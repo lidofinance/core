@@ -1,0 +1,92 @@
+// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.9;
+
+import { IStakingRouter } from "../../oracle/AccountingOracle.sol";
+
+
+contract MockStakingRouterForAccountingOracle is IStakingRouter {
+
+    struct UpdateExitedKeysByModuleCallData {
+        uint256[] moduleIds;
+        uint256[] exitedKeysCounts;
+        uint256 callCount;
+    }
+
+    struct ReportKeysByNodeOperatorCallData {
+        uint256 stakingModuleId;
+        bytes nodeOperatorIds;
+        bytes keysCounts;
+    }
+
+    mapping(uint256 => uint256) internal _exitedKeysCountsByModuleId;
+
+    UpdateExitedKeysByModuleCallData internal _lastCall_updateExitedKeysByModule;
+
+    ReportKeysByNodeOperatorCallData[] public calls_reportExitedKeysByNodeOperator;
+    ReportKeysByNodeOperatorCallData[] public calls_reportStuckKeysByNodeOperator;
+
+    uint256 public totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
+
+
+    function lastCall_updateExitedKeysByModule()
+        external view returns (UpdateExitedKeysByModuleCallData memory)
+    {
+        return _lastCall_updateExitedKeysByModule;
+    }
+
+    function totalCalls_reportExitedKeysByNodeOperator() external view returns (uint256) {
+        return calls_reportExitedKeysByNodeOperator.length;
+    }
+
+    function totalCalls_reportStuckKeysByNodeOperator() external view returns (uint256) {
+        return calls_reportStuckKeysByNodeOperator.length;
+    }
+
+    ///
+    /// IStakingRouter
+    ///
+
+    function updateExitedValidatorsCountByStakingModule(
+        uint256[] calldata moduleIds,
+        uint256[] calldata exitedKeysCounts
+    ) external returns (uint256) {
+        _lastCall_updateExitedKeysByModule.moduleIds = moduleIds;
+        _lastCall_updateExitedKeysByModule.exitedKeysCounts = exitedKeysCounts;
+        ++_lastCall_updateExitedKeysByModule.callCount;
+
+        uint256 newlyExitedValidatorsCount;
+
+        for (uint256 i = 0; i < moduleIds.length; ++i) {
+            uint256 moduleId = moduleIds[i];
+            newlyExitedValidatorsCount += exitedKeysCounts[i] - _exitedKeysCountsByModuleId[moduleId];
+            _exitedKeysCountsByModuleId[moduleId] = exitedKeysCounts[i];
+        }
+
+        return newlyExitedValidatorsCount;
+    }
+
+    function reportStakingModuleExitedValidatorsCountByNodeOperator(
+        uint256 stakingModuleId,
+        bytes calldata nodeOperatorIds,
+        bytes calldata exitedKeysCounts
+    ) external {
+        calls_reportExitedKeysByNodeOperator.push(ReportKeysByNodeOperatorCallData(
+            stakingModuleId, nodeOperatorIds, exitedKeysCounts
+        ));
+    }
+
+    function reportStakingModuleStuckValidatorsCountByNodeOperator(
+        uint256 stakingModuleId,
+        bytes calldata nodeOperatorIds,
+        bytes calldata stuckKeysCounts
+    ) external {
+        calls_reportStuckKeysByNodeOperator.push(ReportKeysByNodeOperatorCallData(
+            stakingModuleId, nodeOperatorIds, stuckKeysCounts
+        ));
+    }
+
+    function onValidatorsCountsByNodeOperatorReportingFinished() external {
+        ++totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
+    }
+}
