@@ -4,6 +4,9 @@
   "description": "Lido core protocol",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "postinstall": "patch-package"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
@@ -19,9 +22,11 @@
     "ethers": "^6.4.0",
     "hardhat": "^2.17.2",
     "hardhat-gas-reporter": "^1.0.8",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "solidity-coverage": "^0.8.0",
     "ts-node": ">=8.0.0",
-    "typechain": "^8.1.0",
+    "typechain": "^8.3.1",
     "typescript": ">=4.5.0"
   },
   "dependencies": {
