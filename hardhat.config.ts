@@ -1,6 +1,5 @@
-import { HardhatUserConfig, task } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import { TASK_COMPILE } from "hardhat/builtin-tasks/task-names";
 
 const config: HardhatUserConfig = {
   solidity: {

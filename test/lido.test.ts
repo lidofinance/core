@@ -1,8 +1,4 @@
-import {
-  time,
-  loadFixture,
-} from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
@@ -21,12 +17,10 @@ describe("eip712StETH", function () {
 
   describe("Parameters", function () {
     it("Should have the correct domain separator 4", async function () {
-      const { eip712StETH, stethAddress } = await loadFixture(
-        deployEIP712StETH
-      );
+      const { eip712StETH, stethAddress } = await loadFixture(deployEIP712StETH);
 
       expect(await eip712StETH.domainSeparatorV4(stethAddress)).to.equal(
-        "0xe518e03c2b8c3c564939187b49918cce3672e932d69139a8b407d911332c7ee2"
+        "0xe518e03c2b8c3c564939187b49918cce3672e932d69139a8b407d911332c7ee2",
       );
     });
   });
