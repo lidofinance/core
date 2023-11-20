@@ -1,28 +1,8 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import { anvilStart, anvilStop } from "./test/anvil-setup";
 
 const config: HardhatUserConfig = {
-  defaultNetwork: "anvil",
-  networks: {
-    anvil: {
-      url: "http://127.0.0.1:8545",
-      forking: {
-        url: process.env.RPC_URL ?? "",
-      },
-      loggingEnabled: true,
-    },
-  },
-  mocha: {
-    rootHooks: {
-      beforeAll: async () => {
-        await anvilStart();
-      },
-      afterAll: async () => {
-        await anvilStop();
-      },
-    },
-  },
+  defaultNetwork: "hardhat",
   solidity: {
     compilers: [
       {
