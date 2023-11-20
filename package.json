@@ -55,7 +55,7 @@
     "solhint-plugin-lido": "^0.0.4",
     "solidity-coverage": "^0.8.0",
     "ts-node": ">=8.0.0",
-    "typechain": "^8.3.1",
+    "typechain": "^8.3.2",
     "typescript": "^5.2.2"
   },
   "dependencies": {
@@ -69,10 +69,5 @@
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
     "openzeppelin-solidity": "2.0.0"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "typechain@8.3.1": "patches/typechain@8.3.1.patch"
-    }
   }
 }
