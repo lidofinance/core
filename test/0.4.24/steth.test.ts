@@ -3,8 +3,8 @@ import { ethers } from "hardhat";
 import { StETHMock } from "../../typechain-types";
 import { ZeroAddress, parseUnits } from "ethers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-
-const MAX_UINT256 = 2n ** 256n - 1n;
+import Snapshot from "../snapshot";
+import { MAX_UINT256 } from "../constants";
 
 describe("StETH as ERC-20", function () {
   let steth: StETHMock;
@@ -14,7 +14,7 @@ describe("StETH as ERC-20", function () {
   const initialTotalSupply = ether(1);
   const initialHolder = "0x000000000000000000000000000000000000dEaD";
 
-  let snapshot: string;
+  let stethDeployedSnapshot: string;
 
   this.beforeAll(async function () {
     steth = await ethers.deployContract("StETHMock", { value: initialTotalSupply });
@@ -25,7 +25,7 @@ describe("StETH as ERC-20", function () {
     users = [signers[0], signers[1], signers[2]];
     assert(users.every(Boolean));
 
-    snapshot = await ethers.provider.send("evm_snapshot", []);
+    stethDeployedSnapshot = await Snapshot.take();
   });
 
   context("Details", function () {
@@ -52,22 +52,105 @@ describe("StETH as ERC-20", function () {
     }
   });
 
-  context("Total supply", function () {
+  context("Transfers", function () {
     let holder: HardhatEthersSigner;
     const amount = parseUnits("1", "ether");
 
+    let userHasStethSnapshot: string;
+
     this.beforeAll(async function () {
-      holder = users[0];
+      [holder] = users;
 
       await expect(steth.mintSteth(holder, { value: amount }))
         .to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, holder.address, await steth.getSharesByPooledEth(amount));
 
       expect(await steth.balanceOf(holder)).to.equal(amount);
+
+      userHasStethSnapshot = await Snapshot.take();
     });
 
-    it("hello", async function () {
-      expect(1).to.equal(1);
+    context("transfer()", function () {
+      let recipient: HardhatEthersSigner;
+
+      this.beforeAll(async function () {
+        [, recipient] = users;
+      });
+
+      it("Reverts if the recipient is zero address.", async function () {
+        await expect(steth.connect(holder).transfer(ZeroAddress, amount)).to.be.revertedWith("TRANSFER_TO_ZERO_ADDR");
+      });
+
+      it("Reverts if the recipient is the stETH contract.", async function () {
+        await expect(steth.connect(holder).transfer(steth, amount)).to.be.revertedWith("TRANSFER_TO_STETH_CONTRACT");
+      });
+
+      it("Reverts if the sender does not have enough tokens.", async function () {
+        await expect(steth.connect(holder).transfer(recipient, amount + 1n)).to.be.revertedWith("BALANCE_EXCEEDED");
+      });
+
+      it("Holder can transfer 0 stETH.", async function () {
+        await expect(steth.connect(holder).transfer(recipient, 0))
+          .to.emit(steth, "Transfer")
+          .withArgs(holder.address, recipient.address, 0)
+          .and.to.emit(steth, "TransferShares")
+          .withArgs(holder.address, recipient.address, 0);
+
+        expect(await steth.balanceOf(holder)).to.equal(amount);
+        expect(await steth.balanceOf(recipient)).to.equal(0n);
+
+        await Snapshot.restore(userHasStethSnapshot);
+      });
+
+      it("Holder can transfer their stETH.", async function () {
+        await expect(steth.connect(holder).transfer(recipient, amount))
+          .to.emit(steth, "Transfer")
+          .withArgs(holder.address, recipient.address, amount)
+          .and.to.emit(steth, "TransferShares")
+          .withArgs(holder.address, recipient.address, await steth.getSharesByPooledEth(amount));
+
+        expect(await steth.balanceOf(holder)).to.equal(0n);
+        expect(await steth.balanceOf(recipient)).to.equal(amount);
+
+        await Snapshot.restore(userHasStethSnapshot);
+      });
+    });
+
+    context("transferFrom()", function () {
+      let spender: HardhatEthersSigner;
+      let recipient: HardhatEthersSigner;
+
+      this.beforeAll(async function () {
+        [, spender, recipient] = users;
+
+        await expect(steth.connect(holder).approve(spender, amount))
+          .to.emit(steth, "Approval")
+          .withArgs(holder.address, spender.address, amount);
+
+        expect(await steth.allowance(holder, spender)).to.equal(amount);
+      });
+
+      this.afterAll(async function () {
+        await Snapshot.restore(stethDeployedSnapshot);
+      });
+
+      it("Reverts if the recipient is zero address.", async function () {
+        await expect(steth.connect(spender).transferFrom(holder, ZeroAddress, amount)).to.be.revertedWith(
+          "TRANSFER_TO_ZERO_ADDR",
+        );
+      });
+
+      it("Reverts if the recipient is the stETH contract.", async function () {
+        await expect(steth.connect(spender).transferFrom(holder, steth, amount)).to.be.revertedWith(
+          "TRANSFER_TO_STETH_CONTRACT",
+        );
+      });
+
+      it("Reverts if the sender does not have enough tokens.", async function () {
+        await expect(steth.connect(spender).transferFrom(holder, recipient, amount + 1n)).to.be.revertedWith(
+          "ALLOWANCE_EXCEEDED",
+        );
+      });
     });
   });
 
@@ -92,7 +175,7 @@ describe("StETH as ERC-20", function () {
           expect(await steth.allowance(owner, spender)).to.equal(amount);
         }
 
-        await ethers.provider.send("evm_revert", [snapshot]);
+        await Snapshot.restore(stethDeployedSnapshot);
       });
     });
   });
