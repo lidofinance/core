@@ -9,6 +9,13 @@ export default class Snapshot {
   }
 
   public static async restore(snapshot: string) {
-    Snapshot.provider.send("evm_revert", [snapshot]);
+    const result = await Snapshot.provider.send("evm_revert", [snapshot]);
+    if (!result) throw new Error("`evm_revert` failed.");
+  }
+
+  public static async refresh(snapshot: string) {
+    if (snapshot) await Snapshot.restore(snapshot);
+
+    return Snapshot.take();
   }
 }
