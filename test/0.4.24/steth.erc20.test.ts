@@ -1,12 +1,10 @@
-import { describe } from "mocha";
-import { StETHMock } from "../../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { assert, expect } from "chai";
 import { ZeroAddress, formatUnits, parseUnits } from "ethers";
 import { ethers } from "hardhat";
-import { assert, expect } from "chai";
-import { MAX_UINT256 } from "../../lib/constants";
-import Snapshot from "../../lib/snapshot";
-import { batch } from "../../lib/promise";
+import { describe } from "mocha";
+import { MAX_UINT256, Snapshot, batch } from "../../lib";
+import { StETHMock } from "../../typechain-types";
 
 describe("StETH ERC-20 Compliance", function () {
   const initialTotalSupply = parseUnits("1.0", "ether");

@@ -1,7 +1,7 @@
 import { HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/internal/hardhat-ethers-provider";
 import { ethers } from "hardhat";
 
-export default class Snapshot {
+export class Snapshot {
   private static provider: HardhatEthersProvider = ethers.provider;
 
   public static async take() {
