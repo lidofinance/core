@@ -4,9 +4,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ZeroAddress, formatUnits, parseUnits } from "ethers";
 import { ethers } from "hardhat";
 import { assert, expect } from "chai";
-import Snapshot from "../snapshot";
-import { batch } from "../utils";
-import { MAX_UINT256 } from "../constants";
+import { MAX_UINT256 } from "../../lib/constants";
+import Snapshot from "../../lib/snapshot";
+import { batch } from "../../lib/promise";
 
 describe("StETH ERC-20 Compliance", function () {
   const initialTotalSupply = parseUnits("1.0", "ether");
@@ -112,7 +112,7 @@ describe("StETH ERC-20 Compliance", function () {
     });
 
     it("Returns true if the transfer succeeds.", async function () {
-      const success = await steth.transfer.staticCallResult(recipient, parseUnits("1.0"));
+      const success = await steth.connect(sender).transfer.staticCallResult(recipient, parseUnits("1.0"));
       assert(success);
     });
 
@@ -238,6 +238,47 @@ describe("StETH ERC-20 Compliance", function () {
       );
     });
 
+    it("Returns true if transferFrom succeeds.", async function () {
+      const success = await steth.connect(spender).transferFrom.staticCallResult(owner, recipient, parseUnits("1.0"));
+      assert(success);
+    });
+
+    this.afterAll(async function () {
+      await Snapshot.restore(initialState);
+    });
+  });
+
+  context("approve()", function () {
+    let owner: HardhatEthersSigner, spender: HardhatEthersSigner;
+
+    let initialState: string;
+    let setupState: string;
+
+    this.beforeAll(async function () {
+      initialState = await Snapshot.take();
+
+      [owner, spender] = users;
+    });
+
+    this.beforeEach(async function () {
+      setupState = await Snapshot.refresh(setupState);
+    });
+
+    it("Gives allowance to spender from owner.", async function () {
+      const allowance = parseUnits("1.0", "ether");
+
+      await expect(steth.connect(owner).approve(spender, allowance))
+        .to.emit(steth, "Approval")
+        .withArgs(owner.address, spender.address, allowance);
+
+      expect(await steth.allowance(owner, spender)).to.equal(allowance);
+    });
+
+    it("Returns true if the approve succeeds.", async function () {
+      const success = await steth.connect(owner).approve.staticCallResult(spender, parseUnits("1.0"));
+      assert(success);
+    });
+
     this.afterAll(async function () {
       await Snapshot.restore(initialState);
     });
@@ -292,6 +333,11 @@ describe("StETH ERC-20 Compliance", function () {
       );
     });
 
+    it("Returns true if the function succeeds.", async function () {
+      const success = await steth.connect(owner).increaseAllowance.staticCallResult(spender, parseUnits("1.0"));
+      assert(success);
+    });
+
     this.afterAll(async function () {
       await Snapshot.restore(initialState);
     });
@@ -299,6 +345,7 @@ describe("StETH ERC-20 Compliance", function () {
 
   context("decreaseAllowance()", function () {
     let owner: HardhatEthersSigner, spender: HardhatEthersSigner;
+    const previousAllowance = parseUnits("3.0", "ether");
 
     let initialState: string;
     let setupState: string;
@@ -307,6 +354,12 @@ describe("StETH ERC-20 Compliance", function () {
       initialState = await Snapshot.take();
 
       [owner, spender] = users;
+
+      await expect(steth.connect(owner).approve(spender, previousAllowance))
+        .to.emit(steth, "Approval")
+        .withArgs(owner.address, spender.address, previousAllowance);
+
+      expect(await steth.allowance(owner, spender)).to.equal(previousAllowance);
     });
 
     this.beforeEach(async function () {
@@ -314,14 +367,7 @@ describe("StETH ERC-20 Compliance", function () {
     });
 
     it("Decreases allowance.", async function () {
-      const previousAllowance = parseUnits("3.0", "ether");
       const decreaseAmount = parseUnits("1.0", "ether");
-
-      await expect(steth.connect(owner).approve(spender, previousAllowance))
-        .to.emit(steth, "Approval")
-        .withArgs(owner.address, spender.address, previousAllowance);
-
-      expect(await steth.allowance(owner, spender)).to.equal(previousAllowance);
 
       await expect(steth.connect(owner).decreaseAllowance(spender, decreaseAmount))
         .to.emit(steth, "Approval")
@@ -347,11 +393,14 @@ describe("StETH ERC-20 Compliance", function () {
     });
 
     it("Cannot decrease below zero.", async function () {
-      const decreaseAmount = parseUnits("1.0", "ether");
-
-      await expect(steth.connect(owner).decreaseAllowance(spender, decreaseAmount)).to.be.revertedWith(
+      await expect(steth.connect(owner).decreaseAllowance(spender, previousAllowance + 1n)).to.be.revertedWith(
         "ALLOWANCE_BELOW_ZERO",
       );
+    });
+
+    it("Returns true if the function succeeds.", async function () {
+      const success = await steth.connect(owner).decreaseAllowance.staticCallResult(spender, parseUnits("1.0"));
+      assert(success);
     });
 
     this.afterAll(async function () {
