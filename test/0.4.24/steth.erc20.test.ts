@@ -12,8 +12,11 @@ describe("StETH ERC-20 Compliance", function () {
 
   let steth: StETHMock;
   let users: HardhatEthersSigner[];
+  let initialState: string;
 
   this.beforeAll(async function () {
+    initialState = await Snapshot.take();
+
     steth = await ethers.deployContract("StETHMock", { value: initialTotalSupply });
     users = await ethers.getSigners();
   });
@@ -404,5 +407,9 @@ describe("StETH ERC-20 Compliance", function () {
     this.afterAll(async function () {
       await Snapshot.restore(initialState);
     });
+  });
+
+  this.afterAll(async function () {
+    await Snapshot.restore(initialState);
   });
 });
