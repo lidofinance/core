@@ -1064,6 +1064,11 @@ packages:
       '@ethersproject/strings': 5.7.0
     dev: true
 
+  /@fastify/busboy@2.1.0:
+    resolution: {integrity: sha512-+KpH+QxZU7O4675t3mnkQKcZZg56u+K/Ct2K+N2AZYNVK8kyeo/bI18tI8aPm3tvNNRyTWfj6s5tnGNlcbQRsA==}
+    engines: {node: '>=14'}
+    dev: true
+
   /@humanwhocodes/config-array@0.11.11:
     resolution: {integrity: sha512-N2brEuAadi0CcdeMXUkhbZB84eskAc8MEX1By6qEchoVywSgXPIjou4rYsl0V3Hj0ZnuGycGCjdNgockbzeWNA==}
     engines: {node: '>=10.10.0'}
@@ -1427,7 +1432,7 @@ packages:
       lodash.clonedeep: 4.5.0
       semver: 6.3.1
       table: 6.8.1
-      undici: 5.23.0
+      undici: 5.28.2
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -3148,13 +3153,6 @@ packages:
       ieee754: 1.2.1
     dev: true
 
-  /busboy@1.6.0:
-    resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
-    engines: {node: '>=10.16.0'}
-    dependencies:
-      streamsearch: 1.1.0
-    dev: true
-
   /bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
@@ -4134,7 +4132,7 @@ packages:
   /eth-block-tracker@2.3.1:
     resolution: {integrity: sha512-NamWuMBIl8kmkJFVj8WzGatySTzQPQag4Xr677yFxdVtIxACFbL/dQowk0MzEqIKk93U1TwY3MjVU6mOcwZnKA==}
     dependencies:
-      async-eventemitter: github.com/ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c
+      async-eventemitter: git@github.com+ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c
       eth-query: 2.1.2
       ethereumjs-tx: 1.3.7
       ethereumjs-util: 5.2.1
@@ -4229,7 +4227,7 @@ packages:
     resolution: {integrity: sha512-iNZ576iTOGcfllftB73cPB5AN+XUQAT/T8xzsILsghXC1o8gJUqe3RHlcDqagu+biFpYQ61KQrZZJza8eRSYqw==}
     deprecated: Deprecated in favor of '@metamask/eth-sig-util'
     dependencies:
-      ethereumjs-abi: github.com/ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0
+      ethereumjs-abi: git@github.com+ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0
       ethereumjs-util: 5.2.1
     dev: false
 
@@ -5174,7 +5172,7 @@ packages:
       ts-node: 10.9.1(@types/node@20.5.9)(typescript@5.2.2)
       tsort: 0.0.1
       typescript: 5.2.2
-      undici: 5.23.0
+      undici: 5.28.2
       uuid: 8.3.2
       ws: 7.5.9
     transitivePeerDependencies:
@@ -7789,11 +7787,6 @@ packages:
     engines: {node: '>=0.10.0'}
     dev: true
 
-  /streamsearch@1.1.0:
-    resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
-    engines: {node: '>=10.0.0'}
-    dev: true
-
   /string-argv@0.3.2:
     resolution: {integrity: sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q==}
     engines: {node: '>=0.6.19'}
@@ -8435,11 +8428,11 @@ packages:
       has-symbols: 1.0.3
       which-boxed-primitive: 1.0.2
 
-  /undici@5.23.0:
-    resolution: {integrity: sha512-1D7w+fvRsqlQ9GscLBwcAJinqcZGHUKjbOmXdlE/v8BvEGXjeWAax+341q44EuTcHXXnfyKNbKRq4Lg7OzhMmg==}
+  /undici@5.28.2:
+    resolution: {integrity: sha512-wh1pHJHnUeQV5Xa8/kyQhO7WFa8M34l026L5P/+2TYiakvGy5Rdc8jWZVyG7ieht/0WgJLEd3kcU5gKx+6GC8w==}
     engines: {node: '>=14.0'}
     dependencies:
-      busboy: 1.6.0
+      '@fastify/busboy': 2.1.0
     dev: true
 
   /universalify@0.1.2:
@@ -8588,7 +8581,7 @@ packages:
   /web3@0.16.0:
     resolution: {integrity: sha512-8vET/GI2qDtShXNtPkuWByWvPNou9ecuYI9OJswBdA+NUwe5WZKirHUWakS0y4mK6lGmOhv7mLN7cHCBhmQRyA==}
     dependencies:
-      bignumber.js: github.com/debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9
+      bignumber.js: git@github.com+debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9
       crypto-js: 3.3.0
       utf8: 2.1.2
       xmlhttprequest: 1.8.0
@@ -8597,7 +8590,7 @@ packages:
   /web3@0.18.4:
     resolution: {integrity: sha512-TG+CtszzJHRHq+1T0AJVN4ATDvNn4QIAIEnErTgx2jj9oCa5ggOqZv3Ub0RAF+Yr2F/e5F6UFpEUSH9QK7w50Q==}
     dependencies:
-      bignumber.js: github.com/debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2
+      bignumber.js: git@github.com+debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2
       crypto-js: 3.3.0
       utf8: 2.1.2
       xhr2: 0.2.1
@@ -8607,7 +8600,7 @@ packages:
   /web3@0.20.7:
     resolution: {integrity: sha512-VU6/DSUX93d1fCzBz7WP/SGCQizO1rKZi4Px9j/3yRyfssHyFcZamMw2/sj4E8TlfMXONvZLoforR8B4bRoyTQ==}
     dependencies:
-      bignumber.js: github.com/frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934
+      bignumber.js: git@github.com+frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934
       crypto-js: 3.3.0
       utf8: 2.1.2
       xhr2-cookies: 1.1.0
@@ -8987,28 +8980,28 @@ packages:
     engines: {node: '>=10'}
     dev: true
 
-  github.com/ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c:
-    resolution: {tarball: https://codeload.github.com/ahultgren/async-eventemitter/tar.gz/fa06e39e56786ba541c180061dbf2c0a5bbf951c}
+  git@github.com+ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c:
+    resolution: {commit: fa06e39e56786ba541c180061dbf2c0a5bbf951c, repo: git@github.com:ahultgren/async-eventemitter.git, type: git}
     name: async-eventemitter
     version: 0.2.3
     dependencies:
       async: 2.6.4
     dev: false
 
-  github.com/debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2:
-    resolution: {tarball: https://codeload.github.com/debris/bignumber.js/tar.gz/94d7146671b9719e00a09c29b01a691bc85048c2}
+  git@github.com+debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2:
+    resolution: {commit: 94d7146671b9719e00a09c29b01a691bc85048c2, repo: git@github.com:debris/bignumber.js.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
 
-  github.com/debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9:
-    resolution: {tarball: https://codeload.github.com/debris/bignumber.js/tar.gz/c7a38de919ed75e6fb6ba38051986e294b328df9}
+  git@github.com+debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9:
+    resolution: {commit: c7a38de919ed75e6fb6ba38051986e294b328df9, repo: git@github.com:debris/bignumber.js.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
 
-  github.com/ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0:
-    resolution: {tarball: https://codeload.github.com/ethereumjs/ethereumjs-abi/tar.gz/ee3994657fa7a427238e6ba92a84d0b529bbcde0}
+  git@github.com+ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0:
+    resolution: {commit: ee3994657fa7a427238e6ba92a84d0b529bbcde0, repo: git@github.com:ethereumjs/ethereumjs-abi.git, type: git}
     name: ethereumjs-abi
     version: 0.6.8
     dependencies:
@@ -9016,8 +9009,8 @@ packages:
       ethereumjs-util: 6.2.1
     dev: false
 
-  github.com/frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934:
-    resolution: {tarball: https://codeload.github.com/frozeman/bignumber.js-nolookahead/tar.gz/57692b3ecfc98bbdd6b3a516cb2353652ea49934}
+  git@github.com+frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934:
+    resolution: {commit: 57692b3ecfc98bbdd6b3a516cb2353652ea49934, repo: git@github.com:frozeman/bignumber.js-nolookahead.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
