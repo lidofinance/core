@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2857"  lines-covered="417"  line-rate="0.146"  branches-valid="1268"  branches-covered="170"  branch-rate="0.1341"  timestamp="1707464456128" complexity="0" version="0.1">
+<coverage lines-valid="2857"  lines-covered="421"  line-rate="0.1474"  branches-valid="1268"  branches-covered="172"  branch-rate="0.1356"  timestamp="1707464458374" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1639,36 +1639,36 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.4.24.utils"  line-rate="0.7143"  branch-rate="0.6667000000000001" >
+	<package name="0.4.24.utils"  line-rate="1"  branch-rate="1" >
 	<classes>
-		<class name="Pausable.sol"  filename="contracts/0.4.24/utils/Pausable.sol"  line-rate="0.5556"  branch-rate="0.5" >
+		<class name="Pausable.sol"  filename="contracts/0.4.24/utils/Pausable.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="_whenNotStopped"  hits="105"  signature="()V" >
-				<lines><line number="19"  hits="105" /></lines>
+			<method name="_whenNotStopped"  hits="108"  signature="()V" >
+				<lines><line number="19"  hits="108" /></lines>
 			</method>
-			<method name="_whenStopped"  hits="136"  signature="()V" >
-				<lines><line number="23"  hits="136" /></lines>
+			<method name="_whenStopped"  hits="142"  signature="()V" >
+				<lines><line number="23"  hits="142" /></lines>
 			</method>
-			<method name="isStopped"  hits="0"  signature="()V" >
-				<lines><line number="27"  hits="0" /></lines>
+			<method name="isStopped"  hits="12"  signature="()V" >
+				<lines><line number="27"  hits="12" /></lines>
 			</method>
-			<method name="_stop"  hits="0"  signature="()V" >
-				<lines><line number="31"  hits="0" /></lines>
+			<method name="_stop"  hits="3"  signature="()V" >
+				<lines><line number="31"  hits="3" /></lines>
 			</method>
-			<method name="_resume"  hits="136"  signature="()V" >
-				<lines><line number="38"  hits="136" /></lines>
+			<method name="_resume"  hits="142"  signature="()V" >
+				<lines><line number="38"  hits="142" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="20"  hits="105"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="24"  hits="136"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="28"  hits="0"  branch="false" />
-			<line number="32"  hits="0"  branch="false" />
-			<line number="34"  hits="0"  branch="false" />
-			<line number="35"  hits="0"  branch="false" />
-			<line number="39"  hits="136"  branch="false" />
-			<line number="41"  hits="136"  branch="false" />
-			<line number="42"  hits="136"  branch="false" />
+			<line number="20"  hits="108"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="24"  hits="142"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="28"  hits="12"  branch="false" />
+			<line number="32"  hits="3"  branch="false" />
+			<line number="34"  hits="2"  branch="false" />
+			<line number="35"  hits="2"  branch="false" />
+			<line number="39"  hits="142"  branch="false" />
+			<line number="41"  hits="141"  branch="false" />
+			<line number="42"  hits="141"  branch="false" />
 		</lines>
 		</class>
 		<class name="Versioned.sol"  filename="contracts/0.4.24/utils/Versioned.sol"  line-rate="1"  branch-rate="1" >
