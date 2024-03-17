@@ -2530,7 +2530,7 @@ packages:
   /axios@1.6.7:
     resolution: {integrity: sha512-/hDJGff6/c7u0hDkvkGxR/oy6CbCs8ziCsC7SqmhjfozqiJGc8Z11wrv9z9lYfY4K8l+H9TpjcMDX0xOZmx+RA==}
     dependencies:
-      follow-redirects: 1.15.5(debug@4.3.4)
+      follow-redirects: 1.15.6(debug@4.3.4)
       form-data: 4.0.0
       proxy-from-env: 1.1.0
     transitivePeerDependencies:
@@ -4237,7 +4237,7 @@ packages:
   /eth-block-tracker@2.3.1:
     resolution: {integrity: sha512-NamWuMBIl8kmkJFVj8WzGatySTzQPQag4Xr677yFxdVtIxACFbL/dQowk0MzEqIKk93U1TwY3MjVU6mOcwZnKA==}
     dependencies:
-      async-eventemitter: github.com/ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c
+      async-eventemitter: git@github.com+ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c
       eth-query: 2.1.2
       ethereumjs-tx: 1.3.7
       ethereumjs-util: 5.2.1
@@ -4334,7 +4334,7 @@ packages:
     resolution: {integrity: sha512-iNZ576iTOGcfllftB73cPB5AN+XUQAT/T8xzsILsghXC1o8gJUqe3RHlcDqagu+biFpYQ61KQrZZJza8eRSYqw==}
     deprecated: Deprecated in favor of '@metamask/eth-sig-util'
     dependencies:
-      ethereumjs-abi: github.com/ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0
+      ethereumjs-abi: git@github.com+ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0
       ethereumjs-util: 5.2.1
     dev: false
 
@@ -4766,8 +4766,8 @@ packages:
     resolution: {integrity: sha512-36yxDn5H7OFZQla0/jFJmbIKTdZAQHngCedGxiMmpNfEZM0sdEeT+WczLQrjK6D7o2aiyLYDnkw0R3JK0Qv1RQ==}
     dev: true
 
-  /follow-redirects@1.15.5(debug@4.3.4):
-    resolution: {integrity: sha512-vSFWUON1B+yAw1VN4xMfxgn5fTUiaOzAJCKBwIIgT/+7CuGy9+r+5gITvP62j3RmaD5Ph65UaERdOSRGUzZtgw==}
+  /follow-redirects@1.15.6(debug@4.3.4):
+    resolution: {integrity: sha512-wWN62YITEaOpSK584EZXJafH1AGpO8RVgElfkuXbTOrPX4fIfOyEpW/CsiNd8JdYrAoOvafRTOEnvsO++qCqFA==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -7674,7 +7674,7 @@ packages:
     dependencies:
       command-exists: 1.2.9
       commander: 3.0.2
-      follow-redirects: 1.15.5(debug@4.3.4)
+      follow-redirects: 1.15.6(debug@4.3.4)
       fs-extra: 0.30.0
       js-sha3: 0.8.0
       memorystream: 0.3.1
@@ -8686,7 +8686,7 @@ packages:
   /web3@0.16.0:
     resolution: {integrity: sha512-8vET/GI2qDtShXNtPkuWByWvPNou9ecuYI9OJswBdA+NUwe5WZKirHUWakS0y4mK6lGmOhv7mLN7cHCBhmQRyA==}
     dependencies:
-      bignumber.js: github.com/debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9
+      bignumber.js: git@github.com+debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9
       crypto-js: 3.3.0
       utf8: 2.1.2
       xmlhttprequest: 1.8.0
@@ -8695,7 +8695,7 @@ packages:
   /web3@0.18.4:
     resolution: {integrity: sha512-TG+CtszzJHRHq+1T0AJVN4ATDvNn4QIAIEnErTgx2jj9oCa5ggOqZv3Ub0RAF+Yr2F/e5F6UFpEUSH9QK7w50Q==}
     dependencies:
-      bignumber.js: github.com/debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2
+      bignumber.js: git@github.com+debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2
       crypto-js: 3.3.0
       utf8: 2.1.2
       xhr2: 0.2.1
@@ -8705,7 +8705,7 @@ packages:
   /web3@0.20.7:
     resolution: {integrity: sha512-VU6/DSUX93d1fCzBz7WP/SGCQizO1rKZi4Px9j/3yRyfssHyFcZamMw2/sj4E8TlfMXONvZLoforR8B4bRoyTQ==}
     dependencies:
-      bignumber.js: github.com/frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934
+      bignumber.js: git@github.com+frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934
       crypto-js: 3.3.0
       utf8: 2.1.2
       xhr2-cookies: 1.1.0
@@ -9056,28 +9056,28 @@ packages:
     engines: {node: '>=12.20'}
     dev: true
 
-  github.com/ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c:
-    resolution: {tarball: https://codeload.github.com/ahultgren/async-eventemitter/tar.gz/fa06e39e56786ba541c180061dbf2c0a5bbf951c}
+  git@github.com+ahultgren/async-eventemitter/fa06e39e56786ba541c180061dbf2c0a5bbf951c:
+    resolution: {commit: fa06e39e56786ba541c180061dbf2c0a5bbf951c, repo: git@github.com:ahultgren/async-eventemitter.git, type: git}
     name: async-eventemitter
     version: 0.2.3
     dependencies:
       async: 2.6.4
     dev: false
 
-  github.com/debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2:
-    resolution: {tarball: https://codeload.github.com/debris/bignumber.js/tar.gz/94d7146671b9719e00a09c29b01a691bc85048c2}
+  git@github.com+debris/bignumber.js/94d7146671b9719e00a09c29b01a691bc85048c2:
+    resolution: {commit: 94d7146671b9719e00a09c29b01a691bc85048c2, repo: git@github.com:debris/bignumber.js.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
 
-  github.com/debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9:
-    resolution: {tarball: https://codeload.github.com/debris/bignumber.js/tar.gz/c7a38de919ed75e6fb6ba38051986e294b328df9}
+  git@github.com+debris/bignumber.js/c7a38de919ed75e6fb6ba38051986e294b328df9:
+    resolution: {commit: c7a38de919ed75e6fb6ba38051986e294b328df9, repo: git@github.com:debris/bignumber.js.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
 
-  github.com/ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0:
-    resolution: {tarball: https://codeload.github.com/ethereumjs/ethereumjs-abi/tar.gz/ee3994657fa7a427238e6ba92a84d0b529bbcde0}
+  git@github.com+ethereumjs/ethereumjs-abi/ee3994657fa7a427238e6ba92a84d0b529bbcde0:
+    resolution: {commit: ee3994657fa7a427238e6ba92a84d0b529bbcde0, repo: git@github.com:ethereumjs/ethereumjs-abi.git, type: git}
     name: ethereumjs-abi
     version: 0.6.8
     dependencies:
@@ -9085,8 +9085,8 @@ packages:
       ethereumjs-util: 6.2.1
     dev: false
 
-  github.com/frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934:
-    resolution: {tarball: https://codeload.github.com/frozeman/bignumber.js-nolookahead/tar.gz/57692b3ecfc98bbdd6b3a516cb2353652ea49934}
+  git@github.com+frozeman/bignumber.js-nolookahead/57692b3ecfc98bbdd6b3a516cb2353652ea49934:
+    resolution: {commit: 57692b3ecfc98bbdd6b3a516cb2353652ea49934, repo: git@github.com:frozeman/bignumber.js-nolookahead.git, type: git}
     name: bignumber.js
     version: 2.0.7
     dev: false
