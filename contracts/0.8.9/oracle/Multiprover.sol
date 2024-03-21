@@ -94,7 +94,8 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
     ///
 
     function isMember(address addr) internal view returns (bool) {
-        for (uint i = 0; i < _memberAddresses.length; i++) {
+        uint256 length = _memberAddresses.length;
+        for (uint256 i = 0; i < length; i++) {
             if (_memberAddresses[i] == addr) {
                 return true;
             }
@@ -119,7 +120,7 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
     function _removeMember(address addr, uint256 quorum) internal {
         require(isMember(addr), "Address not a member");
 
-        for (uint i = 0; i < _memberAddresses.length; i++) {
+        for (uint256 i = 0; i < _memberAddresses.length; i++) {
             if (_memberAddresses[i] == addr) {
                 // Move the last element into the place to delete
                 _memberAddresses[i] = _memberAddresses[_memberAddresses.length - 1];
@@ -162,7 +163,7 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
     }
 
     // Helper function to request a report from an oracle
-    function _requestReportFromOracle(ILidoZKOracle oracle, uint256 refSlot) internal view 
+    function _requestReportFromOracle(ILidoZKOracle oracle, uint256 refSlot) internal view
         returns (Report memory)    {
         (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators) = oracle.getReport(refSlot);
         return Report(success, clBalanceGwei, numValidators, exitedValidators);
@@ -178,7 +179,8 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
         uint256[] memory reportCounts = new uint256[](_memberAddresses.length);
         uint256 reports = 0;
 
-        for (uint256 i = 0; i < _memberAddresses.length; i++) {
+        uint256 length = _memberAddresses.length;
+        for (uint256 i = 0; i < length; i++) {
             ILidoZKOracle oracle = ILidoZKOracle(_memberAddresses[i]);
             Report memory report = _requestReportFromOracle(oracle, refSlot);
             if (report.success) {
@@ -206,7 +208,7 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
 
     ///
     /// Implementation: Auto-resettable fuse
-    /// 
-    
+    ///
+
     // TODO: implement the fuse
 }
