@@ -4,15 +4,7 @@ pragma solidity 0.8.9;
 
 import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable.sol";
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
-
-interface ILidoZKOracle {
-    function getReport(uint256 refSlot) external view returns  (
-        bool success,
-        uint256 clBalanceGwei,
-        uint256 numValidators,
-        uint256 exitedValidators
-	);
-}
+import { ILidoZKOracle } from "./ILidoZKOracle.sol";
 
 contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
     using SafeCast for uint256;
