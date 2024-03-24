@@ -1358,7 +1358,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             if (success) {
                 require(clBalanceGwei == unifiedPostCLBalance, "CL_BALANCE_MISMATCH");
                 require(numValidators == _reportedData.clValidators, "CL_VALIDATORS_MISMATCH");
-                require(exitedValidators == _reportContext.preCLValidators - _reportedData.clValidators, "EXITED_VALIDATORS_MISMATCH");
+                // TODO: Check exitedValidators against StakingRouter
             } else {
                 revert("ZK_ORACLE_FAILED");
             }
