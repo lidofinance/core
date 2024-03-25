@@ -15,8 +15,8 @@ contract Tiebreaker is ILidoZKOracle, AccessControlEnumerable {
     struct Report {
         bool success;
         uint64 clBalanceGwei;
-        uint64 numValidators;
-        uint64 exitedValidators;
+        uint32 numValidators;
+        uint32 exitedValidators;
     }
 
     mapping(uint256 => Report) internal _reports;
@@ -28,7 +28,7 @@ contract Tiebreaker is ILidoZKOracle, AccessControlEnumerable {
     }
 
     function submitReport(uint256 refSlot, bool success, uint64 clBalanceGwei,
-        uint64 numValidators, uint64 exitedValidators) external
+        uint32 numValidators, uint32 exitedValidators) external
         onlyRole(DEFAULT_ADMIN_ROLE) {
         _reports[refSlot] = Report(success, clBalanceGwei, numValidators, exitedValidators);
     }
