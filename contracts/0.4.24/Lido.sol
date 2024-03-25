@@ -140,11 +140,6 @@ interface ILidoZKOracle {
 	);
 }
 
-interface ILidoBaseOracle {
-    function SECONDS_PER_SLOT() external view returns (uint256);
-    function GENESIS_TIME() external view returns (uint256);
-}
-
 /**
 * @title Liquid staking pool implementation
 *
@@ -210,8 +205,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
-
-    address internal constant MULTIPROVER = 0xd497Be005638efCf09F6BFC8DAFBBB0BB72cD991;
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -1217,10 +1210,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // Pass the report data to sanity checker (reverts if malformed)
         _checkAccountingOracleReport(contracts, _reportedData, reportContext);
 
-        // Step 2.1
-        // Check values with Zk Oracles
-        _checkWithZkCLBalanceDecrease(contracts, _reportedData, reportContext);
-
         // Step 3.
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
         // due to withdrawal requests to finalize
@@ -1337,32 +1326,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _reportContext.preCLValidators,
             _reportedData.clValidators
         );
-    }
-
-    /**
-     * @dev Pass the provided oracle data to check it against ZK Oracles
-     */
-    function _checkWithZkCLBalanceDecrease(
-        OracleReportContracts memory _contracts,
-        OracleReportedData memory _reportedData,
-        OracleReportContext memory _reportContext
-    ) internal view {
-        uint256 unifiedPostCLBalance = _reportedData.postCLBalance + _reportedData.withdrawalVaultBalance;
-        if (unifiedPostCLBalance < _reportContext.preCLBalance) {
-            uint256 refSlot = (_reportedData.reportTimestamp -
-                ILidoBaseOracle(_contracts.accountingOracle).GENESIS_TIME()) /
-                ILidoBaseOracle(_contracts.accountingOracle).SECONDS_PER_SLOT();
-
-            (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
-            = ILidoZKOracle(MULTIPROVER).getReport(refSlot);
-            if (success) {
-                require(clBalanceGwei == unifiedPostCLBalance, "CL_BALANCE_MISMATCH");
-                require(numValidators == _reportedData.clValidators, "CL_VALIDATORS_MISMATCH");
-                // TODO: Check exitedValidators against StakingRouter
-            } else {
-                revert("ZK_ORACLE_FAILED");
-            }
-        }
     }
 
     /**
