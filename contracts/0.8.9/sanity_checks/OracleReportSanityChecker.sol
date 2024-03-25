@@ -594,7 +594,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
-            require(balanceDifferenceBP < 749, "CL_BALANCE_MISMATCH");
+            // NOTE: Base points is 10_000, so 74 BP is 0.74%
+            // TODO: Move constant to limitsList?
+            require(balanceDifferenceBP < 74, "CL_BALANCE_MISMATCH");
 
             require(_postCLValidators <= numValidators , "CL_VALIDATORS_MISMATCH");
             // TODO: Check exitedValidators against StakingRouter
