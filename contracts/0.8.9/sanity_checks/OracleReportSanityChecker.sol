@@ -10,6 +10,8 @@ import {Math256} from "../../common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {ILidoZKOracle} from "../oracle/ILidoZKOracle.sol";
+
 import {IBurner} from "../../common/interfaces/IBurner.sol";
 
 interface IWithdrawalQueue {
@@ -32,6 +34,11 @@ interface IWithdrawalQueue {
         external
         view
         returns (WithdrawalRequestStatus[] memory statuses);
+}
+
+interface ILidoBaseOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+    function GENESIS_TIME() external view returns (uint256);
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
@@ -125,6 +132,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
+
+    address internal constant MULTIPROVER = 0xd497Be005638efCf09F6BFC8DAFBBB0BB72cD991;
 
     ILidoLocator private immutable LIDO_LOCATOR;
 
@@ -430,7 +439,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
         // 4. Consensus Layer one-off balance decrease
-        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance, _postCLBalance + _withdrawalVaultBalance);
+        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance,
+            _postCLBalance + _withdrawalVaultBalance, _postCLValidators, _timeElapsed);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -562,14 +572,36 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _checkOneOffCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
-        uint256 _unifiedPostCLBalance
-    ) internal pure {
+        uint256 _unifiedPostCLBalance,
+        uint256 _postCLValidators,
+        uint256 _reportTimestamp
+    ) internal view {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
         uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
             _preCLBalance;
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
+        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
+
+        uint256 refSlot = (_reportTimestamp -
+            ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
+            ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+
+        (bool success, uint256 clBalanceGwei, uint256 numValidators, )
+            = ILidoZKOracle(MULTIPROVER).getReport(refSlot);
+        if (success) {
+            uint balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
+                clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
+            uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
+            require(balanceDifferenceBP < 749, "CL_BALANCE_MISMATCH");
+
+            require(_postCLValidators <= numValidators , "CL_VALIDATORS_MISMATCH");
+            // TODO: Check exitedValidators against StakingRouter
+        } else {
+            revert("ZK_ORACLE_FAILED");
+        }
+
     }
 
     function _checkAnnualBalancesIncrease(
