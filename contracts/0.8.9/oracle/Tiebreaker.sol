@@ -9,13 +9,14 @@ import { ILidoZKOracle } from "./ILidoZKOracle.sol";
 contract Tiebreaker is ILidoZKOracle, AccessControlEnumerable {
     using SafeCast for uint256;
 
+    // TODO: separate role to submit reports
     error AdminCannotBeZero();
 
     struct Report {
         bool success;
-        uint256 clBalanceGwei;
-        uint256 numValidators;
-        uint256 exitedValidators;
+        uint64 clBalanceGwei;
+        uint64 numValidators;
+        uint64 exitedValidators;
     }
 
     mapping(uint256 => Report) internal _reports;
@@ -26,8 +27,8 @@ contract Tiebreaker is ILidoZKOracle, AccessControlEnumerable {
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
-    function submitReport(uint256 refSlot, bool success, uint256 clBalanceGwei,
-        uint256 numValidators, uint256 exitedValidators) external
+    function submitReport(uint256 refSlot, bool success, uint64 clBalanceGwei,
+        uint64 numValidators, uint64 exitedValidators) external
         onlyRole(DEFAULT_ADMIN_ROLE) {
         _reports[refSlot] = Report(success, clBalanceGwei, numValidators, exitedValidators);
     }
