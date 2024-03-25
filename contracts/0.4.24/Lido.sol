@@ -131,15 +131,6 @@ interface IWithdrawalQueue {
     function isBunkerModeActive() external view returns (bool);
 }
 
-interface ILidoZKOracle {
-    function getReport(uint256 refSlot) external view returns  (
-        bool success,
-        uint256 clBalanceGwei,
-        uint256 numValidators,
-        uint256 exitedValidators
-	);
-}
-
 /**
 * @title Liquid staking pool implementation
 *
