@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
-
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "./utils/Versioned.sol";
 
 interface ILido {
@@ -25,9 +25,6 @@ interface ILido {
 contract WithdrawalVault is Versioned {
     using SafeERC20 for IERC20;
 
-    ILido public immutable LIDO;
-    address public immutable TREASURY;
-
     // Events
     /**
      * Emitted when the ERC20 `token` recovered (i.e. transferred)
@@ -41,35 +38,49 @@ contract WithdrawalVault is Versioned {
      */
     event ERC721Recovered(address indexed requestedBy, address indexed token, uint256 tokenId);
 
+    event LocatorContractSet(address locatorAddress);
+
+    //
+    // CONSTANTS
+    //
+    // bytes32 internal constant LIDO_LOCATOR_POSITION = keccak256("lido.WithdrawalVault.lidoLocator");
+    bytes32 internal constant LIDO_LOCATOR_POSITION = 0xc0b60c351b70494e3ab52c5bef06f2292b0f5ac139efc05620bc15f3425d97d1;
+
+
     // Errors
-    error LidoZeroAddress();
-    error TreasuryZeroAddress();
     error NotLido();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
 
     /**
-     * @param _lido the Lido token (stETH) address
-     * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
+     * @param _lidoLocator Address of the Lido Locator contract.
      */
-    constructor(ILido _lido, address _treasury) {
-        if (address(_lido) == address(0)) {
-            revert LidoZeroAddress();
-        }
-        if (_treasury == address(0)) {
-            revert TreasuryZeroAddress();
-        }
+    function initialize(address _lidoLocator) external onlyInit {
+        // Initializations for v1 --> v2
+        _initialize_v2(_lidoLocator);
 
-        LIDO = _lido;
-        TREASURY = _treasury;
+        initialized();
     }
 
-    /**
-     * @notice Initialize the contract explicitly.
-     * Sets the contract version to '1'.
-     */
-    function initialize() external {
-        _initializeContractVersionTo(1);
+    function _initialize_v2(address _locator) internal {
+        _onlyNonZeroAddress(_locator);
+        LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
+
+        _setContractVersion(2);
+
+        emit LocatorContractSet(_locator);
+    }
+
+    function getLidoAddress() public view returns (address) {
+        return getLocator().lido();
+    }
+
+    function getTreasuryAddress() public view returns (address) {
+        return getLocator().treasury();
+    }
+
+    function getLocator() public view returns (ILidoLocator) {
+        return ILidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
     }
 
     /**
@@ -78,7 +89,7 @@ contract WithdrawalVault is Versioned {
      * @param _amount amount of ETH to withdraw
      */
     function withdrawWithdrawals(uint256 _amount) external {
-        if (msg.sender != address(LIDO)) {
+        if (msg.sender != address(getLidoAddress())) {
             revert NotLido();
         }
         if (_amount == 0) {
@@ -90,7 +101,7 @@ contract WithdrawalVault is Versioned {
             revert NotEnoughEther(_amount, balance);
         }
 
-        LIDO.receiveWithdrawals{value: _amount}();
+        ILido(getLidoAddress()).receiveWithdrawals{value: _amount}();
     }
 
     /**
@@ -107,7 +118,7 @@ contract WithdrawalVault is Versioned {
 
         emit ERC20Recovered(msg.sender, address(_token), _amount);
 
-        _token.safeTransfer(TREASURY, _amount);
+        _token.safeTransfer(getTreasuryAddress(), _amount);
     }
 
     /**
@@ -120,6 +131,6 @@ contract WithdrawalVault is Versioned {
     function recoverERC721(IERC721 _token, uint256 _tokenId) external {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
-        _token.transferFrom(address(this), TREASURY, _tokenId);
+        _token.transferFrom(address(this), getTreasuryAddress(), _tokenId);
     }
 }
