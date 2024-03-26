@@ -194,7 +194,7 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
                 }
             }
         }
-        return (false, 0, 0, 0);
+        revert NoConsensus();
    }
 
     ///
