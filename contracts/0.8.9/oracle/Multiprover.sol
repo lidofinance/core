@@ -111,6 +111,7 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
 
     function _removeMember(address addr, uint256 quorum) internal {
         require(isMember(addr), "Address not a member");
+        uint256 newTotalMembers = _memberAddresses.length - 1;
 
         for (uint256 i = 0; i < _memberAddresses.length; i++) {
             if (_memberAddresses[i] == addr) {
@@ -121,8 +122,6 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
                 break;
             }
         }
-
-        uint256 newTotalMembers = _memberAddresses.length - 1;
 
         emit MemberRemoved(addr, newTotalMembers, quorum);
 
