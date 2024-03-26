@@ -41,6 +41,29 @@ interface ILidoBaseOracle {
     function GENESIS_TIME() external view returns (uint256);
 }
 
+interface IStakingRouter {
+
+    struct StakingModuleSummary {
+        /// @notice The total number of validators in the EXITED state on the Consensus Layer
+        /// @dev This value can't decrease in normal conditions
+        uint256 totalExitedValidators;
+
+        /// @notice The total number of validators deposited via the official Deposit Contract
+        /// @dev This value is a cumulative counter: even when the validator goes into EXITED state this
+        ///     counter is not decreasing
+        uint256 totalDepositedValidators;
+
+        /// @notice The number of validators in the set available for deposit
+        uint256 depositableValidatorsCount;
+    }
+
+    function getStakingModuleIds() external view returns (uint256[] memory stakingModuleIds);
+
+    function getStakingModuleSummary(uint256 _stakingModuleId) external view
+        returns (StakingModuleSummary memory summary);
+
+}
+
 /// @notice The set of restrictions used in the sanity checks of the oracle report
 /// @dev struct is loaded from the storage and stored in memory during the tx running
 struct LimitsList {
@@ -582,13 +605,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
-        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
+        ILidoLocator locator = ILidoLocator(getLidoLocator());
+        address accountingOracle = locator.accountingOracle();
 
         uint256 refSlot = (_reportTimestamp -
             ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
-        (bool success, uint256 clBalanceGwei, uint256 numValidators, )
+        (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
             = ILidoZKOracle(MULTIPROVER).getReport(refSlot);
         if (success) {
             uint balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
@@ -596,14 +620,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             // TODO: Move constant to limitsList?
-            require(balanceDifferenceBP < 74, "CL_BALANCE_MISMATCH");
+            require(balanceDifferenceBP <= 74, "CL_BALANCE_MISMATCH");
 
+            // NOTE: As number of validators reported by zkOracles could be greater
+            //       than the number of Lido validators
             require(_postCLValidators <= numValidators , "CL_VALIDATORS_MISMATCH");
-            // TODO: Check exitedValidators against StakingRouter
+
+            // NOTE: Checking exitedValidators against StakingRouter
+            IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
+            uint256[] memory ids = stakingRouter.getStakingModuleIds();
+            uint256 stakingRouterExitedValidators = 0;
+            for (uint256 i = 0; i < ids.length; i++) {
+                IStakingRouter.StakingModuleSummary memory summary = stakingRouter.getStakingModuleSummary(ids[i]);
+                stakingRouterExitedValidators += summary.totalExitedValidators;
+            }
+            require(stakingRouterExitedValidators <= exitedValidators, "EXITED_VALIDATORS_MISMATCH");
         } else {
             revert("ZK_ORACLE_FAILED");
         }
-
     }
 
     function _checkAnnualBalancesIncrease(
