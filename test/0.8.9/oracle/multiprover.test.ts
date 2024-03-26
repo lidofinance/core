@@ -89,10 +89,7 @@ describe("Multiprover.sol", () => {
       await multiprover.addMember(oracle2Mock.getAddress(), 2);
 
       const report = await multiprover.getReport(0x01);
-      expect(report.success).to.be.true;
-      expect(report.clBalanceGwei).to.equal(1);
-      expect(report.numValidators).to.equal(2);
-      expect(report.exitedValidators).to.equal(3);
+      expect(report).to.deep.equal([true, 1n, 2n, 3n]);
     });
 
     it(`can't get result from 2 different oracle reports`, async () => {
