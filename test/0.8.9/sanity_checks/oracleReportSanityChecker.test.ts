@@ -3,7 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { AccountingOracleMock, LidoLocatorMock, OracleReportSanityChecker } from "typechain-types";
+import {
+  AccountingOracleMock,
+  LidoLocatorMock,
+  OracleReportSanityChecker,
+  StakingRouterMockForZkSanityCheck,
+} from "typechain-types";
 
 // pnpm hardhat test --grep "OracleReportSanityChecker"
 
@@ -11,6 +16,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let locator: LidoLocatorMock;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracleMock;
+  let stakingRouter: StakingRouterMockForZkSanityCheck;
   let deployer: HardhatEthersSigner;
 
   const managersRoster = {
@@ -44,8 +50,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     [deployer] = await ethers.getSigners();
 
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
+    stakingRouter = await ethers.deployContract("StakingRouterMockForZkSanityCheck");
     const sanityChecker = deployer.address;
-    const stakingRouter = deployer.address;
 
     locator = await ethers.deployContract("LidoLocatorMock", [
       {
@@ -86,6 +92,28 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       log("secondsPerSlot", secondsPerSlot);
       log("genesisTime", genesisTime);
+    });
+
+    it(`staking router mock is functional`, async () => {
+      await stakingRouter.addStakingModule(1, {
+        totalExitedValidators: 10,
+        totalDepositedValidators: 20,
+        depositableValidatorsCount: 0,
+      });
+      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([1]);
+      expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([10, 20, 0]);
+
+      await stakingRouter.addStakingModule(2, {
+        totalExitedValidators: 1,
+        totalDepositedValidators: 2,
+        depositableValidatorsCount: 0,
+      });
+      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([1, 2]);
+      expect(await stakingRouter.getStakingModuleSummary(2)).to.deep.equal([1, 2, 0]);
+
+      await stakingRouter.removeStakingModule(1);
+      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([2]);
+      expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([0, 0, 0]);
     });
   });
 });
