@@ -22,6 +22,7 @@ contract LidoLocatorMock is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address zkMultiprover;
     }
 
     address public immutable lido;
@@ -38,6 +39,7 @@ contract LidoLocatorMock is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable zkMultiprover;
 
     constructor (
         ContractAddresses memory addresses
@@ -56,6 +58,7 @@ contract LidoLocatorMock is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        zkMultiprover = addresses.zkMultiprover;
     }
 
     function coreComponents() external view returns(address,address,address,address,address,address) {
