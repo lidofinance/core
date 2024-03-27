@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   AccountingOracleMock,
   LidoLocatorMock,
+  Multiprover,
   OracleReportSanityChecker,
   StakingRouterMockForZkSanityCheck,
 } from "typechain-types";
@@ -18,6 +19,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let accountingOracle: AccountingOracleMock;
   let stakingRouter: StakingRouterMockForZkSanityCheck;
   let deployer: HardhatEthersSigner;
+  let multiprover: Multiprover;
 
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
@@ -49,6 +51,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();
 
+    multiprover = await ethers.deployContract("Multiprover", [deployer.address]);
+
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
     stakingRouter = await ethers.deployContract("StakingRouterMockForZkSanityCheck");
     const sanityChecker = deployer.address;
@@ -69,6 +73,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         withdrawalVault: deployer.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
+        zkMultiprover: await multiprover.getAddress(),
       },
     ]);
 
@@ -114,6 +119,27 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await stakingRouter.removeStakingModule(1);
       expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([2]);
       expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([0, 0, 0]);
+    });
+  });
+
+  context("OracleReportSanityChecker checks against zkOracles", () => {
+    it(`base parameters are correct`, async () => {
+      const timestamp = 100 * 12 + 1606824023;
+
+      await expect(
+        checker._checkOneOffCLBalanceDecrease(Object.values(defaultLimitsList), 100, 96, 10, timestamp),
+      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+
+      const zkOracle = await ethers.deployContract("ZkOracleMock");
+      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
+      await multiprover.grantRole(role, deployer);
+
+      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
+      await multiprover.addMember(await zkOracle.getAddress(), 1);
+
+      await expect(checker._checkOneOffCLBalanceDecrease(Object.values(defaultLimitsList), 100, 96, 10, timestamp))
+        .to.be.revertedWithCustomError(checker, "zkBalanceMismatch")
+        .withArgs(96, 95);
     });
   });
 });
