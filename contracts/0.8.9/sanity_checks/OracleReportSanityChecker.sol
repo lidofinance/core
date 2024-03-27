@@ -156,8 +156,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
 
-    address internal constant MULTIPROVER = 0xd497Be005638efCf09F6BFC8DAFBBB0BB72cD991;
-
     ILidoLocator private immutable LIDO_LOCATOR;
 
     LimitsListPacked private _limits;
@@ -592,13 +590,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
+    // TODO: This should be internal and not public
     function _checkOneOffCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
         uint256 _postCLValidators,
         uint256 _reportTimestamp
-    ) internal view {
+    ) public view {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
         uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
             _preCLBalance;
@@ -612,19 +611,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
+        address multiprover = locator.zkMultiprover();
         (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
-            = ILidoZKOracle(MULTIPROVER).getReport(refSlot);
+            = ILidoZKOracle(multiprover).getReport(refSlot);
         if (success) {
             uint balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             // TODO: Move constant to limitsList?
-            require(balanceDifferenceBP <= 74, "CL_BALANCE_MISMATCH");
+            if (balanceDifferenceBP > 74) {
+                revert zkBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+            }
 
             // NOTE: As number of validators reported by zkOracles could be greater
             //       than the number of Lido validators
-            require(_postCLValidators <= numValidators , "CL_VALIDATORS_MISMATCH");
+            if (_postCLValidators > numValidators) {
+                revert zkClValidatorsMismatch(_postCLValidators, numValidators);
+            }
 
             // NOTE: Checking exitedValidators against StakingRouter
             IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
@@ -634,9 +638,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 IStakingRouter.StakingModuleSummary memory summary = stakingRouter.getStakingModuleSummary(ids[i]);
                 stakingRouterExitedValidators += summary.totalExitedValidators;
             }
-            require(stakingRouterExitedValidators <= exitedValidators, "EXITED_VALIDATORS_MISMATCH");
+            if (stakingRouterExitedValidators > exitedValidators) {
+                revert zkExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+            }
         } else {
-            revert("ZK_ORACLE_FAILED");
+            revert zkOracleFailed();
         }
     }
 
@@ -825,6 +831,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
+
+    error zkBalanceMismatch(uint256 balance, uint256 zkBalance);
+    error zkClValidatorsMismatch(uint256 validators, uint256 zkValidators);
+    error zkExitedValidatorsMismatch(uint256 exitedValidators, uint256 zkExitedValidators);
+    error zkOracleFailed();
 }
 
 library LimitsListPacker {
