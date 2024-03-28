@@ -18,6 +18,7 @@ contract LidoLocator__MutableMock {
     address withdrawalQueue;
     address withdrawalVault;
     address oracleDaemonConfig;
+    address zkMultiprover;
   }
 
   error ZeroAddress();
@@ -36,6 +37,7 @@ contract LidoLocator__MutableMock {
   address public withdrawalQueue;
   address public withdrawalVault;
   address public oracleDaemonConfig;
+  address public zkMultiprover;
 
   /**
    * @notice declare service locations
@@ -57,6 +59,7 @@ contract LidoLocator__MutableMock {
     withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
     withdrawalVault = _assertNonZero(_config.withdrawalVault);
     oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+    zkMultiprover = _assertNonZero(_config.zkMultiprover);
   }
 
   function coreComponents() external view returns (address, address, address, address, address, address) {
