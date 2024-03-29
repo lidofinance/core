@@ -6,6 +6,27 @@ import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 import { ILidoZKOracle } from "./ILidoZKOracle.sol";
 
+contract MultiproverStorage {
+    /// @dev Oracle committee members' addresses array
+    address[] internal _memberAddresses;
+
+    /// @dev Oracle committee members quorum value, must be larger than totalMembers // 2
+    uint256 internal immutable _quorum;
+
+    constructor(address[] memory members, uint256 quorum) {
+        _memberAddresses = members;
+        _quorum = quorum;
+    }
+
+    function getMembers() external view returns (address[] memory) {
+        return _memberAddresses;
+    }
+
+    function getQuorum() external view returns (uint256) {
+        return _quorum;
+    }
+}
+
 contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
     using SafeCast for uint256;
 
@@ -19,24 +40,6 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
 
     error NoConsensus();
 
-    event MemberAdded(address indexed addr, uint256 newTotalMembers, uint256 newQuorum);
-    event MemberRemoved(address indexed addr, uint256 newTotalMembers, uint256 newQuorum);
-    event QuorumSet(uint256 newQuorum, uint256 totalMembers, uint256 prevQuorum);
-
-    /// @notice An ACL role granting the permission to modify members list members and
-    /// change the quorum by calling addMember, removeMember, and setQuorum functions.
-    bytes32 public constant MANAGE_MEMBERS_AND_QUORUM_ROLE =
-        keccak256("MANAGE_MEMBERS_AND_QUORUM_ROLE");
-
-    /// @dev A quorum value that effectively disables the oracle.
-    uint256 internal constant UNREACHABLE_QUORUM = type(uint256).max;
-
-    /// @dev Oracle committee members' addresses array
-    address[] internal _memberAddresses;
-
-    /// @dev Oracle committee members quorum value, must be larger than totalMembers // 2
-    uint256 internal _quorum;
-
     struct Report {
         bool success;
         uint256 clBalanceGwei;
@@ -44,101 +47,37 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
         uint256 exitedValidators;
     }
 
+    address internal _members;
+
     constructor(
-        address admin
+        address admin,
+        address[] memory members,
+        uint256 quorum
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
 
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
+
+        setMembers(members, quorum);
     }
 
-    function getMembers() external view returns (
+    function setMembers(address[] memory members, uint256 quorum) public
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 totalMembers = members.length;
+            if (quorum <= totalMembers / 2) {
+                revert QuorumTooSmall(totalMembers / 2 + 1, quorum);
+            }
+        _members = address(new MultiproverStorage(members, quorum));
+    }
+
+    function getMembers() public view returns (
         address[] memory addresses
     ) {
-        return _memberAddresses;
+        return MultiproverStorage(_members).getMembers();
     }
 
-    function addMember(address addr, uint256 quorum)
-        external
-        onlyRole(MANAGE_MEMBERS_AND_QUORUM_ROLE)
-    {
-        _addMember(addr, quorum);
-    }
-
-    function removeMember(address addr, uint256 quorum)
-        external
-        onlyRole(MANAGE_MEMBERS_AND_QUORUM_ROLE)
-    {
-        _removeMember(addr, quorum);
-    }
-
-    function getQuorum() external view returns (uint256) {
-        return _quorum;
-    }
-
-    function setQuorum(uint256 quorum) external {
-        // access control is performed inside the next call
-        _setQuorumAndCheckConsensus(quorum, _memberAddresses.length);
-    }
-
-    ///
-    /// Implementation: members
-    ///
-
-    function isMember(address addr) internal view returns (bool) {
-        uint256 length = _memberAddresses.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (_memberAddresses[i] == addr) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    function _addMember(address addr, uint256 quorum) internal {
-        if (isMember(addr)) revert DuplicateMember();
-        if (addr == address(0)) revert AddressCannotBeZero();
-
-        _memberAddresses.push(addr);
-
-        uint256 newTotalMembers = _memberAddresses.length;
-
-        emit MemberAdded(addr, newTotalMembers, quorum);
-
-        _setQuorumAndCheckConsensus(quorum, newTotalMembers);
-    }
-
-    function _removeMember(address addr, uint256 quorum) internal {
-        require(isMember(addr), "Address not a member");
-        uint256 newTotalMembers = _memberAddresses.length - 1;
-
-        for (uint256 i = 0; i < _memberAddresses.length; i++) {
-            if (_memberAddresses[i] == addr) {
-                // Move the last element into the place to delete
-                _memberAddresses[i] = _memberAddresses[_memberAddresses.length - 1];
-                // Remove the last element
-                _memberAddresses.pop();
-                break;
-            }
-        }
-
-        emit MemberRemoved(addr, newTotalMembers, quorum);
-
-        _setQuorumAndCheckConsensus(quorum, newTotalMembers);
-    }
-
-    function _setQuorumAndCheckConsensus(uint256 quorum, uint256 totalMembers) internal {
-        if (quorum <= totalMembers / 2) {
-            revert QuorumTooSmall(totalMembers / 2 + 1, quorum);
-        }
-
-        uint256 prevQuorum = _quorum;
-        if (quorum != prevQuorum) {
-            _checkRole(MANAGE_MEMBERS_AND_QUORUM_ROLE, _msgSender());
-            _quorum = quorum;
-            emit QuorumSet(quorum, totalMembers, prevQuorum);
-        }
+    function getQuorum() public view returns (uint256) {
+        return MultiproverStorage(_members).getQuorum();
     }
 
     ///
@@ -166,13 +105,15 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
         uint256 numValidators,
         uint256 exitedValidators
     ) {
-        Report[] memory reportsData = new Report[](_memberAddresses.length);
-        uint256[] memory reportCounts = new uint256[](_memberAddresses.length);
+        address[] memory members = getMembers();
+        uint256 quorum = getQuorum();
+        Report[] memory reportsData = new Report[](members.length);
+        uint256[] memory reportCounts = new uint256[](members.length);
         uint256 reports = 0;
 
-        uint256 length = _memberAddresses.length;
+        uint256 length = members.length;
         for (uint256 i = 0; i < length; i++) {
-            ILidoZKOracle oracle = ILidoZKOracle(_memberAddresses[i]);
+            ILidoZKOracle oracle = ILidoZKOracle(members[i]);
             Report memory report = _requestReportFromOracle(oracle, refSlot);
             if (report.success) {
                 uint256 currentReportCount = 0;
@@ -189,17 +130,11 @@ contract Multiprover is ILidoZKOracle, AccessControlEnumerable {
                     currentReportCount = 1;
                     reports++;
                 }
-                if (currentReportCount >= _quorum) {
+                if (currentReportCount >= quorum) {
                     return (report.success, report.clBalanceGwei, report.numValidators, report.exitedValidators);
                 }
             }
         }
         revert NoConsensus();
    }
-
-    ///
-    /// Implementation: Auto-resettable fuse
-    ///
-
-    // TODO: implement the fuse
 }
