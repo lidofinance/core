@@ -592,20 +592,28 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         }
     }
 
-    // TODO: This should be internal and not public
     function _checkOneOffCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
         uint256 _postCLValidators,
         uint256 _reportTimestamp
-    ) public view {
+    ) internal view {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
         uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
             _preCLBalance;
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
+        checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
+    }
+
+    // TODO: This probably should be internal and not public
+    function checkAccountingReportZKP(
+        uint256 _unifiedPostCLBalance,
+        uint256 _postCLValidators,
+        uint256 _reportTimestamp) public view {
+
         ILidoLocator locator = ILidoLocator(getLidoLocator());
         address accountingOracle = locator.accountingOracle();
 
@@ -623,13 +631,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             // TODO: Move constant to limitsList?
             if (balanceDifferenceBP > 74) {
-                revert zkBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
 
             // NOTE: As number of validators reported by zkOracles could be greater
             //       than the number of Lido validators
             if (_postCLValidators > numValidators) {
-                revert zkClValidatorsMismatch(_postCLValidators, numValidators);
+                revert NumValidatorsMismatch(_postCLValidators, numValidators);
             }
 
             // NOTE: Checking exitedValidators against StakingRouter
@@ -641,10 +649,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
                 stakingRouterExitedValidators += summary.totalExitedValidators;
             }
             if (stakingRouterExitedValidators > exitedValidators) {
-                revert zkExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+                revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
             }
         } else {
-            revert zkOracleFailed();
+            revert ZKReportIsNotReady();
         }
     }
 
@@ -834,10 +842,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
 
-    error zkBalanceMismatch(uint256 balance, uint256 zkBalance);
-    error zkClValidatorsMismatch(uint256 validators, uint256 zkValidators);
-    error zkExitedValidatorsMismatch(uint256 exitedValidators, uint256 zkExitedValidators);
-    error zkOracleFailed();
+    error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
+    error NumValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
+    error ExitedValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
+    error ZKReportIsNotReady();
 }
 
 library LimitsListPacker {

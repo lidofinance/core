@@ -126,9 +126,10 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     it(`base parameters are correct`, async () => {
       const timestamp = 100 * 12 + 1606824023;
 
-      await expect(
-        checker._checkOneOffCLBalanceDecrease(defaultLimitsList, 100, 96, 10, timestamp),
-      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+      await expect(checker.checkAccountingReportZKP(96, 10, timestamp)).to.be.revertedWithCustomError(
+        multiprover,
+        "NoConsensus",
+      );
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
       const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
@@ -137,8 +138,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
       await multiprover.addMember(await zkOracle.getAddress(), 1);
 
-      await expect(checker._checkOneOffCLBalanceDecrease(defaultLimitsList, 100, 96, 10, timestamp))
-        .to.be.revertedWithCustomError(checker, "zkBalanceMismatch")
+      await expect(checker.checkAccountingReportZKP(96, 10, timestamp))
+        .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
         .withArgs(96, 95);
     });
   });
