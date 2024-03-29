@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2945"  lines-covered="1195"  line-rate="0.4058"  branches-valid="1312"  branches-covered="563"  branch-rate="0.4291"  timestamp="1711704565085" complexity="0" version="0.1">
+<coverage lines-valid="2945"  lines-covered="1195"  line-rate="0.4058"  branches-valid="1312"  branches-covered="563"  branch-rate="0.4291"  timestamp="1711722467043" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -5214,7 +5214,7 @@
 			<line number="37"  hits="43"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="40"  hits="43"  branch="false" />
 			<line number="41"  hits="43"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="43"  hits="41"  branch="false" />
+			<line number="43"  hits="42"  branch="false" />
 			<line number="51"  hits="29"  branch="false" />
 			<line number="52"  hits="29"  branch="false" />
 			<line number="53"  hits="29"  branch="false" />
