@@ -11,6 +11,8 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {ILidoZKOracle} from "../oracle/ILidoZKOracle.sol";
+import { SanityFuse } from "./SanityFuse.sol";
+
 
 import {IBurner} from "../../common/interfaces/IBurner.sol";
 
@@ -128,7 +130,7 @@ uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
 ///     and lever methods for granular tuning of the params of the checks
-contract OracleReportSanityChecker is AccessControlEnumerable {
+contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
     using LimitsListPacker for LimitsList;
     using LimitsListUnpacker for LimitsListPacked;
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
