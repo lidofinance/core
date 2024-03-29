@@ -625,12 +625,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
             = ILidoZKOracle(multiprover).getReport(refSlot);
         if (success) {
-            uint balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
+            uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
-            // TODO: Move constant to limitsList?
-            if (balanceDifferenceBP > 74) {
+            // TODO: Move constant to limitsList
+            if (balanceDifferenceBP >= 74) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
 
