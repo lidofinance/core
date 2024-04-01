@@ -82,6 +82,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       deployer.address,
       Object.values(defaultLimitsList),
       Object.values(managersRoster),
+      deployer.address,
     ]);
   });
 
