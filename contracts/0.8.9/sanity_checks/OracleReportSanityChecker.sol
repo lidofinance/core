@@ -11,7 +11,7 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {ILidoZKOracle} from "../oracle/ILidoZKOracle.sol";
-import { SanityFuse } from "./SanityFuse.sol";
+import {SanityFuse} from "./SanityFuse.sol";
 
 
 import {IBurner} from "../../common/interfaces/IBurner.sol";
@@ -173,6 +173,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         address[] maxNodeOperatorsPerExtraDataItemCountManagers;
         address[] requestTimestampMarginManagers;
         address[] maxPositiveTokenRebaseManagers;
+    }
+
+    enum ZKReportResult {
+        Success,
+        ZKReportIsNotReady,
+        ClBalanceMismatch,
+        NumValidatorsMismatch,
+        ExitedValidatorsMismatch
     }
 
     /// @param _lidoLocator address of the LidoLocator instance
@@ -624,35 +632,51 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         address multiprover = locator.zkMultiprover();
         (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
             = ILidoZKOracle(multiprover).getReport(refSlot);
+
+        ZKReportResult result;
+        uint256 stakingRouterExitedValidators = 0;
         if (success) {
+            result = ZKReportResult.Success;
             uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             // TODO: Move constant to limitsList
             if (balanceDifferenceBP >= 74) {
-                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+                result = ZKReportResult.ClBalanceMismatch;
             }
 
-            // NOTE: As number of validators reported by zkOracles could be greater
+            // As number of validators reported by zkOracles could be greater
             //       than the number of Lido validators
             if (_postCLValidators > numValidators) {
-                revert NumValidatorsMismatch(_postCLValidators, numValidators);
+                result = ZKReportResult.NumValidatorsMismatch;
             }
 
-            // NOTE: Checking exitedValidators against StakingRouter
+            // Checking exitedValidators against StakingRouter
             IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
             uint256[] memory ids = stakingRouter.getStakingModuleIds();
-            uint256 stakingRouterExitedValidators = 0;
+
             for (uint256 i = 0; i < ids.length; i++) {
                 IStakingRouter.StakingModuleSummary memory summary = stakingRouter.getStakingModuleSummary(ids[i]);
                 stakingRouterExitedValidators += summary.totalExitedValidators;
             }
             if (stakingRouterExitedValidators > exitedValidators) {
-                revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+                result = ZKReportResult.ExitedValidatorsMismatch;
             }
         } else {
-            revert ZKReportIsNotReady();
+            result = ZKReportResult.ZKReportIsNotReady;
+        }
+        bool fuseBlown = consultFuse(result == ZKReportResult.Success);
+        if (!fuseBlown) {
+            if (result == ZKReportResult.ClBalanceMismatch) {
+                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+            } else if (result == ZKReportResult.NumValidatorsMismatch) {
+                revert NumValidatorsMismatch(_postCLValidators, numValidators);
+            } else if (result == ZKReportResult.ExitedValidatorsMismatch) {
+                revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+            } else if (result == ZKReportResult.ZKReportIsNotReady) {
+                revert ZKReportIsNotReady();
+            }
         }
     }
 
