@@ -4,15 +4,15 @@ pragma solidity 0.8.9;
 
 contract SanityFuse {
 
-    uint256 private _expiryTimestamp;
     address private _fuseCommittee;
+    uint256 private _expiryTimestamp;
 
     uint256 private _lastSuccessfulReports;
     bool private _isFuseBlown;
 
-    constructor(uint256 expiryTimestamp, address fuseCommittee) {
-        _expiryTimestamp = expiryTimestamp;
+    constructor(address fuseCommittee, uint256 expiryTimestamp) {
         _fuseCommittee = fuseCommittee;
+        _expiryTimestamp = expiryTimestamp;
     }
 
     function blowFuse() external {

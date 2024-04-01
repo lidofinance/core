@@ -191,8 +191,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         address _lidoLocator,
         address _admin,
         LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster
-    ) {
+        ManagersRoster memory _managersRoster,
+        address _fuseCommittee
+    ) SanityFuse(_fuseCommittee, block.timestamp + 365 days)
+    {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
 
