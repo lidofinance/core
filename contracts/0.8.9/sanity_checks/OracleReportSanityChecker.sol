@@ -193,7 +193,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         LimitsList memory _limitsList,
         ManagersRoster memory _managersRoster,
         address _fuseCommittee
-    ) SanityFuse(_fuseCommittee, block.timestamp + 365 days)
+    ) SanityFuse(_fuseCommittee, block.timestamp + 1 days)
     {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
@@ -457,7 +457,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         uint256 _sharesRequestedToBurn,
         uint256 _preCLValidators,
         uint256 _postCLValidators
-    ) external view {
+    ) external {
         LimitsList memory limitsList = _limits.unpack();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
@@ -608,7 +608,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         uint256 _unifiedPostCLBalance,
         uint256 _postCLValidators,
         uint256 _reportTimestamp
-    ) internal view {
+    ) internal {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
         uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
             _preCLBalance;
@@ -622,7 +622,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
     function checkAccountingReportZKP(
         uint256 _unifiedPostCLBalance,
         uint256 _postCLValidators,
-        uint256 _reportTimestamp) public view {
+        uint256 _reportTimestamp) public {
 
         ILidoLocator locator = ILidoLocator(getLidoLocator());
         address accountingOracle = locator.accountingOracle();
