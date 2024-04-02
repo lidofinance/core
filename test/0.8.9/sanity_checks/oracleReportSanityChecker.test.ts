@@ -56,6 +56,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
     stakingRouter = await ethers.deployContract("StakingRouterMockForZkSanityCheck");
     const sanityChecker = deployer.address;
+    const burner = await ethers.deployContract("BurnerStub", []);
 
     locator = await ethers.deployContract("LidoLocatorMock", [
       {
@@ -65,7 +66,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         accountingOracle: await accountingOracle.getAddress(),
         legacyOracle: deployer.address,
         oracleReportSanityChecker: sanityChecker,
-        burner: deployer.address,
+        burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,
         stakingRouter: stakingRouter,
         treasury: deployer.address,
@@ -127,10 +128,9 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     it(`base parameters are correct`, async () => {
       const timestamp = 100 * 12 + 1606824023;
 
-      await expect(checker.checkAccountingReportZKP(96, 10, timestamp)).to.be.revertedWithCustomError(
-        multiprover,
-        "NoConsensus",
-      );
+      await expect(
+        checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
+      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
       const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
@@ -139,9 +139,9 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
       await multiprover.addMember(await zkOracle.getAddress(), 1);
 
-      await expect(checker.checkAccountingReportZKP(96, 10, timestamp))
+      await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
-        .withArgs(96, 95);
+        .withArgs(94, 95);
     });
   });
 });
