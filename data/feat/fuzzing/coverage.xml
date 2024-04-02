@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2849"  lines-covered="1057"  line-rate="0.371"  branches-valid="1268"  branches-covered="539"  branch-rate="0.4251"  timestamp="1712052282920" complexity="0" version="0.1">
+<coverage lines-valid="2841"  lines-covered="1057"  line-rate="0.3721"  branches-valid="1266"  branches-covered="539"  branch-rate="0.42579999999999996"  timestamp="1712057133822" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4995,7 +4995,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="common.lib"  line-rate="0.4068"  branch-rate="0.4722" >
+	<package name="common.lib"  line-rate="0.4706"  branch-rate="0.5" >
 	<classes>
 		<class name="ECDSA.sol"  filename="contracts/common/lib/ECDSA.sol"  line-rate="1"  branch-rate="0.75" >
 		<methods>
@@ -5045,32 +5045,6 @@
 			<line number="28"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="37"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="42"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
-		</lines>
-		</class>
-		<class name="MemUtils.sol"  filename="contracts/common/lib/MemUtils.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="unsafeAllocateBytes"  hits="0"  signature="()V" >
-				<lines><line number="13"  hits="0" /></lines>
-			</method>
-			<method name="memcpy"  hits="0"  signature="()V" >
-				<lines><line number="26"  hits="0" /></lines>
-			</method>
-			<method name="copyBytes"  hits="0"  signature="()V" >
-				<lines><line number="49"  hits="0" /></lines>
-			</method>
-			<method name="copyBytes"  hits="0"  signature="()V" >
-				<lines><line number="63"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="14"  hits="0"  branch="false" />
-			<line number="27"  hits="0"  branch="false" />
-			<line number="50"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="51"  hits="0"  branch="false" />
-			<line number="52"  hits="0"  branch="false" />
-			<line number="53"  hits="0"  branch="false" />
-			<line number="57"  hits="0"  branch="false" />
-			<line number="64"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="MinFirstAllocationStrategy.sol"  filename="contracts/common/lib/MinFirstAllocationStrategy.sol"  line-rate="0"  branch-rate="0" >
