@@ -125,8 +125,11 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   });
 
   context("OracleReportSanityChecker checks against zkOracles", () => {
-    it(`base parameters are correct`, async () => {
+    it(`works for happy path, NoConsensus and ClBalanceMismatch`, async () => {
       const timestamp = 100 * 12 + 1606824023;
+
+      // Expect to pass through
+      await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
 
       await expect(
         checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
@@ -142,6 +145,42 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
         .withArgs(94, 95);
+    });
+
+    it(`works for NumValidatorsMismatch, `, async () => {
+      const timestamp = 100 * 12 + 1606824023;
+
+      const zkOracle = await ethers.deployContract("ZkOracleMock");
+      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
+      await multiprover.grantRole(role, deployer);
+
+      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
+      await multiprover.addMember(await zkOracle.getAddress(), 1);
+
+      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 12))
+        .to.be.revertedWithCustomError(checker, "NumValidatorsMismatch")
+        .withArgs(12, 10);
+    });
+
+    it(`works for ExitedValidatorsMismatch, `, async () => {
+      const timestamp = 100 * 12 + 1606824023;
+
+      const zkOracle = await ethers.deployContract("ZkOracleMock");
+      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
+      await multiprover.grantRole(role, deployer);
+
+      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
+      await multiprover.addMember(await zkOracle.getAddress(), 1);
+
+      await stakingRouter.addStakingModule(1, {
+        totalExitedValidators: 10,
+        totalDepositedValidators: 20,
+        depositableValidatorsCount: 0,
+      });
+
+      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10))
+        .to.be.revertedWithCustomError(checker, "ExitedValidatorsMismatch")
+        .withArgs(10, 3);
     });
   });
 });
