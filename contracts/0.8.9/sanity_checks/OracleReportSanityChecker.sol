@@ -615,14 +615,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
-        checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
+        _checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
     }
 
-    // TODO: This probably should be internal and not public
-    function checkAccountingReportZKP(
+    function _checkAccountingReportZKP(
         uint256 _unifiedPostCLBalance,
         uint256 _postCLValidators,
-        uint256 _reportTimestamp) public {
+        uint256 _reportTimestamp) internal {
 
         ILidoLocator locator = ILidoLocator(getLidoLocator());
         address accountingOracle = locator.accountingOracle();
