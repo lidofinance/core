@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2841"  lines-covered="1057"  line-rate="0.3721"  branches-valid="1266"  branches-covered="539"  branch-rate="0.42579999999999996"  timestamp="1712057133822" complexity="0" version="0.1">
+<coverage lines-valid="2835"  lines-covered="1051"  line-rate="0.37070000000000003"  branches-valid="1254"  branches-covered="527"  branch-rate="0.4203"  timestamp="1712057365534" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4995,7 +4995,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="common.lib"  line-rate="0.4706"  branch-rate="0.5" >
+	<package name="common.lib"  line-rate="0.4"  branch-rate="0.2273" >
 	<classes>
 		<class name="ECDSA.sol"  filename="contracts/common/lib/ECDSA.sol"  line-rate="1"  branch-rate="0.75" >
 		<methods>
@@ -5015,36 +5015,6 @@
 			<line number="52"  hits="29"  branch="false" />
 			<line number="53"  hits="29"  branch="false" />
 			<line number="57"  hits="29"  branch="false" />
-		</lines>
-		</class>
-		<class name="Math256.sol"  filename="contracts/common/lib/Math256.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-			<method name="max"  hits="3"  signature="()V" >
-				<lines><line number="12"  hits="3" /></lines>
-			</method>
-			<method name="min"  hits="5"  signature="()V" >
-				<lines><line number="17"  hits="5" /></lines>
-			</method>
-			<method name="max"  hits="5"  signature="()V" >
-				<lines><line number="22"  hits="5" /></lines>
-			</method>
-			<method name="min"  hits="5"  signature="()V" >
-				<lines><line number="27"  hits="5" /></lines>
-			</method>
-			<method name="ceilDiv"  hits="8"  signature="()V" >
-				<lines><line number="35"  hits="8" /></lines>
-			</method>
-			<method name="absDiff"  hits="7"  signature="()V" >
-				<lines><line number="41"  hits="7" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="13"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="18"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="23"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="28"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="37"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="42"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 		<class name="MinFirstAllocationStrategy.sol"  filename="contracts/common/lib/MinFirstAllocationStrategy.sol"  line-rate="0"  branch-rate="0" >
