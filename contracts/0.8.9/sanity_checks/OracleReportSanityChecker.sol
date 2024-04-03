@@ -160,6 +160,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
 
     ILidoLocator private immutable LIDO_LOCATOR;
 
+    address private _negativeRebaseOracle;
     LimitsListPacked private _limits;
 
     struct ManagersRoster {
@@ -192,11 +193,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         address _admin,
         LimitsList memory _limitsList,
         ManagersRoster memory _managersRoster,
-        address _fuseCommittee
+        address _fuseCommittee,
+        address _negativeRebaseOracleAddr
     ) SanityFuse(_fuseCommittee, block.timestamp + 365 days)
     {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+        _negativeRebaseOracle = _negativeRebaseOracleAddr;
 
         _updateLimits(_limitsList);
 
@@ -371,6 +374,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         LimitsList memory limitsList = _limits.unpack();
         limitsList.maxNodeOperatorsPerExtraDataItemCount = _maxNodeOperatorsPerExtraDataItemCount;
         _updateLimits(limitsList);
+    }
+
+    /// @notice Returns the address of the negative rebase oracle
+    function getNegativeRebaseOracle() public view returns (address) {
+        return _negativeRebaseOracle;
+    }
+
+    /// @notice Sets the address of the negative rebase oracle
+    /// @param negativeRebaseOracle address of the negative rebase oracle
+    function setNegativeRebaseOracle(address negativeRebaseOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _negativeRebaseOracle = negativeRebaseOracle;
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
@@ -623,6 +637,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         uint256 _postCLValidators,
         uint256 _reportTimestamp) internal {
 
+        address negativeRebaseOracle = getNegativeRebaseOracle();
+        // If there is no negative rebase oracle, then we don't need to check the zk report
+        if (negativeRebaseOracle == address(0)) {
+            return;
+        }
+
         ILidoLocator locator = ILidoLocator(getLidoLocator());
         address accountingOracle = locator.accountingOracle();
 
@@ -630,9 +650,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
             ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
-        address multiprover = locator.zkMultiprover();
         (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
-            = ILidoZKOracle(multiprover).getReport(refSlot);
+            = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
 
         ZKReportResult result;
         uint256 stakingRouterExitedValidators = 0;
