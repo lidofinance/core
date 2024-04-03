@@ -28,7 +28,6 @@ export async function dummyLocator(config?: Partial<LidoLocator.ConfigStruct>, d
     validatorsExitBusOracle: certainAddress("dummy-locator:validatorsExitBusOracle"),
     withdrawalQueue: certainAddress("dummy-locator:withdrawalQueue"),
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
-    zkMultiprover: certainAddress("dummy-locator:zkMultiprover"),
     ...config,
   });
 
