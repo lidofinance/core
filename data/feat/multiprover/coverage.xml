@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2968"  lines-covered="1240"  line-rate="0.4178"  branches-valid="1334"  branches-covered="587"  branch-rate="0.44"  timestamp="1712071254532" complexity="0" version="0.1">
+<coverage lines-valid="2979"  lines-covered="1251"  line-rate="0.4199"  branches-valid="1344"  branches-covered="595"  branch-rate="0.44270000000000004"  timestamp="1712140816493" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4668,7 +4668,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.sanity_checks"  line-rate="0.5602"  branch-rate="0.33049999999999996" >
+	<package name="0.8.9.sanity_checks"  line-rate="0.5815"  branch-rate="0.36719999999999997" >
 	<classes>
 		<class name="OracleReportSanityChecker.sol"  filename="contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol"  line-rate="0.5644"  branch-rate="0.3396" >
 		<methods>
@@ -4989,33 +4989,47 @@
 			<line number="905"  hits="10"  branch="false" />
 		</lines>
 		</class>
-		<class name="SanityFuse.sol"  filename="contracts/0.8.9/sanity_checks/SanityFuse.sol"  line-rate="0.5"  branch-rate="0.25" >
+		<class name="SanityFuse.sol"  filename="contracts/0.8.9/sanity_checks/SanityFuse.sol"  line-rate="0.72"  branch-rate="0.5" >
 		<methods>
-			<method name="constructor"  hits="5"  signature="()V" >
-				<lines><line number="13"  hits="5" /></lines>
+			<method name="constructor"  hits="6"  signature="()V" >
+				<lines><line number="23"  hits="6" /></lines>
 			</method>
 			<method name="blowFuse"  hits="0"  signature="()V" >
-				<lines><line number="18"  hits="0" /></lines>
+				<lines><line number="32"  hits="0" /></lines>
 			</method>
-			<method name="consultFuse"  hits="3"  signature="()V" >
-				<lines><line number="25"  hits="3" /></lines>
+			<method name="getSuccessfulReports"  hits="1"  signature="()V" >
+				<lines><line number="40"  hits="1" /></lines>
+			</method>
+			<method name="consultFuse"  hits="11"  signature="()V" >
+				<lines><line number="44"  hits="11" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="14"  hits="5"  branch="false" />
-			<line number="15"  hits="5"  branch="false" />
-			<line number="19"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="20"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="21"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="22"  hits="0"  branch="false" />
-			<line number="26"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="27"  hits="0"  branch="false" />
-			<line number="29"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="30"  hits="0"  branch="false" />
-			<line number="32"  hits="3"  branch="false" />
-			<line number="34"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="35"  hits="0"  branch="false" />
-			<line number="37"  hits="3"  branch="false" />
+			<line number="24"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="25"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="26"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="28"  hits="6"  branch="false" />
+			<line number="29"  hits="6"  branch="false" />
+			<line number="33"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="34"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="35"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="36"  hits="0"  branch="false" />
+			<line number="37"  hits="0"  branch="false" />
+			<line number="41"  hits="1"  branch="false" />
+			<line number="45"  hits="11"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="46"  hits="0"  branch="false" />
+			<line number="48"  hits="11"  branch="false" />
+			<line number="49"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="50"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="51"  hits="4"  branch="false" />
+			<line number="52"  hits="4"  branch="false" />
+			<line number="55"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="56"  hits="4"  branch="false" />
+			<line number="57"  hits="4"  branch="false" />
+			<line number="60"  hits="11"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="61"  hits="0"  branch="false" />
+			<line number="63"  hits="11"  branch="false" />
+			<line number="64"  hits="11"  branch="false" />
 		</lines>
 		</class>
 	</classes>
