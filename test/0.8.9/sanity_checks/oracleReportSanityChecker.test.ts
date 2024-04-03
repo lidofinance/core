@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -85,6 +86,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       Object.values(defaultLimitsList),
       Object.values(managersRoster),
       deployer.address,
+      await multiprover.getAddress(),
     ]);
   });
 
@@ -100,6 +102,20 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       log("secondsPerSlot", secondsPerSlot);
       log("genesisTime", genesisTime);
+    });
+
+    it(`zk oracle can be changed or removed`, async () => {
+      const timestamp = 100 * 12 + Number(genesisTime);
+      expect(await checker.getNegativeRebaseOracle()).to.be.equal(await multiprover.getAddress());
+
+      await expect(
+        checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
+      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+
+      await checker.setNegativeRebaseOracle(ZeroAddress);
+      expect(await checker.getNegativeRebaseOracle()).to.be.equal(ZeroAddress);
+
+      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10)).not.to.be.reverted;
     });
 
     it(`staking router mock is functional`, async () => {
