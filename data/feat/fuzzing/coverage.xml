@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2835"  lines-covered="1051"  line-rate="0.37070000000000003"  branches-valid="1254"  branches-covered="527"  branch-rate="0.4203"  timestamp="1712153146758" complexity="0" version="0.1">
+<coverage lines-valid="2808"  lines-covered="1051"  line-rate="0.3743"  branches-valid="1238"  branches-covered="527"  branch-rate="0.4257"  timestamp="1712160008878" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4995,7 +4995,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="common.lib"  line-rate="0.4"  branch-rate="0.2273" >
+	<package name="common.lib"  line-rate="1"  branch-rate="0.8332999999999999" >
 	<classes>
 		<class name="ECDSA.sol"  filename="contracts/common/lib/ECDSA.sol"  line-rate="1"  branch-rate="0.75" >
 		<methods>
@@ -5010,50 +5010,11 @@
 			<line number="37"  hits="43"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="40"  hits="43"  branch="false" />
 			<line number="41"  hits="43"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="43"  hits="41"  branch="false" />
+			<line number="43"  hits="42"  branch="false" />
 			<line number="51"  hits="29"  branch="false" />
 			<line number="52"  hits="29"  branch="false" />
 			<line number="53"  hits="29"  branch="false" />
 			<line number="57"  hits="29"  branch="false" />
-		</lines>
-		</class>
-		<class name="MinFirstAllocationStrategy.sol"  filename="contracts/common/lib/MinFirstAllocationStrategy.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="allocate"  hits="0"  signature="()V" >
-				<lines><line number="30"  hits="0" /></lines>
-			</method>
-			<method name="allocateToBestCandidate"  hits="0"  signature="()V" >
-				<lines><line number="62"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="35"  hits="0"  branch="false" />
-			<line number="36"  hits="0"  branch="false" />
-			<line number="37"  hits="0"  branch="false" />
-			<line number="38"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="39"  hits="0"  branch="false" />
-			<line number="41"  hits="0"  branch="false" />
-			<line number="67"  hits="0"  branch="false" />
-			<line number="68"  hits="0"  branch="false" />
-			<line number="69"  hits="0"  branch="false" />
-			<line number="71"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="72"  hits="0"  branch="false" />
-			<line number="75"  hits="0"  branch="false" />
-			<line number="76"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="77"  hits="0"  branch="false" />
-			<line number="79"  hits="0"  branch="false" />
-			<line number="80"  hits="0"  branch="false" />
-			<line number="81"  hits="0"  branch="false" />
-			<line number="83"  hits="0"  branch="false" />
-			<line number="87"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="88"  hits="0"  branch="false" />
-			<line number="92"  hits="0"  branch="false" />
-			<line number="93"  hits="0"  branch="false" />
-			<line number="94"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="95"  hits="0"  branch="false" />
-			<line number="97"  hits="0"  branch="false" />
-			<line number="101"  hits="0"  branch="false" />
-			<line number="105"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="SignatureUtils.sol"  filename="contracts/common/lib/SignatureUtils.sol"  line-rate="1"  branch-rate="1" >
