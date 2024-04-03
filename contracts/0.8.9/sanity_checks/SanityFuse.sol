@@ -31,13 +31,15 @@ contract SanityFuse {
 
     function blowFuse() external {
         require(msg.sender == _fuseCommittee, "SanityFuse: only committee can blow the fuse");
-        require(block.timestamp < _expiryTimestamp, "SanityFuse: fuse is not expired yet");
+        require(block.timestamp < _expiryTimestamp, "SanityFuse: fuse already expired");
         require(_successfulReportsCount == 1, "SanityFuse: fuse can be blown only after unsuccessful report");
+        require(_isFuseBlown == false, "SanityFuse: fuse already blown");
+
         _isFuseBlown = true;
         emit FuseBlown();
     }
 
-    function getSuccessfulReports() public view returns (uint8) {
+    function getSuccessfulReportsCount() public view returns (uint8) {
         return _successfulReportsCount;
     }
 
