@@ -20,6 +20,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let stakingRouter: StakingRouterMockForZkSanityCheck;
   let deployer: HardhatEthersSigner;
   let multiprover: Multiprover;
+  let genesisTime: bigint;
 
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
@@ -54,6 +55,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     multiprover = await ethers.deployContract("Multiprover", [deployer.address]);
 
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
+    genesisTime = await accountingOracle.GENESIS_TIME();
     stakingRouter = await ethers.deployContract("StakingRouterMockForZkSanityCheck");
     const sanityChecker = deployer.address;
     const burner = await ethers.deployContract("BurnerStub", []);
@@ -74,7 +76,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         withdrawalVault: deployer.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
-        zkMultiprover: await multiprover.getAddress(),
       },
     ]);
 
@@ -126,7 +127,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
   context("OracleReportSanityChecker checks against zkOracles", () => {
     it(`works for happy path, NoConsensus and ClBalanceMismatch`, async () => {
-      const timestamp = 100 * 12 + 1606824023;
+      const timestamp = 100 * 12 + Number(genesisTime);
 
       // Expect to pass through
       await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
@@ -148,7 +149,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     });
 
     it(`works for NumValidatorsMismatch, `, async () => {
-      const timestamp = 100 * 12 + 1606824023;
+      const timestamp = 100 * 12 + Number(genesisTime);
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
       const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
@@ -163,7 +164,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     });
 
     it(`works for ExitedValidatorsMismatch, `, async () => {
-      const timestamp = 100 * 12 + 1606824023;
+      const timestamp = 100 * 12 + Number(genesisTime);
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
       const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
