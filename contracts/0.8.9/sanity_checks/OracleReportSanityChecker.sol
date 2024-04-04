@@ -124,8 +124,14 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
 }
 
+struct RebaseData {
+    uint64 rebaseValue;
+    uint32 refSlot;
+}
+
 uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
+uint8 constant MAX_REBASE_SLOTS = 18;
 
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
@@ -162,6 +168,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
 
     address private _negativeRebaseOracle;
     LimitsListPacked private _limits;
+
+    RebaseData[MAX_REBASE_SLOTS] private _rebaseData;
+    uint8 private _rebaseIndex;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -630,6 +639,27 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
         _checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
+    }
+
+    function _addRebaseValue(uint64 rebaseValue, uint32 refSlot) internal {
+        _rebaseData[_rebaseIndex] = RebaseData(rebaseValue, refSlot);
+        _rebaseIndex = (_rebaseIndex + 1) % MAX_REBASE_SLOTS;
+    }
+
+    function sumRebaseValuesNotOlderThan(uint32 referenceSlot) public view returns (uint64) {
+        uint64 sum = 0;
+        uint8 i = MAX_REBASE_SLOTS + _rebaseIndex - 1;
+        uint8 steps = 0;
+        do {
+            if (_rebaseData[i % MAX_REBASE_SLOTS].refSlot >= referenceSlot) {
+                sum += _rebaseData[i % MAX_REBASE_SLOTS].rebaseValue;
+            } else {
+                break;
+            }
+            i = i - 1;
+        } while (steps < MAX_REBASE_SLOTS);
+
+        return sum;
     }
 
     function _checkAccountingReportZKP(

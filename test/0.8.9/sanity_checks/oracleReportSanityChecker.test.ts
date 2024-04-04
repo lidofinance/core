@@ -3,6 +3,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   AccountingOracleMock,
@@ -138,6 +139,52 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await stakingRouter.removeStakingModule(1);
       expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([2]);
       expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([0, 0, 0]);
+    });
+  });
+
+  context("OracleReportSanityChecker rebase slots logic", () => {
+    async function newChecker() {
+      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+        await locator.getAddress(),
+        deployer.address,
+        Object.values(defaultLimitsList),
+        Object.values(managersRoster),
+        deployer.address,
+        await multiprover.getAddress(),
+      ]);
+
+      return checker;
+    }
+    const SLOTS_PER_DAY = 7200;
+
+    it(`works for happy path`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+
+      const result = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result).to.equal(0);
+
+      await checker.addRebaseValue(100, timestamp - 1 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(150, timestamp - 2 * SLOTS_PER_DAY);
+
+      const result2 = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result2).to.equal(250);
+    });
+
+    it(`works for happy path`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+
+      await checker.addRebaseValue(700, timestamp - 19 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(13, timestamp - 18 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(10, timestamp - 17 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(5, timestamp - 5 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(150, timestamp - 2 * SLOTS_PER_DAY);
+      await checker.addRebaseValue(100, timestamp - 1 * SLOTS_PER_DAY);
+
+      const result = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result).to.equal(100 + 150 + 5 + 10 + 13);
+      log("result", result);
     });
   });
 
