@@ -191,14 +191,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         address[] maxPositiveTokenRebaseManagers;
     }
 
-    enum ZKReportResult {
-        Success,
-        ZKReportIsNotReady,
-        ClBalanceMismatch,
-        NumValidatorsMismatch,
-        ExitedValidatorsMismatch
-    }
-
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
@@ -498,7 +490,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         // 4. Consensus Layer one-off balance decrease
         _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance,
-            _postCLBalance + _withdrawalVaultBalance, _postCLValidators, _timeElapsed);
+            _postCLBalance + _withdrawalVaultBalance, _timeElapsed);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -631,7 +623,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
-        uint256 _postCLValidators,
         uint256 _reportTimestamp
     ) internal {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
@@ -640,7 +631,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
-        _checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
+        _checkAccountingReportZKP(_unifiedPostCLBalance, _reportTimestamp);
     }
 
     function _addRebaseValue(uint64 rebaseValue, uint32 refSlot) internal {
@@ -666,7 +657,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _checkAccountingReportZKP(
         uint256 _unifiedPostCLBalance,
-        uint256 _postCLValidators,
         uint256 _reportTimestamp) internal {
 
         address negativeRebaseOracle = getNegativeRebaseOracle();
@@ -682,49 +672,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
-        (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
+        (bool success, uint256 clBalanceGwei,,)
             = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
 
-        ZKReportResult result;
-        uint256 stakingRouterExitedValidators = 0;
         if (success) {
-            result = ZKReportResult.Success;
             uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             // TODO: Move constant to limitsList
             if (balanceDifferenceBP >= 74) {
-                result = ZKReportResult.ClBalanceMismatch;
+                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
 
-            // As number of validators reported by zkOracles could be greater
-            //       than the number of Lido validators
-            if (_postCLValidators > numValidators) {
-                result = ZKReportResult.NumValidatorsMismatch;
-            }
-
-            // Checking exitedValidators against StakingRouter
-            IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
-            uint256[] memory ids = stakingRouter.getStakingModuleIds();
-
-            for (uint256 i = 0; i < ids.length; i++) {
-                IStakingRouter.StakingModuleSummary memory summary = stakingRouter.getStakingModuleSummary(ids[i]);
-                stakingRouterExitedValidators += summary.totalExitedValidators;
-            }
-            if (stakingRouterExitedValidators > exitedValidators) {
-                result = ZKReportResult.ExitedValidatorsMismatch;
-            }
         } else {
-            result = ZKReportResult.ZKReportIsNotReady;
-        }
-        if (result == ZKReportResult.ClBalanceMismatch) {
-            revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
-        } else if (result == ZKReportResult.NumValidatorsMismatch) {
-            revert NumValidatorsMismatch(_postCLValidators, numValidators);
-        } else if (result == ZKReportResult.ExitedValidatorsMismatch) {
-            revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
-        } else if (result == ZKReportResult.ZKReportIsNotReady) {
             revert ZKReportIsNotReady();
         }
     }
