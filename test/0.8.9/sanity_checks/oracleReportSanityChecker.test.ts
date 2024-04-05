@@ -1,17 +1,10 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  AccountingOracleMock,
-  LidoLocatorMock,
-  Multiprover,
-  OracleReportSanityChecker,
-  StakingRouterMockForZkSanityCheck,
-} from "typechain-types";
+import { AccountingOracleMock, LidoLocatorMock, OracleReportSanityChecker } from "typechain-types";
 
 // pnpm hardhat test --grep "OracleReportSanityChecker"
 
@@ -19,10 +12,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let locator: LidoLocatorMock;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracleMock;
-  let stakingRouter: StakingRouterMockForZkSanityCheck;
   let deployer: HardhatEthersSigner;
-  let multiprover: Multiprover;
-  let genesisTime: bigint;
+  // let genesisTime: bigint;
 
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
@@ -54,11 +45,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();
 
-    multiprover = await ethers.deployContract("Multiprover", [deployer.address]);
-
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
-    genesisTime = await accountingOracle.GENESIS_TIME();
-    stakingRouter = await ethers.deployContract("StakingRouterMockForZkSanityCheck");
+    // genesisTime = await accountingOracle.GENESIS_TIME();
     const sanityChecker = deployer.address;
     const burner = await ethers.deployContract("BurnerStub", []);
 
@@ -72,7 +60,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         oracleReportSanityChecker: sanityChecker,
         burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,
-        stakingRouter: stakingRouter,
+        stakingRouter: deployer.address,
         treasury: deployer.address,
         withdrawalQueue: deployer.address,
         withdrawalVault: deployer.address,
@@ -86,8 +74,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       deployer.address,
       Object.values(defaultLimitsList),
       Object.values(managersRoster),
-      deployer.address,
-      await multiprover.getAddress(),
     ]);
   });
 
@@ -105,41 +91,19 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       log("genesisTime", genesisTime);
     });
 
-    it(`zk oracle can be changed or removed`, async () => {
-      const timestamp = 100 * 12 + Number(genesisTime);
-      expect(await checker.getNegativeRebaseOracle()).to.be.equal(await multiprover.getAddress());
+    // it(`zk oracle can be changed or removed`, async () => {
+    //   const timestamp = 100 * 12 + Number(genesisTime);
+    //   expect(await checker.getNegativeRebaseOracle()).to.be.equal(await multiprover.getAddress());
 
-      await expect(
-        checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
-      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+    //   await expect(
+    //     checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
+    //   ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
 
-      await checker.setNegativeRebaseOracle(ZeroAddress);
-      expect(await checker.getNegativeRebaseOracle()).to.be.equal(ZeroAddress);
+    //   await checker.setNegativeRebaseOracle(ZeroAddress);
+    //   expect(await checker.getNegativeRebaseOracle()).to.be.equal(ZeroAddress);
 
-      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10)).not.to.be.reverted;
-    });
-
-    it(`staking router mock is functional`, async () => {
-      await stakingRouter.addStakingModule(1, {
-        totalExitedValidators: 10,
-        totalDepositedValidators: 20,
-        depositableValidatorsCount: 0,
-      });
-      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([1]);
-      expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([10, 20, 0]);
-
-      await stakingRouter.addStakingModule(2, {
-        totalExitedValidators: 1,
-        totalDepositedValidators: 2,
-        depositableValidatorsCount: 0,
-      });
-      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([1, 2]);
-      expect(await stakingRouter.getStakingModuleSummary(2)).to.deep.equal([1, 2, 0]);
-
-      await stakingRouter.removeStakingModule(1);
-      expect(await stakingRouter.getStakingModuleIds()).to.deep.equal([2]);
-      expect(await stakingRouter.getStakingModuleSummary(1)).to.deep.equal([0, 0, 0]);
-    });
+    //   await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10)).not.to.be.reverted;
+    // });
   });
 
   context("OracleReportSanityChecker rebase slots logic", () => {
@@ -149,8 +113,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         deployer.address,
         Object.values(defaultLimitsList),
         Object.values(managersRoster),
-        deployer.address,
-        await multiprover.getAddress(),
       ]);
 
       return checker;
@@ -188,63 +150,28 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     });
   });
 
-  context("OracleReportSanityChecker checks against zkOracles", () => {
-    it(`works for happy path, NoConsensus and ClBalanceMismatch`, async () => {
-      const timestamp = 100 * 12 + Number(genesisTime);
+  // context("OracleReportSanityChecker checks against zkOracles", () => {
+  //   it(`works for happy path, NoConsensus and ClBalanceMismatch`, async () => {
+  //     const timestamp = 100 * 12 + Number(genesisTime);
 
-      // Expect to pass through
-      await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
+  //     // Expect to pass through
+  //     await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
 
-      await expect(
-        checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
-      ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+  //     await expect(
+  //       checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
+  //     ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
 
-      const zkOracle = await ethers.deployContract("ZkOracleMock");
-      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
-      await multiprover.grantRole(role, deployer);
+  //     const zkOracle = await ethers.deployContract("ZkOracleMock");
+  //     const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
+  //     await multiprover.grantRole(role, deployer);
 
-      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
-      await multiprover.addMember(await zkOracle.getAddress(), 1);
+  //     await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
+  //     await multiprover.addMember(await zkOracle.getAddress(), 1);
 
-      await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
-        .withArgs(94, 95);
-    });
+  //     await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
+  //       .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
+  //       .withArgs(94, 95);
+  //   });
 
-    it(`works for NumValidatorsMismatch, `, async () => {
-      const timestamp = 100 * 12 + Number(genesisTime);
-
-      const zkOracle = await ethers.deployContract("ZkOracleMock");
-      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
-      await multiprover.grantRole(role, deployer);
-
-      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
-      await multiprover.addMember(await zkOracle.getAddress(), 1);
-
-      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 12))
-        .to.be.revertedWithCustomError(checker, "NumValidatorsMismatch")
-        .withArgs(12, 10);
-    });
-
-    it(`works for ExitedValidatorsMismatch, `, async () => {
-      const timestamp = 100 * 12 + Number(genesisTime);
-
-      const zkOracle = await ethers.deployContract("ZkOracleMock");
-      const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
-      await multiprover.grantRole(role, deployer);
-
-      await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
-      await multiprover.addMember(await zkOracle.getAddress(), 1);
-
-      await stakingRouter.addStakingModule(1, {
-        totalExitedValidators: 10,
-        totalDepositedValidators: 20,
-        depositableValidatorsCount: 0,
-      });
-
-      await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "ExitedValidatorsMismatch")
-        .withArgs(10, 3);
-    });
-  });
+  // });
 });
