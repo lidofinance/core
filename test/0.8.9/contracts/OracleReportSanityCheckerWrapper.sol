@@ -10,16 +10,12 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         address _lidoLocator,
         address _admin,
         LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster,
-        address _fuseCommittee,
-        address _negativeRebaseOracleAddr
+        ManagersRoster memory _managersRoster
     ) OracleReportSanityChecker(
         _lidoLocator,
         _admin,
         _limitsList,
-        _managersRoster,
-        _fuseCommittee,
-        _negativeRebaseOracleAddr
+        _managersRoster
     ) {}
 
     function addRebaseValue(uint64 rebaseValue, uint32 refSlot) public {

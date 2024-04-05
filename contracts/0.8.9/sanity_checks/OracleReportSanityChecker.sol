@@ -10,9 +10,6 @@ import {Math256} from "../../common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
-import {ILidoZKOracle} from "../oracle/ILidoZKOracle.sol";
-import {SanityFuse} from "./SanityFuse.sol";
-
 
 import {IBurner} from "../../common/interfaces/IBurner.sol";
 
@@ -41,6 +38,15 @@ interface IWithdrawalQueue {
 interface ILidoBaseOracle {
     function SECONDS_PER_SLOT() external view returns (uint256);
     function GENESIS_TIME() external view returns (uint256);
+}
+
+interface ILidoZKOracle {
+    function getReport(uint256 refSlot) external view returns  (
+        bool success,
+        uint256 clBalanceGwei,
+        uint256 numValidators,
+        uint256 exitedValidators
+	);
 }
 
 interface IStakingRouter {
@@ -136,7 +142,7 @@ uint8 constant MAX_REBASE_SLOTS = 18;
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
 ///     and lever methods for granular tuning of the params of the checks
-contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
+contract OracleReportSanityChecker is AccessControlEnumerable {
     using LimitsListPacker for LimitsList;
     using LimitsListUnpacker for LimitsListPacked;
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
@@ -201,14 +207,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         address _lidoLocator,
         address _admin,
         LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster,
-        address _fuseCommittee,
-        address _negativeRebaseOracleAddr
-    ) SanityFuse(_fuseCommittee, block.timestamp + 365 days)
-    {
+        ManagersRoster memory _managersRoster
+    ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
-        _negativeRebaseOracle = _negativeRebaseOracleAddr;
 
         _updateLimits(_limitsList);
 
@@ -716,17 +718,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
         } else {
             result = ZKReportResult.ZKReportIsNotReady;
         }
-        bool fuseBlown = consultFuse(result == ZKReportResult.Success);
-        if (!fuseBlown) {
-            if (result == ZKReportResult.ClBalanceMismatch) {
-                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
-            } else if (result == ZKReportResult.NumValidatorsMismatch) {
-                revert NumValidatorsMismatch(_postCLValidators, numValidators);
-            } else if (result == ZKReportResult.ExitedValidatorsMismatch) {
-                revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
-            } else if (result == ZKReportResult.ZKReportIsNotReady) {
-                revert ZKReportIsNotReady();
-            }
+        if (result == ZKReportResult.ClBalanceMismatch) {
+            revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+        } else if (result == ZKReportResult.NumValidatorsMismatch) {
+            revert NumValidatorsMismatch(_postCLValidators, numValidators);
+        } else if (result == ZKReportResult.ExitedValidatorsMismatch) {
+            revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+        } else if (result == ZKReportResult.ZKReportIsNotReady) {
+            revert ZKReportIsNotReady();
         }
     }
 

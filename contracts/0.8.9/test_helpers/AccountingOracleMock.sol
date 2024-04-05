@@ -10,12 +10,14 @@ import {AccountingOracle, ILido} from "../oracle/AccountingOracle.sol";
 contract AccountingOracleMock {
     address public immutable LIDO;
     uint256 public immutable SECONDS_PER_SLOT;
+    uint256 public immutable GENESIS_TIME;
 
     uint256 internal _lastRefSlot;
 
-    constructor(address lido, uint256 secondsPerSlot) {
+    constructor(address lido, uint256 secondsPerSlot, uint256 genesisTime) {
         LIDO = lido;
         SECONDS_PER_SLOT = secondsPerSlot;
+        GENESIS_TIME = genesisTime;
     }
 
     function submitReportData(
