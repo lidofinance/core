@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2857"  lines-covered="1053"  line-rate="0.3686"  branches-valid="1268"  branches-covered="524"  branch-rate="0.4132"  timestamp="1711960513559" complexity="0" version="0.1">
+<coverage lines-valid="2790"  lines-covered="1054"  line-rate="0.3778"  branches-valid="1232"  branches-covered="534"  branch-rate="0.4334"  timestamp="1712567573181" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1744,7 +1744,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9"  line-rate="0.6352"  branch-rate="0.7190000000000001" >
+	<package name="0.8.9"  line-rate="0.6579999999999999"  branch-rate="0.7437999999999999" >
 	<classes>
 		<class name="BeaconChainDepositor.sol"  filename="contracts/0.8.9/BeaconChainDepositor.sol"  line-rate="0.09519999999999999"  branch-rate="0.16670000000000001" >
 		<methods>
@@ -3333,72 +3333,72 @@
 			<line number="392"  hits="3"  branch="false" />
 		</lines>
 		</class>
-		<class name="WithdrawalVault.sol"  filename="contracts/0.8.9/WithdrawalVault.sol"  line-rate="0"  branch-rate="0" >
+		<class name="WithdrawalVault.sol"  filename="contracts/0.8.9/WithdrawalVault.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="0"  signature="()V" >
-				<lines><line number="55"  hits="0" /></lines>
+			<method name="constructor"  hits="3"  signature="()V" >
+				<lines><line number="55"  hits="3" /></lines>
 			</method>
-			<method name="initialize"  hits="0"  signature="()V" >
-				<lines><line number="71"  hits="0" /></lines>
+			<method name="initialize"  hits="7"  signature="()V" >
+				<lines><line number="71"  hits="7" /></lines>
 			</method>
-			<method name="withdrawWithdrawals"  hits="0"  signature="()V" >
-				<lines><line number="80"  hits="0" /></lines>
+			<method name="withdrawWithdrawals"  hits="4"  signature="()V" >
+				<lines><line number="80"  hits="4" /></lines>
 			</method>
-			<method name="recoverERC20"  hits="0"  signature="()V" >
-				<lines><line number="103"  hits="0" /></lines>
+			<method name="recoverERC20"  hits="3"  signature="()V" >
+				<lines><line number="103"  hits="3" /></lines>
 			</method>
-			<method name="recoverERC721"  hits="0"  signature="()V" >
-				<lines><line number="120"  hits="0" /></lines>
+			<method name="recoverERC721"  hits="2"  signature="()V" >
+				<lines><line number="120"  hits="2" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="56"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="57"  hits="0"  branch="false" />
-			<line number="59"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="60"  hits="0"  branch="false" />
-			<line number="63"  hits="0"  branch="false" />
-			<line number="64"  hits="0"  branch="false" />
-			<line number="72"  hits="0"  branch="false" />
-			<line number="81"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="82"  hits="0"  branch="false" />
-			<line number="84"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="88"  hits="0"  branch="false" />
-			<line number="89"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="90"  hits="0"  branch="false" />
-			<line number="93"  hits="0"  branch="false" />
-			<line number="104"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="105"  hits="0"  branch="false" />
-			<line number="108"  hits="0"  branch="false" />
-			<line number="110"  hits="0"  branch="false" />
-			<line number="121"  hits="0"  branch="false" />
-			<line number="123"  hits="0"  branch="false" />
+			<line number="56"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="57"  hits="1"  branch="false" />
+			<line number="59"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="60"  hits="1"  branch="false" />
+			<line number="63"  hits="1"  branch="false" />
+			<line number="64"  hits="1"  branch="false" />
+			<line number="72"  hits="7"  branch="false" />
+			<line number="81"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="82"  hits="1"  branch="false" />
+			<line number="84"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="85"  hits="1"  branch="false" />
+			<line number="88"  hits="2"  branch="false" />
+			<line number="89"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="90"  hits="1"  branch="false" />
+			<line number="93"  hits="1"  branch="false" />
+			<line number="104"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="105"  hits="1"  branch="false" />
+			<line number="108"  hits="2"  branch="false" />
+			<line number="110"  hits="2"  branch="false" />
+			<line number="121"  hits="2"  branch="false" />
+			<line number="123"  hits="2"  branch="false" />
 		</lines>
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.lib"  line-rate="0.19440000000000002"  branch-rate="0" >
+	<package name="0.8.9.lib"  line-rate="0.2143"  branch-rate="0.1818" >
 	<classes>
-		<class name="Math.sol"  filename="contracts/0.8.9/lib/Math.sol"  line-rate="0"  branch-rate="0" >
+		<class name="Math.sol"  filename="contracts/0.8.9/lib/Math.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="max"  hits="0"  signature="()V" >
-				<lines><line number="8"  hits="0" /></lines>
+			<method name="max"  hits="3"  signature="()V" >
+				<lines><line number="8"  hits="3" /></lines>
 			</method>
-			<method name="min"  hits="0"  signature="()V" >
-				<lines><line number="12"  hits="0" /></lines>
+			<method name="min"  hits="3"  signature="()V" >
+				<lines><line number="12"  hits="3" /></lines>
 			</method>
-			<method name="pointInHalfOpenIntervalModN"  hits="0"  signature="()V" >
-				<lines><line number="18"  hits="0" /></lines>
+			<method name="pointInHalfOpenIntervalModN"  hits="2"  signature="()V" >
+				<lines><line number="18"  hits="2" /></lines>
 			</method>
-			<method name="pointInClosedIntervalModN"  hits="0"  signature="()V" >
-				<lines><line number="26"  hits="0" /></lines>
+			<method name="pointInClosedIntervalModN"  hits="2"  signature="()V" >
+				<lines><line number="26"  hits="2" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="9"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="13"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="21"  hits="0"  branch="false" />
-			<line number="29"  hits="0"  branch="false" />
+			<line number="9"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="13"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="21"  hits="2"  branch="false" />
+			<line number="29"  hits="2"  branch="false" />
 		</lines>
 		</class>
 		<class name="PositiveTokenRebaseLimiter.sol"  filename="contracts/0.8.9/lib/PositiveTokenRebaseLimiter.sol"  line-rate="0"  branch-rate="0" >
@@ -3456,44 +3456,6 @@
 		<lines>
 			<line number="10"  hits="64"  branch="false" />
 			<line number="16"  hits="31"  branch="false" />
-		</lines>
-		</class>
-		<class name="UnstructuredStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredStorage.sol"  line-rate="0.625"  branch-rate="1" >
-		<methods>
-			<method name="getStorageBool"  hits="0"  signature="()V" >
-				<lines><line number="12"  hits="0" /></lines>
-			</method>
-			<method name="getStorageAddress"  hits="12"  signature="()V" >
-				<lines><line number="16"  hits="12" /></lines>
-			</method>
-			<method name="getStorageBytes32"  hits="0"  signature="()V" >
-				<lines><line number="20"  hits="0" /></lines>
-			</method>
-			<method name="getStorageUint256"  hits="1797"  signature="()V" >
-				<lines><line number="24"  hits="1797" /></lines>
-			</method>
-			<method name="setStorageBool"  hits="0"  signature="()V" >
-				<lines><line number="28"  hits="0" /></lines>
-			</method>
-			<method name="setStorageAddress"  hits="6"  signature="()V" >
-				<lines><line number="32"  hits="6" /></lines>
-			</method>
-			<method name="setStorageBytes32"  hits="1"  signature="()V" >
-				<lines><line number="36"  hits="1" /></lines>
-			</method>
-			<method name="setStorageUint256"  hits="830"  signature="()V" >
-				<lines><line number="40"  hits="830" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="13"  hits="0"  branch="false" />
-			<line number="17"  hits="12"  branch="false" />
-			<line number="21"  hits="0"  branch="false" />
-			<line number="25"  hits="1797"  branch="false" />
-			<line number="29"  hits="0"  branch="false" />
-			<line number="33"  hits="6"  branch="false" />
-			<line number="37"  hits="1"  branch="false" />
-			<line number="41"  hits="830"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -4483,8 +4445,8 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="0.0588"  branch-rate="0" >
 		<methods>
-			<method name="constructor"  hits="92"  signature="()V" >
-				<lines><line number="23"  hits="92" /></lines>
+			<method name="constructor"  hits="93"  signature="()V" >
+				<lines><line number="23"  hits="93" /></lines>
 			</method>
 			<method name="proxy__getAdmin"  hits="0"  signature="()V" >
 				<lines><line number="28"  hits="0" /></lines>
@@ -4512,7 +4474,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="92"  branch="false" />
+			<line number="24"  hits="93"  branch="false" />
 			<line number="29"  hits="0"  branch="false" />
 			<line number="34"  hits="0"  branch="false" />
 			<line number="39"  hits="0"  branch="false" />
@@ -4893,37 +4855,37 @@
 		</class>
 		<class name="Versioned.sol"  filename="contracts/0.8.9/utils/Versioned.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="86"  signature="()V" >
-				<lines><line number="28"  hits="86" /></lines>
+			<method name="constructor"  hits="89"  signature="()V" >
+				<lines><line number="28"  hits="89" /></lines>
 			</method>
-			<method name="getContractVersion"  hits="74"  signature="()V" >
-				<lines><line number="34"  hits="74" /></lines>
+			<method name="getContractVersion"  hits="83"  signature="()V" >
+				<lines><line number="34"  hits="83" /></lines>
 			</method>
 			<method name="_checkContractVersion"  hits="2"  signature="()V" >
 				<lines><line number="38"  hits="2" /></lines>
 			</method>
-			<method name="_initializeContractVersionTo"  hits="59"  signature="()V" >
-				<lines><line number="46"  hits="59" /></lines>
+			<method name="_initializeContractVersionTo"  hits="66"  signature="()V" >
+				<lines><line number="46"  hits="66" /></lines>
 			</method>
 			<method name="_updateContractVersion"  hits="3"  signature="()V" >
 				<lines><line number="52"  hits="3" /></lines>
 			</method>
-			<method name="_setContractVersion"  hits="60"  signature="()V" >
-				<lines><line number="57"  hits="60" /></lines>
+			<method name="_setContractVersion"  hits="66"  signature="()V" >
+				<lines><line number="57"  hits="66" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="30"  hits="86"  branch="false" />
-			<line number="35"  hits="74"  branch="false" />
+			<line number="30"  hits="89"  branch="false" />
+			<line number="35"  hits="83"  branch="false" />
 			<line number="39"  hits="2"  branch="false" />
 			<line number="40"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="41"  hits="1"  branch="false" />
-			<line number="47"  hits="59"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="48"  hits="58"  branch="false" />
+			<line number="47"  hits="66"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="48"  hits="64"  branch="false" />
 			<line number="53"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="54"  hits="2"  branch="false" />
-			<line number="58"  hits="60"  branch="false" />
-			<line number="59"  hits="60"  branch="false" />
+			<line number="58"  hits="66"  branch="false" />
+			<line number="59"  hits="66"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -5029,147 +4991,6 @@
 			<line number="67"  hits="311"  branch="false" />
 			<line number="74"  hits="2"  branch="false" />
 			<line number="75"  hits="2"  branch="false" />
-		</lines>
-		</class>
-	</classes>
-	</package>
-	<package name="common.lib"  line-rate="0.322"  branch-rate="0.16670000000000001" >
-	<classes>
-		<class name="ECDSA.sol"  filename="contracts/common/lib/ECDSA.sol"  line-rate="1"  branch-rate="0.75" >
-		<methods>
-			<method name="recover"  hits="43"  signature="()V" >
-				<lines><line number="26"  hits="43" /></lines>
-			</method>
-			<method name="recover"  hits="29"  signature="()V" >
-				<lines><line number="50"  hits="29" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="37"  hits="43"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="40"  hits="43"  branch="false" />
-			<line number="41"  hits="43"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="43"  hits="42"  branch="false" />
-			<line number="51"  hits="29"  branch="false" />
-			<line number="52"  hits="29"  branch="false" />
-			<line number="53"  hits="29"  branch="false" />
-			<line number="57"  hits="29"  branch="false" />
-		</lines>
-		</class>
-		<class name="Math256.sol"  filename="contracts/common/lib/Math256.sol"  line-rate="0.16670000000000001"  branch-rate="0.0833" >
-		<methods>
-			<method name="max"  hits="0"  signature="()V" >
-				<lines><line number="12"  hits="0" /></lines>
-			</method>
-			<method name="min"  hits="2"  signature="()V" >
-				<lines><line number="17"  hits="2" /></lines>
-			</method>
-			<method name="max"  hits="0"  signature="()V" >
-				<lines><line number="22"  hits="0" /></lines>
-			</method>
-			<method name="min"  hits="0"  signature="()V" >
-				<lines><line number="27"  hits="0" /></lines>
-			</method>
-			<method name="ceilDiv"  hits="0"  signature="()V" >
-				<lines><line number="35"  hits="0" /></lines>
-			</method>
-			<method name="absDiff"  hits="0"  signature="()V" >
-				<lines><line number="41"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="13"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="18"  hits="2"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="23"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="28"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="37"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="42"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-		</lines>
-		</class>
-		<class name="MemUtils.sol"  filename="contracts/common/lib/MemUtils.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="unsafeAllocateBytes"  hits="0"  signature="()V" >
-				<lines><line number="13"  hits="0" /></lines>
-			</method>
-			<method name="memcpy"  hits="0"  signature="()V" >
-				<lines><line number="26"  hits="0" /></lines>
-			</method>
-			<method name="copyBytes"  hits="0"  signature="()V" >
-				<lines><line number="49"  hits="0" /></lines>
-			</method>
-			<method name="copyBytes"  hits="0"  signature="()V" >
-				<lines><line number="63"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="14"  hits="0"  branch="false" />
-			<line number="27"  hits="0"  branch="false" />
-			<line number="50"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="51"  hits="0"  branch="false" />
-			<line number="52"  hits="0"  branch="false" />
-			<line number="53"  hits="0"  branch="false" />
-			<line number="57"  hits="0"  branch="false" />
-			<line number="64"  hits="0"  branch="false" />
-		</lines>
-		</class>
-		<class name="MinFirstAllocationStrategy.sol"  filename="contracts/common/lib/MinFirstAllocationStrategy.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="allocate"  hits="0"  signature="()V" >
-				<lines><line number="30"  hits="0" /></lines>
-			</method>
-			<method name="allocateToBestCandidate"  hits="0"  signature="()V" >
-				<lines><line number="62"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="35"  hits="0"  branch="false" />
-			<line number="36"  hits="0"  branch="false" />
-			<line number="37"  hits="0"  branch="false" />
-			<line number="38"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="39"  hits="0"  branch="false" />
-			<line number="41"  hits="0"  branch="false" />
-			<line number="67"  hits="0"  branch="false" />
-			<line number="68"  hits="0"  branch="false" />
-			<line number="69"  hits="0"  branch="false" />
-			<line number="71"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="72"  hits="0"  branch="false" />
-			<line number="75"  hits="0"  branch="false" />
-			<line number="76"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="77"  hits="0"  branch="false" />
-			<line number="79"  hits="0"  branch="false" />
-			<line number="80"  hits="0"  branch="false" />
-			<line number="81"  hits="0"  branch="false" />
-			<line number="83"  hits="0"  branch="false" />
-			<line number="87"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="88"  hits="0"  branch="false" />
-			<line number="92"  hits="0"  branch="false" />
-			<line number="93"  hits="0"  branch="false" />
-			<line number="94"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="95"  hits="0"  branch="false" />
-			<line number="97"  hits="0"  branch="false" />
-			<line number="101"  hits="0"  branch="false" />
-			<line number="105"  hits="0"  branch="false" />
-		</lines>
-		</class>
-		<class name="SignatureUtils.sol"  filename="contracts/common/lib/SignatureUtils.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-			<method name="isValidSignature"  hits="23"  signature="()V" >
-				<lines><line number="29"  hits="23" /></lines>
-			</method>
-			<method name="_hasCode"  hits="23"  signature="()V" >
-				<lines><line number="59"  hits="23" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="36"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="37"  hits="9"  branch="false" />
-			<line number="40"  hits="9"  branch="false" />
-			<line number="41"  hits="9"  branch="false" />
-			<line number="43"  hits="9"  branch="false" />
-			<line number="53"  hits="9"  branch="false" />
-			<line number="55"  hits="14"  branch="false" />
-			<line number="60"  hits="23"  branch="false" />
-			<line number="62"  hits="23"  branch="false" />
-			<line number="63"  hits="23"  branch="false" />
 		</lines>
 		</class>
 	</classes>
