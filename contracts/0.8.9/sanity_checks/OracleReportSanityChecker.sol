@@ -49,29 +49,6 @@ interface ILidoZKOracle {
 	);
 }
 
-interface IStakingRouter {
-
-    struct StakingModuleSummary {
-        /// @notice The total number of validators in the EXITED state on the Consensus Layer
-        /// @dev This value can't decrease in normal conditions
-        uint256 totalExitedValidators;
-
-        /// @notice The total number of validators deposited via the official Deposit Contract
-        /// @dev This value is a cumulative counter: even when the validator goes into EXITED state this
-        ///     counter is not decreasing
-        uint256 totalDepositedValidators;
-
-        /// @notice The number of validators in the set available for deposit
-        uint256 depositableValidatorsCount;
-    }
-
-    function getStakingModuleIds() external view returns (uint256[] memory stakingModuleIds);
-
-    function getStakingModuleSummary(uint256 _stakingModuleId) external view
-        returns (StakingModuleSummary memory summary);
-
-}
-
 /// @notice The set of restrictions used in the sanity checks of the oracle report
 /// @dev struct is loaded from the storage and stored in memory during the tx running
 struct LimitsList {
