@@ -109,12 +109,11 @@ struct LimitsListPacked {
 
 struct RebaseData {
     uint64 rebaseValue;
-    uint32 refSlot;
+    uint64 rebaseTimestamp;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
-uint8 constant MAX_REBASE_SLOTS = 18;
 
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
@@ -152,11 +151,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     address private _negativeRebaseOracle;
     LimitsListPacked private _limits;
 
-    /// @dev The array of the rebase values and the corresponding reference slots
-    /// Here is assumption that reports are happening no more often than once per day.
-    RebaseData[MAX_REBASE_SLOTS] private _rebaseData;
-    /// @dev The index of the new rebase value in the `_rebaseData` array
-    uint8 private _rebaseIndex;
+    /// @dev The array of the rebase values and the corresponding timestamps
+    RebaseData[] private _rebaseData;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -614,24 +610,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkAccountingReportZKP(_preCLBalance, _unifiedPostCLBalance, _reportTimestamp);
     }
 
-    function _addRebaseValue(uint64 rebaseValue, uint32 refSlot) internal {
-        _rebaseData[_rebaseIndex] = RebaseData(rebaseValue, refSlot);
-        _rebaseIndex = (_rebaseIndex + 1) % MAX_REBASE_SLOTS;
+    function _addRebaseValue(uint64 value, uint64 timestamp) internal {
+        _rebaseData.push(RebaseData(value, timestamp));
     }
 
-    function sumRebaseValuesNotOlderThan(uint32 referenceSlot) public view returns (uint64) {
-        uint64 sum = 0;
-        uint8 i = MAX_REBASE_SLOTS + _rebaseIndex - 1;
-        uint8 steps = 0;
-        do {
-            if (_rebaseData[i % MAX_REBASE_SLOTS].refSlot >= referenceSlot) {
-                sum += _rebaseData[i % MAX_REBASE_SLOTS].rebaseValue;
+    function sumRebaseValuesNotOlderThan(uint64 timestamp) public view returns (uint256) {
+        uint256 sum = 0;
+        int256 slot = int256(_rebaseData.length) - 1;
+        while (slot >= 0) {
+            if (_rebaseData[uint256(slot)].rebaseTimestamp >= timestamp) {
+                sum += _rebaseData[uint256(slot)].rebaseValue;
             } else {
                 break;
             }
-            i = i - 1;
-        } while (steps < MAX_REBASE_SLOTS);
-
+            slot--;
+        }
         return sum;
     }
 
@@ -640,32 +633,33 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _unifiedPostCLBalance,
         uint256 _reportTimestamp) internal {
 
-        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
+        _addRebaseValue(uint64(_preCLBalance - _unifiedPostCLBalance), uint64(_reportTimestamp));
 
-        uint256 genesisTime = ILidoBaseOracle(accountingOracle).GENESIS_TIME();
-        uint256 secondsPerSlot = ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
-
-        uint256 currentRefSlot = (_reportTimestamp - genesisTime) / secondsPerSlot;
-        _addRebaseValue(uint64(_preCLBalance - _unifiedPostCLBalance), uint32(currentRefSlot));
-
-        uint256 pastSlot = ((_reportTimestamp - 18 days) - genesisTime) / secondsPerSlot;
-        uint256 rebaseSum = sumRebaseValuesNotOlderThan(uint32(pastSlot));
+        uint256 pastTimestamp = _reportTimestamp - 18 days;
+        uint256 rebaseSum = sumRebaseValuesNotOlderThan(uint64(pastTimestamp));
 
         uint256 balanceDiffBP = MAX_BASIS_POINTS * rebaseSum / (_unifiedPostCLBalance + rebaseSum);
         // NOTE: Base points is 10_000, so 320 BP is 3.20%
         // TODO: Move constant to limitsList
-        if (balanceDiffBP > 320) {
-            revert IncorrectCLBalanceDecreaseForSpan(balanceDiffBP);
+        if (balanceDiffBP <= 320) {
+            // If the diff is less than limit we are finishing check
+            return;
         }
 
         address negativeRebaseOracle = getNegativeRebaseOracle();
         // If there is no negative rebase oracle, then we don't need to check the zk report
         if (negativeRebaseOracle == address(0)) {
-            return;
+            // If there is no oracle and the diff is more than limit, we revert
+            revert IncorrectCLBalanceDecreaseForSpan(balanceDiffBP);
         }
 
+        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
+        uint256 refSlot = (_reportTimestamp -
+            ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
+            ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+
         (bool success, uint256 clBalanceGwei,,)
-            = ILidoZKOracle(negativeRebaseOracle).getReport(currentRefSlot);
+            = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
 
         if (success) {
             uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
@@ -676,6 +670,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (balanceDifferenceBP >= 74) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
+            emit ConfirmNegativeRebase(refSlot, clBalanceGwei);
         } else {
             revert ZKReportIsNotReady();
         }
@@ -849,6 +844,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
     event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
+    event ConfirmNegativeRebase(uint256 refSlot, uint256 clBalanceGwei);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
@@ -869,7 +865,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error IncorrectCLBalanceDecreaseForSpan(uint256 oneOffCLBalanceDecreaseBP);
-
     error ZKReportIsNotReady();
 }
 
