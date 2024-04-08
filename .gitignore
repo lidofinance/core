@@ -16,3 +16,4 @@ coverage.json
 /foundry/out
 
 .env
+.DS_Store

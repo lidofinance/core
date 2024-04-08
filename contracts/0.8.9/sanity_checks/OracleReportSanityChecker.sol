@@ -10,6 +10,10 @@ import {Math256} from "../../common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {ILidoZKOracle} from "../oracle/ILidoZKOracle.sol";
+import {SanityFuse} from "./SanityFuse.sol";
+
+
 import {IBurner} from "../../common/interfaces/IBurner.sol";
 
 interface IWithdrawalQueue {
@@ -32,6 +36,34 @@ interface IWithdrawalQueue {
         external
         view
         returns (WithdrawalRequestStatus[] memory statuses);
+}
+
+interface ILidoBaseOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+    function GENESIS_TIME() external view returns (uint256);
+}
+
+interface IStakingRouter {
+
+    struct StakingModuleSummary {
+        /// @notice The total number of validators in the EXITED state on the Consensus Layer
+        /// @dev This value can't decrease in normal conditions
+        uint256 totalExitedValidators;
+
+        /// @notice The total number of validators deposited via the official Deposit Contract
+        /// @dev This value is a cumulative counter: even when the validator goes into EXITED state this
+        ///     counter is not decreasing
+        uint256 totalDepositedValidators;
+
+        /// @notice The number of validators in the set available for deposit
+        uint256 depositableValidatorsCount;
+    }
+
+    function getStakingModuleIds() external view returns (uint256[] memory stakingModuleIds);
+
+    function getStakingModuleSummary(uint256 _stakingModuleId) external view
+        returns (StakingModuleSummary memory summary);
+
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
@@ -92,13 +124,19 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
 }
 
+struct RebaseData {
+    uint64 rebaseValue;
+    uint32 refSlot;
+}
+
 uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
+uint8 constant MAX_REBASE_SLOTS = 18;
 
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
 ///     and lever methods for granular tuning of the params of the checks
-contract OracleReportSanityChecker is AccessControlEnumerable {
+contract OracleReportSanityChecker is AccessControlEnumerable, SanityFuse {
     using LimitsListPacker for LimitsList;
     using LimitsListUnpacker for LimitsListPacked;
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
@@ -128,7 +166,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     ILidoLocator private immutable LIDO_LOCATOR;
 
+    address private _negativeRebaseOracle;
     LimitsListPacked private _limits;
+
+    RebaseData[MAX_REBASE_SLOTS] private _rebaseData;
+    uint8 private _rebaseIndex;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -143,6 +185,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         address[] maxPositiveTokenRebaseManagers;
     }
 
+    enum ZKReportResult {
+        Success,
+        ZKReportIsNotReady,
+        ClBalanceMismatch,
+        NumValidatorsMismatch,
+        ExitedValidatorsMismatch
+    }
+
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
@@ -151,10 +201,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         address _lidoLocator,
         address _admin,
         LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster
-    ) {
+        ManagersRoster memory _managersRoster,
+        address _fuseCommittee,
+        address _negativeRebaseOracleAddr
+    ) SanityFuse(_fuseCommittee, block.timestamp + 365 days)
+    {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+        _negativeRebaseOracle = _negativeRebaseOracleAddr;
 
         _updateLimits(_limitsList);
 
@@ -331,6 +385,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
+    /// @notice Returns the address of the negative rebase oracle
+    function getNegativeRebaseOracle() public view returns (address) {
+        return _negativeRebaseOracle;
+    }
+
+    /// @notice Sets the address of the negative rebase oracle
+    /// @param negativeRebaseOracle address of the negative rebase oracle
+    function setNegativeRebaseOracle(address negativeRebaseOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _negativeRebaseOracle = negativeRebaseOracle;
+    }
+
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
     /// @param _preTotalPooledEther total amount of ETH controlled by the protocol
@@ -415,7 +480,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _sharesRequestedToBurn,
         uint256 _preCLValidators,
         uint256 _postCLValidators
-    ) external view {
+    ) external {
         LimitsList memory limitsList = _limits.unpack();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
@@ -430,7 +495,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
         // 4. Consensus Layer one-off balance decrease
-        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance, _postCLBalance + _withdrawalVaultBalance);
+        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance,
+            _postCLBalance + _withdrawalVaultBalance, _postCLValidators, _timeElapsed);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -562,13 +628,105 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _checkOneOffCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
-        uint256 _unifiedPostCLBalance
-    ) internal pure {
+        uint256 _unifiedPostCLBalance,
+        uint256 _postCLValidators,
+        uint256 _reportTimestamp
+    ) internal {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
         uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
             _preCLBalance;
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
+        }
+        _checkAccountingReportZKP(_unifiedPostCLBalance, _postCLValidators, _reportTimestamp);
+    }
+
+    function _addRebaseValue(uint64 rebaseValue, uint32 refSlot) internal {
+        _rebaseData[_rebaseIndex] = RebaseData(rebaseValue, refSlot);
+        _rebaseIndex = (_rebaseIndex + 1) % MAX_REBASE_SLOTS;
+    }
+
+    function sumRebaseValuesNotOlderThan(uint32 referenceSlot) public view returns (uint64) {
+        uint64 sum = 0;
+        uint8 i = MAX_REBASE_SLOTS + _rebaseIndex - 1;
+        uint8 steps = 0;
+        do {
+            if (_rebaseData[i % MAX_REBASE_SLOTS].refSlot >= referenceSlot) {
+                sum += _rebaseData[i % MAX_REBASE_SLOTS].rebaseValue;
+            } else {
+                break;
+            }
+            i = i - 1;
+        } while (steps < MAX_REBASE_SLOTS);
+
+        return sum;
+    }
+
+    function _checkAccountingReportZKP(
+        uint256 _unifiedPostCLBalance,
+        uint256 _postCLValidators,
+        uint256 _reportTimestamp) internal {
+
+        address negativeRebaseOracle = getNegativeRebaseOracle();
+        // If there is no negative rebase oracle, then we don't need to check the zk report
+        if (negativeRebaseOracle == address(0)) {
+            return;
+        }
+
+        ILidoLocator locator = ILidoLocator(getLidoLocator());
+        address accountingOracle = locator.accountingOracle();
+
+        uint256 refSlot = (_reportTimestamp -
+            ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
+            ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+
+        (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators)
+            = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
+
+        ZKReportResult result;
+        uint256 stakingRouterExitedValidators = 0;
+        if (success) {
+            result = ZKReportResult.Success;
+            uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
+                clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
+            uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
+            // NOTE: Base points is 10_000, so 74 BP is 0.74%
+            // TODO: Move constant to limitsList
+            if (balanceDifferenceBP >= 74) {
+                result = ZKReportResult.ClBalanceMismatch;
+            }
+
+            // As number of validators reported by zkOracles could be greater
+            //       than the number of Lido validators
+            if (_postCLValidators > numValidators) {
+                result = ZKReportResult.NumValidatorsMismatch;
+            }
+
+            // Checking exitedValidators against StakingRouter
+            IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
+            uint256[] memory ids = stakingRouter.getStakingModuleIds();
+
+            for (uint256 i = 0; i < ids.length; i++) {
+                IStakingRouter.StakingModuleSummary memory summary = stakingRouter.getStakingModuleSummary(ids[i]);
+                stakingRouterExitedValidators += summary.totalExitedValidators;
+            }
+            if (stakingRouterExitedValidators > exitedValidators) {
+                result = ZKReportResult.ExitedValidatorsMismatch;
+            }
+        } else {
+            result = ZKReportResult.ZKReportIsNotReady;
+        }
+        bool fuseBlown = consultFuse(result == ZKReportResult.Success);
+        if (!fuseBlown) {
+            if (result == ZKReportResult.ClBalanceMismatch) {
+                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+            } else if (result == ZKReportResult.NumValidatorsMismatch) {
+                revert NumValidatorsMismatch(_postCLValidators, numValidators);
+            } else if (result == ZKReportResult.ExitedValidatorsMismatch) {
+                revert ExitedValidatorsMismatch(stakingRouterExitedValidators, exitedValidators);
+            } else if (result == ZKReportResult.ZKReportIsNotReady) {
+                revert ZKReportIsNotReady();
+            }
         }
     }
 
@@ -757,6 +915,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
+
+    error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
+    error NumValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
+    error ExitedValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
+    error ZKReportIsNotReady();
 }
 
 library LimitsListPacker {
