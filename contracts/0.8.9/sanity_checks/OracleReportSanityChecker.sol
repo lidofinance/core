@@ -152,7 +152,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     address private _negativeRebaseOracle;
     LimitsListPacked private _limits;
 
+    /// @dev The array of the rebase values and the corresponding reference slots
+    /// Here is assumption that reports are happening no more often than once per day.
     RebaseData[MAX_REBASE_SLOTS] private _rebaseData;
+    /// @dev The index of the new rebase value in the `_rebaseData` array
     uint8 private _rebaseIndex;
 
     struct ManagersRoster {
@@ -608,7 +611,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
             revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
         }
-        _checkAccountingReportZKP(_unifiedPostCLBalance, _reportTimestamp);
+        _checkAccountingReportZKP(_preCLBalance, _unifiedPostCLBalance, _reportTimestamp);
     }
 
     function _addRebaseValue(uint64 rebaseValue, uint32 refSlot) internal {
@@ -633,8 +636,27 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _checkAccountingReportZKP(
+        uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
         uint256 _reportTimestamp) internal {
+
+        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
+
+        uint256 genesisTime = ILidoBaseOracle(accountingOracle).GENESIS_TIME();
+        uint256 secondsPerSlot = ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+
+        uint256 currentRefSlot = (_reportTimestamp - genesisTime) / secondsPerSlot;
+        _addRebaseValue(uint64(_preCLBalance - _unifiedPostCLBalance), uint32(currentRefSlot));
+
+        uint256 pastSlot = ((_reportTimestamp - 18 days) - genesisTime) / secondsPerSlot;
+        uint256 rebaseSum = sumRebaseValuesNotOlderThan(uint32(pastSlot));
+
+        uint256 balanceDiffBP = MAX_BASIS_POINTS * rebaseSum / (_unifiedPostCLBalance + rebaseSum);
+        // NOTE: Base points is 10_000, so 320 BP is 3.20%
+        // TODO: Move constant to limitsList
+        if (balanceDiffBP > 320) {
+            revert IncorrectCLBalanceDecreaseForSpan(balanceDiffBP);
+        }
 
         address negativeRebaseOracle = getNegativeRebaseOracle();
         // If there is no negative rebase oracle, then we don't need to check the zk report
@@ -642,15 +664,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             return;
         }
 
-        ILidoLocator locator = ILidoLocator(getLidoLocator());
-        address accountingOracle = locator.accountingOracle();
-
-        uint256 refSlot = (_reportTimestamp -
-            ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
-            ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
-
         (bool success, uint256 clBalanceGwei,,)
-            = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
+            = ILidoZKOracle(negativeRebaseOracle).getReport(currentRefSlot);
 
         if (success) {
             uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
@@ -661,7 +676,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (balanceDifferenceBP >= 74) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
-
         } else {
             revert ZKReportIsNotReady();
         }
@@ -854,8 +868,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
-    error NumValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
-    error ExitedValidatorsMismatch(uint256 reportedValue, uint256 provedValue);
+    error IncorrectCLBalanceDecreaseForSpan(uint256 oneOffCLBalanceDecreaseBP);
+
     error ZKReportIsNotReady();
 }
 
