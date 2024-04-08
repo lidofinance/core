@@ -20,7 +20,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
     /// @dev events
     event StakingModuleAdded(uint256 indexed stakingModuleId, address stakingModule, string name, address createdBy);
-    event StakingModuleTargetShareSet(uint256 indexed stakingModuleId, uint256 targetShare, address setBy);
+    event StakingModuleShareLimitSet(uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy);
     event StakingModuleFeesSet(uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy);
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
     event StakingModuleExitedValidatorsIncompleteReporting(uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount);
@@ -59,6 +59,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     error StakingModuleAddressExists();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error UnrecoverableModuleError();
+    error InvalidPriorityExitShareThreshold();
 
     enum StakingModuleStatus {
         Active, // deposits and rewards allowed
@@ -75,10 +76,12 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint16 stakingModuleFee;
         /// @notice part of the fee taken from staking rewards that goes to the treasury
         uint16 treasuryFee;
-        /// @notice target percent of total validators in protocol, in BP
-        uint16 targetShare;
+        /// @notice maximum stake share that can be allocated to a module, in BP
+        uint16 stakeShareLimit; // formerly known as `targetShare`
         /// @notice staking module status if staking module can not accept the deposits or can participate in further reward distribution
         uint8 status;
+        /// @notice module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP
+        uint16 priorityExitShareThreshold;
         /// @notice name of staking module
         string name;
         /// @notice block.timestamp of the last deposit of the staking module
@@ -96,7 +99,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint24 stakingModuleId;
         uint16 stakingModuleFee;
         uint16 treasuryFee;
-        uint16 targetShare;
+        uint16 stakeShareLimit;
         StakingModuleStatus status;
         uint256 activeValidatorsCount;
         uint256 availableValidatorsCount;
@@ -168,25 +171,25 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
      * @notice register a new staking module
      * @param _name name of staking module
      * @param _stakingModuleAddress address of staking module
-     * @param _targetShare target total stake share
+     * @param _stakeShareLimit maximum share that can be allocated to a module
+     * @param _priorityExitShareThreshold module's proirity exit share threshold
      * @param _stakingModuleFee fee of the staking module taken from the consensus layer rewards
      * @param _treasuryFee treasury fee
      */
     function addStakingModule(
         string calldata _name,
         address _stakingModuleAddress,
-        uint256 _targetShare,
+        uint256 _stakeShareLimit,
+        uint256 _priorityExitShareThreshold,
         uint256 _stakingModuleFee,
         uint256 _treasuryFee
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        if (_targetShare > TOTAL_BASIS_POINTS)
-            revert ValueOver100Percent("_targetShare");
-        if (_stakingModuleFee + _treasuryFee > TOTAL_BASIS_POINTS)
-            revert ValueOver100Percent("_stakingModuleFee + _treasuryFee");
-        if (_stakingModuleAddress == address(0))
-            revert ZeroAddress("_stakingModuleAddress");
-        if (bytes(_name).length == 0 || bytes(_name).length > MAX_STAKING_MODULE_NAME_LENGTH)
-            revert StakingModuleWrongName();
+        if (_stakeShareLimit > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_stakeShareLimit");
+        if (_priorityExitShareThreshold > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_priorityExitShareThreshold");
+        if (_stakeShareLimit > _priorityExitShareThreshold) revert InvalidPriorityExitShareThreshold();
+        if (_stakingModuleFee + _treasuryFee > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_stakingModuleFee + _treasuryFee");
+        if (_stakingModuleAddress == address(0)) revert ZeroAddress("_stakingModuleAddress");
+        if (bytes(_name).length == 0 || bytes(_name).length > MAX_STAKING_MODULE_NAME_LENGTH) revert StakingModuleWrongName();
 
         uint256 newStakingModuleIndex = getStakingModulesCount();
 
@@ -207,7 +210,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         newStakingModule.id = newStakingModuleId;
         newStakingModule.name = _name;
         newStakingModule.stakingModuleAddress = _stakingModuleAddress;
-        newStakingModule.targetShare = uint16(_targetShare);
+        newStakingModule.stakeShareLimit = uint16(_stakeShareLimit);
+        newStakingModule.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
         newStakingModule.stakingModuleFee = uint16(_stakingModuleFee);
         newStakingModule.treasuryFee = uint16(_treasuryFee);
         /// @dev since `enum` is `uint8` by nature, so the `status` is stored as `uint8` to avoid
@@ -228,33 +232,38 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         STAKING_MODULES_COUNT_POSITION.setStorageUint256(newStakingModuleIndex + 1);
 
         emit StakingModuleAdded(newStakingModuleId, _stakingModuleAddress, _name, msg.sender);
-        emit StakingModuleTargetShareSet(newStakingModuleId, _targetShare, msg.sender);
+        emit StakingModuleShareLimitSet(newStakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, msg.sender);
         emit StakingModuleFeesSet(newStakingModuleId, _stakingModuleFee, _treasuryFee, msg.sender);
     }
 
     /**
      * @notice Update staking module params
      * @param _stakingModuleId staking module id
-     * @param _targetShare target total stake share
+     * @param _stakeShareLimit target total stake share
+     * @param _priorityExitShareThreshold module's proirity exit share threshold
      * @param _stakingModuleFee fee of the staking module taken from the consensus layer rewards
      * @param _treasuryFee treasury fee
      */
     function updateStakingModule(
         uint256 _stakingModuleId,
-        uint256 _targetShare,
+        uint256 _stakeShareLimit,
+        uint256 _priorityExitShareThreshold,
         uint256 _stakingModuleFee,
         uint256 _treasuryFee
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        if (_targetShare > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_targetShare");
+        if (_stakeShareLimit > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_stakeShareLimit");
+        if (_priorityExitShareThreshold > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_priorityExitShareThreshold");
+        if (_stakeShareLimit > _priorityExitShareThreshold) revert InvalidPriorityExitShareThreshold();
         if (_stakingModuleFee + _treasuryFee > TOTAL_BASIS_POINTS) revert ValueOver100Percent("_stakingModuleFee + _treasuryFee");
 
         StakingModule storage stakingModule = _getStakingModuleById(_stakingModuleId);
 
-        stakingModule.targetShare = uint16(_targetShare);
+        stakingModule.stakeShareLimit = uint16(_stakeShareLimit);
+        stakingModule.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
         stakingModule.treasuryFee = uint16(_treasuryFee);
         stakingModule.stakingModuleFee = uint16(_stakingModuleFee);
 
-        emit StakingModuleTargetShareSet(_stakingModuleId, _targetShare, msg.sender);
+        emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, msg.sender);
         emit StakingModuleFeesSet(_stakingModuleId, _stakingModuleFee, _treasuryFee, msg.sender);
     }
 
@@ -1218,7 +1227,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         cacheItem.stakingModuleId = stakingModuleData.id;
         cacheItem.stakingModuleFee = stakingModuleData.stakingModuleFee;
         cacheItem.treasuryFee = stakingModuleData.treasuryFee;
-        cacheItem.targetShare = stakingModuleData.targetShare;
+        cacheItem.stakeShareLimit = stakingModuleData.stakeShareLimit;
         cacheItem.status = StakingModuleStatus(stakingModuleData.status);
 
         (
@@ -1264,7 +1273,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
             for (uint256 i; i < stakingModulesCount; ) {
                 allocations[i] = stakingModulesCache[i].activeValidatorsCount;
-                targetValidators = (stakingModulesCache[i].targetShare * totalActiveValidators) / TOTAL_BASIS_POINTS;
+                targetValidators = (stakingModulesCache[i].stakeShareLimit * totalActiveValidators) / TOTAL_BASIS_POINTS;
                 capacities[i] = Math256.min(targetValidators, stakingModulesCache[i].activeValidatorsCount + stakingModulesCache[i].availableValidatorsCount);
                 unchecked {
                     ++i;
