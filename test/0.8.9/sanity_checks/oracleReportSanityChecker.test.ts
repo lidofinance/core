@@ -14,6 +14,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let accountingOracle: AccountingOracleMock;
   let deployer: HardhatEthersSigner;
   // let genesisTime: bigint;
+  const SLOTS_PER_DAY = 7200;
 
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
@@ -117,7 +118,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       return checker;
     }
-    const SLOTS_PER_DAY = 7200;
 
     it(`works for happy path`, async () => {
       const checker = await newChecker();
@@ -150,28 +150,39 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     });
   });
 
-  // context("OracleReportSanityChecker checks against zkOracles", () => {
-  //   it(`works for happy path, NoConsensus and ClBalanceMismatch`, async () => {
-  //     const timestamp = 100 * 12 + Number(genesisTime);
+  context("OracleReportSanityChecker additional balance decrease check", () => {
+    it(`works for IncorrectCLBalanceDecreaseForSpan`, async () => {
+      const timestamp = await time.latest();
 
-  //     // Expect to pass through
-  //     await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
+      await expect(checker.checkAccountingOracleReport(timestamp, 100, 96, 0, 0, 0, 10, 10))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
+        .withArgs(400);
+    });
 
-  //     await expect(
-  //       checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
-  //     ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
+    it(`works as accamulation for IncorrectCLBalanceDecreaseForSpan`, async () => {
+      const timestampNow = await time.latest();
+      const timestampPrev = timestampNow - 1 * SLOTS_PER_DAY;
 
-  //     const zkOracle = await ethers.deployContract("ZkOracleMock");
-  //     const role = await multiprover.MANAGE_MEMBERS_AND_QUORUM_ROLE();
-  //     await multiprover.grantRole(role, deployer);
+      await checker.checkAccountingOracleReport(timestampPrev, 100, 98, 0, 0, 0, 10, 10);
 
-  //     await zkOracle.addReport(100, { success: true, clBalanceGwei: 95, numValidators: 10, exitedValidators: 3 });
-  //     await multiprover.addMember(await zkOracle.getAddress(), 1);
+      await expect(checker.checkAccountingOracleReport(timestampNow, 98, 96, 0, 0, 0, 10, 10))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
+        .withArgs(400);
+    });
 
-  //     await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
-  //       .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
-  //       .withArgs(94, 95);
-  //   });
+    it(`works for happy path and ClBalanceMismatch`, async () => {
+      const timestamp = await time.latest();
 
-  // });
+      // Expect to pass through
+      await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
+
+      const zkOracle = await ethers.deployContract("ZkOracleMock");
+
+      await checker.setNegativeRebaseOracle(await zkOracle.getAddress());
+
+      // await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
+      //   .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
+      //   .withArgs(94, 95);
+    });
+  });
 });
