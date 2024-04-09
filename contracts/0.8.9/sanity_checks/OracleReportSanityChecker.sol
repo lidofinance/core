@@ -676,7 +676,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             }
             emit NegativeRebaseConfirmed(refSlot, clBalanceGwei);
         } else {
-            revert ZKReportIsNotReady();
+            revert CLStateReportIsNotReady();
         }
     }
 
