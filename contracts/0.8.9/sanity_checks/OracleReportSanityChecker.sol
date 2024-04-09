@@ -636,15 +636,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _addRebaseValue(uint64 _value, uint64 _timestamp) internal {
-        _rebaseData.push(CLRebaseData(_value, _timestamp));
+    function _addRebaseValue(uint256 _value, uint256 _timestamp) internal {
+        // TODO: Consider using SafeCast.toUint192() from OpenZeppelin 5.0.2
+        _rebaseData.push(CLRebaseData(uint192(_value), SafeCast.toUint64(_timestamp)));
     }
 
-    function sumRebaseValuesNotOlderThan(uint64 _timestamp) public view returns (uint256) {
+    function sumRebaseValuesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
         uint256 rebaseValuesSum = 0;
         int256 slot = int256(_rebaseData.length) - 1;
         while (slot >= 0) {
-            if (_rebaseData[uint256(slot)].timestamp >= _timestamp) {
+            if (_rebaseData[uint256(slot)].timestamp >= SafeCast.toUint64(_timestamp)) {
                 rebaseValuesSum += _rebaseData[uint256(slot)].value;
             } else {
                 break;
@@ -662,10 +663,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) internal {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
 
-        _addRebaseValue(uint64(_preCLBalance - _unifiedPostCLBalance), uint64(_reportTimestamp));
+        _addRebaseValue(_preCLBalance - _unifiedPostCLBalance, _reportTimestamp);
 
         uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
-        uint256 rebaseSum = sumRebaseValuesNotOlderThan(uint64(pastTimestamp));
+        uint256 rebaseSum = sumRebaseValuesNotOlderThan(pastTimestamp);
 
         uint256 balanceDiffBP = MAX_BASIS_POINTS * rebaseSum / (_unifiedPostCLBalance + rebaseSum);
         // NOTE: Base points is 10_000, so 320 BP is 3.20%
