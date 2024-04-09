@@ -178,7 +178,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
 
-      await checker.setNegativeRebaseOracle(await zkOracle.getAddress());
+      await checker.setCLStateOracle(await zkOracle.getAddress());
 
       // await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
       //   .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")

@@ -108,8 +108,8 @@ struct LimitsListPacked {
 }
 
 struct CLRebaseData {
-    uint192 clRebaseValue;
-    uint64 rebaseTimestamp;
+    uint192 value;
+    uint64 timestamp;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
@@ -148,11 +148,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     ILidoLocator private immutable LIDO_LOCATOR;
 
-    address private _negativeRebaseOracle;
+    address private _clStateOracle;
     LimitsListPacked private _limits;
 
     /// @dev The array of the rebase values and the corresponding timestamps
-    RebaseData[] private _rebaseData;
+    CLRebaseData[] private _rebaseData;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -357,13 +357,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Returns the address of the negative rebase oracle
     function getCLStateOracle() public view returns (address) {
-        return _negativeRebaseOracle;
+        return _clStateOracle;
     }
 
     /// @notice Sets the address of the negative rebase oracle
-    /// @param negativeRebaseOracle address of the negative rebase oracle
-    function setCLStateOracle(address clStateOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _negativeRebaseOracle = negativeRebaseOracle;
+    /// @param _clStateOracleAddr address of the negative rebase oracle
+    function setCLStateOracle(address _clStateOracleAddr) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _clStateOracle = _clStateOracleAddr;
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
@@ -469,7 +469,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
         // 4. Consensus Layer one-off balance decrease
-        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance,
+        _checkCLBalanceDecrease(limitsList, _preCLBalance,
             _postCLBalance + _withdrawalVaultBalance, _timeElapsed);
 
         // 5. Consensus Layer annual balances increase
@@ -599,7 +599,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkOneOffCLBalanceDecrease(
+    function _checkCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
@@ -615,21 +615,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _addRebaseValue(uint64 _value, uint64 _timestamp) internal {
-        _rebaseData.push(RebaseData(value, timestamp));
+        _rebaseData.push(CLRebaseData(_value, _timestamp));
     }
 
     function sumRebaseValuesNotOlderThan(uint64 _timestamp) public view returns (uint256) {
-        uint256 sum = 0;
+        uint256 rebaseValuesSum = 0;
         int256 slot = int256(_rebaseData.length) - 1;
         while (slot >= 0) {
-            if (_rebaseData[uint256(slot)].rebaseTimestamp >= timestamp) {
-                sum += _rebaseData[uint256(slot)].rebaseValue;
+            if (_rebaseData[uint256(slot)].timestamp >= _timestamp) {
+                rebaseValuesSum += _rebaseData[uint256(slot)].value;
             } else {
                 break;
             }
             slot--;
         }
-        return sum;
+        return rebaseValuesSum;
     }
 
     function _checkAccountingReportZKP(
@@ -650,7 +650,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             return;
         }
 
-        address negativeRebaseOracle = getNegativeRebaseOracle();
+        address negativeRebaseOracle = getCLStateOracle();
         // If there is no negative rebase oracle, then we don't need to check the zk report
         if (negativeRebaseOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
@@ -663,7 +663,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
         (bool success, uint256 clBalanceGwei,,)
-            = ILidoZKOracle(negativeRebaseOracle).getReport(refSlot);
+            = ILidoCLStateOracle(negativeRebaseOracle).getReport(refSlot);
 
         if (success) {
             uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
@@ -674,7 +674,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (balanceDifferenceBP >= 74) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
-            emit NegativeRebaseConfirmed(refSlot, clBalanceGwei);
+            emit ConfirmNegativeRebase(refSlot, clBalanceGwei);
         } else {
             revert CLStateReportIsNotReady();
         }
@@ -868,8 +868,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
-    error IncorrectCLBalanceDecreaseForSpan(uint256 oneOffCLBalanceDecreaseBP);
-    error ZKReportIsNotReady();
+    error IncorrectCLBalanceDecreaseForSpan(uint256 cLBalanceDecreaseBP);
+    error CLStateReportIsNotReady();
 }
 
 library LimitsListPacker {
