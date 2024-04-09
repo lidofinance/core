@@ -614,7 +614,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkAccountingReportZKP(_preCLBalance, _unifiedPostCLBalance, _reportTimestamp);
     }
 
-    function _addRebaseValue(uint64 value, uint64 timestamp) internal {
+    function _addRebaseValue(uint64 _value, uint64 _timestamp) internal {
         _rebaseData.push(RebaseData(value, timestamp));
     }
 
