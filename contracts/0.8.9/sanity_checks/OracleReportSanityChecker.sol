@@ -107,7 +107,7 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
 }
 
-struct RebaseData {
+struct CLRebaseData {
     uint64 rebaseValue;
     uint64 rebaseTimestamp;
 }
