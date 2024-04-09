@@ -19,7 +19,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
     churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-    oneOffCLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
+    cLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
     annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
     shareRateDeviationLimitManagers: accounts.slice(8, 10),
     maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
@@ -30,7 +30,9 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   };
   const defaultLimitsList = {
     churnValidatorsPerDayLimit: 55,
-    oneOffCLBalanceDecreaseBPLimit: 5_00, // 5%
+    cLBalanceDecreaseBPLimit: 3_20, // 3.2%
+    cLBalanceDecreaseHoursSpan: 18 * 24, // 18 days
+    cLBalanceOraclesDiffBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
@@ -177,6 +179,9 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
+
+      const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
+      await checker.grantRole(clOraclesRole, deployer.address);
 
       await checker.setCLStateOracle(await zkOracle.getAddress());
 
