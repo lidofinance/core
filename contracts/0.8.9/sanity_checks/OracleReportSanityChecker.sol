@@ -362,7 +362,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the address of the negative rebase oracle
     /// @param negativeRebaseOracle address of the negative rebase oracle
-    function setNegativeRebaseOracle(address negativeRebaseOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setCLStateOracle(address clStateOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _negativeRebaseOracle = negativeRebaseOracle;
     }
 
