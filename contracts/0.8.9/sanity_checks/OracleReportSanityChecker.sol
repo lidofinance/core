@@ -674,9 +674,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             return;
         }
 
-        address negativeRebaseOracle = getCLStateOracle();
+        address clStateOracle = getCLStateOracle();
         // If there is no negative rebase oracle, then we don't need to check the zk report
-        if (negativeRebaseOracle == address(0)) {
+        if (clStateOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
             revert IncorrectCLBalanceDecreaseForSpan(balanceDiffBP);
         }
