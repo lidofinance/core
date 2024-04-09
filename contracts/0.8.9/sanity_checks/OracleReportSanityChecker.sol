@@ -356,7 +356,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Returns the address of the negative rebase oracle
-    function getNegativeRebaseOracle() public view returns (address) {
+    function getCLStateOracle() public view returns (address) {
         return _negativeRebaseOracle;
     }
 
