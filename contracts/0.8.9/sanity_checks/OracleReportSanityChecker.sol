@@ -108,7 +108,7 @@ struct LimitsListPacked {
 }
 
 struct CLRebaseData {
-    uint64 rebaseValue;
+    uint192 clRebaseValue;
     uint64 rebaseTimestamp;
 }
 
