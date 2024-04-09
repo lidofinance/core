@@ -396,7 +396,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Sets the address of the negative rebase oracle
-    /// @param _clStateOracleAddr address of the negative rebase oracle
+    /// @param _clStateOracleAddr address of the negative rebase oracle.
+    ///     If it's zero address — oracle is disabled.
+    ///     Default value is zero address.
     function setCLStateOracle(address _clStateOracleAddr) external onlyRole(CL_ORACLES_MANAGER_ROLE) {
         _clStateOracle = _clStateOracleAddr;
     }
@@ -659,16 +661,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _reportTimestamp
     ) internal {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
-        LimitsList memory limitsList = _limits.unpack();
 
         _addRebaseValue(uint64(_preCLBalance - _unifiedPostCLBalance), uint64(_reportTimestamp));
 
-        uint256 pastTimestamp = _reportTimestamp - limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
+        uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
         uint256 rebaseSum = sumRebaseValuesNotOlderThan(uint64(pastTimestamp));
 
         uint256 balanceDiffBP = MAX_BASIS_POINTS * rebaseSum / (_unifiedPostCLBalance + rebaseSum);
         // NOTE: Base points is 10_000, so 320 BP is 3.20%
-        if (balanceDiffBP <= limitsList.cLBalanceDecreaseBPLimit) {
+        if (balanceDiffBP <= _limitsList.cLBalanceDecreaseBPLimit) {
             // If the diff is less than limit we are finishing check
             return;
         }
@@ -693,7 +694,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
-            if (balanceDifferenceBP >= limitsList.cLBalanceOraclesDiffBPLimit) {
+            if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesDiffBPLimit) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
             emit ConfirmNegativeRebase(refSlot, clBalanceGwei);
