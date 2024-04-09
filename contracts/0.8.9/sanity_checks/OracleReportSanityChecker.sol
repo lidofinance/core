@@ -40,7 +40,7 @@ interface ILidoBaseOracle {
     function GENESIS_TIME() external view returns (uint256);
 }
 
-interface ILidoZKOracle {
+interface ILidoCLStateOracle {
     function getReport(uint256 refSlot) external view returns  (
         bool success,
         uint256 clBalanceGwei,
