@@ -674,7 +674,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (balanceDifferenceBP >= 74) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
             }
-            emit ConfirmNegativeRebase(refSlot, clBalanceGwei);
+            emit NegativeRebaseConfirmed(refSlot, clBalanceGwei);
         } else {
             revert ZKReportIsNotReady();
         }
