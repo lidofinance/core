@@ -433,7 +433,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report
     /// WARNING. The method has side effects and modifies the state of the contract.
     ///          It's because of negative rebase checks the cummulative sum over the time.
-    ///          It's called from Lido contract that uses old Solidity version and will do a correct
+    ///          It's called from Lido contract that uses the 'old' Solidity version (0.4.24) and will do a correct
     ///          call to this method even it's declared as "view" there.
     /// @param _timeElapsed time elapsed since the previous oracle report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
