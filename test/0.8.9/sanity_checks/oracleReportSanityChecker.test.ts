@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -44,6 +45,10 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
   const log = console.log;
   // const log = () => {}
+
+  const genAccessControlError = (caller: string, role: string): string => {
+    return `AccessControl: account ${caller.toLowerCase()} is missing role ${role}`;
+  };
 
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();
@@ -188,6 +193,24 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       // await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
       //   .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
       //   .withArgs(94, 95);
+    });
+  });
+
+  context("OracleReportSanityChecker roles", () => {
+    it(`CL Oracle related functions require CL_ORACLES_MANAGER_ROLE`, async () => {
+      const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
+
+      await expect(checker.setCLStateOracle(ZeroAddress)).to.be.revertedWith(
+        genAccessControlError(deployer.address, clOraclesRole),
+      );
+
+      await expect(checker.setCLBalanceOraclesDiffBPLimit(74)).to.be.revertedWith(
+        genAccessControlError(deployer.address, clOraclesRole),
+      );
+
+      await checker.grantRole(clOraclesRole, deployer.address);
+      await expect(checker.setCLStateOracle(ZeroAddress)).to.not.be.reverted;
+      await expect(checker.setCLBalanceOraclesDiffBPLimit(74)).to.not.be.reverted;
     });
   });
 });
