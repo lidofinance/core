@@ -618,7 +618,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _rebaseData.push(RebaseData(value, timestamp));
     }
 
-    function sumRebaseValuesNotOlderThan(uint64 timestamp) public view returns (uint256) {
+    function sumRebaseValuesNotOlderThan(uint64 _timestamp) public view returns (uint256) {
         uint256 sum = 0;
         int256 slot = int256(_rebaseData.length) - 1;
         while (slot >= 0) {
