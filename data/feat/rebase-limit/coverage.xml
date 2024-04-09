@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2821"  lines-covered="1160"  line-rate="0.41119999999999995"  branches-valid="1246"  branches-covered="561"  branch-rate="0.45020000000000004"  timestamp="1712648155746" complexity="0" version="0.1">
+<coverage lines-valid="2821"  lines-covered="1160"  line-rate="0.41119999999999995"  branches-valid="1246"  branches-covered="561"  branch-rate="0.45020000000000004"  timestamp="1712649557007" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4541,10 +4541,10 @@
 			<method name="setMaxNodeOperatorsPerExtraDataItemCount"  hits="0"  signature="()V" >
 				<lines><line number="351"  hits="0" /></lines>
 			</method>
-			<method name="getNegativeRebaseOracle"  hits="2"  signature="()V" >
+			<method name="getCLStateOracle"  hits="2"  signature="()V" >
 				<lines><line number="359"  hits="2" /></lines>
 			</method>
-			<method name="setNegativeRebaseOracle"  hits="1"  signature="()V" >
+			<method name="setCLStateOracle"  hits="1"  signature="()V" >
 				<lines><line number="365"  hits="1" /></lines>
 			</method>
 			<method name="smoothenTokenRebase"  hits="0"  signature="()V" >
@@ -4580,7 +4580,7 @@
 			<method name="_checkSharesRequestedToBurn"  hits="4"  signature="()V" >
 				<lines><line number="594"  hits="4" /></lines>
 			</method>
-			<method name="_checkOneOffCLBalanceDecrease"  hits="4"  signature="()V" >
+			<method name="_checkCLBalanceDecrease"  hits="4"  signature="()V" >
 				<lines><line number="602"  hits="4" /></lines>
 			</method>
 			<method name="_addRebaseValue"  hits="11"  signature="()V" >
