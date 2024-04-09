@@ -686,18 +686,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
             ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
-        (bool success, uint256 clBalanceGwei,,)
-            = ILidoCLStateOracle(negativeRebaseOracle).getReport(refSlot);
+        (bool success, uint256 clOracleBalanceGwei,,)
+            = ILidoCLStateOracle(clStateOracle).getReport(refSlot);
 
         if (success) {
-            uint256 balanceDiff = (clBalanceGwei > _unifiedPostCLBalance) ?
-                clBalanceGwei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceGwei;
-            uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceGwei;
+            uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
+            uint256 balanceDiff = (clBalanceWei > _unifiedPostCLBalance) ?
+                clBalanceWei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceWei;
+            uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceWei;
             // NOTE: Base points is 10_000, so 74 BP is 0.74%
             if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesDiffBPLimit) {
-                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceGwei);
+                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei);
             }
-            emit ConfirmNegativeRebase(refSlot, clBalanceGwei);
+            emit ConfirmNegativeRebase(refSlot, clBalanceWei);
         } else {
             revert CLStateReportIsNotReady();
         }
