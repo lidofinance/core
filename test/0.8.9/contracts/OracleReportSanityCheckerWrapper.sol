@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
+// NB: for testing purposes only
 pragma solidity 0.8.9;
 
 import { OracleReportSanityChecker, LimitsList } from "../../../contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
