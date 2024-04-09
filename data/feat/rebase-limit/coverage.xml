@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2833"  lines-covered="1170"  line-rate="0.413"  branches-valid="1252"  branches-covered="576"  branch-rate="0.46009999999999995"  timestamp="1712669339916" complexity="0" version="0.1">
+<coverage lines-valid="2837"  lines-covered="1172"  line-rate="0.4131"  branches-valid="1254"  branches-covered="577"  branch-rate="0.46009999999999995"  timestamp="1712677699901" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4495,9 +4495,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.sanity_checks"  line-rate="0.5421"  branch-rate="0.3962" >
+	<package name="0.8.9.sanity_checks"  line-rate="0.5413"  branch-rate="0.3981" >
 	<classes>
-		<class name="OracleReportSanityChecker.sol"  filename="contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol"  line-rate="0.5421"  branch-rate="0.3962" >
+		<class name="OracleReportSanityChecker.sol"  filename="contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol"  line-rate="0.5413"  branch-rate="0.3981" >
 		<methods>
 			<method name="constructor"  hits="9"  signature="()V" >
 				<lines><line number="187"  hits="9" /></lines>
@@ -4590,10 +4590,10 @@
 				<lines><line number="639"  hits="11" /></lines>
 			</method>
 			<method name="sumRebaseValuesNotOlderThan"  hits="6"  signature="()V" >
-				<lines><line number="644"  hits="6" /></lines>
+				<lines><line number="643"  hits="6" /></lines>
 			</method>
 			<method name="_checkCLBalanceDecrease"  hits="4"  signature="()V" >
-				<lines><line number="658"  hits="4" /></lines>
+				<lines><line number="657"  hits="4" /></lines>
 			</method>
 			<method name="_checkAnnualBalancesIncrease"  hits="2"  signature="()V" >
 				<lines><line number="707"  hits="2" /></lines>
@@ -4624,6 +4624,9 @@
 			</method>
 			<method name="unpack"  hits="15"  signature="()V" >
 				<lines><line number="931"  hits="15" /></lines>
+			</method>
+			<method name="toUint192"  hits="11"  signature="()V" >
+				<lines><line number="965"  hits="11" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -4724,29 +4727,30 @@
 			<line number="633"  hits="4"  branch="false" />
 			<line number="634"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="635"  hits="0"  branch="false" />
-			<line number="641"  hits="11"  branch="false" />
+			<line number="640"  hits="11"  branch="false" />
+			<line number="644"  hits="6"  branch="false" />
 			<line number="645"  hits="6"  branch="false" />
 			<line number="646"  hits="6"  branch="false" />
-			<line number="647"  hits="6"  branch="false" />
-			<line number="648"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="649"  hits="11"  branch="false" />
-			<line number="651"  hits="1"  branch="false" />
-			<line number="653"  hits="11"  branch="false" />
-			<line number="655"  hits="6"  branch="false" />
-			<line number="664"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="666"  hits="3"  branch="false" />
+			<line number="647"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="648"  hits="11"  branch="false" />
+			<line number="650"  hits="1"  branch="false" />
+			<line number="652"  hits="11"  branch="false" />
+			<line number="654"  hits="6"  branch="false" />
+			<line number="663"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="665"  hits="3"  branch="false" />
+			<line number="667"  hits="3"  branch="false" />
 			<line number="668"  hits="3"  branch="false" />
-			<line number="669"  hits="3"  branch="false" />
-			<line number="671"  hits="3"  branch="false" />
-			<line number="673"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="675"  hits="1"  branch="false" />
-			<line number="678"  hits="2"  branch="false" />
-			<line number="680"  hits="2"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="682"  hits="2"  branch="false" />
+			<line number="670"  hits="3"  branch="false" />
+			<line number="672"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="674"  hits="1"  branch="false" />
+			<line number="677"  hits="2"  branch="false" />
+			<line number="679"  hits="2"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="681"  hits="2"  branch="false" />
+			<line number="684"  hits="0"  branch="false" />
 			<line number="685"  hits="0"  branch="false" />
-			<line number="686"  hits="0"  branch="false" />
-			<line number="690"  hits="0"  branch="false" />
-			<line number="693"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="689"  hits="0"  branch="false" />
+			<line number="692"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="693"  hits="0"  branch="false" />
 			<line number="694"  hits="0"  branch="false" />
 			<line number="696"  hits="0"  branch="false" />
 			<line number="698"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
@@ -4841,6 +4845,9 @@
 			<line number="940"  hits="15"  branch="false" />
 			<line number="941"  hits="15"  branch="false" />
 			<line number="942"  hits="15"  branch="false" />
+			<line number="966"  hits="11"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="967"  hits="0"  branch="false" />
+			<line number="969"  hits="11"  branch="false" />
 		</lines>
 		</class>
 	</classes>
