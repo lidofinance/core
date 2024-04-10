@@ -198,8 +198,14 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       ).to.be.revertedWithCustomError(checker, "CLStateReportIsNotReady");
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
+      await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+        .to.emit(checker, "ConfirmNegativeRebase")
+        .withArgs(refSlot, 93 * 1e9);
 
-      await checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10);
+      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
+      await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+        .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
+        .withArgs(93 * 1e9, 94 * 1e9);
     });
   });
 
