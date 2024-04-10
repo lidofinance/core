@@ -14,7 +14,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracleMock;
   let deployer: HardhatEthersSigner;
-  // let genesisTime: bigint;
+  let genesisTime: bigint;
   const SLOTS_PER_DAY = 7200;
 
   const managersRoster = {
@@ -54,7 +54,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     [deployer] = await ethers.getSigners();
 
     accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
-    // genesisTime = await accountingOracle.GENESIS_TIME();
+    genesisTime = await accountingOracle.GENESIS_TIME();
     const sanityChecker = deployer.address;
     const burner = await ethers.deployContract("BurnerStub", []);
 
@@ -95,6 +95,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       const secondsPerSlot = await accountingOracle.SECONDS_PER_SLOT();
       const genesisTime = await accountingOracle.GENESIS_TIME();
+      expect(secondsPerSlot).to.equal(12);
       log("secondsPerSlot", secondsPerSlot);
       log("genesisTime", genesisTime);
     });
@@ -178,10 +179,12 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     });
 
     it(`works for happy path and ClBalanceMismatch`, async () => {
-      const timestamp = await time.latest();
+      const numGenesis = Number(genesisTime);
+      const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
+      const timestamp = refSlot * 12 + numGenesis;
 
       // Expect to pass through
-      await checker.checkAccountingOracleReport(timestamp, 96, 96, 0, 0, 0, 10, 10);
+      await checker.checkAccountingOracleReport(timestamp, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
 
@@ -190,13 +193,33 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       await checker.setCLStateOracle(await zkOracle.getAddress());
 
-      // await expect(checker.checkAccountingOracleReport(timestamp, 96, 94, 0, 0, 0, 10, 10))
-      //   .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
-      //   .withArgs(94, 95);
+      await expect(
+        checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
+      ).to.be.revertedWithCustomError(checker, "CLStateReportIsNotReady");
+
+      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
+
+      await checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10);
     });
   });
 
   context("OracleReportSanityChecker roles", () => {
+    it(`CL Oracle related functions require CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE`, async () => {
+      const decreaseRole = await checker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE();
+
+      await expect(checker.setcLBalanceDecreaseBPLimit(0)).to.be.revertedWith(
+        genAccessControlError(deployer.address, decreaseRole),
+      );
+
+      await expect(checker.setCLBalanceDecreaseHoursSpan(0)).to.be.revertedWith(
+        genAccessControlError(deployer.address, decreaseRole),
+      );
+
+      await checker.grantRole(decreaseRole, deployer.address);
+      await expect(checker.setcLBalanceDecreaseBPLimit(320)).to.not.be.reverted;
+      await expect(checker.setCLBalanceDecreaseHoursSpan(18 * 24)).to.not.be.reverted;
+    });
+
     it(`CL Oracle related functions require CL_ORACLES_MANAGER_ROLE`, async () => {
       const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
 
