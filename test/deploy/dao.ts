@@ -1,4 +1,4 @@
-import { BaseContract } from "ethers";
+import { AddressLike, BaseContract, BytesLike } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -84,4 +84,14 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
   }
 
   return { lido, dao, acl };
+}
+
+export async function hasPermission(
+  dao: Kernel,
+  app: BaseContract,
+  role: string,
+  who: AddressLike,
+  how: BytesLike = "0x",
+): Promise<boolean> {
+  return dao.hasPermission(who, app, await app.getFunction(role)(), how);
 }
