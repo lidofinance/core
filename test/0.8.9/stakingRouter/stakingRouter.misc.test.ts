@@ -5,13 +5,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconChainDepositor,
-  BeaconChainDepositor__factory,
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
+  MinFirstAllocationStrategy__factory,
   StakingRouter,
   StakingRouter__factory,
 } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { certainAddress, ether, proxify } from "lib";
 
@@ -22,8 +22,6 @@ describe("StakingRouter", () => {
   let user: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let beaconChainDepositor: BeaconChainDepositor;
-  let stakingRouterImpl: StakingRouter;
   let stakingRouter: StakingRouter;
 
   const lido = certainAddress("test:staking-router:lido");
@@ -33,9 +31,14 @@ describe("StakingRouter", () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
 
     depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    beaconChainDepositor = await new BeaconChainDepositor__factory(deployer).deploy(depositContract);
-    stakingRouterImpl = await new StakingRouter__factory(deployer).deploy(beaconChainDepositor);
-    [stakingRouter] = await proxify({ impl: stakingRouterImpl, admin: proxyAdmin, caller: user });
+
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
+
+    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
+    [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
   });
 
   context("initialize", () => {
