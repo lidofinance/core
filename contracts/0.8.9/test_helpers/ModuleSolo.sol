@@ -41,7 +41,7 @@ contract ModuleSolo is IStakingModule {
     }
 
     function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        uint265 targetLimitMode,
+        uint256 targetLimitMode,
         uint256 targetValidatorsCount,
         uint256 stuckValidatorsCount,
         uint256 refundedValidatorsCount,
@@ -92,7 +92,7 @@ contract ModuleSolo is IStakingModule {
 
     function updateTargetValidatorsLimits(
         uint256 _nodeOperatorId,
-        uint265 _targetLimitMode,
+        uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external {}
 

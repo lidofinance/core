@@ -170,41 +170,25 @@ contract MinFirstAllocationStrategyBase {
     TestOutput internal _actual;
     TestOutput internal _expected;
 
-    function getInput()
-        external
-        view
-        returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocationSize)
-    {
+    function getInput() external view returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocationSize) {
         buckets = _input.buckets;
         capacities = _input.capacities;
         allocationSize = _input.allocationSize;
     }
 
-    function getExpectedOutput()
-        external
-        view
-        returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocated)
-    {
+    function getExpectedOutput() external view returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocated) {
         buckets = _expected.buckets;
         capacities = _expected.capacities;
         allocated = _expected.allocated;
     }
 
-    function getActualOutput()
-        external
-        view
-        returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocated)
-    {
+    function getActualOutput() external view returns (uint256[] memory buckets, uint256[] memory capacities, uint256 allocated) {
         buckets = _actual.buckets;
         capacities = _actual.capacities;
         allocated = _actual.allocated;
     }
 
-    function _fillTestInput(
-        uint256[] memory _fuzzBuckets,
-        uint256[] memory _fuzzCapacities,
-        uint256 _fuzzAllocationSize
-    ) internal {
+    function _fillTestInput(uint256[] memory _fuzzBuckets, uint256[] memory _fuzzCapacities, uint256 _fuzzAllocationSize) internal {
         uint256 bucketsCount = Math256.min(_fuzzBuckets.length, _fuzzCapacities.length) % MAX_BUCKETS_COUNT;
         _input.buckets = new uint256[](bucketsCount);
         _input.capacities = new uint256[](bucketsCount);
@@ -217,9 +201,7 @@ contract MinFirstAllocationStrategyBase {
 }
 
 contract MinFirstAllocationStrategyAllocateHandler is MinFirstAllocationStrategyBase {
-    function allocate(uint256[] memory _fuzzBuckets, uint256[] memory _fuzzCapacities, uint256 _fuzzAllocationSize)
-        public
-    {
+    function allocate(uint256[] memory _fuzzBuckets, uint256[] memory _fuzzCapacities, uint256 _fuzzAllocationSize) public {
         _fillTestInput(_fuzzBuckets, _fuzzCapacities, _fuzzAllocationSize);
 
         _fillActualAllocateOutput();
@@ -243,10 +225,11 @@ contract MinFirstAllocationStrategyAllocateHandler is MinFirstAllocationStrategy
         uint256[] memory capacities = _input.capacities;
         uint256 allocationSize = _input.allocationSize;
 
-        uint256 allocated = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
+        // uint256 allocated = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
+        (_actual.allocated, _actual.buckets) = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
 
-        _actual.allocated = allocated;
-        _actual.buckets = buckets;
+        // _actual.allocated = allocated;
+        // _actual.buckets = buckets;
         _actual.capacities = capacities;
     }
 }
@@ -257,8 +240,8 @@ contract MinFirstAllocationStrategy__Harness {
         pure
         returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities)
     {
-        allocated = MinFirstAllocationStrategy.allocate(_buckets, _capacities, _allocationSize);
-        newBuckets = _buckets;
+        (allocated, newBuckets) = MinFirstAllocationStrategy.allocate(_buckets, _capacities, _allocationSize);
+        // newBuckets = _buckets;
         newCapacities = _capacities;
     }
 
@@ -276,11 +259,7 @@ contract MinFirstAllocationStrategy__Harness {
 library NaiveMinFirstAllocationStrategy {
     uint256 private constant MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
-    function allocate(uint256[] memory buckets, uint256[] memory capacities, uint256 allocationSize)
-        internal
-        pure
-        returns (uint256 allocated)
-    {
+    function allocate(uint256[] memory buckets, uint256[] memory capacities, uint256 allocationSize) internal pure returns (uint256 allocated) {
         while (allocated < allocationSize) {
             uint256 bestCandidateIndex = MAX_UINT256;
             uint256 bestCandidateAllocation = MAX_UINT256;
