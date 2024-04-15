@@ -37,7 +37,7 @@ interface IStakingModule {
     ///     EXITED state this counter is not decreasing
     /// @return depositableValidatorsCount number of validators in the set available for deposit
     function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        uint265 targetLimitMode,
+        uint256 targetLimitMode,
         uint256 targetValidatorsCount,
         uint256 stuckValidatorsCount,
         uint256 refundedValidatorsCount,
@@ -114,7 +114,7 @@ interface IStakingModule {
     /// @param _targetLimit Target limit of the node operator
     function updateTargetValidatorsLimits(
         uint256 _nodeOperatorId,
-        uint265 _targetLimitMode,
+        uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external;
 
