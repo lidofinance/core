@@ -581,14 +581,17 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _nodeOperatorId Id of the node operator
     /// @param _targetLimit Target limit of the node operator
     /// @param _targetLimitMode target limit mode, >1 means forced target limit
-    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) external {
+    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
         _requireValidRange(_targetLimit <= UINT64_MAX);
 
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
         operatorTargetStats.set(TARGET_LIMIT_MODE_OFFSET, _targetLimitMode);
-        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _targetLimitMode > 0 ? _targetLimit : 0);
+        if (_targetLimitMode == 0) {
+            _targetLimit = 0;
+        }
+        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _targetLimit);
         _saveOperatorTargetValidatorsStats(_nodeOperatorId, operatorTargetStats);
 
         emit TargetValidatorsCountChanged(_nodeOperatorId, _targetLimit, _targetLimitMode);
