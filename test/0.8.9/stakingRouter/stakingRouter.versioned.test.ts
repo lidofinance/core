@@ -4,36 +4,32 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { MinFirstAllocationStrategy, OssifiableProxy, StakingRouter, StakingRouter__factory } from "typechain-types";
+import { MinFirstAllocationStrategy__factory, StakingRouter, StakingRouter__factory } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
-import { MAX_UINT256, randomAddress } from "lib";
+import { MAX_UINT256, proxify, randomAddress } from "lib";
 
 describe("StakingRouter:Versioned", () => {
+  let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
-  let user: HardhatEthersSigner;
 
-  let allocLib: MinFirstAllocationStrategy;
   let impl: StakingRouter;
-  let proxy: OssifiableProxy;
   let versioned: StakingRouter;
 
   const petrifiedVersion = MAX_UINT256;
 
   before(async () => {
-    [admin, user] = await ethers.getSigners();
+    [deployer, admin] = await ethers.getSigners();
 
+    // deploy staking router
     const depositContract = randomAddress();
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
 
-    allocLib = await ethers.deployContract("MinFirstAllocationStrategy", []);
-    impl = await ethers.deployContract("StakingRouter", [depositContract], {
-      libraries: { MinFirstAllocationStrategy: await allocLib.getAddress() },
-    });
-
-    proxy = await ethers.deployContract("OssifiableProxy", [await impl.getAddress(), admin.address, new Uint8Array()], {
-      from: admin,
-    });
-
-    versioned = StakingRouter__factory.connect(await proxy.getAddress(), user);
+    impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
+    [versioned] = await proxify({ impl, admin });
   });
 
   context("constructor", () => {
