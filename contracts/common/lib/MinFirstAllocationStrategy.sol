@@ -31,7 +31,7 @@ library MinFirstAllocationStrategy {
         uint256[] memory buckets,
         uint256[] memory capacities,
         uint256 allocationSize
-    ) public pure returns (uint256 allocated) {
+    ) public pure returns (uint256 allocated, uint256[] memory) {
         uint256 allocatedToBestCandidate = 0;
         while (allocated < allocationSize) {
             allocatedToBestCandidate = allocateToBestCandidate(buckets, capacities, allocationSize - allocated);
@@ -40,6 +40,7 @@ library MinFirstAllocationStrategy {
             }
             allocated += allocatedToBestCandidate;
         }
+        return (allocated, buckets);
     }
 
     /// @notice Allocates the max allowed value not exceeding allocationSize to the bucket with the least value.
@@ -63,7 +64,7 @@ library MinFirstAllocationStrategy {
         uint256[] memory buckets,
         uint256[] memory capacities,
         uint256 allocationSize
-    ) public pure returns (uint256 allocated) {
+    ) internal pure returns (uint256 allocated) {
         uint256 bestCandidateIndex = buckets.length;
         uint256 bestCandidateAllocation = MAX_UINT256;
         uint256 bestCandidatesCount = 0;

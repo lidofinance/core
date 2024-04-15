@@ -275,7 +275,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     function updateTargetValidatorsLimits(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
-        uint265 _targetLimitMode,
+        uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
         address moduleAddr = _getStakingModuleById(_stakingModuleId).stakingModuleAddress;
@@ -1280,7 +1280,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
                 }
             }
 
-            allocated = MinFirstAllocationStrategy.allocate(allocations, capacities, _depositsToAllocate);
+            (allocated, allocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, _depositsToAllocate);
         }
     }
 
