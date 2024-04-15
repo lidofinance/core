@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2790"  lines-covered="1363"  line-rate="0.4885"  branches-valid="1232"  branches-covered="650"  branch-rate="0.5276"  timestamp="1712928001609" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="1363"  line-rate="0.4781"  branches-valid="1260"  branches-covered="650"  branch-rate="0.5159"  timestamp="1713182198252" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1673,8 +1673,8 @@
 		</class>
 		<class name="Versioned.sol"  filename="contracts/0.4.24/utils/Versioned.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="102"  signature="()V" >
-				<lines><line number="29"  hits="102" /></lines>
+			<method name="constructor"  hits="98"  signature="()V" >
+				<lines><line number="29"  hits="98" /></lines>
 			</method>
 			<method name="getContractVersion"  hits="16"  signature="()V" >
 				<lines><line number="35"  hits="16" /></lines>
@@ -1687,7 +1687,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="31"  hits="102"  branch="false" />
+			<line number="31"  hits="98"  branch="false" />
 			<line number="36"  hits="16"  branch="false" />
 			<line number="40"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="44"  hits="100"  branch="false" />
@@ -1740,6 +1740,161 @@
 			<line number="100"  hits="12"  branch="false" />
 			<line number="108"  hits="3"  branch="false" />
 			<line number="116"  hits="3"  branch="false" />
+		</lines>
+		</class>
+	</classes>
+	</package>
+	<package name="0.8.4"  line-rate="0"  branch-rate="0" >
+	<classes>
+		<class name="WithdrawalsManagerProxy.sol"  filename="contracts/0.8.4/WithdrawalsManagerProxy.sol"  line-rate="0"  branch-rate="0" >
+		<methods>
+			<method name="isContract"  hits="0"  signature="()V" >
+				<lines><line number="55"  hits="0" /></lines>
+			</method>
+			<method name="sendValue"  hits="0"  signature="()V" >
+				<lines><line number="82"  hits="0" /></lines>
+			</method>
+			<method name="functionCall"  hits="0"  signature="()V" >
+				<lines><line number="108"  hits="0" /></lines>
+			</method>
+			<method name="functionCall"  hits="0"  signature="()V" >
+				<lines><line number="118"  hits="0" /></lines>
+			</method>
+			<method name="functionCallWithValue"  hits="0"  signature="()V" >
+				<lines><line number="133"  hits="0" /></lines>
+			</method>
+			<method name="functionCallWithValue"  hits="0"  signature="()V" >
+				<lines><line number="143"  hits="0" /></lines>
+			</method>
+			<method name="functionStaticCall"  hits="0"  signature="()V" >
+				<lines><line number="158"  hits="0" /></lines>
+			</method>
+			<method name="functionStaticCall"  hits="0"  signature="()V" >
+				<lines><line number="168"  hits="0" /></lines>
+			</method>
+			<method name="functionDelegateCall"  hits="0"  signature="()V" >
+				<lines><line number="182"  hits="0" /></lines>
+			</method>
+			<method name="functionDelegateCall"  hits="0"  signature="()V" >
+				<lines><line number="192"  hits="0" /></lines>
+			</method>
+			<method name="_verifyCallResult"  hits="0"  signature="()V" >
+				<lines><line number="200"  hits="0" /></lines>
+			</method>
+			<method name="_delegate"  hits="0"  signature="()V" >
+				<lines><line number="241"  hits="0" /></lines>
+			</method>
+			<method name="_fallback"  hits="0"  signature="()V" >
+				<lines><line number="274"  hits="0" /></lines>
+			</method>
+			<method name="null"  hits="0"  signature="()V" >
+				<lines><line number="283"  hits="0" /></lines>
+			</method>
+			<method name="_beforeFallback"  hits="0"  signature="()V" >
+				<lines><line number="301"  hits="0" /></lines>
+			</method>
+			<method name="constructor"  hits="0"  signature="()V" >
+				<lines><line number="326"  hits="0" /></lines>
+			</method>
+			<method name="_implementation"  hits="0"  signature="()V" >
+				<lines><line number="349"  hits="0" /></lines>
+			</method>
+			<method name="_upgradeTo"  hits="0"  signature="()V" >
+				<lines><line number="362"  hits="0" /></lines>
+			</method>
+			<method name="_setImplementation"  hits="0"  signature="()V" >
+				<lines><line number="370"  hits="0" /></lines>
+			</method>
+			<method name="getAddressSlot"  hits="0"  signature="()V" >
+				<lines><line number="395"  hits="0" /></lines>
+			</method>
+			<method name="constructor"  hits="0"  signature="()V" >
+				<lines><line number="446"  hits="0" /></lines>
+			</method>
+			<method name="implementation"  hits="0"  signature="()V" >
+				<lines><line number="454"  hits="0" /></lines>
+			</method>
+			<method name="proxy_upgradeTo"  hits="0"  signature="()V" >
+				<lines><line number="469"  hits="0" /></lines>
+			</method>
+			<method name="_getAdmin"  hits="0"  signature="()V" >
+				<lines><line number="484"  hits="0" /></lines>
+			</method>
+			<method name="_setAdmin"  hits="0"  signature="()V" >
+				<lines><line number="491"  hits="0" /></lines>
+			</method>
+			<method name="proxy_getAdmin"  hits="0"  signature="()V" >
+				<lines><line number="498"  hits="0" /></lines>
+			</method>
+			<method name="proxy_changeAdmin"  hits="0"  signature="()V" >
+				<lines><line number="507"  hits="0" /></lines>
+			</method>
+			<method name="proxy_getIsOssified"  hits="0"  signature="()V" >
+				<lines><line number="517"  hits="0" /></lines>
+			</method>
+		</methods>
+		<lines>
+			<line number="26"  hits="0"  branch="false" />
+			<line number="60"  hits="0"  branch="false" />
+			<line number="62"  hits="0"  branch="false" />
+			<line number="63"  hits="0"  branch="false" />
+			<line number="83"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="86"  hits="0"  branch="false" />
+			<line number="87"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="109"  hits="0"  branch="false" />
+			<line number="119"  hits="0"  branch="false" />
+			<line number="134"  hits="0"  branch="false" />
+			<line number="144"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="145"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="148"  hits="0"  branch="false" />
+			<line number="149"  hits="0"  branch="false" />
+			<line number="159"  hits="0"  branch="false" />
+			<line number="169"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="172"  hits="0"  branch="false" />
+			<line number="173"  hits="0"  branch="false" />
+			<line number="183"  hits="0"  branch="false" />
+			<line number="193"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="196"  hits="0"  branch="false" />
+			<line number="197"  hits="0"  branch="false" />
+			<line number="201"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="202"  hits="0"  branch="false" />
+			<line number="205"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="209"  hits="0"  branch="false" />
+			<line number="214"  hits="0"  branch="false" />
+			<line number="243"  hits="0"  branch="false" />
+			<line number="275"  hits="0"  branch="false" />
+			<line number="276"  hits="0"  branch="false" />
+			<line number="284"  hits="0"  branch="false" />
+			<line number="292"  hits="0"  branch="false" />
+			<line number="327"  hits="0"  branch="false" />
+			<line number="328"  hits="0"  branch="false" />
+			<line number="329"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="330"  hits="0"  branch="false" />
+			<line number="350"  hits="0"  branch="false" />
+			<line number="352"  hits="0"  branch="false" />
+			<line number="363"  hits="0"  branch="false" />
+			<line number="364"  hits="0"  branch="false" />
+			<line number="371"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="373"  hits="0"  branch="false" />
+			<line number="376"  hits="0"  branch="false" />
+			<line number="396"  hits="0"  branch="false" />
+			<line number="447"  hits="0"  branch="false" />
+			<line number="448"  hits="0"  branch="false" />
+			<line number="455"  hits="0"  branch="false" />
+			<line number="470"  hits="0"  branch="false" />
+			<line number="471"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="472"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="474"  hits="0"  branch="false" />
+			<line number="476"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="477"  hits="0"  branch="false" />
+			<line number="485"  hits="0"  branch="false" />
+			<line number="492"  hits="0"  branch="false" />
+			<line number="499"  hits="0"  branch="false" />
+			<line number="508"  hits="0"  branch="false" />
+			<line number="509"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="510"  hits="0"  branch="false" />
+			<line number="511"  hits="0"  branch="false" />
+			<line number="518"  hits="0"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -4445,8 +4600,8 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="0.0588"  branch-rate="0" >
 		<methods>
-			<method name="constructor"  hits="223"  signature="()V" >
-				<lines><line number="23"  hits="223" /></lines>
+			<method name="constructor"  hits="219"  signature="()V" >
+				<lines><line number="23"  hits="219" /></lines>
 			</method>
 			<method name="proxy__getAdmin"  hits="0"  signature="()V" >
 				<lines><line number="28"  hits="0" /></lines>
@@ -4474,7 +4629,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="223"  branch="false" />
+			<line number="24"  hits="219"  branch="false" />
 			<line number="29"  hits="0"  branch="false" />
 			<line number="34"  hits="0"  branch="false" />
 			<line number="39"  hits="0"  branch="false" />
