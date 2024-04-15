@@ -8,11 +8,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
+  MinFirstAllocationStrategy__factory,
   StakingModule__Mock,
   StakingModule__Mock__factory,
   StakingRouter,
   StakingRouter__factory,
 } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { ether, getNextBlock, proxify } from "lib";
 
@@ -35,13 +37,20 @@ describe("StakingRouter:module-sync", () => {
   const name = "myStakingModule";
   const stakingModuleFee = 5_00n;
   const treasuryFee = 5_00n;
-  const targetShare = 1_00n;
+  const stakeShareLimit = 1_00n;
+  const priorityExitShareThreshold = 2_00n;
 
   beforeEach(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
     depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
+
+    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -70,13 +79,20 @@ describe("StakingRouter:module-sync", () => {
     lastDepositAt = timestamp;
     lastDepositBlock = number;
 
-    await stakingRouter.addStakingModule(name, stakingModuleAddress, targetShare, stakingModuleFee, treasuryFee);
+    await stakingRouter.addStakingModule(
+      name,
+      stakingModuleAddress,
+      stakeShareLimit,
+      priorityExitShareThreshold,
+      stakingModuleFee,
+      treasuryFee,
+    );
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
 
   context("Getters", () => {
-    let stakingModuleInfo: [bigint, string, bigint, bigint, bigint, bigint, string, bigint, bigint, bigint];
+    let stakingModuleInfo: [bigint, string, bigint, bigint, bigint, bigint, bigint, string, bigint, bigint, bigint];
 
     // module mock state
     const stakingModuleSummary: Parameters<StakingModule__Mock["mock__getStakingModuleSummary"]> = [
@@ -86,7 +102,7 @@ describe("StakingRouter:module-sync", () => {
     ];
 
     const nodeOperatorSummary: Parameters<StakingModule__Mock["mock__getNodeOperatorSummary"]> = [
-      true, // isTargetLimitActive
+      1, // targetLimitMode
       100n, // targetValidatorsCount
       1n, // stuckValidatorsCount
       5n, // refundedValidatorsCount
@@ -109,8 +125,9 @@ describe("StakingRouter:module-sync", () => {
         stakingModuleAddress,
         stakingModuleFee,
         treasuryFee,
-        targetShare,
+        stakeShareLimit,
         0n, // status
+        priorityExitShareThreshold,
         name,
         lastDepositAt,
         lastDepositBlock,
@@ -291,23 +308,23 @@ describe("StakingRouter:module-sync", () => {
 
   context("updateTargetValidatorsLimits", () => {
     const NODE_OPERATOR_ID = 0n;
-    const IS_TARGET_LIMIT_ACTIVE = true;
+    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - forced
     const TARGET_LIMIT = 100n;
 
     it("Reverts if the caller does not have the role", async () => {
       await expect(
         stakingRouter
           .connect(user)
-          .updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT),
+          .updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT),
       ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Redirects the call to the staking module", async () => {
       await expect(
-        stakingRouter.updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT),
+        stakingRouter.updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT),
       )
         .to.emit(stakingModule, "Mock__TargetValidatorsLimitsUpdated")
-        .withArgs(NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT);
+        .withArgs(NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT);
     });
   });
 

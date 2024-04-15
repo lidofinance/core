@@ -7,9 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor__factory,
+  MinFirstAllocationStrategy__factory,
   StakingRouter,
   StakingRouter__factory,
 } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { certainAddress, proxify } from "lib";
 
@@ -32,7 +34,12 @@ context("StakingRouter:status-control", () => {
 
     // deploy staking router
     const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
+
+    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -53,6 +60,7 @@ context("StakingRouter:status-control", () => {
     await stakingRouter.addStakingModule(
       "myStakingModule",
       certainAddress("test:staking-router-status:staking-module"), // mock staking module address
+      1_00, // target share
       1_00, // target share
       5_00, // module fee
       5_00, // treasury fee

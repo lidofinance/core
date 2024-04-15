@@ -6,11 +6,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor__factory,
+  MinFirstAllocationStrategy__factory,
   StakingModule__Mock,
   StakingModule__Mock__factory,
   StakingRouter,
   StakingRouter__factory,
 } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { certainAddress, ether, proxify } from "lib";
 
@@ -21,13 +23,24 @@ describe("StakingRouter:deposits", () => {
   let stakingRouter: StakingRouter;
 
   const DEPOSIT_VALUE = ether("32.0");
-  const DEFAULT_CONFIG: ModuleConfig = { targetShare: 100_00n, moduleFee: 5_00n, treasuryFee: 5_00n };
+  const DEFAULT_CONFIG: ModuleConfig = {
+    stakeShareLimit: 100_00n,
+    priorityExitShareThreshold: 100_00n,
+    moduleFee: 5_00n,
+    treasuryFee: 5_00n,
+  };
 
   beforeEach(async () => {
     [deployer, admin] = await ethers.getSigners();
 
     const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
+
+    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -71,7 +84,7 @@ describe("StakingRouter:deposits", () => {
 
       const config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
         depositable: 50n,
       };
 
@@ -106,7 +119,8 @@ describe("StakingRouter:deposits", () => {
     it("Allocates evenly if target shares are equal and capacities allow for that", async () => {
       const config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         depositable: 50n,
       };
 
@@ -122,13 +136,15 @@ describe("StakingRouter:deposits", () => {
     it("Allocates according to capacities at equal target shares", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         depositable: 100n,
       };
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         depositable: 50n,
       };
 
@@ -144,13 +160,15 @@ describe("StakingRouter:deposits", () => {
     it("Allocates according to target shares", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 60_00n,
+        stakeShareLimit: 60_00n,
+        priorityExitShareThreshold: 60_00n,
         depositable: 100n,
       };
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 40_00n,
+        stakeShareLimit: 40_00n,
+        priorityExitShareThreshold: 40_00n,
         depositable: 100n,
       };
 
@@ -208,7 +226,8 @@ describe("StakingRouter:deposits", () => {
     it("Distributes rewards evenly between multiple module if fees are the same", async () => {
       const config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         deposited: 1000n,
       };
 
@@ -235,13 +254,15 @@ describe("StakingRouter:deposits", () => {
     it("Does not distribute rewards to modules with no active validators", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         deposited: 1000n,
       };
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         deposited: 0n,
       };
 
@@ -289,7 +310,8 @@ describe("StakingRouter:deposits", () => {
     it("Distributes rewards between multiple module if according to the set fees", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 1_00n,
         treasuryFee: 9_00n,
         deposited: 1000n,
@@ -297,7 +319,8 @@ describe("StakingRouter:deposits", () => {
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 8_00n,
         treasuryFee: 2_00n,
         deposited: 1000n,
@@ -338,7 +361,8 @@ describe("StakingRouter:deposits", () => {
     it("Returns fee aggregates with two modules with different fees", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 4_00n,
         treasuryFee: 6_00n,
         deposited: 1000n,
@@ -346,7 +370,8 @@ describe("StakingRouter:deposits", () => {
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 6_00n,
         treasuryFee: 4_00n,
         deposited: 1000n,
@@ -373,7 +398,8 @@ describe("StakingRouter:deposits", () => {
     it("Returns fee aggregates with two modules with different fees", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 4_00n,
         treasuryFee: 6_00n,
         deposited: 1000n,
@@ -381,7 +407,8 @@ describe("StakingRouter:deposits", () => {
 
       const module2Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 6_00n,
         treasuryFee: 4_00n,
         deposited: 1000n,
@@ -402,7 +429,8 @@ describe("StakingRouter:deposits", () => {
     it("Returns total fee value in 1e4 precision", async () => {
       const module1Config = {
         ...DEFAULT_CONFIG,
-        targetShare: 50_00n,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
         moduleFee: 5_00n,
         treasuryFee: 5_00n,
         deposited: 1000n,
@@ -415,7 +443,8 @@ describe("StakingRouter:deposits", () => {
   });
 
   async function setupModule({
-    targetShare,
+    stakeShareLimit,
+    priorityExitShareThreshold,
     moduleFee,
     treasuryFee,
     exited = 0n,
@@ -428,7 +457,14 @@ describe("StakingRouter:deposits", () => {
 
     await stakingRouter
       .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), targetShare, moduleFee, treasuryFee);
+      .addStakingModule(
+        randomBytes(8).toString(),
+        await module.getAddress(),
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        moduleFee,
+        treasuryFee,
+      );
 
     const moduleId = modulesCount + 1n;
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
@@ -450,7 +486,8 @@ enum Status {
 }
 
 interface ModuleConfig {
-  targetShare: bigint;
+  stakeShareLimit: bigint;
+  priorityExitShareThreshold: bigint;
   moduleFee: bigint;
   treasuryFee: bigint;
   exited?: bigint;
