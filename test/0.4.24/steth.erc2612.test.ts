@@ -6,7 +6,7 @@ import {
   StethPermitMockWithEip712Initialization__factory,
 } from "typechain-types";
 
-import { ether, stethDomain } from "lib/units";
+import { ether, stethDomain } from "lib";
 
 import { testERC2612Compliance } from "../common/erc2612.test";
 

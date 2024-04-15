@@ -16,14 +16,29 @@ import { HardhatUserConfig, subtask } from "hardhat/config";
 
 import { mochaRootHooks } from "./test/setup";
 
+const RPC_URL: string = process.env.RPC_URL || "";
+const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
+
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
+    local: {
+      url: RPC_URL,
+    },
     hardhat: {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
       // gasPrice: 0,
       // initialBaseFeePerGas: 0,
+      blockGasLimit: 30000000,
+      allowUnlimitedContractSize: true,
+      accounts: {
+        // default hardhat's node mnemonic
+        mnemonic: "test test test test test test test test test test test junk",
+        count: 30,
+        accountsBalance: "100000000000000000000000",
+      },
+      forking: HARDHAT_FORKING_URL ? { url: HARDHAT_FORKING_URL } : undefined,
     },
   },
   solidity: {
@@ -50,6 +65,16 @@ const config: HardhatUserConfig = {
       },
       {
         version: "0.6.12",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          evmVersion: "istanbul",
+        },
+      },
+      {
+        version: "0.8.4",
         settings: {
           optimizer: {
             enabled: true,

@@ -124,7 +124,7 @@ contract LidoTemplate is IsContract {
 
     event TmplAPMDeployed(address apm);
     event TmplReposCreated();
-    event TmplAppInstalled(address appProxy, bytes32 appId);
+    event TmplAppInstalled(address appProxy, bytes32 appId, bytes initializeData);
     event TmplDAOAndTokenDeployed(address dao, address token);
     event TmplTokensIssued(uint256 totalAmount);
     event TmplDaoFinalized();
@@ -208,6 +208,51 @@ contract LidoTemplate is IsContract {
         ens.setOwner(node, _to);
     }
 
+    function createStdAragonRepos(
+        address _agentImpl,
+        address _financeImpl,
+        address _tokenManagerImpl,
+        address _votingImpl
+    ) external onlyOwner {
+        uint16[3] memory initialSemanticVersion = [uint16(1), uint16(0), uint16(0)];
+
+        bytes memory dummyContentURI = new bytes(0);
+
+        APMRegistry lidoRegistry = deployState.lidoRegistry;
+
+        apmRepos.aragonAgent = lidoRegistry.newRepoWithVersion(
+            ARAGON_AGENT_APP_NAME,
+            this,
+            initialSemanticVersion,
+            _agentImpl,
+            dummyContentURI
+        );
+
+        apmRepos.aragonFinance = lidoRegistry.newRepoWithVersion(
+            ARAGON_FINANCE_APP_NAME,
+            this,
+            initialSemanticVersion,
+            _financeImpl,
+            dummyContentURI
+        );
+
+        apmRepos.aragonTokenManager = lidoRegistry.newRepoWithVersion(
+            ARAGON_TOKEN_MANAGER_APP_NAME,
+            this,
+            initialSemanticVersion,
+            _tokenManagerImpl,
+            dummyContentURI
+        );
+
+        apmRepos.aragonVoting = lidoRegistry.newRepoWithVersion(
+            ARAGON_VOTING_APP_NAME,
+            this,
+            initialSemanticVersion,
+            _votingImpl,
+            dummyContentURI
+        );
+    }
+
     function createRepos(
         uint16[3] _initialSemanticVersion,
         address _lidoImplAddress,
@@ -216,6 +261,7 @@ contract LidoTemplate is IsContract {
         bytes _nodeOperatorsRegistryContentURI,
         address _oracleImplAddress,
         bytes _oracleContentURI
+
     ) external onlyOwner {
         require(deployState.lidoRegistry != address(0), ERROR_REGISTRY_NOT_DEPLOYED);
 
@@ -245,44 +291,6 @@ contract LidoTemplate is IsContract {
             _initialSemanticVersion,
             _oracleImplAddress,
             _oracleContentURI
-        );
-
-        // create Aragon app repos pointing to latest upstream versions
-
-        AppVersion memory latest = _apmResolveLatest(ARAGON_AGENT_APP_ID);
-        apmRepos.aragonAgent = lidoRegistry.newRepoWithVersion(
-            ARAGON_AGENT_APP_NAME,
-            this,
-            _initialSemanticVersion,
-            latest.contractAddress,
-            latest.contentURI
-        );
-
-        latest = _apmResolveLatest(ARAGON_FINANCE_APP_ID);
-        apmRepos.aragonFinance = lidoRegistry.newRepoWithVersion(
-            ARAGON_FINANCE_APP_NAME,
-            this,
-            _initialSemanticVersion,
-            latest.contractAddress,
-            latest.contentURI
-        );
-
-        latest = _apmResolveLatest(ARAGON_TOKEN_MANAGER_APP_ID);
-        apmRepos.aragonTokenManager = lidoRegistry.newRepoWithVersion(
-            ARAGON_TOKEN_MANAGER_APP_NAME,
-            this,
-            _initialSemanticVersion,
-            latest.contractAddress,
-            latest.contentURI
-        );
-
-        latest = _apmResolveLatest(ARAGON_VOTING_APP_ID);
-        apmRepos.aragonVoting = lidoRegistry.newRepoWithVersion(
-            ARAGON_VOTING_APP_NAME,
-            this,
-            _initialSemanticVersion,
-            latest.contractAddress,
-            latest.contentURI
         );
 
         emit TmplReposCreated();
@@ -393,6 +401,8 @@ contract LidoTemplate is IsContract {
         require(state.dao != address(0), ERROR_DAO_NOT_DEPLOYED);
         require(bytes(_daoName).length > 0, ERROR_INVALID_ID);
 
+        state.stakingRouter = _stakingRouter;
+
         if (_unvestedTokensAmount != 0) {
             // using issue + assign to avoid setting the additional MINT_ROLE for the template
             state.tokenManager.issue(_unvestedTokensAmount);
@@ -495,7 +505,7 @@ contract LidoTemplate is IsContract {
     ) internal returns (address) {
         address latestBaseAppAddress = _apmResolveLatest(_appId).contractAddress;
         address instance = address(_dao.newAppInstance(_appId, latestBaseAppAddress, _initializeData, _setDefault));
-        emit TmplAppInstalled(instance, _appId);
+        emit TmplAppInstalled(instance, _appId, _initializeData);
         return instance;
     }
 
@@ -597,12 +607,12 @@ contract LidoTemplate is IsContract {
 
         // NodeOperatorsRegistry
         perms[0] = _state.operators.MANAGE_SIGNING_KEYS();
-        perms[1] = _state.operators.MANAGE_NODE_OPERATOR_ROLE();
-        perms[2] = _state.operators.SET_NODE_OPERATOR_LIMIT_ROLE();
-        for (i = 0; i < 3; ++i) {
+        perms[1] = _state.operators.SET_NODE_OPERATOR_LIMIT_ROLE();
+        for (i = 0; i < 2; ++i) {
             _createPermissionForVoting(acl, _state.operators, perms[i], voting);
         }
         acl.createPermission(_state.stakingRouter, _state.operators, _state.operators.STAKING_ROUTER_ROLE(), voting);
+        acl.createPermission(_state.agent, _state.operators, _state.operators.MANAGE_NODE_OPERATOR_ROLE(), voting);
 
         // Lido
         perms[0] = _state.lido.PAUSE_ROLE();
@@ -736,7 +746,9 @@ contract LidoTemplate is IsContract {
     }
 
     function _resolveRepo(bytes32 _appId) private view returns (Repo) {
-        return Repo(PublicResolver(ens.resolver(_appId)).addr(_appId));
+        address resolverAddress = ens.resolver(_appId);
+        require(resolverAddress != address(0x0), "ZERO_RESOLVER_ADDRESS");
+        return Repo(PublicResolver(resolverAddress).addr(_appId));
     }
 
     /**

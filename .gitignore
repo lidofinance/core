@@ -16,3 +16,7 @@ coverage.json
 /foundry/out
 
 .env
+deployed-local.json
+
+# MacOS
+.DS_Store

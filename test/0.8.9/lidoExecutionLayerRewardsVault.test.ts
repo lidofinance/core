@@ -15,7 +15,7 @@ import {
   Steth__MinimalMock__factory,
 } from "typechain-types";
 
-import { batch, certainAddress, ether, impersonate } from "lib/address";
+import { batch, certainAddress, ether, impersonate } from "lib";
 
 describe("LidoExecutionLayerRewardsVault", () => {
   let deployer: HardhatEthersSigner;

@@ -7,7 +7,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido__MockForFinalizeUpgradeV2, Lido__MockForFinalizeUpgradeV2__factory, LidoLocator } from "typechain-types";
 
-import { certainAddress, dummyLocator, INITIAL_STETH_HOLDER, ONE_ETHER, proxify } from "lib/address";
+import { certainAddress, dummyLocator, INITIAL_STETH_HOLDER, ONE_ETHER, proxify } from "lib";
 
 describe("Lido:finalizeUpgrade_v2", () => {
   let deployer: HardhatEthersSigner;

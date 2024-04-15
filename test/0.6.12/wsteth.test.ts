@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Steth__MockForWsteth, Steth__MockForWsteth__factory, WstETH, WstETH__factory } from "typechain-types";
 
-import { batch, ether, ONE_ETHER } from "lib/units";
+import { batch, ether, ONE_ETHER } from "lib";
 
 describe("WstETH", () => {
   let steth: Steth__MockForWsteth;

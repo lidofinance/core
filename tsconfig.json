@@ -9,11 +9,11 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "lib/*": ["./lib"],
-      "test/*": ["./test"],
+      "lib": ["./lib"],
+      "test": ["./test"],
       "typechain-types": ["./typechain-types"]
     }
   },
-  "include": ["./test", "./typechain-types", "./lib"],
+  "include": ["./test", "./typechain-types", "./lib", "./scripts"],
   "files": ["./hardhat.config.ts", "./commitlint.config.ts"]
 }

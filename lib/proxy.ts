@@ -21,8 +21,8 @@ export async function proxify<T extends BaseContract>({
 
   const proxy = await new OssifiableProxy__factory(admin).deploy(implAddres, admin.address, data);
 
-  const proxied = impl.attach(await proxy.getAddress()) as T;
-  proxied.connect(caller);
+  let proxied = impl.attach(await proxy.getAddress()) as T;
+  proxied = proxied.connect(caller) as T;
 
   return [proxied, proxy];
 }

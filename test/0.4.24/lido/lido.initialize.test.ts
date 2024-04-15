@@ -7,21 +7,27 @@ import { setStorageAt, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido, Lido__factory, LidoLocator } from "typechain-types";
 
-import { certainAddress, dummyLocator, INITIAL_STETH_HOLDER, proxify, streccak } from "lib/address";
+import { certainAddress, dummyLocator, INITIAL_STETH_HOLDER, proxify, Snapshot, streccak } from "lib";
 
 describe("Lido:initialize", () => {
   let deployer: HardhatEthersSigner;
 
   let lido: Lido;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer] = await ethers.getSigners();
     const factory = new Lido__factory(deployer);
     const impl = await factory.deploy();
-    expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
 
+    expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
     [lido] = await proxify({ impl, admin: deployer });
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("initialize", () => {
     const initialValue = 1n;
