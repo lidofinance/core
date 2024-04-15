@@ -270,17 +270,17 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @notice Updates the limit of the validators that can be used for deposit
     /// @param _stakingModuleId Id of the staking module
     /// @param _nodeOperatorId Id of the node operator
-    /// @param _isTargetLimitActive Active flag
+    /// @param _targetLimitMode Target limit mode
     /// @param _targetLimit Target limit of the node operator
     function updateTargetValidatorsLimits(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
-        bool _isTargetLimitActive,
+        uint265 _targetLimitMode,
         uint256 _targetLimit
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
         address moduleAddr = _getStakingModuleById(_stakingModuleId).stakingModuleAddress;
         IStakingModule(moduleAddr)
-            .updateTargetValidatorsLimits(_nodeOperatorId, _isTargetLimitActive, _targetLimit);
+            .updateTargetValidatorsLimits(_nodeOperatorId, _targetLimitMode, _targetLimit);
     }
 
     /// @notice Updates the number of the refunded validators in the staking module with the given
@@ -498,7 +498,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         address moduleAddr = stakingModule.stakingModuleAddress;
 
         (
-            /* bool isTargetLimitActive */,
+            /* uint156 targetLimitMode */,
             /* uint256 targetValidatorsCount */,
             uint256 stuckValidatorsCount,
             /* uint256 refundedValidatorsCount */,
@@ -677,7 +677,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @notice A summary of node operator and its validators
     struct NodeOperatorSummary {
         /// @notice Shows whether the current target limit applied to the node operator
-        bool isTargetLimitActive;
+        uint256 targetLimitMode;
 
         /// @notice Relative target active validators limit for operator
         uint256 targetValidatorsCount;
@@ -735,7 +735,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         /// @dev using intermediate variables below due to "Stack too deep" error in case of
         ///     assigning directly into the NodeOperatorSummary struct
         (
-            bool isTargetLimitActive,
+            uint256 targetLimitMode,
             uint256 targetValidatorsCount,
             uint256 stuckValidatorsCount,
             uint256 refundedValidatorsCount,
@@ -744,7 +744,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             uint256 totalDepositedValidators,
             uint256 depositableValidatorsCount
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
-        summary.isTargetLimitActive = isTargetLimitActive;
+        summary.targetLimitMode = targetLimitMode;
         summary.targetValidatorsCount = targetValidatorsCount;
         summary.stuckValidatorsCount = stuckValidatorsCount;
         summary.refundedValidatorsCount = refundedValidatorsCount;
