@@ -35,7 +35,7 @@ contract StakingModuleMock is IStakingModule {
     }
 
     struct NodeOperatorSummary {
-        bool isTargetLimitActive;
+        uint265 targetLimitMode,
         uint256 targetValidatorsCount;
         uint256 stuckValidatorsCount;
         uint256 refundedValidatorsCount;
@@ -46,7 +46,7 @@ contract StakingModuleMock is IStakingModule {
     }
     mapping(uint256 => NodeOperatorSummary) internal nodeOperatorsSummary;
     function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        bool isTargetLimitActive,
+        uint265 targetLimitMode,
         uint256 targetValidatorsCount,
         uint256 stuckValidatorsCount,
         uint256 refundedValidatorsCount,
@@ -56,7 +56,7 @@ contract StakingModuleMock is IStakingModule {
         uint256 depositableValidatorsCount
     ) {
         NodeOperatorSummary storage _summary = nodeOperatorsSummary[_nodeOperatorId];
-        isTargetLimitActive = _summary.isTargetLimitActive;
+        targetLimitMode = _summary.targetLimitMode;
         targetValidatorsCount = _summary.targetValidatorsCount;
         stuckValidatorsCount = _summary.stuckValidatorsCount;
         refundedValidatorsCount = _summary.refundedValidatorsCount;
@@ -67,7 +67,7 @@ contract StakingModuleMock is IStakingModule {
     }
     function setNodeOperatorSummary(uint256 _nodeOperatorId, NodeOperatorSummary memory _summary) external {
         NodeOperatorSummary storage summary = nodeOperatorsSummary[_nodeOperatorId];
-        summary.isTargetLimitActive = _summary.isTargetLimitActive;
+        summary.targetLimitMode = _summary.targetLimitMode;
         summary.targetValidatorsCount = _summary.targetValidatorsCount;
         summary.stuckValidatorsCount = _summary.stuckValidatorsCount;
         summary.refundedValidatorsCount = _summary.refundedValidatorsCount;
@@ -165,7 +165,7 @@ contract StakingModuleMock is IStakingModule {
     // solhint-disable-next-line
     struct Call_updateTargetValidatorsLimits {
         uint256 nodeOperatorId;
-        bool isTargetLimitActive;
+        uint256 targetLimitMode;
         uint256 targetLimit;
         uint256 callCount;
     }
@@ -173,11 +173,11 @@ contract StakingModuleMock is IStakingModule {
     Call_updateTargetValidatorsLimits public lastCall_updateTargetValidatorsLimits;
     function updateTargetValidatorsLimits(
         uint256 _nodeOperatorId,
-        bool _isTargetLimitActive,
+        uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external {
         lastCall_updateTargetValidatorsLimits.nodeOperatorId = _nodeOperatorId;
-        lastCall_updateTargetValidatorsLimits.isTargetLimitActive = _isTargetLimitActive;
+        lastCall_updateTargetValidatorsLimits.targetLimitMode = _targetLimitMode;
         lastCall_updateTargetValidatorsLimits.targetLimit = _targetLimit;
         ++lastCall_updateTargetValidatorsLimits.callCount;
     }

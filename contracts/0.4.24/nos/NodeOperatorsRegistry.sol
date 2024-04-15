@@ -93,8 +93,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     uint8 internal constant TOTAL_DEPOSITED_KEYS_COUNT_OFFSET = 3;
 
     // TargetValidatorsStats
-    /// @dev Flag enable/disable limiting target active validators count for operator
-    uint8 internal constant IS_TARGET_LIMIT_ACTIVE_OFFSET = 0;
+    /// @dev Target limit mode, allows limiting target active validators count for operator, >1 means forced target limit enabled
+    uint8 internal constant TARGET_LIMIT_MODE_OFFSET = 0;
     /// @dev relative target active validators limit for operator, set by DAO
     /// @notice used to check how many keys should go to exit, 0 - means all deposited keys would be exited
     uint8 internal constant TARGET_VALIDATORS_COUNT_OFFSET = 1;
@@ -580,15 +580,15 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @notice Updates the limit of the validators that can be used for deposit by DAO
     /// @param _nodeOperatorId Id of the node operator
     /// @param _targetLimit Target limit of the node operator
-    /// @param _isTargetLimitActive active flag
-    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, bool _isTargetLimitActive, uint256 _targetLimit) external {
+    /// @param _targetLimitMode target limit mode, >1 means forced target limit
+    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) external {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
         _requireValidRange(_targetLimit <= UINT64_MAX);
 
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
-        operatorTargetStats.set(IS_TARGET_LIMIT_ACTIVE_OFFSET, _isTargetLimitActive ? 1 : 0);
-        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _isTargetLimitActive ? _targetLimit : 0);
+        operatorTargetStats.set(TARGET_LIMIT_MODE_OFFSET, _targetLimitMode);
+        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _targetLimitMode > 0 ? _targetLimit : 0);
         _saveOperatorTargetValidatorsStats(_nodeOperatorId, operatorTargetStats);
 
         emit TargetValidatorsCountChanged(_nodeOperatorId, _targetLimit);
@@ -788,7 +788,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         if (!isOperatorPenaltyCleared(_nodeOperatorId)) {
             // when the node operator is penalized zeroing its depositable validators count
             newMaxSigningKeysCount = depositedSigningKeysCount;
-        } else if (operatorTargetStats.get(IS_TARGET_LIMIT_ACTIVE_OFFSET) != 0) {
+        } else if (operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET) != 0) {
             // apply target limit when it's active and the node operator is not penalized
             newMaxSigningKeysCount = Math256.max(
                 // max validators count can't be less than the deposited validators count
@@ -803,6 +803,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
                         + operatorTargetStats.get(TARGET_VALIDATORS_COUNT_OFFSET)
                 )
             );
+            }
         }
 
         oldMaxSigningKeysCount = operatorTargetStats.get(MAX_VALIDATORS_COUNT_OFFSET);
@@ -1194,7 +1195,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         external
         view
         returns (
-            bool isTargetLimitActive,
+            uint256 targetLimitMode,
             uint256 targetValidatorsCount,
             uint256 stuckValidatorsCount,
             uint256 refundedValidatorsCount,
@@ -1208,7 +1209,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
         Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
 
-        isTargetLimitActive = operatorTargetStats.get(IS_TARGET_LIMIT_ACTIVE_OFFSET) != 0;
+        targetLimitMode = operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET);
         targetValidatorsCount = operatorTargetStats.get(TARGET_VALIDATORS_COUNT_OFFSET);
         stuckValidatorsCount = stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET);
         refundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);
