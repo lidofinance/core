@@ -35,7 +35,7 @@ contract StakingModuleMock is IStakingModule {
     }
 
     struct NodeOperatorSummary {
-        uint265 targetLimitMode,
+        uint256 targetLimitMode;
         uint256 targetValidatorsCount;
         uint256 stuckValidatorsCount;
         uint256 refundedValidatorsCount;
@@ -46,7 +46,7 @@ contract StakingModuleMock is IStakingModule {
     }
     mapping(uint256 => NodeOperatorSummary) internal nodeOperatorsSummary;
     function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        uint265 targetLimitMode,
+        uint256 targetLimitMode,
         uint256 targetValidatorsCount,
         uint256 stuckValidatorsCount,
         uint256 refundedValidatorsCount,

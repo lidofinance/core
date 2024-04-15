@@ -12,8 +12,7 @@ contract MinFirstAllocationStrategyConsumerMockModernVersion {
         uint256[] memory capacities,
         uint256 maxAllocationSize
     ) external pure returns (uint256 allocated, uint256[] memory newAllocations) {
-        allocated = MinFirstAllocationStrategy.allocate(allocations, capacities, maxAllocationSize);
-        newAllocations = allocations;
+        (allocated, newAllocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, maxAllocationSize);
     }
 
     function allocateToBestCandidate(

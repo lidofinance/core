@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {IStakingModule} from "contracts/0.8.9/interfaces/IStakingModule.sol";
 
 contract StakingModule__Mock is IStakingModule {
-  event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, bool _isTargetLimitActive, uint256 _targetLimit);
+  event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
   event Mock__RefundedValidatorsCountUpdated(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount);
   event Mock__OnRewardsMinted(uint256 _totalShares);
   event Mock__ExitedValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
@@ -39,8 +39,7 @@ contract StakingModule__Mock is IStakingModule {
     totalDepositedValidators__mocked = totalDepositedValidators;
     depositableValidatorsCount__mocked = depositableValidatorsCount;
   }
-
-  bool private nodeOperatorIsTargetLimitActive__mocked;
+  uint256 private nodeOperatorTargetLimitMode__mocked;
   uint256 private nodeOperatorTargetValidatorsCount__mocked;
   uint256 private nodeOperatorStuckValidatorsCount__mocked;
   uint256 private nodeOperatorRefundedValidatorsCount__mocked;
@@ -55,7 +54,7 @@ contract StakingModule__Mock is IStakingModule {
     external
     view
     returns (
-      bool isTargetLimitActive,
+      uint256 targetLimitMode,
       uint256 targetValidatorsCount,
       uint256 stuckValidatorsCount,
       uint256 refundedValidatorsCount,
@@ -65,7 +64,7 @@ contract StakingModule__Mock is IStakingModule {
       uint256 depositableValidatorsCount
     )
   {
-    isTargetLimitActive = nodeOperatorIsTargetLimitActive__mocked;
+    targetLimitMode = nodeOperatorTargetLimitMode__mocked;
     targetValidatorsCount = nodeOperatorTargetValidatorsCount__mocked;
     stuckValidatorsCount = nodeOperatorStuckValidatorsCount__mocked;
     refundedValidatorsCount = nodeOperatorRefundedValidatorsCount__mocked;
@@ -76,7 +75,7 @@ contract StakingModule__Mock is IStakingModule {
   }
 
   function mock__getNodeOperatorSummary(
-    bool isTargetLimitActive,
+    uint256 targetLimitMode,
     uint256 targetValidatorsCount,
     uint256 stuckValidatorsCount,
     uint256 refundedValidatorsCount,
@@ -85,7 +84,7 @@ contract StakingModule__Mock is IStakingModule {
     uint256 totalDepositedValidators,
     uint256 depositableValidatorsCount
   ) external {
-    nodeOperatorIsTargetLimitActive__mocked = isTargetLimitActive;
+    nodeOperatorTargetLimitMode__mocked = targetLimitMode;
     nodeOperatorTargetValidatorsCount__mocked = targetValidatorsCount;
     nodeOperatorStuckValidatorsCount__mocked = stuckValidatorsCount;
     nodeOperatorRefundedValidatorsCount__mocked = refundedValidatorsCount;
@@ -175,10 +174,10 @@ contract StakingModule__Mock is IStakingModule {
 
   function updateTargetValidatorsLimits(
     uint256 _nodeOperatorId,
-    bool _isTargetLimitActive,
+    uint256 _targetLimitMode,
     uint256 _targetLimit
   ) external {
-    emit Mock__TargetValidatorsLimitsUpdated(_nodeOperatorId, _isTargetLimitActive, _targetLimit);
+    emit Mock__TargetValidatorsLimitsUpdated(_nodeOperatorId, _targetLimitMode, _targetLimit);
   }
 
   event Mock__ValidatorsCountUnsafelyUpdated(
