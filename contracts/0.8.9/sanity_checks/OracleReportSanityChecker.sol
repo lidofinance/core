@@ -670,9 +670,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
         uint256 rebaseSum = sumRebaseValuesNotOlderThan(pastTimestamp);
 
-        uint256 balanceDiffBP = MAX_BASIS_POINTS * rebaseSum / (_unifiedPostCLBalance + rebaseSum);
-        // NOTE: Base points is 10_000, so 320 BP is 3.20%
-        if (balanceDiffBP <= _limitsList.cLBalanceDecreaseBPLimit) {
+        uint256 rebaseSumBP = MAX_BASIS_POINTS * rebaseSum;
+        uint256 limitMulByStartBalance = _limitsList.cLBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
+        if (rebaseSumBP <= limitMulByStartBalance) {
             // If the diff is less than limit we are finishing check
             return;
         }
@@ -681,7 +681,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If there is no negative rebase oracle, then we don't need to check the zk report
         if (clStateOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
-            revert IncorrectCLBalanceDecreaseForSpan(balanceDiffBP);
+            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumBP, limitMulByStartBalance);
         }
 
         address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
@@ -697,8 +697,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256 balanceDiff = (clBalanceWei > _unifiedPostCLBalance) ?
                 clBalanceWei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceWei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceWei;
-            // NOTE: Base points is 10_000, so 74 BP is 0.74%
-            if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesDiffBPLimit) {
+            if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesErrorMarginBPLimit) {
                 revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei);
             }
             emit ConfirmNegativeRebase(refSlot, clBalanceWei);
@@ -833,9 +832,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _checkLimitValue(_newLimitsList.cLBalanceDecreaseHoursSpan, 0, type(uint16).max);
             emit CLBalanceDecreaseHoursSpanSet(_newLimitsList.cLBalanceDecreaseHoursSpan);
         }
-        if (_oldLimitsList.cLBalanceOraclesDiffBPLimit != _newLimitsList.cLBalanceOraclesDiffBPLimit) {
-            _checkLimitValue(_newLimitsList.cLBalanceOraclesDiffBPLimit, 0, MAX_BASIS_POINTS);
-            emit CLBalanceOraclesDiffBPLimitSet(_newLimitsList.cLBalanceOraclesDiffBPLimit);
+        if (_oldLimitsList.cLBalanceOraclesErrorMarginBPLimit != _newLimitsList.cLBalanceOraclesErrorMarginBPLimit) {
+            _checkLimitValue(_newLimitsList.cLBalanceOraclesErrorMarginBPLimit, 0, MAX_BASIS_POINTS);
+            emit CLBalanceOraclesErrorMarginBPLimitSet(_newLimitsList.cLBalanceOraclesErrorMarginBPLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
@@ -905,7 +904,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
-    error IncorrectCLBalanceDecreaseForSpan(uint256 cLBalanceDecreaseBP);
+    error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance);
     error CLStateReportIsNotReady();
 }
 
