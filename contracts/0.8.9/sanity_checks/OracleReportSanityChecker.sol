@@ -687,13 +687,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If there is no negative rebase oracle, then we don't need to check the zk report
         if (clStateOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
-            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumBP, limitMulByStartBalance);
+            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumBP, limitMulByStartBalance,
+                _limitsList.cLBalanceDecreaseHoursSpan);
         }
 
-        address accountingOracle = ILidoLocator(getLidoLocator()).accountingOracle();
-        uint256 refSlot = (_reportTimestamp -
-            ILidoBaseOracle(accountingOracle).GENESIS_TIME()) /
-            ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+        uint256 refSlot = (_reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
 
         (bool success, uint256 clOracleBalanceGwei,,)
             = ILidoCLStateOracle(clStateOracle).getReport(refSlot);
@@ -910,7 +908,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
-    error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance);
+    error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
     error CLStateReportIsNotReady();
 }
 
