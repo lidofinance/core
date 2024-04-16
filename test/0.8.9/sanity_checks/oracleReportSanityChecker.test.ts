@@ -164,7 +164,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       await expect(checker.checkAccountingOracleReport(timestamp, 100, 96, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(400);
+        .withArgs(10000 * 4, 320 * 100, 18 * 24);
     });
 
     it(`works as accamulation for IncorrectCLBalanceDecreaseForSpan`, async () => {
@@ -175,7 +175,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       await expect(checker.checkAccountingOracleReport(timestampNow, 98, 96, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(400);
+        .withArgs(10000 * 4, 320 * 100, 18 * 24);
     });
 
     it(`works for happy path and ClBalanceMismatch`, async () => {
@@ -233,13 +233,13 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         genAccessControlError(deployer.address, clOraclesRole),
       );
 
-      await expect(checker.setCLBalanceOraclesDiffBPLimit(74)).to.be.revertedWith(
+      await expect(checker.setCLBalanceOraclesErrorMarginBPLimit(74)).to.be.revertedWith(
         genAccessControlError(deployer.address, clOraclesRole),
       );
 
       await checker.grantRole(clOraclesRole, deployer.address);
       await expect(checker.setCLStateOracle(ZeroAddress)).to.not.be.reverted;
-      await expect(checker.setCLBalanceOraclesDiffBPLimit(74)).to.not.be.reverted;
+      await expect(checker.setCLBalanceOraclesErrorMarginBPLimit(74)).to.not.be.reverted;
     });
   });
 });
