@@ -160,6 +160,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
 
     ILidoLocator private immutable LIDO_LOCATOR;
+    uint256 private immutable GENESIS_TIME;
+    uint256 private immutable SECONDS_PER_SLOT;
 
     address private _clStateOracle;
     LimitsListPacked private _limits;
@@ -192,6 +194,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+
+        address accountingOracle = LIDO_LOCATOR.accountingOracle();
+        GENESIS_TIME = ILidoBaseOracle(accountingOracle).GENESIS_TIME();
+        SECONDS_PER_SLOT = ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
         _updateLimits(_limitsList);
 
