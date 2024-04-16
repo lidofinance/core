@@ -7,11 +7,7 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(
-        uint256 _maxDepositsCount,
-        uint256 _stakingModuleId,
-        bytes calldata _depositCalldata
-    ) external;
+    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 
@@ -20,13 +16,18 @@ interface IDepositContract {
 }
 
 interface IStakingRouter {
-    function pauseStakingModule(uint256 _stakingModuleId) external;
-    function resumeStakingModule(uint256 _stakingModuleId) external;
+    function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsDepositsPaused(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
     function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+    function decreaseStakingModuleVettedKeysCountByNodeOperator(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
 }
 
 
@@ -42,13 +43,14 @@ contract DepositSecurityModule {
 
     event OwnerChanged(address newValue);
     event PauseIntentValidityPeriodBlocksChanged(uint256 newValue);
-    event MaxDepositsChanged(uint256 newValue);
-    event MinDepositBlockDistanceChanged(uint256 newValue);
+    event UnvetIntentValidityPeriodBlocksChanged(uint256 newValue);
+    event MaxOperatorsPerUnvettingChanged(uint256 newValue);
     event GuardianQuorumChanged(uint256 newValue);
     event GuardianAdded(address guardian);
     event GuardianRemoved(address guardian);
-    event DepositsPaused(address indexed guardian, uint24 indexed stakingModuleId);
-    event DepositsUnpaused(uint24 indexed stakingModuleId);
+    event DepositsPaused(address indexed guardian);
+    event DepositsUnpaused();
+    event LastDepositBlockChanged(uint256 newValue);
 
     error ZeroAddress(string field);
     error DuplicateAddress(address addr);
@@ -60,26 +62,30 @@ contract DepositSecurityModule {
     error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
-    error DepositNonceChanged();
+    error DepositsNotPaused();
+    error ModuleNonceChanged();
     error PauseIntentExpired();
+    error UnvetIntentExpired();
+    error UnvetPayloadInvalid();
+    error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
 
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
     bytes32 public immutable PAUSE_MESSAGE_PREFIX;
+    bytes32 public immutable UNVET_MESSAGE_PREFIX;
 
     ILido public immutable LIDO;
     IStakingRouter public immutable STAKING_ROUTER;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
-    /**
-     * NB: both `maxDepositsPerBlock` and `minDepositBlockDistance` values
-     * must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
-     */
-    uint256 internal maxDepositsPerBlock;
-    uint256 internal minDepositBlockDistance;
+    bool public isDepositsPaused;
+
+    uint256 internal lastDepositBlock;
+
     uint256 internal pauseIntentValidityPeriodBlocks;
+    uint256 internal unvetIntentValidityPeriodBlocks;
+    uint256 internal maxOperatorsPerUnvetting;
 
     address internal owner;
 
@@ -91,13 +97,13 @@ contract DepositSecurityModule {
         address _lido,
         address _depositContract,
         address _stakingRouter,
-        uint256 _maxDepositsPerBlock,
-        uint256 _minDepositBlockDistance,
-        uint256 _pauseIntentValidityPeriodBlocks
+        uint256 _pauseIntentValidityPeriodBlocks,
+        uint256 _unvetIntentValidityPeriodBlocks,
+        uint256 _maxOperatorsPerUnvetting
     ) {
         if (_lido == address(0)) revert ZeroAddress("_lido");
-        if (_depositContract == address(0)) revert ZeroAddress ("_depositContract");
-        if (_stakingRouter == address(0)) revert ZeroAddress ("_stakingRouter");
+        if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
+        if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
         LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
@@ -121,10 +127,20 @@ contract DepositSecurityModule {
             )
         );
 
+        UNVET_MESSAGE_PREFIX = keccak256(
+            abi.encodePacked(
+                // keccak256("lido.DepositSecurityModule.UNVET_MESSAGE")
+                bytes32(0x2dd9727393562ed11c29080a884630e2d3a7078e71b313e713a8a1ef68948f6a),
+                block.chainid,
+                address(this)
+            )
+        );
+
         _setOwner(msg.sender);
-        _setMaxDeposits(_maxDepositsPerBlock);
-        _setMinDepositBlockDistance(_minDepositBlockDistance);
+        _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
+        _setUnvetIntentValidityPeriodBlocks(_unvetIntentValidityPeriodBlocks);
+        _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
     }
 
     /**
@@ -173,54 +189,48 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Returns `maxDepositsPerBlock` (see `depositBufferedEther`).
+     * Returns current `unvetIntentValidityPeriodBlocks` contract parameter (see `unvetSigningKeys`).
      */
-    function getMaxDeposits() external view returns (uint256) {
-        return maxDepositsPerBlock;
+    function getUnvetIntentValidityPeriodBlocks() external view returns (uint256) {
+        return unvetIntentValidityPeriodBlocks;
     }
 
     /**
-     * Sets `maxDepositsPerBlock`. Only callable by the owner.
-     *
-     * NB: the value must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
+     * Sets `unvetIntentValidityPeriodBlocks`. Only callable by the owner.
      */
-    function setMaxDeposits(uint256 newValue) external onlyOwner {
-        _setMaxDeposits(newValue);
+    function setUnvetIntentValidityPeriodBlocks(uint256 newValue) external onlyOwner {
+        _setUnvetIntentValidityPeriodBlocks(newValue);
     }
 
-    function _setMaxDeposits(uint256 newValue) internal {
-        maxDepositsPerBlock = newValue;
-        emit MaxDepositsChanged(newValue);
+    function _setUnvetIntentValidityPeriodBlocks(uint256 newValue) internal {
+        if (newValue == 0) revert ZeroParameter("unvetIntentValidityPeriodBlocks");
+        unvetIntentValidityPeriodBlocks = newValue;
+        emit UnvetIntentValidityPeriodBlocksChanged(newValue);
+    }
+
+
+    /**
+     * Returns current `maxOperatorsPerUnvetting` contract parameter (see `unvetSigningKeys`).
+     */
+    function getMaxOperatorsPerUnvetting() external view returns (uint256) {
+        return maxOperatorsPerUnvetting;
     }
 
     /**
-     * Returns `minDepositBlockDistance`  (see `depositBufferedEther`).
+     * Sets `maxOperatorsPerUnvetting`. Only callable by the owner.
      */
-    function getMinDepositBlockDistance() external view returns (uint256) {
-        return minDepositBlockDistance;
+    function setMaxOperatorsPerUnvetting(uint256 newValue) external onlyOwner {
+        _setMaxOperatorsPerUnvetting(newValue);
+    }
+
+    function _setMaxOperatorsPerUnvetting(uint256 newValue) internal {
+        if (newValue == 0) revert ZeroParameter("maxOperatorsPerUnvetting");
+        maxOperatorsPerUnvetting = newValue;
+        emit MaxOperatorsPerUnvettingChanged(newValue);
     }
 
     /**
-     * Sets `minDepositBlockDistance`. Only callable by the owner.
-     *
-     * NB: the value must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
-     */
-    function setMinDepositBlockDistance(uint256 newValue) external onlyOwner {
-        _setMinDepositBlockDistance(newValue);
-    }
-
-    function _setMinDepositBlockDistance(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroParameter("minDepositBlockDistance");
-        if (newValue != minDepositBlockDistance) {
-            minDepositBlockDistance = newValue;
-            emit MinDepositBlockDistanceChanged(newValue);
-        }
-    }
-
-    /**
-     * Returns number of valid guardian signatures required to vet (depositRoot, nonce) pair.
+     * Returns number of valid guardian signatures required to attest (depositRoot, nonce) pair.
      */
     function getGuardianQuorum() external view returns (uint256) {
         return quorum;
@@ -326,7 +336,7 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Pauses deposits for staking module given that both conditions are satisfied (reverts otherwise):
+     * Pauses deposits if both conditions are satisfied (reverts otherwise):
      *
      *   1. The function is called by the guardian with index guardianIndex OR sig
      *      is a valid signature by the guardian with index guardianIndex of the data
@@ -337,50 +347,41 @@ contract DepositSecurityModule {
      * The signature, if present, must be produced for keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | blockNumber | stakingModuleId |
+     * | PAUSE_MESSAGE_PREFIX | blockNumber |
      */
-    function pauseDeposits(
-        uint256 blockNumber,
-        uint256 stakingModuleId,
-        Signature memory sig
-    ) external {
+    function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
         // In case of an emergency function `pauseDeposits` is supposed to be called
         // by all guardians. Thus only the first call will do the actual change. But
         // the other calls would be OK operations from the point of view of protocol’s logic.
         // Thus we prefer not to use “error” semantics which is implied by `require`.
 
-        /// @dev pause only active modules (not already paused, nor full stopped)
-        if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) {
-            return;
-        }
+        if (isDepositsPaused) return;
 
         address guardianAddr = msg.sender;
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber, stakingModuleId));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
         }
 
-        if (block.number - blockNumber >  pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
+        if (block.number - blockNumber > pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
 
-        STAKING_ROUTER.pauseStakingModule(stakingModuleId);
-        emit DepositsPaused(guardianAddr, uint24(stakingModuleId));
+        isDepositsPaused = true;
+        emit DepositsPaused(guardianAddr);
     }
 
     /**
-     * Unpauses deposits for staking module
+     * Unpauses deposits
      *
      * Only callable by the owner.
      */
-    function unpauseDeposits(uint256 stakingModuleId) external onlyOwner {
-         /// @dev unpause only paused modules (skip stopped)
-        if (STAKING_ROUTER.getStakingModuleIsDepositsPaused(stakingModuleId)) {
-            STAKING_ROUTER.resumeStakingModule(stakingModuleId);
-            emit DepositsUnpaused(uint24(stakingModuleId));
-        }
+    function unpauseDeposits() external onlyOwner {
+        if (!isDepositsPaused) revert DepositsNotPaused();
+        isDepositsPaused = false;
+        emit DepositsUnpaused();
     }
 
     /**
@@ -392,14 +393,42 @@ contract DepositSecurityModule {
         if (!STAKING_ROUTER.hasStakingModule(stakingModuleId)) return false;
 
         bool isModuleActive = STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId);
-        uint256 lastDepositBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
+        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
         bool isLidoCanDeposit = LIDO.canDeposit();
+
         return (
-            isModuleActive
+            !isDepositsPaused
+            && isModuleActive
             && quorum > 0
-            && block.number - lastDepositBlock >= minDepositBlockDistance
+            && isDepositDistancePassed
             && isLidoCanDeposit
         );
+    }
+
+    /**
+     * Returns the last block number when a deposit was made.
+     */
+    function getLastDepositBlock() external view returns (uint256) {
+        return lastDepositBlock;
+    }
+
+    function _setLastDepositBlock(uint256 newValue) internal {
+        lastDepositBlock = newValue;
+        emit LastDepositBlockChanged(newValue);
+    }
+
+    /**
+     * Returns whether the deposit distance is greater than the minimum required.
+     */
+    function isMinDepositDistancePassed(uint256 stakingModuleId) external view returns (bool) {
+        return _isMinDepositDistancePassed(stakingModuleId);
+    }
+
+    function _isMinDepositDistancePassed(uint256 stakingModuleId) internal view returns (bool) {
+        uint256 lastDepositToModuleBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
+        uint256 minDepositBlockDistance = STAKING_ROUTER.getStakingModuleMinDepositBlockDistance(stakingModuleId);
+        uint256 maxLastDepositBlock = lastDepositToModuleBlock >= lastDepositBlock ? lastDepositToModuleBlock : lastDepositBlock;
+        return block.number - maxLastDepositBlock >= minDepositBlockDistance;
     }
 
     /**
@@ -434,16 +463,82 @@ contract DepositSecurityModule {
 
         if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
 
-        uint256 lastDepositBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
-        if (block.number - lastDepositBlock < minDepositBlockDistance) revert DepositTooFrequent();
+        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
+
+        if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
 
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
-        if (nonce != onchainNonce) revert DepositNonceChanged();
+        if (nonce != onchainNonce) revert ModuleNonceChanged();
 
         _verifySignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
+        _setLastDepositBlock(block.number);
+    }
+
+    /**
+     * Unvetting signing keys for the given node operators.
+     *
+     * Reverts if any of the following is true:
+     *   1. nodeOperatorIds is not packed with 8 bytes per id.
+     *   2. vettedSigningKeysCounts is not packed with 16 bytes per count.
+     *   3. The number of node operators is greater than maxOperatorsPerUnvetting.
+     *   4. The nonce is not equal to the on-chain nonce of the staking module.
+     *   5. The signature is invalid or the signer is not a guardian.
+     *   6. block.number - blockNumber > unvetIntentValidityPeriodBlocks.
+     *
+     * The signature, if present, must be produced for keccak256 hash of the following message:
+     *
+     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     */
+    function unvetSigningKeys(
+        uint256 blockNumber,
+        bytes32 blockHash,
+        uint256 stakingModuleId,
+        uint256 nonce,
+        bytes calldata nodeOperatorIds,
+        bytes calldata vettedSigningKeysCounts,
+        Signature calldata sig
+    ) external {
+        uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
+        if (nonce != onchainNonce) revert ModuleNonceChanged();
+
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+
+        if (
+            nodeOperatorIds.length % 8 != 0 ||
+            vettedSigningKeysCounts.length % 16 != 0 ||
+            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
+            nodeOperatorsCount > maxOperatorsPerUnvetting
+        ) {
+            revert UnvetPayloadInvalid();
+        }
+
+        address guardianAddr = msg.sender;
+        int256 guardianIndex = _getGuardianIndex(msg.sender);
+
+        if (guardianIndex == -1) {
+            bytes32 msgHash = keccak256(abi.encodePacked(
+                UNVET_MESSAGE_PREFIX,
+                blockNumber,
+                blockHash,
+                stakingModuleId,
+                nonce,
+                nodeOperatorIds,
+                vettedSigningKeysCounts
+            ));
+            guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
+            guardianIndex = _getGuardianIndex(guardianAddr);
+            if (guardianIndex == -1) revert InvalidSignature();
+        }
+
+        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert UnvetUnexpectedBlockHash();
+        if (block.number - blockNumber > unvetIntentValidityPeriodBlocks) revert UnvetIntentExpired();
+
+        STAKING_ROUTER.decreaseStakingModuleVettedKeysCountByNodeOperator(
+            stakingModuleId, nodeOperatorIds, vettedSigningKeysCounts
+        );
     }
 
     function _verifySignatures(

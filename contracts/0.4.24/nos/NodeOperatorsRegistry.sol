@@ -390,6 +390,55 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _authP(SET_NODE_OPERATOR_LIMIT_ROLE, arr(uint256(_nodeOperatorId), uint256(_vettedSigningKeysCount)));
         _onlyCorrectNodeOperatorState(getNodeOperatorIsActive(_nodeOperatorId));
 
+        _updateVettedSingingKeysCount(_nodeOperatorId, _vettedSigningKeysCount, true /* _allowIncrease */);
+        _increaseValidatorsKeysNonce();
+    }
+
+    /// @notice Called by StakingRouter to decrease the number of vetted keys for node operator with given id
+    /// @param _nodeOperatorIds bytes packed array of the node operators id
+    /// @param _vettedSigningKeysCounts bytes packed array of the new number of vetted keys for the node operators
+    function decreaseVettedSigningKeysCount(
+        bytes _nodeOperatorIds,
+        bytes _vettedSigningKeysCounts
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        uint256 nodeOperatorsCount = _checkReportPayload(_nodeOperatorIds.length, _vettedSigningKeysCounts.length);
+        uint256 totalNodeOperatorsCount = getNodeOperatorsCount();
+
+        uint256 nodeOperatorId;
+        uint256 vettedKeysCount;
+        uint256 _nodeOperatorIdsOffset;
+        uint256 _vettedKeysCountsOffset;
+
+        /// @dev calldata layout:
+        /// | func sig (4 bytes) | ABI-enc data |
+        ///
+        /// ABI-enc data:
+        ///
+        /// |    32 bytes    |     32 bytes      |  32 bytes  | ... |  32 bytes  | ...... |
+        /// | ids len offset | counts len offset |  ids len   | ids | counts len | counts |
+        assembly {
+            _nodeOperatorIdsOffset := add(calldataload(4), 36) // arg1 calldata offset + 4 (signature len) + 32 (length slot)
+            _vettedKeysCountsOffset := add(calldataload(36), 36) // arg2 calldata offset + 4 (signature len) + 32 (length slot))
+        }
+        for (uint256 i; i < nodeOperatorsCount;) {
+            /// @solidity memory-safe-assembly
+            assembly {
+                nodeOperatorId := shr(192, calldataload(add(_nodeOperatorIdsOffset, mul(i, 8))))
+                vettedKeysCount := shr(128, calldataload(add(_vettedKeysCountsOffset, mul(i, 16))))
+                i := add(i, 1)
+            }
+            _requireValidRange(nodeOperatorId < totalNodeOperatorsCount);
+            _updateVettedSingingKeysCount(nodeOperatorId, vettedKeysCount, false /* only decrease */);
+        }
+        _increaseValidatorsKeysNonce();
+    }
+
+    function _updateVettedSingingKeysCount(
+        uint256 _nodeOperatorId,
+        uint256 _vettedSigningKeysCount,
+        bool _allowIncrease
+    ) internal {
         Packed64x4.Packed memory signingKeysStats = _loadOperatorSigningKeysStats(_nodeOperatorId);
         uint256 vettedSigningKeysCountBefore = signingKeysStats.get(TOTAL_VETTED_KEYS_COUNT_OFFSET);
         uint256 depositedSigningKeysCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
@@ -399,9 +448,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             totalSigningKeysCount, Math256.max(_vettedSigningKeysCount, depositedSigningKeysCount)
         );
 
-        if (vettedSigningKeysCountAfter == vettedSigningKeysCountBefore) {
-            return;
-        }
+        if (vettedSigningKeysCountAfter == vettedSigningKeysCountBefore) return;
+
+        require(
+            _allowIncrease || vettedSigningKeysCountAfter < vettedSigningKeysCountBefore,
+            "VETTED_KEYS_COUNT_INCREASED"
+        );
 
         signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, vettedSigningKeysCountAfter);
         _saveOperatorSigningKeysStats(_nodeOperatorId, signingKeysStats);
@@ -409,7 +461,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit VettedSigningKeysCountChanged(_nodeOperatorId, vettedSigningKeysCountAfter);
 
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
-        _increaseValidatorsKeysNonce();
     }
 
     /// @notice Called by StakingRouter to signal that stETH rewards were minted for this module.

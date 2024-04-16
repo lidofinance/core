@@ -122,6 +122,24 @@ contract StakingModuleMock is IStakingModule {
     }
 
     // solhint-disable-next-line
+    struct Call_decreaseVettedSigningKeysCount {
+        bytes nodeOperatorIds;
+        bytes vettedSigningKeys;
+        uint256 callCount;
+    }
+
+    Call_decreaseVettedSigningKeysCount public lastCall_decreaseVettedSiginingKeysCount;
+
+    function decreaseVettedSigningKeysCount(
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external {
+        lastCall_decreaseVettedSiginingKeysCount.nodeOperatorIds = _nodeOperatorIds;
+        lastCall_decreaseVettedSiginingKeysCount.vettedSigningKeys = _vettedSigningKeysCounts;
+        ++lastCall_decreaseVettedSiginingKeysCount.callCount;
+    }
+
+    // solhint-disable-next-line
     struct Call_updateValidatorsCount {
         bytes nodeOperatorIds;
         bytes validatorsCounts;

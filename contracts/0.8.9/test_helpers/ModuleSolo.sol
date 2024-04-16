@@ -78,6 +78,11 @@ contract ModuleSolo is IStakingModule {
 
     function onRewardsMinted(uint256 _totalShares) external {}
 
+    function decreaseVettedSigningKeysCount(
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external {}
+
     function updateStuckValidatorsCount(
         bytes calldata _nodeOperatorIds,
         bytes calldata _stuckValidatorsCounts

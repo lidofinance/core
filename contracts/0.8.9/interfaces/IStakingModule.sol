@@ -86,6 +86,14 @@ interface IStakingModule {
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
     function onRewardsMinted(uint256 _totalShares) external;
 
+    /// @notice Called by StakingRouter to decrease the number of vetted keys for node operator with given id
+    /// @param _nodeOperatorIds bytes packed array of the node operators id
+    /// @param _vettedSigningKeysCounts bytes packed array of the new number of vetted keys for the node operators
+    function decreaseVettedSigningKeysCount(
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
+
     /// @notice Updates the number of the validators of the given node operator that were requested
     ///         to exit but failed to do so in the max allowed time
     /// @param _nodeOperatorIds bytes packed array of the node operators id
@@ -97,10 +105,10 @@ interface IStakingModule {
 
     /// @notice Updates the number of the validators in the EXITED state for node operator with given id
     /// @param _nodeOperatorIds bytes packed array of the node operators id
-        /// @param _stuckValidatorsCounts bytes packed array of the new number of EXITED validators for the node operators
+    /// @param _exitedValidatorsCounts bytes packed array of the new number of EXITED validators for the node operators
     function updateExitedValidatorsCount(
         bytes calldata _nodeOperatorIds,
-        bytes calldata _stuckValidatorsCounts
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     /// @notice Updates the number of the refunded validators for node operator with the given id
