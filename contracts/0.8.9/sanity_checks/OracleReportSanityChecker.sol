@@ -610,6 +610,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
+    /// @notice Returns the sum of the rebase values not older than the provided timestamp
+    /// @param _timestamp the timestamp to check the rebase values
+    /// @return rebaseValuesSum the sum of the rebase values not older than the provided timestamp
+    function sumRebaseValuesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
+        uint256 rebaseValuesSum = 0;
+        int256 slot = int256(_rebaseData.length) - 1;
+        while (slot >= 0) {
+            if (_rebaseData[uint256(slot)].timestamp >= SafeCast.toUint64(_timestamp)) {
+                rebaseValuesSum += _rebaseData[uint256(slot)].value;
+            } else {
+                break;
+            }
+            slot--;
+        }
+        return rebaseValuesSum;
+    }
+
     function _checkWithdrawalVaultBalance(
         uint256 _actualWithdrawalVaultBalance,
         uint256 _reportedWithdrawalVaultBalance
@@ -638,20 +655,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _addRebaseValue(uint256 _value, uint256 _timestamp) internal {
         _rebaseData.push(CLRebaseData(SafeCast192.toUint192(_value), SafeCast.toUint64(_timestamp)));
-    }
-
-    function sumRebaseValuesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
-        uint256 rebaseValuesSum = 0;
-        int256 slot = int256(_rebaseData.length) - 1;
-        while (slot >= 0) {
-            if (_rebaseData[uint256(slot)].timestamp >= SafeCast.toUint64(_timestamp)) {
-                rebaseValuesSum += _rebaseData[uint256(slot)].value;
-            } else {
-                break;
-            }
-            slot--;
-        }
-        return rebaseValuesSum;
     }
 
     function _checkCLBalanceDecrease(
