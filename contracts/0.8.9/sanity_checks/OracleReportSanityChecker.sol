@@ -71,7 +71,7 @@ struct LimitsList {
     /// @notice The maximum divergence between the total balances of validators on the Consensus Layer
     ///     as reported by the Oracle and the state of the Consensus Layer Oracle.
     /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 cLBalanceOraclesDiffBPLimit;
+    uint256 cLBalanceOraclesErrorMarginBPLimit;
 
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
@@ -108,7 +108,7 @@ struct LimitsListPacked {
     uint16 churnValidatorsPerDayLimit;
     uint16 cLBalanceDecreaseBPLimit;
     uint16 cLBalanceDecreaseHoursSpan;
-    uint16 cLBalanceOraclesDiffBPLimit;
+    uint16 cLBalanceOraclesErrorMarginBPLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
     uint16 maxValidatorExitRequestsPerReport;
@@ -297,14 +297,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the cLBalanceOraclesDiffBPLimit
-    /// @param _cLBalanceOraclesDiffBPLimit new cLBalanceOraclesDiffBPLimit value
-    function setCLBalanceOraclesDiffBPLimit(uint256 _cLBalanceOraclesDiffBPLimit)
+    /// @notice Sets the new value for the cLBalanceOraclesErrorMarginBPLimit
+    /// @param _cLBalanceOraclesErrorMarginBPLimit new cLBalanceOraclesErrorMarginBPLimit value
+    function setCLBalanceOraclesErrorMarginBPLimit(uint256 _cLBalanceOraclesErrorMarginBPLimit)
         external
         onlyRole(CL_ORACLES_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.cLBalanceOraclesDiffBPLimit = _cLBalanceOraclesDiffBPLimit;
+        limitsList.cLBalanceOraclesErrorMarginBPLimit = _cLBalanceOraclesErrorMarginBPLimit;
         _updateLimits(limitsList);
     }
 
@@ -874,7 +874,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event ChurnValidatorsPerDayLimitSet(uint256 churnValidatorsPerDayLimit);
     event CLBalanceDecreaseBPLimitSet(uint256 cLBalanceDecreaseBPLimit);
     event CLBalanceDecreaseHoursSpanSet(uint256 cLBalanceDecreaseHoursSpan);
-    event CLBalanceOraclesDiffBPLimitSet(uint256 cLBalanceOraclesDiffBPLimit);
+    event CLBalanceOraclesErrorMarginBPLimitSet(uint256 cLBalanceOraclesErrorMarginBPLimit);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
@@ -911,7 +911,7 @@ library LimitsListPacker {
         res.churnValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.churnValidatorsPerDayLimit);
         res.cLBalanceDecreaseBPLimit = _toBasisPoints(_limitsList.cLBalanceDecreaseBPLimit);
         res.cLBalanceDecreaseHoursSpan = SafeCast.toUint16(_limitsList.cLBalanceDecreaseHoursSpan);
-        res.cLBalanceOraclesDiffBPLimit = _toBasisPoints(_limitsList.cLBalanceOraclesDiffBPLimit);
+        res.cLBalanceOraclesErrorMarginBPLimit = _toBasisPoints(_limitsList.cLBalanceOraclesErrorMarginBPLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint64(_limitsList.requestTimestampMargin);
@@ -932,7 +932,7 @@ library LimitsListUnpacker {
         res.churnValidatorsPerDayLimit = _limitsList.churnValidatorsPerDayLimit;
         res.cLBalanceDecreaseBPLimit = _limitsList.cLBalanceDecreaseBPLimit;
         res.cLBalanceDecreaseHoursSpan = _limitsList.cLBalanceDecreaseHoursSpan;
-        res.cLBalanceOraclesDiffBPLimit = _limitsList.cLBalanceOraclesDiffBPLimit;
+        res.cLBalanceOraclesErrorMarginBPLimit = _limitsList.cLBalanceOraclesErrorMarginBPLimit;
         res.annualBalanceIncreaseBPLimit = _limitsList.annualBalanceIncreaseBPLimit;
         res.simulatedShareRateDeviationBPLimit = _limitsList.simulatedShareRateDeviationBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
