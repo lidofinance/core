@@ -5,7 +5,7 @@
 pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
-import {SafeCast192} from "../lib/SafeCast192.sol";
+import {SafeCastExt} from "../lib/SafeCastExt.sol";
 
 import {Math256} from "../../common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
@@ -921,7 +921,7 @@ library LimitsListPacker {
         res.cLBalanceOraclesErrorMarginBPLimit = _toBasisPoints(_limitsList.cLBalanceOraclesErrorMarginBPLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
-        res.requestTimestampMargin = SafeCast.toUint48(_limitsList.requestTimestampMargin);
+        res.requestTimestampMargin = SafeCastExt.toUint48(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
         res.maxValidatorExitRequestsPerReport = SafeCast.toUint16(_limitsList.maxValidatorExitRequestsPerReport);
         res.maxAccountingExtraDataListItemsCount = SafeCast.toUint16(_limitsList.maxAccountingExtraDataListItemsCount);
