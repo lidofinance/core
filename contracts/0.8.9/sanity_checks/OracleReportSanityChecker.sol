@@ -678,7 +678,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         uint256 rebaseSumBP = MAX_BASIS_POINTS * rebaseSum;
         uint256 limitMulByStartBalance = _limitsList.cLBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
-        if (rebaseSumBP <= limitMulByStartBalance) {
+        if (rebaseSumBP < limitMulByStartBalance) {
             // If the diff is less than limit we are finishing check
             return;
         }
