@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="1363"  line-rate="0.4781"  branches-valid="1260"  branches-covered="650"  branch-rate="0.5159"  timestamp="1713358199723" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="1363"  line-rate="0.4781"  branches-valid="1260"  branches-covered="650"  branch-rate="0.5159"  timestamp="1713367963689" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2903,8 +2903,8 @@
 		</class>
 		<class name="WithdrawalQueue.sol"  filename="contracts/0.8.9/WithdrawalQueue.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="76"  signature="()V" >
-				<lines><line number="77"  hits="76" /></lines>
+			<method name="constructor"  hits="9"  signature="()V" >
+				<lines><line number="77"  hits="9" /></lines>
 			</method>
 			<method name="initialize"  hits="57"  signature="()V" >
 				<lines><line number="88"  hits="57" /></lines>
@@ -2977,8 +2977,8 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="79"  hits="76"  branch="false" />
-			<line number="80"  hits="76"  branch="false" />
+			<line number="79"  hits="9"  branch="false" />
+			<line number="80"  hits="9"  branch="false" />
 			<line number="89"  hits="57"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="91"  hits="56"  branch="false" />
 			<line number="97"  hits="77"  branch="false" />
@@ -3078,8 +3078,8 @@
 			<method name="getLockedEtherAmount"  hits="83"  signature="()V" >
 				<lines><line number="127"  hits="83" /></lines>
 			</method>
-			<method name="getLastCheckpointIndex"  hits="265"  signature="()V" >
-				<lines><line number="133"  hits="265" /></lines>
+			<method name="getLastCheckpointIndex"  hits="191"  signature="()V" >
+				<lines><line number="133"  hits="191" /></lines>
 			</method>
 			<method name="unfinalizedRequestNumber"  hits="3"  signature="()V" >
 				<lines><line number="138"  hits="3" /></lines>
@@ -3111,8 +3111,8 @@
 			<method name="_calculateClaimableEther"  hits="22"  signature="()V" >
 				<lines><line number="484"  hits="22" /></lines>
 			</method>
-			<method name="_initializeQueue"  hits="132"  signature="()V" >
-				<lines><line number="517"  hits="132" /></lines>
+			<method name="_initializeQueue"  hits="58"  signature="()V" >
+				<lines><line number="517"  hits="58" /></lines>
 			</method>
 			<method name="_sendValue"  hits="14"  signature="()V" >
 				<lines><line number="525"  hits="14" /></lines>
@@ -3120,11 +3120,11 @@
 			<method name="_calcBatch"  hits="60"  signature="()V" >
 				<lines><line number="534"  hits="60" /></lines>
 			</method>
-			<method name="_getQueue"  hits="867"  signature="()V" >
-				<lines><line number="548"  hits="867" /></lines>
+			<method name="_getQueue"  hits="793"  signature="()V" >
+				<lines><line number="548"  hits="793" /></lines>
 			</method>
-			<method name="_getCheckpoints"  hits="255"  signature="()V" >
-				<lines><line number="555"  hits="255" /></lines>
+			<method name="_getCheckpoints"  hits="181"  signature="()V" >
+				<lines><line number="555"  hits="181" /></lines>
 			</method>
 			<method name="_getRequestsByOwner"  hits="227"  signature="()V" >
 				<lines><line number="562"  hits="227" /></lines>
@@ -3152,7 +3152,7 @@
 			<line number="117"  hits="472"  branch="false" />
 			<line number="123"  hits="187"  branch="false" />
 			<line number="128"  hits="83"  branch="false" />
-			<line number="134"  hits="265"  branch="false" />
+			<line number="134"  hits="191"  branch="false" />
 			<line number="139"  hits="3"  branch="false" />
 			<line number="144"  hits="3"  branch="false" />
 			<line number="221"  hits="12"  branch="true"  condition-coverage="100% (4/4)" />
@@ -3275,18 +3275,18 @@
 			<line number="509"  hits="18"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="510"  hits="2"  branch="false" />
 			<line number="513"  hits="18"  branch="false" />
-			<line number="521"  hits="132"  branch="false" />
-			<line number="522"  hits="132"  branch="false" />
+			<line number="521"  hits="58"  branch="false" />
+			<line number="522"  hits="58"  branch="false" />
 			<line number="526"  hits="14"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="529"  hits="12"  branch="false" />
 			<line number="530"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="539"  hits="60"  branch="false" />
 			<line number="540"  hits="60"  branch="false" />
 			<line number="542"  hits="60"  branch="false" />
-			<line number="549"  hits="867"  branch="false" />
-			<line number="550"  hits="867"  branch="false" />
-			<line number="556"  hits="255"  branch="false" />
-			<line number="557"  hits="255"  branch="false" />
+			<line number="549"  hits="793"  branch="false" />
+			<line number="550"  hits="793"  branch="false" />
+			<line number="556"  hits="181"  branch="false" />
+			<line number="557"  hits="181"  branch="false" />
 			<line number="567"  hits="227"  branch="false" />
 			<line number="568"  hits="227"  branch="false" />
 			<line number="574"  hits="181"  branch="false" />
@@ -4600,8 +4600,8 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="0.0588"  branch-rate="0" >
 		<methods>
-			<method name="constructor"  hits="219"  signature="()V" >
-				<lines><line number="23"  hits="219" /></lines>
+			<method name="constructor"  hits="152"  signature="()V" >
+				<lines><line number="23"  hits="152" /></lines>
 			</method>
 			<method name="proxy__getAdmin"  hits="0"  signature="()V" >
 				<lines><line number="28"  hits="0" /></lines>
@@ -4629,7 +4629,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="219"  branch="false" />
+			<line number="24"  hits="152"  branch="false" />
 			<line number="29"  hits="0"  branch="false" />
 			<line number="34"  hits="0"  branch="false" />
 			<line number="39"  hits="0"  branch="false" />
@@ -5010,8 +5010,8 @@
 		</class>
 		<class name="Versioned.sol"  filename="contracts/0.8.9/utils/Versioned.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="219"  signature="()V" >
-				<lines><line number="28"  hits="219" /></lines>
+			<method name="constructor"  hits="152"  signature="()V" >
+				<lines><line number="28"  hits="152" /></lines>
 			</method>
 			<method name="getContractVersion"  hits="210"  signature="()V" >
 				<lines><line number="34"  hits="210" /></lines>
@@ -5030,7 +5030,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="30"  hits="219"  branch="false" />
+			<line number="30"  hits="152"  branch="false" />
 			<line number="35"  hits="210"  branch="false" />
 			<line number="39"  hits="2"  branch="false" />
 			<line number="40"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
