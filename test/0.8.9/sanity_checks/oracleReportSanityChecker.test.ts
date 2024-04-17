@@ -131,13 +131,13 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const checker = await newChecker();
       const timestamp = await time.latest();
 
-      const result = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
       expect(result).to.equal(0);
 
-      await checker.addRebaseValue(100, timestamp - 1 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(150, timestamp - 2 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
 
-      const result2 = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
       expect(result2).to.equal(250);
     });
 
@@ -145,14 +145,14 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const checker = await newChecker();
       const timestamp = await time.latest();
 
-      await checker.addRebaseValue(700, timestamp - 19 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(13, timestamp - 18 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(10, timestamp - 17 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(5, timestamp - 5 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(150, timestamp - 2 * SLOTS_PER_DAY);
-      await checker.addRebaseValue(100, timestamp - 1 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(700, timestamp - 19 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(13, timestamp - 18 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(10, timestamp - 17 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(5, timestamp - 5 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
+      await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
 
-      const result = await checker.sumRebaseValuesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
       expect(result).to.equal(100 + 150 + 5 + 10 + 13);
       log("result", result);
     });
@@ -178,7 +178,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         .withArgs(10000 * 4, 320 * 100, 18 * 24);
     });
 
-    it(`works for happy path and ClBalanceMismatch`, async () => {
+    it(`works for happy path and NegativeRebaseFailed`, async () => {
       const numGenesis = Number(genesisTime);
       const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
       const timestamp = refSlot * 12 + numGenesis;
@@ -191,20 +191,20 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
       await checker.grantRole(clOraclesRole, deployer.address);
 
-      await checker.setCLStateOracle(await zkOracle.getAddress());
+      await checker.setCLStateOracleAndCLBalanceErrorMargin(await zkOracle.getAddress(), 74);
 
       await expect(
         checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
-      ).to.be.revertedWithCustomError(checker, "CLStateReportIsNotReady");
+      ).to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLStateReportIsNotReady");
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
       await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
-        .to.emit(checker, "ConfirmNegativeRebase")
+        .to.emit(checker, "NegativeRebaseConfirmed")
         .withArgs(refSlot, 93 * 1e9);
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
       await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "ClBalanceMismatch")
+        .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedClBalanceMismatch")
         .withArgs(93 * 1e9, 94 * 1e9);
     });
   });
@@ -213,33 +213,23 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     it(`CL Oracle related functions require CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE`, async () => {
       const decreaseRole = await checker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE();
 
-      await expect(checker.setcLBalanceDecreaseBPLimit(0)).to.be.revertedWith(
-        genAccessControlError(deployer.address, decreaseRole),
-      );
-
-      await expect(checker.setCLBalanceDecreaseHoursSpan(0)).to.be.revertedWith(
+      await expect(checker.setCLBalanceDecreaseBPLimitAndHoursSpan(0, 0)).to.be.revertedWith(
         genAccessControlError(deployer.address, decreaseRole),
       );
 
       await checker.grantRole(decreaseRole, deployer.address);
-      await expect(checker.setcLBalanceDecreaseBPLimit(320)).to.not.be.reverted;
-      await expect(checker.setCLBalanceDecreaseHoursSpan(18 * 24)).to.not.be.reverted;
+      await expect(checker.setCLBalanceDecreaseBPLimitAndHoursSpan(320, 18 * 24)).to.not.be.reverted;
     });
 
     it(`CL Oracle related functions require CL_ORACLES_MANAGER_ROLE`, async () => {
       const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
 
-      await expect(checker.setCLStateOracle(ZeroAddress)).to.be.revertedWith(
-        genAccessControlError(deployer.address, clOraclesRole),
-      );
-
-      await expect(checker.setCLBalanceOraclesErrorMarginBPLimit(74)).to.be.revertedWith(
+      await expect(checker.setCLStateOracleAndCLBalanceErrorMargin(ZeroAddress, 74)).to.be.revertedWith(
         genAccessControlError(deployer.address, clOraclesRole),
       );
 
       await checker.grantRole(clOraclesRole, deployer.address);
-      await expect(checker.setCLStateOracle(ZeroAddress)).to.not.be.reverted;
-      await expect(checker.setCLBalanceOraclesErrorMarginBPLimit(74)).to.not.be.reverted;
+      await expect(checker.setCLStateOracleAndCLBalanceErrorMargin(ZeroAddress, 74)).to.not.be.reverted;
     });
   });
 });

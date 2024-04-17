@@ -283,7 +283,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Sets the new value for the cLBalanceDecreaseBPLimit
     /// @param _cLBalanceDecreaseBPLimit new cLBalanceDecreaseBPLimit value
     /// @param _cLBalanceDecreaseHoursSpan new cLBalanceDecreaseHoursSpan value
-    function setcLBalanceDecreaseBPLimitAndHoursSpan(uint256 _cLBalanceDecreaseBPLimit, uint256 _cLBalanceDecreaseHoursSpan)
+    function setCLBalanceDecreaseBPLimitAndHoursSpan(uint256 _cLBalanceDecreaseBPLimit, uint256 _cLBalanceDecreaseHoursSpan)
         external
         onlyRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE)
     {
