@@ -5,6 +5,7 @@
 pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+import {SafeCast192} from "../lib/SafeCast192.sol";
 
 import {Math256} from "../../common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
@@ -948,31 +949,3 @@ library LimitsListUnpacker {
         res.maxNodeOperatorsPerExtraDataItemCount = _limitsList.maxNodeOperatorsPerExtraDataItemCount;
     }
 }
-
-// OpenZeppelin Contracts (last updated v5.0.2) (utils/math/SafeCast.sol)
-// Code extracted from https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.0.2
-
-library SafeCast192 {
-     /**
-     * @dev Value doesn't fit in an uint of `bits` size.
-     */
-    error SafeCastOverflowedUintDowncast(uint8 bits, uint256 value);
-
-    /**
-     * @dev Returns the downcasted uint192 from uint256, reverting on
-     * overflow (when the input is greater than largest uint192).
-     *
-     * Counterpart to Solidity's `uint192` operator.
-     *
-     * Requirements:
-     *
-     * - input must fit into 192 bits
-     */
-    function toUint192(uint256 value) internal pure returns (uint192) {
-        if (value > type(uint192).max) {
-            revert SafeCastOverflowedUintDowncast(192, value);
-        }
-        return uint192(value);
-    }
-}
-
