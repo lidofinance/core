@@ -115,7 +115,7 @@ struct LimitsListPacked {
     uint16 maxValidatorExitRequestsPerReport;
     uint16 maxAccountingExtraDataListItemsCount;
     uint16 maxNodeOperatorsPerExtraDataItemCount;
-    uint64 requestTimestampMargin;
+    uint48 requestTimestampMargin;
     uint64 maxPositiveTokenRebase;
 }
 
@@ -862,7 +862,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             emit MaxNodeOperatorsPerExtraDataItemCountSet(_newLimitsList.maxNodeOperatorsPerExtraDataItemCount);
         }
         if (_oldLimitsList.requestTimestampMargin != _newLimitsList.requestTimestampMargin) {
-            _checkLimitValue(_newLimitsList.requestTimestampMargin, 0, type(uint64).max);
+            _checkLimitValue(_newLimitsList.requestTimestampMargin, 0, type(uint48).max);
             emit RequestTimestampMarginSet(_newLimitsList.requestTimestampMargin);
         }
         if (_oldLimitsList.maxPositiveTokenRebase != _newLimitsList.maxPositiveTokenRebase) {
@@ -921,7 +921,7 @@ library LimitsListPacker {
         res.cLBalanceOraclesErrorMarginBPLimit = _toBasisPoints(_limitsList.cLBalanceOraclesErrorMarginBPLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
-        res.requestTimestampMargin = SafeCast.toUint64(_limitsList.requestTimestampMargin);
+        res.requestTimestampMargin = SafeCast.toUint48(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
         res.maxValidatorExitRequestsPerReport = SafeCast.toUint16(_limitsList.maxValidatorExitRequestsPerReport);
         res.maxAccountingExtraDataListItemsCount = SafeCast.toUint16(_limitsList.maxAccountingExtraDataListItemsCount);
