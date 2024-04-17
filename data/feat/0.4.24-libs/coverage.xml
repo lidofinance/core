@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="1368"  line-rate="0.47979999999999995"  branches-valid="1260"  branches-covered="652"  branch-rate="0.5175"  timestamp="1713270855451" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="1404"  line-rate="0.4925"  branches-valid="1260"  branches-covered="662"  branch-rate="0.5254"  timestamp="1713355966795" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -602,7 +602,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.4.24.lib"  line-rate="0.5385"  branch-rate="0.4412" >
+	<package name="0.4.24.lib"  line-rate="1"  branch-rate="0.7353000000000001" >
 	<classes>
 		<class name="Packed64x4.sol"  filename="contracts/0.4.24/lib/Packed64x4.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -627,61 +627,61 @@
 			<line number="47"  hits="2"  branch="false" />
 		</lines>
 		</class>
-		<class name="SigningKeys.sol"  filename="contracts/0.4.24/lib/SigningKeys.sol"  line-rate="0"  branch-rate="0" >
+		<class name="SigningKeys.sol"  filename="contracts/0.4.24/lib/SigningKeys.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="getKeyOffset"  hits="0"  signature="()V" >
-				<lines><line number="24"  hits="0" /></lines>
+			<method name="getKeyOffset"  hits="117"  signature="()V" >
+				<lines><line number="24"  hits="117" /></lines>
 			</method>
-			<method name="saveKeysSigs"  hits="0"  signature="()V" >
-				<lines><line number="36"  hits="0" /></lines>
+			<method name="saveKeysSigs"  hits="23"  signature="()V" >
+				<lines><line number="36"  hits="23" /></lines>
 			</method>
-			<method name="removeKeysSigs"  hits="0"  signature="()V" >
-				<lines><line number="90"  hits="0" /></lines>
+			<method name="removeKeysSigs"  hits="5"  signature="()V" >
+				<lines><line number="90"  hits="5" /></lines>
 			</method>
-			<method name="loadKeysSigs"  hits="0"  signature="()V" >
-				<lines><line number="149"  hits="0" /></lines>
+			<method name="loadKeysSigs"  hits="19"  signature="()V" >
+				<lines><line number="149"  hits="19" /></lines>
 			</method>
-			<method name="initKeysSigsBuf"  hits="0"  signature="()V" >
-				<lines><line number="176"  hits="0" /></lines>
+			<method name="initKeysSigsBuf"  hits="19"  signature="()V" >
+				<lines><line number="176"  hits="19" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="25"  hits="0"  branch="false" />
-			<line number="44"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="45"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="50"  hits="0"  branch="false" />
-			<line number="51"  hits="0"  branch="false" />
-			<line number="52"  hits="0"  branch="false" />
-			<line number="54"  hits="0"  branch="false" />
-			<line number="55"  hits="0"  branch="false" />
-			<line number="56"  hits="0"  branch="false" />
-			<line number="65"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="66"  hits="0"  branch="false" />
-			<line number="78"  hits="0"  branch="false" />
-			<line number="80"  hits="0"  branch="false" />
-			<line number="97"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="102"  hits="0"  branch="false" />
-			<line number="103"  hits="0"  branch="false" />
-			<line number="104"  hits="0"  branch="false" />
-			<line number="105"  hits="0"  branch="false" />
-			<line number="107"  hits="0"  branch="false" />
-			<line number="108"  hits="0"  branch="false" />
-			<line number="109"  hits="0"  branch="false" />
-			<line number="114"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="115"  hits="0"  branch="false" />
-			<line number="117"  hits="0"  branch="false" />
-			<line number="118"  hits="0"  branch="false" />
-			<line number="123"  hits="0"  branch="false" />
-			<line number="126"  hits="0"  branch="false" />
-			<line number="127"  hits="0"  branch="false" />
-			<line number="132"  hits="0"  branch="false" />
-			<line number="136"  hits="0"  branch="false" />
-			<line number="138"  hits="0"  branch="false" />
-			<line number="158"  hits="0"  branch="false" />
-			<line number="159"  hits="0"  branch="false" />
-			<line number="160"  hits="0"  branch="false" />
-			<line number="161"  hits="0"  branch="false" />
-			<line number="177"  hits="0"  branch="false" />
+			<line number="25"  hits="117"  branch="false" />
+			<line number="44"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="45"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="50"  hits="17"  branch="false" />
+			<line number="51"  hits="17"  branch="false" />
+			<line number="52"  hits="17"  branch="false" />
+			<line number="54"  hits="17"  branch="false" />
+			<line number="55"  hits="89"  branch="false" />
+			<line number="56"  hits="89"  branch="false" />
+			<line number="65"  hits="89"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="66"  hits="87"  branch="false" />
+			<line number="78"  hits="87"  branch="false" />
+			<line number="80"  hits="15"  branch="false" />
+			<line number="97"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="102"  hits="2"  branch="false" />
+			<line number="103"  hits="2"  branch="false" />
+			<line number="104"  hits="2"  branch="false" />
+			<line number="105"  hits="2"  branch="false" />
+			<line number="107"  hits="2"  branch="false" />
+			<line number="108"  hits="6"  branch="false" />
+			<line number="109"  hits="6"  branch="false" />
+			<line number="114"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="115"  hits="1"  branch="false" />
+			<line number="117"  hits="1"  branch="false" />
+			<line number="118"  hits="1"  branch="false" />
+			<line number="123"  hits="1"  branch="false" />
+			<line number="126"  hits="6"  branch="false" />
+			<line number="127"  hits="6"  branch="false" />
+			<line number="132"  hits="6"  branch="false" />
+			<line number="136"  hits="6"  branch="false" />
+			<line number="138"  hits="2"  branch="false" />
+			<line number="158"  hits="19"  branch="false" />
+			<line number="159"  hits="19"  branch="false" />
+			<line number="160"  hits="19"  branch="false" />
+			<line number="161"  hits="19"  branch="false" />
+			<line number="177"  hits="19"  branch="false" />
 		</lines>
 		</class>
 		<class name="StakeLimitUtils.sol"  filename="contracts/0.4.24/lib/StakeLimitUtils.sol"  line-rate="1"  branch-rate="0.5909" >
