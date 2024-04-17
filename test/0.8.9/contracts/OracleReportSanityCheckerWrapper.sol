@@ -19,8 +19,8 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         _managersRoster
     ) {}
 
-    function addRebaseValue(uint64 rebaseValue, uint32 refSlot) public {
-        _addRebaseValue(rebaseValue, refSlot);
+    function addNegativeRebase(uint64 rebaseValue, uint32 refSlot) public {
+        _addNegativeRebase(rebaseValue, refSlot);
     }
 
 }

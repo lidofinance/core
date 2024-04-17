@@ -36,18 +36,16 @@ interface IWithdrawalQueue {
         returns (WithdrawalRequestStatus[] memory statuses);
 }
 
-interface ILidoBaseOracle {
+interface IBaseOracle {
     function SECONDS_PER_SLOT() external view returns (uint256);
     function GENESIS_TIME() external view returns (uint256);
 }
 
 interface ILidoCLStateOracle {
-    function getReport(uint256 refSlot) external view returns  (
-        bool success,
-        uint256 clBalanceGwei,
-        uint256 numValidators,
-        uint256 exitedValidators
-	);
+    function getReport(uint256 refSlot)
+        external
+        view
+        returns (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators);
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
@@ -70,7 +68,7 @@ struct LimitsList {
     uint256 cLBalanceDecreaseHoursSpan;
 
     /// @notice The maximum divergence between the total balances of validators on the Consensus Layer
-    ///     as reported by the Oracle and the state of the Consensus Layer Oracle.
+    ///     as reported by the AccountingOracle and the state of the Consensus Layer Oracle.
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 cLBalanceOraclesErrorMarginBPLimit;
 
@@ -168,7 +166,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     LimitsListPacked private _limits;
 
     /// @dev The array of the rebase values and the corresponding timestamps
-    CLRebaseData[] private _rebaseData;
+    CLRebaseData[] private _clRebases;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -197,8 +195,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
 
         address accountingOracle = LIDO_LOCATOR.accountingOracle();
-        GENESIS_TIME = ILidoBaseOracle(accountingOracle).GENESIS_TIME();
-        SECONDS_PER_SLOT = ILidoBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+        GENESIS_TIME = IBaseOracle(accountingOracle).GENESIS_TIME();
+        SECONDS_PER_SLOT = IBaseOracle(accountingOracle).SECONDS_PER_SLOT();
 
         _updateLimits(_limitsList);
 
@@ -284,34 +282,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the new value for the cLBalanceDecreaseBPLimit
     /// @param _cLBalanceDecreaseBPLimit new cLBalanceDecreaseBPLimit value
-    function setcLBalanceDecreaseBPLimit(uint256 _cLBalanceDecreaseBPLimit)
+    /// @param _cLBalanceDecreaseHoursSpan new cLBalanceDecreaseHoursSpan value
+    function setcLBalanceDecreaseBPLimitAndHoursSpan(uint256 _cLBalanceDecreaseBPLimit, uint256 _cLBalanceDecreaseHoursSpan)
         external
         onlyRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
         limitsList.cLBalanceDecreaseBPLimit = _cLBalanceDecreaseBPLimit;
-        _updateLimits(limitsList);
-    }
-
-    /// @notice Sets the new value for the cLBalanceDecreaseHoursSpan
-    /// @param _cLBalanceDecreaseHoursSpan new cLBalanceDecreaseHoursSpan value
-    function setCLBalanceDecreaseHoursSpan(uint256 _cLBalanceDecreaseHoursSpan)
-        external
-        onlyRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE)
-    {
-        LimitsList memory limitsList = _limits.unpack();
         limitsList.cLBalanceDecreaseHoursSpan = _cLBalanceDecreaseHoursSpan;
-        _updateLimits(limitsList);
-    }
-
-    /// @notice Sets the new value for the cLBalanceOraclesErrorMarginBPLimit
-    /// @param _cLBalanceOraclesErrorMarginBPLimit new cLBalanceOraclesErrorMarginBPLimit value
-    function setCLBalanceOraclesErrorMarginBPLimit(uint256 _cLBalanceOraclesErrorMarginBPLimit)
-        external
-        onlyRole(CL_ORACLES_MANAGER_ROLE)
-    {
-        LimitsList memory limitsList = _limits.unpack();
-        limitsList.cLBalanceOraclesErrorMarginBPLimit = _cLBalanceOraclesErrorMarginBPLimit;
         _updateLimits(limitsList);
     }
 
@@ -406,7 +384,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _clStateOracleAddr address of the negative rebase oracle.
     ///     If it's zero address — oracle is disabled.
     ///     Default value is zero address.
-    function setCLStateOracle(address _clStateOracleAddr) external onlyRole(CL_ORACLES_MANAGER_ROLE) {
+    /// @param _cLBalanceOraclesErrorMarginBPLimit new cLBalanceOraclesErrorMarginBPLimit value
+    function setCLStateOracleAndCLBalanceErrorMargin(address _clStateOracleAddr, uint256 _cLBalanceOraclesErrorMarginBPLimit)
+        external
+        onlyRole(CL_ORACLES_MANAGER_ROLE)
+    {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.cLBalanceOraclesErrorMarginBPLimit = _cLBalanceOraclesErrorMarginBPLimit;
+        _updateLimits(limitsList);
         _clStateOracle = _clStateOracleAddr;
     }
 
@@ -538,7 +523,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Check rate of exited validators per day
-    /// @param _exitedValidatorsCount Number of validator exit requests supplied per oracle report
+    /// @param _exitedValidatorsCount Number of validator exited per oracle report
     function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount)
         external
         view
@@ -564,7 +549,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Check max accounting extra data list items count
-    /// @param _extraDataListItemsCount Number of validator exit requests supplied per oracle report
+    /// @param _extraDataListItemsCount Accounting extra data list items count
     function checkAccountingExtraDataListItemsCount(uint256 _extraDataListItemsCount)
         external
         view
@@ -617,21 +602,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
-    /// @notice Returns the sum of the rebase values not older than the provided timestamp
+    /// @notice Returns the sum of the negative rebase values not older than the provided timestamp
     /// @param _timestamp the timestamp to check the rebase values
-    /// @return rebaseValuesSum the sum of the rebase values not older than the provided timestamp
-    function sumRebaseValuesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
-        uint256 rebaseValuesSum = 0;
-        int256 slot = int256(_rebaseData.length) - 1;
-        while (slot >= 0) {
-            if (_rebaseData[uint256(slot)].timestamp >= SafeCast.toUint64(_timestamp)) {
-                rebaseValuesSum += _rebaseData[uint256(slot)].value;
+    /// @return rebaseValuesSum the sum of the negative rebase values not older than the provided timestamp
+    function sumNegativeRebasesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
+        uint256 sum;
+        for (int256 index = int256(_clRebases.length) - 1; index >= 0; index--) {
+            if (_clRebases[uint256(index)].timestamp >= SafeCast.toUint64(_timestamp)) {
+                sum += _clRebases[uint256(index)].value;
             } else {
                 break;
             }
-            slot--;
         }
-        return rebaseValuesSum;
+        return sum;
     }
 
     function _checkWithdrawalVaultBalance(
@@ -660,8 +643,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _addRebaseValue(uint256 _value, uint256 _timestamp) internal {
-        _rebaseData.push(CLRebaseData(SafeCast192.toUint192(_value), SafeCast.toUint64(_timestamp)));
+    function _addNegativeRebase(uint256 _value, uint256 _timestamp) internal {
+        _clRebases.push(CLRebaseData(SafeCastExt.toUint192(_value), SafeCast.toUint64(_timestamp)));
     }
 
     function _checkCLBalanceDecrease(
@@ -670,12 +653,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _unifiedPostCLBalance,
         uint256 _reportTimestamp
     ) internal {
+        // If the balance is not decreased, we don't need to check anyting here
         if (_preCLBalance <= _unifiedPostCLBalance) return;
 
-        _addRebaseValue(_preCLBalance - _unifiedPostCLBalance, _reportTimestamp);
+        _addNegativeRebase(_preCLBalance - _unifiedPostCLBalance, _reportTimestamp);
 
         uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
-        uint256 rebaseSum = sumRebaseValuesNotOlderThan(pastTimestamp);
+        uint256 rebaseSum = sumNegativeRebasesNotOlderThan(pastTimestamp);
 
         uint256 rebaseSumBP = MAX_BASIS_POINTS * rebaseSum;
         uint256 limitMulByStartBalance = _limitsList.cLBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
@@ -685,7 +669,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
 
         address clStateOracle = getCLStateOracle();
-        // If there is no negative rebase oracle, then we don't need to check the zk report
+        // If there is no negative rebase oracle, then we don't need to check it's report
         if (clStateOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
             revert IncorrectCLBalanceDecreaseForSpan(rebaseSumBP, limitMulByStartBalance,
@@ -703,11 +687,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 clBalanceWei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceWei;
             uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceWei;
             if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesErrorMarginBPLimit) {
-                revert ClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei);
+                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei);
             }
-            emit ConfirmNegativeRebase(refSlot, clBalanceWei);
+            emit NegativeRebaseConfirmed(refSlot, clBalanceWei);
         } else {
-            revert CLStateReportIsNotReady();
+            revert NegativeRebaseFailedCLStateReportIsNotReady();
         }
     }
 
@@ -889,7 +873,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
     event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event ConfirmNegativeRebase(uint256 refSlot, uint256 clBalanceGwei);
+    event NegativeRebaseConfirmed(uint256 refSlot, uint256 clBalanceGwei);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
@@ -908,9 +892,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
 
-    error ClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
-    error CLStateReportIsNotReady();
+    error NegativeRebaseFailedClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
+    error NegativeRebaseFailedCLStateReportIsNotReady();
 }
 
 library LimitsListPacker {
