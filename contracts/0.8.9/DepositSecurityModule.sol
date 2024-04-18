@@ -426,7 +426,6 @@ contract DepositSecurityModule {
         emit DepositsUnpaused();
     }
 
-
     /**
      * @notice Returns whether LIDO.deposit() can be called, given that the caller
      * will provide guardian attestations of non-stale deposit root and nonce,
@@ -533,14 +532,7 @@ contract DepositSecurityModule {
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
 
-        _verifyAttestSignatures(
-            depositRoot,
-            blockNumber,
-            blockHash,
-            stakingModuleId,
-            nonce,
-            sortedGuardianSignatures
-        );
+        _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
         LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
@@ -562,13 +554,15 @@ contract DepositSecurityModule {
 
         address prevSignerAddr = address(0);
 
-        for (uint256 i = 0; i < sigs.length;) {
+        for (uint256 i = 0; i < sigs.length; ) {
             address signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
             if (!_isGuardian(signerAddr)) revert InvalidSignature();
             if (signerAddr <= prevSignerAddr) revert SignaturesNotSorted();
             prevSignerAddr = signerAddr;
 
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -622,15 +616,17 @@ contract DepositSecurityModule {
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(
-                UNVET_MESSAGE_PREFIX,
-                blockNumber,
-                blockHash,
-                stakingModuleId,
-                nonce,
-                nodeOperatorIds,
-                vettedSigningKeysCounts
-            ));
+            bytes32 msgHash = keccak256(
+                abi.encodePacked(
+                    UNVET_MESSAGE_PREFIX,
+                    blockNumber,
+                    blockHash,
+                    stakingModuleId,
+                    nonce,
+                    nodeOperatorIds,
+                    vettedSigningKeysCounts
+                )
+            );
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
@@ -640,7 +636,9 @@ contract DepositSecurityModule {
         if (block.number - blockNumber > unvetIntentValidityPeriodBlocks) revert UnvetIntentExpired();
 
         STAKING_ROUTER.decreaseStakingModuleVettedKeysCountByNodeOperator(
-            stakingModuleId, nodeOperatorIds, vettedSigningKeysCounts
+            stakingModuleId,
+            nodeOperatorIds,
+            vettedSigningKeysCounts
         );
     }
 }
