@@ -155,6 +155,15 @@ contract StakingModule__Mock is IStakingModule {
     onRewardsMintedShouldRunOutGas = shoudRunOutOfGas;
   }
 
+  event Mock__VettedSigningKeysCountDecreased(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
+
+  function decreaseVettedSigningKeysCount(
+    bytes calldata _nodeOperatorIds,
+    bytes calldata _vettedSigningKeysCounts
+  ) external {
+    emit Mock__VettedSigningKeysCountDecreased(_nodeOperatorIds, _vettedSigningKeysCounts);
+  }
+
   event Mock__StuckValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
 
   function updateStuckValidatorsCount(bytes calldata _nodeOperatorIds, bytes calldata _stuckValidatorsCounts) external {
