@@ -95,39 +95,45 @@ describe("DepositSecurityModule.sol", () => {
     return block as Block;
   }
 
+  type DepositArgs = {
+    blockNumber?: number;
+    blockHash?: string;
+    depositRoot?: string;
+    stakingModuleId?: number;
+    nonce?: number;
+    depositCalldata?: string;
+  };
+
+  async function getDepositArgs(overridingArgs?: DepositArgs) {
+    const stakingModuleId = overridingArgs?.stakingModuleId ?? STAKING_MODULE_ID;
+
+    const [latestBlock, defaultDepositRoot, defaultModuleNonce] = await Promise.all([
+      getLatestBlock(),
+      depositContract.get_deposit_root(),
+      stakingRouter.getStakingModuleNonce(stakingModuleId),
+    ]);
+
+    const blockNumber = overridingArgs?.blockNumber ?? latestBlock.number;
+    const blockHash = overridingArgs?.blockHash ?? latestBlock.hash;
+    const depositRoot = overridingArgs?.depositRoot ?? defaultDepositRoot;
+    const nonce = overridingArgs?.nonce ?? Number(defaultModuleNonce);
+    const depositCalldata = overridingArgs?.depositCalldata ?? encodeBytes32String("");
+
+    return [depositCalldata, blockNumber, blockHash, depositRoot, stakingModuleId, nonce] as const;
+  }
+
   async function deposit(
     sortedGuardianWallets: Wallet[],
-    args?: {
-      blockNumber?: number;
-      blockHash?: string;
-      depositRoot?: string;
-      nonce?: number;
-      depositCalldata?: string;
-    },
+    overridingArgs?: DepositArgs,
   ): Promise<ContractTransactionResponse> {
-    const stakingModuleId = STAKING_MODULE_ID;
-
-    const latestBlock = await getLatestBlock();
-    const blockNumber = args?.blockNumber ?? latestBlock.number;
-    const blockHash = args?.blockHash ?? latestBlock.hash;
-    const depositRoot = args?.depositRoot ?? (await depositContract.get_deposit_root());
-    const nonce = args?.nonce ?? Number(await stakingRouter.getStakingModuleNonce(stakingModuleId));
-    const depositCalldata = args?.depositCalldata ?? encodeBytes32String("");
+    const [depositCalldata, ...signingArgs] = await getDepositArgs(overridingArgs);
 
     const sortedGuardianSignatures = sortedGuardianWallets.map((guardian) => {
-      const validAttestMessage = new DSMAttestMessage(blockNumber, blockHash, depositRoot, stakingModuleId, nonce);
+      const validAttestMessage = new DSMAttestMessage(...signingArgs);
       return validAttestMessage.sign(guardian.privateKey);
     });
 
-    return await dsm.depositBufferedEther(
-      blockNumber,
-      blockHash,
-      depositRoot,
-      stakingModuleId,
-      nonce,
-      depositCalldata,
-      sortedGuardianSignatures,
-    );
+    return await dsm.depositBufferedEther(...signingArgs, depositCalldata, sortedGuardianSignatures);
   }
 
   before(async () => {
@@ -432,7 +438,7 @@ describe("DepositSecurityModule.sol", () => {
         ).to.be.revertedWithCustomError(dsm, "NotAnOwner");
       });
 
-      it("Sets `setMaxOperatorsPerUnvetting` and fires `MaxOperatorsPerUnvettingChanged` event", async () => {
+      it("Sets `maxOperatorsPerUnvetting` and fires `MaxOperatorsPerUnvettingChanged` event", async () => {
         const valueBefore = await dsm.getMaxOperatorsPerUnvetting();
 
         const newValue = config.maxOperatorsPerUnvetting + 1;
@@ -1433,7 +1439,7 @@ describe("DepositSecurityModule.sol", () => {
       vs: encodeBytes32String(""),
     };
 
-    interface UnvetArgs {
+    type UnvetArgs = {
       blockNumber?: number;
       blockHash?: string;
       stakingModuleId?: number;
@@ -1441,11 +1447,9 @@ describe("DepositSecurityModule.sol", () => {
       nodeOperatorIds?: string;
       vettedSigningKeysCounts?: string;
       sig?: DepositSecurityModule.SignatureStruct;
-    }
+    };
 
-    interface UnvetSignedArgs extends UnvetArgs {
-      sig?: DepositSecurityModule.SignatureStruct;
-    }
+    type UnvetSignedArgs = UnvetArgs & { sig?: DepositSecurityModule.SignatureStruct };
 
     async function getUnvetArgs(overridingArgs?: UnvetArgs) {
       const latestBlock = await getLatestBlock();
