@@ -64,6 +64,8 @@ context("StakingRouter:status-control", () => {
       1_00, // target share
       5_00, // module fee
       5_00, // treasury fee
+      150, // max deposits per block
+      25, // min deposit block distance
     );
 
     moduleId = await stakingRouter.getStakingModulesCount();

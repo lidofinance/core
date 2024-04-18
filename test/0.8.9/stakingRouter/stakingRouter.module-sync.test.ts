@@ -39,6 +39,8 @@ describe("StakingRouter:module-sync", () => {
   const treasuryFee = 5_00n;
   const stakeShareLimit = 1_00n;
   const priorityExitShareThreshold = 2_00n;
+  const maxDepositsPerBlock = 150n;
+  const minDepositBlockDistance = 25n;
 
   beforeEach(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
@@ -86,13 +88,29 @@ describe("StakingRouter:module-sync", () => {
       priorityExitShareThreshold,
       stakingModuleFee,
       treasuryFee,
+      maxDepositsPerBlock,
+      minDepositBlockDistance,
     );
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
 
   context("Getters", () => {
-    let stakingModuleInfo: [bigint, string, bigint, bigint, bigint, bigint, bigint, string, bigint, bigint, bigint];
+    let stakingModuleInfo: [
+      bigint,
+      string,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      string,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+    ];
 
     // module mock state
     const stakingModuleSummary: Parameters<StakingModule__Mock["mock__getStakingModuleSummary"]> = [
@@ -127,11 +145,13 @@ describe("StakingRouter:module-sync", () => {
         treasuryFee,
         stakeShareLimit,
         0n, // status
-        priorityExitShareThreshold,
         name,
         lastDepositAt,
         lastDepositBlock,
-        0n, // exitedValidatorsCount
+        0n, // exitedValidatorsCount,
+        priorityExitShareThreshold,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
       ];
 
       // mocking module state

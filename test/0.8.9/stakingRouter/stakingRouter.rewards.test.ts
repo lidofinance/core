@@ -28,6 +28,8 @@ describe("StakingRouter:deposits", () => {
     priorityExitShareThreshold: 100_00n,
     moduleFee: 5_00n,
     treasuryFee: 5_00n,
+    maxDepositsPerBlock: 150n,
+    minDepositBlockDistance: 25n,
   };
 
   beforeEach(async () => {
@@ -447,6 +449,8 @@ describe("StakingRouter:deposits", () => {
     priorityExitShareThreshold,
     moduleFee,
     treasuryFee,
+    maxDepositsPerBlock,
+    minDepositBlockDistance,
     exited = 0n,
     deposited = 0n,
     depositable = 0n,
@@ -464,6 +468,8 @@ describe("StakingRouter:deposits", () => {
         priorityExitShareThreshold,
         moduleFee,
         treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
       );
 
     const moduleId = modulesCount + 1n;
@@ -490,6 +496,8 @@ interface ModuleConfig {
   priorityExitShareThreshold: bigint;
   moduleFee: bigint;
   treasuryFee: bigint;
+  maxDepositsPerBlock: bigint;
+  minDepositBlockDistance: bigint;
   exited?: bigint;
   deposited?: bigint;
   depositable?: bigint;

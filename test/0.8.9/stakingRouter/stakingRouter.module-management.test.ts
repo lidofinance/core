@@ -52,12 +52,23 @@ describe("StakingRouter:module-management", () => {
     const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
     const MODULE_FEE = 5_00n;
     const TREASURY_FEE = 5_00n;
+    const MAX_DEPOSITS_PER_BLOCK = 150n;
+    const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
 
     it("Reverts if the caller does not have the role", async () => {
       await expect(
         stakingRouter
           .connect(user)
-          .addStakingModule(NAME, ADDRESS, STAKE_SHARE_LIMIT, PRIORITY_EXIT_SHARE_THRESHOLD, MODULE_FEE, TREASURY_FEE),
+          .addStakingModule(
+            NAME,
+            ADDRESS,
+            STAKE_SHARE_LIMIT,
+            PRIORITY_EXIT_SHARE_THRESHOLD,
+            MODULE_FEE,
+            TREASURY_FEE,
+            MAX_DEPOSITS_PER_BLOCK,
+            MIN_DEPOSIT_BLOCK_DISTANCE,
+          ),
       ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
     //todo priority < share
@@ -73,6 +84,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -90,6 +103,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE_INVALID,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -105,6 +120,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE_INVALID,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -120,6 +137,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
@@ -137,6 +156,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
@@ -153,6 +174,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
@@ -168,6 +191,8 @@ describe("StakingRouter:module-management", () => {
           1_00,
           1_00,
           1_00,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         );
       }
 
@@ -181,6 +206,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModulesLimitExceeded");
     });
@@ -193,6 +220,8 @@ describe("StakingRouter:module-management", () => {
         PRIORITY_EXIT_SHARE_THRESHOLD,
         MODULE_FEE,
         TREASURY_FEE,
+        MAX_DEPOSITS_PER_BLOCK,
+        MIN_DEPOSIT_BLOCK_DISTANCE,
       );
 
       await expect(
@@ -203,6 +232,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleAddressExists");
     });
@@ -219,6 +250,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.emit(stakingRouter, "StakingRouterETHDeposited")
@@ -237,11 +270,13 @@ describe("StakingRouter:module-management", () => {
         TREASURY_FEE,
         STAKE_SHARE_LIMIT,
         0n, // status active
-        PRIORITY_EXIT_SHARE_THRESHOLD,
         NAME,
         moduleAddedBlock.timestamp,
         moduleAddedBlock.number,
-        0n, // exited validators
+        0n, // exited validators,
+        PRIORITY_EXIT_SHARE_THRESHOLD,
+        MAX_DEPOSITS_PER_BLOCK,
+        MIN_DEPOSIT_BLOCK_DISTANCE,
       ]);
     });
   });
@@ -253,6 +288,8 @@ describe("StakingRouter:module-management", () => {
     const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
     const MODULE_FEE = 5_00n;
     const TREASURY_FEE = 5_00n;
+    const MAX_DEPOSITS_PER_BLOCK = 150n;
+    const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
 
     let ID: bigint;
 
@@ -262,6 +299,9 @@ describe("StakingRouter:module-management", () => {
     const NEW_MODULE_FEE = 6_00n;
     const NEW_TREASURY_FEE = 4_00n;
 
+    const NEW_MAX_DEPOSITS_PER_BLOCK = 100n;
+    const NEW_MIN_DEPOSIT_BLOCK_DISTANCE = 20n;
+
     beforeEach(async () => {
       await stakingRouter.addStakingModule(
         NAME,
@@ -270,6 +310,8 @@ describe("StakingRouter:module-management", () => {
         PRIORITY_EXIT_SHARE_THRESHOLD,
         MODULE_FEE,
         TREASURY_FEE,
+        MAX_DEPOSITS_PER_BLOCK,
+        MIN_DEPOSIT_BLOCK_DISTANCE,
       );
       ID = await stakingRouter.getStakingModulesCount();
     });
@@ -284,6 +326,8 @@ describe("StakingRouter:module-management", () => {
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
+          NEW_MAX_DEPOSITS_PER_BLOCK,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
@@ -297,6 +341,8 @@ describe("StakingRouter:module-management", () => {
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
+          NEW_MAX_DEPOSITS_PER_BLOCK,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -312,6 +358,8 @@ describe("StakingRouter:module-management", () => {
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD_OVER_100,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
+          NEW_MAX_DEPOSITS_PER_BLOCK,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -328,6 +376,8 @@ describe("StakingRouter:module-management", () => {
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
+          NEW_MAX_DEPOSITS_PER_BLOCK,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
@@ -342,6 +392,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE_INVALID,
           TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -355,6 +407,8 @@ describe("StakingRouter:module-management", () => {
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           NEW_TREASURY_FEE_INVALID,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
@@ -369,6 +423,8 @@ describe("StakingRouter:module-management", () => {
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
+          NEW_MAX_DEPOSITS_PER_BLOCK,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
       )
         .to.be.emit(stakingRouter, "StakingModuleShareLimitSet")
