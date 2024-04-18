@@ -59,7 +59,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
   error ZeroAddress(string field);
   error ValueOver100Percent(string field);
   error StakingModuleNotActive();
-  error StakingModuleNotPaused();
   error EmptyWithdrawalsCredentials();
   error DirectETHTransfer();
   error InvalidReportData(uint256 code);
@@ -138,10 +137,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
   }
 
   bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
-  bytes32 public constant STAKING_MODULE_PAUSE_ROLE = keccak256("STAKING_MODULE_PAUSE_ROLE");
-  bytes32 public constant STAKING_MODULE_RESUME_ROLE = keccak256("STAKING_MODULE_RESUME_ROLE");
   bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
-  bytes32 public constant STAKING_MODULE_VETTING_ROLE = keccak256("STAKING_MODULE_VETTING_ROLE");
+  bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
   bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
   bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
   bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
@@ -649,7 +646,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     uint256 _stakingModuleId,
     bytes calldata _nodeOperatorIds,
     bytes calldata _vettedSigningKeysCounts
-  ) external onlyRole(STAKING_MODULE_VETTING_ROLE) {
+  ) external onlyRole(STAKING_MODULE_UNVETTING_ROLE) {
     _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _vettedSigningKeysCounts);
     _getIStakingModuleById(_stakingModuleId).decreaseVettedSigningKeysCount(_nodeOperatorIds, _vettedSigningKeysCounts);
   }
@@ -902,27 +899,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     StakingModule storage stakingModule = _getStakingModuleById(_stakingModuleId);
     if (StakingModuleStatus(stakingModule.status) == _status) revert StakingModuleStatusTheSame();
     _setStakingModuleStatus(stakingModule, _status);
-  }
-
-  /**
-   * @notice pause deposits for staking module
-   * @param _stakingModuleId id of the staking module to be paused
-   */
-  function pauseStakingModule(uint256 _stakingModuleId) external onlyRole(STAKING_MODULE_PAUSE_ROLE) {
-    StakingModule storage stakingModule = _getStakingModuleById(_stakingModuleId);
-    if (StakingModuleStatus(stakingModule.status) != StakingModuleStatus.Active) revert StakingModuleNotActive();
-    _setStakingModuleStatus(stakingModule, StakingModuleStatus.DepositsPaused);
-  }
-
-  /**
-   * @notice resume deposits for staking module
-   * @param _stakingModuleId id of the staking module to be unpaused
-   */
-  function resumeStakingModule(uint256 _stakingModuleId) external onlyRole(STAKING_MODULE_RESUME_ROLE) {
-    StakingModule storage stakingModule = _getStakingModuleById(_stakingModuleId);
-    if (StakingModuleStatus(stakingModule.status) != StakingModuleStatus.DepositsPaused)
-      revert StakingModuleNotPaused();
-    _setStakingModuleStatus(stakingModule, StakingModuleStatus.Active);
   }
 
   function getStakingModuleIsStopped(uint256 _stakingModuleId) external view returns (bool) {

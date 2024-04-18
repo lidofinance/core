@@ -1246,7 +1246,7 @@ describe("DepositSecurityModule.sol", () => {
       });
 
       it("Reverts if module is inactive", async () => {
-        await stakingRouter.pauseStakingModule(STAKING_MODULE_ID);
+        await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, Status.DepositsPaused);
 
         await dsm.addGuardian(guardian1, 1);
         expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
@@ -1628,3 +1628,9 @@ describe("DepositSecurityModule.sol", () => {
     });
   });
 });
+
+enum Status {
+  Active,
+  DepositsPaused,
+  Stopped,
+}

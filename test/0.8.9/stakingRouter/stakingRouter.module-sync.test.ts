@@ -68,8 +68,8 @@ describe("StakingRouter:module-sync", () => {
     await Promise.all([
       stakingRouter.grantRole(await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin),
-      stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_PAUSE_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), admin),
+      stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), admin),
     ]);
@@ -102,7 +102,7 @@ describe("StakingRouter:module-sync", () => {
       bigint,
       bigint,
       bigint,
-      bigint,
+      number,
       string,
       bigint,
       bigint,
@@ -144,7 +144,7 @@ describe("StakingRouter:module-sync", () => {
         stakingModuleFee,
         treasuryFee,
         stakeShareLimit,
-        0n, // status
+        Status.Active,
         name,
         lastDepositAt,
         lastDepositBlock,
@@ -821,6 +821,93 @@ describe("StakingRouter:module-sync", () => {
     });
   });
 
+  context("decreaseStakingModuleVettedKeysCountByNodeOperator", () => {
+    const NODE_OPERATOR_IDS = bigintToHex(1n, true, 8);
+    const VETTED_KEYS_COUNTS = bigintToHex(100n, true, 16);
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(
+        stakingRouter
+          .connect(user)
+          .decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, NODE_OPERATOR_IDS, VETTED_KEYS_COUNTS),
+      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_UNVETTING_ROLE());
+    });
+
+    it("Reverts if the node operators ids are packed incorrectly", async () => {
+      const incorrectlyPackedNodeOperatorIds = bufToHex(new Uint8Array([1]), true, 7);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          incorrectlyPackedNodeOperatorIds,
+          VETTED_KEYS_COUNTS,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(3n);
+    });
+
+    it("Reverts if the validator counts are packed incorrectly", async () => {
+      const incorrectlyPackedValidatorCounts = bufToHex(new Uint8Array([100]), true, 15);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          incorrectlyPackedValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(3n);
+    });
+
+    it("Reverts if the number of node operators does not match validator counts", async () => {
+      const tooManyValidatorCounts = VETTED_KEYS_COUNTS + bigintToHex(101n, false, 16);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          tooManyValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(2n);
+    });
+
+    it("Reverts if the number of node operators does not match validator counts", async () => {
+      const tooManyValidatorCounts = VETTED_KEYS_COUNTS + bigintToHex(101n, false, 16);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          tooManyValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(2n);
+    });
+
+    it("Reverts if the node operators ids is empty", async () => {
+      await expect(stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, "0x", "0x"))
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(1n);
+    });
+
+    it("Updates stuck validators count on the module", async () => {
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          VETTED_KEYS_COUNTS,
+        ),
+      )
+        .to.emit(stakingModule, "Mock__VettedSigningKeysCountDecreased")
+        .withArgs(NODE_OPERATOR_IDS, VETTED_KEYS_COUNTS);
+    });
+  });
+
   context("deposit", () => {
     beforeEach(async () => {
       stakingRouter = stakingRouter.connect(lido);
@@ -843,7 +930,7 @@ describe("StakingRouter:module-sync", () => {
     });
 
     it("Reverts if the staking module is not active", async () => {
-      await stakingRouter.connect(admin).pauseStakingModule(moduleId);
+      await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
@@ -883,3 +970,9 @@ describe("StakingRouter:module-sync", () => {
     });
   });
 });
+
+enum Status {
+  Active,
+  DepositsPaused,
+  Stopped,
+}
