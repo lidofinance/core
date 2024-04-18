@@ -117,8 +117,12 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @notice module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP
     uint16 priorityExitShareThreshold;
     /// @notice the maximum number of validators that can be deposited in a single block
+    /// @dev must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
+    /// (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
     uint64 maxDepositsPerBlock;
     /// @notice the minimum distance between deposits in blocks
+    /// @dev must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
+    /// (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
     uint64 minDepositBlockDistance;
   }
 
