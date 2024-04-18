@@ -249,7 +249,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
     /// @dev  Simulate zero value deposit to prevent real deposits into the new StakingModule via
     ///       DepositSecurityModule just after the addition.
-    ///       See DepositSecurityModule.getMaxDeposits() for details
     newStakingModule.lastDepositAt = uint64(block.timestamp);
     newStakingModule.lastDepositBlock = block.number;
     emit StakingRouterETHDeposited(newStakingModuleId, 0);
