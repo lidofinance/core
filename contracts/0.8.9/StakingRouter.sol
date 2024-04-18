@@ -104,8 +104,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     uint16 stakeShareLimit; // formerly known as `targetShare`
     /// @notice staking module status if staking module can not accept the deposits or can participate in further reward distribution
     uint8 status;
-    /// @notice module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP
-    uint16 priorityExitShareThreshold;
     /// @notice name of staking module
     string name;
     /// @notice block.timestamp of the last deposit of the staking module
@@ -116,6 +114,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     uint256 lastDepositBlock;
     /// @notice number of exited validators
     uint256 exitedValidatorsCount;
+    /// @notice module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP
+    uint16 priorityExitShareThreshold;
     /// @notice the maximum number of validators that can be deposited in a single block
     uint64 maxDepositsPerBlock;
     /// @notice the minimum distance between deposits in blocks
