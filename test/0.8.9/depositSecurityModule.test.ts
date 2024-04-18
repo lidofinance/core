@@ -234,6 +234,10 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Constants", () => {
+    it("Returns the VERSION variable", async () => {
+      expect(await dsm.VERSION()).to.equal(3);
+    });
+
     it("Returns the ATTEST_MESSAGE_PREFIX variable", async () => {
       const dsmAttestMessagePrefix = streccak("lido.DepositSecurityModule.ATTEST_MESSAGE");
       expect(dsmAttestMessagePrefix).to.equal("0x1085395a994e25b1b3d0ea7937b7395495fb405b31c7d22dbc3976a6bd01f2bf");
