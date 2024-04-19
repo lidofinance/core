@@ -74,13 +74,13 @@ describe("StakingRouter:module-management", () => {
     //todo priority < share
     //todo priority > 100
     it("Reverts if the target share is greater than 100%", async () => {
-      const TARGET_SHARE_OVER_100 = 100_01;
+      const STAKE_SHARE_LIMIT_OVER_100 = 100_01;
 
       await expect(
         stakingRouter.addStakingModule(
           NAME,
           ADDRESS,
-          TARGET_SHARE_OVER_100,
+          STAKE_SHARE_LIMIT_OVER_100,
           PRIORITY_EXIT_SHARE_THRESHOLD,
           MODULE_FEE,
           TREASURY_FEE,
@@ -333,11 +333,11 @@ describe("StakingRouter:module-management", () => {
     });
 
     it("Reverts if the new target share is greater than 100%", async () => {
-      const NEW_TARGET_SHARE_OVER_100 = 100_01;
+      const NEW_STAKE_SHARE_LIMIT_OVER_100 = 100_01;
       await expect(
         stakingRouter.updateStakingModule(
           ID,
-          NEW_TARGET_SHARE_OVER_100,
+          NEW_STAKE_SHARE_LIMIT_OVER_100,
           NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
           NEW_MODULE_FEE,
           NEW_TREASURY_FEE,
