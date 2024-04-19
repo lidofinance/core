@@ -170,9 +170,12 @@ await stakingRouter.grantRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from:
 await stakingRouter.addStakingModule(
   state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
   nodeOperatorsRegistry.address,
-  NOR_STAKING_MODULE_TARGET_SHARE_BP,
+  NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+  NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
   NOR_STAKING_MODULE_MODULE_FEE_BP,
   NOR_STAKING_MODULE_TREASURY_FEE_BP,
+  NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+  NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
   { from: agent.address },
 );
 await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from: agent.address });
