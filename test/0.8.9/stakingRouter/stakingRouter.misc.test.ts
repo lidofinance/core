@@ -57,13 +57,13 @@ describe("StakingRouter", () => {
     it("Initializes the contract version, sets up roles and variables", async () => {
       await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
         .to.emit(stakingRouter, "ContractVersionSet")
-        .withArgs(1)
+        .withArgs(2)
         .and.to.emit(stakingRouter, "RoleGranted")
         .withArgs(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address, user.address)
         .and.to.emit(stakingRouter, "WithdrawalCredentialsSet")
         .withArgs(withdrawalCredentials, user.address);
 
-      expect(await stakingRouter.getContractVersion()).to.equal(1);
+      expect(await stakingRouter.getContractVersion()).to.equal(2);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
     });
