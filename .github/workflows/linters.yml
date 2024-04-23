@@ -12,21 +12,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Run Solidity linters
-        run: pnpm lint:sol
+        run: npm run lint:sol
 
       - name: Run TS linters
-        run: pnpm lint:ts
+        run: npm run lint:ts
 
   types:
     name: TypeScript types check
@@ -37,18 +35,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Generate typechain types
-        run: pnpm hardhat compile
+        run: npm run hardhat compile
 
       - name: Run TypeScript types check
-        run: pnpm type:check
+        run: npm run typecheck

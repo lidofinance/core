@@ -12,18 +12,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Run Hardhat Solidity tests
-        run: pnpm test
+        run: npm run test
 
   test_foundry:
     name: Foundry Solidity tests
@@ -37,15 +35,13 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Run tests
         run: forge test --gas-report

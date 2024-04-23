@@ -16,18 +16,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Run Solidity coverage
-        run: pnpm test:coverage
+        run: npm run test:coverage
 
       - name: Produce the coverage report
         uses: insightsengineering/coverage-action@v2
