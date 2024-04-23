@@ -62,7 +62,7 @@ struct LimitsList {
     /// @notice The max number of exit requests allowed in report to ValidatorsExitBusOracle
     uint256 maxValidatorExitRequestsPerReport;
 
-    /// @notice The max number of data list items reported to accounting oracle in extra data
+    /// @notice The max number of data list items reported to accounting oracle in extra data per single transaction
     /// @dev Must fit into uint16 (<= 65_535)
     uint256 maxAccountingExtraDataListItemsCount;
 
@@ -468,7 +468,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Check number of node operators reported per extra data item in accounting oracle
     /// @param _itemIndex Index of item in extra data
     /// @param _nodeOperatorsCount Number of validator exit requests supplied per oracle report
-    /// @dev Checks against the same limit as used in checkAccountingExtraDataListItemsCount
+    /// @dev Checks against the same limit as used in checkExtraDataItemsCountPerTransaction
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount)
         external
         view
@@ -479,9 +479,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Check max accounting extra data list items count
-    /// @param _extraDataListItemsCount Number of validator exit requests supplied per oracle report
-    function checkAccountingExtraDataListItemsCount(uint256 _extraDataListItemsCount)
+    /// @notice Check max accounting extra data list items count per transaction
+    /// @param _extraDataListItemsCount Number of items per single transaction in oracle report
+    function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount)
         external
         view
     {

@@ -155,5 +155,5 @@ contract OracleReportSanityCheckerStub {
         sharesToBurn = _etherToLockForWithdrawals;
     }
 
-    function checkAccountingExtraDataListItemsCount(uint256 _extraDataListItemsCount) external view {}
+    function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view {}
 }

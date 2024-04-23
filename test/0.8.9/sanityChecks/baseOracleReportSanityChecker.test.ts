@@ -1197,12 +1197,12 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(12, maxCount + 1n);
     });
 
-    it("checkAccountingExtraDataListItemsCount", async () => {
+    it("checkExtraDataItemsCountPerTransaction", async () => {
       const maxCount = (await oracleReportSanityChecker.getOracleReportLimits()).maxAccountingExtraDataListItemsCount;
 
-      await oracleReportSanityChecker.checkAccountingExtraDataListItemsCount(maxCount);
+      await oracleReportSanityChecker.checkExtraDataItemsCountPerTransaction(maxCount);
 
-      await expect(oracleReportSanityChecker.checkAccountingExtraDataListItemsCount(maxCount + 1n))
+      await expect(oracleReportSanityChecker.checkExtraDataItemsCountPerTransaction(maxCount + 1n))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "MaxAccountingExtraDataItemsCountExceeded")
         .withArgs(maxCount, maxCount + 1n);
     });
