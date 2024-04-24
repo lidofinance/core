@@ -392,7 +392,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory limitsList = _limits.unpack();
         limitsList.cLBalanceOraclesErrorMarginBPLimit = _cLBalanceOraclesErrorMarginBPLimit;
         _updateLimits(limitsList);
-        _clStateOracle = _clStateOracleAddr;
+        if (_clStateOracleAddr != _clStateOracle) {
+            _clStateOracle = _clStateOracleAddr;
+            emit CLStateOracleChanged(_clStateOracleAddr);
+        }
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
@@ -865,6 +868,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event ChurnValidatorsPerDayLimitSet(uint256 churnValidatorsPerDayLimit);
     event CLBalanceDecreaseBPLimitSet(uint256 cLBalanceDecreaseBPLimit);
     event CLBalanceDecreaseHoursSpanSet(uint256 cLBalanceDecreaseHoursSpan);
+    event CLStateOracleChanged(address clStateOracle);
     event CLBalanceOraclesErrorMarginBPLimitSet(uint256 cLBalanceOraclesErrorMarginBPLimit);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
