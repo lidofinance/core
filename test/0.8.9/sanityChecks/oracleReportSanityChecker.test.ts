@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
@@ -96,7 +97,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       const secondsPerSlot = await accountingOracle.SECONDS_PER_SLOT();
       const genesisTime = await accountingOracle.GENESIS_TIME();
       expect(secondsPerSlot).to.equal(12);
-      log("secondsPerSlot", secondsPerSlot);
       log("genesisTime", genesisTime);
     });
 
@@ -205,7 +205,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
       await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedClBalanceMismatch")
-        .withArgs(93 * 1e9, 94 * 1e9);
+        .withArgs(93 * 1e9, 94 * 1e9, anyValue);
     });
   });
 

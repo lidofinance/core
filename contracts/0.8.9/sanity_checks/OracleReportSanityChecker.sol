@@ -667,9 +667,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
         uint256 rebaseSum = sumNegativeRebasesNotOlderThan(pastTimestamp);
 
-        uint256 rebaseSumBP = MAX_BASIS_POINTS * rebaseSum;
+        uint256 rebaseSumScaled = MAX_BASIS_POINTS * rebaseSum;
         uint256 limitMulByStartBalance = _limitsList.cLBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
-        if (rebaseSumBP < limitMulByStartBalance) {
+        if (rebaseSumScaled < limitMulByStartBalance) {
             // If the diff is less than limit we are finishing check
             return;
         }
@@ -678,7 +678,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If there is no negative rebase oracle, then we don't need to check it's report
         if (clStateOracle == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
-            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumBP, limitMulByStartBalance,
+            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumScaled, limitMulByStartBalance,
                 _limitsList.cLBalanceDecreaseHoursSpan);
         }
 
@@ -691,9 +691,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
             uint256 balanceDiff = (clBalanceWei > _unifiedPostCLBalance) ?
                 clBalanceWei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceWei;
-            uint256 balanceDifferenceBP = MAX_BASIS_POINTS * balanceDiff / clBalanceWei;
-            if (balanceDifferenceBP >= _limitsList.cLBalanceOraclesErrorMarginBPLimit) {
-                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei);
+            if (MAX_BASIS_POINTS * balanceDiff >= _limitsList.cLBalanceOraclesErrorMarginBPLimit * clBalanceWei) {
+                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.cLBalanceOraclesErrorMarginBPLimit);
             }
             emit NegativeRebaseConfirmed(refSlot, clBalanceWei);
         } else {
@@ -900,7 +899,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
-    error NegativeRebaseFailedClBalanceMismatch(uint256 reportedValue, uint256 provedValue);
+    error NegativeRebaseFailedClBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
     error NegativeRebaseFailedCLStateReportIsNotReady();
 }
 
