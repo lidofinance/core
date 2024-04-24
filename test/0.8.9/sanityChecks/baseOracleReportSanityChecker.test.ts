@@ -233,40 +233,6 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(31);
     });
 
-    // it("reverts with error IncorrectCLBalanceDecrease() when one off CL balance decrease more than limit", async () => {
-    //   const maxBasisPoints = 10_000n;
-    //   const preCLBalance = ether("100000");
-    //   const postCLBalance = ether("85000");
-    //   const withdrawalVaultBalance = ether("500");
-    //   const unifiedPostCLBalance = postCLBalance + withdrawalVaultBalance;
-    //   const oneOffCLBalanceDecreaseBP = (maxBasisPoints * (preCLBalance - unifiedPostCLBalance)) / preCLBalance;
-
-    //   await expect(
-    //     oracleReportSanityChecker.checkAccountingOracleReport(
-    //       correctLidoOracleReport.timeElapsed,
-    //       preCLBalance,
-    //       postCLBalance,
-    //       withdrawalVaultBalance,
-    //       correctLidoOracleReport.elRewardsVaultBalance,
-    //       correctLidoOracleReport.sharesRequestedToBurn,
-    //       correctLidoOracleReport.preCLValidators,
-    //       correctLidoOracleReport.postCLValidators,
-    //     ),
-    //   )
-    //     .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceDecrease")
-    //     .withArgs(oneOffCLBalanceDecreaseBP);
-
-    //   const postCLBalanceCorrect = ether("99000");
-    //   await oracleReportSanityChecker.checkAccountingOracleReport(
-    //     ...(Object.values({
-    //       ...correctLidoOracleReport,
-    //       preCLBalance: preCLBalance.toString(),
-    //       postCLBalance: postCLBalanceCorrect.toString(),
-    //       withdrawalVaultBalance: withdrawalVaultBalance.toString(),
-    //     }) as CheckAccountingOracleReportParameters),
-    //   );
-    // });
-
     it("reverts with error IncorrectCLBalanceIncrease() when reported values overcome annual CL balance limit", async () => {
       const maxBasisPoints = 10_000n;
       const secondsInOneYear = 365n * 24n * 60n * 60n;
