@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { keccak256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -14,7 +14,7 @@ import {
   MockWithdrawalQueueForAccountingOracle,
 } from "typechain-types";
 
-import { hex, Snapshot, streccak } from "lib";
+import { hex, Snapshot } from "lib";
 
 import {
   deployLocatorWithDummyAddressesImplementation,
@@ -27,11 +27,11 @@ import { deployHashConsensus } from "./hashConsensus";
 
 const V1_ORACLE_LAST_COMPLETED_EPOCH = 2 * EPOCHS_PER_FRAME;
 
-const EXTRA_DATA_FORMAT_EMPTY = 0;
-const EXTRA_DATA_FORMAT_LIST = 1;
+export const EXTRA_DATA_FORMAT_EMPTY = 0;
+export const EXTRA_DATA_FORMAT_LIST = 1;
 
-const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
-const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
+export const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
+export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
 
 function encodeExtraDataItem(
   itemIndex: number,
@@ -64,7 +64,7 @@ export function packExtraDataList(extraDataItems: string[]) {
 }
 
 export function calcExtraDataListHash(packedExtraDataList: string) {
-  return streccak(packedExtraDataList);
+  return keccak256(packedExtraDataList);
 }
 
 async function deployMockLegacyOracle({
@@ -240,7 +240,7 @@ async function configureAccountingOracleSetup({
   return { updateInitialEpochIx, initTx };
 }
 
-async function deployAndConfigureAccountingOracle(admin: string) {
+export async function deployAndConfigureAccountingOracle(admin: string) {
   /// this is done (far) before the protocol upgrade voting initiation:
   ///   1. deploy HashConsensus
   ///   2. deploy AccountingOracle impl
