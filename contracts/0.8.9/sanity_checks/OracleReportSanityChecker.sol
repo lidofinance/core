@@ -254,6 +254,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return _limits.maxPositiveTokenRebase;
     }
 
+    /// @notice Returns the address of the negative rebase oracle
+    function getCLStateOracle() public view returns (address) {
+        return _clStateOracle;
+    }
+
     /// @notice Sets the new values for the limits list
     /// @param _limitsList new limits list
     function setOracleReportLimits(LimitsList memory _limitsList) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
@@ -373,11 +378,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory limitsList = _limits.unpack();
         limitsList.maxNodeOperatorsPerExtraDataItemCount = _maxNodeOperatorsPerExtraDataItemCount;
         _updateLimits(limitsList);
-    }
-
-    /// @notice Returns the address of the negative rebase oracle
-    function getCLStateOracle() public view returns (address) {
-        return _clStateOracle;
     }
 
     /// @notice Sets the address of the negative rebase oracle
