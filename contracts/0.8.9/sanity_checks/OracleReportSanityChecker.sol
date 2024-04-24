@@ -167,7 +167,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     LimitsListPacked private _limits;
 
     /// @dev The array of the rebase values and the corresponding timestamps
-    CLRebaseData[] private _clRebases;
+    CLRebaseData[] private _clNegativeRebases;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -613,9 +613,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return rebaseValuesSum the sum of the negative rebase values not older than the provided timestamp
     function sumNegativeRebasesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
         uint256 sum;
-        for (int256 index = int256(_clRebases.length) - 1; index >= 0; index--) {
-            if (_clRebases[uint256(index)].timestamp >= SafeCast.toUint64(_timestamp)) {
-                sum += _clRebases[uint256(index)].value;
+        for (int256 index = int256(_clNegativeRebases.length) - 1; index >= 0; index--) {
+            if (_clNegativeRebases[uint256(index)].timestamp >= SafeCast.toUint64(_timestamp)) {
+                sum += _clNegativeRebases[uint256(index)].value;
             } else {
                 break;
             }
@@ -650,7 +650,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _addNegativeRebase(uint256 _value, uint256 _timestamp) internal {
-        _clRebases.push(CLRebaseData(SafeCastExt.toUint192(_value), SafeCast.toUint64(_timestamp)));
+        _clNegativeRebases.push(CLRebaseData(SafeCastExt.toUint192(_value), SafeCast.toUint64(_timestamp)));
     }
 
     function _checkCLBalanceDecrease(
