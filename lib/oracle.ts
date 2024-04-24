@@ -5,11 +5,11 @@ import { AccountingOracle, HashConsensus } from "typechain-types";
 
 import { CONSENSUS_VERSION } from "lib/constants";
 
-type Report = AccountingOracle.ReportDataStruct;
+export type OracleReport = AccountingOracle.ReportDataStruct;
 
-type ReportAsArray = ReturnType<typeof getReportDataItems>;
+export type ReportAsArray = ReturnType<typeof getReportDataItems>;
 
-const DEFAULT_REPORT_FIELDS: Report = {
+const DEFAULT_REPORT_FIELDS: OracleReport = {
   consensusVersion: 1n,
   refSlot: 0n,
   numValidators: 0n,
@@ -27,7 +27,7 @@ const DEFAULT_REPORT_FIELDS: Report = {
   extraDataItemsCount: 0n,
 };
 
-function getReportDataItems(r: Report) {
+export function getReportDataItems(r: OracleReport) {
   return [
     r.consensusVersion,
     r.refSlot,
@@ -47,10 +47,10 @@ function getReportDataItems(r: Report) {
   ];
 }
 
-function calcReportDataHash(reportItems: ReportAsArray) {
+export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256,uint256,uint256,uint256,uint256[],uint256[],uint256,uint256,uint256,uint256[],uint256,bool,uint256,bytes32,uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
@@ -62,12 +62,12 @@ export async function prepareOracleReport({
   ...restFields
 }: {
   clBalance: bigint;
-} & Partial<Report>) {
+} & Partial<OracleReport>) {
   const fields = {
     ...DEFAULT_REPORT_FIELDS,
     ...restFields,
     clBalanceGwei: clBalance / 10n ** 9n,
-  } as Report;
+  } as OracleReport;
 
   const items = getReportDataItems(fields);
   const hash = calcReportDataHash(items);
@@ -91,7 +91,7 @@ export async function triggerConsensusOnHash(hash: string, consensus: HashConsen
 export async function reportOracle(
   consensus: HashConsensus,
   oracle: AccountingOracle,
-  reportFields: Partial<Report> & { clBalance: bigint },
+  reportFields: Partial<OracleReport> & { clBalance: bigint },
 ) {
   const { refSlot } = await consensus.getCurrentFrame();
   const report = await prepareOracleReport({ ...reportFields, refSlot });
