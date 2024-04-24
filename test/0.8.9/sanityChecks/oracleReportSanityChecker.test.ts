@@ -181,10 +181,10 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     it(`works for happy path and NegativeRebaseFailed`, async () => {
       const numGenesis = Number(genesisTime);
       const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
-      const timestamp = refSlot * 12 + numGenesis;
+      await accountingOracle.setLastProcessingRefSlot(refSlot);
 
       // Expect to pass through
-      await checker.checkAccountingOracleReport(timestamp, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
+      await checker.checkAccountingOracleReport(0, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
 
@@ -194,16 +194,16 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await checker.setCLStateOracleAndCLBalanceErrorMargin(await zkOracle.getAddress(), 74);
 
       await expect(
-        checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
+        checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
       ).to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLStateReportIsNotReady");
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+      await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
         .to.emit(checker, "NegativeRebaseConfirmed")
         .withArgs(refSlot, 93 * 1e9);
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(timestamp, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+      await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedClBalanceMismatch")
         .withArgs(93 * 1e9, 94 * 1e9);
     });

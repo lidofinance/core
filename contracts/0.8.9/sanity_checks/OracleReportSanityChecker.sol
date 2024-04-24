@@ -39,6 +39,7 @@ interface IWithdrawalQueue {
 interface IBaseOracle {
     function SECONDS_PER_SLOT() external view returns (uint256);
     function GENESIS_TIME() external view returns (uint256);
+    function getLastProcessingRefSlot() external view returns (uint256);
 }
 
 interface ILidoCLStateOracle {
@@ -489,6 +490,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) external {
         LimitsList memory limitsList = _limits.unpack();
 
+        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
+
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
         // 1. Withdrawals vault reported balance
         _checkWithdrawalVaultBalance(withdrawalVault.balance, _withdrawalVaultBalance);
@@ -502,7 +505,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         // 4. Consensus Layer one-off balance decrease
         _checkCLBalanceDecrease(limitsList, _preCLBalance,
-            _postCLBalance + _withdrawalVaultBalance, _timeElapsed);
+            _postCLBalance + _withdrawalVaultBalance, GENESIS_TIME + refSlot * SECONDS_PER_SLOT);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
