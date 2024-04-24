@@ -33,7 +33,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     churnValidatorsPerDayLimit: 55,
     cLBalanceDecreaseBPLimit: 3_20, // 3.2%
     cLBalanceDecreaseHoursSpan: 18 * 24, // 18 days
-    cLBalanceOraclesDiffBPLimit: 74, // 0.74%
+    cLBalanceOraclesErrorMarginBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
