@@ -260,26 +260,68 @@ describe("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    // TODO: fix this and add two more tests for other new limits
-    // it("set one-off CL balance decrease", async () => {
-    //   const previousValue = (await oracleReportSanityChecker.getOracleReportLimits()).oneOffCLBalanceDecreaseBPLimit;
-    //   const newValue = 3;
-    //   expect(newValue).to.not.equal(previousValue);
-    //   await expect(
-    //     oracleReportSanityChecker.connect(deployer).setOneOffCLBalanceDecreaseBPLimit(newValue),
-    //   ).to.be.revertedWithOZAccessControlError(
-    //     deployer.address,
-    //     await oracleReportSanityChecker.ONE_OFF_CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE(),
-    //   );
+    it("set CL balance decrease and hours span limit", async () => {
+      const previousBalance = (await oracleReportSanityChecker.getOracleReportLimits()).cLBalanceDecreaseBPLimit;
+      const previousHoursSpan = (await oracleReportSanityChecker.getOracleReportLimits()).cLBalanceDecreaseHoursSpan;
+      const newBalance = 3;
+      const newHoursSpan = 13 * 24;
+      expect(newBalance).to.not.equal(previousBalance);
+      expect(newHoursSpan).to.not.equal(previousHoursSpan);
+      await expect(
+        oracleReportSanityChecker.connect(deployer).setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan),
+      ).to.be.revertedWithOZAccessControlError(
+        deployer.address,
+        await oracleReportSanityChecker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE(),
+      );
 
-    //   const tx = await oracleReportSanityChecker
-    //     .connect(managersRoster.oneOffCLBalanceDecreaseLimitManagers[0])
-    //     .setOneOffCLBalanceDecreaseBPLimit(newValue);
-    //   expect((await oracleReportSanityChecker.getOracleReportLimits()).oneOffCLBalanceDecreaseBPLimit).to.equal(
-    //     newValue,
-    //   );
-    //   await expect(tx).to.emit(oracleReportSanityChecker, "OneOffCLBalanceDecreaseBPLimitSet").withArgs(newValue);
-    // });
+      const tx = await oracleReportSanityChecker
+        .connect(managersRoster.cLBalanceDecreaseLimitManagers[0])
+        .setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan);
+
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).cLBalanceDecreaseBPLimit).to.equal(newBalance);
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).cLBalanceDecreaseHoursSpan).to.equal(
+        newHoursSpan,
+      );
+      await expect(tx)
+        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseBPLimitSet")
+        .withArgs(newBalance)
+        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseHoursSpanSet")
+        .withArgs(newHoursSpan);
+    });
+
+    it("set CL state oracle and balance error margin limit", async () => {
+      const previousOracle = await oracleReportSanityChecker.getCLStateOracle();
+      const previousErrorMargin = (await oracleReportSanityChecker.getOracleReportLimits())
+        .cLBalanceOraclesErrorMarginBPLimit;
+      const newOracle = deployer.address;
+      const newErrorMargin = 1;
+      expect(newOracle).to.not.equal(previousOracle);
+      expect(newErrorMargin).to.not.equal(previousErrorMargin);
+      await expect(
+        oracleReportSanityChecker.connect(deployer).setCLStateOracleAndCLBalanceErrorMargin(newOracle, newErrorMargin),
+      ).to.be.revertedWithOZAccessControlError(
+        deployer.address,
+        await oracleReportSanityChecker.CL_ORACLES_MANAGER_ROLE(),
+      );
+
+      const oracleManagerRole = await oracleReportSanityChecker.CL_ORACLES_MANAGER_ROLE();
+      const oracleManagerAccount = accounts[21];
+      await oracleReportSanityChecker.connect(admin).grantRole(oracleManagerRole, oracleManagerAccount);
+
+      const tx = await oracleReportSanityChecker
+        .connect(oracleManagerAccount)
+        .setCLStateOracleAndCLBalanceErrorMargin(newOracle, newErrorMargin);
+
+      expect(await oracleReportSanityChecker.getCLStateOracle()).to.equal(newOracle);
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).cLBalanceOraclesErrorMarginBPLimit).to.equal(
+        newErrorMargin,
+      );
+      await expect(tx)
+        .to.emit(oracleReportSanityChecker, "CLBalanceOraclesErrorMarginBPLimitSet")
+        .withArgs(newErrorMargin)
+        .to.emit(oracleReportSanityChecker, "CLStateOracleChanged")
+        .withArgs(newOracle);
+    });
 
     it("set annual balance increase", async () => {
       const previousValue = (await oracleReportSanityChecker.getOracleReportLimits()).annualBalanceIncreaseBPLimit;
