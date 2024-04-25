@@ -24,6 +24,7 @@ import {
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   ExtraDataType,
+  ONE_GWEI,
   packExtraDataList,
   V1_ORACLE_LAST_REPORT_SLOT,
 } from "./accountingOracleDeploy.test";
@@ -34,10 +35,7 @@ import {
   SECONDS_PER_FRAME,
   SECONDS_PER_SLOT,
   SLOTS_PER_FRAME,
-  ZERO_HASH,
 } from "./baseOracle";
-
-const ONE_GWEI = 1_000_000_000n;
 
 describe("AccountingOracle.sol", () => {
   context("Happy path", () => {
@@ -92,22 +90,19 @@ describe("AccountingOracle.sol", () => {
 
     it("initially, consensus report is empty and is not being processed", async () => {
       const report = await oracle.getConsensusReport();
-      expect(report.hash).to.equal(ZERO_HASH);
-      // assert.equal(report.hash, ZERO_HASH)
+      expect(report.hash).to.equal(ZeroHash);
       // see the next test for refSlot
       expect(report.processingDeadlineTime).to.equal(0);
-      // assert.equals(report.processingDeadlineTime, 0)
       expect(report.processingStarted).to.be.false;
-      // assert.isFalse(report.processingStarted)
 
       const frame = await consensus.getCurrentFrame();
       const procState = await oracle.getProcessingState();
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
       expect(procState.processingDeadlineTime).to.equal(0);
-      expect(procState.mainDataHash).to.equal(ZERO_HASH);
+      expect(procState.mainDataHash).to.equal(ZeroHash);
       expect(procState.mainDataSubmitted).to.be.false;
-      expect(procState.extraDataHash).to.equal(ZERO_HASH);
+      expect(procState.extraDataHash).to.equal(ZeroHash);
       expect(procState.extraDataFormat).to.equal(0);
       expect(procState.extraDataSubmitted).to.be.false;
       expect(procState.extraDataItemsCount).to.equal(0);
@@ -363,15 +358,11 @@ describe("AccountingOracle.sol", () => {
     it("Staking router got the stuck keys by node op report", async () => {
       const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
       expect(totalReportCalls).to.equal(3);
-      // assert.equal(totalReportCalls, 3)
 
       const call1 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(0);
       expect(call1.stakingModuleId).to.equal(1);
       expect(call1.nodeOperatorIds).to.equal("0x" + [0].map((i) => hex(i, 8)).join(""));
       expect(call1.keysCounts).to.equal("0x" + [1].map((i) => hex(i, 16)).join(""));
-      // assert.equals(call1.stakingModuleId, 1)
-      // assert.equal(call1.nodeOperatorIds, '0x' + [0].map((i) => hex(i, 8)).join(''))
-      // assert.equal(call1.keysCounts, '0x' + [1].map((i) => hex(i, 16)).join(''))
 
       const call2 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(1);
       expect(call2.stakingModuleId).to.equal(2);
@@ -404,9 +395,9 @@ describe("AccountingOracle.sol", () => {
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
       expect(procState.processingDeadlineTime).to.equal(0);
-      expect(procState.mainDataHash).to.equal(ZERO_HASH);
+      expect(procState.mainDataHash).to.equal(ZeroHash);
       expect(procState.mainDataSubmitted).to.be.false;
-      expect(procState.extraDataHash).to.equal(ZERO_HASH);
+      expect(procState.extraDataHash).to.equal(ZeroHash);
       expect(procState.extraDataFormat).to.equal(0);
       expect(procState.extraDataSubmitted).to.be.false;
       expect(procState.extraDataItemsCount).to.equal(0);
@@ -420,7 +411,7 @@ describe("AccountingOracle.sol", () => {
         ...reportFields,
         refSlot: refSlot,
         extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
-        extraDataHash: ZERO_HASH,
+        extraDataHash: ZeroHash,
         extraDataItemsCount: 0,
       };
       reportItems = getReportDataItems(reportFields);
@@ -467,7 +458,7 @@ describe("AccountingOracle.sol", () => {
       );
       expect(procState.mainDataHash).to.equal(reportHash);
       expect(procState.mainDataSubmitted).to.be.true;
-      expect(procState.extraDataHash).to.equal(ZERO_HASH);
+      expect(procState.extraDataHash).to.equal(ZeroHash);
       expect(procState.extraDataFormat).to.equal(EXTRA_DATA_FORMAT_EMPTY);
       expect(procState.extraDataSubmitted).to.be.true;
       expect(procState.extraDataItemsCount).to.equal(0);

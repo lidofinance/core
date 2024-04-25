@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
@@ -22,7 +23,6 @@ import {
   ONE_GWEI,
   packExtraDataList,
 } from "./accountingOracleDeploy.test";
-import { ZERO_HASH } from "./baseOracle";
 
 describe("AccountingOracle.sol", () => {
   let consensus: HashConsensusTimeTravellable;
@@ -76,7 +76,7 @@ describe("AccountingOracle.sol", () => {
       simulatedShareRate: shareRate(1n),
       isBunkerMode: true,
       extraDataFormat: emptyExtraData ? EXTRA_DATA_FORMAT_EMPTY : EXTRA_DATA_FORMAT_LIST,
-      extraDataHash: emptyExtraData ? ZERO_HASH : extraDataHash,
+      extraDataHash: emptyExtraData ? ZeroHash : extraDataHash,
       extraDataItemsCount: emptyExtraData ? 0 : extraDataItems.length,
     };
     reportItems = getReportDataItems(reportFields);
@@ -127,7 +127,7 @@ describe("AccountingOracle.sol", () => {
       });
     });
 
-    context("submitReportExtraDataList", () => {
+    context("extraDataItems", () => {
       beforeEach(deploy);
 
       it("should revert from not consensus member without SUBMIT_DATA_ROLE role ", async () => {
