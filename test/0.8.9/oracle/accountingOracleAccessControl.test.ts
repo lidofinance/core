@@ -19,11 +19,10 @@ import {
   encodeExtraDataItems,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
+  ONE_GWEI,
   packExtraDataList,
 } from "./accountingOracleDeploy.test";
 import { ZERO_HASH } from "./baseOracle";
-
-const ONE_GWEI = 1_000_000_000n;
 
 describe("AccountingOracle.sol", () => {
   let consensus: HashConsensusTimeTravellable;

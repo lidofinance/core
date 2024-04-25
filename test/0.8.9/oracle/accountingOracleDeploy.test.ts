@@ -21,17 +21,19 @@ import {
   updateLocatorImplementation,
 } from "../../../lib/locator-deploy";
 
-// const { calcAccountingReportDataHash, getAccountingReportDataItems } = require('../../helpers/reportData')
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "./baseOracle";
 import { deployHashConsensus } from "./hashConsensus";
 
 const V1_ORACLE_LAST_COMPLETED_EPOCH = 2 * EPOCHS_PER_FRAME;
+export const V1_ORACLE_LAST_REPORT_SLOT = V1_ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
 
 export const EXTRA_DATA_FORMAT_EMPTY = 0;
 export const EXTRA_DATA_FORMAT_LIST = 1;
 
 export const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
 export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
+
+export const ONE_GWEI = 1_000_000_000n;
 
 function encodeExtraDataItem(
   itemIndex: number,
