@@ -19,18 +19,20 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
-    churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-    cLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
-    annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
-    shareRateDeviationLimitManagers: accounts.slice(8, 10),
-    maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
-    maxAccountingExtraDataListItemsCountManagers: accounts.slice(12, 14),
-    maxNodeOperatorsPerExtraDataItemCountManagers: accounts.slice(14, 16),
-    requestTimestampMarginManagers: accounts.slice(16, 18),
-    maxPositiveTokenRebaseManagers: accounts.slice(18, 20),
+    exitedValidatorsPerDayLimitManagers: accounts.slice(2, 4),
+    appearedValidatorsPerDayLimitManagers: accounts.slice(4, 6),
+    cLBalanceDecreaseLimitManagers: accounts.slice(6, 8),
+    annualBalanceIncreaseLimitManagers: accounts.slice(8, 10),
+    shareRateDeviationLimitManagers: accounts.slice(10, 12),
+    maxValidatorExitRequestsPerReportManagers: accounts.slice(12, 14),
+    maxAccountingExtraDataListItemsCountManagers: accounts.slice(14, 16),
+    maxNodeOperatorsPerExtraDataItemCountManagers: accounts.slice(16, 18),
+    requestTimestampMarginManagers: accounts.slice(18, 20),
+    maxPositiveTokenRebaseManagers: accounts.slice(20, 22),
   };
   const defaultLimitsList = {
-    churnValidatorsPerDayLimit: 55,
+    exitedValidatorsPerDayLimit: 55,
+    appearedValidatorsPerDayLimit: 100,
     cLBalanceDecreaseBPLimit: 3_20, // 3.2%
     cLBalanceDecreaseHoursSpan: 18 * 24, // 18 days
     cLBalanceOraclesErrorMarginBPLimit: 74, // 0.74%
