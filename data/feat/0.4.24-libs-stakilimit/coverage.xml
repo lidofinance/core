@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="1685"  line-rate="0.591"  branches-valid="1260"  branches-covered="818"  branch-rate="0.6492"  timestamp="1714149280537" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="1685"  line-rate="0.591"  branches-valid="1260"  branches-covered="818"  branch-rate="0.6492"  timestamp="1714161651746" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -713,8 +713,8 @@
 			<method name="setStakeLimitPauseState"  hits="78"  signature="()V" >
 				<lines><line number="209"  hits="78" /></lines>
 			</method>
-			<method name="_constGasMin"  hits="119"  signature="()V" >
-				<lines><line number="224"  hits="119" /></lines>
+			<method name="_constGasMin"  hits="124"  signature="()V" >
+				<lines><line number="224"  hits="124" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -752,9 +752,9 @@
 			<line number="200"  hits="3"  branch="false" />
 			<line number="213"  hits="78"  branch="false" />
 			<line number="215"  hits="78"  branch="false" />
-			<line number="225"  hits="119"  branch="false" />
-			<line number="226"  hits="119"  branch="false" />
-			<line number="229"  hits="119"  branch="false" />
+			<line number="225"  hits="124"  branch="false" />
+			<line number="226"  hits="124"  branch="false" />
+			<line number="229"  hits="124"  branch="false" />
 		</lines>
 		</class>
 	</classes>
