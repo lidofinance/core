@@ -55,6 +55,14 @@ contract BaseOracleTimeTravellable is BaseOracle {
         return _time;
     }
 
+    function _originalGetTime() internal virtual view returns (uint256) {
+        return block.timestamp; // solhint-disable-line not-rely-on-time
+    }
+
+    function originalGetTime() external view returns (uint256) {
+        return _originalGetTime();
+    }
+
     function setTime(uint256 newTime) external {
         _time = newTime;
     }
