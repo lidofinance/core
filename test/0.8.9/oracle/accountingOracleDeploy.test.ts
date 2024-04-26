@@ -35,7 +35,7 @@ export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
 
 export const ONE_GWEI = 1_000_000_000n;
 
-function encodeExtraDataItem(
+export function encodeExtraDataItem(
   itemIndex: number,
   itemType: number,
   moduleId: number,
