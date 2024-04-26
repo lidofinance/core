@@ -243,8 +243,8 @@ describe("AccountingOracle.sol", () => {
       expect(lastOracleReportCall.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
       expect(lastOracleReportCall.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
       expect(lastOracleReportCall.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
-      expect(lastOracleReportCall.withdrawalFinalizationBatches.map((x) => Number(x))).to.have.ordered.members(
-        reportFields.withdrawalFinalizationBatches.map((x) => Number(x)),
+      expect(lastOracleReportCall.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
+        reportFields.withdrawalFinalizationBatches.map(Number),
       );
       expect(lastOracleReportCall.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
     });
@@ -261,10 +261,10 @@ describe("AccountingOracle.sol", () => {
     it(`Staking router got the exited keys report`, async () => {
       const lastExitedKeysByModuleCall = await mockStakingRouter.lastCall_updateExitedKeysByModule();
       expect(lastExitedKeysByModuleCall.callCount).to.equal(1);
-      expect(lastExitedKeysByModuleCall.moduleIds.map((x) => Number(x))).to.have.ordered.members(
+      expect(lastExitedKeysByModuleCall.moduleIds.map(Number)).to.have.ordered.members(
         reportFields.stakingModuleIdsWithNewlyExitedValidators,
       );
-      expect(lastExitedKeysByModuleCall.exitedKeysCounts.map((x) => Number(x))).to.have.ordered.members(
+      expect(lastExitedKeysByModuleCall.exitedKeysCounts.map(Number)).to.have.ordered.members(
         reportFields.numExitedValidatorsByStakingModule,
       );
     });
