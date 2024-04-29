@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2019"  line-rate="0.7081999999999999"  branches-valid="1260"  branches-covered="959"  branch-rate="0.7611"  timestamp="1714136060193" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2020"  line-rate="0.7084999999999999"  branches-valid="1260"  branches-covered="959"  branch-rate="0.7611"  timestamp="1714379600147" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3615,7 +3615,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.oracle"  line-rate="0.6579999999999999"  branch-rate="0.609" >
+	<package name="0.8.9.oracle"  line-rate="0.6596"  branch-rate="0.609" >
 	<classes>
 		<class name="AccountingOracle.sol"  filename="contracts/0.8.9/oracle/AccountingOracle.sol"  line-rate="0.9942"  branch-rate="0.9783" >
 		<methods>
@@ -3851,7 +3851,7 @@
 			<line number="881"  hits="195"  branch="false" />
 		</lines>
 		</class>
-		<class name="BaseOracle.sol"  filename="contracts/0.8.9/oracle/BaseOracle.sol"  line-rate="0.9887999999999999"  branch-rate="0.9792000000000001" >
+		<class name="BaseOracle.sol"  filename="contracts/0.8.9/oracle/BaseOracle.sol"  line-rate="1"  branch-rate="0.9792000000000001" >
 		<methods>
 			<method name="constructor"  hits="39"  signature="()V" >
 				<lines><line number="103"  hits="39" /></lines>
@@ -3913,8 +3913,8 @@
 			<method name="_checkSenderIsConsensusContract"  hits="96"  signature="()V" >
 				<lines><line number="390"  hits="96" /></lines>
 			</method>
-			<method name="_getTime"  hits="0"  signature="()V" >
-				<lines><line number="396"  hits="0" /></lines>
+			<method name="_getTime"  hits="1"  signature="()V" >
+				<lines><line number="396"  hits="1" /></lines>
 			</method>
 			<method name="_storageConsensusReport"  hits="474"  signature="()V" >
 				<lines><line number="408"  hits="474" /></lines>
@@ -4007,7 +4007,7 @@
 			<line number="387"  hits="28"  branch="false" />
 			<line number="391"  hits="96"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="392"  hits="3"  branch="false" />
-			<line number="397"  hits="0"  branch="false" />
+			<line number="397"  hits="1"  branch="false" />
 			<line number="409"  hits="474"  branch="false" />
 			<line number="410"  hits="474"  branch="false" />
 		</lines>
