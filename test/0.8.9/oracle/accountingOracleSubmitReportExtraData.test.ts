@@ -590,7 +590,7 @@ describe("AccountingOracle.sol", () => {
       });
     });
 
-    it("reverts if extraData has already been already processed", async () => {
+    it("reverts if extraData has already been processed", async () => {
       await consensus.advanceTimeToNextFrameStart();
       const { reportFields, extraDataItems, extraDataList } = await submitReportHash();
       await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
