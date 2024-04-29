@@ -188,10 +188,10 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       const zkOracle = await ethers.deployContract("ZkOracleMock");
 
-      const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
+      const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
       await checker.grantRole(clOraclesRole, deployer.address);
 
-      await checker.setCLStateOracleAndCLBalanceErrorMargin(await zkOracle.getAddress(), 74);
+      await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(await zkOracle.getAddress(), 74);
 
       await expect(
         checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
@@ -221,15 +221,15 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await expect(checker.setCLBalanceDecreaseBPLimitAndHoursSpan(320, 18 * 24)).to.not.be.reverted;
     });
 
-    it(`CL Oracle related functions require CL_ORACLES_MANAGER_ROLE`, async () => {
-      const clOraclesRole = await checker.CL_ORACLES_MANAGER_ROLE();
+    it(`CL Oracle related functions require SECOND_OPINION_MANAGER_ROLE`, async () => {
+      const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
 
-      await expect(checker.setCLStateOracleAndCLBalanceErrorMargin(ZeroAddress, 74)).to.be.revertedWith(
+      await expect(checker.setSecondOpinionOracleAndCLBalanceUpperMargin(ZeroAddress, 74)).to.be.revertedWith(
         genAccessControlError(deployer.address, clOraclesRole),
       );
 
       await checker.grantRole(clOraclesRole, deployer.address);
-      await expect(checker.setCLStateOracleAndCLBalanceErrorMargin(ZeroAddress, 74)).to.not.be.reverted;
+      await expect(checker.setSecondOpinionOracleAndCLBalanceUpperMargin(ZeroAddress, 74)).to.not.be.reverted;
     });
   });
 });

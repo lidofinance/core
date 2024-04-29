@@ -42,7 +42,7 @@ interface IBaseOracle {
     function getLastProcessingRefSlot() external view returns (uint256);
 }
 
-interface ILidoCLStateOracle {
+interface ISecondOpinionOracle {
     function getReport(uint256 refSlot)
         external
         view
@@ -62,16 +62,16 @@ struct LimitsList {
     /// @notice The max decrease of the total validators' balances on the Consensus Layer on
     ///     a timespan of N hours
     /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 cLBalanceDecreaseBPLimit;
+    uint256 clBalanceDecreaseBPLimit;
 
     /// @notice The timespan of the max decrease of the total validators' balances on the Consensus Layer
     /// @dev Represented in hours
-    uint256 cLBalanceDecreaseHoursSpan;
+    uint256 clBalanceDecreaseHoursSpan;
 
-    /// @notice The maximum divergence between the total balances of validators on the Consensus Layer
-    ///     as reported by the AccountingOracle and the state of the Consensus Layer Oracle.
+    /// @notice The maximum percent on how Second Opinion Oracle reported value could be greater
+    ///     than reported by the AccountingOracle.
     /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 cLBalanceOraclesErrorMarginBPLimit;
+    uint256 clBalanceOraclesErrorUpperBPLimit;
 
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
@@ -106,9 +106,9 @@ struct LimitsList {
 /// @dev The packed version of the LimitsList struct to be effectively persisted in storage
 struct LimitsListPacked {
     uint16 churnValidatorsPerDayLimit;
-    uint16 cLBalanceDecreaseBPLimit;
-    uint16 cLBalanceDecreaseHoursSpan;
-    uint16 cLBalanceOraclesErrorMarginBPLimit;
+    uint16 clBalanceDecreaseBPLimit;
+    uint16 clBalanceDecreaseHoursSpan;
+    uint16 clBalanceOraclesErrorUpperBPLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
     uint16 maxValidatorExitRequestsPerReport;
@@ -118,7 +118,7 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
 }
 
-struct CLRebaseData {
+struct NegativeCLRebaseData {
     uint192 value;
     uint64 timestamp;
 }
@@ -149,11 +149,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE");
     bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE =
         keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE");
-    bytes32 public constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
+    bytes32 public constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE =
+        keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
     bytes32 public constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
         keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
-    bytes32 public constant CL_ORACLES_MANAGER_ROLE =
-        keccak256("CL_ORACLES_MANAGER_ROLE");
+    bytes32 public constant SECOND_OPINION_MANAGER_ROLE =
+        keccak256("SECOND_OPINION_MANAGER_ROLE");
 
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
@@ -163,11 +164,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private immutable GENESIS_TIME;
     uint256 private immutable SECONDS_PER_SLOT;
 
-    address private _clStateOracle;
+    ISecondOpinionOracle public secondOpinionOracle;
     LimitsListPacked private _limits;
 
-    /// @dev The array of the rebase values and the corresponding timestamps
-    CLRebaseData[] private _clNegativeRebases;
+    /// @dev The array of the negative CL rebase values and the corresponding timestamps
+    NegativeCLRebaseData[] private _clNegativeRebases;
 
     struct ManagersRoster {
         address[] allLimitsManagers;
@@ -255,15 +256,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return _limits.maxPositiveTokenRebase;
     }
 
-    /// @notice Returns the address of the negative rebase oracle
-    function getCLStateOracle() public view returns (address) {
-        return _clStateOracle;
-    }
-
     /// @notice Sets the new values for the limits list
     /// @param _limitsList new limits list
-    function setOracleReportLimits(LimitsList memory _limitsList) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
+    /// @param _secondOpinionOracle negative rebase oracle.
+    function setOracleReportLimits(LimitsList calldata _limitsList, ISecondOpinionOracle _secondOpinionOracle) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
         _updateLimits(_limitsList);
+        if (_secondOpinionOracle != secondOpinionOracle) {
+            secondOpinionOracle = _secondOpinionOracle;
+            emit SecondOpinionOracleChanged(_secondOpinionOracle);
+        }
     }
 
     /// @notice Sets the new value for the churnValidatorsPerDayLimit
@@ -286,16 +287,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the cLBalanceDecreaseBPLimit
-    /// @param _cLBalanceDecreaseBPLimit new cLBalanceDecreaseBPLimit value
-    /// @param _cLBalanceDecreaseHoursSpan new cLBalanceDecreaseHoursSpan value
-    function setCLBalanceDecreaseBPLimitAndHoursSpan(uint256 _cLBalanceDecreaseBPLimit, uint256 _cLBalanceDecreaseHoursSpan)
+    /// @notice Sets the new value for the clBalanceDecreaseBPLimit
+    /// @param _clBalanceDecreaseBPLimit new clBalanceDecreaseBPLimit value
+    /// @param _clBalanceDecreaseHoursSpan new clBalanceDecreaseHoursSpan value
+    function setCLBalanceDecreaseBPLimitAndHoursSpan(uint256 _clBalanceDecreaseBPLimit, uint256 _clBalanceDecreaseHoursSpan)
         external
         onlyRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.cLBalanceDecreaseBPLimit = _cLBalanceDecreaseBPLimit;
-        limitsList.cLBalanceDecreaseHoursSpan = _cLBalanceDecreaseHoursSpan;
+        limitsList.clBalanceDecreaseBPLimit = _clBalanceDecreaseBPLimit;
+        limitsList.clBalanceDecreaseHoursSpan = _clBalanceDecreaseHoursSpan;
         _updateLimits(limitsList);
     }
 
@@ -381,21 +382,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the address of the negative rebase oracle
-    /// @param _clStateOracleAddr address of the negative rebase oracle.
+    /// @notice Sets the address of the second opinion oracle
+    /// @param _secondOpinionOracle second opinion oracle.
     ///     If it's zero address — oracle is disabled.
     ///     Default value is zero address.
-    /// @param _cLBalanceOraclesErrorMarginBPLimit new cLBalanceOraclesErrorMarginBPLimit value
-    function setCLStateOracleAndCLBalanceErrorMargin(address _clStateOracleAddr, uint256 _cLBalanceOraclesErrorMarginBPLimit)
+    /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
+    function setSecondOpinionOracleAndCLBalanceUpperMargin(ISecondOpinionOracle _secondOpinionOracle, uint256 _clBalanceOraclesErrorUpperBPLimit)
         external
-        onlyRole(CL_ORACLES_MANAGER_ROLE)
+        onlyRole(SECOND_OPINION_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.cLBalanceOraclesErrorMarginBPLimit = _cLBalanceOraclesErrorMarginBPLimit;
+        limitsList.clBalanceOraclesErrorUpperBPLimit = _clBalanceOraclesErrorUpperBPLimit;
         _updateLimits(limitsList);
-        if (_clStateOracleAddr != _clStateOracle) {
-            _clStateOracle = _clStateOracleAddr;
-            emit CLStateOracleChanged(_clStateOracleAddr);
+        if (_secondOpinionOracle != secondOpinionOracle) {
+            secondOpinionOracle = ISecondOpinionOracle(_secondOpinionOracle);
+            emit SecondOpinionOracleChanged(_secondOpinionOracle);
         }
     }
 
@@ -650,7 +651,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _addNegativeRebase(uint256 _value, uint256 _timestamp) internal {
-        _clNegativeRebases.push(CLRebaseData(SafeCastExt.toUint192(_value), SafeCast.toUint64(_timestamp)));
+        _clNegativeRebases.push(NegativeCLRebaseData(SafeCastExt.toUint192(_value), SafeCast.toUint64(_timestamp)));
     }
 
     function _checkCLBalanceDecrease(
@@ -664,35 +665,36 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         _addNegativeRebase(_preCLBalance - _unifiedPostCLBalance, _reportTimestamp);
 
-        uint256 pastTimestamp = _reportTimestamp - _limitsList.cLBalanceDecreaseHoursSpan * 1 hours;
+        uint256 pastTimestamp = _reportTimestamp - _limitsList.clBalanceDecreaseHoursSpan * 1 hours;
         uint256 rebaseSum = sumNegativeRebasesNotOlderThan(pastTimestamp);
 
         uint256 rebaseSumScaled = MAX_BASIS_POINTS * rebaseSum;
-        uint256 limitMulByStartBalance = _limitsList.cLBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
+        uint256 limitMulByStartBalance = _limitsList.clBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
         if (rebaseSumScaled < limitMulByStartBalance) {
             // If the diff is less than limit we are finishing check
             return;
         }
 
-        address clStateOracle = getCLStateOracle();
+        ISecondOpinionOracle secondOpitionOracle = secondOpinionOracle;
         // If there is no negative rebase oracle, then we don't need to check it's report
-        if (clStateOracle == address(0)) {
+        if (address(secondOpitionOracle) == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
             revert IncorrectCLBalanceDecreaseForSpan(rebaseSumScaled, limitMulByStartBalance,
-                _limitsList.cLBalanceDecreaseHoursSpan);
+                _limitsList.clBalanceDecreaseHoursSpan);
         }
 
         uint256 refSlot = (_reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
 
-        (bool success, uint256 clOracleBalanceGwei,,)
-            = ILidoCLStateOracle(clStateOracle).getReport(refSlot);
+        (bool success, uint256 clOracleBalanceGwei,,) = secondOpitionOracle.getReport(refSlot);
 
         if (success) {
             uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
-            uint256 balanceDiff = (clBalanceWei > _unifiedPostCLBalance) ?
-                clBalanceWei - _unifiedPostCLBalance : _unifiedPostCLBalance - clBalanceWei;
-            if (MAX_BASIS_POINTS * balanceDiff >= _limitsList.cLBalanceOraclesErrorMarginBPLimit * clBalanceWei) {
-                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.cLBalanceOraclesErrorMarginBPLimit);
+            if (clBalanceWei < _unifiedPostCLBalance) {
+                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
+            }
+            uint256 balanceDiff = clBalanceWei - _unifiedPostCLBalance;
+            if (MAX_BASIS_POINTS * balanceDiff > _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
+                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
             emit NegativeRebaseConfirmed(refSlot, clBalanceWei);
         } else {
@@ -818,17 +820,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _checkLimitValue(_newLimitsList.churnValidatorsPerDayLimit, 0, type(uint16).max);
             emit ChurnValidatorsPerDayLimitSet(_newLimitsList.churnValidatorsPerDayLimit);
         }
-        if (_oldLimitsList.cLBalanceDecreaseBPLimit != _newLimitsList.cLBalanceDecreaseBPLimit) {
-            _checkLimitValue(_newLimitsList.cLBalanceDecreaseBPLimit, 0, MAX_BASIS_POINTS);
-            emit CLBalanceDecreaseBPLimitSet(_newLimitsList.cLBalanceDecreaseBPLimit);
+        if (_oldLimitsList.clBalanceDecreaseBPLimit != _newLimitsList.clBalanceDecreaseBPLimit) {
+            _checkLimitValue(_newLimitsList.clBalanceDecreaseBPLimit, 0, MAX_BASIS_POINTS);
+            emit ClBalanceDecreaseBPLimitSet(_newLimitsList.clBalanceDecreaseBPLimit);
         }
-        if (_oldLimitsList.cLBalanceDecreaseHoursSpan != _newLimitsList.cLBalanceDecreaseHoursSpan) {
-            _checkLimitValue(_newLimitsList.cLBalanceDecreaseHoursSpan, 0, type(uint16).max);
-            emit CLBalanceDecreaseHoursSpanSet(_newLimitsList.cLBalanceDecreaseHoursSpan);
+        if (_oldLimitsList.clBalanceDecreaseHoursSpan != _newLimitsList.clBalanceDecreaseHoursSpan) {
+            _checkLimitValue(_newLimitsList.clBalanceDecreaseHoursSpan, 0, type(uint16).max);
+            emit ClBalanceDecreaseHoursSpanSet(_newLimitsList.clBalanceDecreaseHoursSpan);
         }
-        if (_oldLimitsList.cLBalanceOraclesErrorMarginBPLimit != _newLimitsList.cLBalanceOraclesErrorMarginBPLimit) {
-            _checkLimitValue(_newLimitsList.cLBalanceOraclesErrorMarginBPLimit, 0, MAX_BASIS_POINTS);
-            emit CLBalanceOraclesErrorMarginBPLimitSet(_newLimitsList.cLBalanceOraclesErrorMarginBPLimit);
+        if (_oldLimitsList.clBalanceOraclesErrorUpperBPLimit != _newLimitsList.clBalanceOraclesErrorUpperBPLimit) {
+            _checkLimitValue(_newLimitsList.clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
+            emit ClBalanceOraclesErrorUpperBPLimitSet(_newLimitsList.clBalanceOraclesErrorUpperBPLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
@@ -868,10 +870,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     event ChurnValidatorsPerDayLimitSet(uint256 churnValidatorsPerDayLimit);
-    event CLBalanceDecreaseBPLimitSet(uint256 cLBalanceDecreaseBPLimit);
-    event CLBalanceDecreaseHoursSpanSet(uint256 cLBalanceDecreaseHoursSpan);
-    event CLStateOracleChanged(address clStateOracle);
-    event CLBalanceOraclesErrorMarginBPLimitSet(uint256 cLBalanceOraclesErrorMarginBPLimit);
+    event ClBalanceDecreaseBPLimitSet(uint256 clBalanceDecreaseBPLimit);
+    event ClBalanceDecreaseHoursSpanSet(uint256 clBalanceDecreaseHoursSpan);
+    event SecondOpinionOracleChanged(ISecondOpinionOracle secondOpinionOracle);
+    event ClBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
@@ -906,9 +908,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 library LimitsListPacker {
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
         res.churnValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.churnValidatorsPerDayLimit);
-        res.cLBalanceDecreaseBPLimit = _toBasisPoints(_limitsList.cLBalanceDecreaseBPLimit);
-        res.cLBalanceDecreaseHoursSpan = SafeCast.toUint16(_limitsList.cLBalanceDecreaseHoursSpan);
-        res.cLBalanceOraclesErrorMarginBPLimit = _toBasisPoints(_limitsList.cLBalanceOraclesErrorMarginBPLimit);
+        res.clBalanceDecreaseBPLimit = _toBasisPoints(_limitsList.clBalanceDecreaseBPLimit);
+        res.clBalanceDecreaseHoursSpan = SafeCast.toUint16(_limitsList.clBalanceDecreaseHoursSpan);
+        res.clBalanceOraclesErrorUpperBPLimit = _toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCastExt.toUint48(_limitsList.requestTimestampMargin);
@@ -927,9 +929,9 @@ library LimitsListPacker {
 library LimitsListUnpacker {
     function unpack(LimitsListPacked memory _limitsList) internal pure returns (LimitsList memory res) {
         res.churnValidatorsPerDayLimit = _limitsList.churnValidatorsPerDayLimit;
-        res.cLBalanceDecreaseBPLimit = _limitsList.cLBalanceDecreaseBPLimit;
-        res.cLBalanceDecreaseHoursSpan = _limitsList.cLBalanceDecreaseHoursSpan;
-        res.cLBalanceOraclesErrorMarginBPLimit = _limitsList.cLBalanceOraclesErrorMarginBPLimit;
+        res.clBalanceDecreaseBPLimit = _limitsList.clBalanceDecreaseBPLimit;
+        res.clBalanceDecreaseHoursSpan = _limitsList.clBalanceDecreaseHoursSpan;
+        res.clBalanceOraclesErrorUpperBPLimit = _limitsList.clBalanceOraclesErrorUpperBPLimit;
         res.annualBalanceIncreaseBPLimit = _limitsList.annualBalanceIncreaseBPLimit;
         res.simulatedShareRateDeviationBPLimit = _limitsList.simulatedShareRateDeviationBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
