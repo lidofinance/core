@@ -21,7 +21,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   const managersRoster = {
     allLimitsManagers: accounts.slice(0, 2),
     churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-    cLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
+    clBalanceDecreaseLimitManagers: accounts.slice(4, 6),
     annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
     shareRateDeviationLimitManagers: accounts.slice(8, 10),
     maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
@@ -32,9 +32,9 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   };
   const defaultLimitsList = {
     churnValidatorsPerDayLimit: 55,
-    cLBalanceDecreaseBPLimit: 3_20, // 3.2%
-    cLBalanceDecreaseHoursSpan: 18 * 24, // 18 days
-    cLBalanceOraclesErrorMarginBPLimit: 74, // 0.74%
+    clBalanceDecreaseBPLimit: 3_20, // 3.2%
+    clBalanceDecreaseHoursSpan: 18 * 24, // 18 days
+    clBalanceOraclesErrorMarginBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
@@ -204,7 +204,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
       await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedClBalanceMismatch")
+        .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
         .withArgs(93 * 1e9, 94 * 1e9, anyValue);
     });
   });

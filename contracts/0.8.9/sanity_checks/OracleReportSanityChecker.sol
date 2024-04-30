@@ -173,7 +173,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     struct ManagersRoster {
         address[] allLimitsManagers;
         address[] churnValidatorsPerDayLimitManagers;
-        address[] cLBalanceDecreaseLimitManagers;
+        address[] clBalanceDecreaseLimitManagers;
         address[] annualBalanceIncreaseLimitManagers;
         address[] shareRateDeviationLimitManagers;
         address[] maxValidatorExitRequestsPerReportManagers;
@@ -206,7 +206,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _grantRole(ALL_LIMITS_MANAGER_ROLE, _managersRoster.allLimitsManagers);
         _grantRole(CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE, _managersRoster.churnValidatorsPerDayLimitManagers);
         _grantRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE,
-                   _managersRoster.cLBalanceDecreaseLimitManagers);
+                   _managersRoster.clBalanceDecreaseLimitManagers);
         _grantRole(ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE, _managersRoster.annualBalanceIncreaseLimitManagers);
         _grantRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE, _managersRoster.maxPositiveTokenRebaseManagers);
         _grantRole(MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
@@ -690,11 +690,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (success) {
             uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
             if (clBalanceWei < _unifiedPostCLBalance) {
-                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
+                revert NegativeRebaseFailedCLBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
             uint256 balanceDiff = clBalanceWei - _unifiedPostCLBalance;
             if (MAX_BASIS_POINTS * balanceDiff > _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
-                revert NegativeRebaseFailedClBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
+                revert NegativeRebaseFailedCLBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
             emit NegativeRebaseConfirmed(refSlot, clBalanceWei);
         } else {
@@ -822,15 +822,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         if (_oldLimitsList.clBalanceDecreaseBPLimit != _newLimitsList.clBalanceDecreaseBPLimit) {
             _checkLimitValue(_newLimitsList.clBalanceDecreaseBPLimit, 0, MAX_BASIS_POINTS);
-            emit ClBalanceDecreaseBPLimitSet(_newLimitsList.clBalanceDecreaseBPLimit);
+            emit CLBalanceDecreaseBPLimitSet(_newLimitsList.clBalanceDecreaseBPLimit);
         }
         if (_oldLimitsList.clBalanceDecreaseHoursSpan != _newLimitsList.clBalanceDecreaseHoursSpan) {
             _checkLimitValue(_newLimitsList.clBalanceDecreaseHoursSpan, 0, type(uint16).max);
-            emit ClBalanceDecreaseHoursSpanSet(_newLimitsList.clBalanceDecreaseHoursSpan);
+            emit CLBalanceDecreaseHoursSpanSet(_newLimitsList.clBalanceDecreaseHoursSpan);
         }
         if (_oldLimitsList.clBalanceOraclesErrorUpperBPLimit != _newLimitsList.clBalanceOraclesErrorUpperBPLimit) {
             _checkLimitValue(_newLimitsList.clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
-            emit ClBalanceOraclesErrorUpperBPLimitSet(_newLimitsList.clBalanceOraclesErrorUpperBPLimit);
+            emit CLBalanceOraclesErrorUpperBPLimitSet(_newLimitsList.clBalanceOraclesErrorUpperBPLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
@@ -870,10 +870,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     event ChurnValidatorsPerDayLimitSet(uint256 churnValidatorsPerDayLimit);
-    event ClBalanceDecreaseBPLimitSet(uint256 clBalanceDecreaseBPLimit);
-    event ClBalanceDecreaseHoursSpanSet(uint256 clBalanceDecreaseHoursSpan);
-    event SecondOpinionOracleChanged(ISecondOpinionOracle secondOpinionOracle);
-    event ClBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
+    event CLBalanceDecreaseBPLimitSet(uint256 clBalanceDecreaseBPLimit);
+    event CLBalanceDecreaseHoursSpanSet(uint256 clBalanceDecreaseHoursSpan);
+    event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
+    event CLBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
@@ -881,7 +881,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
     event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event NegativeRebaseConfirmed(uint256 refSlot, uint256 clBalanceGwei);
+    event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceGwei);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
@@ -901,7 +901,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AdminCannotBeZero();
 
     error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
-    error NegativeRebaseFailedClBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
+    error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
     error NegativeRebaseFailedCLStateReportIsNotReady();
 }
 

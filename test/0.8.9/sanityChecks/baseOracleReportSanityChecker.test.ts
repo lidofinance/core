@@ -285,9 +285,9 @@ describe("OracleReportSanityChecker.sol", () => {
         newHoursSpan,
       );
       await expect(tx)
-        .to.emit(oracleReportSanityChecker, "ClBalanceDecreaseBPLimitSet")
+        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseBPLimitSet")
         .withArgs(newBalance)
-        .to.emit(oracleReportSanityChecker, "ClBalanceDecreaseHoursSpanSet")
+        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseHoursSpanSet")
         .withArgs(newHoursSpan);
     });
 
@@ -321,7 +321,7 @@ describe("OracleReportSanityChecker.sol", () => {
         newErrorMargin,
       );
       await expect(tx)
-        .to.emit(oracleReportSanityChecker, "ClBalanceOraclesErrorUpperBPLimitSet")
+        .to.emit(oracleReportSanityChecker, "CLBalanceOraclesErrorUpperBPLimitSet")
         .withArgs(newErrorMargin)
         .to.emit(oracleReportSanityChecker, "SecondOpinionOracleChanged")
         .withArgs(newOracle);
