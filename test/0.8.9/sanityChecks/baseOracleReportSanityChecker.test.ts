@@ -270,7 +270,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(newBalance).to.not.equal(previousBalance);
       expect(newHoursSpan).to.not.equal(previousHoursSpan);
       await expect(
-        oracleReportSanityChecker.connect(deployer).setClBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan),
+        oracleReportSanityChecker.connect(deployer).setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan),
       ).to.be.revertedWithOZAccessControlError(
         deployer.address,
         await oracleReportSanityChecker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE(),
@@ -278,7 +278,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       const tx = await oracleReportSanityChecker
         .connect(managersRoster.cLBalanceDecreaseLimitManagers[0])
-        .setClBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan);
+        .setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan);
 
       expect((await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseBPLimit).to.equal(newBalance);
       expect((await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseHoursSpan).to.equal(
@@ -323,7 +323,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(tx)
         .to.emit(oracleReportSanityChecker, "ClBalanceOraclesErrorUpperBPLimitSet")
         .withArgs(newErrorMargin)
-        .to.emit(oracleReportSanityChecker, "CLStateOracleChanged")
+        .to.emit(oracleReportSanityChecker, "SecondOpinionOracleChanged")
         .withArgs(newOracle);
     });
 
@@ -482,7 +482,7 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleReportSanityChecker.checkSimulatedShareRate(
           ...(Object.values({
             ...correctSimulatedShareRate,
-            simulatedShareRate: simulatedShareRate.toString(),
+            simulatedShareRate: simulatedShareRate,
           }) as CheckSimulatedShareRateParameters),
         ),
       )
@@ -1113,7 +1113,7 @@ describe("OracleReportSanityChecker.sol", () => {
     beforeEach(async () => {
       await oracleReportSanityChecker
         .connect(managersRoster.allLimitsManagers[0])
-        .setOracleReportLimits(defaultLimitsList);
+        .setOracleReportLimits(defaultLimitsList, ZeroAddress);
     });
 
     it("checkExitBusOracleReport works", async () => {
@@ -1170,7 +1170,7 @@ describe("OracleReportSanityChecker.sol", () => {
     beforeEach(async () => {
       await oracleReportSanityChecker
         .connect(managersRoster.allLimitsManagers[0])
-        .setOracleReportLimits(defaultLimitsList);
+        .setOracleReportLimits(defaultLimitsList, ZeroAddress);
     });
 
     it("set maxNodeOperatorsPerExtraDataItemCount", async () => {
@@ -1244,7 +1244,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, clBalanceDecreaseBPLimit: INVALID_BASIS_POINTS }),
+          .setOracleReportLimits({ ...defaultLimitsList, clBalanceDecreaseBPLimit: INVALID_BASIS_POINTS }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
@@ -1252,7 +1252,10 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, annualBalanceIncreaseBPLimit: INVALID_BASIS_POINTS }),
+          .setOracleReportLimits(
+            { ...defaultLimitsList, annualBalanceIncreaseBPLimit: INVALID_BASIS_POINTS },
+            ZeroAddress,
+          ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
@@ -1260,7 +1263,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, simulatedShareRateDeviationBPLimit: 10001 }),
+          .setOracleReportLimits({ ...defaultLimitsList, simulatedShareRateDeviationBPLimit: 10001 }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
@@ -1273,7 +1276,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, churnValidatorsPerDayLimit: INVALID_VALUE }),
+          .setOracleReportLimits({ ...defaultLimitsList, churnValidatorsPerDayLimit: INVALID_VALUE }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
@@ -1281,7 +1284,10 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, maxValidatorExitRequestsPerReport: INVALID_VALUE }),
+          .setOracleReportLimits(
+            { ...defaultLimitsList, maxValidatorExitRequestsPerReport: INVALID_VALUE },
+            ZeroAddress,
+          ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
@@ -1289,7 +1295,10 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, maxAccountingExtraDataListItemsCount: INVALID_VALUE }),
+          .setOracleReportLimits(
+            { ...defaultLimitsList, maxAccountingExtraDataListItemsCount: INVALID_VALUE },
+            ZeroAddress,
+          ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
@@ -1297,7 +1306,10 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, maxNodeOperatorsPerExtraDataItemCount: INVALID_VALUE }),
+          .setOracleReportLimits(
+            { ...defaultLimitsList, maxNodeOperatorsPerExtraDataItemCount: INVALID_VALUE },
+            ZeroAddress,
+          ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
@@ -1311,7 +1323,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, requestTimestampMargin: INVALID_VALUE }),
+          .setOracleReportLimits({ ...defaultLimitsList, requestTimestampMargin: INVALID_VALUE }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE.toString(), 0, MAX_UINT_48);
@@ -1319,7 +1331,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, maxPositiveTokenRebase: INVALID_VALUE }),
+          .setOracleReportLimits({ ...defaultLimitsList, maxPositiveTokenRebase: INVALID_VALUE }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE.toString(), 1, MAX_UINT_64);
