@@ -199,7 +199,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
       await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
-        .to.emit(checker, "NegativeRebaseConfirmed")
+        .to.emit(checker, "NegativeCLRebaseConfirmed")
         .withArgs(refSlot, 93 * 1e9);
 
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });

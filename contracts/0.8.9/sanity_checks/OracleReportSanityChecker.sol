@@ -696,7 +696,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (MAX_BASIS_POINTS * balanceDiff > _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
                 revert NegativeRebaseFailedCLBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
-            emit NegativeRebaseConfirmed(refSlot, clBalanceWei);
+            emit NegativeCLRebaseConfirmed(refSlot, clBalanceWei);
         } else {
             revert NegativeRebaseFailedCLStateReportIsNotReady();
         }
@@ -881,7 +881,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
     event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceGwei);
+    event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceWei);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
