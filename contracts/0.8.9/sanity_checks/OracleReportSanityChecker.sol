@@ -506,7 +506,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         // 4. Consensus Layer one-off balance decrease
         _checkCLBalanceDecrease(limitsList, _preCLBalance,
-            _postCLBalance + _withdrawalVaultBalance, GENESIS_TIME + refSlot * SECONDS_PER_SLOT);
+            _postCLBalance + _withdrawalVaultBalance, refSlot);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -569,10 +569,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Applies sanity checks to the withdrawal requests finalization
     /// @param _lastFinalizableRequestId last finalizable withdrawal request id
-    /// @param _reportTimestamp timestamp when the originated oracle report was submitted
+    /// @param reportTimestamp timestamp when the originated oracle report was submitted
     function checkWithdrawalQueueOracleReport(
         uint256 _lastFinalizableRequestId,
-        uint256 _reportTimestamp
+        uint256 reportTimestamp
     )
         external
         view
@@ -580,7 +580,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory limitsList = _limits.unpack();
         address withdrawalQueue = LIDO_LOCATOR.withdrawalQueue();
 
-        _checkLastFinalizableId(limitsList, withdrawalQueue, _lastFinalizableRequestId, _reportTimestamp);
+        _checkLastFinalizableId(limitsList, withdrawalQueue, _lastFinalizableRequestId, reportTimestamp);
     }
 
     /// @notice Applies sanity checks to the simulated share rate for withdrawal requests finalization
@@ -658,19 +658,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _unifiedPostCLBalance,
-        uint256 _reportTimestamp
+        uint256 _refSlot
     ) internal {
-        // If the balance is not decreased, we don't need to check anyting here
+        // If the CL balance is not decreased, we don't need to check anyting here
         if (_preCLBalance <= _unifiedPostCLBalance) return;
 
-        _addNegativeRebase(_preCLBalance - _unifiedPostCLBalance, _reportTimestamp);
+        uint256 reportTimestamp = GENESIS_TIME + _refSlot * SECONDS_PER_SLOT;
+        _addNegativeRebase(_preCLBalance - _unifiedPostCLBalance, reportTimestamp);
 
-        uint256 pastTimestamp = _reportTimestamp - _limitsList.clBalanceDecreaseHoursSpan * 1 hours;
-        uint256 rebaseSum = sumNegativeRebasesNotOlderThan(pastTimestamp);
+        uint256 pastTimestamp = reportTimestamp - _limitsList.clBalanceDecreaseHoursSpan * 1 hours;
+        uint256 negativeCLRebaseSum = sumNegativeRebasesNotOlderThan(pastTimestamp);
 
-        uint256 rebaseSumScaled = MAX_BASIS_POINTS * rebaseSum;
-        uint256 limitMulByStartBalance = _limitsList.clBalanceDecreaseBPLimit * (_unifiedPostCLBalance + rebaseSum);
-        if (rebaseSumScaled < limitMulByStartBalance) {
+        uint256 negativeCLRebaseSumScaled = MAX_BASIS_POINTS * negativeCLRebaseSum;
+        uint256 limitMulByStartBalance = _limitsList.clBalanceDecreaseBPLimit * (_unifiedPostCLBalance + negativeCLRebaseSum);
+        if (negativeCLRebaseSumScaled < limitMulByStartBalance) {
             // If the diff is less than limit we are finishing check
             return;
         }
@@ -679,13 +680,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If there is no negative rebase oracle, then we don't need to check it's report
         if (address(secondOpitionOracle) == address(0)) {
             // If there is no oracle and the diff is more than limit, we revert
-            revert IncorrectCLBalanceDecreaseForSpan(rebaseSumScaled, limitMulByStartBalance,
+            revert IncorrectCLBalanceDecreaseForSpan(negativeCLRebaseSumScaled, limitMulByStartBalance,
                 _limitsList.clBalanceDecreaseHoursSpan);
         }
 
-        uint256 refSlot = (_reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-
-        (bool success, uint256 clOracleBalanceGwei,,) = secondOpitionOracle.getReport(refSlot);
+        (bool success, uint256 clOracleBalanceGwei,,) = secondOpitionOracle.getReport(_refSlot);
 
         if (success) {
             uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
@@ -696,7 +695,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (MAX_BASIS_POINTS * balanceDiff > _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
                 revert NegativeRebaseFailedCLBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
-            emit NegativeCLRebaseConfirmed(refSlot, clBalanceWei);
+            emit NegativeCLRebaseConfirmed(_refSlot, clBalanceWei);
         } else {
             revert NegativeRebaseFailedCLStateReportIsNotReady();
         }
@@ -748,14 +747,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory _limitsList,
         address _withdrawalQueue,
         uint256 _lastFinalizableId,
-        uint256 _reportTimestamp
+        uint256 reportTimestamp
     ) internal view {
         uint256[] memory requestIds = new uint256[](1);
         requestIds[0] = _lastFinalizableId;
 
         IWithdrawalQueue.WithdrawalRequestStatus[] memory statuses = IWithdrawalQueue(_withdrawalQueue)
             .getWithdrawalStatus(requestIds);
-        if (_reportTimestamp < statuses[0].timestamp + _limitsList.requestTimestampMargin)
+        if (reportTimestamp < statuses[0].timestamp + _limitsList.requestTimestampMargin)
             revert IncorrectRequestFinalization(statuses[0].timestamp);
     }
 
