@@ -609,7 +609,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
-    /// @notice Returns the sum of the negative rebase values not older than the provided timestamp
+    /// @notice Returns the sum of the negative CL rebase values not older than the provided timestamp
     /// @param _timestamp the timestamp to check the rebase values
     /// @return rebaseValuesSum the sum of the negative rebase values not older than the provided timestamp
     function sumNegativeRebasesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
@@ -900,7 +900,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
 
-    error IncorrectCLBalanceDecreaseForSpan(uint256 rebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
+    error IncorrectCLBalanceDecreaseForSpan(uint256 negativeCLRebaseSumBP, uint256 limitMulByStartBalance, uint256 hoursSpan);
     error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
     error NegativeRebaseFailedCLStateReportIsNotReady();
 }
