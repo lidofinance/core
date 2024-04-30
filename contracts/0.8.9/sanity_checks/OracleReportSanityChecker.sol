@@ -695,7 +695,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             if (MAX_BASIS_POINTS * balanceDiff > _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
                 revert NegativeRebaseFailedCLBalanceMismatch(_unifiedPostCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
             }
-            emit NegativeCLRebaseConfirmed(_refSlot, clBalanceWei);
+            emit NegativeCLRebaseConfirmed(_refSlot, _unifiedPostCLBalance);
         } else {
             revert NegativeRebaseFailedCLStateReportIsNotReady();
         }
