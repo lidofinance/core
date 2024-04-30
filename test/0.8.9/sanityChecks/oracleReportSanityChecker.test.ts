@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { artifacts, ethers } from "hardhat";
 
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -126,6 +126,41 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
 
       return checker;
     }
+
+    it("has compact packed limits representation", async () => {
+      const artifact = await artifacts.readArtifact("OracleReportSanityCheckerWrapper");
+
+      const functionABI = artifact.abi.find(
+        (entry) => entry.type === "function" && entry.name === "exposePackedLimits",
+      );
+
+      const sizeOfCalc = (x: string) => {
+        switch (x) {
+          case "uint256":
+            return 256;
+          case "uint64":
+            return 64;
+          case "uint48":
+            return 48;
+          case "uint16":
+            return 16;
+          default:
+            expect.fail(`Unknown type ${x}`);
+        }
+      };
+
+      const structSizeInBits = functionABI.outputs[0].components
+        .map((x: { type: string }) => x.type)
+        .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
+      expect(structSizeInBits).to.lessThanOrEqual(256);
+
+      // Same check but through the gas usage
+      const checker = await newChecker();
+      const tx = await checker.packAndStore();
+      const receipt = await tx.wait();
+      expect(receipt).to.exist;
+      expect(receipt!.gasUsed).to.equal(51660);
+    });
 
     it(`works for happy path`, async () => {
       const checker = await newChecker();

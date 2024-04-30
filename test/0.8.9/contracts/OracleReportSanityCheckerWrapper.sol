@@ -3,9 +3,12 @@
 // NB: for testing purposes only
 pragma solidity 0.8.9;
 
-import { OracleReportSanityChecker, LimitsList } from "../../../contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
+import { OracleReportSanityChecker, LimitsList, LimitsListPacked, LimitsListPacker } from "../../../contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
+    using LimitsListPacker for LimitsList;
+
+    LimitsListPacked private _limitsListPacked;
 
     constructor(
         address _lidoLocator,
@@ -23,4 +26,11 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         _addNegativeRebase(rebaseValue, refSlot);
     }
 
+    function exposePackedLimits() public view returns (LimitsListPacked memory) {
+        return _limitsListPacked;
+    }
+
+    function packAndStore() public {
+        _limitsListPacked = getOracleReportLimits().pack();
+    }
 }
