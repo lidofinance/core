@@ -34,7 +34,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     churnValidatorsPerDayLimit: 55,
     clBalanceDecreaseBPLimit: 3_20, // 3.2%
     clBalanceDecreaseHoursSpan: 18 * 24, // 18 days
-    clBalanceOraclesErrorMarginBPLimit: 74, // 0.74%
+    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
@@ -100,33 +100,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       log("genesisTime", genesisTime);
     });
 
-    // it(`zk oracle can be changed or removed`, async () => {
-    //   const timestamp = 100 * 12 + Number(genesisTime);
-    //   expect(await checker.getNegativeRebaseOracle()).to.be.equal(await multiprover.getAddress());
-
-    //   await expect(
-    //     checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10),
-    //   ).to.be.revertedWithCustomError(multiprover, "NoConsensus");
-
-    //   await checker.setNegativeRebaseOracle(ZeroAddress);
-    //   expect(await checker.getNegativeRebaseOracle()).to.be.equal(ZeroAddress);
-
-    //   await expect(checker.checkAccountingOracleReport(timestamp, 96, 95, 0, 0, 0, 10, 10)).not.to.be.reverted;
-    // });
-  });
-
-  context("OracleReportSanityChecker rebase slots logic", () => {
-    async function newChecker() {
-      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
-        await locator.getAddress(),
-        deployer.address,
-        Object.values(defaultLimitsList),
-        Object.values(managersRoster),
-      ]);
-
-      return checker;
-    }
-
     it("has compact packed limits representation", async () => {
       const artifact = await artifacts.readArtifact("OracleReportSanityCheckerWrapper");
 
@@ -154,6 +127,35 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
       expect(structSizeInBits).to.lessThanOrEqual(256);
     });
+
+    it(`second opinion can be changed or removed`, async () => {
+      expect(await checker.secondOpinionOracle()).to.be.equal(ZeroAddress);
+
+      const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
+      await checker.grantRole(clOraclesRole, deployer.address);
+
+      await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(deployer.address, 74);
+      expect(await checker.secondOpinionOracle()).to.be.equal(deployer.address);
+
+      const allLimitsRole = await checker.ALL_LIMITS_MANAGER_ROLE();
+      await checker.grantRole(allLimitsRole, deployer.address);
+
+      await checker.setOracleReportLimits(defaultLimitsList, ZeroAddress);
+      expect(await checker.secondOpinionOracle()).to.be.equal(ZeroAddress);
+    });
+  });
+
+  context("OracleReportSanityChecker rebase slots logic", () => {
+    async function newChecker() {
+      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+        await locator.getAddress(),
+        deployer.address,
+        Object.values(defaultLimitsList),
+        Object.values(managersRoster),
+      ]);
+
+      return checker;
+    }
 
     it(`works for happy path`, async () => {
       const checker = await newChecker();
