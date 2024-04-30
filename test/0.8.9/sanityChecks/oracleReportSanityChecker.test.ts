@@ -206,7 +206,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         .withArgs(10000 * 4, 320 * 100, 18 * 24);
     });
 
-    it(`works for happy path and NegativeRebaseFailed`, async () => {
+    it(`works for happy path and report is not ready`, async () => {
       const numGenesis = Number(genesisTime);
       const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
       await accountingOracle.setLastProcessingRefSlot(refSlot);
@@ -229,11 +229,39 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
         .withArgs(refSlot, 93 * 1e9);
+    });
 
-      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 94, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+    it(`works reports close together`, async () => {
+      const numGenesis = Number(genesisTime);
+      const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
+      await accountingOracle.setLastProcessingRefSlot(refSlot);
+
+      const zkOracle = await ethers.deployContract("ZkOracleMock");
+
+      const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
+      await checker.grantRole(clOraclesRole, deployer.address);
+
+      // 10000 BP - 100%
+      // 74 BP - 0.74%
+      await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(await zkOracle.getAddress(), 74);
+
+      // Second opinion balance is way bigger than general Oracle's (~1%)
+      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
+      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 99 * 1e9, 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
-        .withArgs(93 * 1e9, 94 * 1e9, anyValue);
+        .withArgs(99 * 1e9, 100 * 1e9, anyValue);
+
+      // Second opinion balance is almost equal general Oracle's (<0.74%) - should pass
+      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
+      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 99.4 * 1e9, 0, 0, 0, 10, 10))
+        .to.emit(checker, "NegativeCLRebaseConfirmed")
+        .withArgs(refSlot, 99.4 * 1e9);
+
+      // Second opinion balance is slightly less than general Oracle's (0.01%) - should fail
+      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
+      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 100.01 * 1e9, 0, 0, 0, 10, 10))
+        .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
+        .withArgs(100.01 * 1e9, 100 * 1e9, anyValue);
     });
   });
 
