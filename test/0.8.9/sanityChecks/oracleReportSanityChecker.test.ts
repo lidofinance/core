@@ -153,13 +153,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         .map((x: { type: string }) => x.type)
         .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
       expect(structSizeInBits).to.lessThanOrEqual(256);
-
-      // Same check but through the gas usage
-      const checker = await newChecker();
-      const tx = await checker.packAndStore();
-      const receipt = await tx.wait();
-      expect(receipt).to.exist;
-      expect(receipt!.gasUsed).to.equal(51660);
     });
 
     it(`works for happy path`, async () => {
