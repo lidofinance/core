@@ -5,7 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { BurnerStub, LidoLocatorMock, LidoStub, OracleReportSanityChecker, WithdrawalQueueStub } from "typechain-types";
+import {
+  BurnerStub,
+  LidoLocatorMock,
+  LidoStub,
+  OracleReportSanityChecker,
+  StakingRouterMockForValidatorsCount,
+  WithdrawalQueueStub,
+} from "typechain-types";
 
 import { ether, getCurrentBlockTimestamp, randomAddress, Snapshot } from "lib";
 
@@ -48,6 +55,7 @@ describe("OracleReportSanityChecker.sol", () => {
   let admin: HardhatEthersSigner;
   let withdrawalVault: string;
   let elRewardsVault: HardhatEthersSigner;
+  let stakingRouter: StakingRouterMockForValidatorsCount;
   let accounts: HardhatEthersSigner[];
 
   before(async () => {
@@ -61,6 +69,7 @@ describe("OracleReportSanityChecker.sol", () => {
     withdrawalQueueMock = await ethers.deployContract("WithdrawalQueueStub");
     burnerMock = await ethers.deployContract("BurnerStub");
     const accountingOracle = await ethers.deployContract("AccountingOracleMock", [deployer.address, 12, 1606824023]);
+    stakingRouter = await ethers.deployContract("StakingRouterMockForValidatorsCount");
 
     lidoLocatorMock = await ethers.deployContract("LidoLocatorMock", [
       {
@@ -72,7 +81,7 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleReportSanityChecker: deployer.address,
         burner: await burnerMock.getAddress(),
         validatorsExitBusOracle: deployer.address,
-        stakingRouter: deployer.address,
+        stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: await withdrawalQueueMock.getAddress(),
         withdrawalVault: withdrawalVault,
@@ -248,7 +257,7 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleReportSanityChecker.checkAccountingOracleReport(
           ...(Object.values({
             ...correctLidoOracleReport,
-            postCLBalance: postCLBalance.toString(),
+            postCLBalance: postCLBalance,
           }) as CheckAccountingOracleReportParameters),
         ),
       )
