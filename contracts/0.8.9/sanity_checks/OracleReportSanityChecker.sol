@@ -513,7 +513,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _postCLValidators
     ) external {
         LimitsList memory limitsList = _limits.unpack();
-
         uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
@@ -723,7 +722,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If the CL balance is not decreased, we don't need to check anyting here
         if (_preCLBalance <= _unifiedPostCLBalance) return;
 
-        uint256 negativeCLRebaseSum = sumNegativeRebasesNotOlderThan(reportTimestamp - 18 days) * 1 gwei;
+        uint256 negativeCLRebaseSum = sumNegativeRebasesNotOlderThan(reportTimestamp - 18 days);
 
         uint256 maxCLRebaseNegativeSum =
             1 ether * (_postCLValidators - exitedValidatorsAtTimestamp(reportTimestamp - 18 days)) +

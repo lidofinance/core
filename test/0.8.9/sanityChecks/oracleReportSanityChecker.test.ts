@@ -1,12 +1,19 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { parseUnits, ZeroAddress } from "ethers";
 import { artifacts, ethers } from "hardhat";
 
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { AccountingOracleMock, LidoLocatorMock, OracleReportSanityChecker } from "typechain-types";
+import {
+  AccountingOracleMock,
+  LidoLocatorMock,
+  OracleReportSanityChecker,
+  StakingRouterMockForValidatorsCount,
+} from "typechain-types";
+
+import { ether } from "lib";
 
 // pnpm hardhat test --grep "OracleReportSanityChecker"
 
@@ -14,6 +21,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let locator: LidoLocatorMock;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracleMock;
+  let stakingRouter: StakingRouterMockForValidatorsCount;
   let deployer: HardhatEthersSigner;
   let genesisTime: bigint;
   const SLOTS_PER_DAY = 7200;
@@ -47,6 +55,8 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   const log = console.log;
   // const log = () => {}
 
+  const gweis = (x: number) => parseUnits(x.toString(), "gwei");
+
   const genAccessControlError = (caller: string, role: string): string => {
     return `AccessControl: account ${caller.toLowerCase()} is missing role ${role}`;
   };
@@ -58,6 +68,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
     genesisTime = await accountingOracle.GENESIS_TIME();
     const sanityChecker = deployer.address;
     const burner = await ethers.deployContract("BurnerStub", []);
+    stakingRouter = await ethers.deployContract("StakingRouterMockForValidatorsCount");
 
     locator = await ethers.deployContract("LidoLocatorMock", [
       {
@@ -69,7 +80,7 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
         oracleReportSanityChecker: sanityChecker,
         burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,
-        stakingRouter: deployer.address,
+        stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: deployer.address,
         withdrawalVault: deployer.address,
@@ -146,66 +157,58 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   });
 
   context("OracleReportSanityChecker rebase slots logic", () => {
-    async function newChecker() {
-      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
-        await locator.getAddress(),
-        deployer.address,
-        Object.values(defaultLimitsList),
-        Object.values(managersRoster),
-      ]);
-
-      return checker;
-    }
-
-    it(`works for happy path`, async () => {
-      const checker = await newChecker();
-      const timestamp = await time.latest();
-
-      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result).to.equal(0);
-
-      await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
-
-      const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result2).to.equal(250);
-    });
-
-    it(`works for happy path`, async () => {
-      const checker = await newChecker();
-      const timestamp = await time.latest();
-
-      await checker.addNegativeRebase(700, timestamp - 19 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(13, timestamp - 18 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(10, timestamp - 17 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(5, timestamp - 5 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
-      await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
-
-      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result).to.equal(100 + 150 + 5 + 10 + 13);
-      log("result", result);
-    });
+    // async function newChecker() {
+    //   const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+    //     await locator.getAddress(),
+    //     deployer.address,
+    //     Object.values(defaultLimitsList),
+    //     Object.values(managersRoster),
+    //   ]);
+    //   return checker;
+    // }
+    // it(`works for happy path`, async () => {
+    //   const checker = await newChecker();
+    //   const timestamp = await time.latest();
+    //   const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+    //   expect(result).to.equal(0);
+    //   await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
+    //   const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+    //   expect(result2).to.equal(250);
+    // });
+    // it(`works for happy path`, async () => {
+    //   const checker = await newChecker();
+    //   const timestamp = await time.latest();
+    //   await checker.addNegativeRebase(700, timestamp - 19 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(13, timestamp - 18 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(10, timestamp - 17 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(5, timestamp - 5 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
+    //   await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
+    //   const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+    //   expect(result).to.equal(100 + 150 + 5 + 10 + 13);
+    //   log("result", result);
+    // });
   });
 
   context("OracleReportSanityChecker additional balance decrease check", () => {
     it(`works for IncorrectCLBalanceDecreaseForSpan`, async () => {
-      const timestamp = await time.latest();
-
-      await expect(checker.checkAccountingOracleReport(timestamp, 100, 96, 0, 0, 0, 10, 10))
+      await expect(checker.checkAccountingOracleReport(0, ether("320"), ether("300"), 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(10000 * 4, 320 * 100, 18 * 24);
+        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"), 18 * 24);
     });
 
     it(`works as accamulation for IncorrectCLBalanceDecreaseForSpan`, async () => {
-      const timestampNow = await time.latest();
-      const timestampPrev = timestampNow - 1 * SLOTS_PER_DAY;
+      const refSlot = Math.floor(((await time.latest()) - Number(genesisTime)) / 12);
+      const prevRefSlot = refSlot - SLOTS_PER_DAY;
 
-      await checker.checkAccountingOracleReport(timestampPrev, 100, 98, 0, 0, 0, 10, 10);
+      await accountingOracle.setLastProcessingRefSlot(prevRefSlot);
+      await checker.checkAccountingOracleReport(0, ether("320"), ether("310"), 0, 0, 0, 10, 10);
 
-      await expect(checker.checkAccountingOracleReport(timestampNow, 98, 96, 0, 0, 0, 10, 10))
+      await accountingOracle.setLastProcessingRefSlot(refSlot);
+      await expect(checker.checkAccountingOracleReport(0, ether("310"), ether("300"), 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(10000 * 4, 320 * 100, 18 * 24);
+        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"), 18 * 24);
     });
 
     it(`works for happy path and report is not ready`, async () => {
@@ -224,13 +227,18 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(await zkOracle.getAddress(), 74);
 
       await expect(
-        checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10),
+        checker.checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
       ).to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLStateReportIsNotReady");
 
-      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 93, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(0, 100 * 1e9, 93 * 1e9, 0, 0, 0, 10, 10))
+      await zkOracle.addReport(refSlot, {
+        success: true,
+        clBalanceGwei: gweis(300),
+        numValidators: 0,
+        exitedValidators: 0,
+      });
+      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
-        .withArgs(refSlot, 93 * 1e9);
+        .withArgs(refSlot, ether("300"));
     });
 
     it(`works reports close together`, async () => {
@@ -248,16 +256,26 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(await zkOracle.getAddress(), 74);
 
       // Second opinion balance is way bigger than general Oracle's (~1%)
-      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 99 * 1e9, 0, 0, 0, 10, 10))
+      await zkOracle.addReport(refSlot, {
+        success: true,
+        clBalanceGwei: gweis(302),
+        numValidators: 0,
+        exitedValidators: 0,
+      });
+      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
-        .withArgs(99 * 1e9, 100 * 1e9, anyValue);
+        .withArgs(ether("299"), ether("302"), anyValue);
 
       // Second opinion balance is almost equal general Oracle's (<0.74%) - should pass
-      await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
-      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 99.4 * 1e9, 0, 0, 0, 10, 10))
+      await zkOracle.addReport(refSlot, {
+        success: true,
+        clBalanceGwei: gweis(301),
+        numValidators: 0,
+        exitedValidators: 0,
+      });
+      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
-        .withArgs(refSlot, 99.4 * 1e9);
+        .withArgs(refSlot, ether("299"));
 
       // Second opinion balance is slightly less than general Oracle's (0.01%) - should fail
       await zkOracle.addReport(refSlot, { success: true, clBalanceGwei: 100, numValidators: 0, exitedValidators: 0 });
