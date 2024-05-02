@@ -144,38 +144,39 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   context("OracleReportSanityChecker rebase slots logic", () => {
-    // async function newChecker() {
-    //   const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
-    //     await locator.getAddress(),
-    //     deployer.address,
-    //     Object.values(defaultLimitsList),
-    //     Object.values(managersRoster),
-    //   ]);
-    //   return checker;
-    // }
-    // it(`works for happy path`, async () => {
-    //   const checker = await newChecker();
-    //   const timestamp = await time.latest();
-    //   const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-    //   expect(result).to.equal(0);
-    //   await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
-    //   const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-    //   expect(result2).to.equal(250);
-    // });
-    // it(`works for happy path`, async () => {
-    //   const checker = await newChecker();
-    //   const timestamp = await time.latest();
-    //   await checker.addNegativeRebase(700, timestamp - 19 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(13, timestamp - 18 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(10, timestamp - 17 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(5, timestamp - 5 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(150, timestamp - 2 * SLOTS_PER_DAY);
-    //   await checker.addNegativeRebase(100, timestamp - 1 * SLOTS_PER_DAY);
-    //   const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-    //   expect(result).to.equal(100 + 150 + 5 + 10 + 13);
-    //   log("result", result);
-    // });
+    async function newChecker() {
+      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+        await locator.getAddress(),
+        deployer.address,
+        Object.values(defaultLimitsList),
+      ]);
+      return checker;
+    }
+
+    it(`sums negative rebases for a few days`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result).to.equal(0);
+      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 10, 100);
+      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 10, 150);
+      const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result2).to.equal(250);
+    });
+
+    it(`sums negative rebases for 18 days`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 0, 700);
+      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 0, 13);
+      await checker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 0, 10);
+      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 0, 5);
+      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 0, 150);
+      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 0, 100);
+      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
+      expect(result).to.equal(100 + 150 + 5 + 10 + 13);
+      log("result", result);
+    });
   });
 
   context("OracleReportSanityChecker additional balance decrease check", () => {
