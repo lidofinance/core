@@ -193,28 +193,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @dev The address of the second opinion oracle
     ISecondOpinionOracle public secondOpinionOracle;
 
-    struct ManagersRoster {
-        address[] allLimitsManagers;
-        address[] churnValidatorsPerDayLimitManagers;
-        address[] clBalanceDecreaseLimitManagers;
-        address[] annualBalanceIncreaseLimitManagers;
-        address[] shareRateDeviationLimitManagers;
-        address[] maxValidatorExitRequestsPerReportManagers;
-        address[] maxAccountingExtraDataListItemsCountManagers;
-        address[] maxNodeOperatorsPerExtraDataItemCountManagers;
-        address[] requestTimestampMarginManagers;
-        address[] maxPositiveTokenRebaseManagers;
-    }
-
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
-    /// @param _managersRoster list of the address to grant permissions for granular limits management
     constructor(
         address _lidoLocator,
         address _admin,
-        LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster
+        LimitsList memory _limitsList
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
@@ -226,20 +211,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(_limitsList);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(ALL_LIMITS_MANAGER_ROLE, _managersRoster.allLimitsManagers);
-        _grantRole(CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE, _managersRoster.churnValidatorsPerDayLimitManagers);
-        _grantRole(CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE,
-                   _managersRoster.clBalanceDecreaseLimitManagers);
-        _grantRole(ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE, _managersRoster.annualBalanceIncreaseLimitManagers);
-        _grantRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE, _managersRoster.maxPositiveTokenRebaseManagers);
-        _grantRole(MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
-                   _managersRoster.maxValidatorExitRequestsPerReportManagers);
-        _grantRole(MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE,
-                   _managersRoster.maxAccountingExtraDataListItemsCountManagers);
-        _grantRole(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE,
-                   _managersRoster.maxNodeOperatorsPerExtraDataItemCountManagers);
-        _grantRole(SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE, _managersRoster.shareRateDeviationLimitManagers);
-        _grantRole(REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE, _managersRoster.requestTimestampMarginManagers);
     }
 
     /// @notice returns the address of the LidoLocator

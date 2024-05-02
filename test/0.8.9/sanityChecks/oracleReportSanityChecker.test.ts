@@ -17,7 +17,7 @@ import { ether } from "lib";
 
 // pnpm hardhat test --grep "OracleReportSanityChecker"
 
-describe("OracleReportSanityChecker.sol", (...accounts) => {
+describe("OracleReportSanityChecker.sol", () => {
   let locator: LidoLocatorMock;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracleMock;
@@ -26,18 +26,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
   let genesisTime: bigint;
   const SLOTS_PER_DAY = 7200;
 
-  const managersRoster = {
-    allLimitsManagers: accounts.slice(0, 2),
-    churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-    clBalanceDecreaseLimitManagers: accounts.slice(4, 6),
-    annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
-    shareRateDeviationLimitManagers: accounts.slice(8, 10),
-    maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
-    maxAccountingExtraDataListItemsCountManagers: accounts.slice(12, 14),
-    maxNodeOperatorsPerExtraDataItemCountManagers: accounts.slice(14, 16),
-    requestTimestampMarginManagers: accounts.slice(16, 18),
-    maxPositiveTokenRebaseManagers: accounts.slice(18, 20),
-  };
   const defaultLimitsList = {
     churnValidatorsPerDayLimit: 55,
     clBalanceDecreaseBPLimit: 3_20, // 3.2%
@@ -93,7 +81,6 @@ describe("OracleReportSanityChecker.sol", (...accounts) => {
       await locator.getAddress(),
       deployer.address,
       Object.values(defaultLimitsList),
-      Object.values(managersRoster),
     ]);
   });
 

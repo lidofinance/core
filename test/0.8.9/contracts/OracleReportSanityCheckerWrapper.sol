@@ -13,13 +13,11 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
     constructor(
         address _lidoLocator,
         address _admin,
-        LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster
+        LimitsList memory _limitsList
     ) OracleReportSanityChecker(
         _lidoLocator,
         _admin,
-        _limitsList,
-        _managersRoster
+        _limitsList
     ) {}
 
     function addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) public {
