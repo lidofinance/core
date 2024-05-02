@@ -176,7 +176,7 @@ describe("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    it(`exited validators count`, async () => {
+    it(`returns exited validators count`, async () => {
       const checker = await newChecker();
       const timestamp = await time.latest();
       await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
@@ -188,8 +188,27 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(await checker.exitedValidatorsAtTimestamp(timestamp - 19 * SLOTS_PER_DAY)).to.equal(10);
       expect(await checker.exitedValidatorsAtTimestamp(timestamp - 18 * SLOTS_PER_DAY)).to.equal(11);
       expect(await checker.exitedValidatorsAtTimestamp(timestamp - 1 * SLOTS_PER_DAY)).to.equal(15);
+    });
+
+    it(`returns exited validators count for missed or non-existent report`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
+      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
+      await checker.addReportData(timestamp - 15 * SLOTS_PER_DAY, 12, 100);
+      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
+      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
+      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
       // Out of range: day -20
       expect(await checker.exitedValidatorsAtTimestamp(timestamp - 20 * SLOTS_PER_DAY)).to.equal(0);
+      // Missed report: day -6
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 6 * SLOTS_PER_DAY)).to.equal(12);
+      // Missed report: day -7
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 7 * SLOTS_PER_DAY)).to.equal(12);
+      // Expected report: day 15
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 15 * SLOTS_PER_DAY)).to.equal(12);
+      // Missed report: day -16
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 16 * SLOTS_PER_DAY)).to.equal(11);
     });
   });
 
