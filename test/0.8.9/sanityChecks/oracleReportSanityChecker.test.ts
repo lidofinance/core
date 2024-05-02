@@ -143,7 +143,7 @@ describe("OracleReportSanityChecker.sol", () => {
     });
   });
 
-  context("OracleReportSanityChecker rebase slots logic", () => {
+  context("OracleReportSanityChecker rebase report data", () => {
     async function newChecker() {
       const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
@@ -156,12 +156,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it(`sums negative rebases for a few days`, async () => {
       const checker = await newChecker();
       const timestamp = await time.latest();
-      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result).to.equal(0);
+      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(0);
       await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 10, 100);
       await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 10, 150);
-      const result2 = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result2).to.equal(250);
+      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(250);
     });
 
     it(`sums negative rebases for 18 days`, async () => {
@@ -173,9 +171,25 @@ describe("OracleReportSanityChecker.sol", () => {
       await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 0, 5);
       await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 0, 150);
       await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 0, 100);
-      const result = await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY);
-      expect(result).to.equal(100 + 150 + 5 + 10 + 13);
-      log("result", result);
+      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(
+        100 + 150 + 5 + 10 + 13,
+      );
+    });
+
+    it(`exited validators count`, async () => {
+      const checker = await newChecker();
+      const timestamp = await time.latest();
+      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
+      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
+      await checker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 12, 100);
+      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
+      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
+      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 19 * SLOTS_PER_DAY)).to.equal(10);
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 18 * SLOTS_PER_DAY)).to.equal(11);
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 1 * SLOTS_PER_DAY)).to.equal(15);
+      // Out of range: day -20
+      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 20 * SLOTS_PER_DAY)).to.equal(0);
     });
   });
 
