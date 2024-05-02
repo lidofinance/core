@@ -621,14 +621,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _timestamp the timestamp to get the exited validators count
     /// @return exited validators count
     function exitedValidatorsAtTimestamp(uint256 _timestamp) public view returns (uint256) {
-        uint256 count = 0;
         for (int256 index = int256(_reportData.length) - 1; index >= 0; index--) {
             if (_reportData[uint256(index)].timestamp <= SafeCast.toUint64(_timestamp)) {
-                count = _reportData[uint256(index)].exitedValidatorsCount;
-                break;
+                return _reportData[uint256(index)].exitedValidatorsCount;
             }
         }
-        return count;
+        return 0;
     }
 
     function _checkWithdrawalVaultBalance(
