@@ -33,13 +33,12 @@ describe("AccountingOracle.sol", () => {
   let extraDataList: string;
 
   let admin: HardhatEthersSigner;
-  let account1: HardhatEthersSigner;
-  let account2: HardhatEthersSigner;
-  let member1: HardhatEthersSigner;
+  let account: HardhatEthersSigner;
+  let member: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   before(async () => {
-    [admin, account1, account2, member1, stranger] = await ethers.getSigners();
+    [admin, account, member, stranger] = await ethers.getSigners();
   });
 
   const deploy = async ({ emptyExtraData = false } = {}) => {
@@ -80,8 +79,8 @@ describe("AccountingOracle.sol", () => {
     };
     reportItems = getReportDataItems(reportFields);
     const reportHash = calcReportDataHash(reportItems);
-    await deployed.consensus.connect(admin).addMember(member1, 1);
-    await deployed.consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    await deployed.consensus.connect(admin).addMember(member, 1);
+    await deployed.consensus.connect(member).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -110,23 +109,23 @@ describe("AccountingOracle.sol", () => {
 
       it("should allow calling from a possessor of SUBMIT_DATA_ROLE role", async () => {
         const submitDataRole = await oracle.SUBMIT_DATA_ROLE();
-        await oracle.grantRole(submitDataRole, account2);
+        await oracle.grantRole(submitDataRole, account);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        const tx = await oracle.connect(account2).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
       });
 
       it("should allow calling from a member", async () => {
-        const tx = await oracle.connect(member1).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
       });
     });
 
     context("extraDataItems", () => {
       it("should revert from not consensus member without SUBMIT_DATA_ROLE role ", async () => {
-        await expect(oracle.connect(account1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
+        await expect(oracle.connect(account).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
           oracle,
           "SenderNotAllowed",
         );
@@ -134,12 +133,12 @@ describe("AccountingOracle.sol", () => {
 
       it("should allow calling from a possessor of SUBMIT_DATA_ROLE role", async () => {
         const submitDataRole = await oracle.SUBMIT_DATA_ROLE();
-        await oracle.grantRole(submitDataRole, account2);
+        await oracle.grantRole(submitDataRole, account);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(account2).submitReportData(reportFields, CONSENSUS_VERSION);
-        const tx = await oracle.connect(account2).submitReportExtraDataList(extraDataList);
+        await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(account).submitReportExtraDataList(extraDataList);
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
       });
@@ -148,8 +147,8 @@ describe("AccountingOracle.sol", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(member1).submitReportData(reportFields, CONSENSUS_VERSION);
-        const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
+        await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(member).submitReportExtraDataList(extraDataList);
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
       });
@@ -159,7 +158,7 @@ describe("AccountingOracle.sol", () => {
       beforeEach(() => deploy({ emptyExtraData: true }));
 
       it("should revert from not consensus member without SUBMIT_DATA_ROLE role ", async () => {
-        await expect(oracle.connect(account1).submitReportExtraDataEmpty()).to.be.revertedWithCustomError(
+        await expect(oracle.connect(account).submitReportExtraDataEmpty()).to.be.revertedWithCustomError(
           oracle,
           "SenderNotAllowed",
         );
@@ -167,12 +166,12 @@ describe("AccountingOracle.sol", () => {
 
       it("should allow calling from a possessor of SUBMIT_DATA_ROLE role", async () => {
         const submitDataRole = await oracle.SUBMIT_DATA_ROLE();
-        await oracle.grantRole(submitDataRole, account2);
+        await oracle.grantRole(submitDataRole, account);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(account2).submitReportData(reportFields, CONSENSUS_VERSION);
-        const tx = await oracle.connect(account2).submitReportExtraDataEmpty();
+        await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(account).submitReportExtraDataEmpty();
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
       });
@@ -181,8 +180,8 @@ describe("AccountingOracle.sol", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(member1).submitReportData(reportFields, CONSENSUS_VERSION);
-        const tx = await oracle.connect(member1).submitReportExtraDataEmpty();
+        await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(member).submitReportExtraDataEmpty();
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
       });
