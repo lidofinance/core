@@ -14,12 +14,9 @@ import {
   MockWithdrawalQueueForAccountingOracle,
 } from "typechain-types";
 
-import { hex, Snapshot } from "lib";
+import { numberToHex, Snapshot } from "lib";
 
-import {
-  deployLocatorWithDummyAddressesImplementation,
-  updateLocatorImplementation,
-} from "../../../lib/locator-deploy";
+import { deployLocatorWithDummyAddressesImplementation, updateLocatorImplementation } from "../../../lib";
 
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "./baseOracle";
 import { deployHashConsensus } from "./hashConsensus";
@@ -42,10 +39,10 @@ export function encodeExtraDataItem(
   nodeOperatorIds: number[],
   keysCounts: number[],
 ) {
-  const itemHeader = hex(itemIndex, 3) + hex(itemType, 2);
-  const payloadHeader = hex(moduleId, 3) + hex(nodeOperatorIds.length, 8);
-  const operatorIdsPayload = nodeOperatorIds.map((id) => hex(id, 8)).join("");
-  const keysCountsPayload = keysCounts.map((count) => hex(count, 16)).join("");
+  const itemHeader = numberToHex(itemIndex, 3) + numberToHex(itemType, 2);
+  const payloadHeader = numberToHex(moduleId, 3) + numberToHex(nodeOperatorIds.length, 8);
+  const operatorIdsPayload = nodeOperatorIds.map((id) => numberToHex(id, 8)).join("");
+  const keysCountsPayload = keysCounts.map((count) => numberToHex(count, 16)).join("");
   return "0x" + itemHeader + payloadHeader + operatorIdsPayload + keysCountsPayload;
 }
 

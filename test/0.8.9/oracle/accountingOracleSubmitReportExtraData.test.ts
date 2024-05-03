@@ -12,7 +12,7 @@ import {
   OracleReportSanityChecker,
 } from "typechain-types";
 
-import { calcReportDataHash, ether, getReportDataItems, hex, OracleReport, shareRate, Snapshot } from "lib";
+import { calcReportDataHash, ether, getReportDataItems, numberToHex, OracleReport, shareRate, Snapshot } from "lib";
 import { CONSENSUS_VERSION } from "lib";
 
 import {
@@ -555,8 +555,8 @@ describe("AccountingOracle.sol", () => {
           const call = await stakingRouter.calls_reportStuckKeysByNodeOperator(i);
           const item = extraData.stuckKeys[i];
           expect(call.stakingModuleId).to.be.equal(item.moduleId);
-          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => hex(id, 8)).join(""));
-          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => hex(count, 16)).join(""));
+          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
+          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
         }
       });
 
@@ -574,8 +574,8 @@ describe("AccountingOracle.sol", () => {
           const call = await stakingRouter.calls_reportExitedKeysByNodeOperator(i);
           const item = extraData.exitedKeys[i];
           expect(call.stakingModuleId).to.be.equal(item.moduleId);
-          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => hex(id, 8)).join(""));
-          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => hex(count, 16)).join(""));
+          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
+          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
         }
       });
 

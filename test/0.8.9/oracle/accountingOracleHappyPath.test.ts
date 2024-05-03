@@ -14,7 +14,15 @@ import {
   MockWithdrawalQueueForAccountingOracle,
 } from "typechain-types";
 
-import { calcReportDataHash, ether, getReportDataItems, hex, OracleReport, ReportAsArray, shareRate } from "lib";
+import {
+  calcReportDataHash,
+  ether,
+  getReportDataItems,
+  numberToHex,
+  OracleReport,
+  ReportAsArray,
+  shareRate,
+} from "lib";
 import { CONSENSUS_VERSION } from "lib";
 
 import {
@@ -346,13 +354,13 @@ describe("AccountingOracle.sol", () => {
 
       const call1 = await mockStakingRouter.calls_reportExitedKeysByNodeOperator(0);
       expect(call1.stakingModuleId).to.equal(2);
-      expect(call1.nodeOperatorIds).to.equal("0x" + [1, 2].map((i) => hex(i, 8)).join(""));
-      expect(call1.keysCounts).to.equal("0x" + [1, 3].map((i) => hex(i, 16)).join(""));
+      expect(call1.nodeOperatorIds).to.equal("0x" + [1, 2].map((i) => numberToHex(i, 8)).join(""));
+      expect(call1.keysCounts).to.equal("0x" + [1, 3].map((i) => numberToHex(i, 16)).join(""));
 
       const call2 = await mockStakingRouter.calls_reportExitedKeysByNodeOperator(1);
       expect(call2.stakingModuleId).to.equal(3);
-      expect(call2.nodeOperatorIds).to.equal("0x" + [1].map((i) => hex(i, 8)).join(""));
-      expect(call2.keysCounts).to.equal("0x" + [2].map((i) => hex(i, 16)).join(""));
+      expect(call2.nodeOperatorIds).to.equal("0x" + [1].map((i) => numberToHex(i, 8)).join(""));
+      expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
     });
 
     it("Staking router got the stuck keys by node op report", async () => {
@@ -361,18 +369,18 @@ describe("AccountingOracle.sol", () => {
 
       const call1 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(0);
       expect(call1.stakingModuleId).to.equal(1);
-      expect(call1.nodeOperatorIds).to.equal("0x" + [0].map((i) => hex(i, 8)).join(""));
-      expect(call1.keysCounts).to.equal("0x" + [1].map((i) => hex(i, 16)).join(""));
+      expect(call1.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
+      expect(call1.keysCounts).to.equal("0x" + [1].map((i) => numberToHex(i, 16)).join(""));
 
       const call2 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(1);
       expect(call2.stakingModuleId).to.equal(2);
-      expect(call2.nodeOperatorIds).to.equal("0x" + [0].map((i) => hex(i, 8)).join(""));
-      expect(call2.keysCounts).to.equal("0x" + [2].map((i) => hex(i, 16)).join(""));
+      expect(call2.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
+      expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
 
       const call3 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(2);
       expect(call3.stakingModuleId).to.equal(3);
-      expect(call3.nodeOperatorIds).to.equal("0x" + [2].map((i) => hex(i, 8)).join(""));
-      expect(call3.keysCounts).to.equal("0x" + [3].map((i) => hex(i, 16)).join(""));
+      expect(call3.nodeOperatorIds).to.equal("0x" + [2].map((i) => numberToHex(i, 8)).join(""));
+      expect(call3.keysCounts).to.equal("0x" + [3].map((i) => numberToHex(i, 16)).join(""));
     });
 
     it("Staking router was told that stuck and exited keys updating is finished", async () => {
