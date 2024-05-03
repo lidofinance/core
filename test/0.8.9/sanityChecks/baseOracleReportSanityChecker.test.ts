@@ -28,9 +28,6 @@ describe("OracleReportSanityChecker.sol", () => {
 
   const defaultLimitsList = {
     churnValidatorsPerDayLimit: 55,
-    clBalanceDecreaseBPLimit: 3_20, // 3.2%
-    clBalanceDecreaseHoursSpan: 18 * 24, // 18 days
-    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
@@ -38,6 +35,9 @@ describe("OracleReportSanityChecker.sol", () => {
     maxNodeOperatorsPerExtraDataItemCount: 16,
     requestTimestampMargin: 128,
     maxPositiveTokenRebase: 5_000_000, // 0.05%
+    initialSlashingCoefPWei: 1000,
+    penaltiesCoefPWei: 101,
+    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
   };
 
   const correctLidoOracleReport = {
@@ -92,7 +92,7 @@ describe("OracleReportSanityChecker.sol", () => {
     managersRoster = {
       allLimitsManagers: accounts.slice(0, 2),
       churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-      cLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
+      initialSlashingAndPenaltiesManagers: accounts.slice(4, 6),
       annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
       shareRateDeviationLimitManagers: accounts.slice(8, 10),
       maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
@@ -132,9 +132,6 @@ describe("OracleReportSanityChecker.sol", () => {
     it("sets limits correctly", async () => {
       const newLimitsList = {
         churnValidatorsPerDayLimit: 50,
-        clBalanceDecreaseBPLimit: 10_00,
-        clBalanceDecreaseHoursSpan: 10 * 24,
-        clBalanceOraclesErrorUpperBPLimit: 12,
         annualBalanceIncreaseBPLimit: 15_00,
         simulatedShareRateDeviationBPLimit: 1_50, // 1.5%
         maxValidatorExitRequestsPerReport: 3000,
@@ -142,15 +139,16 @@ describe("OracleReportSanityChecker.sol", () => {
         maxNodeOperatorsPerExtraDataItemCount: 16 + 1,
         requestTimestampMargin: 2048,
         maxPositiveTokenRebase: 10_000_000,
+        initialSlashingCoefPWei: 2000,
+        penaltiesCoefPWei: 303,
+        clBalanceOraclesErrorUpperBPLimit: 12,
       };
       const limitsBefore = await oracleReportSanityChecker.getOracleReportLimits();
       expect(limitsBefore.churnValidatorsPerDayLimit).to.not.equal(newLimitsList.churnValidatorsPerDayLimit);
-      expect(limitsBefore.clBalanceDecreaseBPLimit).to.not.equal(newLimitsList.clBalanceDecreaseBPLimit);
       expect(limitsBefore.annualBalanceIncreaseBPLimit).to.not.equal(newLimitsList.annualBalanceIncreaseBPLimit);
       expect(limitsBefore.simulatedShareRateDeviationBPLimit).to.not.equal(
         newLimitsList.simulatedShareRateDeviationBPLimit,
       );
-
       expect(limitsBefore.maxValidatorExitRequestsPerReport).to.not.equal(
         newLimitsList.maxValidatorExitRequestsPerReport,
       );
@@ -162,6 +160,11 @@ describe("OracleReportSanityChecker.sol", () => {
       );
       expect(limitsBefore.requestTimestampMargin).to.not.equal(newLimitsList.requestTimestampMargin);
       expect(limitsBefore.maxPositiveTokenRebase).to.not.equal(newLimitsList.maxPositiveTokenRebase);
+      expect(limitsBefore.clBalanceOraclesErrorUpperBPLimit).to.not.equal(
+        newLimitsList.clBalanceOraclesErrorUpperBPLimit,
+      );
+      expect(limitsBefore.initialSlashingCoefPWei).to.not.equal(newLimitsList.initialSlashingCoefPWei);
+      expect(limitsBefore.penaltiesCoefPWei).to.not.equal(newLimitsList.penaltiesCoefPWei);
 
       await expect(
         oracleReportSanityChecker.setOracleReportLimits(newLimitsList, ZeroAddress),
@@ -179,7 +182,6 @@ describe("OracleReportSanityChecker.sol", () => {
 
       const limitsAfter = await oracleReportSanityChecker.getOracleReportLimits();
       expect(limitsAfter.churnValidatorsPerDayLimit).to.equal(newLimitsList.churnValidatorsPerDayLimit);
-      expect(limitsAfter.clBalanceDecreaseBPLimit).to.equal(newLimitsList.clBalanceDecreaseBPLimit);
       expect(limitsAfter.annualBalanceIncreaseBPLimit).to.equal(newLimitsList.annualBalanceIncreaseBPLimit);
       expect(limitsAfter.simulatedShareRateDeviationBPLimit).to.equal(newLimitsList.simulatedShareRateDeviationBPLimit);
       expect(limitsAfter.maxValidatorExitRequestsPerReport).to.equal(newLimitsList.maxValidatorExitRequestsPerReport);
@@ -191,6 +193,9 @@ describe("OracleReportSanityChecker.sol", () => {
       );
       expect(limitsAfter.requestTimestampMargin).to.equal(newLimitsList.requestTimestampMargin);
       expect(limitsAfter.maxPositiveTokenRebase).to.equal(newLimitsList.maxPositiveTokenRebase);
+      expect(limitsAfter.clBalanceOraclesErrorUpperBPLimit).to.equal(newLimitsList.clBalanceOraclesErrorUpperBPLimit);
+      expect(limitsAfter.initialSlashingCoefPWei).to.equal(newLimitsList.initialSlashingCoefPWei);
+      expect(limitsAfter.penaltiesCoefPWei).to.equal(newLimitsList.penaltiesCoefPWei);
     });
   });
 
@@ -275,39 +280,40 @@ describe("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    it("set CL balance decrease and hours span limit", async () => {
-      const previousBalance = (await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseBPLimit;
-      const previousHoursSpan = (await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseHoursSpan;
-      const newBalance = 3;
-      const newHoursSpan = 13 * 24;
-      expect(newBalance).to.not.equal(previousBalance);
-      expect(newHoursSpan).to.not.equal(previousHoursSpan);
+    it("set initial slashing and penalties coef", async () => {
+      const oldInitialSlashing = (await oracleReportSanityChecker.getOracleReportLimits()).initialSlashingCoefPWei;
+      const oldPenalties = (await oracleReportSanityChecker.getOracleReportLimits()).penaltiesCoefPWei;
+      const newInitialSlashing = 2000;
+      const newPenalties = 202;
+      expect(newInitialSlashing).to.not.equal(oldInitialSlashing);
+      expect(newPenalties).to.not.equal(oldPenalties);
       await expect(
-        oracleReportSanityChecker.connect(deployer).setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan),
+        oracleReportSanityChecker
+          .connect(deployer)
+          .setInitialSlashingAndPenaltiesCoef(newInitialSlashing, newPenalties),
       ).to.be.revertedWithOZAccessControlError(
         deployer.address,
-        await oracleReportSanityChecker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE(),
+        await oracleReportSanityChecker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE(),
       );
 
       await oracleReportSanityChecker
         .connect(admin)
         .grantRole(
-          await oracleReportSanityChecker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE(),
-          managersRoster.cLBalanceDecreaseLimitManagers[0],
+          await oracleReportSanityChecker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE(),
+          managersRoster.initialSlashingAndPenaltiesManagers[0],
         );
       const tx = await oracleReportSanityChecker
-        .connect(managersRoster.cLBalanceDecreaseLimitManagers[0])
-        .setCLBalanceDecreaseBPLimitAndHoursSpan(newBalance, newHoursSpan);
-
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseBPLimit).to.equal(newBalance);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).clBalanceDecreaseHoursSpan).to.equal(
-        newHoursSpan,
-      );
+        .connect(managersRoster.initialSlashingAndPenaltiesManagers[0])
+        .setInitialSlashingAndPenaltiesCoef(newInitialSlashing, newPenalties);
       await expect(tx)
-        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseBPLimitSet")
-        .withArgs(newBalance)
-        .to.emit(oracleReportSanityChecker, "CLBalanceDecreaseHoursSpanSet")
-        .withArgs(newHoursSpan);
+        .to.emit(oracleReportSanityChecker, "InitialSlashingCoefSet")
+        .withArgs(newInitialSlashing)
+        .to.emit(oracleReportSanityChecker, "PenaltiesCoefSet")
+        .withArgs(newPenalties);
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).initialSlashingCoefPWei).to.equal(
+        newInitialSlashing,
+      );
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).penaltiesCoefPWei).to.equal(newPenalties);
     });
 
     it("set CL state oracle and balance error margin limit", async () => {
@@ -1365,13 +1371,6 @@ describe("OracleReportSanityChecker.sol", () => {
       await oracleReportSanityChecker
         .connect(admin)
         .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-      await expect(
-        oracleReportSanityChecker
-          .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, clBalanceDecreaseBPLimit: INVALID_BASIS_POINTS }, ZeroAddress),
-      )
-        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-        .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
 
       await expect(
         oracleReportSanityChecker
@@ -1437,6 +1436,22 @@ describe("OracleReportSanityChecker.sol", () => {
             { ...defaultLimitsList, maxNodeOperatorsPerExtraDataItemCount: INVALID_VALUE },
             ZeroAddress,
           ),
+      )
+        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
+        .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
+
+      await expect(
+        oracleReportSanityChecker
+          .connect(managersRoster.allLimitsManagers[0])
+          .setOracleReportLimits({ ...defaultLimitsList, initialSlashingCoefPWei: INVALID_VALUE }, ZeroAddress),
+      )
+        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
+        .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
+
+      await expect(
+        oracleReportSanityChecker
+          .connect(managersRoster.allLimitsManagers[0])
+          .setOracleReportLimits({ ...defaultLimitsList, penaltiesCoefPWei: INVALID_VALUE }, ZeroAddress),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);

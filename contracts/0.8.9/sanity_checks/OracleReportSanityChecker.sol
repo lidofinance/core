@@ -146,6 +146,7 @@ struct ReportData {
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
+uint256 constant ONE_PWEI = 1e15;
 
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
@@ -691,10 +692,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_preCLBalance <= _unifiedPostCLBalance) return;
 
         uint256 negativeCLRebaseSum = sumNegativeRebasesNotOlderThan(reportTimestamp - 18 days);
-
         uint256 maxCLRebaseNegativeSum =
-            1e15 * _limits.initialSlashingCoefPWei * (_postCLValidators - exitedValidatorsAtTimestamp(reportTimestamp - 18 days)) +
-            1e15 * _limits.penaltiesCoefPWei * (_postCLValidators - exitedValidatorsAtTimestamp(reportTimestamp - 54 days));
+            _limits.initialSlashingCoefPWei * ONE_PWEI * (_postCLValidators - exitedValidatorsAtTimestamp(reportTimestamp - 18 days)) +
+            _limits.penaltiesCoefPWei * ONE_PWEI * (_postCLValidators - exitedValidatorsAtTimestamp(reportTimestamp - 54 days));
 
         if (negativeCLRebaseSum < maxCLRebaseNegativeSum) {
             // If the diff is less than limit we are finishing check
@@ -880,7 +880,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         if (_oldLimitsList.initialSlashingCoefPWei != _newLimitsList.initialSlashingCoefPWei) {
             _checkLimitValue(_newLimitsList.initialSlashingCoefPWei, 0, type(uint16).max);
-            emit InitialSlashingSet(_newLimitsList.initialSlashingCoefPWei);
+            emit InitialSlashingCoefSet(_newLimitsList.initialSlashingCoefPWei);
         }
         if (_oldLimitsList.penaltiesCoefPWei != _newLimitsList.penaltiesCoefPWei) {
             _checkLimitValue(_newLimitsList.penaltiesCoefPWei, 0, type(uint16).max);
@@ -904,7 +904,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
     event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event InitialSlashingSet(uint256 initialSlashingCoefPWei);
+    event InitialSlashingCoefSet(uint256 initialSlashingCoefPWei);
     event PenaltiesCoefSet(uint256 penaltiesCoefPWei);
     event CLBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
     event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceWei);

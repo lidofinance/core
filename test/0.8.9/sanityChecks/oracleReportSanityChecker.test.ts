@@ -28,9 +28,6 @@ describe("OracleReportSanityChecker.sol", () => {
 
   const defaultLimitsList = {
     churnValidatorsPerDayLimit: 55,
-    clBalanceDecreaseBPLimit: 3_20, // 3.2%
-    clBalanceDecreaseHoursSpan: 18 * 24, // 18 days
-    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
     maxValidatorExitRequestsPerReport: 2000,
@@ -38,6 +35,9 @@ describe("OracleReportSanityChecker.sol", () => {
     maxNodeOperatorsPerExtraDataItemCount: 16,
     requestTimestampMargin: 128,
     maxPositiveTokenRebase: 5_000_000, // 0.05%
+    initialSlashingCoefPWei: 1000, // 1 ETH = 1000 PWei
+    penaltiesCoefPWei: 101, // 0.101 ETH = 101 PWei
+    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
   };
 
   const log = console.log;
@@ -213,13 +213,13 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   context("OracleReportSanityChecker additional balance decrease check", () => {
-    it(`works for IncorrectCLBalanceDecreaseForSpan`, async () => {
+    it(`works for IncorrectCLBalanceDecrease`, async () => {
       await expect(checker.checkAccountingOracleReport(0, ether("320"), ether("300"), 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"), 18 * 24);
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
     });
 
-    it(`works as accamulation for IncorrectCLBalanceDecreaseForSpan`, async () => {
+    it(`works as accamulation for IncorrectCLBalanceDecrease`, async () => {
       const refSlot = Math.floor(((await time.latest()) - Number(genesisTime)) / 12);
       const prevRefSlot = refSlot - SLOTS_PER_DAY;
 
@@ -228,8 +228,8 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await accountingOracle.setLastProcessingRefSlot(refSlot);
       await expect(checker.checkAccountingOracleReport(0, ether("310"), ether("300"), 0, 0, 0, 10, 10))
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseForSpan")
-        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"), 18 * 24);
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
     });
 
     it(`works for happy path and report is not ready`, async () => {
@@ -262,7 +262,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(refSlot, ether("300"));
     });
 
-    it(`works reports close together`, async () => {
+    it(`works for reports close together`, async () => {
       const numGenesis = Number(genesisTime);
       const refSlot = Math.floor(((await time.latest()) - numGenesis) / 12);
       await accountingOracle.setLastProcessingRefSlot(refSlot);
@@ -312,15 +312,15 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   context("OracleReportSanityChecker roles", () => {
-    it(`CL Oracle related functions require CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE`, async () => {
-      const decreaseRole = await checker.CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE();
+    it(`CL Oracle related functions require INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE`, async () => {
+      const role = await checker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
 
-      await expect(checker.setCLBalanceDecreaseBPLimitAndHoursSpan(0, 0)).to.be.revertedWith(
-        genAccessControlError(deployer.address, decreaseRole),
+      await expect(checker.setInitialSlashingAndPenaltiesCoef(0, 0)).to.be.revertedWith(
+        genAccessControlError(deployer.address, role),
       );
 
-      await checker.grantRole(decreaseRole, deployer.address);
-      await expect(checker.setCLBalanceDecreaseBPLimitAndHoursSpan(320, 18 * 24)).to.not.be.reverted;
+      await checker.grantRole(role, deployer.address);
+      await expect(checker.setInitialSlashingAndPenaltiesCoef(1000, 101)).to.not.be.reverted;
     });
 
     it(`CL Oracle related functions require SECOND_OPINION_MANAGER_ROLE`, async () => {
