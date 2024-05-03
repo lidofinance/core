@@ -40,7 +40,6 @@ describe("AccountingOracle.sol", () => {
 
   before(async () => {
     [admin, account1, account2, member1, stranger] = await ethers.getSigners();
-    await deploy();
   });
 
   const deploy = async ({ emptyExtraData = false } = {}) => {
@@ -89,9 +88,9 @@ describe("AccountingOracle.sol", () => {
     mockLido = deployed.lido;
   };
 
-  context("deploying", () => {
-    before(deploy);
+  beforeEach(deploy);
 
+  context("deploying", () => {
     it("deploying accounting oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
@@ -102,8 +101,6 @@ describe("AccountingOracle.sol", () => {
   });
 
   context("SUBMIT_DATA_ROLE", () => {
-    beforeEach(deploy);
-
     context("submitReportData", () => {
       it("should revert from not consensus member without SUBMIT_DATA_ROLE role", async () => {
         await expect(
@@ -128,8 +125,6 @@ describe("AccountingOracle.sol", () => {
     });
 
     context("extraDataItems", () => {
-      beforeEach(deploy);
-
       it("should revert from not consensus member without SUBMIT_DATA_ROLE role ", async () => {
         await expect(oracle.connect(account1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
           oracle,
