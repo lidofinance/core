@@ -1,22 +1,22 @@
 import { ethers } from "hardhat";
 
-const DUMMY_ADDRESS = "0x" + "f".repeat(40);
+import { certainAddress } from "lib";
 
 const invalidButNonZeroLocatorConfig = {
-  accountingOracle: DUMMY_ADDRESS,
-  depositSecurityModule: DUMMY_ADDRESS,
-  elRewardsVault: DUMMY_ADDRESS,
-  legacyOracle: DUMMY_ADDRESS,
-  lido: DUMMY_ADDRESS,
-  oracleReportSanityChecker: DUMMY_ADDRESS,
-  postTokenRebaseReceiver: DUMMY_ADDRESS,
-  burner: DUMMY_ADDRESS,
-  stakingRouter: DUMMY_ADDRESS,
-  treasury: DUMMY_ADDRESS,
-  validatorsExitBusOracle: DUMMY_ADDRESS,
-  withdrawalQueue: DUMMY_ADDRESS,
-  withdrawalVault: DUMMY_ADDRESS,
-  oracleDaemonConfig: DUMMY_ADDRESS,
+  accountingOracle: certainAddress("dummy"),
+  depositSecurityModule: certainAddress("dummy"),
+  elRewardsVault: certainAddress("dummy"),
+  legacyOracle: certainAddress("dummy"),
+  lido: certainAddress("dummy"),
+  oracleReportSanityChecker: certainAddress("dummy"),
+  postTokenRebaseReceiver: certainAddress("dummy"),
+  burner: certainAddress("dummy"),
+  stakingRouter: certainAddress("dummy"),
+  treasury: certainAddress("dummy"),
+  validatorsExitBusOracle: certainAddress("dummy"),
+  withdrawalQueue: certainAddress("dummy"),
+  withdrawalVault: certainAddress("dummy"),
+  oracleDaemonConfig: certainAddress("dummy"),
 };
 
 async function deployBehindOssifiableProxy(artifactName: string, proxyOwner: string, constructorArgs: unknown[]) {
