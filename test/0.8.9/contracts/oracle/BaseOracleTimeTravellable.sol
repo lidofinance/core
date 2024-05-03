@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { UnstructuredStorage } from "../../lib/UnstructuredStorage.sol";
-import { BaseOracle } from "../../oracle/BaseOracle.sol";
+import { UnstructuredStorage } from "contracts/0.8.9/lib/UnstructuredStorage.sol";
+import { BaseOracle } from "contracts/0.8.9/oracle/BaseOracle.sol";
 
 struct ConsensusReport {
     bytes32 hash;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { IWithdrawalQueue } from "../../oracle/AccountingOracle.sol";
+import { IWithdrawalQueue } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 contract MockWithdrawalQueueForAccountingOracle is IWithdrawalQueue {
     struct OnOracleReportCallData {

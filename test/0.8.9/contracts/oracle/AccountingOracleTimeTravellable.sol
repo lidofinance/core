@@ -3,8 +3,8 @@
 pragma solidity 0.8.9;
 
 
-import { UnstructuredStorage } from "../../lib/UnstructuredStorage.sol";
-import { AccountingOracle } from "../../oracle/AccountingOracle.sol";
+import { UnstructuredStorage } from "contracts/0.8.9/lib/UnstructuredStorage.sol";
+import { AccountingOracle } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 
 interface ITimeProvider {

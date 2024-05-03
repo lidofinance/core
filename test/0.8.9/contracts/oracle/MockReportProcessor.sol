@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { IReportAsyncProcessor } from "../../oracle/HashConsensus.sol";
+import { IReportAsyncProcessor } from "contracts/0.8.9/oracle/HashConsensus.sol";
 
 contract MockReportProcessor is IReportAsyncProcessor {
     uint256 internal _consensusVersion;
