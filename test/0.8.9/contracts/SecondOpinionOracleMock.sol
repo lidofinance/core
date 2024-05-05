@@ -3,16 +3,14 @@
 // NB: for testing purposes only
 pragma solidity 0.8.9;
 
-interface ILidoZKOracle {
-    function getReport(uint256 refSlot) external view returns  (
-        bool success,
-        uint256 clBalanceGwei,
-        uint256 numValidators,
-        uint256 exitedValidators
-	);
+interface ISecondOpinionOracle {
+    function getReport(uint256 refSlot)
+        external
+        view
+        returns (bool success, uint256 clBalanceGwei, uint256 numValidators, uint256 exitedValidators);
 }
 
-contract ZkOracleMock is ILidoZKOracle {
+contract SecondOpinionOracleMock is ISecondOpinionOracle {
 
     struct Report {
         bool success;

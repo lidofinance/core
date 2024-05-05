@@ -40,6 +40,10 @@ contract AccountingOracleMock {
         );
     }
 
+    function setLastProcessingRefSlot(uint256 refSlot) external {
+        _lastRefSlot = refSlot;
+    }
+
     function getLastProcessingRefSlot() external view returns (uint256) {
         return _lastRefSlot;
     }
