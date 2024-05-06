@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { ILido } from "../../oracle/AccountingOracle.sol";
+import { ILido } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 interface IPostTokenRebaseReceiver {
     function handlePostTokenRebase(

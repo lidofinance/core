@@ -1,3 +1,4 @@
+import { bigintToHex } from "bigint-conversion";
 import { hexlify, randomBytes } from "ethers";
 
 export function de0x(hex: string) {
@@ -12,4 +13,8 @@ export function en0x(value: number | bigint) {
 
 export function randomString(length: number) {
   return hexlify(randomBytes(length));
+}
+
+export function numberToHex(n: number, byteLen: number | undefined = undefined) {
+  return bigintToHex(BigInt(n), false, byteLen);
 }

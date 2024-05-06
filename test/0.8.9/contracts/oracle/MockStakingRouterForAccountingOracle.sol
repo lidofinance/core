@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { IStakingRouter } from "../../oracle/AccountingOracle.sol";
+import { IStakingRouter } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 
 contract MockStakingRouterForAccountingOracle is IStakingRouter {

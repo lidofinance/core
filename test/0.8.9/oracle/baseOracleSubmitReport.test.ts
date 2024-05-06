@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -16,7 +17,6 @@ import {
   HASH_2,
   HASH_3,
   SECONDS_PER_SLOT,
-  ZERO_HASH,
 } from "./baseOracle";
 
 describe("BaseOracle.sol", () => {
@@ -74,7 +74,7 @@ describe("BaseOracle.sol", () => {
 
       it("zero hash cannot be submitted as a report", async () => {
         await expect(
-          consensus.submitReportAsConsensus(ZERO_HASH, initialRefSlot, computeDeadlineFromRefSlot(initialRefSlot)),
+          consensus.submitReportAsConsensus(ZeroHash, initialRefSlot, computeDeadlineFromRefSlot(initialRefSlot)),
         ).to.be.revertedWithCustomError(baseOracle, "HashCannotBeZero");
       });
 
@@ -143,7 +143,7 @@ describe("BaseOracle.sol", () => {
 
       it("getConsensusReport at deploy returns empty state", async () => {
         const report = await baseOracle.getConsensusReport();
-        expect(report.hash).to.be.equal(ZERO_HASH);
+        expect(report.hash).to.be.equal(ZeroHash);
         expect(report.refSlot).to.be.equal(0);
         expect(report.processingDeadlineTime).to.be.equal(0);
         expect(report.processingStarted).to.be.false;
@@ -281,7 +281,7 @@ describe("BaseOracle.sol", () => {
       const tx = await consensus.discardReportAsConsensus(initialRefSlot);
       await expect(tx).to.emit(baseOracle, "ReportDiscarded").withArgs(initialRefSlot, HASH_1);
       const currentReport = await baseOracle.getConsensusReport();
-      expect(currentReport.hash).to.be.equal(ZERO_HASH);
+      expect(currentReport.hash).to.be.equal(ZeroHash);
       expect(currentReport.refSlot).to.be.equal(initialRefSlot);
       expect(currentReport.processingDeadlineTime).to.be.equal(computeDeadlineFromRefSlot(initialRefSlot));
       expect(currentReport.processingStarted).to.be.false;

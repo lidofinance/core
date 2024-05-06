@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { BaseOracleTimeTravellable, MockConsensusContract } from "typechain-types";
 
-import { Snapshot } from "lib";
+import { getCurrentBlockTimestamp, Snapshot } from "lib";
 
 import {
   CONSENSUS_VERSION,
@@ -62,6 +62,12 @@ describe("BaseOracle.sol", async () => {
         oracle,
         "SecondsPerSlotCannotBeZero",
       );
+    });
+
+    it("test original getTime() function of the base oracle", async () => {
+      const blockTime = await getCurrentBlockTimestamp();
+      const time = await oracle.originalGetTime();
+      expect(time).to.be.equal(blockTime);
     });
   });
 

@@ -3,7 +3,7 @@
 pragma solidity 0.8.9;
 
 
-import { HashConsensus } from "../../oracle/HashConsensus.sol";
+import { HashConsensus } from "contracts/0.8.9/oracle/HashConsensus.sol";
 
 
 contract HashConsensusTimeTravellable is HashConsensus {

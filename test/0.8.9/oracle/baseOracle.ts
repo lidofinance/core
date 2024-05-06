@@ -13,6 +13,7 @@ export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0;
 
 export const SECONDS_PER_EPOCH = SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
 export const SLOTS_PER_FRAME = EPOCHS_PER_FRAME * SLOTS_PER_EPOCH;
+export const SECONDS_PER_FRAME = SECONDS_PER_EPOCH * EPOCHS_PER_FRAME;
 
 export const computeSlotAt = (time: number) => Math.floor((time - GENESIS_TIME) / SECONDS_PER_SLOT);
 export const computeEpochAt = (time: number) => Math.floor(computeSlotAt(time) / SLOTS_PER_EPOCH);
@@ -21,8 +22,6 @@ export const computeEpochFirstSlotAt = (time: number) => computeEpochFirstSlot(c
 export const computeTimestampAtSlot = (slot: number) => GENESIS_TIME + slot * SECONDS_PER_SLOT;
 export const computeDeadlineFromRefSlot = (slot: number) => computeTimestampAtSlot(slot + SLOTS_PER_FRAME);
 export const computeNextRefSlotFromRefSlot = (slot: number) => +slot + SLOTS_PER_FRAME;
-
-export const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 export const HASH_1 = "0x1111111111111111111111111111111111111111111111111111111111111111";
 export const HASH_2 = "0x2222222222222222222222222222222222222222222222222222222222222222";
