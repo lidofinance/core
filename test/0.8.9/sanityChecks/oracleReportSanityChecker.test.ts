@@ -112,8 +112,8 @@ describe("OracleReportSanityChecker.sol", () => {
             return 256;
           case "uint64":
             return 64;
-          case "uint48":
-            return 48;
+          case "uint32":
+            return 32;
           case "uint16":
             return 16;
           default:
