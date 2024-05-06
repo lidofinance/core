@@ -12,7 +12,7 @@ import {
   WithdrawalVault,
 } from "typechain-types";
 
-import { MAX_UINT256, proxify, Snapshot } from "lib";
+import { certainAddress, MAX_UINT256, proxify, Snapshot } from "lib";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -29,6 +29,8 @@ describe("WithdrawalVault.sol", () => {
   let impl: WithdrawalVault;
   let vault: WithdrawalVault;
   let vaultAddress: string;
+  let oracleAddress: string;
+  let triggerableExitAddress: string;
 
   before(async () => {
     [owner, user, treasury] = await ethers.getSigners();
@@ -36,7 +38,15 @@ describe("WithdrawalVault.sol", () => {
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
 
-    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address]);
+    oracleAddress = certainAddress("oracleAddress");
+    triggerableExitAddress = certainAddress("triggerableExitAddress");
+
+    impl = await ethers.deployContract("WithdrawalVault", [
+      lidoAddress,
+      treasury.address,
+      oracleAddress,
+      triggerableExitAddress,
+    ]);
 
     [vault] = await proxify({ impl, admin: owner });
 
@@ -50,15 +60,31 @@ describe("WithdrawalVault.sol", () => {
   context("Constructor", () => {
     it("Reverts if the Lido address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address]),
-      ).to.be.revertedWithCustomError(vault, "LidoZeroAddress");
+        ethers.deployContract("WithdrawalVault", [
+          ZeroAddress,
+          treasury.address,
+          oracleAddress,
+          triggerableExitAddress,
+        ]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Reverts if the treasury address is zero", async () => {
-      await expect(ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress])).to.be.revertedWithCustomError(
-        vault,
-        "TreasuryZeroAddress",
-      );
+      await expect(
+        ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress, oracleAddress, triggerableExitAddress]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the oracle address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, ZeroAddress, triggerableExitAddress]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the triggerableExit address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, oracleAddress, ZeroAddress]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Sets initial properties", async () => {

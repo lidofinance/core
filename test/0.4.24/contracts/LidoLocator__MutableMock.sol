@@ -87,4 +87,12 @@ contract LidoLocator__MutableMock {
   function mock___updatePostTokenRebaseReceiver(address newAddress) external {
     postTokenRebaseReceiver = newAddress;
   }
+
+  function mock__updateValidatorsExitBusOracle(address newAddress) external {
+    validatorsExitBusOracle = newAddress;
+  }
+
+  function mock__updateWithdrawalVault(address newAddress) external {
+    withdrawalVault = newAddress;
+  }
 }

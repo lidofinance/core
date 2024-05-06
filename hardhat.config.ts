@@ -40,6 +40,21 @@ const config: HardhatUserConfig = {
       },
       forking: HARDHAT_FORKING_URL ? { url: HARDHAT_FORKING_URL } : undefined,
     },
+    sepolia: {
+      url: RPC_URL,
+      chainId: 11155111,
+      timeout: 60000 * 15,
+      // accounts: [""],
+      urls: {
+        apiURL: "https://api-sepolia.etherscan.io/api",
+        browserURL: "https://sepolia.etherscan.io/",
+      },
+    },
+  },
+  etherscan: {
+    apiKey: {
+      sepolia: "",
+    },
   },
   solidity: {
     compilers: [

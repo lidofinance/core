@@ -233,4 +233,8 @@ contract StakingModuleMock is IStakingModule {
     function setAvailableKeysCount(uint256 _newAvailableValidatorsCount) external {
         _availableValidatorsCount = _newAvailableValidatorsCount;
     }
+
+    function isKeyAvailableToExit(uint256 _nodeOperatorId,  uint256 _index, bytes calldata _pubkey) external view returns (bool) {
+
+    }
 }

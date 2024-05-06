@@ -79,6 +79,7 @@ export enum Sk {
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
+  triggerableExitMock = "triggerableExitMock",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -123,6 +124,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
+    case Sk.triggerableExitMock:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

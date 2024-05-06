@@ -126,31 +126,6 @@ async function main() {
   logWideSplitter();
 
   //
-  // === WithdrawalVault ===
-  //
-  const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
-    lidoAddress,
-    treasuryAddress,
-  ]);
-  state = readNetworkState();
-  const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
-  const withdrawalsManagerProxy = await deployContract(
-    "WithdrawalsManagerProxy",
-    withdrawalsManagerProxyConstructorArgs,
-    deployer,
-  );
-  const withdrawalVaultAddress = withdrawalsManagerProxy.address;
-  updateObjectInState(Sk.withdrawalVault, {
-    proxy: {
-      contract: await getContractPath("WithdrawalsManagerProxy"),
-      address: withdrawalsManagerProxy.address,
-      constructorArgs: withdrawalsManagerProxyConstructorArgs,
-    },
-    address: withdrawalsManagerProxy.address,
-  });
-  logWideSplitter();
-
-  //
   // === LidoExecutionLayerRewardsVault ===
   //
   const elRewardsVault = await deployWithoutProxy(
@@ -267,6 +242,39 @@ async function main() {
     deployer,
     hashConsensusForExitBusArgs,
   );
+  logWideSplitter();
+
+  //
+  // === TriggerableExitMock ===
+  //
+  const triggerableExitMock = await deployWithoutProxy(Sk.triggerableExitMock, "TriggerableExitMock", deployer);
+  logWideSplitter();
+
+  //
+  // === WithdrawalVault ===
+  //
+  const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
+    lidoAddress,
+    treasuryAddress,
+    validatorsExitBusOracle.address,
+    triggerableExitMock.address,
+  ]);
+  state = readNetworkState();
+  const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
+  const withdrawalsManagerProxy = await deployContract(
+    "WithdrawalsManagerProxy",
+    withdrawalsManagerProxyConstructorArgs,
+    deployer,
+  );
+  const withdrawalVaultAddress = withdrawalsManagerProxy.address;
+  updateObjectInState(Sk.withdrawalVault, {
+    proxy: {
+      contract: await getContractPath("WithdrawalsManagerProxy"),
+      address: withdrawalsManagerProxy.address,
+      constructorArgs: withdrawalsManagerProxyConstructorArgs,
+    },
+    address: withdrawalsManagerProxy.address,
+  });
   logWideSplitter();
 
   //

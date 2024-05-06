@@ -11,9 +11,11 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
 
-
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
+}
+interface IWithdrawalVault {
+    function triggerELValidatorExit(bytes[] calldata pubkey, uint256[] calldata amounts) external payable;
 }
 
 
@@ -35,6 +37,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         uint256 prevRequestedValidatorIndex,
         uint256 requestedValidatorIndex
     );
+    error ErrorInvalidReport();
+    error ErrorInvalidPubkeyInReport();
+    error ErrorReportExists();
+    error ErrorInvalidKeysRequestsCount();
 
     event ValidatorExitRequest(
         uint256 indexed stakingModuleId,
@@ -65,6 +71,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
 
+    /// @notice An ACL role granting the permission to submit the prioritized exit requests data.
+    bytes32 public constant SUBMIT_PRIORITY_DATA_ROLE = keccak256("SUBMIT_PRIORITY_DATA_ROLE");
+
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
@@ -84,6 +93,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.dataProcessingState");
 
+    /// @dev Storage slot: ReportData reports
+    bytes32 internal constant REPORTS_HASH_POSITION =
+        keccak256("lido.ValidatorsExitBusOracle.reports");
+
     ILidoLocator internal immutable LOCATOR;
 
     ///
@@ -94,6 +107,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         BaseOracle(secondsPerSlot, genesisTime)
     {
         LOCATOR = ILidoLocator(lidoLocator);
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function initialize(
@@ -218,6 +232,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         _checkContractVersion(contractVersion);
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data)));
+        _saveReportDataHash(keccak256(abi.encode(data)), data.requestsCount);
         _startProcessing();
         _handleConsensusReportData(data);
     }
@@ -343,7 +358,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
             revert UnexpectedRequestsDataLength();
         }
 
-        _processExitRequestsList(data.data);
+        _processExitRequestsList(data.data, "");
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
@@ -361,7 +376,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         );
     }
 
-    function _processExitRequestsList(bytes calldata data) internal {
+    function _processExitRequestsList(bytes calldata data, bytes32 kCheckedKey) internal {
         uint256 offset;
         uint256 offsetPastEnd;
         assembly {
@@ -406,28 +421,40 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
                 revert InvalidRequestsData();
             }
 
-            uint256 nodeOpKey = _computeNodeOpKey(moduleId, nodeOpId);
-            if (nodeOpKey != lastNodeOpKey) {
-                if (lastNodeOpKey != 0) {
-                    _storageLastRequestedValidatorIndices()[lastNodeOpKey] = lastRequestedVal;
+            if (kCheckedKey == "") {
+                uint256 nodeOpKey = _computeNodeOpKey(moduleId, nodeOpId);
+                if (nodeOpKey != lastNodeOpKey) {
+                    if (lastNodeOpKey != 0) {
+                        _storageLastRequestedValidatorIndices()[lastNodeOpKey] = lastRequestedVal;
+                    }
+                    lastRequestedVal = _storageLastRequestedValidatorIndices()[nodeOpKey];
+                    lastNodeOpKey = nodeOpKey;
                 }
-                lastRequestedVal = _storageLastRequestedValidatorIndices()[nodeOpKey];
-                lastNodeOpKey = nodeOpKey;
-            }
 
-            if (lastRequestedVal.requested && valIndex <= lastRequestedVal.index) {
-                revert NodeOpValidatorIndexMustIncrease(
-                    moduleId,
-                    nodeOpId,
-                    lastRequestedVal.index,
-                    valIndex
-                );
-            }
+                if (lastRequestedVal.requested && valIndex <= lastRequestedVal.index) {
+                    revert NodeOpValidatorIndexMustIncrease(
+                        moduleId,
+                        nodeOpId,
+                        lastRequestedVal.index,
+                        valIndex
+                    );
+                }
 
-            lastRequestedVal = RequestedValidator(true, valIndex);
-            lastDataWithoutPubkey = dataWithoutPubkey;
+                lastRequestedVal = RequestedValidator(true, valIndex);
+                lastDataWithoutPubkey = dataWithoutPubkey;
+
+            } else {
+                if (keccak256(pubkey) == kCheckedKey) {
+                    emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+                    return;
+                }
+            }
 
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+        }
+
+        if (kCheckedKey != "") {
+            revert ErrorInvalidPubkeyInReport();
         }
 
         if (lastNodeOpKey != 0) {
@@ -459,5 +486,41 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     ) {
         bytes32 position = DATA_PROCESSING_STATE_POSITION;
         assembly { r.slot := position }
+    }
+
+    function _saveReportDataHash(bytes32 reportHash, uint256 requestsCount) internal {
+        if (_getReportHashesStorage()[reportHash] != 0) {
+            revert ErrorReportExists();
+        }
+        _getReportHashesStorage()[reportHash] = requestsCount;
+    }
+
+    function _getReportHashesStorage() internal pure returns (
+        mapping(bytes32 => uint256) storage r
+    ) {
+        bytes32 position = REPORTS_HASH_POSITION;
+        assembly { r.slot := position }
+    }
+
+    function submitPriorityReportData(bytes32 reportHash, uint256 requestsCount) external onlyRole(SUBMIT_PRIORITY_DATA_ROLE){
+        _saveReportDataHash(reportHash, requestsCount);
+    }
+
+    function forcedExitPubkeys(bytes[] calldata keys, uint256[] calldata amounts, ReportData calldata data) external payable {
+        uint256 requestsCount = _getReportHashesStorage()[keccak256(abi.encode(data))];
+        uint256 keysCount = keys.length;
+
+        if (requestsCount == 0) {
+            revert ErrorInvalidReport();
+        }
+        if (keysCount > requestsCount || requestsCount != data.requestsCount) {
+            revert ErrorInvalidKeysRequestsCount();
+        }
+
+        for(uint256 i = 0; i < keysCount; i++) {
+            _processExitRequestsList(data.data, keccak256(keys[i]));
+        }
+
+        IWithdrawalVault(LOCATOR.withdrawalVault()).triggerELValidatorExit{value: msg.value}(keys, amounts);
     }
 }

@@ -10,6 +10,7 @@ async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
+  const agent = state[Sk.appAgent].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const gateSealAddress = state.gateSeal.address;
@@ -54,8 +55,8 @@ async function main() {
   //
   // === ValidatorsExitBusOracle
   //
+  const validatorsExitBusOracle = await getContractAt("ValidatorsExitBusOracle", validatorsExitBusOracleAddress);
   if (gateSealAddress) {
-    const validatorsExitBusOracle = await getContractAt("ValidatorsExitBusOracle", validatorsExitBusOracleAddress);
     await makeTx(
       validatorsExitBusOracle,
       "grantRole",
@@ -66,6 +67,12 @@ async function main() {
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
   }
+  await makeTx(
+    validatorsExitBusOracle,
+    "grantRole",
+    [await validatorsExitBusOracle.getFunction("SUBMIT_PRIORITY_DATA_ROLE")(), agent],
+    { from: deployer },
+  );
 
   //
   // === WithdrawalQueue

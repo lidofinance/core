@@ -149,4 +149,8 @@ contract ModuleSolo is IStakingModule {
 
         return (publicKeys, signatures);
     }
+
+    function isKeyAvailableToExit(uint256 _nodeOperatorId,  uint256 _index, bytes calldata _pubkey) external view returns (bool) {
+
+    }
 }

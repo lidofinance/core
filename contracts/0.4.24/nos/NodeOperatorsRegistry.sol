@@ -1138,7 +1138,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @return depositSignature Signature needed for a deposit_contract.deposit call
     /// @return used Flag indication if the key was used in the staking
     function getSigningKey(uint256 _nodeOperatorId, uint256 _index)
-        external
+        public
         view
         returns (bytes key, bytes depositSignature, bool used)
     {
@@ -1448,5 +1448,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     function _onlyNonZeroAddress(address _a) internal pure {
         require(_a != address(0), "ZERO_ADDRESS");
+    }
+
+    function isKeyAvailableToExit(uint256 _nodeOperatorId,  uint256 _index, bytes _pubkey) external view returns (bool) {
+        (bytes memory key, /** depositSignature */, bool used) = getSigningKey(_nodeOperatorId, _index);
+        return (keccak256(_pubkey) == keccak256(key) && used);
     }
 }

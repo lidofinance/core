@@ -161,6 +161,9 @@ interface IStakingModule {
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
     function onWithdrawalCredentialsChanged() external;
 
+    /// @notice checks is the key available for exit
+    function isKeyAvailableToExit(uint256 _nodeOperatorId,  uint256 _index, bytes calldata _pubkey) external view returns (bool);
+
     /// @dev Event to be emitted on StakingModule's nonce change
     event NonceChanged(uint256 nonce);
 }

@@ -240,6 +240,9 @@ contract StakingModule__Mock is IStakingModule {
     emit Mock__WithdrawalCredentialsChanged();
   }
 
+  function isKeyAvailableToExit(uint256 _nodeOperatorId,  uint256 _index, bytes calldata _pubkey) external view returns (bool) {
+  }
+
   function mock__onWithdrawalCredentialsChanged(bool shouldRevert, string calldata revertMessage) external {
     onWithdrawalCredentialsChangedShouldRevert = shouldRevert;
     onWithdrawalCredentialsChangedShouldRevertWithMessage = revertMessage;
