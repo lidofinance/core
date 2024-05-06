@@ -1,19 +1,21 @@
-/.idea
+.idea/
+.yarn/
 
-/node_modules
-/coverage
+node_modules/
+coverage/
+
 coverage.json
 
-/typechain
-/typechain-types
+typechain/
+typechain-types/
 
 # Hardhat files
-/cache
-/artifacts
+cache/
+artifacts/
 
 # foundry artifacts
-/foundry/cache
-/foundry/out
+foundry/cache/
+foundry/out/
 
 .env
 deployed-local.json

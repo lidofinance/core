@@ -24,11 +24,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: "yarn"
 
       - name: Install dependencies
-        run: pnpm install
+        run: yarn install
 
       # REVIEW: here and below steps taken from official guide
       # https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#caching-packages

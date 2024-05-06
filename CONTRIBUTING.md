@@ -29,7 +29,7 @@ If you have a bigger idea on how to improve the protocol, consider publishing yo
 ### Requirements
 
 - [Node.js v20](https://nodejs.org/en)
-- [Pnpm](https://pnpm.io/)
+- [Yarn](https://yarnpkg.com/)
 - [Foundry](https://book.getfoundry.sh/)
 
 ### Setup
@@ -39,7 +39,7 @@ If you have a bigger idea on how to improve the protocol, consider publishing yo
 Install dependencies
 
 ```bash
-pnpm install
+yarn install
 ```
 
 ### Test
@@ -47,7 +47,7 @@ pnpm install
 Run Hardhat tests
 
 ```bash
-pnpm test
+yarn test
 ```
 
 See `package.json` for more commands.
@@ -125,7 +125,7 @@ All typechain types are placed in `/typechain-types` in the root of the project.
 There have been issues with IDEs failing to properly index this directory resulting in import errors. If you are experiencing similar issues, the solutions above should resolve them:
 
 - open the `/typechain-types/index.ts` file to force the IDE to index it;
-- delete the directory and re-compile `pnpm hardhat compile --force`.
+- delete the directory and re-compile `yarn hardhat compile --force`.
 
 ### Config files
 

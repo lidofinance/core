@@ -16,17 +16,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: "yarn"
 
       - name: Install dependencies
-        run: pnpm install
+        run: yarn install
 
       - name: Run Solidity linters
-        run: pnpm lint:sol
+        run: yarn lint:sol
 
       - name: Run TS linters
-        run: pnpm lint:ts
+        run: yarn lint:ts
 
   types:
     name: TypeScript types check
@@ -41,14 +41,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: "yarn"
 
       - name: Install dependencies
-        run: pnpm install
+        run: yarn install
 
       - name: Generate typechain types
-        run: pnpm hardhat compile
+        run: yarn hardhat compile
 
       - name: Run TypeScript types check
-        run: pnpm type:check
+        run: yarn typecheck

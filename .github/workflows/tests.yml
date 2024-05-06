@@ -16,14 +16,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: "yarn"
 
       - name: Install dependencies
-        run: pnpm install
+        run: yarn install
 
       - name: Run Hardhat Solidity tests
-        run: pnpm test
+        run: yarn test
 
   test_foundry:
     name: Foundry Solidity tests
@@ -41,11 +41,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
+          node-version-file: .nvmrc
+          cache: "yarn"
 
       - name: Install dependencies
-        run: pnpm install
+        run: yarn install
 
       - name: Run tests
         run: forge test --gas-report
