@@ -369,6 +369,11 @@ describe("AccountingOracle.sol", () => {
     context("enforces data safety boundaries", () => {
       it("reverts with MaxAccountingExtraDataItemsCountExceeded if data limit exceeds", async () => {
         const MAX_ACCOUNTING_EXTRA_DATA_LIMIT = 1;
+
+        await sanityChecker
+          .connect(admin)
+          .grantRole(await sanityChecker.MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE(), admin);
+
         await sanityChecker.connect(admin).setMaxAccountingExtraDataListItemsCount(MAX_ACCOUNTING_EXTRA_DATA_LIMIT);
 
         expect((await sanityChecker.getOracleReportLimits()).maxAccountingExtraDataListItemsCount).to.be.equal(
@@ -382,6 +387,10 @@ describe("AccountingOracle.sol", () => {
 
       it("passes fine on borderline data limit value — when it equals to count of passed items", async () => {
         const MAX_ACCOUNTING_EXTRA_DATA_LIMIT = reportFields.extraDataItemsCount;
+
+        await sanityChecker
+          .connect(admin)
+          .grantRole(await sanityChecker.MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE(), admin);
 
         await sanityChecker.connect(admin).setMaxAccountingExtraDataListItemsCount(MAX_ACCOUNTING_EXTRA_DATA_LIMIT);
 
@@ -423,6 +432,11 @@ describe("AccountingOracle.sol", () => {
           0,
         );
         const exitingRateLimit = getBigInt(totalExitedValidators) - 1n;
+
+        await sanityChecker
+          .connect(admin)
+          .grantRole(await sanityChecker.CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(), admin);
+
         await sanityChecker.setChurnValidatorsPerDayLimit(exitingRateLimit);
         expect((await sanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(exitingRateLimit);
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))

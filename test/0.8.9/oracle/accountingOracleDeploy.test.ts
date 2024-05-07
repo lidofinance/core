@@ -102,7 +102,6 @@ async function deployAccountingOracleSetup(
 ) {
   const locatorAddr = await (await deployLocatorWithDummyAddressesImplementation(admin)).getAddress();
   const { lido, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   const legacyOracle = await getLegacyOracle();
 
@@ -117,6 +116,12 @@ async function deployAccountingOracleSetup(
     secondsPerSlot,
     genesisTime,
   ]);
+
+  await updateLocatorImplementation(locatorAddr, admin, {
+    accountingOracle: await oracle.getAddress(),
+  });
+
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle,
@@ -196,14 +201,12 @@ async function initAccountingOracle({
 
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
   const churnValidatorsPerDayLimit = 100;
-  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0];
-  const managersRoster = [[admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin]];
+  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0, 0, 0];
 
   const oracleReportSanityChecker = await ethers.deployContract("OracleReportSanityChecker", [
     lidoLocator,
     admin,
     limitsList,
-    managersRoster,
   ]);
   return oracleReportSanityChecker;
 }
