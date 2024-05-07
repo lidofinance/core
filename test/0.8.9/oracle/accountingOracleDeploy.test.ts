@@ -58,8 +58,11 @@ export function encodeExtraDataItems(data: ExtraDataType) {
   return items;
 }
 
-export function packExtraDataList(extraDataItems: string[]) {
-  return "0x" + extraDataItems.map((s) => s.substring(2)).join("");
+export function packExtraDataList(extraDataItems: string[], nextHash?: string) {
+  const nextHashBytes = typeof nextHash === "undefined" ? ethers.ZeroHash : nextHash;
+  const extraDataItemsBytes = extraDataItems.map((s) => s.substring(2)).join("");
+
+  return `${nextHashBytes}${extraDataItemsBytes}`;
 }
 
 export function calcExtraDataListHash(packedExtraDataList: string) {

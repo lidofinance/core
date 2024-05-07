@@ -745,7 +745,7 @@ contract AccountingOracle is BaseOracle {
 
         bytes32 nextHash;
         assembly {
-            nextHash := calldataload(add(data.offset, initialDataOffset))
+            nextHash := calldataload(data.offset)
         }
 
         ExtraDataIterState memory iter = ExtraDataIterState({
