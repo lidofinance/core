@@ -43,7 +43,7 @@ __metadata:
 "@aragon/apps-lido@lidofinance/aragon-apps#master":
   version: 1.0.0
   resolution: "@aragon/apps-lido@https://github.com/lidofinance/aragon-apps.git#commit=b09834d29c0db211ddd50f50905cbeff257fc8e0"
-  checksum: 10c0/bf1e6bf16b97a2e6a4d597b45db1ec63fe7709825ceeb5ebba04258ed44131929ba5ada30bc8ecf88fd389db620762c591a5ac1d0fa811e719a387040aebe2a7
+  checksum: 10c0/d7ab02743c2899f6f69beda158221c9e1ecdbfa2fa8ab05ab117d7f8e5f80a11113c64cbbdc9d61ec0a641ac25d626b881021a2dcdff99e4c64063782fc887fd
   languageName: node
   linkType: hard
 
