@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { ILido } from "../../oracle/AccountingOracle.sol";
+import { IReportReceiver } from "../../oracle/AccountingOracle.sol";
+import { ReportValues } from "../../Accounting.sol";
 
 interface IPostTokenRebaseReceiver {
     function handlePostTokenRebase(
@@ -16,7 +17,7 @@ interface IPostTokenRebaseReceiver {
     ) external;
 }
 
-contract MockLidoForAccountingOracle is ILido {
+contract MockLidoForAccountingOracle is IReportReceiver {
     address internal legacyOracle;
 
     struct HandleOracleReportLastCall {
@@ -51,37 +52,29 @@ contract MockLidoForAccountingOracle is ILido {
     ///
 
     function handleOracleReport(
-        uint256 currentReportTimestamp,
-        uint256 secondsElapsedSinceLastReport,
-        uint256 numValidators,
-        uint256 clBalance,
-        uint256 withdrawalVaultBalance,
-        uint256 elRewardsVaultBalance,
-        uint256 sharesRequestedToBurn,
-        uint256[] calldata withdrawalFinalizationBatches,
-        uint256 simulatedShareRate
+        ReportValues memory values
     ) external {
         _handleOracleReportLastCall
-            .currentReportTimestamp = currentReportTimestamp;
+            .currentReportTimestamp = values.timestamp;
         _handleOracleReportLastCall
-            .secondsElapsedSinceLastReport = secondsElapsedSinceLastReport;
-        _handleOracleReportLastCall.numValidators = numValidators;
-        _handleOracleReportLastCall.clBalance = clBalance;
+            .secondsElapsedSinceLastReport = values.timeElapsed;
+        _handleOracleReportLastCall.numValidators = values.clValidators;
+        _handleOracleReportLastCall.clBalance = values.clBalance;
         _handleOracleReportLastCall
-            .withdrawalVaultBalance = withdrawalVaultBalance;
+            .withdrawalVaultBalance = values.withdrawalVaultBalance;
         _handleOracleReportLastCall
-            .elRewardsVaultBalance = elRewardsVaultBalance;
+            .elRewardsVaultBalance = values.elRewardsVaultBalance;
         _handleOracleReportLastCall
-            .sharesRequestedToBurn = sharesRequestedToBurn;
+            .sharesRequestedToBurn = values.sharesRequestedToBurn;
         _handleOracleReportLastCall
-            .withdrawalFinalizationBatches = withdrawalFinalizationBatches;
-        _handleOracleReportLastCall.simulatedShareRate = simulatedShareRate;
+            .withdrawalFinalizationBatches = values.withdrawalFinalizationBatches;
+        _handleOracleReportLastCall.simulatedShareRate = values.simulatedShareRate;
         ++_handleOracleReportLastCall.callCount;
 
         if (legacyOracle != address(0)) {
             IPostTokenRebaseReceiver(legacyOracle).handlePostTokenRebase(
-                currentReportTimestamp /* IGNORED reportTimestamp */,
-                secondsElapsedSinceLastReport /* timeElapsed */,
+                values.timestamp /* IGNORED reportTimestamp */,
+                values.timeElapsed /* timeElapsed */,
                 0 /* IGNORED preTotalShares */,
                 0 /* preTotalEther */,
                 1 /* postTotalShares */,

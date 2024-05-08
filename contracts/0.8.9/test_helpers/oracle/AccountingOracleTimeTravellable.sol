@@ -15,8 +15,8 @@ interface ITimeProvider {
 contract AccountingOracleTimeTravellable is AccountingOracle, ITimeProvider {
     using UnstructuredStorage for bytes32;
 
-    constructor(address lidoLocator, address lido, address legacyOracle, uint256 secondsPerSlot, uint256 genesisTime)
-        AccountingOracle(lidoLocator, lido, legacyOracle, secondsPerSlot, genesisTime)
+    constructor(address lidoLocator, address legacyOracle, uint256 secondsPerSlot, uint256 genesisTime)
+        AccountingOracle(lidoLocator, legacyOracle, secondsPerSlot, genesisTime)
     {
         // allow usage without a proxy for tests
         CONTRACT_VERSION_POSITION.setStorageUint256(0);

@@ -360,6 +360,29 @@ contract StETH is IERC20, Pausable {
         return tokensAmount;
     }
 
+    function mintShares(address _recipient, uint256 _amount) external {
+        require(_isMinter(msg.sender), "AUTH_FAILED");
+
+        _mintShares(_recipient, _amount);
+        _emitTransferAfterMintingShares(_recipient, _amount);
+    }
+
+    function burnShares(address _account, uint256 _amount) external {
+        require(_isBurner(msg.sender), "AUTH_FAILED");
+
+        _burnShares(_account, _amount);
+
+        // TODO: do something with Transfer event
+    }
+
+    function _isMinter(address _sender) internal view returns (bool) {
+        return false;
+    }
+
+    function _isBurner(address _sender) internal view returns (bool) {
+        return false;
+    }
+
     /**
      * @return the total amount (in wei) of Ether controlled by the protocol.
      * @dev This is used for calculating tokens from shares and vice versa.

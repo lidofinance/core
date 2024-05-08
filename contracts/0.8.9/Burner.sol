@@ -42,6 +42,8 @@ interface IStETH is IERC20 {
     function transferSharesFrom(
         address _sender, address _recipient, uint256 _sharesAmount
     ) external returns (uint256);
+
+    function burnShares(address _account, uint256 _amount) external;
 }
 
 /**
@@ -323,6 +325,8 @@ contract Burner is IBurner, AccessControlEnumerable {
             nonCoverSharesBurnRequested -= sharesToBurnNowForNonCover;
             sharesToBurnNow += sharesToBurnNowForNonCover;
         }
+
+        IStETH(STETH).burnShares(address(this), _sharesToBurn);
         assert(sharesToBurnNow == _sharesToBurn);
     }
 

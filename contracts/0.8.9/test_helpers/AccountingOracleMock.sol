@@ -4,7 +4,8 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
-import {AccountingOracle, ILido} from "../oracle/AccountingOracle.sol";
+import {AccountingOracle, IReportReceiver} from "../oracle/AccountingOracle.sol";
+import { ReportValues } from "../Accounting.sol";
 
 
 contract AccountingOracleMock {
@@ -25,7 +26,7 @@ contract AccountingOracleMock {
         uint256 slotsElapsed = data.refSlot - _lastRefSlot;
         _lastRefSlot = data.refSlot;
 
-        ILido(LIDO).handleOracleReport(
+        IReportReceiver(LIDO).handleOracleReport(ReportValues(
             data.refSlot * SECONDS_PER_SLOT,
             slotsElapsed * SECONDS_PER_SLOT,
             data.numValidators,
@@ -35,7 +36,7 @@ contract AccountingOracleMock {
             data.sharesRequestedToBurn,
             data.withdrawalFinalizationBatches,
             data.simulatedShareRate
-        );
+        ));
     }
 
     function getLastProcessingRefSlot() external view returns (uint256) {

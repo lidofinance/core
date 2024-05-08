@@ -22,6 +22,7 @@ contract LidoLocatorMock is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address accounting;
     }
 
     address public immutable lido;
@@ -38,6 +39,7 @@ contract LidoLocatorMock is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
 
     constructor (
         ContractAddresses memory addresses
@@ -56,6 +58,7 @@ contract LidoLocatorMock is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        accounting = addresses.accounting;
     }
 
     function coreComponents() external view returns(address,address,address,address,address,address) {
@@ -69,8 +72,7 @@ contract LidoLocatorMock is ILidoLocator {
         );
     }
 
-    function oracleReportComponentsForLido() external view returns(
-        address,
+    function oracleReportComponents() external view returns(
         address,
         address,
         address,
@@ -80,12 +82,11 @@ contract LidoLocatorMock is ILidoLocator {
     ) {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            accounting
         );
     }
 }
