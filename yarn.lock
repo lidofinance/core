@@ -40,10 +40,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@aragon/apps-lido@lidofinance/aragon-apps#master":
+"@aragon/apps-lido@https://github.com/lidofinance/aragon-apps/archive/refs/tags/app-voting-v3.0.0-1.tar.gz":
   version: 1.0.0
-  resolution: "@aragon/apps-lido@https://github.com/lidofinance/aragon-apps.git#commit=b09834d29c0db211ddd50f50905cbeff257fc8e0"
-  checksum: 10c0/bf1e6bf16b97a2e6a4d597b45db1ec63fe7709825ceeb5ebba04258ed44131929ba5ada30bc8ecf88fd389db620762c591a5ac1d0fa811e719a387040aebe2a7
+  resolution: "@aragon/apps-lido@https://github.com/lidofinance/aragon-apps/archive/refs/tags/app-voting-v3.0.0-1.tar.gz"
+  checksum: 10c0/468106d1e0c0aba835f4eeb01547ab96d2d9344e502c62180c67bcff4765757cd62cd5f4dd1569c107ae8552f7600a29e86b3cc6fabb7c07532e20ca9c684e5b
   languageName: node
   linkType: hard
 
@@ -7825,7 +7825,7 @@ __metadata:
   dependencies:
     "@aragon/apps-agent": "npm:2.1.0"
     "@aragon/apps-finance": "npm:3.0.0"
-    "@aragon/apps-lido": "lidofinance/aragon-apps#master"
+    "@aragon/apps-lido": "https://github.com/lidofinance/aragon-apps/archive/refs/tags/app-voting-v3.0.0-1.tar.gz"
     "@aragon/apps-vault": "npm:4.1.0"
     "@aragon/id": "npm:2.1.1"
     "@aragon/minime": "npm:1.0.0"

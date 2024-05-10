@@ -81,7 +81,7 @@
   "dependencies": {
     "@aragon/apps-agent": "2.1.0",
     "@aragon/apps-finance": "3.0.0",
-    "@aragon/apps-lido": "lidofinance/aragon-apps#master",
+    "@aragon/apps-lido": "https://github.com/lidofinance/aragon-apps/archive/refs/tags/app-voting-v3.0.0-1.tar.gz",
     "@aragon/apps-vault": "4.1.0",
     "@aragon/id": "2.1.1",
     "@aragon/minime": "1.0.0",
