@@ -121,6 +121,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
+    /// @dev amount of external balance that is counted into total pooled eth
+    bytes32 internal constant EXTERNAL_BALANCE_POSITION =
+        0x8bfa431400f09f5d08a01c4be5ebce854346f7abf198d4f5cc3122340906aba2; // keccak256("lido.Lido.externalClBalance");
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -345,7 +348,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         external
         view
         returns (
-            bool isStakingPaused,
+            bool isStakingPaused_,
             bool isStakingLimitSet,
             uint256 currentStakeLimit,
             uint256 maxStakeLimit,
@@ -356,7 +359,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     {
         StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
 
-        isStakingPaused = stakeLimitData.isStakingPaused();
+        isStakingPaused_ = stakeLimitData.isStakingPaused();
         isStakingLimitSet = stakeLimitData.isStakingLimitSet();
 
         currentStakeLimit = _getCurrentStakeLimit(stakeLimitData);
@@ -462,6 +465,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _getBufferedEther();
     }
 
+    function getExternalEther() external view returns (uint256) {
+        return EXTERNAL_BALANCE_POSITION.getStorageUint256();
+    }
+
     /**
      * @notice Get total amount of execution layer rewards collected to Lido contract
      * @dev Ether got through LidoExecutionLayerRewardsVault is kept on this contract's balance the same way
@@ -553,6 +560,32 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
     }
 
+    function mintExternalShares(address _receiver, uint256 _amount) external {
+        uint256 tokens = super.getPooledEthByShares(_amount);
+        mintShares(_receiver, _amount);
+
+        EXTERNAL_BALANCE_POSITION.setStorageUint256(
+            EXTERNAL_BALANCE_POSITION.getStorageUint256() + tokens
+        );
+
+        // TODO: emit something
+    }
+
+    function burnExternalShares(address _account, uint256 _amount) external {
+        uint256 ethAmount = super.getPooledEthByShares(_amount);
+        uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
+
+        if (extBalance < ethAmount) revert("EXT_BALANCE_TOO_SMALL");
+
+        burnShares(_account, _amount);
+
+        EXTERNAL_BALANCE_POSITION.setStorageUint256(
+            EXTERNAL_BALANCE_POSITION.getStorageUint256() - ethAmount
+        );
+
+        // TODO: emit
+    }
+
     /*
      * @dev updates Consensus Layer state snapshot according to the current report
      *
@@ -566,7 +599,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _postClValidators,
-        uint256 _postClBalance
+        uint256 _postClBalance,
+        uint256 _postExternalBalance
     ) external {
         require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
 
@@ -579,7 +613,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // calculate rewards on the next push
         CL_BALANCE_POSITION.setStorageUint256(_postClBalance);
 
-        //TODO: emit CLBalanceUpdated ??
+        EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
+
+        //TODO: emit CLBalanceUpdated and external balance updated??
         emit CLValidatorsUpdated(_reportTimestamp, preClValidators, _postClValidators);
     }
 
@@ -791,6 +827,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getTotalPooledEther() internal view returns (uint256) {
         return _getBufferedEther()
             .add(CL_BALANCE_POSITION.getStorageUint256())
+            .add(EXTERNAL_BALANCE_POSITION.getStorageUint256())
             .add(_getTransientBalance());
     }
 

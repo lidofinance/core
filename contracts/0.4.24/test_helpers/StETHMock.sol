@@ -39,7 +39,7 @@ contract StETHMock is StETH {
         totalPooledEther = _totalPooledEther;
     }
 
-    function mintShares(address _to, uint256 _sharesAmount) external {
+    function mintShares(address _to, uint256 _sharesAmount) public {
         _mintShares(_to, _sharesAmount);
         _emitTransferAfterMintingShares(_to, _sharesAmount);
     }
@@ -50,7 +50,7 @@ contract StETHMock is StETH {
         setTotalPooledEther(_getTotalPooledEther().add(msg.value));
     }
 
-    function burnShares(address _account, uint256 _sharesAmount) external {
+    function burnShares(address _account, uint256 _sharesAmount) public {
         _burnShares(_account, _sharesAmount);
     }
 }

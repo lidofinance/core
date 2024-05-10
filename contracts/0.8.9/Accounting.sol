@@ -208,7 +208,7 @@ contract Accounting {
         // Take a snapshot of the current (pre-) state
         PreReportState memory pre = PreReportState(0,0,0,0,0);
 
-        (pre.depositedValidators ,pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
+        (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
 
@@ -252,6 +252,8 @@ contract Accounting {
             update.elRewards,
             update.adjustedPreClBalance,
             update.moduleRewardDistribution);
+
+        //TODO: Pre-calculate `postTotalPooledEther` and `postTotalShares`
 
         return ReportContext(_report, pre, update);
     }
