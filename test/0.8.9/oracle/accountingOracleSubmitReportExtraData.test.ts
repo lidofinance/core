@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroHash } from "ethers";
+import { BigNumberish, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
@@ -15,6 +15,7 @@ import {
 import {
   calcExtraDataListHash,
   calcReportDataHash,
+  constructOracleReport,
   encodeExtraDataItem,
   encodeExtraDataItems,
   ether,
@@ -103,25 +104,23 @@ describe("AccountingOracle.sol", () => {
   function getReportData({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
     const extraDataValue = extraData || getDefaultExtraData();
     const extraDataItemsValue = extraDataItems || encodeExtraDataItems(extraDataValue);
-    const extraDataList = packExtraDataList(extraDataItemsValue);
-    const extraDataHash = calcExtraDataListHash(extraDataList);
 
-    const reportFieldsArg = getDefaultReportFields({
-      extraDataHash,
-      extraDataItemsCount: extraDataItemsValue.length,
+    const reportFieldsValue = getDefaultReportFields({
       ...reportFields,
     });
 
-    const reportItems = getReportDataItems(reportFieldsArg);
-    const reportHash = calcReportDataHash(reportItems);
+    const { extraDataChunks, extraDataChunkHashes, report, reportHash } = constructOracleReport(
+      reportFieldsValue,
+      extraDataItemsValue,
+      { maxItemsPerChunk: extraDataItemsValue.length },
+    );
 
     return {
       extraData: extraDataValue,
       extraDataItems: extraDataItemsValue,
-      extraDataList,
-      extraDataHash,
-      reportFields: reportFieldsArg,
-      reportItems,
+      extraDataList: extraDataChunks[0],
+      extraDataHash: extraDataChunkHashes[0],
+      reportFields: report,
       reportHash,
     };
   }
@@ -131,9 +130,21 @@ describe("AccountingOracle.sol", () => {
     return getReportData({ extraData, extraDataItems, reportFields: { ...reportFields, refSlot } as OracleReport });
   }
 
+  async function oracleMemberSubmitReportHash(refSlot: BigNumberish, reportHash: string) {
+    await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+  }
+
+  async function oracleMemberSubmitReportData(report: OracleReport) {
+    await oracle.connect(member1).submitReportData(report, oracleVersion);
+  }
+
+  async function oracleMemberSubmitExtraData(extraDataList: string) {
+    await oracle.connect(member1).submitReportExtraDataList(extraDataList);
+  }
+
   async function submitReportHash({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
     const data = await prepareReport({ extraData, extraDataItems, reportFields });
-    await consensus.connect(member1).submitReport(data.reportFields.refSlot, data.reportHash, CONSENSUS_VERSION);
+    await oracleMemberSubmitReportHash(data.reportFields.refSlot, data.reportHash);
     return data;
   }
 
@@ -163,6 +174,8 @@ describe("AccountingOracle.sol", () => {
           .to.be.revertedWithCustomError(oracle, "ProcessingDeadlineMissed")
           .withArgs(deadline);
       });
+
+      // second report miss deadline
 
       it("pass successfully if time is equals exactly to deadline value", async () => {
         await consensus.advanceTimeToNextFrameStart();
@@ -224,29 +237,32 @@ describe("AccountingOracle.sol", () => {
 
     context("checks items count", () => {
       it("reverts with UnexpectedExtraDataItemsCount if there was wrong amount of items", async () => {
-        const wrongItemsCount = 1;
         await consensus.advanceTimeToNextFrameStart();
-        const { extraDataList, extraDataItems, reportFields } = await submitReportHash({
-          reportFields: { extraDataItemsCount: wrongItemsCount },
-        });
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+        const { extraDataList, extraDataItems, reportFields } = await prepareReport();
+
+        const wrongItemsCount = 1;
+        const reportWithWrongItemsCount = { ...reportFields, extraDataItemsCount: wrongItemsCount };
+        const hashOfReportWithWrongItemsCount = calcReportDataHash(getReportDataItems(reportWithWrongItemsCount));
+
+        await oracleMemberSubmitReportHash(reportWithWrongItemsCount.refSlot, hashOfReportWithWrongItemsCount);
+        await oracleMemberSubmitReportData(reportWithWrongItemsCount);
+        await expect(oracleMemberSubmitExtraData(extraDataList))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataItemsCount")
-          .withArgs(reportFields.extraDataItemsCount, extraDataItems.length);
+          .withArgs(reportWithWrongItemsCount.extraDataItemsCount, extraDataItems.length);
       });
     });
 
     context("enforces data format", () => {
       it("reverts with UnexpectedExtraDataFormat if there was empty format submitted on first phase", async () => {
-        const reportFieldsConsts = {
-          extraDataHash: ZeroHash,
-          extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
-          extraDataItemsCount: 0,
-        };
         await consensus.advanceTimeToNextFrameStart();
-        const { reportFields, extraDataList } = await submitReportHash({ reportFields: reportFieldsConsts });
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+        const { reportFields: emptyReport, reportHash: emptyReportHash } = await prepareReport({
+          extraData: { stuckKeys: [], exitedKeys: [] },
+        });
+        const { extraDataList } = await prepareReport();
+
+        await oracleMemberSubmitReportHash(emptyReport.refSlot, emptyReportHash);
+        await oracleMemberSubmitReportData(emptyReport);
+        await expect(oracleMemberSubmitExtraData(extraDataList))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataFormat")
           .withArgs(EXTRA_DATA_FORMAT_EMPTY, EXTRA_DATA_FORMAT_LIST);
       });
