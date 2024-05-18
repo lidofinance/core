@@ -215,11 +215,18 @@ type ExtraDataConfig = {
   maxItemsPerChunk?: number;
 };
 
-export function constructOracleReport(
-  reportFieldsWithoutExtraData: Omit<OracleReport, "extraDataHash" | "extraDataItemsCount" | "extraDataFormat">,
-  extraData: string[] | ItemType[] | ExtraDataType,
-  config?: ExtraDataConfig,
-) {
+export type ReportFieldsWithoutExtraData = Omit<
+  OracleReport,
+  "extraDataHash" | "extraDataItemsCount" | "extraDataFormat"
+>;
+
+export type OracleReportProps = {
+  reportFieldsWithoutExtraData: Omit<OracleReport, "extraDataHash" | "extraDataItemsCount" | "extraDataFormat">;
+  extraData: string[] | ItemType[] | ExtraDataType;
+  config?: ExtraDataConfig;
+};
+
+export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
   const extraDataItems: string[] = [];
 
   if (Array.isArray(extraData)) {
@@ -232,7 +239,8 @@ export function constructOracleReport(
     extraDataItems.push(...encodeExtraDataItems(extraData));
   }
 
-  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItems.length;
+  const extraDataItemsCount = extraDataItems.length;
+  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
   const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
   const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
 
@@ -248,6 +256,7 @@ export function constructOracleReport(
   return {
     extraDataChunks,
     extraDataChunkHashes,
+    extraDataItemsCount,
     report,
     reportHash,
   };

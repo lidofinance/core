@@ -26,7 +26,9 @@ import {
   getReportDataItems,
   numberToHex,
   OracleReport,
+  OracleReportProps,
   packExtraDataList,
+  ReportFieldsWithoutExtraData,
   shareRate,
   Snapshot,
 } from "lib";
@@ -34,7 +36,7 @@ import { CONSENSUS_VERSION } from "lib";
 
 import { deployAndConfigureAccountingOracle, ONE_GWEI } from "./accountingOracleDeploy.test";
 
-const getDefaultExtraData = () => ({
+const getDefaultExtraData = (): ExtraDataType => ({
   stuckKeys: [
     { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
     { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
@@ -87,12 +89,6 @@ describe("AccountingOracle.sol", () => {
     await consensus.connect(admin).addMember(member1, 1);
   });
 
-  interface ReportDataArgs {
-    extraData?: ExtraDataType;
-    extraDataItems?: string[];
-    reportFields?: object;
-  }
-
   async function takeSnapshot() {
     snapshot = await Snapshot.take();
   }
@@ -101,23 +97,45 @@ describe("AccountingOracle.sol", () => {
     await Snapshot.restore(snapshot);
   }
 
-  function getReportData({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
-    const extraDataValue = extraData || getDefaultExtraData();
-    const extraDataItemsValue = extraDataItems || encodeExtraDataItems(extraDataValue);
-
+  function constructOracleReportWithDefaultValues({
+    reportFieldsWithoutExtraData,
+    extraData,
+    config,
+  }: Pick<Partial<OracleReportProps>, "config" | "extraData"> & {
+    reportFieldsWithoutExtraData?: Partial<ReportFieldsWithoutExtraData>;
+  }) {
     const reportFieldsValue = getDefaultReportFields({
-      ...reportFields,
+      ...reportFieldsWithoutExtraData,
     });
 
-    const { extraDataChunks, extraDataChunkHashes, report, reportHash } = constructOracleReport(
-      reportFieldsValue,
-      extraDataItemsValue,
-      { maxItemsPerChunk: extraDataItemsValue.length },
-    );
+    const extraDataValue = extraData || getDefaultExtraData();
+
+    return constructOracleReport({
+      reportFieldsWithoutExtraData: reportFieldsValue,
+      extraData: extraDataValue,
+      config,
+    });
+  }
+
+  interface ReportDataArgs {
+    extraData?: ExtraDataType;
+    extraDataItems?: string[];
+    reportFields?: Partial<ReportFieldsWithoutExtraData>;
+  }
+
+  function getReportData({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
+    const extraDataValue = extraData || getDefaultExtraData();
+    const extraDataItemsValue = extraDataItems || extraDataValue;
+
+    const { extraDataChunks, extraDataChunkHashes, extraDataItemsCount, report, reportHash } =
+      constructOracleReportWithDefaultValues({
+        reportFieldsWithoutExtraData: reportFields,
+        extraData: extraDataItemsValue,
+      });
 
     return {
       extraData: extraDataValue,
-      extraDataItems: extraDataItemsValue,
+      extraDataItemsCount,
       extraDataList: extraDataChunks[0],
       extraDataHash: extraDataChunkHashes[0],
       reportFields: report,
@@ -191,23 +209,27 @@ describe("AccountingOracle.sol", () => {
     context("checks ref slot", () => {
       it("reverts with CannotSubmitExtraDataBeforeMainData in attempt of try to pass extra data ahead of submitReportData", async () => {
         const { refSlot } = await consensus.getCurrentFrame();
-        const { reportHash, extraDataList } = getReportData({ reportFields: { refSlot } });
+        const { reportHash, extraDataChunks } = constructOracleReportWithDefaultValues({
+          reportFieldsWithoutExtraData: { refSlot },
+        });
         await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
         // No submitReportData here — trying to send extra data ahead of it
-        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
-          oracle,
-          "CannotSubmitExtraDataBeforeMainData",
-        );
+        await expect(
+          oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]),
+        ).to.be.revertedWithCustomError(oracle, "CannotSubmitExtraDataBeforeMainData");
       });
 
       it("pass successfully ", async () => {
         const { refSlot } = await consensus.getCurrentFrame();
-        const { reportFields, reportHash, extraDataList } = getReportData({ reportFields: { refSlot } });
+        const { report, reportHash, extraDataChunks } = constructOracleReportWithDefaultValues({
+          reportFieldsWithoutExtraData: { refSlot },
+        });
+
         await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
         // Now submitReportData on it's place
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
-        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
+        await oracle.connect(member1).submitReportData(report, oracleVersion);
+        const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]);
+        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, anyValue, anyValue);
       });
     });
 
@@ -238,7 +260,7 @@ describe("AccountingOracle.sol", () => {
     context("checks items count", () => {
       it("reverts with UnexpectedExtraDataItemsCount if there was wrong amount of items", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { extraDataList, extraDataItems, reportFields } = await prepareReport();
+        const { extraDataList, extraDataItemsCount, reportFields } = await prepareReport();
 
         const wrongItemsCount = 1;
         const reportWithWrongItemsCount = { ...reportFields, extraDataItemsCount: wrongItemsCount };
@@ -248,7 +270,7 @@ describe("AccountingOracle.sol", () => {
         await oracleMemberSubmitReportData(reportWithWrongItemsCount);
         await expect(oracleMemberSubmitExtraData(extraDataList))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataItemsCount")
-          .withArgs(reportWithWrongItemsCount.extraDataItemsCount, extraDataItems.length);
+          .withArgs(reportWithWrongItemsCount.extraDataItemsCount, extraDataItemsCount);
       });
     });
 
@@ -613,11 +635,11 @@ describe("AccountingOracle.sol", () => {
 
     it("reverts if extraData has already been processed", async () => {
       await consensus.advanceTimeToNextFrameStart();
-      const { reportFields, extraDataItems, extraDataList } = await submitReportHash();
+      const { reportFields, extraDataItemsCount, extraDataList } = await submitReportHash();
       await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
       await oracle.connect(member1).submitReportExtraDataList(extraDataList);
       const state = await oracle.getExtraDataProcessingState();
-      expect(state.itemsCount).to.be.equal(extraDataItems.length);
+      expect(state.itemsCount).to.be.equal(extraDataItemsCount);
       expect(state.itemsCount).to.be.equal(state.itemsProcessed);
       await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
         oracle,
@@ -656,7 +678,7 @@ describe("AccountingOracle.sol", () => {
 
     it("updates extra data processing state", async () => {
       await consensus.advanceTimeToNextFrameStart();
-      const { reportFields, extraDataItems, extraDataHash, extraDataList } = await submitReportHash();
+      const { reportFields, extraDataItemsCount, extraDataHash, extraDataList } = await submitReportHash();
       await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
       const stateBefore = await oracle.getExtraDataProcessingState();
@@ -664,7 +686,7 @@ describe("AccountingOracle.sol", () => {
       expect(stateBefore.refSlot).to.be.equal(reportFields.refSlot);
       expect(stateBefore.dataFormat).to.be.equal(EXTRA_DATA_FORMAT_LIST);
       expect(stateBefore.submitted).to.be.false;
-      expect(stateBefore.itemsCount).to.be.equal(extraDataItems.length);
+      expect(stateBefore.itemsCount).to.be.equal(extraDataItemsCount);
       expect(stateBefore.itemsProcessed).to.be.equal(0);
       expect(stateBefore.lastSortingKey).to.be.equal("0");
       expect(stateBefore.dataHash).to.be.equal(extraDataHash);
@@ -676,8 +698,8 @@ describe("AccountingOracle.sol", () => {
       expect(stateAfter.refSlot).to.be.equal(reportFields.refSlot);
       expect(stateAfter.dataFormat).to.be.equal(EXTRA_DATA_FORMAT_LIST);
       expect(stateAfter.submitted).to.be.true;
-      expect(stateAfter.itemsCount).to.be.equal(extraDataItems.length);
-      expect(stateAfter.itemsProcessed).to.be.equal(extraDataItems.length);
+      expect(stateAfter.itemsCount).to.be.equal(extraDataItemsCount);
+      expect(stateAfter.itemsProcessed).to.be.equal(extraDataItemsCount);
       // TODO: figure out how to build this value and test it properly
       expect(stateAfter.lastSortingKey).to.be.equal(
         "3533694129556768659166595001485837031654967793751237971583444623713894401",
