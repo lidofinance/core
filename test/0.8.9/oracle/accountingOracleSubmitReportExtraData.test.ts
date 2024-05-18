@@ -131,7 +131,7 @@ describe("AccountingOracle.sol", () => {
     reportFields?: Partial<ReportFieldsWithoutExtraData>;
   }
 
-  function getReportData({ extraData, reportFields }: ReportDataArgs = {}) {
+  function constructOracleReportWithSingeExtraDataTransaction({ extraData, reportFields }: ReportDataArgs = {}) {
     const extraDataValue = extraData || getDefaultExtraData();
 
     const { extraDataChunks, extraDataChunkHashes, extraDataItemsCount, report, reportHash, reportInput } =
@@ -150,9 +150,15 @@ describe("AccountingOracle.sol", () => {
     };
   }
 
-  async function prepareReport({ extraData, reportFields }: ReportDataArgs = {}) {
+  async function constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot({
+    extraData,
+    reportFields,
+  }: ReportDataArgs = {}) {
     const { refSlot } = await consensus.getCurrentFrame();
-    return getReportData({ extraData, reportFields: { ...reportFields, refSlot } as OracleReport });
+    return constructOracleReportWithSingeExtraDataTransaction({
+      extraData,
+      reportFields: { ...reportFields, refSlot } as OracleReport,
+    });
   }
 
   async function oracleMemberSubmitReportHash(refSlot: BigNumberish, reportHash: string) {
@@ -168,7 +174,7 @@ describe("AccountingOracle.sol", () => {
   }
 
   async function submitReportHash({ extraData, reportFields }: ReportDataArgs = {}) {
-    const data = await prepareReport({ extraData, reportFields });
+    const data = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot({ extraData, reportFields });
     await oracleMemberSubmitReportHash(data.reportFields.refSlot, data.reportHash);
     return data;
   }
@@ -267,7 +273,8 @@ describe("AccountingOracle.sol", () => {
     context("checks items count", () => {
       it("reverts with UnexpectedExtraDataItemsCount if there was wrong amount of items", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { extraDataList, extraDataItemsCount, reportFields } = await prepareReport();
+        const { extraDataList, extraDataItemsCount, reportFields } =
+          await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot();
 
         const wrongItemsCount = 1;
         const reportWithWrongItemsCount = { ...reportFields, extraDataItemsCount: wrongItemsCount };
@@ -284,10 +291,11 @@ describe("AccountingOracle.sol", () => {
     context("enforces data format", () => {
       it("reverts with UnexpectedExtraDataFormat if there was empty format submitted on first phase", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { reportFields: emptyReport, reportHash: emptyReportHash } = await prepareReport({
-          extraData: { stuckKeys: [], exitedKeys: [] },
-        });
-        const { extraDataList } = await prepareReport();
+        const { reportFields: emptyReport, reportHash: emptyReportHash } =
+          await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot({
+            extraData: { stuckKeys: [], exitedKeys: [] },
+          });
+        const { extraDataList } = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot();
 
         await oracleMemberSubmitReportHash(emptyReport.refSlot, emptyReportHash);
         await oracleMemberSubmitReportData(emptyReport);
@@ -660,7 +668,7 @@ describe("AccountingOracle.sol", () => {
 
     it("reverts if main data has not been processed yet", async () => {
       await consensus.advanceTimeToNextFrameStart();
-      const report1 = await prepareReport();
+      const report1 = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot();
 
       await expect(
         oracle.connect(member1).submitReportExtraDataList(report1.extraDataList),
