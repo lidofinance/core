@@ -110,11 +110,19 @@ describe("AccountingOracle.sol", () => {
 
     const extraDataValue = extraData || getDefaultExtraData();
 
-    return constructOracleReport({
+    const report = constructOracleReport({
       reportFieldsWithoutExtraData: reportFieldsValue,
       extraData: extraDataValue,
       config,
     });
+
+    return {
+      ...report,
+      reportInput: {
+        reportFieldsValue,
+        extraDataValue,
+      },
+    };
   }
 
   interface ReportDataArgs {
@@ -127,19 +135,19 @@ describe("AccountingOracle.sol", () => {
     const extraDataValue = extraData || getDefaultExtraData();
     const extraDataItemsValue = extraDataItems || extraDataValue;
 
-    const { extraDataChunks, extraDataChunkHashes, extraDataItemsCount, report, reportHash } =
+    const { extraDataChunks, extraDataChunkHashes, extraDataItemsCount, report, reportHash, reportInput } =
       constructOracleReportWithDefaultValues({
         reportFieldsWithoutExtraData: reportFields,
         extraData: extraDataItemsValue,
       });
 
     return {
-      extraData: extraDataValue,
       extraDataItemsCount,
       extraDataList: extraDataChunks[0],
       extraDataHash: extraDataChunkHashes[0],
       reportFields: report,
       reportHash,
+      reportInput,
     };
   }
 
@@ -586,17 +594,19 @@ describe("AccountingOracle.sol", () => {
     context("delivers the data to staking router", () => {
       it("calls reportStakingModuleStuckValidatorsCountByNodeOperator on StakingRouter", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { reportFields, extraData, extraDataList } = await submitReportHash();
+        const { reportFields, reportInput, extraDataList } = await submitReportHash();
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
         await oracle.connect(member1).submitReportExtraDataList(extraDataList);
 
         const callsCount = await stakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-        expect(callsCount).to.be.equal(extraData.stuckKeys.length);
+
+        const extraDataValue = reportInput.extraDataValue as ExtraDataType;
+        expect(callsCount).to.be.equal(extraDataValue.stuckKeys.length);
 
         for (let i = 0; i < callsCount; i++) {
           const call = await stakingRouter.calls_reportStuckKeysByNodeOperator(i);
-          const item = extraData.stuckKeys[i];
+          const item = extraDataValue.stuckKeys[i];
           expect(call.stakingModuleId).to.be.equal(item.moduleId);
           expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
           expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
@@ -605,17 +615,19 @@ describe("AccountingOracle.sol", () => {
 
       it("calls reportStakingModuleExitedValidatorsCountByNodeOperator on StakingRouter", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { reportFields, extraData, extraDataList } = await submitReportHash();
+        const { reportFields, reportInput, extraDataList } = await submitReportHash();
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
         await oracle.connect(member1).submitReportExtraDataList(extraDataList);
 
         const callsCount = await stakingRouter.totalCalls_reportExitedKeysByNodeOperator();
-        expect(callsCount).to.be.equal(extraData.exitedKeys.length);
+
+        const extraDataValue = reportInput.extraDataValue as ExtraDataType;
+        expect(callsCount).to.be.equal(extraDataValue.exitedKeys.length);
 
         for (let i = 0; i < callsCount; i++) {
           const call = await stakingRouter.calls_reportExitedKeysByNodeOperator(i);
-          const item = extraData.exitedKeys[i];
+          const item = extraDataValue.exitedKeys[i];
           expect(call.stakingModuleId).to.be.equal(item.moduleId);
           expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
           expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
