@@ -220,9 +220,10 @@ export type ReportFieldsWithoutExtraData = Omit<
   "extraDataHash" | "extraDataItemsCount" | "extraDataFormat"
 >;
 
+export type ExtraData = string[] | ItemType[] | ExtraDataType;
 export type OracleReportProps = {
-  reportFieldsWithoutExtraData: Omit<OracleReport, "extraDataHash" | "extraDataItemsCount" | "extraDataFormat">;
-  extraData: string[] | ItemType[] | ExtraDataType;
+  reportFieldsWithoutExtraData: ReportFieldsWithoutExtraData;
+  extraData: ExtraData;
   config?: ExtraDataConfig;
 };
 

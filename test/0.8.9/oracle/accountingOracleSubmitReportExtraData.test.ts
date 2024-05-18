@@ -22,6 +22,7 @@ import {
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   EXTRA_DATA_TYPE_STUCK_VALIDATORS,
+  ExtraData,
   ExtraDataType,
   getReportDataItems,
   numberToHex,
@@ -126,19 +127,17 @@ describe("AccountingOracle.sol", () => {
   }
 
   interface ReportDataArgs {
-    extraData?: ExtraDataType;
-    extraDataItems?: string[];
+    extraData?: ExtraData;
     reportFields?: Partial<ReportFieldsWithoutExtraData>;
   }
 
-  function getReportData({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
+  function getReportData({ extraData, reportFields }: ReportDataArgs = {}) {
     const extraDataValue = extraData || getDefaultExtraData();
-    const extraDataItemsValue = extraDataItems || extraDataValue;
 
     const { extraDataChunks, extraDataChunkHashes, extraDataItemsCount, report, reportHash, reportInput } =
       constructOracleReportWithDefaultValues({
         reportFieldsWithoutExtraData: reportFields,
-        extraData: extraDataItemsValue,
+        extraData: extraDataValue,
       });
 
     return {
@@ -151,9 +150,9 @@ describe("AccountingOracle.sol", () => {
     };
   }
 
-  async function prepareReport({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
+  async function prepareReport({ extraData, reportFields }: ReportDataArgs = {}) {
     const { refSlot } = await consensus.getCurrentFrame();
-    return getReportData({ extraData, extraDataItems, reportFields: { ...reportFields, refSlot } as OracleReport });
+    return getReportData({ extraData, reportFields: { ...reportFields, refSlot } as OracleReport });
   }
 
   async function oracleMemberSubmitReportHash(refSlot: BigNumberish, reportHash: string) {
@@ -168,8 +167,8 @@ describe("AccountingOracle.sol", () => {
     await oracle.connect(member1).submitReportExtraDataList(extraDataList);
   }
 
-  async function submitReportHash({ extraData, extraDataItems, reportFields }: ReportDataArgs = {}) {
-    const data = await prepareReport({ extraData, extraDataItems, reportFields });
+  async function submitReportHash({ extraData, reportFields }: ReportDataArgs = {}) {
+    const data = await prepareReport({ extraData, reportFields });
     await oracleMemberSubmitReportHash(data.reportFields.refSlot, data.reportHash);
     return data;
   }
@@ -343,9 +342,9 @@ describe("AccountingOracle.sol", () => {
         };
 
         it("if first item index is not zero", async () => {
-          const { extraData, extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(1, 1);
+          const { extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(1, 1);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataIndex")
@@ -353,9 +352,9 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("if next index is greater than previous for more than +1", async () => {
-          const { extraData, extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(2, 2);
+          const { extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(2, 2);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataIndex")
@@ -363,9 +362,9 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("if next index equals to previous", async () => {
-          const { extraData, extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(3, 1);
+          const { extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(3, 1);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataIndex")
@@ -373,9 +372,9 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("if next index less than previous", async () => {
-          const { extraData, extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(3, 0);
+          const { extraDataItems, lastIndexDefault, lastIndexCustom } = getExtraWithCustomLastIndex(3, 0);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataIndex")
@@ -383,9 +382,9 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("succeeds if indexes were passed sequentially", async () => {
-          const { extraData, extraDataItems } = getExtraWithCustomLastIndex(3, 2);
+          const { extraDataItems } = getExtraWithCustomLastIndex(3, 2);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
           await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
@@ -411,9 +410,9 @@ describe("AccountingOracle.sol", () => {
         };
 
         it("if type `0` was passed", async () => {
-          const { extraData, extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0);
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
@@ -421,9 +420,9 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("if type `3` was passed", async () => {
-          const { extraData, extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3);
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
@@ -431,18 +430,18 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("succeeds if `1` was passed", async () => {
-          const { extraData, extraDataItems } = getExtraWithCustomType(1);
+          const { extraDataItems } = getExtraWithCustomType(1);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
           await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
         });
 
         it("succeeds if `2` was passed", async () => {
-          const { extraData, extraDataItems } = getExtraWithCustomType(2);
+          const { extraDataItems } = getExtraWithCustomType(2);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
           await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
@@ -498,7 +497,7 @@ describe("AccountingOracle.sol", () => {
           const cutStop = 36;
           extraDataItems[invalidItemIndex] = extraDataItems[invalidItemIndex].slice(0, cutStop);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "InvalidExtraDataItem")
@@ -520,7 +519,7 @@ describe("AccountingOracle.sol", () => {
           const cutStop = extraDataItems[invalidItemIndex].length - 2;
           extraDataItems[invalidItemIndex] = extraDataItems[invalidItemIndex].slice(0, cutStop);
           await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData, extraDataItems });
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(oracle, "InvalidExtraDataItem")
