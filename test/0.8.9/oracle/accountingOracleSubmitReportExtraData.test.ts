@@ -98,13 +98,15 @@ describe("AccountingOracle.sol", () => {
     await Snapshot.restore(snapshot);
   }
 
+  type ConstructOracleReportWithDefaultValuesProps = Pick<Partial<OracleReportProps>, "config" | "extraData"> & {
+    reportFieldsWithoutExtraData?: Partial<ReportFieldsWithoutExtraData>;
+  };
+
   function constructOracleReportWithDefaultValues({
     reportFieldsWithoutExtraData,
     extraData,
     config,
-  }: Pick<Partial<OracleReportProps>, "config" | "extraData"> & {
-    reportFieldsWithoutExtraData?: Partial<ReportFieldsWithoutExtraData>;
-  }) {
+  }: ConstructOracleReportWithDefaultValuesProps) {
     const reportFieldsValue = getDefaultReportFields({
       ...reportFieldsWithoutExtraData,
     });
@@ -173,6 +175,21 @@ describe("AccountingOracle.sol", () => {
     await oracle.connect(member1).submitReportExtraDataList(extraDataList);
   }
 
+  async function constructOracleReportForCurrentFrameAndSubmitReportHash({
+    extraData,
+    reportFieldsWithoutExtraData,
+    config,
+  }: ConstructOracleReportWithDefaultValuesProps) {
+    const { refSlot } = await consensus.getCurrentFrame();
+    const data = await constructOracleReportWithDefaultValues({
+      extraData,
+      reportFieldsWithoutExtraData: { ...reportFieldsWithoutExtraData, refSlot },
+      config,
+    });
+    await oracleMemberSubmitReportHash(data.report.refSlot, data.reportHash);
+    return data;
+  }
+
   async function submitReportHash({ extraData, reportFields }: ReportDataArgs = {}) {
     const data = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot({ extraData, reportFields });
     await oracleMemberSubmitReportHash(data.reportFields.refSlot, data.reportHash);
@@ -195,18 +212,43 @@ describe("AccountingOracle.sol", () => {
     afterEach(rollback);
 
     context("enforces the deadline", () => {
-      it("reverts with ProcessingDeadlineMissed if deadline missed", async () => {
+      it("reverts with ProcessingDeadlineMissed if deadline missed for the single transaction of extra data report", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { reportFields, extraDataList } = await submitReportHash();
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({});
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await oracleMemberSubmitReportData(report);
         await consensus.advanceTimeToNextFrameStart();
-        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]))
           .to.be.revertedWithCustomError(oracle, "ProcessingDeadlineMissed")
           .withArgs(deadline);
       });
 
-      // second report miss deadline
+      it("reverts with ProcessingDeadlineMissed if deadline missed for the first transaction of extra data report", async () => {
+        await consensus.advanceTimeToNextFrameStart();
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
+          config: { maxItemsPerChunk: 2 },
+        });
+        const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
+        await oracleMemberSubmitReportData(report);
+        await consensus.advanceTimeToNextFrameStart();
+        await expect(oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]))
+          .to.be.revertedWithCustomError(oracle, "ProcessingDeadlineMissed")
+          .withArgs(deadline);
+      });
+
+      it("reverts with ProcessingDeadlineMissed if deadline missed for the second transaction of extra data report", async () => {
+        await consensus.advanceTimeToNextFrameStart();
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
+          config: { maxItemsPerChunk: 2 },
+        });
+        const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
+        await oracleMemberSubmitReportData(report);
+        await oracleMemberSubmitExtraData(extraDataChunks[0]);
+        await consensus.advanceTimeToNextFrameStart();
+        await expect(oracleMemberSubmitExtraData(extraDataChunks[1]))
+          .to.be.revertedWithCustomError(oracle, "ProcessingDeadlineMissed")
+          .withArgs(deadline);
+      });
 
       it("pass successfully if time is equals exactly to deadline value", async () => {
         await consensus.advanceTimeToNextFrameStart();
