@@ -183,7 +183,7 @@ export function packExtraDataItemsToChunksLinkedByHash(extraDataItems: string[],
     nextHash = calcExtraDataListHash(packed);
   }
 
-  return packedChunks;
+  return packedChunks.reverse();
 }
 
 export function packExtraDataList(extraDataItems: string[]) {
