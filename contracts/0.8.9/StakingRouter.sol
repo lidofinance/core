@@ -191,8 +191,15 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
   /**
    * @notice A function to finalize upgrade to v2 (from v1). Can be called only once
+   * @param _priorityExitShareThresholds array of priority exit share thresholds
+   * @param _maxDepositsPerBlock array of max deposits per block
+   * @param _minDepositBlockDistances array of min deposit block distances
    */
-  function finalizeUpgrade_v2(uint256[] memory _priorityExitShareThresholds) external {
+  function finalizeUpgrade_v2(
+    uint256[] memory _priorityExitShareThresholds,
+    uint256[] memory _maxDepositsPerBlock,
+    uint256[] memory _minDepositBlockDistances
+  ) external {
     _checkContractVersion(1);
 
     uint256 stakingModulesCount = getStakingModulesCount();
@@ -201,13 +208,26 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
       revert ArraysLengthMismatch(stakingModulesCount, _priorityExitShareThresholds.length);
     }
 
+    if (stakingModulesCount != _maxDepositsPerBlock.length) {
+      revert ArraysLengthMismatch(stakingModulesCount, _maxDepositsPerBlock.length);
+    }
+
+    if (stakingModulesCount != _minDepositBlockDistances.length) {
+      revert ArraysLengthMismatch(stakingModulesCount, _minDepositBlockDistances.length);
+    }
+
     for (uint256 i; i < stakingModulesCount; ) {
       StakingModule storage stakingModule = _getStakingModuleByIndex(i);
-
-      if (stakingModule.stakeShareLimit > _priorityExitShareThresholds[i]) {
-        revert InvalidPriorityExitShareThreshold();
-      }
-      stakingModule.priorityExitShareThreshold = uint16(_priorityExitShareThresholds[i]);
+      _updateStakingModule(
+        stakingModule,
+        stakingModule.id,
+        stakingModule.stakeShareLimit,
+        _priorityExitShareThresholds[i],
+        stakingModule.stakingModuleFee,
+        stakingModule.treasuryFee,
+        _maxDepositsPerBlock[i],
+        _minDepositBlockDistances[i]
+      );
 
       unchecked {
         ++i;
