@@ -32,7 +32,6 @@ const STAKING_MODULE_ID = 100;
 const MAX_DEPOSITS_PER_BLOCK = 100;
 const MIN_DEPOSIT_BLOCK_DISTANCE = 14;
 const PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS = 10;
-const UNVET_INTENT_VALIDITY_PERIOD_BLOCKS = 10;
 const MAX_OPERATORS_PER_UNVETTING = 20;
 const MODULE_NONCE = 12;
 const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac30c179137";
@@ -64,7 +63,6 @@ function initialParams(): Params {
     depositContract: "",
     stakingRouter: "",
     pauseIntentValidityPeriodBlocks: PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS,
-    unvetIntentValidityPeriodBlocks: UNVET_INTENT_VALIDITY_PERIOD_BLOCKS,
     maxOperatorsPerUnvetting: MAX_OPERATORS_PER_UNVETTING,
   } as Params;
 }
@@ -370,46 +368,6 @@ describe("DepositSecurityModule.sol", () => {
           .withArgs(newValue);
 
         expect(await dsm.getPauseIntentValidityPeriodBlocks()).to.equal(newValue);
-      });
-    });
-  });
-
-  context("Unvet intent validity period blocks", () => {
-    context("Function `getUnvetIntentValidityPeriodBlocks`", () => {
-      it("Returns current `unvetIntentValidityPeriodBlocks` contract parameter", async () => {
-        expect(await dsm.getUnvetIntentValidityPeriodBlocks()).to.equal(config.unvetIntentValidityPeriodBlocks);
-      });
-    });
-
-    context("Function `setUnvetIntentValidityPeriodBlocks`", () => {
-      let originalState: string;
-
-      before(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalState);
-      });
-
-      it("Reverts if the `newValue` is zero parameter", async () => {
-        await expect(dsm.setUnvetIntentValidityPeriodBlocks(0)).to.be.revertedWithCustomError(dsm, "ZeroParameter");
-      });
-
-      it("Reverts if the `setUnvetIntentValidityPeriodBlocks` called by not an owner", async () => {
-        await expect(
-          dsm.connect(stranger).setUnvetIntentValidityPeriodBlocks(config.unvetIntentValidityPeriodBlocks),
-        ).to.be.revertedWithCustomError(dsm, "NotAnOwner");
-      });
-
-      it("Sets `unvetIntentValidityPeriodBlocks` and fires `UnvetIntentValidityPeriodBlocksChanged` event", async () => {
-        const newValue = config.unvetIntentValidityPeriodBlocks + 1;
-
-        await expect(dsm.setUnvetIntentValidityPeriodBlocks(newValue))
-          .to.emit(dsm, "UnvetIntentValidityPeriodBlocksChanged")
-          .withArgs(newValue);
-
-        expect(await dsm.getUnvetIntentValidityPeriodBlocks()).to.equal(newValue);
       });
     });
   });
@@ -1532,7 +1490,7 @@ describe("DepositSecurityModule.sol", () => {
       ).to.be.revertedWithCustomError(dsm, "UnvetPayloadInvalid");
     });
 
-    it("Reverts if the number of operator ids is not equal to the number of keys count", async () => {
+    it("Reverts if the number of operators is greater than the limit", async () => {
       const overlimitedPayloadSize = MAX_OPERATORS_PER_UNVETTING + 1;
       const nodeOperatorIds = concat(Array(overlimitedPayloadSize).fill(operatorId1));
       const vettedSigningKeysCounts = concat(Array(overlimitedPayloadSize).fill(vettedSigningKeysCount1));
@@ -1577,15 +1535,6 @@ describe("DepositSecurityModule.sol", () => {
         dsm,
         "UnvetUnexpectedBlockHash",
       );
-    });
-
-    it("Reverts if called with an expired `blockNumber` and `blockHash` by a guardian", async () => {
-      const block = await getLatestBlock();
-      await mineUpTo((await time.latestBlock()) + UNVET_INTENT_VALIDITY_PERIOD_BLOCKS);
-
-      await expect(
-        unvetSigningKeys(guardian1, { blockNumber: block.number, blockHash: block.hash }),
-      ).to.be.revertedWithCustomError(dsm, "UnvetIntentExpired");
     });
 
     it("Reverts if signature is not guardian", async () => {

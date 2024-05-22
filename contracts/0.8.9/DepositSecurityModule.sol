@@ -44,7 +44,6 @@ contract DepositSecurityModule {
 
     event OwnerChanged(address newValue);
     event PauseIntentValidityPeriodBlocksChanged(uint256 newValue);
-    event UnvetIntentValidityPeriodBlocksChanged(uint256 newValue);
     event MaxOperatorsPerUnvettingChanged(uint256 newValue);
     event GuardianQuorumChanged(uint256 newValue);
     event GuardianAdded(address guardian);
@@ -66,7 +65,6 @@ contract DepositSecurityModule {
     error DepositsNotPaused();
     error ModuleNonceChanged();
     error PauseIntentExpired();
-    error UnvetIntentExpired();
     error UnvetPayloadInvalid();
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
@@ -92,7 +90,6 @@ contract DepositSecurityModule {
     uint256 internal lastDepositBlock;
 
     uint256 internal pauseIntentValidityPeriodBlocks;
-    uint256 internal unvetIntentValidityPeriodBlocks;
     uint256 internal maxOperatorsPerUnvetting;
 
     address internal owner;
@@ -112,7 +109,6 @@ contract DepositSecurityModule {
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
-        uint256 _unvetIntentValidityPeriodBlocks,
         uint256 _maxOperatorsPerUnvetting
     ) {
         if (_lido == address(0)) revert ZeroAddress("_lido");
@@ -153,7 +149,6 @@ contract DepositSecurityModule {
         _setOwner(msg.sender);
         _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
-        _setUnvetIntentValidityPeriodBlocks(_unvetIntentValidityPeriodBlocks);
         _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
     }
 
@@ -206,29 +201,6 @@ contract DepositSecurityModule {
         if (newValue == 0) revert ZeroParameter("pauseIntentValidityPeriodBlocks");
         pauseIntentValidityPeriodBlocks = newValue;
         emit PauseIntentValidityPeriodBlocksChanged(newValue);
-    }
-
-    /**
-     * @notice Returns the number of blocks during which the unvet intent is valid.
-     * @return unvetIntentValidityPeriodBlocks The number of blocks during which the unvet intent is valid.
-     */
-    function getUnvetIntentValidityPeriodBlocks() external view returns (uint256) {
-        return unvetIntentValidityPeriodBlocks;
-    }
-
-    /**
-     * @notice Sets the number of blocks during which the unvet intent is valid.
-     * @param newValue The new number of blocks during which the unvet intent is valid.
-     * @dev Only callable by the owner.
-     */
-    function setUnvetIntentValidityPeriodBlocks(uint256 newValue) external onlyOwner {
-        _setUnvetIntentValidityPeriodBlocks(newValue);
-    }
-
-    function _setUnvetIntentValidityPeriodBlocks(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroParameter("unvetIntentValidityPeriodBlocks");
-        unvetIntentValidityPeriodBlocks = newValue;
-        emit UnvetIntentValidityPeriodBlocksChanged(newValue);
     }
 
     /**
@@ -581,8 +553,7 @@ contract DepositSecurityModule {
      *   - vettedSigningKeysCounts is not packed with 16 bytes per count;
      *   - the number of node operators is greater than maxOperatorsPerUnvetting;
      *   - the signature is invalid or the signer is not a guardian;
-     *   - blockHash is zero or not equal to the blockhash(blockNumber);
-     *   - the unvet intent is expired.
+     *   - blockHash is zero or not equal to the blockhash(blockNumber).
      *
      * The signature, if present, must be produced for the keccak256 hash of the following message:
      *
@@ -633,7 +604,6 @@ contract DepositSecurityModule {
         }
 
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert UnvetUnexpectedBlockHash();
-        if (block.number - blockNumber > unvetIntentValidityPeriodBlocks) revert UnvetIntentExpired();
 
         STAKING_ROUTER.decreaseStakingModuleVettedKeysCountByNodeOperator(
             stakingModuleId,
