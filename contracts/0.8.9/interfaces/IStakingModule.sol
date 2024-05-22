@@ -23,7 +23,7 @@ interface IStakingModule {
 
     /// @notice Returns all-validators summary belonging to the node operator with the given id
     /// @param _nodeOperatorId id of the operator to return report for
-    /// @return targetLimitMode shows whether the current target limit applied to the node operator (1 = soft mode, 2 = forced mode)
+    /// @return targetLimitMode shows whether the current target limit applied to the node operator (0 = disabled, 1 = soft mode, 2 = forced mode)
     /// @return targetValidatorsCount relative target active validators limit for operator
     /// @return stuckValidatorsCount number of validators with an expired request to exit time
     /// @return refundedValidatorsCount number of validators that can't be withdrawn, but deposit
