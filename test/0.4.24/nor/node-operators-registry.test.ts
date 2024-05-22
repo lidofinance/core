@@ -18,7 +18,7 @@ import {
 } from "typechain-types";
 import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
 
-import { addAragonApp, deployLidoDao, hasPermission } from "lib";
+import { addAragonApp, deployLidoDao, hasPermission } from "test/deploy";
 
 const CURATED_TYPE = "0x637572617465642d6f6e636861696e2d76310000000000000000000000000000"; // "curated-onchain-v1"
 const PENALTY_DELAY = 2 * 24 * 60 * 60; // 2 days

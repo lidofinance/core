@@ -23,7 +23,7 @@ import {
   StakingRouterMockForDepositSecurityModule,
 } from "typechain-types";
 
-import { certainAddress, DSMAttestMessage, DSMPauseMessage, ether, streccak } from "lib";
+import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, ether, streccak } from "lib";
 
 import { Snapshot } from "test/suite";
 
