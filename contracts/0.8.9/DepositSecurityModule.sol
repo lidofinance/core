@@ -62,6 +62,7 @@ contract DepositSecurityModule {
     error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
+    error DepositsArePaused();
     error DepositsNotPaused();
     error ModuleNonceChanged();
     error PauseIntentExpired();
@@ -503,6 +504,7 @@ contract DepositSecurityModule {
         if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
+        if (isDepositsPaused) revert DepositsArePaused();
 
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 

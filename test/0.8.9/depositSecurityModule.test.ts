@@ -1263,6 +1263,23 @@ describe("DepositSecurityModule.sol", () => {
         ).to.be.revertedWithCustomError(dsm, "DepositUnexpectedBlockHash");
       });
 
+      it("Reverts if deposits are paused", async () => {
+        const blockNumber = await time.latestBlock();
+
+        await dsm.addGuardian(guardian1, 1);
+        expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
+        expect(await dsm.getGuardians()).to.have.length(1);
+        expect(await dsm.getGuardianQuorum()).to.equal(1);
+
+        await dsm.connect(guardian1).pauseDeposits(blockNumber, {
+          r: encodeBytes32String(""),
+          vs: encodeBytes32String(""),
+        });
+        expect(await dsm.isDepositsPaused()).to.equal(true);
+
+        await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositsArePaused");
+      });
+
       it("Deposit with the guardian's sig", async () => {
         await dsm.addGuardian(guardian1, 1);
         expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
