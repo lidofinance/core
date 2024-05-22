@@ -131,6 +131,24 @@ interface IWithdrawalQueue {
     function isBunkerModeActive() external view returns (bool);
 }
 
+interface IBaseOracle {
+    function getConsensusReport() external view returns (
+        bytes32 hash,
+        uint256 refSlot,
+        uint256 processingDeadlineTime,
+        bool processingStarted
+    );
+
+    function getConsensusContract() external view returns (address);
+}
+
+interface IConsensusContract {
+    function getCurrentFrame() external view returns (
+        uint256 refSlot,
+        uint256 reportProcessingDeadlineSlot
+    );
+}
+
 /**
 * @title Liquid staking pool implementation
 *
@@ -196,6 +214,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
+    /// @dev Depositable ether amount exceeding the currently existing withdrawal demand
+    /// gets replenished with each AccountingOracle frame
+    bytes32 internal constant DEPOSITABLE_FASTLANE_AMOUNT_POSITION =
+        0x4391005991030a658de88e2a8055d4c95a6944d7ddbe36242ddc7afee151ad53; // keccak256("lido.Lido.depositableFastLaneAmount);
+
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -205,6 +228,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event StakingLimitSet(uint256 maxStakeLimit, uint256 stakeLimitIncreasePerBlock);
     // Staking limit was removed
     event StakingLimitRemoved();
+    // Depositable fastlane amount set
+    event DepositableFastLaneAmountSet(uint256 amount);
 
     // Emits when validators number delivered by the oracle
     event CLValidatorsUpdated(
@@ -253,6 +278,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // The `amount` of ether was sent to the deposit_contract.deposit function
     event Unbuffered(uint256 amount);
+
+    // Accumulates deposited ether for each checkpoint
+    // @dev Checkpoints are correspond to the AccountingOracle frames
+    mapping (uint256 => uint256) public depositedPerCheckpoint;
 
     /**
     * @dev As AragonApp, Lido contract must be initialized with following variables:
@@ -441,6 +470,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         maxStakeLimitGrowthBlocks = stakeLimitData.maxStakeLimitGrowthBlocks;
         prevStakeLimit = stakeLimitData.prevStakeLimit;
         prevStakeBlockNumber = stakeLimitData.prevStakeBlockNumber;
+    }
+
+    function setDepositableFastLaneAmount(uint256 _amount) external {
+        _auth(STAKING_CONTROL_ROLE);
+
+        DEPOSITABLE_FASTLANE_AMOUNT_POSITION.setStorageUint256(_amount);
+
+        emit DepositableFastLaneAmountSet(_amount);
+    }
+
+    function getDepositableFastLaneAmount() public view returns (uint256) {
+        return DEPOSITABLE_FASTLANE_AMOUNT_POSITION.getStorageUint256();
     }
 
     /**
@@ -680,7 +721,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * Takes into account unfinalized stETH required by WithdrawalQueue
      */
     function getDepositableEther() public view returns (uint256) {
+        IBaseOracle accountingOracle = IBaseOracle(getLidoLocator().accountingOracle());
+
+        (,uint256 refSlot,,bool processingStarted) = accountingOracle.getConsensusReport();
+
         uint256 bufferedEther = _getBufferedEther();
+
+        /// @dev means that the withdrawal finalization report has been arrived for the current oracle frame
+        /// otherwise can't allow fastlane deposits being a subject of the expecting withdrawal finalization round
+        if(processingStarted) {
+            uint256 alreadyDeposited = depositedPerCheckpoint[refSlot];
+            uint256 depositableFastLaneAmount = getDepositableFastLaneAmount();
+
+            if(depositableFastLaneAmount > alreadyDeposited) {
+                return Math256.min(depositableFastLaneAmount - alreadyDeposited, bufferedEther);
+            }
+        }
+
         uint256 withdrawalReserve = _withdrawalQueue().unfinalizedStETH();
         return bufferedEther > withdrawalReserve ? bufferedEther - withdrawalReserve : 0;
     }
@@ -720,6 +777,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
+
+        /// @dev accumulate the deposited ether for the current checkpoint
+        IConsensusContract consensusContract = IConsensusContract(
+            IBaseOracle(locator.accountingOracle()).getConsensusContract()
+        );
+        (uint256 refSlot,) = consensusContract.getCurrentFrame();
+
+        depositedPerCheckpoint[refSlot] += depositsValue;
     }
 
     /// DEPRECATED PUBLIC METHODS
