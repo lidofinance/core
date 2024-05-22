@@ -590,6 +590,8 @@ contract DepositSecurityModule {
 
         if (guardianIndex == -1) {
             bytes32 msgHash = keccak256(
+                // slither-disable-start encode-packed-collision
+                // values with a dynamic type checked earlier
                 abi.encodePacked(
                     UNVET_MESSAGE_PREFIX,
                     blockNumber,
@@ -599,6 +601,7 @@ contract DepositSecurityModule {
                     nodeOperatorIds,
                     vettedSigningKeysCounts
                 )
+                // slither-disable-end encode-packed-collision
             );
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
