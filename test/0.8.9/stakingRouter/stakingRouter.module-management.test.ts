@@ -87,9 +87,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakeShareLimit");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
 
     it("Reverts if the sum of module and treasury fees is greater than 100%", async () => {
@@ -106,9 +104,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakingModuleFee + _treasuryFee");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
       const TREASURY_FEE_INVALID = 100_01n - MODULE_FEE;
 
@@ -123,9 +119,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakingModuleFee + _treasuryFee");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
     it("Reverts if the staking module address is zero address", async () => {
@@ -140,9 +134,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
-        .withArgs("_stakingModuleAddress");
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressStakingModule");
     });
 
     it("Reverts if the staking module name is empty string", async () => {
@@ -344,9 +336,7 @@ describe("StakingRouter:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakeShareLimit");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
 
     it("Reverts if the new priority exit share is greater than 100%", async () => {
@@ -361,9 +351,7 @@ describe("StakingRouter:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_priorityExitShareThreshold");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
 
     it("Reverts if the new priority exit share is less than stake share limit", async () => {
@@ -395,9 +383,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakingModuleFee + _treasuryFee");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
       const NEW_TREASURY_FEE_INVALID = 100_01n - MODULE_FEE;
       await expect(
@@ -410,9 +396,7 @@ describe("StakingRouter:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "ValueOver100Percent")
-        .withArgs("_stakingModuleFee + _treasuryFee");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
     it("Update target share, module and treasury fees and emits events", async () => {

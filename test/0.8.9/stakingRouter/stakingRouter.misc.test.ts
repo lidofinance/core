@@ -43,15 +43,16 @@ describe("StakingRouter", () => {
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {
-      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials))
-        .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
-        .withArgs("_admin");
+      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroAddressAdmin",
+      );
     });
 
     it("Reverts if lido is zero address", async () => {
-      await expect(stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials))
-        .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
-        .withArgs("_lido");
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressLido");
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
