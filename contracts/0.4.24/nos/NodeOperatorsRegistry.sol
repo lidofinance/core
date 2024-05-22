@@ -93,7 +93,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     uint8 internal constant TOTAL_DEPOSITED_KEYS_COUNT_OFFSET = 3;
 
     // TargetValidatorsStats
-    /// @dev Target limit mode, allows limiting target active validators count for operator, >1 means forced target limit enabled
+    /// @dev Target limit mode, allows limiting target active validators count for operator (0 = disabled, 1 = soft mode, 2 = forced mode)
     uint8 internal constant TARGET_LIMIT_MODE_OFFSET = 0;
     /// @dev relative target active validators limit for operator, set by DAO
     /// @notice used to check how many keys should go to exit, 0 - means all deposited keys would be exited
@@ -631,7 +631,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @notice Updates the limit of the validators that can be used for deposit by DAO
     /// @param _nodeOperatorId Id of the node operator
     /// @param _targetLimit Target limit of the node operator
-    /// @param _targetLimitMode target limit mode, >1 means forced target limit
+    /// @param _targetLimitMode target limit mode (0 = disabled, 1 = soft mode, 2 = forced mode)
     function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
