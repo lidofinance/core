@@ -152,9 +152,22 @@ export async function initAccountingOracle({
 }
 
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
-  const churnValidatorsPerDayLimit = 100;
-  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0];
-  const managersRoster = [[admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin]];
+  const exitedValidatorsPerDayLimit = 55;
+  const appearedValidatorsPerDayLimit = 100;
+  const limitsList = [exitedValidatorsPerDayLimit, appearedValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0];
+  const managersRoster = [
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+    [admin],
+  ];
 
   return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList, managersRoster]);
 }
