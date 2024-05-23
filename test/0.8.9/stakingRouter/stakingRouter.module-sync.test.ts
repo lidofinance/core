@@ -261,17 +261,31 @@ describe("StakingRouter:module-sync", () => {
         .and.to.emit(stakingModule, "Mock__WithdrawalCredentialsChanged");
     });
 
-    it("Reverts if the hook fails without revert data", async () => {
-      await stakingModule.mock__onWithdrawalCredentialsChanged(true, "");
+    it("Emits an event if the module hook fails with a revert data", async () => {
+      const shouldRevert = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
+
+      // "revert reason" abi-encoded
+      const revertReasonEncoded = [
+        "0x08c379a0", // string type
+        "0000000000000000000000000000000000000000000000000000000000000020",
+        "000000000000000000000000000000000000000000000000000000000000000d",
+        "72657665727420726561736f6e00000000000000000000000000000000000000",
+      ].join("");
+
+      await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32))))
+        .to.emit(stakingRouter, "WithdrawalsCredentialsChangeFailed")
+        .withArgs(moduleId, revertReasonEncoded);
+    });
+
+    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
+      const shouldRunOutOfGas = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
         stakingRouter,
         "UnrecoverableModuleError",
       );
-    });
-
-    it("Logs the revert data if the hook fails", async () => {
-      // TODO: catch lowLevelData
     });
   });
 
@@ -349,17 +363,31 @@ describe("StakingRouter:module-sync", () => {
         .withArgs(1n);
     });
 
-    it("Reverts if the hook fails without revert data", async () => {
-      await stakingModule.mock__revertOnRewardsMinted(true, "");
+    it("Emits an event if the module hook fails with a revert data", async () => {
+      const shouldRevert = true;
+      await stakingModule.mock__revertOnRewardsMinted(shouldRevert, false);
+
+      // "revert reason" abi-encoded
+      const revertReasonEncoded = [
+        "0x08c379a0", // string type
+        "0000000000000000000000000000000000000000000000000000000000000020",
+        "000000000000000000000000000000000000000000000000000000000000000d",
+        "72657665727420726561736f6e00000000000000000000000000000000000000",
+      ].join("");
+
+      await expect(stakingRouter.reportRewardsMinted([moduleId], [1n]))
+        .to.emit(stakingRouter, "RewardsMintedReportFailed")
+        .withArgs(moduleId, revertReasonEncoded);
+    });
+
+    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
+      const shouldRunOutOfGas = true;
+      await stakingModule.mock__revertOnRewardsMinted(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.reportRewardsMinted([moduleId], [1n])).to.be.revertedWithCustomError(
         stakingRouter,
         "UnrecoverableModuleError",
       );
-    });
-
-    it("Logs the revert data if the hook fails", async () => {
-      // TODO: catch lowLevelData
     });
   });
 
@@ -728,17 +756,31 @@ describe("StakingRouter:module-sync", () => {
       );
     });
 
-    it("Reverts if the hook fails without revert data", async () => {
-      await stakingModule.mock__onExitedAndStuckValidatorsCountsUpdated(true, "");
+    it("Emits an event if the module hook fails with a revert data", async () => {
+      const shouldRevert = true;
+      await stakingModule.mock__onExitedAndStuckValidatorsCountsUpdated(shouldRevert, false);
+
+      // "revert reason" abi-encoded
+      const revertReasonEncoded = [
+        "0x08c379a0", // string type
+        "0000000000000000000000000000000000000000000000000000000000000020",
+        "000000000000000000000000000000000000000000000000000000000000000d",
+        "72657665727420726561736f6e00000000000000000000000000000000000000",
+      ].join("");
+
+      await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished())
+        .to.emit(stakingRouter, "ExitedAndStuckValidatorsCountsUpdateFailed")
+        .withArgs(moduleId, revertReasonEncoded);
+    });
+
+    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
+      const shouldRunOutOfGas = true;
+      await stakingModule.mock__onExitedAndStuckValidatorsCountsUpdated(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).to.be.revertedWithCustomError(
         stakingRouter,
         "UnrecoverableModuleError",
       );
-    });
-
-    it("Logs the revert data if the hook fails", async () => {
-      // TODO: catch lowLevelData
     });
   });
 

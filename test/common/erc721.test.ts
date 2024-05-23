@@ -7,13 +7,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ERC721, ERC721ReceiverMock } from "typechain-types";
 
-import {
-  ERC165_INTERFACE_ID,
-  ERC721_INTERFACE_ID,
-  ERC721METADATA_INTERFACE_ID,
-  INVALID_INTERFACE_ID,
-  Snapshot,
-} from "lib";
+import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "lib";
+
+import { Snapshot } from "test/suite";
 
 interface ERC721Deployment {
   token: ERC721;

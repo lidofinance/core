@@ -10,7 +10,9 @@ import {
   StethPermitMockWithEip712Initialization__factory,
 } from "typechain-types";
 
-import { certainAddress, days, ether, Permit, signPermit, Snapshot, stethDomain } from "lib";
+import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
+
+import { Snapshot } from "test/suite";
 
 describe("Permit", () => {
   let deployer: Signer;

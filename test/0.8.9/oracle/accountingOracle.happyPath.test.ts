@@ -17,35 +17,33 @@ import {
 import {
   calcExtraDataListHash,
   calcReportDataHash,
+  CONSENSUS_VERSION,
   encodeExtraDataItems,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   ExtraDataType,
+  GENESIS_TIME,
   getReportDataItems,
   numberToHex,
+  ONE_GWEI,
   OracleReport,
   packExtraDataList,
   ReportAsArray,
+  SECONDS_PER_SLOT,
   shareRate,
 } from "lib";
-import { CONSENSUS_VERSION } from "lib";
 
 import {
   deployAndConfigureAccountingOracle,
-  ONE_GWEI,
-  V1_ORACLE_LAST_REPORT_SLOT,
-} from "./accountingOracleDeploy.test";
-import {
-  computeTimestampAtSlot,
-  GENESIS_TIME,
   SECONDS_PER_EPOCH,
   SECONDS_PER_FRAME,
-  SECONDS_PER_SLOT,
   SLOTS_PER_FRAME,
-} from "./baseOracle";
+  timestampAtSlot,
+  V1_ORACLE_LAST_REPORT_SLOT,
+} from "test/deploy";
 
-describe("AccountingOracle.sol", () => {
+describe("AccountingOracle.sol:happyPath", () => {
   context("Happy path", () => {
     let consensus: HashConsensusTimeTravellable;
     let oracle: AccountingOracleTimeTravellable;
@@ -59,7 +57,7 @@ describe("AccountingOracle.sol", () => {
     let extraDataItems: string[];
     let extraDataList: string;
     let extraDataHash: string;
-    let reportFields: OracleReport;
+    let reportFields: OracleReport & { refSlot: bigint };
     let reportItems: ReportAsArray;
     let reportHash: string;
 
@@ -86,7 +84,7 @@ describe("AccountingOracle.sol", () => {
       await consensus.connect(admin).addMember(member2, 2);
       await consensus.connect(admin).addMember(member3, 2);
 
-      await consensus.advanceTimeBySlots(SECONDS_PER_EPOCH + 1);
+      await consensus.advanceTimeBySlots(SECONDS_PER_EPOCH + 1n);
     });
 
     async function triggerConsensusOnHash(hash: string) {
@@ -169,16 +167,14 @@ describe("AccountingOracle.sol", () => {
       const report = await oracle.getConsensusReport();
       expect(report.hash).to.equal(reportHash);
       expect(report.refSlot).to.equal(reportFields.refSlot);
-      expect(report.processingDeadlineTime).to.equal(computeTimestampAtSlot(Number(report.refSlot) + SLOTS_PER_FRAME));
+      expect(report.processingDeadlineTime).to.equal(timestampAtSlot(report.refSlot + SLOTS_PER_FRAME));
       expect(report.processingStarted).to.be.false;
 
       const frame = await consensus.getCurrentFrame();
       const procState = await oracle.getProcessingState();
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-      expect(procState.processingDeadlineTime).to.equal(
-        computeTimestampAtSlot(Number(frame.reportProcessingDeadlineSlot)),
-      );
+      expect(procState.processingDeadlineTime).to.equal(timestampAtSlot(frame.reportProcessingDeadlineSlot));
       expect(procState.mainDataHash).to.equal(reportHash);
       expect(procState.mainDataSubmitted).to.be.false;
       expect(procState.extraDataHash).to.equal(ZeroHash);
@@ -189,7 +185,7 @@ describe("AccountingOracle.sol", () => {
     });
 
     it("some time passes", async () => {
-      await consensus.advanceTimeBy(Math.floor(SECONDS_PER_FRAME / 3));
+      await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
     });
 
     it("non-member cannot submit the data", async () => {
@@ -229,9 +225,7 @@ describe("AccountingOracle.sol", () => {
       const procState = await oracle.getProcessingState();
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-      expect(procState.processingDeadlineTime).to.equal(
-        computeTimestampAtSlot(Number(frame.reportProcessingDeadlineSlot)),
-      );
+      expect(procState.processingDeadlineTime).to.equal(timestampAtSlot(frame.reportProcessingDeadlineSlot));
       expect(procState.mainDataHash).to.equal(reportHash);
       expect(procState.mainDataSubmitted).to.be.true;
       expect(procState.extraDataHash).to.equal(reportFields.extraDataHash);
@@ -245,7 +239,7 @@ describe("AccountingOracle.sol", () => {
       const lastOracleReportCall = await mockLido.getLastCall_handleOracleReport();
       expect(lastOracleReportCall.callCount).to.equal(1);
       expect(lastOracleReportCall.secondsElapsedSinceLastReport).to.equal(
-        (Number(reportFields.refSlot) - V1_ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
+        (reportFields.refSlot - V1_ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
       );
       expect(lastOracleReportCall.numValidators).to.equal(reportFields.numValidators);
       expect(lastOracleReportCall.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
@@ -262,7 +256,7 @@ describe("AccountingOracle.sol", () => {
       expect(onOracleReportLastCall.callCount).to.equal(1);
       expect(onOracleReportLastCall.isBunkerMode).to.be.equal(reportFields.isBunkerMode);
       expect(onOracleReportLastCall.prevReportTimestamp).to.be.equal(
-        GENESIS_TIME + Number(prevProcessingRefSlot) * SECONDS_PER_SLOT,
+        GENESIS_TIME + prevProcessingRefSlot * SECONDS_PER_SLOT,
       );
     });
 
@@ -336,9 +330,7 @@ describe("AccountingOracle.sol", () => {
       const procState = await oracle.getProcessingState();
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-      expect(procState.processingDeadlineTime).to.equal(
-        computeTimestampAtSlot(Number(frame.reportProcessingDeadlineSlot)),
-      );
+      expect(procState.processingDeadlineTime).to.equal(timestampAtSlot(frame.reportProcessingDeadlineSlot));
       expect(procState.mainDataHash).to.equal(reportHash);
       expect(procState.mainDataSubmitted).to.be.true;
       expect(procState.extraDataHash).to.equal(extraDataHash);
@@ -461,9 +453,7 @@ describe("AccountingOracle.sol", () => {
       const procState = await oracle.getProcessingState();
 
       expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-      expect(procState.processingDeadlineTime).to.equal(
-        computeTimestampAtSlot(Number(frame.reportProcessingDeadlineSlot)),
-      );
+      expect(procState.processingDeadlineTime).to.equal(timestampAtSlot(frame.reportProcessingDeadlineSlot));
       expect(procState.mainDataHash).to.equal(reportHash);
       expect(procState.mainDataSubmitted).to.be.true;
       expect(procState.extraDataHash).to.equal(ZeroHash);

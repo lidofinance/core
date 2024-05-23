@@ -11,7 +11,7 @@ struct ConsensusReport {
     uint64 processingDeadlineTime;
 }
 
-contract BaseOracleTimeTravellable is BaseOracle {
+contract BaseOracle__Harness is BaseOracle {
     using UnstructuredStorage for bytes32;
     uint256 internal _time = 2513040315;
 

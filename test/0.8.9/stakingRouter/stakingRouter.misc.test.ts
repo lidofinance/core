@@ -5,8 +5,6 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconChainDepositor,
-  BeaconChainDepositor__factory,
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
   StakingRouter,
@@ -22,7 +20,6 @@ describe("StakingRouter", () => {
   let user: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let beaconChainDepositor: BeaconChainDepositor;
   let stakingRouterImpl: StakingRouter;
   let stakingRouter: StakingRouter;
 
@@ -33,8 +30,7 @@ describe("StakingRouter", () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
 
     depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    beaconChainDepositor = await new BeaconChainDepositor__factory(deployer).deploy(depositContract);
-    stakingRouterImpl = await new StakingRouter__factory(deployer).deploy(beaconChainDepositor);
+    stakingRouterImpl = await new StakingRouter__factory(deployer).deploy(depositContract);
     [stakingRouter] = await proxify({ impl: stakingRouterImpl, admin: proxyAdmin, caller: user });
   });
 

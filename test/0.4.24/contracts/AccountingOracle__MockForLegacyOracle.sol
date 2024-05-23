@@ -1,21 +1,32 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+pragma solidity >=0.4.24 <0.9.0;
 
-/* See contracts/COMPILERS.md */
-pragma solidity 0.8.9;
+import {AccountingOracle, ILido} from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
-import {AccountingOracle, ILido} from "../oracle/AccountingOracle.sol";
+interface ITimeProvider {
+    function getTime() external view returns (uint256);
+}
 
-
-contract AccountingOracleMock {
+contract AccountingOracle__MockForLegacyOracle {
     address public immutable LIDO;
+    address public immutable CONSENSUS_CONTRACT;
     uint256 public immutable SECONDS_PER_SLOT;
 
     uint256 internal _lastRefSlot;
 
-    constructor(address lido, uint256 secondsPerSlot) {
+    constructor(address lido, address consensusContract, uint256 secondsPerSlot) {
         LIDO = lido;
+        CONSENSUS_CONTRACT = consensusContract;
         SECONDS_PER_SLOT = secondsPerSlot;
+    }
+
+    function getTime() external view returns (uint256) {
+        return _getTime();
+    }
+
+    function _getTime() internal view returns (uint256) {
+        return ITimeProvider(CONSENSUS_CONTRACT).getTime();
     }
 
     function submitReportData(
@@ -40,5 +51,9 @@ contract AccountingOracleMock {
 
     function getLastProcessingRefSlot() external view returns (uint256) {
         return _lastRefSlot;
+    }
+
+    function getConsensusContract() external view returns (address) {
+        return CONSENSUS_CONTRACT;
     }
 }

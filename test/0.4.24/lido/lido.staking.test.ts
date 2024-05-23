@@ -6,7 +6,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ACL, Lido } from "typechain-types";
 
-import { certainAddress, deployLidoDao, ether, ONE_ETHER } from "lib";
+import { certainAddress, ether, ONE_ETHER } from "lib";
+
+import { deployLidoDao } from "test/deploy";
 
 describe("Lido:staking", () => {
   let deployer: HardhatEthersSigner;

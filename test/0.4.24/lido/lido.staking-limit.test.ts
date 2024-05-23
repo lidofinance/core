@@ -7,7 +7,9 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ACL, Lido } from "typechain-types";
 
-import { certainAddress, deployLidoDao, ether, ONE_ETHER } from "lib";
+import { certainAddress, ether, ONE_ETHER } from "lib";
+
+import { deployLidoDao } from "test/deploy";
 
 describe("Lido:staking-limit", () => {
   let deployer: HardhatEthersSigner;

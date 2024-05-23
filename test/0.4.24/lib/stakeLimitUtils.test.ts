@@ -7,7 +7,7 @@ import { latestBlock } from "@nomicfoundation/hardhat-network-helpers/dist/src/h
 
 import { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types";
 
-import { Snapshot } from "lib";
+import { Snapshot } from "test/suite";
 
 describe("StakeLimitUtils.sol", () => {
   let stakeLimitUnstructuredStorage: StakeLimitUnstructuredStorage__Harness;

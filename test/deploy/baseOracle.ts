@@ -4,30 +4,33 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { MockConsensusContract } from "typechain-types";
 
-export const SLOTS_PER_EPOCH = 32;
-export const SECONDS_PER_SLOT = 12;
-export const GENESIS_TIME = 100;
-export const EPOCHS_PER_FRAME = 225; // one day
-export const INITIAL_EPOCH = 1;
-export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0;
+import {
+  CONSENSUS_VERSION,
+  EPOCHS_PER_FRAME,
+  GENESIS_TIME,
+  INITIAL_EPOCH,
+  INITIAL_FAST_LANE_LENGTH_SLOTS,
+  SECONDS_PER_SLOT,
+  SLOTS_PER_EPOCH,
+} from "lib";
 
 export const SECONDS_PER_EPOCH = SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
 export const SLOTS_PER_FRAME = EPOCHS_PER_FRAME * SLOTS_PER_EPOCH;
 export const SECONDS_PER_FRAME = SECONDS_PER_EPOCH * EPOCHS_PER_FRAME;
 
-export const computeSlotAt = (time: number) => Math.floor((time - GENESIS_TIME) / SECONDS_PER_SLOT);
-export const computeEpochAt = (time: number) => Math.floor(computeSlotAt(time) / SLOTS_PER_EPOCH);
-export const computeEpochFirstSlot = (epoch: number) => epoch * SLOTS_PER_EPOCH;
-export const computeEpochFirstSlotAt = (time: number) => computeEpochFirstSlot(computeEpochAt(time));
-export const computeTimestampAtSlot = (slot: number) => GENESIS_TIME + slot * SECONDS_PER_SLOT;
-export const computeDeadlineFromRefSlot = (slot: number) => computeTimestampAtSlot(slot + SLOTS_PER_FRAME);
-export const computeNextRefSlotFromRefSlot = (slot: number) => +slot + SLOTS_PER_FRAME;
+export const slotAt = (time: bigint) => (time - GENESIS_TIME) / SECONDS_PER_SLOT;
+export const epochAt = (time: bigint) => slotAt(time) / SLOTS_PER_EPOCH;
+export const epochFirstSlot = (epoch: bigint) => epoch * SLOTS_PER_EPOCH;
+export const epochFirstSlotAt = (time: bigint) => epochFirstSlot(epochAt(time));
+export const timestampAtSlot = (slot: bigint) => GENESIS_TIME + slot * SECONDS_PER_SLOT;
+export const timestampAtEpoch = (epoch: bigint) => timestampAtSlot(epochFirstSlot(epoch));
+export const deadlineFromRefSlot = (slot: bigint) => timestampAtSlot(slot + SLOTS_PER_FRAME);
+export const nextRefSlotFromRefSlot = (slot: bigint) => slot + SLOTS_PER_FRAME;
 
+export const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 export const HASH_1 = "0x1111111111111111111111111111111111111111111111111111111111111111";
 export const HASH_2 = "0x2222222222222222222222222222222222222222222222222222222222222222";
 export const HASH_3 = "0x3333333333333333333333333333333333333333333333333333333333333333";
-
-export const CONSENSUS_VERSION = 1;
 
 export async function deployBaseOracle(
   admin: HardhatEthersSigner,
@@ -54,7 +57,7 @@ export async function deployBaseOracle(
     ]);
   }
 
-  const oracle = await ethers.deployContract("BaseOracleTimeTravellable", [secondsPerSlot, genesisTime, admin]);
+  const oracle = await ethers.deployContract("BaseOracle__Harness", [secondsPerSlot, genesisTime, admin]);
 
   await oracle.initialize(await consensusContract.getAddress(), CONSENSUS_VERSION, 0);
 

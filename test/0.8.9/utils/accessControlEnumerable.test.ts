@@ -11,9 +11,10 @@ import {
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
-  Snapshot,
   streccak,
 } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 
@@ -36,19 +37,19 @@ describe("AccessControlEnumerable", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("supportsInterface", () => {
-    it("should return true for ERC165_INTERFACE_ID", async () => {
+    it("Returns true for ERC165_INTERFACE_ID", async () => {
       expect(await contract.supportsInterface(ERC165_INTERFACE_ID)).to.be.true;
     });
 
-    it("should return true for AccessControl", async () => {
+    it("Returns true for AccessControl", async () => {
       expect(await contract.supportsInterface(OZ_ACCESS_CONTROL_INTERFACE_ID)).to.be.true;
     });
 
-    it("should return true for AccessControlEnumerable", async () => {
+    it("Returns true for AccessControlEnumerable", async () => {
       expect(await contract.supportsInterface(OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID)).to.be.true;
     });
 
-    it("should return false for an invalid interface", async () => {
+    it("Returns false for an invalid interface", async () => {
       expect(await contract.supportsInterface(INVALID_INTERFACE_ID)).to.be.false;
     });
   });

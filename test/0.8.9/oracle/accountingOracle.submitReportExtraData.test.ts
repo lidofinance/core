@@ -15,6 +15,7 @@ import {
 import {
   calcExtraDataListHash,
   calcReportDataHash,
+  CONSENSUS_VERSION,
   constructOracleReport,
   encodeExtraDataItem,
   encodeExtraDataItems,
@@ -26,16 +27,16 @@ import {
   ExtraDataType,
   getReportDataItems,
   numberToHex,
+  ONE_GWEI,
   OracleReport,
   OracleReportProps,
   packExtraDataList,
   ReportFieldsWithoutExtraData,
   shareRate,
-  Snapshot,
 } from "lib";
-import { CONSENSUS_VERSION } from "lib";
 
-import { deployAndConfigureAccountingOracle, ONE_GWEI } from "./accountingOracleDeploy.test";
+import { deployAndConfigureAccountingOracle } from "test/deploy";
+import { Snapshot } from "test/suite";
 
 const getDefaultExtraData = (): ExtraDataType => ({
   stuckKeys: [
@@ -68,7 +69,7 @@ const getDefaultReportFields = (override = {}) => ({
   ...override,
 });
 
-describe("AccountingOracle.sol", () => {
+describe("AccountingOracle.sol:submitReportExtraData", () => {
   let consensus: HashConsensusTimeTravellable;
   let oracle: AccountingOracleTimeTravellable;
   let oracleVersion: bigint;
@@ -482,7 +483,7 @@ describe("AccountingOracle.sol", () => {
 
       context("checks data type for UnsupportedExtraDataType reverts (only supported types are `1` and `2`)", () => {
         // contextual helper to prepeare wrong typed data
-        const getExtraWithCustomType = (typeCustom: number) => {
+        const getExtraWithCustomType = (typeCustom: bigint) => {
           const extraData = {
             stuckKeys: [{ moduleId: 1, nodeOpIds: [1], keysCounts: [2] }],
             exitedKeys: [],
@@ -499,7 +500,7 @@ describe("AccountingOracle.sol", () => {
         };
 
         it("if type `0` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0);
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -509,7 +510,7 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("if type `3` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3);
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -519,7 +520,7 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("succeeds if `1` was passed", async () => {
-          const { extraDataItems } = getExtraWithCustomType(1);
+          const { extraDataItems } = getExtraWithCustomType(1n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -528,7 +529,7 @@ describe("AccountingOracle.sol", () => {
         });
 
         it("succeeds if `2` was passed", async () => {
-          const { extraDataItems } = getExtraWithCustomType(2);
+          const { extraDataItems } = getExtraWithCustomType(2n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);

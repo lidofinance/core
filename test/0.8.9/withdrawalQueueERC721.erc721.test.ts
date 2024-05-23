@@ -1,6 +1,8 @@
 import { ethers } from "hardhat";
 
-import { deployWithdrawalQueue, ether } from "lib";
+import { ether } from "lib";
+
+import { deployWithdrawalQueue } from "test/deploy";
 
 import { testERC721Compliance } from "../common/erc721.test";
 

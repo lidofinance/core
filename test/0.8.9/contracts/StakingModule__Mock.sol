@@ -139,22 +139,21 @@ contract StakingModule__Mock is IStakingModule {
   }
 
   bool private onRewardsMintedShouldRevert = false;
-  string private onRewardsMintedShouldRevertWithMessage = "";
+  bool private onRewardsMintedShouldRunOutGas = false;
 
   function onRewardsMinted(uint256 _totalShares) external {
-    if (onRewardsMintedShouldRevert) {
-      if (bytes(onRewardsMintedShouldRevertWithMessage).length > 0) {
-        require(false, onRewardsMintedShouldRevertWithMessage);
-      }
-      require(false);
+    require(!onRewardsMintedShouldRevert, "revert reason");
+
+    if (onRewardsMintedShouldRunOutGas) {
+      revert();
     }
 
     emit Mock__OnRewardsMinted(_totalShares);
   }
 
-  function mock__revertOnRewardsMinted(bool shouldRevert, string calldata message) external {
+  function mock__revertOnRewardsMinted(bool shouldRevert, bool shoudRunOutOfGas) external {
     onRewardsMintedShouldRevert = shouldRevert;
-    // onRewardsMintedShouldRevertWithMessage = message;
+    onRewardsMintedShouldRunOutGas = shoudRunOutOfGas;
   }
 
   event Mock__StuckValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
@@ -207,41 +206,40 @@ contract StakingModule__Mock is IStakingModule {
   event Mock__onExitedAndStuckValidatorsCountsUpdated();
 
   bool private onExitedAndStuckValidatorsCountsUpdatedShouldRevert = false;
-  string private onExitedAndStuckValidatorsCountsUpdatedShouldRevertWithMessage = "";
+  bool private onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = false;
 
   function onExitedAndStuckValidatorsCountsUpdated() external {
-    if (onExitedAndStuckValidatorsCountsUpdatedShouldRevert) {
-      if (bytes(onExitedAndStuckValidatorsCountsUpdatedShouldRevertWithMessage).length > 0) {
-        require(false, onExitedAndStuckValidatorsCountsUpdatedShouldRevertWithMessage);
-      }
-      require(false);
+    require(!onExitedAndStuckValidatorsCountsUpdatedShouldRevert, "revert reason");
+
+    if (onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas) {
+      revert();
     }
+
     emit Mock__onExitedAndStuckValidatorsCountsUpdated();
   }
 
-  function mock__onExitedAndStuckValidatorsCountsUpdated(bool shouldRevert, string calldata revertMessage) external {
+  function mock__onExitedAndStuckValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
     onExitedAndStuckValidatorsCountsUpdatedShouldRevert = shouldRevert;
-    onExitedAndStuckValidatorsCountsUpdatedShouldRevertWithMessage = revertMessage;
+    onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
   }
 
   event Mock__WithdrawalCredentialsChanged();
 
   bool private onWithdrawalCredentialsChangedShouldRevert = false;
-  string private onWithdrawalCredentialsChangedShouldRevertWithMessage = "";
+  bool private onWithdrawalCredentialsChangedShouldRunOutGas = false;
 
   function onWithdrawalCredentialsChanged() external {
-    if (onWithdrawalCredentialsChangedShouldRevert) {
-      if (bytes(onWithdrawalCredentialsChangedShouldRevertWithMessage).length > 0) {
-        require(false, onWithdrawalCredentialsChangedShouldRevertWithMessage);
-      }
-      require(false);
+    require(!onWithdrawalCredentialsChangedShouldRevert, "revert reason");
+
+    if (onWithdrawalCredentialsChangedShouldRunOutGas) {
+      revert();
     }
 
     emit Mock__WithdrawalCredentialsChanged();
   }
 
-  function mock__onWithdrawalCredentialsChanged(bool shouldRevert, string calldata revertMessage) external {
+  function mock__onWithdrawalCredentialsChanged(bool shouldRevert, bool shouldRunOutGas) external {
     onWithdrawalCredentialsChangedShouldRevert = shouldRevert;
-    onWithdrawalCredentialsChangedShouldRevertWithMessage = revertMessage;
+    onWithdrawalCredentialsChangedShouldRunOutGas = shouldRunOutGas;
   }
 }

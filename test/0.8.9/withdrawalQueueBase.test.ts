@@ -7,7 +7,9 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Receiver__MockForWithdrawalQueueBase, WithdrawalsQueueBase__Harness } from "typechain-types";
 
-import { ether, shareRate, shares, Snapshot, WITHDRAWAL_MAX_BATCHES_LENGTH } from "lib";
+import { ether, shareRate, shares, WITHDRAWAL_MAX_BATCHES_LENGTH } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const buildBatchCalculationState = (...args: unknown[]) => ({
   remainingEthBudget: args[0] as bigint,

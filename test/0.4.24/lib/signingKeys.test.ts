@@ -4,7 +4,9 @@ import { ethers } from "hardhat";
 
 import { SigningKeys__Harness } from "typechain-types";
 
-import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE, FakeValidatorKeys, Snapshot } from "lib";
+import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE, FakeValidatorKeys } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const NODE_OPERATOR_1 = 1;
 const NODE_OPERATOR_2 = 2;

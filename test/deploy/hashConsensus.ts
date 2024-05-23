@@ -10,7 +10,7 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "./baseOracle";
+} from "lib";
 
 export async function deployHashConsensus(
   admin: string,

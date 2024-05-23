@@ -14,21 +14,22 @@ import {
 import {
   calcExtraDataListHash,
   calcReportDataHash,
+  CONSENSUS_VERSION,
   encodeExtraDataItems,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   getReportDataItems,
+  ONE_GWEI,
   OracleReport,
   packExtraDataList,
   ReportAsArray,
   shareRate,
 } from "lib";
-import { CONSENSUS_VERSION } from "lib";
 
-import { deployAndConfigureAccountingOracle, ONE_GWEI } from "./accountingOracleDeploy.test";
+import { deployAndConfigureAccountingOracle } from "test/deploy";
 
-describe("AccountingOracle.sol", () => {
+describe("AccountingOracle.sol:accessControl", () => {
   let consensus: HashConsensusTimeTravellable;
   let oracle: AccountingOracleTimeTravellable;
   let mockLido: MockLidoForAccountingOracle;
@@ -65,7 +66,7 @@ describe("AccountingOracle.sol", () => {
     extraDataList = packExtraDataList(extraDataItems);
     const extraDataHash = calcExtraDataListHash(extraDataList);
     reportFields = {
-      consensusVersion: BigInt(CONSENSUS_VERSION),
+      consensusVersion: CONSENSUS_VERSION,
       refSlot: refSlot,
       numValidators: 10,
       clBalanceGwei: 320n * ONE_GWEI,

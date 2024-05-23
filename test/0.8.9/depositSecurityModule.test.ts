@@ -14,7 +14,9 @@ import {
   StakingRouterMockForDepositSecurityModule,
 } from "typechain-types";
 
-import { certainAddress, DSMAttestMessage, DSMPauseMessage, ether, Snapshot, streccak } from "lib";
+import { certainAddress, DSMAttestMessage, DSMPauseMessage, ether, streccak } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const UNREGISTERED_STAKING_MODULE_ID = 1;
 const STAKING_MODULE_ID = 100;
