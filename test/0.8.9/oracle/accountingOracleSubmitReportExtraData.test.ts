@@ -164,15 +164,15 @@ describe("AccountingOracle.sol", () => {
   }
 
   async function oracleMemberSubmitReportHash(refSlot: BigNumberish, reportHash: string) {
-    await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    return await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
   }
 
   async function oracleMemberSubmitReportData(report: OracleReport) {
-    await oracle.connect(member1).submitReportData(report, oracleVersion);
+    return await oracle.connect(member1).submitReportData(report, oracleVersion);
   }
 
   async function oracleMemberSubmitExtraData(extraDataList: string) {
-    await oracle.connect(member1).submitReportExtraDataList(extraDataList);
+    return await oracle.connect(member1).submitReportExtraDataList(extraDataList);
   }
 
   async function constructOracleReportForCurrentFrameAndSubmitReportHash({
@@ -211,6 +211,28 @@ describe("AccountingOracle.sol", () => {
     beforeEach(takeSnapshot);
     afterEach(rollback);
 
+    context("submit third phase transactions successfully", () => {
+      it("submit extra data report within single transaction", async () => {
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({});
+        expect(extraDataChunks.length).to.be.equal(1);
+        await oracleMemberSubmitReportData(report);
+        const tx = await oracleMemberSubmitExtraData(extraDataChunks[0]);
+        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 5, 5);
+      });
+
+      it("submit extra data report within two transaction", async () => {
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
+          config: { maxItemsPerChunk: 3 },
+        });
+        expect(extraDataChunks.length).to.be.equal(2);
+        await oracleMemberSubmitReportData(report);
+        const tx1 = await oracleMemberSubmitExtraData(extraDataChunks[0]);
+        await expect(tx1).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 3, 5);
+        const tx2 = await oracleMemberSubmitExtraData(extraDataChunks[1]);
+        await expect(tx2).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 5, 5);
+      });
+    });
+
     context("enforces the deadline", () => {
       it("reverts with ProcessingDeadlineMissed if deadline missed for the single transaction of extra data report", async () => {
         await consensus.advanceTimeToNextFrameStart();
@@ -226,8 +248,9 @@ describe("AccountingOracle.sol", () => {
       it("reverts with ProcessingDeadlineMissed if deadline missed for the first transaction of extra data report", async () => {
         await consensus.advanceTimeToNextFrameStart();
         const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
-          config: { maxItemsPerChunk: 2 },
+          config: { maxItemsPerChunk: 3 },
         });
+        expect(extraDataChunks.length).to.be.equal(2);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await oracleMemberSubmitReportData(report);
         await consensus.advanceTimeToNextFrameStart();
@@ -239,8 +262,9 @@ describe("AccountingOracle.sol", () => {
       it("reverts with ProcessingDeadlineMissed if deadline missed for the second transaction of extra data report", async () => {
         await consensus.advanceTimeToNextFrameStart();
         const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
-          config: { maxItemsPerChunk: 2 },
+          config: { maxItemsPerChunk: 3 },
         });
+        expect(extraDataChunks.length).to.be.equal(2);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await oracleMemberSubmitReportData(report);
         await oracleMemberSubmitExtraData(extraDataChunks[0]);
@@ -252,12 +276,27 @@ describe("AccountingOracle.sol", () => {
 
       it("pass successfully if time is equals exactly to deadline value", async () => {
         await consensus.advanceTimeToNextFrameStart();
-        const { extraDataList, reportFields } = await submitReportHash();
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({});
+        expect(extraDataChunks.length).to.be.equal(1);
+        await oracleMemberSubmitReportData(report);
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
-        const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
-        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
+        const tx = await oracleMemberSubmitExtraData(extraDataChunks[0]);
+        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, anyValue, anyValue);
+      });
+
+      it("pass successfully if the last transaction time is equals exactly to deadline value", async () => {
+        await consensus.advanceTimeToNextFrameStart();
+        const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
+          config: { maxItemsPerChunk: 3 },
+        });
+        expect(extraDataChunks.length).to.be.equal(2);
+        await oracleMemberSubmitReportData(report);
+        await oracleMemberSubmitExtraData(extraDataChunks[0]);
+        const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
+        await consensus.setTime(deadline);
+        const tx = await oracleMemberSubmitExtraData(extraDataChunks[1]);
+        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, anyValue, anyValue);
       });
     });
 
