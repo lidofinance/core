@@ -716,6 +716,7 @@ contract AccountingOracle is BaseOracle {
 
     struct ExtraDataIterState {
         // volatile
+        bool started;
         uint256 index;
         uint256 itemType;
         uint256 dataOffset;
@@ -748,8 +749,11 @@ contract AccountingOracle is BaseOracle {
             nextHash := calldataload(data.offset)
         }
 
+        bool started = procState.itemsProcessed > 0;
+
         ExtraDataIterState memory iter = ExtraDataIterState({
-            index: 0,
+            started: started,
+            index: started ? procState.itemsProcessed - 1 : 0,
             itemType: 0,
             dataOffset: initialDataOffset,
             lastSortingKey: procState.lastSortingKey,
@@ -757,7 +761,7 @@ contract AccountingOracle is BaseOracle {
         });
 
         _processExtraDataItems(data, iter);
-        uint256 itemsProcessed = procState.itemsProcessed + iter.index + 1;
+        uint256 itemsProcessed = iter.index + 1;
 
         if(nextHash == ZERO_HASH) {
             if (itemsProcessed != procState.itemsCount) {
@@ -804,10 +808,12 @@ contract AccountingOracle is BaseOracle {
                 dataOffset := add(dataOffset, 5)
             }
 
-            if (iter.itemType == 0) {
+            if (!iter.started) {
                 if (index != 0) {
                     revert UnexpectedExtraDataIndex(0, index);
                 }
+
+                iter.started = true;
             } else if (index != iter.index + 1) {
                 revert UnexpectedExtraDataIndex(iter.index + 1, index);
             }
