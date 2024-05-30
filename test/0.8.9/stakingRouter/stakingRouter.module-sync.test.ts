@@ -271,6 +271,18 @@ describe("StakingRouter:module-sync", () => {
       });
     });
 
+    context("getStakingModuleMinDepositBlockDistance", () => {
+      it("Returns the minimum deposit block distance", async () => {
+        expect(await stakingRouter.getStakingModuleMinDepositBlockDistance(moduleId)).to.equal(minDepositBlockDistance);
+      });
+    });
+
+    context("getStakingModuleMaxDepositsPerBlock", () => {
+      it("Returns the maximum deposits per block", async () => {
+        expect(await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId)).to.equal(maxDepositsPerBlock);
+      });
+    });
+
     context("getStakingModuleActiveValidatorsCount", () => {
       it("Returns the number of active validators in the module", async () => {
         const [exitedValidators, depositedValidators] = stakingModuleSummary;
