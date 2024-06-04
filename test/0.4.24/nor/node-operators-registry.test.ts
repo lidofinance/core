@@ -141,7 +141,7 @@ describe("NodeOperatorsRegistry", () => {
     });
 
     it("sets contract version correctly", async () => {
-      expect(await nor.getContractVersion()).to.be.equal(2);
+      expect(await nor.getContractVersion()).to.be.equal(3);
     });
 
     it("sets hasInitialized() to true", async () => {
