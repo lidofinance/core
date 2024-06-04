@@ -28,13 +28,7 @@ async function main() {
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.getFunction("STAKING_MODULE_PAUSE_ROLE")(), depositSecurityModuleAddress],
-    { from: deployer },
-  );
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.getFunction("STAKING_MODULE_RESUME_ROLE")(), depositSecurityModuleAddress],
+    [await stakingRouter.getFunction("STAKING_MODULE_UNVETTING_ROLE")(), depositSecurityModuleAddress],
     { from: deployer },
   );
   await makeTx(

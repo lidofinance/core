@@ -59,7 +59,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 refundedValidatorsCount,
         uint256 stuckPenaltyEndTimestamp
     );
-    event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount);
+    event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
     event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
 
     // Enum to represent the state of the reward distribution process
@@ -101,8 +101,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     uint8 internal constant TOTAL_DEPOSITED_KEYS_COUNT_OFFSET = 3;
 
     // TargetValidatorsStats
-    /// @dev Flag enable/disable limiting target active validators count for operator
-    uint8 internal constant IS_TARGET_LIMIT_ACTIVE_OFFSET = 0;
+    /// @dev Target limit mode, allows limiting target active validators count for operator (0 = disabled, 1 = soft mode, 2 = forced mode)
+    uint8 internal constant TARGET_LIMIT_MODE_OFFSET = 0;
     /// @dev relative target active validators limit for operator, set by DAO
     /// @notice used to check how many keys should go to exit, 0 - means all deposited keys would be exited
     uint8 internal constant TARGET_VALIDATORS_COUNT_OFFSET = 1;
@@ -416,6 +416,55 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _authP(SET_NODE_OPERATOR_LIMIT_ROLE, arr(uint256(_nodeOperatorId), uint256(_vettedSigningKeysCount)));
         _onlyCorrectNodeOperatorState(getNodeOperatorIsActive(_nodeOperatorId));
 
+        _updateVettedSingingKeysCount(_nodeOperatorId, _vettedSigningKeysCount, true /* _allowIncrease */);
+        _increaseValidatorsKeysNonce();
+    }
+
+    /// @notice Called by StakingRouter to decrease the number of vetted keys for node operator with given id
+    /// @param _nodeOperatorIds bytes packed array of the node operators id
+    /// @param _vettedSigningKeysCounts bytes packed array of the new number of vetted keys for the node operators
+    function decreaseVettedSigningKeysCount(
+        bytes _nodeOperatorIds,
+        bytes _vettedSigningKeysCounts
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        uint256 nodeOperatorsCount = _checkReportPayload(_nodeOperatorIds.length, _vettedSigningKeysCounts.length);
+        uint256 totalNodeOperatorsCount = getNodeOperatorsCount();
+
+        uint256 nodeOperatorId;
+        uint256 vettedKeysCount;
+        uint256 _nodeOperatorIdsOffset;
+        uint256 _vettedKeysCountsOffset;
+
+        /// @dev calldata layout:
+        /// | func sig (4 bytes) | ABI-enc data |
+        ///
+        /// ABI-enc data:
+        ///
+        /// |    32 bytes    |     32 bytes      |  32 bytes  | ... |  32 bytes  | ...... |
+        /// | ids len offset | counts len offset |  ids len   | ids | counts len | counts |
+        assembly {
+            _nodeOperatorIdsOffset := add(calldataload(4), 36) // arg1 calldata offset + 4 (signature len) + 32 (length slot)
+            _vettedKeysCountsOffset := add(calldataload(36), 36) // arg2 calldata offset + 4 (signature len) + 32 (length slot))
+        }
+        for (uint256 i; i < nodeOperatorsCount;) {
+            /// @solidity memory-safe-assembly
+            assembly {
+                nodeOperatorId := shr(192, calldataload(add(_nodeOperatorIdsOffset, mul(i, 8))))
+                vettedKeysCount := shr(128, calldataload(add(_vettedKeysCountsOffset, mul(i, 16))))
+                i := add(i, 1)
+            }
+            _requireValidRange(nodeOperatorId < totalNodeOperatorsCount);
+            _updateVettedSingingKeysCount(nodeOperatorId, vettedKeysCount, false /* only decrease */);
+        }
+        _increaseValidatorsKeysNonce();
+    }
+
+    function _updateVettedSingingKeysCount(
+        uint256 _nodeOperatorId,
+        uint256 _vettedSigningKeysCount,
+        bool _allowIncrease
+    ) internal {
         Packed64x4.Packed memory signingKeysStats = _loadOperatorSigningKeysStats(_nodeOperatorId);
         uint256 vettedSigningKeysCountBefore = signingKeysStats.get(TOTAL_VETTED_KEYS_COUNT_OFFSET);
         uint256 depositedSigningKeysCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
@@ -425,9 +474,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             totalSigningKeysCount, Math256.max(_vettedSigningKeysCount, depositedSigningKeysCount)
         );
 
-        if (vettedSigningKeysCountAfter == vettedSigningKeysCountBefore) {
-            return;
-        }
+        if (vettedSigningKeysCountAfter == vettedSigningKeysCountBefore) return;
+
+        require(
+            _allowIncrease || vettedSigningKeysCountAfter < vettedSigningKeysCountBefore,
+            "VETTED_KEYS_COUNT_INCREASED"
+        );
 
         signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, vettedSigningKeysCountAfter);
         _saveOperatorSigningKeysStats(_nodeOperatorId, signingKeysStats);
@@ -435,7 +487,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit VettedSigningKeysCountChanged(_nodeOperatorId, vettedSigningKeysCountAfter);
 
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
-        _increaseValidatorsKeysNonce();
     }
 
     /// @notice Called by StakingRouter to signal that stETH rewards were minted for this module.
@@ -637,18 +688,21 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @notice Updates the limit of the validators that can be used for deposit by DAO
     /// @param _nodeOperatorId Id of the node operator
     /// @param _targetLimit Target limit of the node operator
-    /// @param _isTargetLimitActive active flag
-    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, bool _isTargetLimitActive, uint256 _targetLimit) external {
+    /// @param _targetLimitMode target limit mode (0 = disabled, 1 = soft mode, 2 = forced mode)
+    function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
         _requireValidRange(_targetLimit <= UINT64_MAX);
 
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
-        operatorTargetStats.set(IS_TARGET_LIMIT_ACTIVE_OFFSET, _isTargetLimitActive ? 1 : 0);
-        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _isTargetLimitActive ? _targetLimit : 0);
+        operatorTargetStats.set(TARGET_LIMIT_MODE_OFFSET, _targetLimitMode);
+        if (_targetLimitMode == 0) {
+            _targetLimit = 0;
+        }
+        operatorTargetStats.set(TARGET_VALIDATORS_COUNT_OFFSET, _targetLimit);
         _saveOperatorTargetValidatorsStats(_nodeOperatorId, operatorTargetStats);
 
-        emit TargetValidatorsCountChanged(_nodeOperatorId, _targetLimit);
+        emit TargetValidatorsCountChanged(_nodeOperatorId, _targetLimit, _targetLimitMode);
 
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
         _increaseValidatorsKeysNonce();
@@ -845,7 +899,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         if (!isOperatorPenaltyCleared(_nodeOperatorId)) {
             // when the node operator is penalized zeroing its depositable validators count
             newMaxSigningKeysCount = depositedSigningKeysCount;
-        } else if (operatorTargetStats.get(IS_TARGET_LIMIT_ACTIVE_OFFSET) != 0) {
+        } else if (operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET) != 0) {
             // apply target limit when it's active and the node operator is not penalized
             newMaxSigningKeysCount = Math256.max(
                 // max validators count can't be less than the deposited validators count
@@ -909,7 +963,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             }
         }
 
-        allocatedKeysCount =
+        (allocatedKeysCount, activeKeyCountsAfterAllocation) =
             MinFirstAllocationStrategy.allocate(activeKeyCountsAfterAllocation, activeKeysCapacities, _keysCount);
 
         /// @dev method NEVER allocates more keys than was requested
@@ -1251,7 +1305,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         external
         view
         returns (
-            bool isTargetLimitActive,
+            uint256 targetLimitMode,
             uint256 targetValidatorsCount,
             uint256 stuckValidatorsCount,
             uint256 refundedValidatorsCount,
@@ -1265,7 +1319,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
         Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
 
-        isTargetLimitActive = operatorTargetStats.get(IS_TARGET_LIMIT_ACTIVE_OFFSET) != 0;
+        targetLimitMode = operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET);
         targetValidatorsCount = operatorTargetStats.get(TARGET_VALIDATORS_COUNT_OFFSET);
         stuckValidatorsCount = stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET);
         refundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);

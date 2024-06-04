@@ -7,9 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
+  MinFirstAllocationStrategy__factory,
   StakingRouter,
   StakingRouter__factory,
 } from "typechain-types";
+import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { certainAddress, ether, proxify } from "lib";
 
@@ -20,7 +22,6 @@ describe("StakingRouter", () => {
   let user: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let stakingRouterImpl: StakingRouter;
   let stakingRouter: StakingRouter;
 
   const lido = certainAddress("test:staking-router:lido");
@@ -30,33 +31,40 @@ describe("StakingRouter", () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
 
     depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    stakingRouterImpl = await new StakingRouter__factory(deployer).deploy(depositContract);
-    [stakingRouter] = await proxify({ impl: stakingRouterImpl, admin: proxyAdmin, caller: user });
+
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: StakingRouterLibraryAddresses = {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    };
+
+    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
+    [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
   });
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {
-      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials))
-        .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
-        .withArgs("_admin");
+      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroAddressAdmin",
+      );
     });
 
     it("Reverts if lido is zero address", async () => {
-      await expect(stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials))
-        .to.be.revertedWithCustomError(stakingRouter, "ZeroAddress")
-        .withArgs("_lido");
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressLido");
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
       await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
         .to.emit(stakingRouter, "ContractVersionSet")
-        .withArgs(1)
+        .withArgs(2)
         .and.to.emit(stakingRouter, "RoleGranted")
         .withArgs(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address, user.address)
         .and.to.emit(stakingRouter, "WithdrawalCredentialsSet")
         .withArgs(withdrawalCredentials, user.address);
 
-      expect(await stakingRouter.getContractVersion()).to.equal(1);
+      expect(await stakingRouter.getContractVersion()).to.equal(2);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
     });
