@@ -171,4 +171,10 @@ interface IStakingModule {
 
     /// @dev Event to be emitted on StakingModule's nonce change
     event NonceChanged(uint256 nonce);
+
+    /// @dev Event to be emitted when a signing key is added to the StakingModule
+    event SigningKeyAdded(uint256 indexed nodeOperatorId, bytes pubkey);
+
+    /// @dev Event to be emitted when a signing key is removed from the StakingModule
+    event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
 }
