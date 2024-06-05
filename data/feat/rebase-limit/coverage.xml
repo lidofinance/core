@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2905"  lines-covered="2196"  line-rate="0.7559"  branches-valid="1286"  branches-covered="1044"  branch-rate="0.8118000000000001"  timestamp="1717582061087" complexity="0" version="0.1">
+<coverage lines-valid="2905"  lines-covered="2196"  line-rate="0.7559"  branches-valid="1286"  branches-covered="1044"  branch-rate="0.8118000000000001"  timestamp="1717583430665" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4669,8 +4669,8 @@
 			<method name="constructor"  hits="49"  signature="()V" >
 				<lines><line number="199"  hits="49" /></lines>
 			</method>
-			<method name="getReportDataCount"  hits="2"  signature="()V" >
-				<lines><line number="217"  hits="2" /></lines>
+			<method name="getReportDataCount"  hits="1"  signature="()V" >
+				<lines><line number="217"  hits="1" /></lines>
 			</method>
 			<method name="getLidoLocator"  hits="2"  signature="()V" >
 				<lines><line number="222"  hits="2" /></lines>
@@ -4798,7 +4798,7 @@
 			<line number="209"  hits="48"  branch="false" />
 			<line number="211"  hits="48"  branch="false" />
 			<line number="213"  hits="48"  branch="false" />
-			<line number="218"  hits="2"  branch="false" />
+			<line number="218"  hits="1"  branch="false" />
 			<line number="223"  hits="2"  branch="false" />
 			<line number="228"  hits="29"  branch="false" />
 			<line number="255"  hits="33"  branch="false" />
