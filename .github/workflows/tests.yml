@@ -51,5 +51,8 @@ jobs:
       - name: Install dependencies
         run: yarn install
 
+      - name: Compile contracts
+        run: forge compile
+
       - name: Run tests
         run: forge test -vvv
