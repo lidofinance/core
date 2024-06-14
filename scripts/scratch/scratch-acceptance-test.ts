@@ -40,7 +40,6 @@ import { ether } from "lib/units";
 const UNLIMITED_STAKING_LIMIT = 1000000000;
 const CURATED_MODULE_ID = 1;
 const DEPOSIT_CALLDATA = "0x00";
-const MAX_DEPOSITS = 150;
 const ADDRESS_1 = "0x0000000000000000000000000000000000000001";
 const ADDRESS_2 = "0x0000000000000000000000000000000000000002";
 
@@ -220,7 +219,7 @@ async function checkSubmitDepositReportWithdrawal(
   assert.equal(await lido.getTotalPooledEther(), initialLidoBalance + BigInt(ether("34")));
   assert.equal(await lido.getBufferedEther(), initialLidoBalance + BigInt(ether("34")));
 
-  await lido.connect(depositSecurityModuleSigner).deposit(MAX_DEPOSITS, CURATED_MODULE_ID, DEPOSIT_CALLDATA);
+  await lido.connect(depositSecurityModuleSigner).deposit(CURATED_MODULE_ID, DEPOSIT_CALLDATA);
   log.success("Ether deposited");
 
   assert.equal((await lido.getBeaconStat()).depositedValidators, 1n);

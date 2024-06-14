@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 
@@ -17,7 +17,6 @@ interface IDepositContract {
 
 interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
-    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
@@ -460,7 +459,7 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Calls LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata).
+     * @notice Calls LIDO.deposit(stakingModuleId, depositCalldata).
      * @param blockNumber The block number at which the deposit intent was created.
      * @param blockHash The block hash at which the deposit intent was created.
      * @param depositRoot The deposit root hash.
@@ -508,8 +507,7 @@ contract DepositSecurityModule {
 
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
-        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
-        LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
+        LIDO.deposit(stakingModuleId, depositCalldata);
 
         _setLastDepositBlock(block.number);
     }

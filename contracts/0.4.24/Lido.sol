@@ -687,21 +687,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @dev Invokes a deposit call to the Staking Router contract and updates buffered counters
-     * @param _maxDepositsCount max deposits count
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
      */
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external {
+    function deposit(uint256 _stakingModuleId, bytes _depositCalldata) external {
         ILidoLocator locator = getLidoLocator();
 
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
         IStakingRouter stakingRouter = _stakingRouter();
-        uint256 depositsCount = Math256.min(
-            _maxDepositsCount,
-            stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
-        );
+        uint256 depositsCount = stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther());
 
         uint256 depositsValue;
         if (depositsCount > 0) {

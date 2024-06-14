@@ -12,7 +12,7 @@ contract StakingRouterMockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
 
     event StakingModuleVettedKeysDecreased(uint24 stakingModuleId, bytes nodeOperatorIds, bytes vettedSigningKeysCounts);
-    event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
+    event StakingModuleDeposited(uint24 stakingModuleId, bytes depositCalldata);
     event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingRouter.StakingModuleStatus status, address setBy);
 
     StakingRouter.StakingModuleStatus private status;
@@ -27,12 +27,12 @@ contract StakingRouterMockForDepositSecurityModule is IStakingRouter {
     }
 
     function deposit(
-        uint256 maxDepositsCount,
+        uint256 _depositsCount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
-    ) external whenModuleIsRegistered(stakingModuleId) payable returns (uint256 keysCount) {
-        emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
-        return maxDepositsCount;
+    ) external whenModuleIsRegistered(stakingModuleId) payable{
+        emit StakingModuleDeposited(uint24(stakingModuleId), depositCalldata);
+
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(

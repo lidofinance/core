@@ -266,7 +266,6 @@ describe("Lido:misc", () => {
   });
 
   context("deposit", () => {
-    const maxDepositsCount = 100n;
     const stakingModuleId = 1n;
     const depositCalldata = new Uint8Array();
 
@@ -278,17 +277,13 @@ describe("Lido:misc", () => {
     it("Reverts if the caller is not `DepositSecurityModule`", async () => {
       lido = lido.connect(stranger);
 
-      await expect(lido.deposit(maxDepositsCount, stakingModuleId, depositCalldata)).to.be.revertedWith(
-        "APP_AUTH_DSM_FAILED",
-      );
+      await expect(lido.deposit(stakingModuleId, depositCalldata)).to.be.revertedWith("APP_AUTH_DSM_FAILED");
     });
 
     it("Reverts if the contract is stopped", async () => {
       await lido.connect(user).stop();
 
-      await expect(lido.deposit(maxDepositsCount, stakingModuleId, depositCalldata)).to.be.revertedWith(
-        "CAN_NOT_DEPOSIT",
-      );
+      await expect(lido.deposit(stakingModuleId, depositCalldata)).to.be.revertedWith("CAN_NOT_DEPOSIT");
     });
 
     it("Emits `Unbuffered` and `DepositedValidatorsChanged` events if there are deposits", async () => {
@@ -307,7 +302,7 @@ describe("Lido:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      await expect(lido.deposit(maxDepositsCount, stakingModuleId, depositCalldata))
+      await expect(lido.deposit(stakingModuleId, depositCalldata))
         .to.emit(lido, "Unbuffered")
         .withArgs(oneDepositWorthOfEther)
         .and.to.emit(lido, "DepositedValidatorsChanged")
@@ -341,7 +336,7 @@ describe("Lido:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      await expect(lido.deposit(maxDepositsCount, stakingModuleId, depositCalldata))
+      await expect(lido.deposit(stakingModuleId, depositCalldata))
         .to.emit(stakingRouter, "Mock__DepositCalled")
         .not.to.emit(lido, "Unbuffered")
         .and.not.to.emit(lido, "DepositedValidatorsChanged");
