@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@typechain/hardhat";
 
+import "dotenv/config";
 import "solidity-coverage";
 import "tsconfig-paths/register";
 import "hardhat-tracer";
@@ -23,7 +24,10 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
     local: {
-      url: RPC_URL,
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+    },
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
     },
     hardhat: {
       // setting base fee to 0 to avoid extra calculations doesn't work :(

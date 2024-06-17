@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   test_hardhat:
-    name: Hardhat Solidity tests
+    name: Hardhat Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -25,8 +25,30 @@ jobs:
       - name: Run Hardhat Solidity tests
         run: yarn test
 
+#  test_hardhat_integration:
+#    name: Hardhat Integration Tests
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          persist-credentials: false
+#
+#      - run: corepack enable
+#
+#      - uses: actions/setup-node@v4
+#        with:
+#          node-version-file: .nvmrc
+#          cache: "yarn"
+#
+#      - name: Install dependencies
+#        run: yarn install
+#
+#      - name: Run Hardhat Solidity tests
+#        run: yarn test:integration
+
   test_foundry:
-    name: Foundry Solidity tests
+    name: Foundry Fuzzing & Invariant Tests
     runs-on: ubuntu-latest
 
     steps:

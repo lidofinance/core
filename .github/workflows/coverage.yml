@@ -8,7 +8,7 @@ on:
 
 jobs:
   coverage:
-    name: Solidity coverage
+    name: Hardhat Unit Tests Coverage
     runs-on: ubuntu-latest
 
     steps:
@@ -37,5 +37,5 @@ jobs:
           diff: true
           diff-branch: master
           diff-storage: _core_coverage_reports
-          coverage-summary-title: "Code Coverage Summary"
+          coverage-summary-title: "Hardhat Unit Tests Coverage Summary"
           togglable-report: true

@@ -20,3 +20,4 @@ export * from "./string";
 export * from "./time";
 export * from "./type";
 export * from "./units";
+export * from "./bigint-math";

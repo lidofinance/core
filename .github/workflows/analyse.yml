@@ -8,7 +8,7 @@ on:
 
 jobs:
   slither:
-    name: Solidity code analysis
+    name: Slither Code Analysis
     runs-on: ubuntu-latest
 
     permissions:
