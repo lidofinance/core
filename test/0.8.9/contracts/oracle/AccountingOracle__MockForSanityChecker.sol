@@ -8,25 +8,17 @@ interface ITimeProvider {
     function getTime() external view returns (uint256);
 }
 
-contract AccountingOracle__MockForLegacyOracle {
+contract AccountingOracle__MockForSanityChecker {
     address public immutable LIDO;
-    address public immutable CONSENSUS_CONTRACT;
     uint256 public immutable SECONDS_PER_SLOT;
+    uint256 public immutable GENESIS_TIME;
 
     uint256 internal _lastRefSlot;
 
-    constructor(address lido, address consensusContract, uint256 secondsPerSlot) {
+    constructor(address lido, uint256 secondsPerSlot, uint256 genesisTime) {
         LIDO = lido;
-        CONSENSUS_CONTRACT = consensusContract;
         SECONDS_PER_SLOT = secondsPerSlot;
-    }
-
-    function getTime() external view returns (uint256) {
-        return _getTime();
-    }
-
-    function _getTime() internal view returns (uint256) {
-        return ITimeProvider(CONSENSUS_CONTRACT).getTime();
+        GENESIS_TIME = genesisTime;
     }
 
     function submitReportData(
@@ -55,9 +47,5 @@ contract AccountingOracle__MockForLegacyOracle {
 
     function getLastProcessingRefSlot() external view returns (uint256) {
         return _lastRefSlot;
-    }
-
-    function getConsensusContract() external view returns (address) {
-        return CONSENSUS_CONTRACT;
     }
 }

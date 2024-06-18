@@ -415,6 +415,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+          await sanityChecker.grantRole(
+            await sanityChecker.MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE(),
+            admin.address,
+          );
           await sanityChecker.setMaxNodeOperatorsPerExtraDataItemCount(problematicItemsCount - 1);
           await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
             .to.be.revertedWithCustomError(sanityChecker, "TooManyNodeOpsPerExtraDataItem")
@@ -431,6 +435,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+          await sanityChecker.grantRole(
+            await sanityChecker.MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE(),
+            admin.address,
+          );
           await sanityChecker.setMaxAccountingExtraDataListItemsCount(problematicItemsCount);
           const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
           await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);

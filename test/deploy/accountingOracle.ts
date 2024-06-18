@@ -58,7 +58,6 @@ export async function deployAccountingOracleSetup(
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
   const { lido, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   const legacyOracle = await getLegacyOracle();
 
@@ -87,8 +86,13 @@ export async function deployAccountingOracleSetup(
     lido: lidoAddr || (await lido.getAddress()),
     stakingRouter: await stakingRouter.getAddress(),
     withdrawalQueue: await withdrawalQueue.getAddress(),
-    oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
     accountingOracle: await oracle.getAddress(),
+  });
+
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
+
+  await updateLidoLocatorImplementation(locatorAddr, {
+    oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
   });
 
   // pretend we're at the first slot of the initial frame's epoch
@@ -153,10 +157,9 @@ export async function initAccountingOracle({
 
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
   const churnValidatorsPerDayLimit = 100;
-  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0];
-  const managersRoster = [[admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin]];
+  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 32 * 12, 15, 16, 0, 0, 0, 0, 0];
 
-  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList, managersRoster]);
+  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
 }
 
 interface AccountingOracleSetup {
