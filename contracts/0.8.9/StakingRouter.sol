@@ -658,10 +658,12 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
     {
         uint256 stakingModulesCount = getStakingModulesCount();
+        StakingModule storage stakingModule;
+        IStakingModule moduleContract;
 
         for (uint256 i; i < stakingModulesCount; ) {
-            StakingModule storage stakingModule = _getStakingModuleByIndex(i);
-            IStakingModule moduleContract = IStakingModule(stakingModule.stakingModuleAddress);
+            stakingModule = _getStakingModuleByIndex(i);
+            moduleContract = IStakingModule(stakingModule.stakingModuleAddress);
 
             (uint256 exitedValidatorsCount, , ) = moduleContract.getStakingModuleSummary();
             if (exitedValidatorsCount == stakingModule.exitedValidatorsCount) {

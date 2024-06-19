@@ -524,10 +524,11 @@ contract DepositSecurityModule {
             abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
         );
 
-        address prevSignerAddr = address(0);
+        address prevSignerAddr;
+        address signerAddr;
 
         for (uint256 i = 0; i < sigs.length; ) {
-            address signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
+            signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
             if (!_isGuardian(signerAddr)) revert InvalidSignature();
             if (signerAddr <= prevSignerAddr) revert SignaturesNotSorted();
             prevSignerAddr = signerAddr;
