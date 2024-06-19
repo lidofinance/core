@@ -1049,8 +1049,10 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             StakingModuleCache[] memory stakingModulesCache
         ) = _getDepositsAllocation(_maxDepositsValue / DEPOSIT_SIZE);
         uint256 stakingModuleIndex = _getStakingModuleIndexById(_stakingModuleId);
-        return
-            newDepositsAllocation[stakingModuleIndex] - stakingModulesCache[stakingModuleIndex].activeValidatorsCount;
+        return Math256.min(
+            _getStakingModuleByIndex(stakingModuleIndex).maxDepositsPerBlock,
+            newDepositsAllocation[stakingModuleIndex] - stakingModulesCache[stakingModuleIndex].activeValidatorsCount
+        );
     }
 
     /**

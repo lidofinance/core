@@ -81,6 +81,22 @@ describe("StakingRouter:deposits", () => {
       );
     });
 
+    it("Max allocation respects the maxDepositsPerBlock value which set per module", async () => {
+      const maxDeposits = 150n;
+
+      const config = {
+        ...DEFAULT_CONFIG,
+        maxDepositsPerBlock: 30n,
+        depositable: 100n,
+      };
+
+      const [, id] = await setupModule(config);
+
+      expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, maxDeposits * DEPOSIT_VALUE)).to.equal(
+        config.maxDepositsPerBlock,
+      );
+    });
+
     it("Returns even allocation between modules if target shares are equal and capacities allow for that", async () => {
       const maxDeposits = 200n;
 
