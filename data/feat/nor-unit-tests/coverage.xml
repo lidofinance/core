@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2246"  line-rate="0.7878000000000001"  branches-valid="1260"  branches-covered="1041"  branch-rate="0.8262"  timestamp="1718921326191" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2246"  line-rate="0.7878000000000001"  branches-valid="1260"  branches-covered="1041"  branch-rate="0.8262"  timestamp="1719263179488" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -937,11 +937,11 @@
 			<method name="_distributeRewards"  hits="0"  signature="()V" >
 				<lines><line number="1312"  hits="0" /></lines>
 			</method>
-			<method name="getLocator"  hits="257"  signature="()V" >
-				<lines><line number="1343"  hits="257" /></lines>
+			<method name="getLocator"  hits="259"  signature="()V" >
+				<lines><line number="1343"  hits="259" /></lines>
 			</method>
-			<method name="getStuckPenaltyDelay"  hits="2"  signature="()V" >
-				<lines><line number="1347"  hits="2" /></lines>
+			<method name="getStuckPenaltyDelay"  hits="5"  signature="()V" >
+				<lines><line number="1347"  hits="5" /></lines>
 			</method>
 			<method name="setStuckPenaltyDelay"  hits="0"  signature="()V" >
 				<lines><line number="1351"  hits="0" /></lines>
@@ -1463,8 +1463,8 @@
 			<line number="1336"  hits="0"  branch="false" />
 			<line number="1338"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="1339"  hits="0"  branch="false" />
-			<line number="1344"  hits="257"  branch="false" />
-			<line number="1348"  hits="2"  branch="false" />
+			<line number="1344"  hits="259"  branch="false" />
+			<line number="1348"  hits="5"  branch="false" />
 			<line number="1352"  hits="0"  branch="false" />
 			<line number="1354"  hits="0"  branch="false" />
 			<line number="1359"  hits="7"  branch="false" />
