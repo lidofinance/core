@@ -17,7 +17,6 @@ interface IDepositContract {
 
 interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
-    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
@@ -73,6 +72,10 @@ contract DepositSecurityModule {
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 3;
+
+    /// @notice max deposits count stub passed to Lido contract
+    ///         to allow SR to use module's maxDepositsPerBlock
+    uint256 internal constant MAX_DEPOSITS_STUB = type(uint256).max;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -516,8 +519,7 @@ contract DepositSecurityModule {
 
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
-        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
-        LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
+        LIDO.deposit(MAX_DEPOSITS_STUB, stakingModuleId, depositCalldata);
 
         _setLastDepositBlock(block.number);
     }
