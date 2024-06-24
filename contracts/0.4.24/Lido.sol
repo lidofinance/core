@@ -123,7 +123,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
     /// @dev amount of external balance that is counted into total pooled eth
     bytes32 internal constant EXTERNAL_BALANCE_POSITION =
-        0x8bfa431400f09f5d08a01c4be5ebce854346f7abf198d4f5cc3122340906aba2; // keccak256("lido.Lido.externalClBalance");
+        0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -560,42 +560,41 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
     }
 
-    function mintExternalShares(address _receiver, uint256 _amount) external {
-        uint256 tokens = super.getPooledEthByShares(_amount);
-        mintShares(_receiver, _amount);
+    // mint shares backed by external capital
+    function mintExternalShares(
+        address _receiver,
+        uint256 _amountOfShares
+    ) external {
+        uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
+
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(
-            EXTERNAL_BALANCE_POSITION.getStorageUint256() + tokens
+            EXTERNAL_BALANCE_POSITION.getStorageUint256() + stethAmount
         );
+
+        mintShares(_receiver, _amountOfShares);
 
         // TODO: emit something
     }
 
-    function burnExternalShares(address _account, uint256 _amount) external {
-        uint256 ethAmount = super.getPooledEthByShares(_amount);
+    function burnExternalShares(
+        address _account,
+        uint256 _amountOfShares
+    ) external {
+        uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
 
-        if (extBalance < ethAmount) revert("EXT_BALANCE_TOO_SMALL");
-
-        burnShares(_account, _amount);
+        if (extBalance < stethAmount) revert("EXT_BALANCE_TOO_SMALL");
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(
-            EXTERNAL_BALANCE_POSITION.getStorageUint256() - ethAmount
+            EXTERNAL_BALANCE_POSITION.getStorageUint256() - stethAmount
         );
+
+        burnShares(_account, _amountOfShares);
 
         // TODO: emit
     }
 
-    /*
-     * @dev updates Consensus Layer state snapshot according to the current report
-     *
-     * NB: conventions and assumptions
-     *
-     * `depositedValidators` are total amount of the **ever** deposited Lido validators
-     * `_postClValidators` are total amount of the **ever** appeared on the CL side Lido validators
-     *
-     * i.e., exited Lido validators persist in the state, just with a different status
-     */
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _postClValidators,
@@ -619,9 +618,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit CLValidatorsUpdated(_reportTimestamp, preClValidators, _postClValidators);
     }
 
-    /**
-     * @dev collect ETH from ELRewardsVault and WithdrawalVault, then send to WithdrawalQueue
-     */
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _adjustedPreCLBalance,
@@ -898,10 +894,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         assert(balance != 0);
 
         if (_getTotalShares() == 0) {
-            // if protocol is empty bootstrap it with the contract's balance
+            // if protocol is empty, bootstrap it with the contract's balance
             // address(0xdead) is a holder for initial shares
             _setBufferedEther(balance);
-            // emitting `Submitted` before Transfer events to preserver events order in tx
+            // emitting `Submitted` before Transfer events to preserve events order in tx
             emit Submitted(INITIAL_TOKEN_HOLDER, balance, 0);
             _mintInitialShares(balance);
         }

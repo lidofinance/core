@@ -360,17 +360,17 @@ contract StETH is IERC20, Pausable {
         return tokensAmount;
     }
 
-    function mintShares(address _recipient, uint256 _amount) public {
+    function mintShares(address _recipient, uint256 _sharesAmount) public {
         require(_isMinter(msg.sender), "AUTH_FAILED");
 
-        _mintShares(_recipient, _amount);
-        _emitTransferAfterMintingShares(_recipient, _amount);
+        _mintShares(_recipient, _sharesAmount);
+        _emitTransferAfterMintingShares(_recipient, _sharesAmount);
     }
 
-    function burnShares(address _account, uint256 _amount) public {
+    function burnShares(address _account, uint256 _sharesAmount) public {
         require(_isBurner(msg.sender), "AUTH_FAILED");
 
-        _burnShares(_account, _amount);
+        _burnShares(_account, _sharesAmount);
 
         // TODO: do something with Transfer event
     }

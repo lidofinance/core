@@ -6,7 +6,7 @@ pragma solidity 0.8.9;
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
-
+import {VaultHub} from "./vaults/VaultHub.sol";
 
 interface IOracleReportSanityChecker {
     function checkAccountingOracleReport(
@@ -114,8 +114,6 @@ interface ILido {
         uint256 _simulatedShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external;
-    function mintShares(address _recipient, uint256 _sharesAmount) external;
-    function burnShares(address _account, uint256 _sharesAmount) external;
 
     function emitTokenRebase(
         uint256 _reportTimestamp,
@@ -126,6 +124,9 @@ interface ILido {
         uint256 _postTotalEther,
         uint256 _sharesMintedAsFees
     ) external;
+
+    function mintShares(address _recipient, uint256 _sharesAmount) external returns (uint256);
+    function burnShares(address _account, uint256 _sharesAmount) external returns (uint256);
 }
 
 /**
@@ -164,14 +165,14 @@ struct ReportValues {
 }
 
 /// This contract is responsible for handling oracle reports
-contract Accounting {
+contract Accounting is VaultHub{
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
-    constructor(address _lidoLocator){
-        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+    constructor(ILidoLocator _lidoLocator) VaultHub(_lidoLocator.lido()){
+        LIDO_LOCATOR = _lidoLocator;
         LIDO = ILido(LIDO_LOCATOR.lido());
     }
 
