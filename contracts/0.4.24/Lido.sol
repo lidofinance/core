@@ -560,13 +560,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
     }
 
-    // mint shares backed by external capital
+    /// @notice mint shares backed by external vaults
     function mintExternalShares(
         address _receiver,
         uint256 _amountOfShares
     ) external {
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
+        // TODO: sanity check here to avoid 100% external balance
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(
             EXTERNAL_BALANCE_POSITION.getStorageUint256() + stethAmount
@@ -586,9 +587,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         if (extBalance < stethAmount) revert("EXT_BALANCE_TOO_SMALL");
 
-        EXTERNAL_BALANCE_POSITION.setStorageUint256(
-            EXTERNAL_BALANCE_POSITION.getStorageUint256() - stethAmount
-        );
+        EXTERNAL_BALANCE_POSITION.setStorageUint256(extBalance - stethAmount);
 
         burnShares(_account, _amountOfShares);
 
@@ -628,6 +627,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
         require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
+
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
             ILidoExecutionLayerRewardsVault(getLidoLocator().elRewardsVault())
@@ -662,7 +662,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             CL_BALANCE_POSITION.getStorageUint256(),
             _withdrawalsToWithdraw,
             _elRewardsToWithdraw,
-            _getBufferedEther()
+            postBufferedEther
         );
     }
 

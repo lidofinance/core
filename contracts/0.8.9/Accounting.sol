@@ -125,8 +125,8 @@ interface ILido {
         uint256 _sharesMintedAsFees
     ) external;
 
-    function mintShares(address _recipient, uint256 _sharesAmount) external returns (uint256);
-    function burnShares(address _account, uint256 _sharesAmount) external returns (uint256);
+    function mintShares(address _recipient, uint256 _sharesAmount) external;
+    function burnShares(address _account, uint256 _sharesAmount) external;
 }
 
 /**
@@ -187,13 +187,17 @@ contract Accounting is VaultHub{
     struct CalculatedValues {
         uint256 withdrawals;
         uint256 elRewards;
-        uint256 etherToLockOnWithdrawalQueue;
-        uint256 sharesToBurnFromWithdrawalQueue;
-        uint256 simulatedSharesToBurn;
-        uint256 sharesToBurn;
+
+        uint256 etherToFinalizeWQ;
+        uint256 sharesToFinalizeWQ;
+        uint256 sharesToBurnDueToWQThisReport;
+        uint256 totalSharesToBurn;
+
         uint256 sharesToMintAsFees;
-        uint256 adjustedPreClBalance;
         StakingRewardsDistribution moduleRewardDistribution;
+        uint256 adjustedPreClBalance;
+        uint256 postTotalShares;
+        uint256 postTotalPooledEther;
     }
 
     struct ReportContext {
@@ -215,24 +219,26 @@ contract Accounting is VaultHub{
 
         // Calculate values to update
         CalculatedValues memory update = CalculatedValues(0,0,0,0,0,0,0,0,
-            _getStakingRewardsDistribution(_contracts.stakingRouter));
+            _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0);
 
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
         (
-            update.etherToLockOnWithdrawalQueue,
-            update.sharesToBurnFromWithdrawalQueue
+            update.etherToFinalizeWQ,
+            update.sharesToFinalizeWQ
         ) = _calculateWithdrawals(_contracts, _report);
 
         // Take into account the balance of the newly appeared validators
         uint256 appearedValidators = _report.clValidators - pre.clValidators;
         update.adjustedPreClBalance = pre.clBalance + appearedValidators * DEPOSIT_SIZE;
 
+        uint256 simulatedSharesToBurn; // shares that would be burned if no withdrawals are handled
+
         // Pre-calculate amounts to withdraw from ElRewardsVault and WithdrawalsVault
         (
             update.withdrawals,
             update.elRewards,
-            update.simulatedSharesToBurn,
-            update.sharesToBurn
+            simulatedSharesToBurn,
+            update.totalSharesToBurn
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
             pre.totalPooledEther,
             pre.totalShares,
@@ -241,12 +247,16 @@ contract Accounting is VaultHub{
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            update.etherToLockOnWithdrawalQueue,
-            update.sharesToBurnFromWithdrawalQueue
+            update.etherToFinalizeWQ,
+            update.sharesToFinalizeWQ
         );
 
+        update.sharesToBurnDueToWQThisReport = update.totalSharesToBurn - simulatedSharesToBurn;
+
         // Pre-calculate total amount of protocol fees for this rebase
-        update.sharesToMintAsFees = _calculateFees(
+        (
+            update.sharesToMintAsFees
+        ) = _calculateFees(
             _report,
             pre,
             update.withdrawals,
@@ -254,7 +264,10 @@ contract Accounting is VaultHub{
             update.adjustedPreClBalance,
             update.moduleRewardDistribution);
 
-        //TODO: Pre-calculate `postTotalPooledEther` and `postTotalShares`
+        update.postTotalShares = pre.totalShares + update.sharesToMintAsFees - update.totalSharesToBurn;
+        update.postTotalPooledEther = pre.totalPooledEther // was before the report
+            + _report.clBalance + update.withdrawals - update.adjustedPreClBalance // total rewards or penalty
+            - update.etherToFinalizeWQ;
 
         return ReportContext(_report, pre, update);
     }
@@ -309,16 +322,16 @@ contract Accounting is VaultHub{
         uint256 _adjustedPreClBalance,
         StakingRewardsDistribution memory _rewardsDistribution
     ) internal pure returns (uint256 sharesToMintAsFees) {
-        uint256 postCLTotalBalance = _report.clBalance + _withdrawnWithdrawals;
+        uint256 unifiedClBalance = _report.clBalance + _withdrawnWithdrawals;
         // Don’t mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
-        if (postCLTotalBalance <= _adjustedPreClBalance) return 0;
+        if (unifiedClBalance <= _adjustedPreClBalance) return 0;
 
         if (_rewardsDistribution.totalFee > 0) {
-            uint256 totalRewards = postCLTotalBalance - _adjustedPreClBalance + _withdrawnELRewards;
-            uint256 postTotalPooledEther = _pre.totalPooledEther + totalRewards;
+            uint256 totalRewards = unifiedClBalance - _adjustedPreClBalance + _withdrawnELRewards;
+            uint256 totalPooledEtherWithRewards = _pre.totalPooledEther + totalRewards; // it's not a TPE yet, w'll spend some on withdrawals
 
             uint256 totalFee = _rewardsDistribution.totalFee;
             uint256 precisionPoints = _rewardsDistribution.precisionPoints;
@@ -350,7 +363,7 @@ contract Accounting is VaultHub{
             // token shares.
 
             sharesToMintAsFees = (totalRewards * totalFee * _pre.totalShares)
-                / (postTotalPooledEther * precisionPoints - totalRewards * totalFee);
+                / (totalPooledEtherWithRewards * precisionPoints - totalRewards * totalFee);
         }
     }
 
@@ -369,10 +382,9 @@ contract Accounting is VaultHub{
             _context.report.clBalance
         );
 
-        if (_context.update.sharesToBurnFromWithdrawalQueue > 0) {
+        if (_context.update.sharesToFinalizeWQ > 0) {
             _contracts.burner.requestBurnShares(
-                address(_contracts.withdrawalQueue),
-                _context.update.sharesToBurnFromWithdrawalQueue
+                address(_contracts.withdrawalQueue), _context.update.sharesToFinalizeWQ
             );
         }
 
@@ -383,11 +395,11 @@ contract Accounting is VaultHub{
             _context.update.elRewards,
             _context.report.withdrawalFinalizationBatches,
             _context.report.simulatedShareRate,
-            _context.update.etherToLockOnWithdrawalQueue
+            _context.update.etherToFinalizeWQ
         );
 
-        if (_context.update.sharesToBurn > 0) {
-            _contracts.burner.commitSharesToBurn(_context.update.sharesToBurn);
+        if (_context.update.totalSharesToBurn > 0) {
+            _contracts.burner.commitSharesToBurn(_context.update.totalSharesToBurn);
         }
 
         // Distribute protocol fee (treasury & node operators)
@@ -400,24 +412,27 @@ contract Accounting is VaultHub{
         }
 
         (
-            uint256 postTotalShares,
-            uint256 postTotalPooledEther
+            uint256 realPostTotalShares,
+            uint256 realPostTotalPooledEther
         ) = _completeTokenRebase(
             _context,
             _contracts.postTokenRebaseReceiver
         );
 
         if (_context.report.withdrawalFinalizationBatches.length != 0) {
+            // TODO: Is there any sense to check if simulated == real on no withdrawals
             _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                postTotalPooledEther,
-                postTotalShares,
-                _context.update.etherToLockOnWithdrawalQueue,
-                _context.update.sharesToBurn - _context.update.simulatedSharesToBurn,
+                realPostTotalPooledEther,
+                realPostTotalShares,
+                _context.update.etherToFinalizeWQ,
+                _context.update.sharesToBurnDueToWQThisReport,
                 _context.report.simulatedShareRate
             );
         }
 
-        return [postTotalPooledEther, postTotalShares,
+        // TODO: check realPostTPE and realPostTS against calculated
+
+        return [realPostTotalPooledEther, realPostTotalShares,
             _context.update.withdrawals, _context.update.elRewards];
     }
 
