@@ -11,18 +11,16 @@ import {Report} from "./interfaces/Connected.sol";
 import {Hub} from "./interfaces/Hub.sol";
 
 contract LiquidVault is BasicVault, Liquid {
-
     uint256 internal constant BPS_IN_100_PERCENT = 10000;
 
     uint256 public immutable BOND_BP;
     Hub public immutable HUB;
 
     Report public lastReport;
-    // sum(deposits_to_vault) - sum(withdrawals_from_vault)
-
-    // Is direct validator creaction affects this accounting?
-    int256 public depositBalance; // ?? better naming
     uint256 public lockedBalance;
+
+    // Is direct validator depositing affects this accounting?
+    int256 public netCashFlow;
 
     constructor(
         address _owner,
@@ -35,7 +33,7 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     function getValue() public view override returns (uint256) {
-        return lastReport.cl + lastReport.el - lastReport.depositBalance + uint256(depositBalance);
+        return lastReport.cl + lastReport.el - lastReport.netCashFlow + uint256(netCashFlow);
     }
 
     function update(Report memory _report, uint256 _lockedBalance) external {
@@ -46,7 +44,7 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     receive() external payable override(BasicVault, Basic) {
-        depositBalance += int256(msg.value);
+        netCashFlow += int256(msg.value);
     }
 
     function deposit(
@@ -60,7 +58,7 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     function withdraw(address _receiver, uint256 _amount) public override(Basic, BasicVault) {
-        depositBalance -= int256(_amount);
+        netCashFlow -= int256(_amount);
         _mustBeHealthy();
 
         super.withdraw(_receiver, _amount);

@@ -6,7 +6,7 @@ pragma solidity 0.8.9;
 struct Report {
     uint96 cl;
     uint96 el;
-    uint96 depositBalance;
+    uint96 netCashFlow;
 }
 
 interface Connected {
@@ -15,10 +15,10 @@ interface Connected {
     function lastReport() external view returns (
         uint96 clBalance,
         uint96 elBalance,
-        uint96 depositBalance
+        uint96 netCashFlow
     );
     function lockedBalance() external view returns (uint256);
-    function depositBalance() external view returns (int256);
+    function netCashFlow() external view returns (int256);
 
     function getValue() external view returns (uint256);
 
