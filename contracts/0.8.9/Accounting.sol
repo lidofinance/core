@@ -165,7 +165,7 @@ struct ReportValues {
 }
 
 /// This contract is responsible for handling oracle reports
-contract Accounting is VaultHub{
+contract Accounting is VaultHub {
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
     ILidoLocator public immutable LIDO_LOCATOR;
@@ -184,19 +184,32 @@ contract Accounting is VaultHub{
         uint256 depositedValidators;
     }
 
+    /// @notice precalculated values that is used to change the state of the protocol during the report
     struct CalculatedValues {
+        /// @notice amount of ether to collect from WithdrawalsVault to the buffer
         uint256 withdrawals;
+        /// @notice amount of ether to collect from ELRewardsVault to the buffer
         uint256 elRewards;
 
+        /// @notice amount of ether to transfer to WithdrawalQueue to finalize requests
         uint256 etherToFinalizeWQ;
+        /// @notice number of stETH shares to transfer to Burner because of WQ finalization
         uint256 sharesToFinalizeWQ;
+        /// @notice number of stETH shares transferred from WQ that will be burned this (to be removed)
         uint256 sharesToBurnDueToWQThisReport;
+        /// @notice number of stETH shares that will be burned from Burner this report
         uint256 totalSharesToBurn;
 
+        /// @notice number of stETH shares to mint as a fee to Lido treasury
         uint256 sharesToMintAsFees;
+
+        /// @notice amount of NO fees to transfer to each module
         StakingRewardsDistribution moduleRewardDistribution;
-        uint256 adjustedPreClBalance;
+        /// @notice amount of CL ether that is not rewards earned during this report period
+        uint256 principalClBalance;
+        /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
+        /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
     }
 
@@ -229,7 +242,7 @@ contract Accounting is VaultHub{
 
         // Take into account the balance of the newly appeared validators
         uint256 appearedValidators = _report.clValidators - pre.clValidators;
-        update.adjustedPreClBalance = pre.clBalance + appearedValidators * DEPOSIT_SIZE;
+        update.principalClBalance = pre.clBalance + appearedValidators * DEPOSIT_SIZE;
 
         uint256 simulatedSharesToBurn; // shares that would be burned if no withdrawals are handled
 
@@ -242,7 +255,7 @@ contract Accounting is VaultHub{
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
             pre.totalPooledEther,
             pre.totalShares,
-            update.adjustedPreClBalance,
+            update.principalClBalance,
             _report.clBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
@@ -261,12 +274,15 @@ contract Accounting is VaultHub{
             pre,
             update.withdrawals,
             update.elRewards,
-            update.adjustedPreClBalance,
-            update.moduleRewardDistribution);
+            update.principalClBalance,
+            update.etherToFinalizeWQ,
+            update.totalSharesToBurn,
+            update.moduleRewardDistribution
+        );
 
         update.postTotalShares = pre.totalShares + update.sharesToMintAsFees - update.totalSharesToBurn;
         update.postTotalPooledEther = pre.totalPooledEther // was before the report
-            + _report.clBalance + update.withdrawals - update.adjustedPreClBalance // total rewards or penalty
+            + _report.clBalance + update.withdrawals - update.principalClBalance // total rewards or penalty
             - update.etherToFinalizeWQ;
 
         return ReportContext(_report, pre, update);
@@ -320,6 +336,8 @@ contract Accounting is VaultHub{
         uint256 _withdrawnWithdrawals,
         uint256 _withdrawnELRewards,
         uint256 _adjustedPreClBalance,
+        uint256 _etherToFinalizeWQ,
+        uint256 _sharesToBurn,
         StakingRewardsDistribution memory _rewardsDistribution
     ) internal pure returns (uint256 sharesToMintAsFees) {
         uint256 unifiedClBalance = _report.clBalance + _withdrawnWithdrawals;
@@ -331,39 +349,44 @@ contract Accounting is VaultHub{
 
         if (_rewardsDistribution.totalFee > 0) {
             uint256 totalRewards = unifiedClBalance - _adjustedPreClBalance + _withdrawnELRewards;
-            uint256 totalPooledEtherWithRewards = _pre.totalPooledEther + totalRewards; // it's not a TPE yet, w'll spend some on withdrawals
-
             uint256 totalFee = _rewardsDistribution.totalFee;
             uint256 precisionPoints = _rewardsDistribution.precisionPoints;
 
             // We need to take a defined percentage of the reported reward as a fee, and we do
             // this by minting new token shares and assigning them to the fee recipients (see
             // StETH docs for the explanation of the shares mechanics). The staking rewards fee
-            // is defined in basis points (1 basis point is equal to 0.01%, 10000 (TOTAL_BASIS_POINTS) is 100%).
+            // is defined in basis points (1 basis point is equal to 0.01%, 10000 (PRECISION_POINTS) is 100%).
             //
-            // Since we are increasing totalPooledEther by totalRewards (totalPooledEtherWithRewards),
+            // Since we are increasing totalPooledEther by totalRewards,
             // the combined cost of all holders' shares has became totalRewards StETH tokens more,
             // effectively splitting the reward between each token holder proportionally to their token share.
             //
-            // Now we want to mint new shares to the fee recipient, so that the total cost of the
+            // Now we want to mint new shares to the fee recipient, so that the total value of the
             // newly-minted shares exactly corresponds to the fee taken:
             //
-            // totalPooledEtherWithRewards = _pre.totalPooledEther + totalRewards
-            // shares2mint * newShareCost = (totalRewards * totalFee) / PRECISION_POINTS
-            // newShareCost = totalPooledEtherWithRewards / (_pre.totalShares + shares2mint)
+            // sharesToMintAsFees * newShareRate = (totalRewards * totalFee) / PRECISION_POINTS
+            // newShareRate = (postTotalPooledEther) / (postTotalShares)
+            // postTotalPooledEther = (_pre.totalPooledEther - etherToFinalizeWQ) + totalRewards
+            // postTotalShares = (_pre.totalShares - sharesToBurn) + sharesToMintAsFees
             //
             // which follows to:
             //
-            //                        totalRewards * totalFee * _pre.totalShares
-            // shares2mint = --------------------------------------------------------------
-            //                 (totalPooledEtherWithRewards * PRECISION_POINTS) - (totalRewards * totalFee)
+            //                      totalRewards * totalFee             (_pre.totalShares - sharesToBurn)
+            // sharesToMintAsFees = ----------------------- * ----------------------------------------------------------------------------------------------
+            //                          PRECISION_POINTS      (_pre.totalPooledEther - etherToFinalizeWQ) + totalRewards * (1 - totalFee / PRECISION_POINTS)
+            //
             //
             // The effect is that the given percentage of the reward goes to the fee recipient, and
             // the rest of the reward is distributed between token holders proportionally to their
             // token shares.
 
-            sharesToMintAsFees = (totalRewards * totalFee * _pre.totalShares)
-                / (totalPooledEtherWithRewards * precisionPoints - totalRewards * totalFee);
+            // BTW: fees on vaults does not change newShareRate, because they are backed by
+            // external balance proportionately
+            // BUT WQ request finalization do change it.
+
+            // simplified formula from above to reduce the number of DIV operations
+            sharesToMintAsFees = (totalRewards * totalFee * (_pre.totalShares - _sharesToBurn))
+                / ((_pre.totalPooledEther - _etherToFinalizeWQ + totalRewards) * precisionPoints - totalRewards * totalFee);
         }
     }
 
@@ -390,7 +413,7 @@ contract Accounting is VaultHub{
 
         LIDO.collectRewardsAndProcessWithdrawals(
             _context.report.timestamp,
-            _context.update.adjustedPreClBalance,
+            _context.update.principalClBalance,
             _context.update.withdrawals,
             _context.update.elRewards,
             _context.report.withdrawalFinalizationBatches,
@@ -448,7 +471,7 @@ contract Accounting is VaultHub{
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _context.report.timestamp,
             _context.report.timeElapsed,
-            _context.update.adjustedPreClBalance,
+            _context.update.principalClBalance,
             _context.report.clBalance,
             _context.report.withdrawalVaultBalance,
             _context.report.elRewardsVaultBalance,
