@@ -30,6 +30,7 @@ export enum Sk {
   appLido = "app:lido",
   appOracle = `app:oracle`,
   appNodeOperatorsRegistry = "app:node-operators-registry",
+  appSimpleDvt = "app:simple-dvt",
   aragonAcl = "aragon-acl",
   aragonEvmScriptRegistry = "aragon-evm-script-registry",
   aragonApmRegistry = "aragon-apm-registry",
