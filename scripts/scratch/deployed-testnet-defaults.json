@@ -78,7 +78,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -94,15 +94,15 @@
   },
   "depositSecurityModule": {
     "deployParameters": {
-      "maxDepositsPerBlock": 150,
-      "minDepositBlockDistance": 5,
+      "maxOperatorsPerUnvetting": 200,
       "pauseIntentValidityPeriodBlocks": 6646,
       "usePredefinedAddressInstead": null
     }
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "churnValidatorsPerDayLimit": 1500,
+      "exitedValidatorsPerDayLimit": 1500,
+      "appearedValidatorsPerDayLimit": 1500,
       "oneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,

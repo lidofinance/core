@@ -27,6 +27,7 @@ async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
+  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -76,7 +77,7 @@ async function main() {
     locator.address,
     admin,
     [
-      sanityChecks.churnValidatorsPerDayLimit,
+      sanityChecks.exitedValidatorsPerDayLimit,
       sanityChecks.oneOffCLBalanceDecreaseBPLimit,
       sanityChecks.annualBalanceIncreaseBPLimit,
       sanityChecks.simulatedShareRateDeviationBPLimit,
@@ -85,8 +86,9 @@ async function main() {
       sanityChecks.maxNodeOperatorsPerExtraDataItemCount,
       sanityChecks.requestTimestampMargin,
       sanityChecks.maxPositiveTokenRebase,
+      sanityChecks.appearedValidatorsPerDayLimit,
     ],
-    [[], [], [], [], [], [], [], [], [], []],
+    [[], [], [], [], [], [], [], [], [], [], []],
   ];
   const oracleReportSanityChecker = await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
@@ -164,12 +166,17 @@ async function main() {
   //
   // === StakingRouter ===
   //
+
   const stakingRouter = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
     proxyContractsOwner,
     deployer,
     [depositContract],
+    null,
+    {
+      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+    },
   );
 
   //
@@ -177,15 +184,13 @@ async function main() {
   //
   let depositSecurityModuleAddress = depositSecurityModuleParams.usePredefinedAddressInstead;
   if (depositSecurityModuleAddress === null) {
-    const { maxDepositsPerBlock, minDepositBlockDistance, pauseIntentValidityPeriodBlocks } =
-      depositSecurityModuleParams;
+    const { maxOperatorsPerUnvetting, pauseIntentValidityPeriodBlocks } = depositSecurityModuleParams;
     const depositSecurityModuleArgs = [
       lidoAddress,
       depositContract,
       stakingRouter.address,
-      maxDepositsPerBlock,
-      minDepositBlockDistance,
       pauseIntentValidityPeriodBlocks,
+      maxOperatorsPerUnvetting,
     ];
     depositSecurityModuleAddress = (
       await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, depositSecurityModuleArgs)

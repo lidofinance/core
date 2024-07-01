@@ -22,7 +22,7 @@ describe("OracleReportSanityChecker.sol", () => {
   let managersRoster: Record<string, HardhatEthersSigner[]>;
 
   const defaultLimitsList = {
-    churnValidatorsPerDayLimit: 55,
+    exitedValidatorsPerDayLimit: 55,
     oneOffCLBalanceDecreaseBPLimit: 5_00, // 5%
     annualBalanceIncreaseBPLimit: 10_00, // 10%
     simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
@@ -31,6 +31,7 @@ describe("OracleReportSanityChecker.sol", () => {
     maxNodeOperatorsPerExtraDataItemCount: 16,
     requestTimestampMargin: 128,
     maxPositiveTokenRebase: 5_000_000, // 0.05%
+    appearedValidatorsPerDayLimit: 100,
   };
 
   const correctLidoOracleReport = {
@@ -71,15 +72,16 @@ describe("OracleReportSanityChecker.sol", () => {
     // const accounts = signers.map(s => s.address);
     managersRoster = {
       allLimitsManagers: accounts.slice(0, 2),
-      churnValidatorsPerDayLimitManagers: accounts.slice(2, 4),
-      oneOffCLBalanceDecreaseLimitManagers: accounts.slice(4, 6),
-      annualBalanceIncreaseLimitManagers: accounts.slice(6, 8),
-      shareRateDeviationLimitManagers: accounts.slice(8, 10),
-      maxValidatorExitRequestsPerReportManagers: accounts.slice(10, 12),
-      maxAccountingExtraDataListItemsCountManagers: accounts.slice(12, 14),
-      maxNodeOperatorsPerExtraDataItemCountManagers: accounts.slice(14, 16),
-      requestTimestampMarginManagers: accounts.slice(16, 18),
-      maxPositiveTokenRebaseManagers: accounts.slice(18, 20),
+      exitedValidatorsPerDayLimitManagers: accounts.slice(2, 4),
+      appearedValidatorsPerDayLimitManagers: accounts.slice(4, 6),
+      oneOffCLBalanceDecreaseLimitManagers: accounts.slice(6, 8),
+      annualBalanceIncreaseLimitManagers: accounts.slice(8, 10),
+      shareRateDeviationLimitManagers: accounts.slice(10, 12),
+      maxValidatorExitRequestsPerReportManagers: accounts.slice(12, 14),
+      maxAccountingExtraDataListItemsCountManagers: accounts.slice(14, 16),
+      maxNodeOperatorsPerExtraDataItemCountManagers: accounts.slice(16, 18),
+      requestTimestampMarginManagers: accounts.slice(18, 20),
+      maxPositiveTokenRebaseManagers: accounts.slice(20, 22),
     };
     oracleReportSanityChecker = await ethers.deployContract("OracleReportSanityChecker", [
       await lidoLocatorMock.getAddress(),
@@ -113,7 +115,8 @@ describe("OracleReportSanityChecker.sol", () => {
   describe("setOracleReportLimits()", () => {
     it("sets limits correctly", async () => {
       const newLimitsList = {
-        churnValidatorsPerDayLimit: 50,
+        exitedValidatorsPerDayLimit: 50,
+        appearedValidatorsPerDayLimit: 75,
         oneOffCLBalanceDecreaseBPLimit: 10_00,
         annualBalanceIncreaseBPLimit: 15_00,
         simulatedShareRateDeviationBPLimit: 1_50, // 1.5%
@@ -124,7 +127,8 @@ describe("OracleReportSanityChecker.sol", () => {
         maxPositiveTokenRebase: 10_000_000,
       };
       const limitsBefore = await oracleReportSanityChecker.getOracleReportLimits();
-      expect(limitsBefore.churnValidatorsPerDayLimit).to.not.equal(newLimitsList.churnValidatorsPerDayLimit);
+      expect(limitsBefore.exitedValidatorsPerDayLimit).to.not.equal(newLimitsList.exitedValidatorsPerDayLimit);
+      expect(limitsBefore.appearedValidatorsPerDayLimit).to.not.equal(newLimitsList.appearedValidatorsPerDayLimit);
       expect(limitsBefore.oneOffCLBalanceDecreaseBPLimit).to.not.equal(newLimitsList.oneOffCLBalanceDecreaseBPLimit);
       expect(limitsBefore.annualBalanceIncreaseBPLimit).to.not.equal(newLimitsList.annualBalanceIncreaseBPLimit);
       expect(limitsBefore.simulatedShareRateDeviationBPLimit).to.not.equal(
@@ -153,7 +157,8 @@ describe("OracleReportSanityChecker.sol", () => {
       await oracleReportSanityChecker.connect(managersRoster.allLimitsManagers[0]).setOracleReportLimits(newLimitsList);
 
       const limitsAfter = await oracleReportSanityChecker.getOracleReportLimits();
-      expect(limitsAfter.churnValidatorsPerDayLimit).to.equal(newLimitsList.churnValidatorsPerDayLimit);
+      expect(limitsAfter.exitedValidatorsPerDayLimit).to.equal(newLimitsList.exitedValidatorsPerDayLimit);
+      expect(limitsAfter.appearedValidatorsPerDayLimit).to.equal(newLimitsList.appearedValidatorsPerDayLimit);
       expect(limitsAfter.oneOffCLBalanceDecreaseBPLimit).to.equal(newLimitsList.oneOffCLBalanceDecreaseBPLimit);
       expect(limitsAfter.annualBalanceIncreaseBPLimit).to.equal(newLimitsList.annualBalanceIncreaseBPLimit);
       expect(limitsAfter.simulatedShareRateDeviationBPLimit).to.equal(newLimitsList.simulatedShareRateDeviationBPLimit);
@@ -1021,65 +1026,102 @@ describe("OracleReportSanityChecker.sol", () => {
     });
   });
 
-  describe("churn limit", () => {
-    it("setChurnValidatorsPerDayLimit works", async () => {
-      const oldChurnLimit = defaultLimitsList.churnValidatorsPerDayLimit;
-      await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldChurnLimit);
-      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldChurnLimit + 1))
+  describe("validators limits", () => {
+    it("setExitedValidatorsPerDayLimit works", async () => {
+      const oldExitedLimit = defaultLimitsList.exitedValidatorsPerDayLimit;
+      await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldExitedLimit);
+      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldExitedLimit + 1))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedValidatorsLimitExceeded")
-        .withArgs(oldChurnLimit, oldChurnLimit + 1);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
-        oldChurnLimit,
+        .withArgs(oldExitedLimit, oldExitedLimit + 1);
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.be.equal(
+        oldExitedLimit,
       );
 
-      const newChurnLimit = 30;
-      expect(newChurnLimit).to.not.equal(oldChurnLimit);
+      const newExitedLimit = 30;
+      expect(newExitedLimit).to.not.equal(oldExitedLimit);
 
       await expect(
-        oracleReportSanityChecker.connect(deployer).setChurnValidatorsPerDayLimit(newChurnLimit),
+        oracleReportSanityChecker.connect(deployer).setExitedValidatorsPerDayLimit(newExitedLimit),
       ).to.be.revertedWithOZAccessControlError(
         deployer.address,
-        await oracleReportSanityChecker.CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
+        await oracleReportSanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
       );
 
       const tx = await oracleReportSanityChecker
-        .connect(managersRoster.churnValidatorsPerDayLimitManagers[0])
-        .setChurnValidatorsPerDayLimit(newChurnLimit);
+        .connect(managersRoster.exitedValidatorsPerDayLimitManagers[0])
+        .setExitedValidatorsPerDayLimit(newExitedLimit);
 
-      await expect(tx).to.emit(oracleReportSanityChecker, "ChurnValidatorsPerDayLimitSet").withArgs(newChurnLimit);
-      // assert.emits(tx, 'ChurnValidatorsPerDayLimitSet', { churnValidatorsPerDayLimit: newChurnLimit })
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
-        newChurnLimit,
+      await expect(tx).to.emit(oracleReportSanityChecker, "ExitedValidatorsPerDayLimitSet").withArgs(newExitedLimit);
+
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.be.equal(
+        newExitedLimit,
       );
 
-      await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newChurnLimit);
-      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newChurnLimit + 1))
+      await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newExitedLimit);
+      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newExitedLimit + 1))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedValidatorsLimitExceeded")
-        .withArgs(newChurnLimit, newChurnLimit + 1);
+        .withArgs(newExitedLimit, newExitedLimit + 1);
     });
 
-    it("checkAccountingOracleReport: churnLimit works", async () => {
-      const churnLimit = defaultLimitsList.churnValidatorsPerDayLimit;
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
-        churnLimit,
+    it("setAppearedValidatorsPerDayLimit works", async () => {
+      const oldAppearedLimit = defaultLimitsList.appearedValidatorsPerDayLimit;
+
+      await oracleReportSanityChecker.checkAccountingOracleReport(
+        ...(Object.values({
+          ...correctLidoOracleReport,
+          postCLValidators: oldAppearedLimit,
+        }) as CheckAccountingOracleReportParameters),
+      );
+
+      await expect(
+        oracleReportSanityChecker.checkAccountingOracleReport(
+          ...(Object.values({
+            ...correctLidoOracleReport,
+            postCLValidators: oldAppearedLimit + 1,
+          }) as CheckAccountingOracleReportParameters),
+        ),
+      )
+        .to.be.revertedWithCustomError(oracleReportSanityChecker, `IncorrectAppearedValidators`)
+        .withArgs(oldAppearedLimit + 1);
+
+      const newAppearedLimit = 30;
+      expect(newAppearedLimit).not.equal(oldAppearedLimit);
+
+      await expect(
+        oracleReportSanityChecker.connect(deployer).setAppearedValidatorsPerDayLimit(newAppearedLimit),
+      ).to.be.revertedWithOZAccessControlError(
+        deployer.address,
+        await oracleReportSanityChecker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
+      );
+
+      const tx = await oracleReportSanityChecker
+        .connect(managersRoster.appearedValidatorsPerDayLimitManagers[0])
+        .setAppearedValidatorsPerDayLimit(newAppearedLimit);
+
+      await expect(tx)
+        .to.emit(oracleReportSanityChecker, "AppearedValidatorsPerDayLimitSet")
+        .withArgs(newAppearedLimit);
+
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).appearedValidatorsPerDayLimit).to.be.equal(
+        newAppearedLimit,
       );
 
       await oracleReportSanityChecker.checkAccountingOracleReport(
         ...(Object.values({
           ...correctLidoOracleReport,
-          postCLValidators: churnLimit,
+          postCLValidators: newAppearedLimit,
         }) as CheckAccountingOracleReportParameters),
       );
       await expect(
         oracleReportSanityChecker.checkAccountingOracleReport(
           ...(Object.values({
             ...correctLidoOracleReport,
-            postCLValidators: churnLimit + 1,
+            postCLValidators: newAppearedLimit + 1,
           }) as CheckAccountingOracleReportParameters),
         ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectAppearedValidators")
-        .withArgs(churnLimit + 1);
+        .withArgs(newAppearedLimit + 1);
     });
   });
 
@@ -1199,12 +1241,12 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(12, maxCount + 1n);
     });
 
-    it("checkAccountingExtraDataListItemsCount", async () => {
+    it("checkExtraDataItemsCountPerTransaction", async () => {
       const maxCount = (await oracleReportSanityChecker.getOracleReportLimits()).maxAccountingExtraDataListItemsCount;
 
-      await oracleReportSanityChecker.checkAccountingExtraDataListItemsCount(maxCount);
+      await oracleReportSanityChecker.checkExtraDataItemsCountPerTransaction(maxCount);
 
-      await expect(oracleReportSanityChecker.checkAccountingExtraDataListItemsCount(maxCount + 1n))
+      await expect(oracleReportSanityChecker.checkExtraDataItemsCountPerTransaction(maxCount + 1n))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "MaxAccountingExtraDataItemsCountExceeded")
         .withArgs(maxCount, maxCount + 1n);
     });
@@ -1247,7 +1289,15 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, churnValidatorsPerDayLimit: INVALID_VALUE }),
+          .setOracleReportLimits({ ...defaultLimitsList, exitedValidatorsPerDayLimit: INVALID_VALUE }),
+      )
+        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
+        .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
+
+      await expect(
+        oracleReportSanityChecker
+          .connect(managersRoster.allLimitsManagers[0])
+          .setOracleReportLimits({ ...defaultLimitsList, appearedValidatorsPerDayLimit: INVALID_VALUE }),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_VALUE, 0, MAX_UINT_16);

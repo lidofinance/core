@@ -25,7 +25,15 @@ async function main() {
 
   await deployImplementation(Sk.appLido, "Lido", deployer);
   await deployImplementation(Sk.appOracle, "LegacyOracle", deployer);
-  await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer);
+
+  const minFirstAllocationStrategy = await deployWithoutProxy(
+    Sk.minFirstAllocationStrategy,
+    "MinFirstAllocationStrategy",
+    deployer,
+  );
+  await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
+    libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategy.address },
+  });
 
   const template = await deployWithoutProxy(Sk.lidoTemplate, "LidoTemplate", state.deployer, templateConstructorArgs);
   const receipt = await ethers.provider.getTransactionReceipt(template.deploymentTx);

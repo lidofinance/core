@@ -1,4 +1,4 @@
-import { BaseContract } from "ethers";
+import { AddressLike, BaseContract, BytesLike } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -48,7 +48,7 @@ async function createAragonDao(rootAccount: HardhatEthersSigner) {
   return { dao, acl };
 }
 
-async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAppArgs): Promise<string> {
+export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAppArgs): Promise<string> {
   const tx = await dao["newAppInstance(bytes32,address,bytes,bool)"](
     streccak(`${name}.aragonpm.test`),
     await impl.getAddress(),
@@ -84,4 +84,14 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
   }
 
   return { lido, dao, acl };
+}
+
+export async function hasPermission(
+  dao: Kernel,
+  app: BaseContract,
+  role: string,
+  who: AddressLike,
+  how: BytesLike = "0x",
+): Promise<boolean> {
+  return dao.hasPermission(who, app, await app.getFunction(role)(), how);
 }

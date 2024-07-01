@@ -373,20 +373,21 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("enforces data safety boundaries", () => {
-      it("reverts with MaxAccountingExtraDataItemsCountExceeded if data limit exceeds", async () => {
+      it("passes fine when extra data do not feet in a single third phase transaction", async () => {
         const MAX_ACCOUNTING_EXTRA_DATA_LIMIT = 1;
+
+        expect(reportFields.extraDataItemsCount).to.be.greaterThan(MAX_ACCOUNTING_EXTRA_DATA_LIMIT);
+
         await sanityChecker.connect(admin).setMaxAccountingExtraDataListItemsCount(MAX_ACCOUNTING_EXTRA_DATA_LIMIT);
 
         expect((await sanityChecker.getOracleReportLimits()).maxAccountingExtraDataListItemsCount).to.be.equal(
           MAX_ACCOUNTING_EXTRA_DATA_LIMIT,
         );
 
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
-          .to.be.revertedWithCustomError(sanityChecker, "MaxAccountingExtraDataItemsCountExceeded")
-          .withArgs(MAX_ACCOUNTING_EXTRA_DATA_LIMIT, reportFields.extraDataItemsCount);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
       });
 
-      it("passes fine on borderline data limit value — when it equals to count of passed items", async () => {
+      it("passes fine when extra data feet in a single third phase transaction", async () => {
         const MAX_ACCOUNTING_EXTRA_DATA_LIMIT = reportFields.extraDataItemsCount;
 
         await sanityChecker.connect(admin).setMaxAccountingExtraDataListItemsCount(MAX_ACCOUNTING_EXTRA_DATA_LIMIT);
@@ -429,8 +430,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           0,
         );
         const exitingRateLimit = getBigInt(totalExitedValidators) - 1n;
-        await sanityChecker.setChurnValidatorsPerDayLimit(exitingRateLimit);
-        expect((await sanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(exitingRateLimit);
+        await sanityChecker.setExitedValidatorsPerDayLimit(exitingRateLimit);
+        expect((await sanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.be.equal(exitingRateLimit);
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
           .to.be.revertedWithCustomError(sanityChecker, "ExitedValidatorsLimitExceeded")
           .withArgs(exitingRateLimit, totalExitedValidators);

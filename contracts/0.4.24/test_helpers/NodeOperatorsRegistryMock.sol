@@ -143,6 +143,10 @@ contract NodeOperatorsRegistryMock is NodeOperatorsRegistry {
         _setContractVersion(_newBaseVersion);
     }
 
+    function testing_setRewardDistributionStatus(RewardDistributionState _state) external {
+        _updateRewardDistributionState(_state);
+    }
+
     function testing_resetRegistry() external {
         uint256 totalOperatorsCount = TOTAL_OPERATORS_COUNT_POSITION.getStorageUint256();
         TOTAL_OPERATORS_COUNT_POSITION.setStorageUint256(0);

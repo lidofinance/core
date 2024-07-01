@@ -7,11 +7,7 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(
-        uint256 _maxDepositsCount,
-        uint256 _stakingModuleId,
-        bytes calldata _depositCalldata
-    ) external;
+    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 
@@ -20,20 +16,26 @@ interface IDepositContract {
 }
 
 interface IStakingRouter {
-    function pauseStakingModule(uint256 _stakingModuleId) external;
-    function resumeStakingModule(uint256 _stakingModuleId) external;
-    function getStakingModuleIsDepositsPaused(uint256 _stakingModuleId) external view returns (bool);
+    function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
     function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+    function decreaseStakingModuleVettedKeysCountByNodeOperator(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
 }
 
-
-
+/**
+ * @title DepositSecurityModule
+ * @dev The contract represents a security module for handling deposits.
+ */
 contract DepositSecurityModule {
     /**
-     * Short ECDSA signature as defined in https://eips.ethereum.org/EIPS/eip-2098.
+     * @dev Short ECDSA signature as defined in https://eips.ethereum.org/EIPS/eip-2098.
      */
     struct Signature {
         bytes32 r;
@@ -42,13 +44,13 @@ contract DepositSecurityModule {
 
     event OwnerChanged(address newValue);
     event PauseIntentValidityPeriodBlocksChanged(uint256 newValue);
-    event MaxDepositsChanged(uint256 newValue);
-    event MinDepositBlockDistanceChanged(uint256 newValue);
+    event MaxOperatorsPerUnvettingChanged(uint256 newValue);
     event GuardianQuorumChanged(uint256 newValue);
     event GuardianAdded(address guardian);
     event GuardianRemoved(address guardian);
-    event DepositsPaused(address indexed guardian, uint24 indexed stakingModuleId);
-    event DepositsUnpaused(uint24 indexed stakingModuleId);
+    event DepositsPaused(address indexed guardian);
+    event DepositsUnpaused();
+    event LastDepositBlockChanged(uint256 newValue);
 
     error ZeroAddress(string field);
     error DuplicateAddress(address addr);
@@ -60,26 +62,36 @@ contract DepositSecurityModule {
     error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
-    error DepositNonceChanged();
+    error DepositsArePaused();
+    error DepositsNotPaused();
+    error ModuleNonceChanged();
     error PauseIntentExpired();
+    error UnvetPayloadInvalid();
+    error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
 
+    /// @notice Represents the code version to help distinguish contract interfaces.
+    uint256 public constant VERSION = 3;
+
+    /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
+    /// @notice Prefix for the message signed by guardians to pause deposits.
     bytes32 public immutable PAUSE_MESSAGE_PREFIX;
+    /// @notice Prefix for the message signed by guardians to unvet signing keys.
+    bytes32 public immutable UNVET_MESSAGE_PREFIX;
 
     ILido public immutable LIDO;
     IStakingRouter public immutable STAKING_ROUTER;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
-    /**
-     * NB: both `maxDepositsPerBlock` and `minDepositBlockDistance` values
-     * must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
-     */
-    uint256 internal maxDepositsPerBlock;
-    uint256 internal minDepositBlockDistance;
+    /// @notice Flag indicating whether deposits are paused.
+    bool public isDepositsPaused;
+
+    uint256 internal lastDepositBlock;
+
     uint256 internal pauseIntentValidityPeriodBlocks;
+    uint256 internal maxOperatorsPerUnvetting;
 
     address internal owner;
 
@@ -87,17 +99,22 @@ contract DepositSecurityModule {
     address[] internal guardians;
     mapping(address => uint256) internal guardianIndicesOneBased; // 1-based
 
+    /**
+     * @notice Initializes the contract with the given parameters.
+     * @dev Reverts if any of the addresses is zero.
+     *
+     * Sets the last deposit block to the current block number.
+     */
     constructor(
         address _lido,
         address _depositContract,
         address _stakingRouter,
-        uint256 _maxDepositsPerBlock,
-        uint256 _minDepositBlockDistance,
-        uint256 _pauseIntentValidityPeriodBlocks
+        uint256 _pauseIntentValidityPeriodBlocks,
+        uint256 _maxOperatorsPerUnvetting
     ) {
         if (_lido == address(0)) revert ZeroAddress("_lido");
-        if (_depositContract == address(0)) revert ZeroAddress ("_depositContract");
-        if (_stakingRouter == address(0)) revert ZeroAddress ("_stakingRouter");
+        if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
+        if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
         LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
@@ -121,14 +138,24 @@ contract DepositSecurityModule {
             )
         );
 
+        UNVET_MESSAGE_PREFIX = keccak256(
+            abi.encodePacked(
+                // keccak256("lido.DepositSecurityModule.UNVET_MESSAGE")
+                bytes32(0x2dd9727393562ed11c29080a884630e2d3a7078e71b313e713a8a1ef68948f6a),
+                block.chainid,
+                address(this)
+            )
+        );
+
         _setOwner(msg.sender);
-        _setMaxDeposits(_maxDepositsPerBlock);
-        _setMinDepositBlockDistance(_minDepositBlockDistance);
+        _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
+        _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
     }
 
     /**
-     * Returns the owner address.
+     * @notice Returns the owner of the contract.
+     * @return owner The address of the owner.
      */
     function getOwner() external view returns (address) {
         return owner;
@@ -140,7 +167,9 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Sets new owner. Only callable by the current owner.
+     * @notice Sets the owner of the contract.
+     * @param newValue The address of the new owner.
+     * @dev Only callable by the current owner.
      */
     function setOwner(address newValue) external onlyOwner {
         _setOwner(newValue);
@@ -153,14 +182,17 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Returns current `pauseIntentValidityPeriodBlocks` contract parameter (see `pauseDeposits`).
+     * @notice Returns the number of blocks during which the pause intent is valid.
+     * @return pauseIntentValidityPeriodBlocks The number of blocks during which the pause intent is valid.
      */
     function getPauseIntentValidityPeriodBlocks() external view returns (uint256) {
         return pauseIntentValidityPeriodBlocks;
     }
 
     /**
-     * Sets `pauseIntentValidityPeriodBlocks`. Only callable by the owner.
+     * @notice Sets the number of blocks during which the pause intent is valid.
+     * @param newValue The new number of blocks during which the pause intent is valid.
+     * @dev Only callable by the owner.
      */
     function setPauseIntentValidityPeriodBlocks(uint256 newValue) external onlyOwner {
         _setPauseIntentValidityPeriodBlocks(newValue);
@@ -173,65 +205,48 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Returns `maxDepositsPerBlock` (see `depositBufferedEther`).
+     * @notice Returns the maximum number of operators per unvetting.
+     * @return maxOperatorsPerUnvetting The maximum number of operators per unvetting.
      */
-    function getMaxDeposits() external view returns (uint256) {
-        return maxDepositsPerBlock;
+    function getMaxOperatorsPerUnvetting() external view returns (uint256) {
+        return maxOperatorsPerUnvetting;
     }
 
     /**
-     * Sets `maxDepositsPerBlock`. Only callable by the owner.
-     *
-     * NB: the value must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
+     * @notice Sets the maximum number of operators per unvetting.
+     * @param newValue The new maximum number of operators per unvetting.
+     * @dev Only callable by the owner.
      */
-    function setMaxDeposits(uint256 newValue) external onlyOwner {
-        _setMaxDeposits(newValue);
+    function setMaxOperatorsPerUnvetting(uint256 newValue) external onlyOwner {
+        _setMaxOperatorsPerUnvetting(newValue);
     }
 
-    function _setMaxDeposits(uint256 newValue) internal {
-        maxDepositsPerBlock = newValue;
-        emit MaxDepositsChanged(newValue);
+    function _setMaxOperatorsPerUnvetting(uint256 newValue) internal {
+        if (newValue == 0) revert ZeroParameter("maxOperatorsPerUnvetting");
+        maxOperatorsPerUnvetting = newValue;
+        emit MaxOperatorsPerUnvettingChanged(newValue);
     }
 
     /**
-     * Returns `minDepositBlockDistance`  (see `depositBufferedEther`).
-     */
-    function getMinDepositBlockDistance() external view returns (uint256) {
-        return minDepositBlockDistance;
-    }
-
-    /**
-     * Sets `minDepositBlockDistance`. Only callable by the owner.
-     *
-     * NB: the value must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
-     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
-     */
-    function setMinDepositBlockDistance(uint256 newValue) external onlyOwner {
-        _setMinDepositBlockDistance(newValue);
-    }
-
-    function _setMinDepositBlockDistance(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroParameter("minDepositBlockDistance");
-        if (newValue != minDepositBlockDistance) {
-            minDepositBlockDistance = newValue;
-            emit MinDepositBlockDistanceChanged(newValue);
-        }
-    }
-
-    /**
-     * Returns number of valid guardian signatures required to vet (depositRoot, nonce) pair.
+     * @notice Returns the number of guardians required to perform a deposit.
+     * @return quorum The guardian quorum value.
      */
     function getGuardianQuorum() external view returns (uint256) {
         return quorum;
     }
 
+    /**
+     * @notice Sets the number of guardians required to perform a deposit.
+     * @param newValue The new guardian quorum value.
+     * @dev Only callable by the owner.
+     */
     function setGuardianQuorum(uint256 newValue) external onlyOwner {
         _setGuardianQuorum(newValue);
     }
 
     function _setGuardianQuorum(uint256 newValue) internal {
-        // we're intentionally allowing setting quorum value higher than the number of guardians
+        /// @dev This intentionally allows the quorum value to be set higher
+        /// than the number of guardians.
         if (quorum != newValue) {
             quorum = newValue;
             emit GuardianQuorumChanged(newValue);
@@ -239,14 +254,17 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Returns guardian committee member list.
+     * @notice Returns the list of guardian addresses.
+     * @return guardians The list of guardian addresses.
      */
     function getGuardians() external view returns (address[] memory) {
         return guardians;
     }
 
     /**
-     * Checks whether the given address is a guardian.
+     * @notice Returns whether the given address is a guardian.
+     * @param addr The address to check.
+     * @return isGuardian Whether the address is a guardian.
      */
     function isGuardian(address addr) external view returns (bool) {
         return _isGuardian(addr);
@@ -257,7 +275,10 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Returns index of the guardian, or -1 if the address is not a guardian.
+     * @notice Returns the index of the guardian with the given address.
+     * @param addr The address of the guardian.
+     * @return guardianIndex The index of the guardian.
+     * @dev Returns -1 if the address is not a guardian.
      */
     function getGuardianIndex(address addr) external view returns (int256) {
         return _getGuardianIndex(addr);
@@ -268,10 +289,11 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Adds a guardian address and sets a new quorum value.
-     * Reverts if the address is already a guardian.
-     *
-     * Only callable by the owner.
+     * @notice Adds a guardian address and sets a new quorum value.
+     * @param addr The address of the guardian.
+     * @param newQuorum The new guardian quorum value.
+     * @dev Only callable by the owner.
+     * Reverts if the address is already a guardian or is zero.
      */
     function addGuardian(address addr, uint256 newQuorum) external onlyOwner {
         _addGuardian(addr);
@@ -279,14 +301,19 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Adds a set of guardian addresses and sets a new quorum value.
-     * Reverts any of them is already a guardian.
-     *
-     * Only callable by the owner.
+     * @notice Adds multiple guardian addresses and sets a new quorum value.
+     * @param addresses The list of guardian addresses.
+     * @param newQuorum The new guardian quorum value.
+     * @dev Only callable by the owner.
+     * Reverts if any of the addresses is already a guardian or is zero.
      */
     function addGuardians(address[] memory addresses, uint256 newQuorum) external onlyOwner {
-        for (uint256 i = 0; i < addresses.length; ++i) {
+        for (uint256 i = 0; i < addresses.length; ) {
             _addGuardian(addresses[i]);
+
+            unchecked {
+                ++i;
+            }
         }
         _setGuardianQuorum(newQuorum);
     }
@@ -300,9 +327,11 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Removes a guardian with the given address and sets a new quorum value.
-     *
-     * Only callable by the owner.
+     * @notice Removes a guardian address and sets a new quorum value.
+     * @param addr The address of the guardian.
+     * @param newQuorum The new guardian quorum value.
+     * @dev Only callable by the owner.
+     * Reverts if the address is not a guardian.
      */
     function removeGuardian(address addr, uint256 newQuorum) external onlyOwner {
         uint256 indexOneBased = guardianIndicesOneBased[addr];
@@ -326,92 +355,136 @@ contract DepositSecurityModule {
     }
 
     /**
-     * Pauses deposits for staking module given that both conditions are satisfied (reverts otherwise):
+     * @notice Pauses deposits if both conditions are satisfied.
+     * @param blockNumber The block number at which the pause intent was created.
+     * @param sig The signature of the guardian.
+     * @dev Does nothing if deposits are already paused.
      *
-     *   1. The function is called by the guardian with index guardianIndex OR sig
-     *      is a valid signature by the guardian with index guardianIndex of the data
-     *      defined below.
+     * Reverts if:
+     *  - the pause intent is expired;
+     *  - the caller is not a guardian and signature is invalid or not from a guardian.
      *
-     *   2. block.number - blockNumber <= pauseIntentValidityPeriodBlocks
-     *
-     * The signature, if present, must be produced for keccak256 hash of the following
+     * The signature, if present, must be produced for the keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | blockNumber | stakingModuleId |
+     * | PAUSE_MESSAGE_PREFIX | blockNumber |
      */
-    function pauseDeposits(
-        uint256 blockNumber,
-        uint256 stakingModuleId,
-        Signature memory sig
-    ) external {
-        // In case of an emergency function `pauseDeposits` is supposed to be called
-        // by all guardians. Thus only the first call will do the actual change. But
-        // the other calls would be OK operations from the point of view of protocol’s logic.
-        // Thus we prefer not to use “error” semantics which is implied by `require`.
-
-        /// @dev pause only active modules (not already paused, nor full stopped)
-        if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) {
-            return;
-        }
+    function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
+        /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
+        /// by all guardians. Thus only the first call will do the actual change. But
+        /// the other calls would be OK operations from the point of view of protocol’s logic.
+        /// Thus we prefer not to use “error” semantics which is implied by `require`.
+        if (isDepositsPaused) return;
 
         address guardianAddr = msg.sender;
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber, stakingModuleId));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
         }
 
-        if (block.number - blockNumber >  pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
+        if (block.number - blockNumber > pauseIntentValidityPeriodBlocks) revert PauseIntentExpired();
 
-        STAKING_ROUTER.pauseStakingModule(stakingModuleId);
-        emit DepositsPaused(guardianAddr, uint24(stakingModuleId));
+        isDepositsPaused = true;
+        emit DepositsPaused(guardianAddr);
     }
 
     /**
-     * Unpauses deposits for staking module
-     *
-     * Only callable by the owner.
+     * @notice Unpauses deposits.
+     * @dev Only callable by the owner.
+     * Reverts if deposits are not paused.
      */
-    function unpauseDeposits(uint256 stakingModuleId) external onlyOwner {
-         /// @dev unpause only paused modules (skip stopped)
-        if (STAKING_ROUTER.getStakingModuleIsDepositsPaused(stakingModuleId)) {
-            STAKING_ROUTER.resumeStakingModule(stakingModuleId);
-            emit DepositsUnpaused(uint24(stakingModuleId));
-        }
+    function unpauseDeposits() external onlyOwner {
+        if (!isDepositsPaused) revert DepositsNotPaused();
+        isDepositsPaused = false;
+        emit DepositsUnpaused();
     }
 
     /**
-     * Returns whether LIDO.deposit() can be called, given that the caller will provide
-     * guardian attestations of non-stale deposit root and `nonce`, and the number of
-     * such attestations will be enough to reach quorum.
+     * @notice Returns whether LIDO.deposit() can be called, given that the caller
+     * will provide guardian attestations of non-stale deposit root and nonce,
+     * and the number of such attestations will be enough to reach the quorum.
+     *
+     * @param stakingModuleId The ID of the staking module.
+     * @return canDeposit Whether a deposit can be made.
+     * @dev Returns true if all of the following conditions are met:
+     *   - deposits are not paused;
+     *   - the staking module is active;
+     *   - the guardian quorum is not set to zero;
+     *   - the deposit distance is greater than the minimum required;
+     *   - LIDO.canDeposit() returns true.
      */
     function canDeposit(uint256 stakingModuleId) external view returns (bool) {
         if (!STAKING_ROUTER.hasStakingModule(stakingModuleId)) return false;
 
         bool isModuleActive = STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId);
-        uint256 lastDepositBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
+        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
         bool isLidoCanDeposit = LIDO.canDeposit();
+
         return (
-            isModuleActive
+            !isDepositsPaused
+            && isModuleActive
             && quorum > 0
-            && block.number - lastDepositBlock >= minDepositBlockDistance
+            && isDepositDistancePassed
             && isLidoCanDeposit
         );
     }
 
     /**
-     * Calls LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata).
-     *
-     * Reverts if any of the following is true:
-     *   1. IDepositContract.get_deposit_root() != depositRoot.
-     *   2. StakingModule.getNonce() != nonce.
-     *   3. The number of guardian signatures is less than getGuardianQuorum().
-     *   4. An invalid or non-guardian signature received.
-     *   5. block.number - StakingModule.getLastDepositBlock() < minDepositBlockDistance.
-     *   6. blockhash(blockNumber) != blockHash.
+     * @notice Returns the block number of the last deposit.
+     * @return lastDepositBlock The block number of the last deposit.
+     */
+    function getLastDepositBlock() external view returns (uint256) {
+        return lastDepositBlock;
+    }
+
+    function _setLastDepositBlock(uint256 newValue) internal {
+        lastDepositBlock = newValue;
+        emit LastDepositBlockChanged(newValue);
+    }
+
+    /**
+     * @notice Returns whether the deposit distance is greater than the minimum required.
+     * @param stakingModuleId The ID of the staking module.
+     * @return isMinDepositDistancePassed Whether the deposit distance is greater than the minimum required.
+     * @dev Checks the distance for the last deposit to any staking module.
+     */
+    function isMinDepositDistancePassed(uint256 stakingModuleId) external view returns (bool) {
+        return _isMinDepositDistancePassed(stakingModuleId);
+    }
+
+    function _isMinDepositDistancePassed(uint256 stakingModuleId) internal view returns (bool) {
+        /// @dev The distance is reset when a deposit is made to any module. This prevents a front-run attack
+        /// by colluding guardians on several modules at once, providing the necessary window for an honest
+        /// guardian to react and pause deposits to all modules.
+        uint256 lastDepositToModuleBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
+        uint256 minDepositBlockDistance = STAKING_ROUTER.getStakingModuleMinDepositBlockDistance(stakingModuleId);
+        uint256 maxLastDepositBlock = lastDepositToModuleBlock >= lastDepositBlock ? lastDepositToModuleBlock : lastDepositBlock;
+        return block.number - maxLastDepositBlock >= minDepositBlockDistance;
+    }
+
+    /**
+     * @notice Calls LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata).
+     * @param blockNumber The block number at which the deposit intent was created.
+     * @param blockHash The block hash at which the deposit intent was created.
+     * @param depositRoot The deposit root hash.
+     * @param stakingModuleId The ID of the staking module.
+     * @param nonce The nonce of the staking module.
+     * @param depositCalldata The calldata for the deposit.
+     * @param sortedGuardianSignatures The list of guardian signatures ascendingly sorted by address.
+     * @dev Reverts if any of the following is true:
+     *   - onchain deposit root is different from the provided one;
+     *   - onchain module nonce is different from the provided one;
+     *   - quorum is zero;
+     *   - the number of guardian signatures is less than the quorum;
+     *   - module is not active;
+     *   - min deposit distance is not passed;
+     *   - blockHash is zero or not equal to the blockhash(blockNumber);
+     *   - deposits are paused;
+     *   - invalid or non-guardian signature received.
      *
      * Signatures must be sorted in ascending order by address of the guardian. Each signature must
      * be produced for the keccak256 hash of the following message (each component taking 32 bytes):
@@ -427,26 +500,29 @@ contract DepositSecurityModule {
         bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
-        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-
+        /// @dev The first most likely reason for the signature to go stale
         bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
 
-        if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
-
-        uint256 lastDepositBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
-        if (block.number - lastDepositBlock < minDepositBlockDistance) revert DepositTooFrequent();
-        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
-
+        /// @dev The second most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
-        if (nonce != onchainNonce) revert DepositNonceChanged();
+        if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        _verifySignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
+        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
+        if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
+        if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
+        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
+        if (isDepositsPaused) revert DepositsArePaused();
 
+        _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
+
+        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
         LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
+
+        _setLastDepositBlock(block.number);
     }
 
-    function _verifySignatures(
+    function _verifyAttestSignatures(
         bytes32 depositRoot,
         uint256 blockNumber,
         bytes32 blockHash,
@@ -458,13 +534,95 @@ contract DepositSecurityModule {
             abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
         );
 
-        address prevSignerAddr = address(0);
+        address prevSignerAddr;
+        address signerAddr;
 
-        for (uint256 i = 0; i < sigs.length; ++i) {
-            address signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
+        for (uint256 i = 0; i < sigs.length; ) {
+            signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
             if (!_isGuardian(signerAddr)) revert InvalidSignature();
             if (signerAddr <= prevSignerAddr) revert SignaturesNotSorted();
             prevSignerAddr = signerAddr;
+
+            unchecked {
+                ++i;
+            }
         }
+    }
+
+    /**
+     * @notice Unvets signing keys for the given node operators.
+     * @param blockNumber The block number at which the unvet intent was created.
+     * @param blockHash The block hash at which the unvet intent was created.
+     * @param stakingModuleId The ID of the staking module.
+     * @param nonce The nonce of the staking module.
+     * @param nodeOperatorIds The list of node operator IDs.
+     * @param vettedSigningKeysCounts The list of vetted signing keys counts.
+     * @param sig The signature of the guardian.
+     * @dev Reverts if any of the following is true:
+     *   - The nonce is not equal to the on-chain nonce of the staking module;
+     *   - nodeOperatorIds is not packed with 8 bytes per id;
+     *   - vettedSigningKeysCounts is not packed with 16 bytes per count;
+     *   - the number of node operators is greater than maxOperatorsPerUnvetting;
+     *   - the signature is invalid or the signer is not a guardian;
+     *   - blockHash is zero or not equal to the blockhash(blockNumber).
+     *
+     * The signature, if present, must be produced for the keccak256 hash of the following message:
+     *
+     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     */
+    function unvetSigningKeys(
+        uint256 blockNumber,
+        bytes32 blockHash,
+        uint256 stakingModuleId,
+        uint256 nonce,
+        bytes calldata nodeOperatorIds,
+        bytes calldata vettedSigningKeysCounts,
+        Signature calldata sig
+    ) external {
+        /// @dev The most likely reason for the signature to go stale
+        uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
+        if (nonce != onchainNonce) revert ModuleNonceChanged();
+
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+
+        if (
+            nodeOperatorIds.length % 8 != 0 ||
+            vettedSigningKeysCounts.length % 16 != 0 ||
+            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
+            nodeOperatorsCount > maxOperatorsPerUnvetting
+        ) {
+            revert UnvetPayloadInvalid();
+        }
+
+        address guardianAddr = msg.sender;
+        int256 guardianIndex = _getGuardianIndex(msg.sender);
+
+        if (guardianIndex == -1) {
+            bytes32 msgHash = keccak256(
+                // slither-disable-start encode-packed-collision
+                // values with a dynamic type checked earlier
+                abi.encodePacked(
+                    UNVET_MESSAGE_PREFIX,
+                    blockNumber,
+                    blockHash,
+                    stakingModuleId,
+                    nonce,
+                    nodeOperatorIds,
+                    vettedSigningKeysCounts
+                )
+                // slither-disable-end encode-packed-collision
+            );
+            guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
+            guardianIndex = _getGuardianIndex(guardianAddr);
+            if (guardianIndex == -1) revert InvalidSignature();
+        }
+
+        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert UnvetUnexpectedBlockHash();
+
+        STAKING_ROUTER.decreaseStakingModuleVettedKeysCountByNodeOperator(
+            stakingModuleId,
+            nodeOperatorIds,
+            vettedSigningKeysCounts
+        );
     }
 }

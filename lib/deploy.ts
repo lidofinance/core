@@ -1,5 +1,6 @@
-import { ContractFactory, ContractTransactionReceipt } from "ethers";
+import { ContractFactory, ContractTransactionReceipt, Signer } from "ethers";
 import { ethers } from "hardhat";
+import { FactoryOptions } from "hardhat/types";
 
 import {
   addContractHelperFields,
@@ -62,9 +63,10 @@ async function deployContractType2(
   artifactName: string,
   constructorArgs: unknown[],
   deployer: string,
+  signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
-  const factory = (await ethers.getContractFactory(artifactName)) as ContractFactory;
+  const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
@@ -90,10 +92,11 @@ export async function deployContract(
   artifactName: string,
   constructorArgs: unknown[],
   deployer: string,
+  signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
   if (txParams.type === 2) {
-    return await deployContractType2(artifactName, constructorArgs, deployer);
+    return await deployContractType2(artifactName, constructorArgs, deployer, signerOrOptions);
   } else {
     throw Error("Tx type 1 is not supported");
   }
@@ -126,12 +129,13 @@ export async function deployImplementation(
   artifactName: string,
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
+  signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   log.lineWithArguments(
     `Deploying implementation for proxy of ${artifactName} with constructor args: `,
     constructorArgs,
   );
-  const contract = await deployContract(artifactName, constructorArgs, deployer);
+  const contract = await deployContract(artifactName, constructorArgs, deployer, signerOrOptions);
 
   updateObjectInState(nameInState, {
     implementation: {
@@ -150,13 +154,14 @@ export async function deployBehindOssifiableProxy(
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
   implementation: null | string = null,
+  signerOrOptions?: Signer | FactoryOptions,
 ) {
   if (implementation === null) {
     log.lineWithArguments(
       `Deploying implementation for proxy of ${artifactName} with constructor args: `,
       constructorArgs,
     );
-    const contract = await deployContract(artifactName, constructorArgs, deployer);
+    const contract = await deployContract(artifactName, constructorArgs, deployer, signerOrOptions);
     implementation = contract.address;
   } else {
     log(`Using pre-deployed implementation of ${artifactName}: ${implementation}`);

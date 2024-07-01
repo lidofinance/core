@@ -91,9 +91,9 @@ describe("BaseOracle:accessControl", () => {
       const role = await oracle.MANAGE_CONSENSUS_VERSION_ROLE();
 
       await oracle.grantRole(role, manager);
-      await oracle.connect(manager).setConsensusVersion(2);
+      await oracle.connect(manager).setConsensusVersion(3);
 
-      expect(await oracle.getConsensusVersion()).to.be.equal(2);
+      expect(await oracle.getConsensusVersion()).to.be.equal(3);
     });
   });
 
