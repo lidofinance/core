@@ -48,7 +48,7 @@ async function createAragonDao(rootAccount: HardhatEthersSigner) {
   return { dao, acl };
 }
 
-async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAppArgs): Promise<string> {
+export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAppArgs): Promise<string> {
   const tx = await dao["newAppInstance(bytes32,address,bytes,bool)"](
     streccak(`${name}.aragonpm.test`),
     await impl.getAddress(),
