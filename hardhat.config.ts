@@ -40,6 +40,10 @@ const config: HardhatUserConfig = {
       },
       forking: HARDHAT_FORKING_URL ? { url: HARDHAT_FORKING_URL } : undefined,
     },
+    sepolia: {
+      url: RPC_URL,
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
+    },
   },
   solidity: {
     compilers: [
