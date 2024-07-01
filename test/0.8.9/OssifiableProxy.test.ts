@@ -66,7 +66,6 @@ describe("OssifiableProxy", () => {
         .and.to.emit(proxy, "AdminChanged")
         .withArgs(admin.getAddress(), "0x0000000000000000000000000000000000000000");
 
-      // validate proxy is ossified
       expect(await proxy.proxy__getIsOssified()).to.be.true;
     });
   });
