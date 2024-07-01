@@ -13,6 +13,7 @@ describe("OssifiableProxy", () => {
   let proxy: OssifiableProxy;
   let snapshot: string;
   let initPayload: string;
+
   async function takeSnapshot() {
     snapshot = await Snapshot.take();
   }
@@ -20,6 +21,7 @@ describe("OssifiableProxy", () => {
   async function rollback() {
     await Snapshot.restore(snapshot);
   }
+
   beforeEach(async () => {
     [, admin, stranger] = await ethers.getSigners();
     const InitializableContract = await ethers.getContractFactory("Initializable__Mock");
@@ -60,7 +62,7 @@ describe("OssifiableProxy", () => {
 
   describe("proxy__changeAdmin()", () => {
     it("should change admin when called by current admin", async () => {
-      const newAdmin = stranger; // Let's assume stranger is the new admin for testing
+      const newAdmin = stranger;
       await expect(proxy.connect(admin).proxy__changeAdmin(await newAdmin.getAddress()))
         .to.emit(proxy, "AdminChanged")
         .withArgs(await admin.getAddress(), await newAdmin.getAddress());
@@ -92,10 +94,8 @@ describe("OssifiableProxy", () => {
     });
 
     it('reverts with error "ProxyIsOssified()" when called on ossified proxy', async () => {
-      // ossify proxy
       await proxy.connect(admin).proxy__ossify();
 
-      // validate proxy is ossified
       expect(await proxy.proxy__getIsOssified()).to.be.true;
 
       await expect(proxy.connect(admin).proxy__upgradeTo(await currentImpl.getAddress())).to.be.revertedWithCustomError(
@@ -110,7 +110,6 @@ describe("OssifiableProxy", () => {
         .to.emit(proxy, "Upgraded")
         .withArgs(await currentImpl.getAddress());
 
-      // validate implementation address was updated
       expect(await proxy.proxy__getImplementation()).to.equal(await currentImpl.getAddress());
     });
   });
@@ -123,10 +122,8 @@ describe("OssifiableProxy", () => {
     });
 
     it('reverts with error "ProxyIsOssified()" when called on ossified proxy', async () => {
-      // ossify proxy
       await proxy.connect(admin).proxy__ossify();
 
-      // validate proxy is ossified
       expect(await proxy.proxy__getIsOssified()).to.be.true;
 
       await expect(
@@ -135,41 +132,41 @@ describe("OssifiableProxy", () => {
     });
 
     it("upgrades proxy to new implementation when forceCall is false", async () => {
-      // Deploy new implementation
       const NewImplementation = await ethers.getContractFactory("Initializable__Mock", admin);
       const newImpl = await NewImplementation.deploy();
       await newImpl.waitForDeployment();
 
       const tx = await proxy.connect(admin).proxy__upgradeToAndCall(await newImpl.getAddress(), initPayload, false);
+      const implInterfaceOnProxyAddr = newImpl.attach(await proxy.getAddress()) as Initializable__Mock;
 
       await tx.wait();
 
       await expect(tx)
         .to.emit(proxy, "Upgraded")
         .withArgs(await newImpl.getAddress())
-        // .and.to.emit(newImpl, "Initialized")
-        // .withArgs(1);
+        .and.to.emit(implInterfaceOnProxyAddr, "Initialized")
+        .withArgs(1);
 
       expect(await proxy.proxy__getImplementation()).to.equal(await newImpl.getAddress());
-      // expect(await newImpl.version()).to.equal(1);
+      expect(await implInterfaceOnProxyAddr.version()).to.equal(1);
     });
 
     it("upgrades proxy to new implementation when forceCall is true and no init function", async () => {
-      // Deploy new implementation
       const NewImplementation = await ethers.getContractFactory("Initializable__Mock", admin);
       const newImpl = await NewImplementation.deploy();
+
       await newImpl.waitForDeployment();
 
+      const tx = await proxy.connect(admin).proxy__upgradeToAndCall(await newImpl.getAddress(), "0x", true);
+      const implInterfaceOnProxyAddr = newImpl.attach(await proxy.getAddress()) as Initializable__Mock;
 
-      const tx = await proxy.connect(admin).proxy__upgradeToAndCall(await newImpl.getAddress(), '0x', true);
       await tx.wait();
-      await expect(tx)
-        .to.emit(proxy, "Upgraded")
-        // .withArgs(await newImpl.getAddress())
-        // .and.to.emit(newImpl, "ReceiveCalled");
+      await expect(tx).to.emit(proxy, "Upgraded")
+      .withArgs(await newImpl.getAddress())
+      .and.to.emit(implInterfaceOnProxyAddr, "ReceiveCalled");
 
       expect(await proxy.proxy__getImplementation()).to.equal(await newImpl.getAddress());
-      expect(await newImpl.version()).to.equal(0); // Assuming default version is 0 if `initialize` was not called
+      expect(await implInterfaceOnProxyAddr.version()).to.equal(0);
     });
   });
 });
