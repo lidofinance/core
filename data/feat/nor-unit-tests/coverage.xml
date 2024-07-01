@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2507"  line-rate="0.8793000000000001"  branches-valid="1260"  branches-covered="1085"  branch-rate="0.8611"  timestamp="1719823918977" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2509"  line-rate="0.88"  branches-valid="1260"  branches-covered="1085"  branch-rate="0.8611"  timestamp="1719824294177" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -759,9 +759,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.4.24.nos"  line-rate="0.7505"  branch-rate="0.66" >
+	<package name="0.4.24.nos"  line-rate="0.7545999999999999"  branch-rate="0.66" >
 	<classes>
-		<class name="NodeOperatorsRegistry.sol"  filename="contracts/0.4.24/nos/NodeOperatorsRegistry.sol"  line-rate="0.7505"  branch-rate="0.66" >
+		<class name="NodeOperatorsRegistry.sol"  filename="contracts/0.4.24/nos/NodeOperatorsRegistry.sol"  line-rate="0.7545999999999999"  branch-rate="0.66" >
 		<methods>
 			<method name="initialize"  hits="8"  signature="()V" >
 				<lines><line number="206"  hits="8" /></lines>
@@ -865,17 +865,17 @@
 			<method name="_addSigningKeys"  hits="50"  signature="()V" >
 				<lines><line number="1022"  hits="50" /></lines>
 			</method>
-			<method name="removeSigningKey"  hits="22"  signature="()V" >
-				<lines><line number="1053"  hits="22" /></lines>
+			<method name="removeSigningKey"  hits="11"  signature="()V" >
+				<lines><line number="1053"  hits="11" /></lines>
 			</method>
-			<method name="removeSigningKeys"  hits="34"  signature="()V" >
-				<lines><line number="1061"  hits="34" /></lines>
+			<method name="removeSigningKeys"  hits="19"  signature="()V" >
+				<lines><line number="1061"  hits="19" /></lines>
 			</method>
-			<method name="removeSigningKeyOperatorBH"  hits="0"  signature="()V" >
-				<lines><line number="1069"  hits="0" /></lines>
+			<method name="removeSigningKeyOperatorBH"  hits="11"  signature="()V" >
+				<lines><line number="1069"  hits="11" /></lines>
 			</method>
-			<method name="removeSigningKeysOperatorBH"  hits="0"  signature="()V" >
-				<lines><line number="1078"  hits="0" /></lines>
+			<method name="removeSigningKeysOperatorBH"  hits="15"  signature="()V" >
+				<lines><line number="1078"  hits="15" /></lines>
 			</method>
 			<method name="_removeUnusedSigningKeys"  hits="56"  signature="()V" >
 				<lines><line number="1082"  hits="56" /></lines>
@@ -1367,10 +1367,10 @@
 			<line number="1043"  hits="22"  branch="false" />
 			<line number="1044"  hits="20"  branch="false" />
 			<line number="1046"  hits="20"  branch="false" />
-			<line number="1054"  hits="22"  branch="false" />
-			<line number="1062"  hits="34"  branch="false" />
-			<line number="1070"  hits="0"  branch="false" />
-			<line number="1079"  hits="0"  branch="false" />
+			<line number="1054"  hits="11"  branch="false" />
+			<line number="1062"  hits="19"  branch="false" />
+			<line number="1070"  hits="11"  branch="false" />
+			<line number="1079"  hits="15"  branch="false" />
 			<line number="1083"  hits="56"  branch="false" />
 			<line number="1084"  hits="52"  branch="false" />
 			<line number="1087"  hits="32"  branch="true"  condition-coverage="100% (2/2)" />
