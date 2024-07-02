@@ -17,10 +17,10 @@ interface Connected {
         uint96 elBalance,
         uint96 netCashFlow
     );
-    function lockedBalance() external view returns (uint256);
+    function locked() external view returns (uint256);
     function netCashFlow() external view returns (int256);
 
     function getValue() external view returns (uint256);
 
-    function update(Report memory report, uint256 lockedBalance) external;
+    function update(Report memory report, uint256 locked) external;
 }

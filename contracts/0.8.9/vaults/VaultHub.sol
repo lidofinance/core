@@ -143,7 +143,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
         for (uint256 i = 0; i < vaults.length; ++i) {
             VaultSocket memory socket = vaults[i];
             Connected vault = socket.vault;
-
+            uint256 fee =  STETH.getSharesByPooledEth(vault.locked()) ;// * LIDO_APR * FEE_PERCENT;
         }
 
         // here we need to pre-calculate the new locked balance for each vault

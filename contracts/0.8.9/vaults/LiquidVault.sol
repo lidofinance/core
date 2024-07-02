@@ -17,7 +17,7 @@ contract LiquidVault is BasicVault, Liquid {
     Hub public immutable HUB;
 
     Report public lastReport;
-    uint256 public lockedBalance;
+    uint256 public locked;
 
     // Is direct validator depositing affects this accounting?
     int256 public netCashFlow;
@@ -40,21 +40,22 @@ contract LiquidVault is BasicVault, Liquid {
         if (msg.sender != address(HUB)) revert("ONLY_HUB");
 
         lastReport = _report;
-        lockedBalance = _lockedBalance;
+        locked = _lockedBalance;
     }
 
-    receive() external payable override(BasicVault, Basic) {
+    function deposit() public payable override(Basic, BasicVault) {
         netCashFlow += int256(msg.value);
+        super.deposit();
     }
 
-    function deposit(
+    function depositKeys(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
     ) public override(BasicVault, Basic) {
         _mustBeHealthy();
 
-        super.deposit(_keysCount, _publicKeysBatch, _signaturesBatch);
+        super.depositKeys(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
     function withdraw(address _receiver, uint256 _amount) public override(Basic, BasicVault) {
@@ -65,11 +66,11 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     function isUnderLiquidation() public view returns (bool) {
-        return lockedBalance > getValue();
+        return locked > getValue();
     }
 
     function mintStETH(address _receiver, uint256 _amountOfShares) external onlyOwner {
-        lockedBalance =
+        locked =
             uint96((HUB.mintSharesBackedByVault(_receiver, _amountOfShares) * BPS_IN_100_PERCENT) /
             (BPS_IN_100_PERCENT - BOND_BP)); //TODO: SafeCast
 
@@ -87,6 +88,6 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     function _mustBeHealthy() view private {
-        require(lockedBalance <= getValue() , "LIQUIDATION_LIMIT");
+        require(locked <= getValue() , "LIQUIDATION_LIMIT");
     }
 }

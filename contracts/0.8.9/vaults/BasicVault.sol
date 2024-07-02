@@ -22,13 +22,19 @@ contract BasicVault is Basic, BeaconChainDepositor {
         owner = _owner;
     }
 
-    receive() external payable virtual {}
+    receive() external payable virtual {
+        // emit EL reward flow
+    }
+
+    function deposit() public payable virtual {
+        // emit deposit flow
+    }
 
     function getWithdrawalCredentials() public view returns (bytes32) {
         return bytes32(0x01 << 254 + uint160(address(this)));
     }
 
-    function deposit(
+    function depositKeys(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
