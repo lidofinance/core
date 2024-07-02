@@ -94,7 +94,9 @@ interface IWithdrawalQueue {
 
 interface ILido {
     function getTotalPooledEther() external view returns (uint256);
+    function getExternalEther() external view returns (uint256);
     function getTotalShares() external view returns (uint256);
+    function getSharesByPooledEth(uint256) external view returns (uint256);
     function getBeaconStat() external view returns (
         uint256 depositedValidators,
         uint256 beaconValidators,
@@ -182,6 +184,7 @@ contract Accounting is VaultHub {
         uint256 totalPooledEther;
         uint256 totalShares;
         uint256 depositedValidators;
+        uint256 externalEther;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -204,9 +207,11 @@ contract Accounting is VaultHub {
         uint256 sharesToMintAsFees;
 
         /// @notice amount of NO fees to transfer to each module
-        StakingRewardsDistribution moduleRewardDistribution;
+        StakingRewardsDistribution rewardDistribution;
         /// @notice amount of CL ether that is not rewards earned during this report period
         uint256 principalClBalance;
+        /// @notice number of shares corresponding to external balance of stETH
+        uint256 externalShares;
         /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
@@ -224,15 +229,11 @@ contract Accounting is VaultHub {
         ReportValues memory _report
     ) public view returns (ReportContext memory){
         // Take a snapshot of the current (pre-) state
-        PreReportState memory pre = PreReportState(0,0,0,0,0);
-
-        (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
-        pre.totalPooledEther = LIDO.getTotalPooledEther();
-        pre.totalShares = LIDO.getTotalShares();
+        PreReportState memory pre = _snapshotPreReportState();
 
         // Calculate values to update
-        CalculatedValues memory update = CalculatedValues(0,0,0,0,0,0,0,0,
-            _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0);
+        CalculatedValues memory update = CalculatedValues(0,0,0,0,0,0,0,
+            _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0, 0, 0);
 
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
         (
@@ -265,24 +266,24 @@ contract Accounting is VaultHub {
         );
 
         update.sharesToBurnDueToWQThisReport = update.totalSharesToBurn - simulatedSharesToBurn;
+        update.externalShares = LIDO.getSharesByPooledEth(pre.externalEther);
+
+        // TODO: check simulatedShareRate here ??
 
         // Pre-calculate total amount of protocol fees for this rebase
         (
             update.sharesToMintAsFees
-        ) = _calculateFees(
+        ) = _calculateV2Fees(
             _report,
             pre,
-            update.withdrawals,
-            update.elRewards,
-            update.principalClBalance,
-            update.etherToFinalizeWQ,
-            update.totalSharesToBurn,
-            update.moduleRewardDistribution
+            update
         );
 
-        update.postTotalShares = pre.totalShares + update.sharesToMintAsFees - update.totalSharesToBurn;
+        update.postTotalShares = pre.totalShares + update.sharesToMintAsFees
+            - update.totalSharesToBurn;// + vaultsSharesToMintAsFees;
         update.postTotalPooledEther = pre.totalPooledEther // was before the report
-            + _report.clBalance + update.withdrawals - update.principalClBalance // total rewards or penalty
+            + _report.clBalance + update.withdrawals - update.principalClBalance // total rewards or penalty in Lido v2
+            - pre.externalEther //+ update.externalEther // vaults increase (fees and stETH growth)
             - update.etherToFinalizeWQ;
 
         return ReportContext(_report, pre, update);
@@ -309,6 +310,14 @@ contract Accounting is VaultHub {
         return _applyOracleReportContext(contracts, reportContext);
     }
 
+    function _snapshotPreReportState() internal view returns (PreReportState memory pre) {
+        pre = PreReportState(0,0,0,0,0,0);
+        (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
+        pre.totalPooledEther = LIDO.getTotalPooledEther();
+        pre.totalShares = LIDO.getTotalShares();
+        pre.externalEther = LIDO.getExternalEther();
+    }
+
     /**
      * @dev return amount to lock on withdrawal queue and shares to burn
      * depending on the finalization batch parameters
@@ -330,27 +339,22 @@ contract Accounting is VaultHub {
         }
     }
 
-    function _calculateFees(
+    function _calculateV2Fees(
         ReportValues memory _report,
         PreReportState memory _pre,
-        uint256 _withdrawnWithdrawals,
-        uint256 _withdrawnELRewards,
-        uint256 _adjustedPreClBalance,
-        uint256 _etherToFinalizeWQ,
-        uint256 _sharesToBurn,
-        StakingRewardsDistribution memory _rewardsDistribution
+        CalculatedValues memory _calculated
     ) internal pure returns (uint256 sharesToMintAsFees) {
-        uint256 unifiedClBalance = _report.clBalance + _withdrawnWithdrawals;
+        uint256 unifiedClBalance = _report.clBalance + _calculated.withdrawals;
         // Don’t mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
-        if (unifiedClBalance <= _adjustedPreClBalance) return 0;
+        if (unifiedClBalance <= _calculated.principalClBalance) return 0;
 
-        if (_rewardsDistribution.totalFee > 0) {
-            uint256 totalRewards = unifiedClBalance - _adjustedPreClBalance + _withdrawnELRewards;
-            uint256 totalFee = _rewardsDistribution.totalFee;
-            uint256 precisionPoints = _rewardsDistribution.precisionPoints;
+        if (_calculated.rewardDistribution.totalFee > 0) {
+            uint256 totalRewards = unifiedClBalance - _calculated.principalClBalance + _calculated.elRewards;
+            uint256 totalFee = _calculated.rewardDistribution.totalFee;
+            uint256 precisionPoints = _calculated.rewardDistribution.precisionPoints;
 
             // We need to take a defined percentage of the reported reward as a fee, and we do
             // this by minting new token shares and assigning them to the fee recipients (see
@@ -384,9 +388,12 @@ contract Accounting is VaultHub {
             // external balance proportionately
             // BUT WQ request finalization do change it.
 
+            uint256 totalPooledEtherNoVaults = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
+            uint256 totalSharesNoVaults = _pre.totalPooledEther - _calculated.externalShares - _calculated.totalSharesToBurn;
+
             // simplified formula from above to reduce the number of DIV operations
-            sharesToMintAsFees = (totalRewards * totalFee * (_pre.totalShares - _sharesToBurn))
-                / ((_pre.totalPooledEther - _etherToFinalizeWQ + totalRewards) * precisionPoints - totalRewards * totalFee);
+            sharesToMintAsFees = (totalRewards * totalFee * totalSharesNoVaults)
+                / ((totalPooledEtherNoVaults + totalRewards) * precisionPoints - totalRewards * totalFee);
         }
     }
 
@@ -429,7 +436,7 @@ contract Accounting is VaultHub {
         if (_context.update.sharesToMintAsFees > 0) {
             _distributeFee(
                 _contracts.stakingRouter,
-                _context.update.moduleRewardDistribution,
+                _context.update.rewardDistribution,
                 _context.update.sharesToMintAsFees
             );
         }
