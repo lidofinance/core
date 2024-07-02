@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2143"  line-rate="0.7517"  branches-valid="1260"  branches-covered="1019"  branch-rate="0.8087000000000001"  timestamp="1718012961756" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2154"  line-rate="0.7555"  branches-valid="1260"  branches-covered="1028"  branch-rate="0.8159000000000001"  timestamp="1719943632859" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4596,56 +4596,56 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.proxy"  line-rate="0.3529"  branch-rate="0.25" >
+	<package name="0.8.9.proxy"  line-rate="1"  branch-rate="1" >
 	<classes>
-		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="0.3529"  branch-rate="0.25" >
+		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="291"  signature="()V" >
-				<lines><line number="23"  hits="291" /></lines>
+			<method name="constructor"  hits="312"  signature="()V" >
+				<lines><line number="23"  hits="312" /></lines>
 			</method>
-			<method name="proxy__getAdmin"  hits="0"  signature="()V" >
-				<lines><line number="28"  hits="0" /></lines>
+			<method name="proxy__getAdmin"  hits="3"  signature="()V" >
+				<lines><line number="28"  hits="3" /></lines>
 			</method>
-			<method name="proxy__getImplementation"  hits="0"  signature="()V" >
-				<lines><line number="33"  hits="0" /></lines>
+			<method name="proxy__getImplementation"  hits="4"  signature="()V" >
+				<lines><line number="33"  hits="4" /></lines>
 			</method>
-			<method name="proxy__getIsOssified"  hits="0"  signature="()V" >
-				<lines><line number="38"  hits="0" /></lines>
+			<method name="proxy__getIsOssified"  hits="5"  signature="()V" >
+				<lines><line number="38"  hits="5" /></lines>
 			</method>
-			<method name="proxy__ossify"  hits="0"  signature="()V" >
-				<lines><line number="44"  hits="0" /></lines>
+			<method name="proxy__ossify"  hits="5"  signature="()V" >
+				<lines><line number="44"  hits="5" /></lines>
 			</method>
-			<method name="proxy__changeAdmin"  hits="0"  signature="()V" >
-				<lines><line number="53"  hits="0" /></lines>
+			<method name="proxy__changeAdmin"  hits="2"  signature="()V" >
+				<lines><line number="53"  hits="2" /></lines>
 			</method>
-			<method name="proxy__upgradeTo"  hits="29"  signature="()V" >
-				<lines><line number="59"  hits="29" /></lines>
+			<method name="proxy__upgradeTo"  hits="30"  signature="()V" >
+				<lines><line number="59"  hits="30" /></lines>
 			</method>
-			<method name="proxy__upgradeToAndCall"  hits="0"  signature="()V" >
-				<lines><line number="73"  hits="0" /></lines>
+			<method name="proxy__upgradeToAndCall"  hits="2"  signature="()V" >
+				<lines><line number="73"  hits="2" /></lines>
 			</method>
-			<method name="onlyAdmin"  hits="29"  signature="()V" >
-				<lines><line number="79"  hits="29" /></lines>
+			<method name="onlyAdmin"  hits="47"  signature="()V" >
+				<lines><line number="79"  hits="47" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="291"  branch="false" />
-			<line number="29"  hits="0"  branch="false" />
-			<line number="34"  hits="0"  branch="false" />
-			<line number="39"  hits="0"  branch="false" />
-			<line number="45"  hits="0"  branch="false" />
-			<line number="46"  hits="0"  branch="false" />
-			<line number="47"  hits="0"  branch="false" />
-			<line number="48"  hits="0"  branch="false" />
-			<line number="54"  hits="0"  branch="false" />
-			<line number="60"  hits="29"  branch="false" />
-			<line number="74"  hits="0"  branch="false" />
-			<line number="80"  hits="29"  branch="false" />
-			<line number="81"  hits="29"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="82"  hits="0"  branch="false" />
-			<line number="84"  hits="29"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="87"  hits="29"  branch="false" />
+			<line number="24"  hits="312"  branch="false" />
+			<line number="29"  hits="3"  branch="false" />
+			<line number="34"  hits="4"  branch="false" />
+			<line number="39"  hits="5"  branch="false" />
+			<line number="45"  hits="5"  branch="false" />
+			<line number="46"  hits="5"  branch="false" />
+			<line number="47"  hits="5"  branch="false" />
+			<line number="48"  hits="5"  branch="false" />
+			<line number="54"  hits="2"  branch="false" />
+			<line number="60"  hits="30"  branch="false" />
+			<line number="74"  hits="2"  branch="false" />
+			<line number="80"  hits="47"  branch="false" />
+			<line number="81"  hits="47"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="82"  hits="3"  branch="false" />
+			<line number="84"  hits="44"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="85"  hits="5"  branch="false" />
+			<line number="87"  hits="39"  branch="false" />
 		</lines>
 		</class>
 	</classes>
