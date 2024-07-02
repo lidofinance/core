@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2154"  line-rate="0.7555"  branches-valid="1260"  branches-covered="1028"  branch-rate="0.8159000000000001"  timestamp="1719924013351" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2154"  line-rate="0.7555"  branches-valid="1260"  branches-covered="1028"  branch-rate="0.8159000000000001"  timestamp="1719931549800" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4600,11 +4600,11 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="307"  signature="()V" >
-				<lines><line number="23"  hits="307" /></lines>
+			<method name="constructor"  hits="312"  signature="()V" >
+				<lines><line number="23"  hits="312" /></lines>
 			</method>
-			<method name="proxy__getAdmin"  hits="2"  signature="()V" >
-				<lines><line number="28"  hits="2" /></lines>
+			<method name="proxy__getAdmin"  hits="3"  signature="()V" >
+				<lines><line number="28"  hits="3" /></lines>
 			</method>
 			<method name="proxy__getImplementation"  hits="4"  signature="()V" >
 				<lines><line number="33"  hits="4" /></lines>
@@ -4615,8 +4615,8 @@
 			<method name="proxy__ossify"  hits="5"  signature="()V" >
 				<lines><line number="44"  hits="5" /></lines>
 			</method>
-			<method name="proxy__changeAdmin"  hits="1"  signature="()V" >
-				<lines><line number="53"  hits="1" /></lines>
+			<method name="proxy__changeAdmin"  hits="2"  signature="()V" >
+				<lines><line number="53"  hits="2" /></lines>
 			</method>
 			<method name="proxy__upgradeTo"  hits="30"  signature="()V" >
 				<lines><line number="59"  hits="30" /></lines>
@@ -4624,28 +4624,28 @@
 			<method name="proxy__upgradeToAndCall"  hits="2"  signature="()V" >
 				<lines><line number="73"  hits="2" /></lines>
 			</method>
-			<method name="onlyAdmin"  hits="46"  signature="()V" >
-				<lines><line number="79"  hits="46" /></lines>
+			<method name="onlyAdmin"  hits="47"  signature="()V" >
+				<lines><line number="79"  hits="47" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="307"  branch="false" />
-			<line number="29"  hits="2"  branch="false" />
+			<line number="24"  hits="312"  branch="false" />
+			<line number="29"  hits="3"  branch="false" />
 			<line number="34"  hits="4"  branch="false" />
 			<line number="39"  hits="5"  branch="false" />
 			<line number="45"  hits="5"  branch="false" />
 			<line number="46"  hits="5"  branch="false" />
 			<line number="47"  hits="5"  branch="false" />
 			<line number="48"  hits="5"  branch="false" />
-			<line number="54"  hits="1"  branch="false" />
+			<line number="54"  hits="2"  branch="false" />
 			<line number="60"  hits="30"  branch="false" />
 			<line number="74"  hits="2"  branch="false" />
-			<line number="80"  hits="46"  branch="false" />
-			<line number="81"  hits="46"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="80"  hits="47"  branch="false" />
+			<line number="81"  hits="47"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="82"  hits="3"  branch="false" />
-			<line number="84"  hits="43"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="84"  hits="44"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="85"  hits="5"  branch="false" />
-			<line number="87"  hits="38"  branch="false" />
+			<line number="87"  hits="39"  branch="false" />
 		</lines>
 		</class>
 	</classes>
