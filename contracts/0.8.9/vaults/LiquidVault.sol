@@ -7,8 +7,13 @@ pragma solidity 0.8.9;
 import {Basic} from "./interfaces/Basic.sol";
 import {BasicVault} from "./BasicVault.sol";
 import {Liquid} from "./interfaces/Liquid.sol";
-import {Report} from "./interfaces/Connected.sol";
 import {Hub} from "./interfaces/Hub.sol";
+
+struct Report {
+    uint96 cl;
+    uint96 el;
+    uint96 netCashFlow;
+}
 
 contract LiquidVault is BasicVault, Liquid {
     uint256 internal constant BPS_IN_100_PERCENT = 10000;
@@ -36,11 +41,11 @@ contract LiquidVault is BasicVault, Liquid {
         return lastReport.cl + lastReport.el - lastReport.netCashFlow + uint256(netCashFlow);
     }
 
-    function update(Report memory _report, uint256 _lockedBalance) external {
+    function update(uint256 cl, uint256 el, uint256 ncf, uint256 _locked) external {
         if (msg.sender != address(HUB)) revert("ONLY_HUB");
 
-        lastReport = _report;
-        locked = _lockedBalance;
+        lastReport = Report(cl, el, ncf);
+        locked = _locked;
     }
 
     function deposit() public payable override(Basic, BasicVault) {

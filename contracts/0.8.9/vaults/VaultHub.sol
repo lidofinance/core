@@ -5,7 +5,7 @@
 pragma solidity 0.8.9;
 
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {Connected, Report} from "./interfaces/Connected.sol";
+import {Connected} from "./interfaces/Connected.sol";
 import {Hub} from "./interfaces/Hub.sol";
 
 interface StETH {
@@ -120,10 +120,16 @@ contract VaultHub is AccessControlEnumerable, Hub {
         STETH.burnExternalShares(address(this), numberOfShares);
     }
 
+    struct ShareRate {
+        uint256 eth;
+        uint256 shares;
+    }
+
     function _calculateVaultsRebase(
-        uint256[] memory clBalances,
-        uint256[] memory elBalances
-    ) internal returns(uint256[] memory locked) {
+        ShareRate memory shareRate
+    ) internal view returns (
+        uint256[] memory lockedEther
+    ) {
         /// HERE WILL BE ACCOUNTING DRAGONS
 
         //                 \||/
@@ -139,11 +145,11 @@ contract VaultHub is AccessControlEnumerable, Hub {
         //  \______(_______;;; __;;;
 
         // for each vault
+        lockedEther = new uint256[](vaults.length);
 
         for (uint256 i = 0; i < vaults.length; ++i) {
             VaultSocket memory socket = vaults[i];
-            Connected vault = socket.vault;
-            uint256 fee =  STETH.getSharesByPooledEth(vault.locked()) ;// * LIDO_APR * FEE_PERCENT;
+            lockedEther[i] = socket.mintedShares * shareRate.eth / shareRate.shares;
         }
 
         // here we need to pre-calculate the new locked balance for each vault
@@ -174,16 +180,16 @@ contract VaultHub is AccessControlEnumerable, Hub {
     function _updateVaults(
         uint256[] memory clBalances,
         uint256[] memory elBalances,
-        uint256[] memory depositBalances,
-        uint256[] memory lockedBalances
+        uint256[] memory netCashFlows
     ) internal {
         for(uint256 i; i < vaults.length; ++i) {
-            uint96 clBalance = uint96(clBalances[i]); // TODO: SafeCast
-            uint96 elBalance = uint96(elBalances[i]);
-             uint96 depositBalance = uint96(depositBalances[i]);
-            uint96 lockedBalance = uint96(lockedBalances[i]);
-
-            vaults[i].vault.update(Report(clBalance, elBalance, depositBalance), lockedBalance);
+            VaultSocket memory socket = vaults[i];
+            socket.vault.update(
+                clBalances[i],
+                elBalances[i],
+                netCashFlows[i],
+                STETH.getPooledEthByShares(socket.mintedShares)
+            );
         }
     }
 

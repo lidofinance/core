@@ -165,6 +165,10 @@ struct ReportValues {
     // Decision about withdrawals processing
     uint256[] withdrawalFinalizationBatches;
     uint256 simulatedShareRate;
+    // vaults
+    uint256[] clBalances;
+    uint256[] elBalances;
+    uint256[] netCashFlows;
 }
 
 /// This contract is responsible for handling oracle reports
@@ -223,11 +227,6 @@ contract Accounting is VaultHub {
         ReportValues report;
         PreReportState pre;
         CalculatedValues update;
-    }
-
-    struct ShareRate {
-        uint256 totalPooledEther;
-        uint256 totalShares;
     }
 
     function calculateOracleReportContext(
@@ -311,7 +310,7 @@ contract Accounting is VaultHub {
         ) = _calculateShareRateAndFees(_report, pre, update, externalShares);
         update.sharesToMintAsFees = sharesToMintAsFees;
 
-        update.externalEther = externalShares * newShareRate.totalPooledEther / newShareRate.totalShares;
+        update.externalEther = externalShares * newShareRate.eth / newShareRate.shares;
 
         update.postTotalShares = pre.totalShares + update.sharesToMintAsFees
             - update.totalSharesToBurn + externalShares;
@@ -360,9 +359,9 @@ contract Accounting is VaultHub {
         CalculatedValues memory _calculated,
         uint256 _externalShares
     ) internal pure returns (ShareRate memory shareRate, uint256 sharesToMintAsFees) {
-        shareRate.totalShares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
+        shareRate.shares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
 
-        shareRate.totalPooledEther = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
+        shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
 
         uint256 unifiedBalance = _report.clBalance + _calculated.withdrawals + _calculated.elRewards;
 
@@ -375,13 +374,13 @@ contract Accounting is VaultHub {
             uint256 totalFee = _calculated.rewardDistribution.totalFee;
             uint256 precision = _calculated.rewardDistribution.precisionPoints;
             uint256 feeEther = totalRewards * totalFee / precision;
-            shareRate.totalPooledEther += totalRewards - feeEther;
+            shareRate.eth += totalRewards - feeEther;
 
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
-            sharesToMintAsFees = feeEther * shareRate.totalShares / shareRate.totalPooledEther;
+            sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
         } else {
             uint256 totalPenalty = _calculated.principalClBalance - unifiedBalance;
-            shareRate.totalPooledEther -= totalPenalty;
+            shareRate.eth -= totalPenalty;
         }
     }
 
@@ -437,6 +436,14 @@ contract Accounting is VaultHub {
             _context,
             _contracts.postTokenRebaseReceiver
         );
+
+        _updateVaults(
+            _context.report.clBalances,
+            _context.report.elBalances,
+            _context.report.netCashFlows
+        );
+
+        // TODO: vault fees
 
         if (_context.report.withdrawalFinalizationBatches.length != 0) {
             // TODO: Is there any sense to check if simulated == real on no withdrawals

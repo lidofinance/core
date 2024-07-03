@@ -3,12 +3,6 @@
 
 pragma solidity 0.8.9;
 
-struct Report {
-    uint96 cl;
-    uint96 el;
-    uint96 netCashFlow;
-}
-
 interface Connected {
     function BOND_BP() external view returns (uint256);
 
@@ -22,5 +16,5 @@ interface Connected {
 
     function getValue() external view returns (uint256);
 
-    function update(Report memory report, uint256 locked) external;
+    function update(uint256 cl, uint256 el, uint256 ncf, uint256 locked) external;
 }
