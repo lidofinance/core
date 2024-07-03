@@ -35,7 +35,10 @@ contract AccountingOracleMock {
             data.elRewardsVaultBalance,
             data.sharesRequestedToBurn,
             data.withdrawalFinalizationBatches,
-            data.simulatedShareRate
+            data.simulatedShareRate,
+            new uint256[](0),
+            new uint256[](0),
+            new uint256[](0)
         ));
     }
 

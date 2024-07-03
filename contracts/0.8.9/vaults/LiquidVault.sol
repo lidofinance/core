@@ -44,7 +44,7 @@ contract LiquidVault is BasicVault, Liquid {
     function update(uint256 cl, uint256 el, uint256 ncf, uint256 _locked) external {
         if (msg.sender != address(HUB)) revert("ONLY_HUB");
 
-        lastReport = Report(cl, el, ncf);
+        lastReport = Report(uint96(cl), uint96(el), uint96(ncf)); //TODO: safecast
         locked = _locked;
     }
 
