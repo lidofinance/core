@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "yarn@4.2.2",
+  "packageManager": "yarn@4.3.1",
   "scripts": {
     "compile": "hardhat compile",
     "lint:sol": "solhint 'contracts/**/*.sol'",
