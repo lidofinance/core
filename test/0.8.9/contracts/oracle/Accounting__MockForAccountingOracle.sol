@@ -8,7 +8,7 @@ import { IReportReceiver } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 contract Accounting__MockForAccountingOracle is IReportReceiver {
     struct HandleOracleReportCallData {
-        ReportValues values;
+        ReportValues arg;
         uint256 callCount;
     }
 

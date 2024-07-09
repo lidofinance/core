@@ -238,17 +238,17 @@ describe("AccountingOracle.sol:happyPath", () => {
     it(`Accounting got the oracle report`, async () => {
       const lastOracleReportCall = await mockAccounting.lastCall__handleOracleReport();
       expect(lastOracleReportCall.callCount).to.equal(1);
-      expect(lastOracleReportCall.values.timeElapsed).to.equal(
+      expect(lastOracleReportCall.arg.timeElapsed).to.equal(
         (reportFields.refSlot - V1_ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
       );
-      expect(lastOracleReportCall.values.clValidators).to.equal(reportFields.numValidators);
-      expect(lastOracleReportCall.values.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-      expect(lastOracleReportCall.values.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
-      expect(lastOracleReportCall.values.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
-      expect(lastOracleReportCall.values.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
+      expect(lastOracleReportCall.arg.clValidators).to.equal(reportFields.numValidators);
+      expect(lastOracleReportCall.arg.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
+      expect(lastOracleReportCall.arg.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
+      expect(lastOracleReportCall.arg.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
+      expect(lastOracleReportCall.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
         reportFields.withdrawalFinalizationBatches.map(Number),
       );
-      expect(lastOracleReportCall.values.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
+      expect(lastOracleReportCall.arg.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
     });
 
     it(`withdrawal queue got bunker mode report`, async () => {

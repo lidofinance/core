@@ -438,30 +438,32 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("delivers the data to corresponded contracts", () => {
-      it("should call handleOracleReport on Lido", async () => {
+      it("should call handleOracleReport on Accounting", async () => {
         expect((await mockAccounting.lastCall__handleOracleReport()).callCount).to.be.equal(0);
         await consensus.setTime(deadline);
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
 
-        const lastOracleReportToLido = await mockAccounting.lastCall__handleOracleReport();
+        const lastOracleReportToAccounting = await mockAccounting.lastCall__handleOracleReport();
 
-        expect(lastOracleReportToLido.callCount).to.be.equal(1);
-        expect(lastOracleReportToLido.values.timestamp).to.be.equal(
+        expect(lastOracleReportToAccounting.callCount).to.be.equal(1);
+        expect(lastOracleReportToAccounting.arg.timestamp).to.be.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
-        expect(lastOracleReportToLido.callCount).to.be.equal(1);
-        expect(lastOracleReportToLido.values.timestamp).to.be.equal(
+        expect(lastOracleReportToAccounting.callCount).to.be.equal(1);
+        expect(lastOracleReportToAccounting.arg.timestamp).to.be.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToLido.values.clBalance).to.be.equal(reportFields.clBalanceGwei + "000000000");
-        expect(lastOracleReportToLido.values.withdrawalVaultBalance).to.be.equal(reportFields.withdrawalVaultBalance);
-        expect(lastOracleReportToLido.values.elRewardsVaultBalance).to.be.equal(reportFields.elRewardsVaultBalance);
-        expect(lastOracleReportToLido.values.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
+        expect(lastOracleReportToAccounting.arg.clBalance).to.be.equal(reportFields.clBalanceGwei + "000000000");
+        expect(lastOracleReportToAccounting.arg.withdrawalVaultBalance).to.be.equal(
+          reportFields.withdrawalVaultBalance,
+        );
+        expect(lastOracleReportToAccounting.arg.elRewardsVaultBalance).to.be.equal(reportFields.elRewardsVaultBalance);
+        expect(lastOracleReportToAccounting.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
           reportFields.withdrawalFinalizationBatches.map(Number),
         );
-        expect(lastOracleReportToLido.values.simulatedShareRate).to.be.equal(reportFields.simulatedShareRate);
+        expect(lastOracleReportToAccounting.arg.simulatedShareRate).to.be.equal(reportFields.simulatedShareRate);
       });
 
       it("should call updateExitedValidatorsCountByStakingModule on StakingRouter", async () => {
