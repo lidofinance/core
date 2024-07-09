@@ -14,7 +14,6 @@ import {
   LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport__factory,
   LidoLocator,
   LidoLocator__factory,
-  LidoLocator__MutableMock__factory,
   OracleReportSanityChecker__MockForLidoHandleOracleReport,
   OracleReportSanityChecker__MockForLidoHandleOracleReport__factory,
   PostTokenRebaseReceiver__MockForLidoHandleOracleReport,
@@ -26,9 +25,10 @@ import {
   WithdrawalVault__MockForLidoHandleOracleReport,
   WithdrawalVault__MockForLidoHandleOracleReport__factory,
 } from "typechain-types";
-import { LidoLocator__MutableMock } from "typechain-types/test/0.4.24/contracts/LidoLocator__MutableMock";
 
-import { certainAddress, deployLidoDao, ether, getNextBlockTimestamp, streccak } from "lib";
+import { certainAddress, ether, getNextBlockTimestamp, impersonate, streccak } from "lib";
+
+import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 
 // TODO: improve coverage
 // TODO: probably needs some refactoring and optimization
@@ -569,15 +569,19 @@ describe("Lido:report", () => {
     });
 
     it("Does not relay the report data to `PostTokenRebaseReceiver` if the locator returns zero address", async () => {
-      const locatorMutable: LidoLocator__MutableMock = LidoLocator__MutableMock__factory.connect(
-        await lido.getLidoLocator(),
-        deployer,
-      );
+      const lidoLocatorAddress = await lido.getLidoLocator();
 
+      // Change the locator implementation to support zero address
+      await updateLidoLocatorImplementation(lidoLocatorAddress, {}, "LidoLocator__MutableMock", deployer);
+      const locatorMutable = await ethers.getContractAt("LidoLocator__MutableMock", lidoLocatorAddress, deployer);
       await locatorMutable.mock___updatePostTokenRebaseReceiver(ZeroAddress);
+
       expect(await locator.postTokenRebaseReceiver()).to.equal(ZeroAddress);
 
-      await expect(lido.handleOracleReport(...report())).not.to.emit(
+      const accountingOracleAddress = await locator.accountingOracle();
+      const accountingOracle = await impersonate(accountingOracleAddress, ether("1000.0"));
+
+      await expect(lido.connect(accountingOracle).handleOracleReport(...report())).not.to.emit(
         postTokenRebaseReceiver,
         "Mock__PostTokenRebaseHandled",
       );

@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ACL, Lido } from "typechain-types";
 
-import { deployLidoDao } from "lib";
+import { deployLidoDao } from "test/deploy";
 
 describe("Lido:Pausable", () => {
   let deployer: HardhatEthersSigner;

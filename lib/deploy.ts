@@ -73,14 +73,16 @@ async function deployContractType2(
   log(`sent deployment tx ${tx.hash} (nonce ${tx.nonce})...`);
 
   const receipt = await tx.wait();
-  if (receipt) {
-    const gasUsed = receipt.gasUsed;
-    (contract as DeployedContract).deploymentGasUsed = gasUsed;
-    (contract as DeployedContract).deploymentTx = tx.hash;
-    incrementGasUsed(gasUsed);
-    log(`deployed at ${receipt.to} (gas used ${gasUsed})`);
-    log.emptyLine();
+  if (!receipt) {
+    throw new Error(`Failed to wait till the tx ${tx.hash} execution`);
   }
+
+  const gasUsed = receipt.gasUsed;
+  incrementGasUsed(gasUsed);
+  (contract as DeployedContract).deploymentGasUsed = gasUsed;
+  (contract as DeployedContract).deploymentTx = tx.hash;
+  log(`deployed at ${receipt.contractAddress} (gas used ${gasUsed})`);
+  log.emptyLine();
   await addContractHelperFields(contract, artifactName);
 
   return contract as DeployedContract;

@@ -18,6 +18,7 @@ foundry/cache/
 foundry/out/
 
 .env
+accounts.json
 deployed-local.json
 
 # MacOS

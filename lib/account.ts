@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { getNetworkName } from "./client";
+import { getNetworkName } from "./network";
 
 export async function impersonate(address: string, balance?: bigint): Promise<HardhatEthersSigner> {
   const networkName = await getNetworkName();

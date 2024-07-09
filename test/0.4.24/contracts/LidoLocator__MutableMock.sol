@@ -23,19 +23,19 @@ contract LidoLocator__MutableMock {
   error ZeroAddress();
 
   address public accountingOracle;
-  address public depositSecurityModule;
-  address public elRewardsVault;
-  address public legacyOracle;
-  address public lido;
-  address public oracleReportSanityChecker;
+  address public immutable depositSecurityModule;
+  address public immutable elRewardsVault;
+  address public immutable legacyOracle;
+  address public immutable lido;
+  address public immutable oracleReportSanityChecker;
   address public postTokenRebaseReceiver;
-  address public burner;
-  address public stakingRouter;
-  address public treasury;
-  address public validatorsExitBusOracle;
-  address public withdrawalQueue;
-  address public withdrawalVault;
-  address public oracleDaemonConfig;
+  address public immutable burner;
+  address public immutable stakingRouter;
+  address public immutable treasury;
+  address public immutable validatorsExitBusOracle;
+  address public immutable withdrawalQueue;
+  address public immutable withdrawalVault;
+  address public immutable oracleDaemonConfig;
 
   /**
    * @notice declare service locations
@@ -86,5 +86,9 @@ contract LidoLocator__MutableMock {
 
   function mock___updatePostTokenRebaseReceiver(address newAddress) external {
     postTokenRebaseReceiver = newAddress;
+  }
+
+  function mock___updateAccountingOracle(address newAddress) external {
+    accountingOracle = newAddress;
   }
 }
