@@ -7,7 +7,9 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { IERC20, IERC2612 } from "typechain-types";
 
-import { certainAddress, days, Permit, signPermit, Snapshot } from "lib";
+import { certainAddress, days, Permit, signPermit } from "lib";
+
+import { Snapshot } from "test/suite";
 
 interface ERC2612Target {
   tokenName: string;

@@ -28,9 +28,23 @@ If you have a bigger idea on how to improve the protocol, consider publishing yo
 
 ### Requirements
 
-- [Node.js v20](https://nodejs.org/en)
-- [Yarn](https://yarnpkg.com/)
-- [Foundry](https://book.getfoundry.sh/)
+- [Node.js](https://nodejs.org/en) version 20 (LTS) with `corepack` enabled
+- [Yarn](https://yarnpkg.com/) installed via corepack (see below)
+- [Foundry](https://book.getfoundry.sh/) latest available version
+
+> [!NOTE]
+> On macOS with Homebrew it is recommended to install Node.js using [`n`](https://github.com/tj/n) or [`nvm`](https://github.com/nvm-sh/nvm) version managers.  
+> Example setup process using `n` package manager for zsh users:
+>
+> ```
+> $ brew install n
+> $ echo "\n\nexport N_PREFIX=\$HOME/.local\nexport PATH=\$N_PREFIX/bin:\$PATH" >> ~/.zshrc
+> $ source ~/.zshrc
+> $ n lts
+> $ corepack enable
+> $ cd /path/to/core
+> $ yarn
+> ```
 
 ### Setup
 

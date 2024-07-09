@@ -10,9 +10,10 @@ import {
   ERC165_INTERFACE_ID,
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
-  Snapshot,
   streccak,
 } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 const TEST_ADMIN_ROLE = streccak("TEST_ADMIN_ROLE");
@@ -56,11 +57,11 @@ describe("AccessControl", () => {
   });
 
   context("supportsInterface", () => {
-    it("should return true for ERC165_INTERFACE_ID", async () => {
+    it("Returns true for ERC165_INTERFACE_ID", async () => {
       expect(await contract.supportsInterface(ERC165_INTERFACE_ID)).to.be.true;
     });
 
-    it("should return true for AccessControl", async () => {
+    it("Returns true for AccessControl", async () => {
       expect(await contract.supportsInterface(OZ_ACCESS_CONTROL_INTERFACE_ID)).to.be.true;
     });
 

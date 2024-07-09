@@ -12,7 +12,9 @@ import {
   WithdrawalVault,
 } from "typechain-types";
 
-import { MAX_UINT256, proxify, Snapshot } from "lib";
+import { MAX_UINT256, proxify } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 

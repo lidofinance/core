@@ -7,7 +7,9 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido__MockForFinalizeUpgradeV2, Lido__MockForFinalizeUpgradeV2__factory, LidoLocator } from "typechain-types";
 
-import { certainAddress, dummyLocator, INITIAL_STETH_HOLDER, ONE_ETHER, proxify } from "lib";
+import { certainAddress, INITIAL_STETH_HOLDER, ONE_ETHER, proxify } from "lib";
+
+import { deployLidoLocator } from "test/deploy";
 
 describe("Lido:finalizeUpgrade_v2", () => {
   let deployer: HardhatEthersSigner;
@@ -31,7 +33,7 @@ describe("Lido:finalizeUpgrade_v2", () => {
     impl = await lidoFactory.deploy();
     [lido] = await proxify({ impl, admin: deployer });
 
-    locator = await dummyLocator();
+    locator = await deployLidoLocator();
     [withdrawalQueueAddress, burnerAddress] = await Promise.all([locator.withdrawalQueue(), locator.burner()]);
   });
 

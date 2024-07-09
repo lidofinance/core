@@ -15,7 +15,9 @@ import {
   WithdrawalQueue__MockForLidoMisc__factory,
 } from "typechain-types";
 
-import { batch, certainAddress, deployLidoDao, ether, impersonate, ONE_ETHER } from "lib";
+import { batch, certainAddress, ether, impersonate, ONE_ETHER } from "lib";
+
+import { deployLidoDao } from "test/deploy";
 
 describe("Lido:misc", () => {
   let deployer: HardhatEthersSigner;

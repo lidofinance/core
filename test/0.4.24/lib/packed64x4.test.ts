@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { Packed64x4__Harness } from "typechain-types";
 
-import { Snapshot } from "lib";
+import { Snapshot } from "test/suite";
 
 const OVER_UINT64_MAX = 2n ** 64n;
 

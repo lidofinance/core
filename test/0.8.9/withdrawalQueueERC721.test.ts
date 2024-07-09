@@ -26,11 +26,12 @@ import {
   proxify,
   shareRate,
   shares,
-  Snapshot,
   streccak,
   WITHDRAWAL_QUEUE_NAME,
   WITHDRAWAL_QUEUE_SYMBOL,
 } from "lib";
+
+import { Snapshot } from "test/suite";
 
 const MANAGE_TOKEN_URI_ROLE = streccak("MANAGE_TOKEN_URI_ROLE");
 
@@ -130,7 +131,7 @@ describe("WithdrawalQueueERC721.sol", () => {
   });
 
   context("supportsInterface", () => {
-    it("should return true for ERC165_INTERFACE_ID", async () => {
+    it("Returns true for ERC165_INTERFACE_ID", async () => {
       expect(await queue.supportsInterface(ERC165_INTERFACE_ID)).to.be.true;
     });
 
@@ -142,7 +143,7 @@ describe("WithdrawalQueueERC721.sol", () => {
       expect(await queue.supportsInterface(ERC721METADATA_INTERFACE_ID)).to.equal(true);
     });
 
-    it("should return true for AccessControl", async () => {
+    it("Returns true for AccessControl", async () => {
       expect(await queue.supportsInterface(OZ_ACCESS_CONTROL_INTERFACE_ID)).to.be.true;
     });
 

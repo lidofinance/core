@@ -6,7 +6,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/ERC20";
 
-import { batch, Snapshot } from "lib";
+import { batch } from "lib";
+
+import { Snapshot } from "test/suite";
 
 interface ERC20Target {
   tokenName: string;

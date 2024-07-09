@@ -76,12 +76,12 @@ A brief description of what's going on under the hood in the deploy script.
 
 ## Local deployment
 
-Deploys the DAO to local (http://127.0.0.1:8545) dev node (anvil, hardhat, ganache).
+Deploys the DAO to local (http://127.0.0.1:8555) dev node (anvil, hardhat, ganache).
 The deployment is done from the default test account `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` derived from the default mnemonic.
 Thus the node must be configured with the default test accounts derived from the mnemonic `test test test test test test test test test test test junk`.
 
 1. Run `yarn install` (get sure repo dependencies are installed)
-2. Run the node on default port 8545 (for the commands, see subsections below)
+2. Run the node on port 8555 (for the commands, see subsections below)
 3. Run the deploy script `bash scripts/scratch/dao-local-deploy.sh` from root repo directory
 4. Check out the deploy artifacts in `deployed-local.json`
 
@@ -90,7 +90,7 @@ Thus the node must be configured with the default test accounts derived from the
 Run the node with the command:
 
 ```shell
-anvil -p 8545 --mnemonic "test test test test test test test test test test test junk"
+anvil -p 8555 --mnemonic "test test test test test test test test test test test junk"
 ```
 
 ### Hardhat node

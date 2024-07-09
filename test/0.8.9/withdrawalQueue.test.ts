@@ -12,19 +12,19 @@ import {
 } from "typechain-types";
 
 import {
+  ether,
   impersonate,
   MAX_UINT256,
   proxify,
   randomAddress,
   shareRate,
   shares,
-  Snapshot,
   streccak,
   WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT,
   WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT,
 } from "lib";
 
-import { ether } from "../../lib/units";
+import { Snapshot } from "test/suite";
 
 const ZERO = 0n;
 
