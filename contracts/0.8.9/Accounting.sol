@@ -178,9 +178,9 @@ contract Accounting is VaultHub {
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator) VaultHub(_lidoLocator.lido()){
+    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(address(_lido)){
         LIDO_LOCATOR = _lidoLocator;
-        LIDO = ILido(LIDO_LOCATOR.lido());
+        LIDO = _lido;
     }
 
     struct PreReportState {
@@ -250,7 +250,7 @@ contract Accounting is VaultHub {
      */
     function handleOracleReport(
         ReportValues memory _report
-    ) internal returns (uint256[4] memory) {
+    ) external returns (uint256[4] memory) {
         Contracts memory contracts = _loadOracleReportContracts();
 
         ReportContext memory reportContext = _calculateOracleReportContext(contracts, _report);
