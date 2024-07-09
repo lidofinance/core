@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { IReportReceiver } from "../../oracle/AccountingOracle.sol";
-import { ReportValues } from "../../Accounting.sol";
-import { ILido } from "contracts/0.8.9/oracle/AccountingOracle.sol";
+import { ReportValues } from "contracts/0.8.9/Accounting.sol";
+import { IReportReceiver } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 interface IPostTokenRebaseReceiver {
     function handlePostTokenRebase(
@@ -47,10 +46,6 @@ contract MockLidoForAccountingOracle is IReportReceiver {
     function setLegacyOracle(address addr) external {
         legacyOracle = addr;
     }
-
-    ///
-    /// ILido
-    ///
 
     function handleOracleReport(
         ReportValues memory values
