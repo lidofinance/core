@@ -6,9 +6,9 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForAccountingOracle,
   AccountingOracleTimeTravellable,
   HashConsensusTimeTravellable,
-  MockLidoForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -32,7 +32,7 @@ import { deployAndConfigureAccountingOracle } from "test/deploy";
 describe("AccountingOracle.sol:accessControl", () => {
   let consensus: HashConsensusTimeTravellable;
   let oracle: AccountingOracleTimeTravellable;
-  let mockLido: MockLidoForAccountingOracle;
+  let mockAccounting: Accounting__MockForAccountingOracle;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport;
   let extraDataList: string;
@@ -89,7 +89,7 @@ describe("AccountingOracle.sol:accessControl", () => {
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    mockLido = deployed.lido;
+    mockAccounting = deployed.accounting;
   };
 
   beforeEach(deploy);
@@ -98,7 +98,7 @@ describe("AccountingOracle.sol:accessControl", () => {
     it("deploying accounting oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
-      expect(mockLido).to.be.not.null;
+      expect(mockAccounting).to.be.not.null;
       expect(reportItems).to.be.not.null;
       expect(extraDataList).to.be.not.null;
     });

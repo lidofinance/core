@@ -5,11 +5,11 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForAccountingOracle,
   AccountingOracle,
   AccountingOracleTimeTravellable,
   HashConsensusTimeTravellable,
   LegacyOracle,
-  MockLidoForAccountingOracle,
   MockStakingRouterForAccountingOracle,
   MockWithdrawalQueueForAccountingOracle,
 } from "typechain-types";
@@ -129,19 +129,21 @@ describe("AccountingOracle.sol:deploy", () => {
     describe("deployment and init finishes successfully (default setup)", async () => {
       let consensus: HashConsensusTimeTravellable;
       let oracle: AccountingOracleTimeTravellable;
-      let mockLido: MockLidoForAccountingOracle;
+      let mockAccounting: Accounting__MockForAccountingOracle;
       let mockStakingRouter: MockStakingRouterForAccountingOracle;
       let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
       let legacyOracle: LegacyOracle;
+      let locatorAddr: string;
 
       before(async () => {
         const deployed = await deployAndConfigureAccountingOracle(admin.address);
         consensus = deployed.consensus;
         oracle = deployed.oracle;
-        mockLido = deployed.lido;
         mockStakingRouter = deployed.stakingRouter;
         mockWithdrawalQueue = deployed.withdrawalQueue;
         legacyOracle = deployed.legacyOracle;
+        locatorAddr = deployed.locatorAddr;
+        mockAccounting = deployed.accounting;
       });
 
       it("mock setup is correct", async () => {
@@ -155,7 +157,7 @@ describe("AccountingOracle.sol:deploy", () => {
         expect(time2).to.be.equal(time1 + BigInt(SECONDS_PER_SLOT));
         expect(await oracle.getTime()).to.be.equal(time2);
 
-        const handleOracleReportCallData = await mockLido.getLastCall_handleOracleReport();
+        const handleOracleReportCallData = await mockAccounting.lastCall__handleOracleReport();
         expect(handleOracleReportCallData.callCount).to.be.equal(0);
 
         const updateExitedKeysByModuleCallData = await mockStakingRouter.lastCall_updateExitedKeysByModule();
@@ -176,7 +178,7 @@ describe("AccountingOracle.sol:deploy", () => {
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.be.equal(await consensus.getAddress());
         expect(await oracle.getConsensusVersion()).to.be.equal(CONSENSUS_VERSION);
-        expect(await oracle.LIDO()).to.be.equal(await mockLido.getAddress());
+        expect(await oracle.LOCATOR()).to.be.equal(locatorAddr);
         expect(await oracle.SECONDS_PER_SLOT()).to.be.equal(SECONDS_PER_SLOT);
       });
 
@@ -190,12 +192,6 @@ describe("AccountingOracle.sol:deploy", () => {
         await expect(
           deployAccountingOracleSetup(admin.address, { legacyOracleAddr: ZeroAddress }),
         ).to.be.revertedWithCustomError(defaultOracle, "LegacyOracleCannotBeZero");
-      });
-
-      it("constructor reverts if lido address is zero", async () => {
-        await expect(
-          deployAccountingOracleSetup(admin.address, { lidoAddr: ZeroAddress }),
-        ).to.be.revertedWithCustomError(defaultOracle, "LidoCannotBeZero");
       });
 
       it("initialize reverts if admin address is zero", async () => {
