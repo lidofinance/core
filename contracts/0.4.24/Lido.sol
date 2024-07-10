@@ -535,7 +535,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
-        IStakingRouter stakingRouter = _stakingRouter();
+        IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
         uint256 depositsCount = Math256.min(
             _maxDepositsCount,
             stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
