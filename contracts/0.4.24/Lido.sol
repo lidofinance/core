@@ -565,6 +565,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         address _receiver,
         uint256 _amountOfShares
     ) external {
+        _whenNotStopped();
+        // authentication goes through isMinter in StETH
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         // TODO: sanity check here to avoid 100% external balance
@@ -582,6 +584,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         address _account,
         uint256 _amountOfShares
     ) external {
+        _whenNotStopped();
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
 
@@ -600,6 +603,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postClBalance,
         uint256 _postExternalBalance
     ) external {
+        _whenNotStopped();
         require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
 
         uint256 preClValidators = CL_VALIDATORS_POSITION.getStorageUint256();
@@ -626,23 +630,25 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _simulatedShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
-        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
+        _whenNotStopped();
+        ILidoLocator locator = getLidoLocator();
+        require(msg.sender == locator.accounting(), "AUTH_FAILED");
 
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
-            ILidoExecutionLayerRewardsVault(getLidoLocator().elRewardsVault())
+            ILidoExecutionLayerRewardsVault(locator.elRewardsVault())
                 .withdrawRewards(_elRewardsToWithdraw);
         }
 
         // withdraw withdrawals and put them to the buffer
         if (_withdrawalsToWithdraw > 0) {
-            IWithdrawalVault(getLidoLocator().withdrawalVault())
+            IWithdrawalVault(locator.withdrawalVault())
                 .withdrawWithdrawals(_withdrawalsToWithdraw);
         }
 
         // finalize withdrawals (send ether, assign shares for burning)
         if (_etherToLockOnWithdrawalQueue > 0) {
-            IWithdrawalQueue(getLidoLocator().withdrawalQueue())
+            IWithdrawalQueue(locator.withdrawalQueue())
                 .finalize.value(_etherToLockOnWithdrawalQueue)(
                     _withdrawalFinalizationBatches[_withdrawalFinalizationBatches.length - 1],
                     _simulatedShareRate
@@ -677,6 +683,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postTotalEther,
         uint256 _sharesMintedAsFees
     ) external {
+        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
+
         emit TokenRebased(
             _reportTimestamp,
             _timeElapsed,
@@ -813,6 +821,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 clValidators = CL_VALIDATORS_POSITION.getStorageUint256();
         // clValidators can never be less than deposited ones.
         assert(depositedValidators >= clValidators);
+
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
 
@@ -827,10 +836,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .add(_getTransientBalance());
     }
 
+    /// @dev override isMinter from StETH to allow accounting to mint
     function _isMinter(address _sender) internal view returns (bool) {
         return _sender == getLidoLocator().accounting();
     }
 
+    /// @dev override isBurner from StETH to allow accounting to burn
     function _isBurner(address _sender) internal view returns (bool) {
         return _sender == getLidoLocator().burner();
     }
