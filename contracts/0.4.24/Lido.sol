@@ -4,18 +4,16 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/apps/AragonApp.sol";
-import "@aragon/os/contracts/lib/math/SafeMath.sol";
+import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonApp.sol";
+import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
-import "../common/interfaces/ILidoLocator.sol";
-import "../common/interfaces/IBurner.sol";
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
+import {Math256} from "../common/lib/Math256.sol";
 
-import "./lib/StakeLimitUtils.sol";
-import "../common/lib/Math256.sol";
+import {StETHPermit} from "./StETHPermit.sol";
 
-import "./StETHPermit.sol";
-
-import "./utils/Versioned.sol";
+import {Versioned} from "./utils/Versioned.sol";
 
 interface IStakingRouter {
     function deposit(

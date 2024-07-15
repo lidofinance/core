@@ -4,10 +4,10 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.4.24;
 
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
-import "@aragon/os/contracts/common/UnstructuredStorage.sol";
-import "@aragon/os/contracts/lib/math/SafeMath.sol";
-import "./utils/Pausable.sol";
+import {IERC20} from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
+import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
+import {Pausable} from "./utils/Pausable.sol";
 
 /**
  * @title Interest-bearing ERC20-like token for Lido Liquid Stacking protocol.
@@ -540,7 +540,7 @@ contract StETH is IERC20, Pausable {
     /**
      * @dev Emits {Transfer} and {TransferShares} events
      */
-    function _emitTransferEvents(address _from, address _to, uint _tokenAmount, uint256 _sharesAmount) internal {
+    function _emitTransferEvents(address _from, address _to, uint256 _tokenAmount, uint256 _sharesAmount) internal {
         emit Transfer(_from, _to, _tokenAmount);
         emit TransferShares(_from, _to, _sharesAmount);
     }
