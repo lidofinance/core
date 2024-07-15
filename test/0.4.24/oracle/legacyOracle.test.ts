@@ -326,7 +326,7 @@ describe("LegacyOracle.sol", () => {
           initialFastLaneLengthSlots,
         ]);
 
-        const accountingOracle = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
+        const accountingOracle = await ethers.deployContract("AccountingOracle__HarnessForLegacyOracle", [
           lido,
           invalidConsensusContract,
           secondsPerSlot,
