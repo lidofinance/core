@@ -1,6 +1,6 @@
 import { ethers, network } from "hardhat";
 
-import { Steth__MockForLidoMiscMinimal__factory, WstETH__factory } from "typechain-types";
+import { StETH__MockForLidoMiscMinimal__factory, WstETH__factory } from "typechain-types";
 
 import { ether } from "lib/units";
 
@@ -12,7 +12,7 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
     const totalSupply = ether("10.0");
 
-    const stethFactory = new Steth__MockForLidoMiscMinimal__factory(deployer);
+    const stethFactory = new StETH__MockForLidoMiscMinimal__factory(deployer);
     const steth = await stethFactory.deploy(owner, { value: totalSupply });
 
     const wstethFactory = new WstETH__factory(deployer);

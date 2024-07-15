@@ -11,8 +11,8 @@ import {
   LidoExecutionLayerRewardsVault__factory,
   NFT__GeneralMock,
   NFT__GeneralMock__factory,
-  Steth__MockForLidoMiscMinimal,
-  Steth__MockForLidoMiscMinimal__factory,
+  StETH__MockForLidoMiscMinimal,
+  StETH__MockForLidoMiscMinimal__factory,
 } from "typechain-types";
 
 import { batch, certainAddress, ether, impersonate } from "lib";
@@ -224,11 +224,11 @@ describe("LidoExecutionLayerRewardsVault", () => {
   });
 
   context("recoverERC20", () => {
-    let token: Steth__MockForLidoMiscMinimal;
+    let token: StETH__MockForLidoMiscMinimal;
 
     beforeEach(async () => {
       const tokensToMint = ether("10.0");
-      token = await new Steth__MockForLidoMiscMinimal__factory(deployer).deploy(vault, { value: tokensToMint });
+      token = await new StETH__MockForLidoMiscMinimal__factory(deployer).deploy(vault, { value: tokensToMint });
 
       expect(await token.balanceOf(vault)).to.equal(tokensToMint);
 
