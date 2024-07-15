@@ -28,7 +28,7 @@ contract StakingRouter__MockForLidoMisc {
     modulesFee = 500;
   }
 
-  function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _maxDepositsValue)
+  function getStakingModuleMaxDepositsCount(uint256, uint256)
     public
     view
     returns (uint256)
@@ -38,9 +38,9 @@ contract StakingRouter__MockForLidoMisc {
 
 
   function deposit(
-    uint256 _depositsCount,
-    uint256 _stakingModuleId,
-    bytes calldata _depositCalldata
+    uint256,
+    uint256,
+    bytes calldata
   ) external payable {
     emit Mock__DepositCalled();
   }

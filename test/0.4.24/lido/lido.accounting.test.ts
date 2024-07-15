@@ -7,82 +7,54 @@ import { getStorageAt, setBalance } from "@nomicfoundation/hardhat-network-helpe
 
 import {
   ACL,
-  Burner__MockForLidoHandleOracleReport,
-  Burner__MockForLidoHandleOracleReport__factory,
   Lido,
-  LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport,
-  LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport__factory,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
   LidoLocator,
   LidoLocator__factory,
-  OracleReportSanityChecker__MockForLidoHandleOracleReport,
-  OracleReportSanityChecker__MockForLidoHandleOracleReport__factory,
-  PostTokenRebaseReceiver__MockForLidoHandleOracleReport,
-  PostTokenRebaseReceiver__MockForLidoHandleOracleReport__factory,
-  StakingRouter__MockForLidoHandleOracleReport,
-  StakingRouter__MockForLidoHandleOracleReport__factory,
-  WithdrawalQueue__MockForLidoHandleOracleReport,
-  WithdrawalQueue__MockForLidoHandleOracleReport__factory,
-  WithdrawalVault__MockForLidoHandleOracleReport,
-  WithdrawalVault__MockForLidoHandleOracleReport__factory,
+  StakingRouter__MockForLidoAccounting,
+  StakingRouter__MockForLidoAccounting__factory,
+  WithdrawalVault__MockForLidoAccounting,
+  WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 
 import { certainAddress, ether, getNextBlockTimestamp, impersonate, streccak } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 
-// TODO: improve coverage
-// TODO: probably needs some refactoring and optimization
-// TODO: more math-focused tests
-describe("Lido:report", () => {
+describe("Lido:accounting", () => {
   let deployer: HardhatEthersSigner;
-  let accountingOracle: HardhatEthersSigner;
+  let accounting: HardhatEthersSigner;
   let stethWhale: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let withdrawalQueue: HardhatEthersSigner;
 
   let lido: Lido;
   let acl: ACL;
   let locator: LidoLocator;
-  let withdrawalQueue: WithdrawalQueue__MockForLidoHandleOracleReport;
-  let oracleReportSanityChecker: OracleReportSanityChecker__MockForLidoHandleOracleReport;
-  let burner: Burner__MockForLidoHandleOracleReport;
-  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport;
-  let withdrawalVault: WithdrawalVault__MockForLidoHandleOracleReport;
-  let stakingRouter: StakingRouter__MockForLidoHandleOracleReport;
-  let postTokenRebaseReceiver: PostTokenRebaseReceiver__MockForLidoHandleOracleReport;
+
+  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
+  let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
+  let stakingRouter: StakingRouter__MockForLidoAccounting;
 
   beforeEach(async () => {
-    [deployer, accountingOracle, stethWhale, stranger] = await ethers.getSigners();
+    [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
 
-    [
-      burner,
-      elRewardsVault,
-      oracleReportSanityChecker,
-      postTokenRebaseReceiver,
-      stakingRouter,
-      withdrawalQueue,
-      withdrawalVault,
-    ] = await Promise.all([
-      new Burner__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new PostTokenRebaseReceiver__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new StakingRouter__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new WithdrawalQueue__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new WithdrawalVault__MockForLidoHandleOracleReport__factory(deployer).deploy(),
+    [elRewardsVault, stakingRouter, withdrawalVault] = await Promise.all([
+      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
+      new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
+      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
     ]);
 
     ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
       initialized: true,
       locatorConfig: {
-        accountingOracle,
-        oracleReportSanityChecker,
         withdrawalQueue,
-        burner,
         elRewardsVault,
         withdrawalVault,
         stakingRouter,
-        postTokenRebaseReceiver,
+        accounting,
       },
     }));
 
@@ -93,66 +65,105 @@ describe("Lido:report", () => {
     await acl.createPermission(deployer, lido, await lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE(), deployer);
     await lido.resume();
 
-    lido = lido.connect(accountingOracle);
+    lido = lido.connect(accounting);
   });
 
-  context("handleOracleReport", () => {
-    it("Reverts when the contract is stopped", async () => {
+  context("processClStateUpdate", async () => {
+    it("Reverts when contract is stopped", async () => {
       await lido.connect(deployer).stop();
-      await expect(lido.handleOracleReport(...report())).to.be.revertedWith("CONTRACT_IS_STOPPED");
+      await expect(lido.processClStateUpdate(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
-    it("Reverts if the caller is not `AccountingOracle`", async () => {
-      await expect(lido.connect(stranger).handleOracleReport(...report())).to.be.revertedWith("APP_AUTH_FAILED");
+    it("Reverts if sender is not `Accounting`", async () => {
+      await expect(lido.connect(stranger).processClStateUpdate(...args())).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
-    it("Reverts if the report timestamp is in the future", async () => {
-      const nextBlockTimestamp = await getNextBlockTimestamp();
-      const invalidReportTimestamp = nextBlockTimestamp + 1n;
-
+    it("Updates beacon stats", async () => {
       await expect(
-        lido.handleOracleReport(
-          ...report({
-            reportTimestamp: invalidReportTimestamp,
+        lido.processClStateUpdate(
+          ...args({
+            postClValidators: 100n,
+            postClBalance: 100n,
+            postExternalBalance: 100n,
           }),
         ),
-      ).to.be.revertedWith("INVALID_REPORT_TIMESTAMP");
+      )
+        .to.emit(lido, "CLValidatorsUpdated")
+        .withArgs(0n, 0n, 100n);
     });
 
-    it("Reverts if the number of reported validators is greater than what is stored on the contract", async () => {
-      const depositedValidators = 100n;
-      await lido.connect(deployer).unsafeChangeDepositedValidators(depositedValidators);
+    type ArgsTuple = [BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish];
 
-      await expect(
-        lido.handleOracleReport(
-          ...report({
-            clValidators: depositedValidators + 1n,
-          }),
-        ),
-      ).to.be.revertedWith("REPORTED_MORE_DEPOSITED");
+    interface Args {
+      reportTimestamp: BigNumberish;
+      preClValidators: BigNumberish;
+      postClValidators: BigNumberish;
+      postClBalance: BigNumberish;
+      postExternalBalance: BigNumberish;
+    }
+
+    function args(overrides?: Partial<Args>): ArgsTuple {
+      return Object.values({
+        reportTimestamp: 0n,
+        preClValidators: 0n,
+        postClValidators: 0n,
+        postClBalance: 0n,
+        postExternalBalance: 0n,
+        ...overrides,
+      }) as ArgsTuple;
+    }
+  });
+
+  context("collectRewardsAndProcessWithdrawals", async () => {
+    it("Reverts when contract is stopped", async () => {
+      await lido.connect(deployer).stop();
+      await expect(lido.collectRewardsAndProcessWithdrawals(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
-    it("Reverts if the number of reported CL validators is less than what is stored on the contract", async () => {
-      const depositedValidators = 100n;
-      await lido.connect(deployer).unsafeChangeDepositedValidators(depositedValidators);
-
-      // first report, 100 validators
-      await lido.handleOracleReport(
-        ...report({
-          clValidators: depositedValidators,
-        }),
+    it("Reverts if sender is not `Accounting`", async () => {
+      await expect(lido.connect(stranger).collectRewardsAndProcessWithdrawals(...args())).to.be.revertedWith(
+        "APP_AUTH_FAILED",
       );
-
-      // first report, 99 validators
-      await expect(
-        lido.handleOracleReport(
-          ...report({
-            clValidators: depositedValidators - 1n,
-          }),
-        ),
-      ).to.be.revertedWith("REPORTED_LESS_VALIDATORS");
     });
 
+    type ArgsTuple = [
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish,
+    ];
+
+    interface Args {
+      reportTimestamp: BigNumberish;
+      reportClBalance: BigNumberish;
+      adjustedPreCLBalance: BigNumberish;
+      withdrawalsToWithdraw: BigNumberish;
+      elRewardsToWithdraw: BigNumberish;
+      lastWithdrawalRequestToFinalize: BigNumberish;
+      simulatedShareRate: BigNumberish;
+      etherToLockOnWithdrawalQueue: BigNumberish;
+    }
+
+    function args(overrides?: Partial<Args>): ArgsTuple {
+      return Object.values({
+        reportTimestamp: 0n,
+        reportClBalance: 0n,
+        adjustedPreCLBalance: 0n,
+        withdrawalsToWithdraw: 0n,
+        elRewardsToWithdraw: 0n,
+        lastWithdrawalRequestToFinalize: 0n,
+        simulatedShareRate: 0n,
+        etherToLockOnWithdrawalQueue: 0n,
+        ...overrides,
+      }) as ArgsTuple;
+    }
+  });
+
+  context.skip("handleOracleReport", () => {
     it("Update CL validators count if reported more", async () => {
       let depositedValidators = 100n;
       await lido.connect(deployer).unsafeChangeDepositedValidators(depositedValidators);
@@ -612,42 +623,3 @@ describe("Lido:report", () => {
     });
   });
 });
-
-function report(overrides?: Partial<Report>): ReportTuple {
-  return Object.values({
-    reportTimestamp: 0n,
-    timeElapsed: 0n,
-    clValidators: 0n,
-    clBalance: 0n,
-    withdrawalVaultBalance: 0n,
-    elRewardsVaultBalance: 0n,
-    sharesRequestedToBurn: 0n,
-    withdrawalFinalizationBatches: [],
-    simulatedShareRate: 0n,
-    ...overrides,
-  }) as ReportTuple;
-}
-
-interface Report {
-  reportTimestamp: BigNumberish;
-  timeElapsed: BigNumberish;
-  clValidators: BigNumberish;
-  clBalance: BigNumberish;
-  withdrawalVaultBalance: BigNumberish;
-  elRewardsVaultBalance: BigNumberish;
-  sharesRequestedToBurn: BigNumberish;
-  withdrawalFinalizationBatches: BigNumberish[];
-  simulatedShareRate: BigNumberish;
-}
-
-type ReportTuple = [
-  BigNumberish,
-  BigNumberish,
-  BigNumberish,
-  BigNumberish,
-  BigNumberish,
-  BigNumberish,
-  BigNumberish,
-  BigNumberish[],
-  BigNumberish,
-];

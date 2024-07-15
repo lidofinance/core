@@ -599,40 +599,38 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function processClStateUpdate(
         uint256 _reportTimestamp,
-        uint256 _postClValidators,
-        uint256 _postClBalance,
+        uint256 _preClValidators,
+        uint256 _reportClValidators,
+        uint256 _reportClBalance,
         uint256 _postExternalBalance
     ) external {
+        // all data validation was done by Accounting and OracleReportSanityChecker
         _whenNotStopped();
-        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
-
-        uint256 preClValidators = CL_VALIDATORS_POSITION.getStorageUint256();
-        if (_postClValidators > preClValidators) {
-            CL_VALIDATORS_POSITION.setStorageUint256(_postClValidators);
-        }
+        _auth(getLidoLocator().accounting());
 
         // Save the current CL balance and validators to
         // calculate rewards on the next push
-        CL_BALANCE_POSITION.setStorageUint256(_postClBalance);
-
+        CL_VALIDATORS_POSITION.setStorageUint256(_reportClValidators);
+        CL_BALANCE_POSITION.setStorageUint256(_reportClBalance);
         EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
 
-        //TODO: emit CLBalanceUpdated and external balance updated??
-        emit CLValidatorsUpdated(_reportTimestamp, preClValidators, _postClValidators);
+        emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
+        // cl and external balance change are reported in ETHDistributed event later
     }
 
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
+        uint256 _reportClBalance,
         uint256 _adjustedPreCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
-        uint256[] _withdrawalFinalizationBatches,
+        uint256 _lastWithdrawalRequestToFinalize,
         uint256 _simulatedShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
         _whenNotStopped();
         ILidoLocator locator = getLidoLocator();
-        require(msg.sender == locator.accounting(), "AUTH_FAILED");
+        _auth(locator.accounting());
 
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
@@ -650,7 +648,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         if (_etherToLockOnWithdrawalQueue > 0) {
             IWithdrawalQueue(locator.withdrawalQueue())
                 .finalize.value(_etherToLockOnWithdrawalQueue)(
-                    _withdrawalFinalizationBatches[_withdrawalFinalizationBatches.length - 1],
+                    _lastWithdrawalRequestToFinalize,
                     _simulatedShareRate
                 );
         }
@@ -665,7 +663,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit ETHDistributed(
             _reportTimestamp,
             _adjustedPreCLBalance,
-            CL_BALANCE_POSITION.getStorageUint256(),
+            _reportClBalance,
             _withdrawalsToWithdraw,
             _elRewardsToWithdraw,
             postBufferedEther
@@ -673,7 +671,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /// @notice emit TokenRebase event
-    /// @dev stay here for back compatibility reasons
+    /// @dev should stay here for back compatibility reasons
     function emitTokenRebase(
         uint256 _reportTimestamp,
         uint256 _timeElapsed,
@@ -683,7 +681,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postTotalEther,
         uint256 _sharesMintedAsFees
     ) external {
-        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
+        _auth(getLidoLocator().accounting());
 
         emit TokenRebased(
             _reportTimestamp,
@@ -879,6 +877,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function _auth(bytes32 _role) internal view {
         require(canPerform(msg.sender, _role, new uint256[](0)), "APP_AUTH_FAILED");
+    }
+
+    // @dev simple address-based auth
+    function _auth(address _address) internal view {
+        require(msg.sender == _address, "APP_AUTH_FAILED");
     }
 
     function _stakingRouter() internal view returns (IStakingRouter) {

@@ -7,7 +7,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   ACL,
-  Burner__MockForLidoHandleOracleReport__factory,
+  Burner__MockForAccounting__factory,
   Kernel,
   Lido,
   LidoLocator,
@@ -96,7 +96,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, stranger] =
       await ethers.getSigners();
 
-    const burner = await new Burner__MockForLidoHandleOracleReport__factory(deployer).deploy();
+    const burner = await new Burner__MockForAccounting__factory(deployer).deploy();
 
     ({ lido, dao, acl } = await deployLidoDao({
       rootAccount: deployer,

@@ -92,7 +92,7 @@ contract LiquidVault is BasicVault, Liquid {
         HUB.forgive{value: _amountOfETH}();
     }
 
-    function _mustBeHealthy() view private {
+    function _mustBeHealthy() private view {
         require(locked <= getValue() , "LIQUIDATION_LIMIT");
     }
 }
