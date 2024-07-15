@@ -214,7 +214,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       );
     });
 
-    it('reverts with "APP_AUTH_FAILED" error when called by sender without STAKING_ROUTER_ROLE', async () => {
+    it("reverts with \"APP_AUTH_FAILED\" error when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
         .false;
 
@@ -223,7 +223,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       );
     });
 
-    it('reverts with "OUT_OF_RANGE" error when called with targetLimit > UINT64_MAX', async () => {
+    it("reverts with \"OUT_OF_RANGE\" error when called with targetLimit > UINT64_MAX", async () => {
       const targetLimitWrong = BigInt("0x10000000000000000");
 
       await expect(
@@ -335,13 +335,13 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(
           firstNodeOperatorId,
           NODE_OPERATORS[firstNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
         )
         .and.to.emit(nor, "NodeOperatorTotalKeysTrimmed")
         .withArgs(
           secondNodeOperatorId,
           NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
         )
         .to.emit(nor, "KeysOpIndexSet")
         .withArgs(nonce + 1n)
@@ -401,13 +401,13 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(
           firstNodeOperatorId,
           NODE_OPERATORS[firstNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
         )
         .and.to.emit(nor, "NodeOperatorTotalKeysTrimmed")
         .withArgs(
           secondNodeOperatorId,
           NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
         )
         .to.emit(nor, "KeysOpIndexSet")
         .withArgs(nonce + 1n)

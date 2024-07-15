@@ -4,25 +4,12 @@
 
 pragma solidity 0.4.24;
 
-import "contracts/0.4.24/oracle/LegacyOracle.sol";
+import {LegacyOracle} from "contracts/0.4.24/oracle/LegacyOracle.sol";
 
-interface ILegacyOracle {
-    function getBeaconSpec() external view returns (
-        uint64 epochsPerFrame,
-        uint64 slotsPerEpoch,
-        uint64 secondsPerSlot,
-        uint64 genesisTime
-    );
+import {ILegacyOracle} from "./interfaces/ILegacyOracle.sol";
+import {ITimeProvider} from "./interfaces/ITimeProvider.sol";
 
-    function getLastCompletedEpochId() external view returns (uint256);
-}
-
-interface ITimeProvider {
-    function getTime() external view returns (uint256);
-}
-
-
-contract LegacyOracle__MockForAccountingOracle is ILegacyOracle, LegacyOracle {
+contract LegacyOracle__HarnessForAccountingOracle is ILegacyOracle, LegacyOracle {
 
     struct HandleConsensusLayerReportCallData {
         uint256 totalCalls;

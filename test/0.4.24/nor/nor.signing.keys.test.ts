@@ -257,9 +257,9 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const summaryBefore = await nor.getStakingModuleSummary();
       expect(summaryBefore.depositableValidatorsCount).to.be.equal(
         NODE_OPERATORS[firstNodeOperatorId].vettedSigningKeysCount -
-          NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount +
-          NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount -
-          NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
+        NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount +
+        NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount -
+        NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
       );
 
       await expect(nor.connect(stakingRouter).harness__obtainDepositData(summaryBefore.depositableValidatorsCount))

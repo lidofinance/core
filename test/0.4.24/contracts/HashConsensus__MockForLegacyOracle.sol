@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity >=0.4.24 <0.9.0;
 
 import {IHashConsensus} from "contracts/0.4.24/oracle/LegacyOracle.sol";

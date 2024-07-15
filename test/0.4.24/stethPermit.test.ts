@@ -6,8 +6,8 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   EIP712StETH__factory,
-  StethPermitMockWithEip712Initialization,
-  StethPermitMockWithEip712Initialization__factory,
+  StETHPermit__HarnessWithEip712Initialization,
+  StETHPermit__HarnessWithEip712Initialization__factory,
 } from "typechain-types";
 
 import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
@@ -22,14 +22,13 @@ describe("Permit", () => {
   let permit: Permit;
   let signature: Signature;
 
-  let steth: StethPermitMockWithEip712Initialization;
+  let steth: StETHPermit__HarnessWithEip712Initialization;
 
   before(async () => {
     [deployer, owner] = await ethers.getSigners();
 
-    steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, {
-      value: ether("10.0"),
-    });
+    steth = await new StETHPermit__HarnessWithEip712Initialization__factory(deployer)
+      .deploy(owner, { value: ether("10.0") });
 
     const holderBalance = await steth.balanceOf(owner);
 

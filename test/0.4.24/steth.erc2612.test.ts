@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import {
   EIP712StETH__factory,
   ERC1271Wallet__factory,
-  StethPermitMockWithEip712Initialization__factory,
+  StETHPermit__HarnessWithEip712Initialization__factory,
 } from "typechain-types";
 
 import { ether, stethDomain } from "lib";
@@ -16,7 +16,7 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");
-    const steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, { value });
+    const steth = await new StETHPermit__HarnessWithEip712Initialization__factory(deployer).deploy(owner, { value });
 
     const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
     await steth.initializeEIP712StETH(eip712helper);
@@ -36,7 +36,7 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");
-    const steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, { value });
+    const steth = await new StETHPermit__HarnessWithEip712Initialization__factory(deployer).deploy(owner, { value });
 
     const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
     await steth.initializeEIP712StETH(eip712helper);

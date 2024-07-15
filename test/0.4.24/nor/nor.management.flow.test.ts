@@ -134,7 +134,8 @@ describe("NodeOperatorsRegistry:management", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("addNodeOperator", () => {
-    beforeEach(async () => {});
+    beforeEach(async () => {
+    });
 
     it("Reverts if invalid name", async () => {
       await expect(nor.addNodeOperator("", certainAddress("reward-address-0"))).to.be.revertedWith("WRONG_NAME_LENGTH");
