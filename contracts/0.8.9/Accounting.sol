@@ -102,18 +102,22 @@ interface ILido {
         uint256 beaconValidators,
         uint256 beaconBalance
     );
+
     function processClStateUpdate(
         uint256 _reportTimestamp,
-        uint256 _postClValidators,
-        uint256 _postClBalance,
+        uint256 _preClValidators,
+        uint256 _reportClValidators,
+        uint256 _reportClBalance,
         uint256 _postExternalBalance
     ) external;
+
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
+        uint256 _reportClBalance,
         uint256 _adjustedPreCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
-        uint256[] memory _withdrawalFinalizationBatches,
+        uint256 _lastWithdrawalRequestToFinalize,
         uint256 _simulatedShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external;
@@ -132,42 +136,32 @@ interface ILido {
     function burnShares(address _account, uint256 _sharesAmount) external;
 }
 
-/**
- * The structure is used to aggregate the `handleOracleReport` provided data.
- *
- * @param _reportTimestamp the moment of the oracle report calculation
- * @param _timeElapsed seconds elapsed since the previous report calculation
- * @param _clValidators number of Lido validators on Consensus Layer
- * @param _clBalance sum of all Lido validators' balances on Consensus Layer
- * @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer at `_reportTimestamp`
- * @param _elRewardsVaultBalance elRewards vault balance on Execution Layer at `_reportTimestamp`
- * @param _sharesRequestedToBurn shares requested to burn through Burner at `_reportTimestamp`
- * @param _withdrawalFinalizationBatches the ascendingly-sorted array of withdrawal request IDs obtained by calling
- * WithdrawalQueue.calculateFinalizationBatches. Empty array means that no withdrawal requests should be finalized
- * @param _simulatedShareRate share rate that was simulated by oracle when the report data created (1e27 precision)
- *
- * NB: `_simulatedShareRate` should be calculated off-chain by calling the method with `eth_call` JSON-RPC API
- * while passing empty `_withdrawalFinalizationBatches` and `_simulatedShareRate` == 0, plugging the returned values
- * to the following formula: `_simulatedShareRate = (postTotalPooledEther * 1e27) / postTotalShares`
- *
- */
+
 struct ReportValues {
-    // Oracle timings
+    /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
     uint256 timestamp;
+    /// @notice seconds elapsed since the previous report
     uint256 timeElapsed;
-    // CL values
+    /// @notice total number of Lido validators on Consensus Layers (exited included)
     uint256 clValidators;
+    /// @notice sum of all Lido validators' balances on Consensus Layer
     uint256 clBalance;
-    // EL values
+    /// @notice withdrawal vault balance
     uint256 withdrawalVaultBalance;
+    /// @notice elRewards vault balance
     uint256 elRewardsVaultBalance;
+    /// @notice stETH shares requested to burn through Burner
     uint256 sharesRequestedToBurn;
-    // Decision about withdrawals processing
+    /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
+    /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
+    /// @notice share rate that was simulated by oracle when the report data created (1e27 precision)
     uint256 simulatedShareRate;
-    // vaults
+    /// @notice array of aggregated balances of validators for each Lido vault
     uint256[] clBalances;
+    /// @notice balances of Lido vaults
     uint256[] elBalances;
+    /// @notice value of netCashFlow of each Lido vault
     uint256[] netCashFlows;
 }
 
@@ -178,9 +172,9 @@ contract Accounting is VaultHub {
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator) VaultHub(_lidoLocator.lido()){
+    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(address(_lido)){
         LIDO_LOCATOR = _lidoLocator;
-        LIDO = ILido(LIDO_LOCATOR.lido());
+        LIDO = _lido;
     }
 
     struct PreReportState {
@@ -250,7 +244,7 @@ contract Accounting is VaultHub {
      */
     function handleOracleReport(
         ReportValues memory _report
-    ) internal returns (uint256[4] memory) {
+    ) external returns (uint256[4] memory) {
         Contracts memory contracts = _loadOracleReportContracts();
 
         ReportContext memory reportContext = _calculateOracleReportContext(contracts, _report);
@@ -393,27 +387,22 @@ contract Accounting is VaultHub {
 
         _checkAccountingOracleReport(_contracts, _context);
 
-        LIDO.processClStateUpdate(
-            _context.report.timestamp,
-            _context.report.clValidators,
-            _context.report.clBalance,
-            _context.update.externalEther
-        );
-
+        uint256 lastWithdrawalRequestToFinalize;
         if (_context.update.sharesToFinalizeWQ > 0) {
             _contracts.burner.requestBurnShares(
                 address(_contracts.withdrawalQueue), _context.update.sharesToFinalizeWQ
             );
+
+            lastWithdrawalRequestToFinalize =
+                _context.report.withdrawalFinalizationBatches[_context.report.withdrawalFinalizationBatches.length - 1];
         }
 
-        LIDO.collectRewardsAndProcessWithdrawals(
+        LIDO.processClStateUpdate(
             _context.report.timestamp,
-            _context.update.principalClBalance,
-            _context.update.withdrawals,
-            _context.update.elRewards,
-            _context.report.withdrawalFinalizationBatches,
-            _context.report.simulatedShareRate,
-            _context.update.etherToFinalizeWQ
+            _context.pre.clValidators,
+            _context.report.clValidators,
+            _context.report.clBalance,
+            _context.update.externalEther
         );
 
         if (_context.update.totalSharesToBurn > 0) {
@@ -429,12 +418,15 @@ contract Accounting is VaultHub {
             );
         }
 
-        (
-            uint256 realPostTotalShares,
-            uint256 realPostTotalPooledEther
-        ) = _completeTokenRebase(
-            _context,
-            _contracts.postTokenRebaseReceiver
+        LIDO.collectRewardsAndProcessWithdrawals(
+            _context.report.timestamp,
+            _context.report.clBalance,
+            _context.update.principalClBalance,
+            _context.update.withdrawals,
+            _context.update.elRewards,
+            lastWithdrawalRequestToFinalize,
+            _context.report.simulatedShareRate,
+            _context.update.etherToFinalizeWQ
         );
 
         _updateVaults(
@@ -445,11 +437,26 @@ contract Accounting is VaultHub {
 
         // TODO: vault fees
 
+        _completeTokenRebase(
+            _context,
+            _contracts.postTokenRebaseReceiver
+        );
+
+        LIDO.emitTokenRebase(
+            _context.report.timestamp,
+            _context.report.timeElapsed,
+            _context.pre.totalShares,
+            _context.pre.totalPooledEther,
+            _context.update.postTotalShares,
+            _context.update.postTotalPooledEther,
+            _context.update.sharesToMintAsFees
+        );
+
         if (_context.report.withdrawalFinalizationBatches.length != 0) {
             // TODO: Is there any sense to check if simulated == real on no withdrawals
             _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                realPostTotalPooledEther,
-                realPostTotalShares,
+                _context.update.postTotalPooledEther,
+                _context.update.postTotalShares,
                 _context.update.etherToFinalizeWQ,
                 _context.update.sharesToBurnDueToWQThisReport,
                 _context.report.simulatedShareRate
@@ -458,7 +465,7 @@ contract Accounting is VaultHub {
 
         // TODO: check realPostTPE and realPostTS against calculated
 
-        return [realPostTotalPooledEther, realPostTotalShares,
+        return [_context.update.postTotalPooledEther, _context.update.postTotalShares,
             _context.update.withdrawals, _context.update.elRewards];
     }
 
@@ -492,31 +499,18 @@ contract Accounting is VaultHub {
     function _completeTokenRebase(
         ReportContext memory _context,
         IPostTokenRebaseReceiver _postTokenRebaseReceiver
-    ) internal returns (uint256 postTotalShares, uint256 postTotalPooledEther) {
-        postTotalShares = LIDO.getTotalShares();
-        postTotalPooledEther = LIDO.getTotalPooledEther();
-
+    ) internal {
         if (address(_postTokenRebaseReceiver) != address(0)) {
             _postTokenRebaseReceiver.handlePostTokenRebase(
                 _context.report.timestamp,
                 _context.report.timeElapsed,
                 _context.pre.totalShares,
                 _context.pre.totalPooledEther,
-                postTotalShares,
-                postTotalPooledEther,
+                _context.update.postTotalShares,
+                _context.update.postTotalPooledEther,
                 _context.update.sharesToMintAsFees
             );
         }
-
-        LIDO.emitTokenRebase(
-            _context.report.timestamp,
-            _context.report.timeElapsed,
-            _context.pre.totalShares,
-            _context.pre.totalPooledEther,
-            postTotalShares,
-            postTotalPooledEther,
-            _context.update.sharesToMintAsFees
-        );
     }
 
     function _distributeFee(

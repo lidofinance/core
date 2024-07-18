@@ -4,18 +4,16 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/apps/AragonApp.sol";
-import "@aragon/os/contracts/lib/math/SafeMath.sol";
+import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonApp.sol";
+import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
-import "../common/interfaces/ILidoLocator.sol";
-import "../common/interfaces/IBurner.sol";
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
+import {Math256} from "../common/lib/Math256.sol";
 
-import "./lib/StakeLimitUtils.sol";
-import "../common/lib/Math256.sol";
+import {StETHPermit} from "./StETHPermit.sol";
 
-import "./StETHPermit.sol";
-
-import "./utils/Versioned.sol";
+import {Versioned} from "./utils/Versioned.sol";
 
 interface IStakingRouter {
     function deposit(
@@ -535,7 +533,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
-        IStakingRouter stakingRouter = _stakingRouter();
+        IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
         uint256 depositsCount = Math256.min(
             _maxDepositsCount,
             stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
@@ -565,6 +563,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         address _receiver,
         uint256 _amountOfShares
     ) external {
+        _whenNotStopped();
+        // authentication goes through isMinter in StETH
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         // TODO: sanity check here to avoid 100% external balance
@@ -582,6 +582,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         address _account,
         uint256 _amountOfShares
     ) external {
+        _whenNotStopped();
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
 
@@ -596,55 +597,56 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function processClStateUpdate(
         uint256 _reportTimestamp,
-        uint256 _postClValidators,
-        uint256 _postClBalance,
+        uint256 _preClValidators,
+        uint256 _reportClValidators,
+        uint256 _reportClBalance,
         uint256 _postExternalBalance
     ) external {
-        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
-
-        uint256 preClValidators = CL_VALIDATORS_POSITION.getStorageUint256();
-        if (_postClValidators > preClValidators) {
-            CL_VALIDATORS_POSITION.setStorageUint256(_postClValidators);
-        }
+        // all data validation was done by Accounting and OracleReportSanityChecker
+        _whenNotStopped();
+        _auth(getLidoLocator().accounting());
 
         // Save the current CL balance and validators to
         // calculate rewards on the next push
-        CL_BALANCE_POSITION.setStorageUint256(_postClBalance);
-
+        CL_VALIDATORS_POSITION.setStorageUint256(_reportClValidators);
+        CL_BALANCE_POSITION.setStorageUint256(_reportClBalance);
         EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
 
-        //TODO: emit CLBalanceUpdated and external balance updated??
-        emit CLValidatorsUpdated(_reportTimestamp, preClValidators, _postClValidators);
+        emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
+        // cl and external balance change are reported in ETHDistributed event later
     }
 
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
+        uint256 _reportClBalance,
         uint256 _adjustedPreCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
-        uint256[] _withdrawalFinalizationBatches,
+        uint256 _lastWithdrawalRequestToFinalize,
         uint256 _simulatedShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
-        require(msg.sender == getLidoLocator().accounting(), "AUTH_FAILED");
+        _whenNotStopped();
+        ILidoLocator locator = getLidoLocator();
+        _auth(locator.accounting());
 
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
-            ILidoExecutionLayerRewardsVault(getLidoLocator().elRewardsVault())
+            ILidoExecutionLayerRewardsVault(locator.elRewardsVault())
                 .withdrawRewards(_elRewardsToWithdraw);
         }
 
         // withdraw withdrawals and put them to the buffer
         if (_withdrawalsToWithdraw > 0) {
-            IWithdrawalVault(getLidoLocator().withdrawalVault())
+            IWithdrawalVault(locator.withdrawalVault())
                 .withdrawWithdrawals(_withdrawalsToWithdraw);
         }
 
         // finalize withdrawals (send ether, assign shares for burning)
         if (_etherToLockOnWithdrawalQueue > 0) {
-            IWithdrawalQueue(getLidoLocator().withdrawalQueue())
+            IWithdrawalQueue(locator.withdrawalQueue())
                 .finalize.value(_etherToLockOnWithdrawalQueue)(
-                    _withdrawalFinalizationBatches[_withdrawalFinalizationBatches.length - 1],
+                    _lastWithdrawalRequestToFinalize,
                     _simulatedShareRate
                 );
         }
@@ -659,7 +661,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit ETHDistributed(
             _reportTimestamp,
             _adjustedPreCLBalance,
-            CL_BALANCE_POSITION.getStorageUint256(),
+            _reportClBalance,
             _withdrawalsToWithdraw,
             _elRewardsToWithdraw,
             postBufferedEther
@@ -667,7 +669,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /// @notice emit TokenRebase event
-    /// @dev stay here for back compatibility reasons
+    /// @dev should stay here for back compatibility reasons
     function emitTokenRebase(
         uint256 _reportTimestamp,
         uint256 _timeElapsed,
@@ -677,6 +679,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postTotalEther,
         uint256 _sharesMintedAsFees
     ) external {
+        _auth(getLidoLocator().accounting());
+
         emit TokenRebased(
             _reportTimestamp,
             _timeElapsed,
@@ -813,6 +817,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 clValidators = CL_VALIDATORS_POSITION.getStorageUint256();
         // clValidators can never be less than deposited ones.
         assert(depositedValidators >= clValidators);
+
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
 
@@ -827,10 +832,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .add(_getTransientBalance());
     }
 
+    /// @dev override isMinter from StETH to allow accounting to mint
     function _isMinter(address _sender) internal view returns (bool) {
         return _sender == getLidoLocator().accounting();
     }
 
+    /// @dev override isBurner from StETH to allow accounting to burn
     function _isBurner(address _sender) internal view returns (bool) {
         return _sender == getLidoLocator().burner();
     }
@@ -868,6 +875,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function _auth(bytes32 _role) internal view {
         require(canPerform(msg.sender, _role, new uint256[](0)), "APP_AUTH_FAILED");
+    }
+
+    // @dev simple address-based auth
+    function _auth(address _address) internal view {
+        require(msg.sender == _address, "APP_AUTH_FAILED");
     }
 
     function _stakingRouter() internal view returns (IStakingRouter) {

@@ -2,7 +2,7 @@
 // for testing purposes only
 pragma solidity 0.4.24;
 
-contract StakingRouter__MockForLidoHandleOracleReport {
+contract StakingRouter__MockForLidoAccounting {
   event Mock__MintedRewardsReported();
 
   address[] private recipients__mocked;
@@ -29,7 +29,7 @@ contract StakingRouter__MockForLidoHandleOracleReport {
     precisionPoints = precisionPoint__mocked;
   }
 
-  function reportRewardsMinted(uint256[] _stakingModuleIds, uint256[] _totalShares) external {
+  function reportRewardsMinted(uint256[], uint256[]) external {
     emit Mock__MintedRewardsReported();
   }
 

@@ -198,11 +198,16 @@ async function main() {
   logWideSplitter();
 
   //
+  // === Accounting ===
+  //
+  const accounting = await deployWithoutProxy(Sk.accounting, "Accounting", deployer, [locator.address, lidoAddress]);
+  logWideSplitter();
+
+  //
   // === AccountingOracle ===
   //
   const accountingOracleArgs = [
     locator.address,
-    lidoAddress,
     legacyOracleAddress,
     Number(chainSpec.secondsPerSlot),
     Number(chainSpec.genesisTime),
@@ -301,6 +306,7 @@ async function main() {
     withdrawalQueueERC721.address,
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
+    accounting.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 

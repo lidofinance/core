@@ -2,7 +2,7 @@
 // for testing purposes only
 pragma solidity 0.4.24;
 
-contract WithdrawalQueue__MockForLidoHandleOracleReport {
+contract WithdrawalQueue__MockForAccounting {
   event WithdrawalsFinalized(
     uint256 indexed from,
     uint256 indexed to,
@@ -28,7 +28,10 @@ contract WithdrawalQueue__MockForLidoHandleOracleReport {
     sharesToBurn = sharesToBurn_;
   }
 
-  function finalize(uint256 _lastRequestIdToBeFinalized, uint256 _maxShareRate) external payable {
+  function finalize(
+    uint256 _lastRequestIdToBeFinalized,
+    uint256 _maxShareRate
+) external payable {
     _maxShareRate;
 
     // some random fake event values

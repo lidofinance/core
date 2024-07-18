@@ -2,7 +2,7 @@
 // for testing purposes only
 pragma solidity 0.4.24;
 
-contract LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport {
+contract LidoExecutionLayerRewardsVault__MockForLidoAccounting {
   event Mock__RewardsWithdrawn();
 
   function withdrawRewards(uint256 _maxAmount) external returns (uint256 amount) {
