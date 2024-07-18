@@ -16,6 +16,7 @@ interface IDepositContract {
 }
 
 interface IStakingRouter {
+    function getStakingModuleActiveValidatorsCount(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
@@ -44,6 +45,7 @@ contract DepositSecurityModule {
 
     event OwnerChanged(address newValue);
     event PauseIntentValidityPeriodBlocksChanged(uint256 newValue);
+    event MaxDepositsPerBlockChanged(uint256 newValue);
     event MaxOperatorsPerUnvettingChanged(uint256 newValue);
     event GuardianQuorumChanged(uint256 newValue);
     event GuardianAdded(address guardian);
@@ -57,6 +59,9 @@ contract DepositSecurityModule {
     error NotAnOwner(address caller);
     error InvalidSignature();
     error SignaturesNotSorted();
+    error ModulesNotSorted();
+    error NoDepositedModules();
+    error MaxDepositsPerBlock();
     error DepositNoQuorum();
     error DepositRootChanged();
     error DepositInactiveModule();
@@ -89,7 +94,7 @@ contract DepositSecurityModule {
     bool public isDepositsPaused;
 
     uint256 internal lastDepositBlock;
-
+    uint256 internal maxDepositsPerBlock;
     uint256 internal pauseIntentValidityPeriodBlocks;
     uint256 internal maxOperatorsPerUnvetting;
 
@@ -110,6 +115,7 @@ contract DepositSecurityModule {
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
+        uint256 _maxDepositsPerBlock,
         uint256 _maxOperatorsPerUnvetting
     ) {
         if (_lido == address(0)) revert ZeroAddress("_lido");
@@ -149,6 +155,7 @@ contract DepositSecurityModule {
 
         _setOwner(msg.sender);
         _setLastDepositBlock(block.number);
+        _setMaxDepositsPerBlock(_maxDepositsPerBlock);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
         _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
     }
@@ -205,9 +212,31 @@ contract DepositSecurityModule {
     }
 
     /**
+     * Returns `maxDepositsPerBlock` (see `depositBufferedEther`).
+     */
+    function getMaxDepositsPerBlock() external view returns (uint256) {
+        return maxDepositsPerBlock;
+    }
+
+    /**
+     * Sets `maxDepositsPerBlock`. Only callable by the owner.
+     *
+     * NB: the value must be harmonized with `OracleReportSanityChecker.churnValidatorsPerDayLimit`
+     * (see docs for the `OracleReportSanityChecker.setChurnValidatorsPerDayLimit` function)
+     */
+    function setMaxDepositsPerBlock(uint256 newValue) external onlyOwner {
+        _setMaxDepositsPerBlock(newValue);
+    }
+
+    function _setMaxDepositsPerBlock(uint256 newValue) internal {
+        maxDepositsPerBlock = newValue;
+        emit MaxDepositsPerBlockChanged(newValue);
+    }
+    /**
      * @notice Returns the maximum number of operators per unvetting.
      * @return maxOperatorsPerUnvetting The maximum number of operators per unvetting.
      */
+
     function getMaxOperatorsPerUnvetting() external view returns (uint256) {
         return maxOperatorsPerUnvetting;
     }
@@ -308,7 +337,7 @@ contract DepositSecurityModule {
      * Reverts if any of the addresses is already a guardian or is zero.
      */
     function addGuardians(address[] memory addresses, uint256 newQuorum) external onlyOwner {
-        for (uint256 i = 0; i < addresses.length; ) {
+        for (uint256 i = 0; i < addresses.length;) {
             _addGuardian(addresses[i]);
 
             unchecked {
@@ -420,8 +449,8 @@ contract DepositSecurityModule {
     function canDeposit(uint256 stakingModuleId) external view returns (bool) {
         if (!STAKING_ROUTER.hasStakingModule(stakingModuleId)) return false;
 
-        bool isModuleActive = STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId);
-        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
+        bool isModuleActive = _checkModuleIsActive(stakingModuleId, true);
+        bool isDepositDistancePassed = _checkMinDepositDistancePassed(stakingModuleId, true);
         bool isLidoCanDeposit = LIDO.canDeposit();
 
         return (
@@ -453,17 +482,22 @@ contract DepositSecurityModule {
      * @dev Checks the distance for the last deposit to any staking module.
      */
     function isMinDepositDistancePassed(uint256 stakingModuleId) external view returns (bool) {
-        return _isMinDepositDistancePassed(stakingModuleId);
+        return _checkMinDepositDistancePassed(stakingModuleId, true);
     }
 
-    function _isMinDepositDistancePassed(uint256 stakingModuleId) internal view returns (bool) {
+    function _checkMinDepositDistancePassed(uint256 stakingModuleId, bool noRevert) internal view returns (bool) {
         /// @dev The distance is reset when a deposit is made to any module. This prevents a front-run attack
         /// by colluding guardians on several modules at once, providing the necessary window for an honest
         /// guardian to react and pause deposits to all modules.
         uint256 lastDepositToModuleBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
         uint256 minDepositBlockDistance = STAKING_ROUTER.getStakingModuleMinDepositBlockDistance(stakingModuleId);
-        uint256 maxLastDepositBlock = lastDepositToModuleBlock >= lastDepositBlock ? lastDepositToModuleBlock : lastDepositBlock;
-        return block.number - maxLastDepositBlock >= minDepositBlockDistance;
+        // return block.number - lastDepositToModuleBlock >= minDepositBlockDistance;
+
+        if (block.number - lastDepositToModuleBlock < minDepositBlockDistance) {
+            if (noRevert) return false;
+            revert DepositTooFrequent();
+        }
+        return true;
     }
 
     /**
@@ -500,26 +534,130 @@ contract DepositSecurityModule {
         bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
+        _checkDepositRoot(depositRoot);
+        _checkBlockHash(blockHash, blockNumber);
+        _checkDepositsPaused();
+
+        ModuleDepositData memory moduleData = ModuleDepositData({
+            stakingModuleId: stakingModuleId,
+            nonce: nonce,
+            depositCalldata: depositCalldata,
+            guardianSignatures: sortedGuardianSignatures
+        });
+        _checkModule(blockNumber, blockHash, depositRoot, quorum, moduleData, false);
+
+        uint256 moduleMaxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
+        LIDO.deposit(moduleMaxDepositsPerBlock, stakingModuleId, depositCalldata);
+
+        if (moduleMaxDepositsPerBlock > maxDepositsPerBlock) revert MaxDepositsPerBlock();
+        _setLastDepositBlock(block.number);
+    }
+
+    struct ModuleDepositData {
+        uint256 stakingModuleId;
+        uint256 nonce;
+        bytes depositCalldata;
+        Signature[] guardianSignatures;
+    }
+
+    function depositBufferedEtherBatch(
+        uint256 blockNumber,
+        bytes32 blockHash,
+        bytes32 depositRoot,
+        ModuleDepositData[] calldata modulesDepositData
+    ) external returns (uint256 depositedCount) {
+        _checkDepositRoot(depositRoot);
+        _checkBlockHash(blockHash, blockNumber);
+        _checkDepositsPaused();
+
+        uint256 stakingModuleId;
+        ModuleDepositData memory moduleData;
+        uint256 totalModuleMaxDepositsPerBlock;
+        uint256 activeValidatorsCount;
+        uint256 prevActiveValidatorsCount;
+        uint256 guardianQuorum = quorum; // cache value to avoid multiple SLOADs
+        for (uint256 i = 0; i < modulesDepositData.length;) {
+            moduleData = modulesDepositData[i];
+            stakingModuleId = moduleData.stakingModuleId;
+
+            if (_checkModule(blockNumber, blockHash, depositRoot, guardianQuorum, moduleData, true)) {
+                // ensure that the modules are sorted by the number of active validators ascendingly
+                activeValidatorsCount = STAKING_ROUTER.getStakingModuleActiveValidatorsCount(stakingModuleId);
+                if (activeValidatorsCount < prevActiveValidatorsCount) revert ModulesNotSorted();
+
+                uint256 moduleMaxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
+                LIDO.deposit(moduleMaxDepositsPerBlock, stakingModuleId, moduleData.depositCalldata);
+
+                unchecked {
+                    ++depositedCount;
+                }
+                prevActiveValidatorsCount = activeValidatorsCount;
+                totalModuleMaxDepositsPerBlock += moduleMaxDepositsPerBlock;
+            } // else skip the module
+            unchecked {
+                ++i;
+            }
+        }
+        if (depositedCount == 0) revert NoDepositedModules();
+
+        if (totalModuleMaxDepositsPerBlock > maxDepositsPerBlock) revert MaxDepositsPerBlock();
+        _setLastDepositBlock(block.number);
+    }
+
+    function _checkModule(
+        uint256 blockNumber,
+        bytes32 blockHash,
+        bytes32 depositRoot,
+        uint256 sigsQuorum,
+        ModuleDepositData memory moduleData,
+        bool noRevert
+    ) internal view returns (bool) {
+        uint256 stakingModuleId = moduleData.stakingModuleId;
+        return _checkModuleNonce(stakingModuleId, moduleData.nonce, noRevert)
+            && _checkModuleIsActive(stakingModuleId, noRevert) && _checkMinDepositDistancePassed(stakingModuleId, noRevert)
+            && _verifyAttestSignatures(
+                depositRoot,
+                blockNumber,
+                blockHash,
+                stakingModuleId,
+                moduleData.nonce,
+                sigsQuorum,
+                moduleData.guardianSignatures,
+                noRevert
+            );
+    }
+
+    function _checkDepositRoot(bytes32 depositRoot) internal view {
         /// @dev The first most likely reason for the signature to go stale
         bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
+    }
 
+    function _checkBlockHash(bytes32 blockHash, uint256 blockNumber) internal view {
+        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
+    }
+
+    function _checkDepositsPaused() internal view {
+        if (isDepositsPaused) revert DepositsArePaused();
+    }
+
+    function _checkModuleNonce(uint256 stakingModuleId, uint256 nonce, bool noRevert) internal view returns (bool) {
         /// @dev The second most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
-        if (nonce != onchainNonce) revert ModuleNonceChanged();
+        if (nonce != onchainNonce) {
+            if (noRevert) return false;
+            revert ModuleNonceChanged();
+        }
+        return true;
+    }
 
-        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
-        if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
-        if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
-        if (isDepositsPaused) revert DepositsArePaused();
-
-        _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
-
-        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
-        LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
-
-        _setLastDepositBlock(block.number);
+    function _checkModuleIsActive(uint256 stakingModuleId, bool noRevert) internal view returns (bool) {
+        bool isModuleActive = STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId);
+        if (!isModuleActive) {
+            if (noRevert) return false;
+            revert DepositInactiveModule();
+        }
+        return true;
     }
 
     function _verifyAttestSignatures(
@@ -528,8 +666,15 @@ contract DepositSecurityModule {
         bytes32 blockHash,
         uint256 stakingModuleId,
         uint256 nonce,
-        Signature[] memory sigs
-    ) internal view {
+        uint256 sigsQuorum,
+        Signature[] memory sigs,
+        bool noRevert
+    ) internal view returns (bool) {
+        if (sigsQuorum == 0 || sigs.length < sigsQuorum) {
+            if (noRevert) return false;
+            revert DepositNoQuorum();
+        }
+
         bytes32 msgHash = keccak256(
             abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
         );
@@ -537,16 +682,23 @@ contract DepositSecurityModule {
         address prevSignerAddr;
         address signerAddr;
 
-        for (uint256 i = 0; i < sigs.length; ) {
+        for (uint256 i = 0; i < sigs.length;) {
             signerAddr = ECDSA.recover(msgHash, sigs[i].r, sigs[i].vs);
-            if (!_isGuardian(signerAddr)) revert InvalidSignature();
-            if (signerAddr <= prevSignerAddr) revert SignaturesNotSorted();
+            if (!_isGuardian(signerAddr)) {
+                if (noRevert) return false;
+                revert InvalidSignature();
+            }
+            if (signerAddr <= prevSignerAddr) {
+                if (noRevert) return false;
+                revert SignaturesNotSorted();
+            }
             prevSignerAddr = signerAddr;
 
             unchecked {
                 ++i;
             }
         }
+        return true;
     }
 
     /**
