@@ -213,7 +213,7 @@ describe("StakeLimitUtils.sol", () => {
 
       it("the full limit gets restored after growth blocks", async () => {
         prevStakeBlockNumber = BigInt(await latestBlock());
-        const prevStakeLimit = 0n;
+        const baseStakeLimit = 0n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, 0n, maxStakeLimitGrowthBlocks, maxStakeLimit);
         // 1 block passed due to the setter call above
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(
@@ -223,7 +223,7 @@ describe("StakeLimitUtils.sol", () => {
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(
-          prevStakeLimit + maxStakeLimitGrowthBlocks * (maxStakeLimit / maxStakeLimitGrowthBlocks),
+          baseStakeLimit + maxStakeLimitGrowthBlocks * (maxStakeLimit / maxStakeLimitGrowthBlocks),
         );
 
         // move forward one more block to account for rounding and reach max
@@ -294,9 +294,9 @@ describe("StakeLimitUtils.sol", () => {
 
       context("reset prev stake limit cases", () => {
         it("staking was paused", async () => {
-          const prevStakeBlockNumber = 0n; // staking is paused
+          const baseStakeBlockNumber = 0n; // staking is paused
           await stakeLimitUtils.harness_setState(
-            prevStakeBlockNumber,
+            baseStakeBlockNumber,
             prevStakeLimit,
             maxStakeLimitGrowthBlocks,
             maxStakeLimit,
@@ -308,7 +308,7 @@ describe("StakeLimitUtils.sol", () => {
 
           const state = await stakeLimitUtils.harness_getState();
 
-          expect(state.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
+          expect(state.prevStakeBlockNumber).to.be.equal(baseStakeBlockNumber);
           expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
           expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
           // prev stake limit reset
@@ -316,12 +316,12 @@ describe("StakeLimitUtils.sol", () => {
         });
 
         it("staking was unlimited", async () => {
-          const maxStakeLimit = 0n; // staking is unlimited
+          const noStakeLimit = 0n; // staking is unlimited
           await stakeLimitUtils.harness_setState(
             prevStakeBlockNumber,
             prevStakeLimit,
             maxStakeLimitGrowthBlocks,
-            maxStakeLimit,
+            noStakeLimit,
           );
 
           const updatedMaxStakeLimit = 10n ** 18n;
@@ -417,11 +417,11 @@ describe("StakeLimitUtils.sol", () => {
         await expect(stakeLimitUtils.updatePrevStakeLimit(updatedValue))
           .to.emit(stakeLimitUtils, "PrevStakeLimitUpdated")
           .withArgs(updatedValue);
-        const prevStakeBlockNumber = await latestBlock();
+        const stakeBlockNumber = await latestBlock();
 
         const state = await stakeLimitUtils.harness_getState();
 
-        expect(state.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
+        expect(state.prevStakeBlockNumber).to.be.equal(stakeBlockNumber);
         expect(state.prevStakeLimit).to.be.equal(updatedValue);
         expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
         expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);

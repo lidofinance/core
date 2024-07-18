@@ -3,9 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { OssifiableProxy } from "typechain-types";
-import { VersionedMock } from "typechain-types/contracts/0.4.24/test_helpers";
-import { VersionedMock__factory } from "typechain-types/factories/contracts/0.4.24/test_helpers";
+import { OssifiableProxy, VersionedMock, VersionedMock__factory } from "typechain-types";
 
 // TODO: rewrite to be reusable for any derived contract
 describe("Versioned", () => {

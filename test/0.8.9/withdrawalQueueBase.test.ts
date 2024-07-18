@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { parseUnits } from "ethers";
+import { parseUnits, Result } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -199,7 +199,7 @@ describe("WithdrawalQueueBase.sol", () => {
         buildBatchCalculationState(
           calc1.remainingEthBudget,
           calc1.finished,
-          calc1.batches.map((x) => x),
+          (calc1.batches as Result).toArray(),
           calc1.batchesLength,
         ),
       );
@@ -233,7 +233,7 @@ describe("WithdrawalQueueBase.sol", () => {
         buildBatchCalculationState(
           calc1.remainingEthBudget,
           calc1.finished,
-          calc1.batches.map((x) => x),
+          (calc1.batches as Result).toArray(),
           calc1.batchesLength,
         ),
       );
@@ -272,7 +272,7 @@ describe("WithdrawalQueueBase.sol", () => {
         buildBatchCalculationState(
           calc1.remainingEthBudget,
           calc1.finished,
-          calc1.batches.map((x) => x),
+          (calc1.batches as Result).toArray(),
           calc1.batchesLength,
         ),
       );
@@ -311,7 +311,7 @@ describe("WithdrawalQueueBase.sol", () => {
         buildBatchCalculationState(
           calc1.remainingEthBudget,
           calc1.finished,
-          calc1.batches.map((x) => x),
+          (calc1.batches as Result).toArray(),
           calc1.batchesLength,
         ),
       );

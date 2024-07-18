@@ -1,5 +1,6 @@
 export * from "./account";
 export * from "./address";
+export * from "./bigint-math";
 export * from "./constants";
 export * from "./contract";
 export * from "./deploy";
@@ -19,5 +20,6 @@ export * from "./signing-keys";
 export * from "./state-file";
 export * from "./string";
 export * from "./time";
+export * from "./transaction";
 export * from "./type";
 export * from "./units";

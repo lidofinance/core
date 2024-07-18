@@ -16,7 +16,7 @@ import { Snapshot } from "test/suite";
 
 describe("Permit", () => {
   let deployer: Signer;
-  let owner: Signer;
+  let signer: Signer;
 
   let originalState: string;
   let permit: Permit;
@@ -25,23 +25,23 @@ describe("Permit", () => {
   let steth: StethPermitMockWithEip712Initialization;
 
   before(async () => {
-    [deployer, owner] = await ethers.getSigners();
+    [deployer, signer] = await ethers.getSigners();
 
-    steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, {
+    steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(signer, {
       value: ether("10.0"),
     });
 
-    const holderBalance = await steth.balanceOf(owner);
+    const holderBalance = await steth.balanceOf(signer);
 
     permit = {
-      owner: await owner.getAddress(),
+      owner: await signer.getAddress(),
       spender: certainAddress("spender"),
       value: holderBalance,
-      nonce: await steth.nonces(owner),
+      nonce: await steth.nonces(signer),
       deadline: BigInt(await time.latest()) + days(7n),
     };
 
-    signature = await signPermit(await stethDomain(steth), permit, owner);
+    signature = await signPermit(await stethDomain(steth), permit, signer);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

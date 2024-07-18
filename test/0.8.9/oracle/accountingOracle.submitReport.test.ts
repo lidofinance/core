@@ -130,15 +130,15 @@ describe("AccountingOracle.sol:submitReport", () => {
     await consensus.setTime(deadline);
 
     const newReportItems = getReportDataItems(newReportFields);
-    const reportHash = calcReportDataHash(newReportItems);
+    const nextReportHash = calcReportDataHash(newReportItems);
 
     await consensus.advanceTimeToNextFrameStart();
-    await consensus.connect(member1).submitReport(newReportFields.refSlot, reportHash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(newReportFields.refSlot, nextReportHash, CONSENSUS_VERSION);
 
     return {
       newReportFields,
       newReportItems,
-      reportHash,
+      reportHash: nextReportHash,
     };
   }
 
@@ -555,30 +555,30 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should revert on non-empty format but zero length", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           extraDataItemsCount: 0,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
         await expect(
-          oracle.connect(member1).submitReportData(reportFields, oracleVersion),
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
         ).to.be.revertedWithCustomError(oracle, "ExtraDataItemsCountCannotBeZeroForNonEmptyData");
       });
 
       it("should revert on non-empty format but zero hash", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           extraDataHash: ZeroHash,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
         await expect(
-          oracle.connect(member1).submitReportData(reportFields, oracleVersion),
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
         ).to.be.revertedWithCustomError(oracle, "ExtraDataHashCannotBeZeroForNonEmptyData");
       });
     });
@@ -588,17 +588,17 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
         const nonZeroHash = keccakFromString("nonZeroHash");
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           isBunkerMode: false,
           extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
           extraDataHash: nonZeroHash,
           extraDataItemsCount: 0,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
+        await expect(oracle.connect(member1).submitReportData(newReportFields, oracleVersion))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataHash")
           .withArgs(ZeroHash, nonZeroHash);
       });
@@ -606,17 +606,17 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should revert for non zero ExtraDataLength", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           isBunkerMode: false,
           extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
           extraDataHash: ZeroHash,
           extraDataItemsCount: 10,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
+        await expect(oracle.connect(member1).submitReportData(newReportFields, oracleVersion))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataItemsCount")
           .withArgs(0, 10);
       });

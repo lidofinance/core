@@ -264,10 +264,10 @@ describe("LegacyOracle.sol", () => {
       const accountingOracleAddress = await accountingOracle.getAddress();
       const accountingOracleActor = await impersonate(accountingOracleAddress, ether("1000"));
 
-      const refSlot = 0n;
-      const expectedEpochId = (refSlot + 1n) / SLOTS_PER_EPOCH;
+      const baseRefSlot = 0n;
+      const expectedEpochId = (baseRefSlot + 1n) / SLOTS_PER_EPOCH;
 
-      await expect(legacyOracle.connect(accountingOracleActor).handleConsensusLayerReport(refSlot, 0, 0))
+      await expect(legacyOracle.connect(accountingOracleActor).handleConsensusLayerReport(baseRefSlot, 0, 0))
         .to.emit(legacyOracle, "Completed")
         .withArgs(expectedEpochId, 0, 0);
 
@@ -326,13 +326,17 @@ describe("LegacyOracle.sol", () => {
           initialFastLaneLengthSlots,
         ]);
 
-        const accountingOracle = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
+        const accountingOracleMock = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
           lido,
           invalidConsensusContract,
           secondsPerSlot,
         ]);
 
-        const locatorConfig = { legacyOracle, accountingOracle, lido };
+        const locatorConfig = {
+          lido,
+          legacyOracle,
+          accountingOracle: accountingOracleMock,
+        };
         const invalidLocator = await deployLidoLocator(locatorConfig, admin);
 
         return { invalidLocator, invalidConsensusContract };

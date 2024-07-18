@@ -18,8 +18,8 @@ describe("OssifiableProxy", () => {
   let proxy: OssifiableProxy;
   let snapshot: string;
   let initPayload: string;
-  let InitializableContract: Initializable__Mock__factory;
-  let OssifiableProxy: OssifiableProxy__factory;
+  let initializableContract: Initializable__Mock__factory;
+  let ossifiableProxy: OssifiableProxy__factory;
 
   async function takeSnapshot() {
     snapshot = await Snapshot.take();
@@ -31,11 +31,11 @@ describe("OssifiableProxy", () => {
 
   beforeEach(async () => {
     [admin, stranger] = await ethers.getSigners();
-    InitializableContract = await ethers.getContractFactory("Initializable__Mock");
-    OssifiableProxy = await ethers.getContractFactory("OssifiableProxy");
+    initializableContract = await ethers.getContractFactory("Initializable__Mock");
+    ossifiableProxy = await ethers.getContractFactory("OssifiableProxy");
 
-    currentImpl = await InitializableContract.deploy();
-    proxy = await OssifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), "0x");
+    currentImpl = await initializableContract.deploy();
+    proxy = await ossifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), "0x");
 
     initPayload = currentImpl.interface.encodeFunctionData("initialize", [1]);
   });
@@ -45,8 +45,8 @@ describe("OssifiableProxy", () => {
 
   describe("deploy", () => {
     it("with empty calldata", async () => {
-      currentImpl = await InitializableContract.deploy();
-      proxy = await OssifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), "0x");
+      currentImpl = await initializableContract.deploy();
+      proxy = await ossifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), "0x");
 
       const tx = proxy.deploymentTransaction();
       const implInterfaceOnProxyAddr = currentImpl.attach(await proxy.getAddress()) as Initializable__Mock;
@@ -59,8 +59,8 @@ describe("OssifiableProxy", () => {
     });
 
     it("with calldata", async () => {
-      currentImpl = await InitializableContract.deploy();
-      proxy = await OssifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), initPayload);
+      currentImpl = await initializableContract.deploy();
+      proxy = await ossifiableProxy.deploy(await currentImpl.getAddress(), await admin.getAddress(), initPayload);
 
       const tx = proxy.deploymentTransaction();
       const implInterfaceOnProxyAddr = currentImpl.attach(await proxy.getAddress()) as Initializable__Mock;
