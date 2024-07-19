@@ -68,7 +68,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
         uint256 _amountOfShares
     ) external returns (uint256 totalEtherToBackTheVault) {
         Connected vault = Connected(msg.sender);
-        VaultSocket memory socket = _socket(vault);
+        VaultSocket memory socket = _authedSocket(vault);
 
         uint256 mintedShares = socket.mintedShares + _amountOfShares;
         if (mintedShares >= socket.capShares) revert("CAP_REACHED");
@@ -92,7 +92,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
 
     function burnSharesBackedByVault(address _account, uint256 _amountOfShares) external {
         Connected vault = Connected(msg.sender);
-        VaultSocket memory socket = _socket(vault);
+        VaultSocket memory socket = _authedSocket(vault);
 
         if (socket.mintedShares < _amountOfShares) revert("NOT_ENOUGH_SHARES");
 
@@ -108,15 +108,17 @@ contract VaultHub is AccessControlEnumerable, Hub {
 
     function forgive() external payable {
         Connected vault = Connected(msg.sender);
-        VaultSocket memory socket = _socket(vault);
+        VaultSocket memory socket = _authedSocket(vault);
 
         uint256 numberOfShares = STETH.getSharesByPooledEth(msg.value);
 
         vaultIndex[vault].mintedShares = socket.mintedShares - numberOfShares;
 
+        // mint stETH (shares+ TPE+)
         (bool success,) = address(STETH).call{value: msg.value}("");
         if (!success) revert("STETH_MINT_FAILED");
 
+        // and burn on behalf of this node (shares- TPE-)
         STETH.burnExternalShares(address(this), numberOfShares);
     }
 
@@ -147,9 +149,13 @@ contract VaultHub is AccessControlEnumerable, Hub {
         // for each vault
         lockedEther = new uint256[](vaults.length);
 
+        uint256 BPS_BASE = 10000;
+
         for (uint256 i = 0; i < vaults.length; ++i) {
             VaultSocket memory socket = vaults[i];
-            lockedEther[i] = socket.mintedShares * shareRate.eth / shareRate.shares;
+            uint256 externalEther = socket.mintedShares * shareRate.eth / shareRate.shares;
+
+            lockedEther[i] = externalEther * BPS_BASE / (BPS_BASE - socket.vault.BOND_BP());
         }
 
         // here we need to pre-calculate the new locked balance for each vault
@@ -180,20 +186,20 @@ contract VaultHub is AccessControlEnumerable, Hub {
     function _updateVaults(
         uint256[] memory clBalances,
         uint256[] memory elBalances,
-        uint256[] memory netCashFlows
+        uint256[] memory netCashFlows,
+        uint256[] memory lockedEther
     ) internal {
         for(uint256 i; i < vaults.length; ++i) {
-            VaultSocket memory socket = vaults[i];
-            socket.vault.update(
+            vaults[i].vault.update(
                 clBalances[i],
                 elBalances[i],
                 netCashFlows[i],
-                STETH.getPooledEthByShares(socket.mintedShares)
+                lockedEther[i]
             );
         }
     }
 
-    function _socket(Connected _vault) internal view returns (VaultSocket memory) {
+    function _authedSocket(Connected _vault) internal view returns (VaultSocket memory) {
         VaultSocket memory socket = vaultIndex[_vault];
         if (socket.vault != _vault) revert("NOT_CONNECTED_TO_HUB");
 

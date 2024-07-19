@@ -215,6 +215,8 @@ contract Accounting is VaultHub {
         uint256 postTotalPooledEther;
         /// @notice rebased amount of external ether
         uint256 externalEther;
+
+        uint256[] lockedEther;
     }
 
     struct ReportContext {
@@ -261,7 +263,7 @@ contract Accounting is VaultHub {
 
         // Calculate values to update
         CalculatedValues memory update = CalculatedValues(0,0,0,0,0,0,0,
-            _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0, 0, 0);
+            _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0, 0, 0, new uint256[](0));
 
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
         (
@@ -306,12 +308,15 @@ contract Accounting is VaultHub {
 
         update.externalEther = externalShares * newShareRate.eth / newShareRate.shares;
 
-        update.postTotalShares = pre.totalShares + update.sharesToMintAsFees
-            - update.totalSharesToBurn + externalShares;
+        update.postTotalShares = pre.totalShares // totalShares includes externalShares
+            + update.sharesToMintAsFees
+            - update.totalSharesToBurn;
         update.postTotalPooledEther = pre.totalPooledEther // was before the report
-            + _report.clBalance + update.withdrawals - update.principalClBalance // total rewards or penalty in Lido
+            + _report.clBalance + update.withdrawals + update.elRewards - update.principalClBalance // total rewards or penalty in Lido
             + update.externalEther - pre.externalEther // vaults rewards (or penalty)
             - update.etherToFinalizeWQ;
+
+        update.lockedEther = _calculateVaultsRebase(newShareRate);
 
         // TODO: assert resuting shareRate == newShareRate
 
@@ -432,7 +437,8 @@ contract Accounting is VaultHub {
         _updateVaults(
             _context.report.clBalances,
             _context.report.elBalances,
-            _context.report.netCashFlows
+            _context.report.netCashFlows,
+            _context.update.lockedEther
         );
 
         // TODO: vault fees

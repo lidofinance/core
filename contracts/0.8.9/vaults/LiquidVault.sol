@@ -75,9 +75,13 @@ contract LiquidVault is BasicVault, Liquid {
     }
 
     function mintStETH(address _receiver, uint256 _amountOfShares) external onlyOwner {
-        locked =
+        uint256 newLocked =
             uint96((HUB.mintSharesBackedByVault(_receiver, _amountOfShares) * BPS_IN_100_PERCENT) /
             (BPS_IN_100_PERCENT - BOND_BP)); //TODO: SafeCast
+
+        if (newLocked > locked) {
+            locked = newLocked;
+        }
 
         _mustBeHealthy();
     }
