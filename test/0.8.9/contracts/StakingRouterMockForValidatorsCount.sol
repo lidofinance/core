@@ -6,7 +6,7 @@ pragma solidity 0.8.9;
 
 import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
 
-contract StakingRouterMockForValidatorsCount {
+contract StakingRouter__MockForSanityChecker{
 
     mapping(uint256 => StakingRouter.StakingModule) private modules;
 

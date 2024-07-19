@@ -9,7 +9,7 @@ import {
   BurnerStub,
   LidoLocatorMock,
   OracleReportSanityChecker,
-  StakingRouterMockForValidatorsCount,
+  StakingRouter__MockForSanityChecker,
   WithdrawalQueueStub,
 } from "typechain-types";
 
@@ -56,7 +56,7 @@ describe("OracleReportSanityChecker.sol", () => {
   let admin: HardhatEthersSigner;
   let withdrawalVault: string;
   let elRewardsVault: HardhatEthersSigner;
-  let stakingRouter: StakingRouterMockForValidatorsCount;
+  let stakingRouter: StakingRouter__MockForSanityChecker;
   let accounts: HardhatEthersSigner[];
 
   before(async () => {
@@ -73,7 +73,7 @@ describe("OracleReportSanityChecker.sol", () => {
       12,
       1606824023,
     ]);
-    stakingRouter = await ethers.deployContract("StakingRouterMockForValidatorsCount");
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
     lidoLocatorMock = await ethers.deployContract("LidoLocatorMock", [
       {

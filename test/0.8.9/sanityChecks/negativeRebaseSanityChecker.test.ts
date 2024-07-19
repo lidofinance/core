@@ -10,7 +10,7 @@ import {
   AccountingOracle__MockForSanityChecker,
   LidoLocatorMock,
   OracleReportSanityChecker,
-  StakingRouterMockForValidatorsCount,
+  StakingRouter__MockForSanityChecker,
 } from "typechain-types";
 
 import { ether } from "lib";
@@ -21,7 +21,7 @@ describe("OracleReportSanityChecker.sol", () => {
   let locator: LidoLocatorMock;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
-  let stakingRouter: StakingRouterMockForValidatorsCount;
+  let stakingRouter: StakingRouter__MockForSanityChecker;
   let deployer: HardhatEthersSigner;
   let genesisTime: bigint;
   const SLOTS_PER_DAY = 7200;
@@ -70,7 +70,7 @@ describe("OracleReportSanityChecker.sol", () => {
     genesisTime = await accountingOracle.GENESIS_TIME();
     const sanityChecker = deployer.address;
     const burner = await ethers.deployContract("BurnerStub", []);
-    stakingRouter = await ethers.deployContract("StakingRouterMockForValidatorsCount");
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
     locator = await ethers.deployContract("LidoLocatorMock", [
       {
