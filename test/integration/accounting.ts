@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { ether, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { oracleReport } from "lib/protocol/helpers";
+import { report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
@@ -55,7 +55,7 @@ describe("Protocol", () => {
     const { lido, accountingOracle } = ctx.contracts;
 
     const blockBeforeReport = await ethers.provider.getBlockNumber();
-    const { reportTx } = await oracleReport(ctx, { clDiff: 0n, excludeVaultsBalances: true });
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
     const blockAfterReport = await ethers.provider.getBlockNumber();
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
@@ -99,7 +99,7 @@ describe("Protocol", () => {
 
     const blockBeforeReport = await ethers.provider.getBlockNumber();
     const REBASE_AMOUNT = ether("-1000");
-    const { reportTx } = await oracleReport(ctx, { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true });
+    const { reportTx } = await report(ctx, { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true });
     const blockAfterReport = await ethers.provider.getBlockNumber();
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
