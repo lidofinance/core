@@ -26,22 +26,6 @@ describe("Protocol", () => {
     return findEventsWithInterfaces(receipt, eventName, ctx.interfaces);
   };
 
-  // const waitToNextAvailableReportTime = async (consensusContract: IHashConsensus) => {
-  //   const [SLOTS_PER_EPOCH, SECONDS_PER_SLOT, GENESIS_TIME] = await consensusContract.getChainConfig();
-  //   const [refSlot] = await consensusContract.getCurrentFrame();
-  //   const latestBlock = await ethers.provider.getBlock("latest");
-  //   expect(latestBlock).to.not.be.null;
-  //   const latestTime = BigInt(latestBlock!.timestamp);
-
-  //   const [, EPOCHS_PER_FRAME] = await consensusContract.getFrameConfig();
-  //   const frameStartWithOffset = GENESIS_TIME + (refSlot + SLOTS_PER_EPOCH * EPOCHS_PER_FRAME + 1n) * SECONDS_PER_SLOT;
-  //   const sleepDuration = frameStartWithOffset - latestTime;
-  //   await advanceChainTime(Number(sleepDuration));
-
-  //   const [nextRefSlot] = await consensusContract.getCurrentFrame();
-  //   expect(nextRefSlot).to.equal(refSlot + SLOTS_PER_EPOCH * EPOCHS_PER_FRAME);
-  // }
-
   const shareRateFromEvent = (tokenRebasedEvent: LogDescription) => {
     const sharesRateBefore =
       (tokenRebasedEvent.args.preTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.preTotalShares;
