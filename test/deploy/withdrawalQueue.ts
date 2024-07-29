@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   NFTDescriptor__MockForWithdrawalQueue,
   OssifiableProxy,
-  StETHPermit__MockForWithdrawalQueueDeploy,
+  StETHPermit__HarnessForWithdrawalQueueDeploy,
   WithdrawalQueueERC721,
   WstETH__MockForWithdrawalQueueDeploy,
 } from "typechain-types";
@@ -46,7 +46,7 @@ async function deployNftDescriptor() {
 }
 
 async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
-  const stEth = await ethers.deployContract("StETHPermit__MockForWithdrawalQueueDeploy", {
+  const stEth = await ethers.deployContract("StETHPermit__HarnessForWithdrawalQueueDeploy", {
     value: stEthSettings.initialStEth,
   });
 
@@ -117,7 +117,7 @@ export async function deployWithdrawalQueue({
   name: string;
   symbol: string;
   initTx: ContractTransactionResponse | null;
-  stEth: StETHPermit__MockForWithdrawalQueueDeploy;
+  stEth: StETHPermit__HarnessForWithdrawalQueueDeploy;
   stEthAddress: string;
   wstEth: WstETH__MockForWithdrawalQueueDeploy;
   wstEthAddress: string;

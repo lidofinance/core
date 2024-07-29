@@ -11,8 +11,8 @@ import {
   ERC20Token__MockForBurner__factory,
   NFT__GeneralMock,
   NFT__GeneralMock__factory,
-  Steth__MinimalMock,
-  Steth__MinimalMock__factory,
+  StETH__MockForLidoMiscMinimal,
+  StETH__MockForLidoMiscMinimal__factory,
 } from "typechain-types";
 
 import { batch, certainAddress, ether, impersonate } from "lib";
@@ -25,7 +25,7 @@ describe("Burner", () => {
   let stethAsSigner: HardhatEthersSigner;
 
   let burner: Burner;
-  let steth: Steth__MinimalMock;
+  let steth: StETH__MockForLidoMiscMinimal;
   const treasury = certainAddress("test:burner:treasury");
 
   const coverSharesBurnt = 0n;
@@ -34,7 +34,7 @@ describe("Burner", () => {
   beforeEach(async () => {
     [deployer, admin, holder, stranger] = await ethers.getSigners();
 
-    steth = await new Steth__MinimalMock__factory(deployer).deploy(holder, { value: ether("10.0") });
+    steth = await new StETH__MockForLidoMiscMinimal__factory(deployer).deploy(holder, { value: ether("10.0") });
     burner = await new Burner__factory(deployer).deploy(admin, treasury, steth, coverSharesBurnt, nonCoverSharesBurnt);
 
     steth = steth.connect(holder);

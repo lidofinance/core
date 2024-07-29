@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracle__MockForLegacyOracle,
+  AccountingOracle__HarnessForLegacyOracle,
   HashConsensus__MockForLegacyOracle,
   LegacyOracle__Harness,
   LidoLocator,
@@ -36,7 +36,7 @@ describe("LegacyOracle.sol", () => {
 
   let locator: LidoLocator;
   let consensusContract: HashConsensus__MockForLegacyOracle;
-  let accountingOracle: AccountingOracle__MockForLegacyOracle;
+  let accountingOracle: AccountingOracle__HarnessForLegacyOracle;
 
   let lido: string;
 
@@ -59,7 +59,7 @@ describe("LegacyOracle.sol", () => {
       INITIAL_FAST_LANE_LENGTH_SLOTS,
     ]);
 
-    accountingOracle = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
+    accountingOracle = await ethers.deployContract("AccountingOracle__HarnessForLegacyOracle", [
       lido,
       consensusContract,
       SECONDS_PER_SLOT,
@@ -326,7 +326,7 @@ describe("LegacyOracle.sol", () => {
           initialFastLaneLengthSlots,
         ]);
 
-        const accountingOracle = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
+        const accountingOracle = await ethers.deployContract("AccountingOracle__HarnessForLegacyOracle", [
           lido,
           invalidConsensusContract,
           secondsPerSlot,

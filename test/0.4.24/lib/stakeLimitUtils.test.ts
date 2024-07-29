@@ -5,18 +5,18 @@ import { ethers } from "hardhat";
 import { mineUpTo } from "@nomicfoundation/hardhat-network-helpers";
 import { latestBlock } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
-import { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types";
+import { StakeLimitUtils__Harness, StakeLimitUtils__HarnessWithStakeLimitUnstructuredStorage } from "typechain-types";
 
 import { Snapshot } from "test/suite";
 
 describe("StakeLimitUtils.sol", () => {
-  let stakeLimitUnstructuredStorage: StakeLimitUnstructuredStorage__Harness;
+  let stakeLimitUnstructuredStorage: StakeLimitUtils__HarnessWithStakeLimitUnstructuredStorage;
   let stakeLimitUtils: StakeLimitUtils__Harness;
 
   let originalState: string;
 
   before(async () => {
-    stakeLimitUnstructuredStorage = await ethers.deployContract("StakeLimitUnstructuredStorage__Harness");
+    stakeLimitUnstructuredStorage = await ethers.deployContract("StakeLimitUtils__HarnessWithStakeLimitUnstructuredStorage");
     stakeLimitUtils = await ethers.deployContract("StakeLimitUtils__Harness");
   });
 

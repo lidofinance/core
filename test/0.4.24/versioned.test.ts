@@ -3,15 +3,15 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { OssifiableProxy, Versioned__Harness0424, Versioned__Harness0424__factory } from "typechain-types";
+import { OssifiableProxy, VersionedLegacy__Harness, VersionedLegacy__Harness__factory } from "typechain-types";
 
 // TODO: rewrite to be reusable for any derived contract
 describe("Versioned", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let proxy: OssifiableProxy;
-  let impl: Versioned__Harness0424;
-  let versioned: Versioned__Harness0424;
+  let impl: VersionedLegacy__Harness;
+  let versioned: VersionedLegacy__Harness;
 
   const DEFAULT_VERSION = 0n;
   const INIT_VERSION = 1n;
@@ -21,9 +21,9 @@ describe("Versioned", () => {
 
     // because we have two VersionMocks, we have to specify the full path to the contract
     // which for some reason loses the typing
-    impl = await ethers.deployContract("Versioned__Harness0424");
+    impl = await ethers.deployContract("VersionedLegacy__Harness");
     proxy = await ethers.deployContract("OssifiableProxy", [await impl.getAddress(), admin.address, new Uint8Array()], { from: admin });
-    versioned = Versioned__Harness0424__factory.connect(await proxy.getAddress(), user);
+    versioned = VersionedLegacy__Harness__factory.connect(await proxy.getAddress(), user);
   });
 
   it("Implementation is petrified.", async () => {

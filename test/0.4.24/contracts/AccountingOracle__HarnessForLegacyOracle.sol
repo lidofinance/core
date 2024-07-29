@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity >=0.4.24 <0.9.0;
 
 import {AccountingOracle, ILido} from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
-interface ITimeProvider {
-    function getTime() external view returns (uint256);
-}
+import {ITimeProvider} from "./interfaces/ITimeProvider.sol";
 
-contract AccountingOracle__MockForLegacyOracle {
+contract AccountingOracle__HarnessForLegacyOracle {
     address public immutable LIDO;
     address public immutable CONSENSUS_CONTRACT;
     uint256 public immutable SECONDS_PER_SLOT;

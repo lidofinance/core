@@ -4,9 +4,7 @@ pragma solidity 0.4.24;
 
 import {LegacyOracle} from "contracts/0.4.24/oracle/LegacyOracle.sol";
 
-interface ITimeProvider {
-    function getTime() external view returns (uint256);
-}
+import {ITimeProvider} from "./interfaces/ITimeProvider.sol";
 
 contract LegacyOracle__Harness is LegacyOracle {
 

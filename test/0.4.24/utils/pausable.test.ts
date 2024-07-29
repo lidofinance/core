@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { PausableMockWithExposedApi } from "typechain-types";
+import { Pausable__Harness } from "typechain-types";
 
 describe("Pausable", () => {
-  let pausable: PausableMockWithExposedApi;
+  let pausable: Pausable__Harness;
 
   beforeEach(async () => {
-    pausable = await ethers.deployContract("PausableMockWithExposedApi");
+    pausable = await ethers.deployContract("Pausable__Harness");
     expect(await pausable.isStopped()).to.equal(true);
   });
 

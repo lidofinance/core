@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { Steth__MinimalMock__factory } from "typechain-types";
+import { StETH__MockForLidoMiscMinimal__factory } from "typechain-types";
 
 import { ether } from "lib/units";
 
@@ -26,7 +26,7 @@ async function deploy(rebaseFactor: bigint = 100n) {
   const [deployer, holder, recipient, spender] = signers;
   const holderBalance = ether("10.0");
 
-  const factory = new Steth__MinimalMock__factory(deployer);
+  const factory = new StETH__MockForLidoMiscMinimal__factory(deployer);
   const steth = await factory.deploy(holder, { value: holderBalance });
 
   const totalSupply = (holderBalance * rebaseFactor) / 100n;

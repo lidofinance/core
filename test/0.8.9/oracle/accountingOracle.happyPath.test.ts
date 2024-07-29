@@ -8,7 +8,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   AccountingOracleTimeTravellable,
   HashConsensusTimeTravellable,
-  LegacyOracle__MockForAccountingOracle,
+  LegacyOracle__HarnessForAccountingOracle,
   MockLidoForAccountingOracle,
   MockStakingRouterForAccountingOracle,
   MockWithdrawalQueueForAccountingOracle,
@@ -51,7 +51,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     let mockLido: MockLidoForAccountingOracle;
     let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
     let mockStakingRouter: MockStakingRouterForAccountingOracle;
-    let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
+    let mockLegacyOracle: LegacyOracle__HarnessForAccountingOracle;
 
     let extraData: ExtraDataType;
     let extraDataItems: string[];

@@ -28,7 +28,7 @@ export async function deployMockLegacyOracle({
   genesisTime = GENESIS_TIME,
   lastCompletedEpochId = V1_ORACLE_LAST_COMPLETED_EPOCH,
 } = {}) {
-  const legacyOracle = await ethers.deployContract("LegacyOracle__MockForAccountingOracle");
+  const legacyOracle = await ethers.deployContract("LegacyOracle__HarnessForAccountingOracle");
   await legacyOracle.setParams(epochsPerFrame, slotsPerEpoch, secondsPerSlot, genesisTime, lastCompletedEpochId);
   return legacyOracle;
 }

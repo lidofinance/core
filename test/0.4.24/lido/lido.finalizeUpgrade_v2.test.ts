@@ -5,7 +5,11 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Lido__MockForFinalizeUpgradeV2, Lido__MockForFinalizeUpgradeV2__factory, LidoLocator } from "typechain-types";
+import {
+  Lido__HarnessForFinalizeUpgradeV2,
+  Lido__HarnessForFinalizeUpgradeV2__factory,
+  LidoLocator,
+} from "typechain-types";
 
 import { certainAddress, INITIAL_STETH_HOLDER, ONE_ETHER, proxify } from "lib";
 
@@ -15,8 +19,8 @@ describe("Lido:finalizeUpgrade_v2", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  let impl: Lido__MockForFinalizeUpgradeV2;
-  let lido: Lido__MockForFinalizeUpgradeV2;
+  let impl: Lido__HarnessForFinalizeUpgradeV2;
+  let lido: Lido__HarnessForFinalizeUpgradeV2;
   let locator: LidoLocator;
 
   const initialValue = 1n;
@@ -29,7 +33,7 @@ describe("Lido:finalizeUpgrade_v2", () => {
 
   beforeEach(async () => {
     [deployer, user] = await ethers.getSigners();
-    const lidoFactory = new Lido__MockForFinalizeUpgradeV2__factory(deployer);
+    const lidoFactory = new Lido__HarnessForFinalizeUpgradeV2__factory(deployer);
     impl = await lidoFactory.deploy();
     [lido] = await proxify({ impl, admin: deployer });
 
@@ -85,9 +89,9 @@ describe("Lido:finalizeUpgrade_v2", () => {
 
     it("Reverts if the balance of initial holder is zero", async () => {
       // first get someone else's some tokens to avoid division by 0 error
-      await lido.mock__mintSharesWithoutChecks(user, ONE_ETHER);
+      await lido.harness__mintSharesWithoutChecks(user, ONE_ETHER);
       // then burn initial user's tokens
-      await lido.mock__burnInitialHoldersShares();
+      await lido.harness__burnInitialHoldersShares();
 
       await expect(lido.finalizeUpgrade_v2(locator, eip712helperAddress)).to.be.revertedWith("INITIAL_HOLDER_EXISTS");
     });

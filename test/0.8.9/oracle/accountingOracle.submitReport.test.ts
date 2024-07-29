@@ -9,7 +9,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   AccountingOracleTimeTravellable,
   HashConsensusTimeTravellable,
-  LegacyOracle__MockForAccountingOracle,
+  LegacyOracle__HarnessForAccountingOracle,
   MockLidoForAccountingOracle,
   MockStakingRouterForAccountingOracle,
   MockWithdrawalQueueForAccountingOracle,
@@ -53,7 +53,7 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraData: ExtraDataType;
   let mockLido: MockLidoForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
-  let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
+  let mockLegacyOracle: LegacyOracle__HarnessForAccountingOracle;
   let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
   let snapshot: string;
 
