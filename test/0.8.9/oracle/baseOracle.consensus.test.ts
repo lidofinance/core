@@ -127,7 +127,7 @@ describe("BaseOracle:consensus", () => {
         .to.emit(baseOracle, "ConsensusHashContractSet")
         .withArgs(await newConsensusContract.getAddress(), await consensus.getAddress());
 
-      expect(await baseOracle.getConsensusContract()).to.be.equal(await newConsensusContract.getAddress());
+      expect(await baseOracle.getConsensusContract()).to.equal(await newConsensusContract.getAddress());
     });
   });
 
@@ -221,7 +221,7 @@ describe("BaseOracle:consensus", () => {
       const oracleSlot = await baseOracle.getCurrentRefSlot();
       const { refSlot } = await consensus.getCurrentFrame();
 
-      expect(oracleSlot).to.be.equal(refSlot);
+      expect(oracleSlot).to.equal(refSlot);
     });
   });
 });

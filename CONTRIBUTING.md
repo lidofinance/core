@@ -213,7 +213,8 @@ yarn test:integration:trace   # Run all integration tests with trace logging (se
 
 ##### Local setup
 
-This method is used to run integration tests against a local scratch deployment.
+This method is used to run integration tests against a local scratch deployment (
+see [scratch-deploy.md](./docs/scratch-deploy.md)).
 Requires `LOCAL_*` env variables to be set and a local deployment to be running on port `8555`.
 
 ```bash

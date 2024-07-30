@@ -28,4 +28,4 @@ jobs:
       - name: Run integration tests
         run: yarn test:integration:fork
         env:
-          DEBUG_LOGS: true
+          LOG_LEVEL: debug

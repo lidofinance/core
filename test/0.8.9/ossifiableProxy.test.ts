@@ -106,7 +106,7 @@ describe("OssifiableProxy", () => {
         .withArgs(admin.getAddress(), ZeroAddress);
 
       expect(await proxy.proxy__getIsOssified()).to.be.true;
-      expect(await proxy.proxy__getAdmin()).to.be.equal(ZeroAddress);
+      expect(await proxy.proxy__getAdmin()).to.equal(ZeroAddress);
     });
   });
 
@@ -150,13 +150,13 @@ describe("OssifiableProxy", () => {
   });
 
   describe("proxy__upgradeTo()", () => {
-    it('reverts with error "NotAdmin()" called by stranger', async () => {
+    it("reverts with error \"NotAdmin()\" called by stranger", async () => {
       await expect(
         proxy.connect(stranger).proxy__upgradeTo(await currentImpl.getAddress()),
       ).to.be.revertedWithCustomError(proxy, "NotAdmin()");
     });
 
-    it('reverts with error "ProxyIsOssified()" when called on ossified proxy', async () => {
+    it("reverts with error \"ProxyIsOssified()\" when called on ossified proxy", async () => {
       await proxy.connect(admin).proxy__ossify();
 
       expect(await proxy.proxy__getIsOssified()).to.be.true;
@@ -182,13 +182,13 @@ describe("OssifiableProxy", () => {
   });
 
   describe("proxy__upgradeToAndCall()", () => {
-    it('reverts with error "NotAdmin()" when called by stranger', async () => {
+    it("reverts with error \"NotAdmin()\" when called by stranger", async () => {
       await expect(
         proxy.connect(stranger).proxy__upgradeToAndCall(await currentImpl.getAddress(), initPayload, false),
       ).to.be.revertedWithCustomError(proxy, "NotAdmin()");
     });
 
-    it('reverts with error "ProxyIsOssified()" when called on ossified proxy', async () => {
+    it("reverts with error \"ProxyIsOssified()\" when called on ossified proxy", async () => {
       await proxy.connect(admin).proxy__ossify();
 
       expect(await proxy.proxy__getIsOssified()).to.be.true;

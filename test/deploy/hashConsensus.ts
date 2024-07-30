@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { IReportAsyncProcessor } from "typechain-types";
+import { MockReportProcessor } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -12,17 +12,27 @@ import {
   SLOTS_PER_EPOCH,
 } from "lib";
 
+export interface DeployHashConsensusParams {
+  reportProcessor?: MockReportProcessor;
+  slotsPerEpoch?: bigint | undefined;
+  secondsPerSlot?: bigint | undefined;
+  genesisTime?: bigint | undefined;
+  epochsPerFrame?: bigint | undefined;
+  fastLaneLengthSlots?: bigint | undefined;
+  initialEpoch?: bigint | null;
+}
+
 export async function deployHashConsensus(
   admin: string,
   {
-    reportProcessor = null as IReportAsyncProcessor | null,
+    reportProcessor,
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
     epochsPerFrame = EPOCHS_PER_FRAME,
     fastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
     initialEpoch = INITIAL_EPOCH,
-  } = {},
+  }: DeployHashConsensusParams = {},
 ) {
   if (!reportProcessor) {
     reportProcessor = await ethers.deployContract("MockReportProcessor", [CONSENSUS_VERSION]);

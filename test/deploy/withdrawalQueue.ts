@@ -4,11 +4,11 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  NFTDescriptorMock,
+  NFTDescriptor__MockForWithdrawalQueue,
   OssifiableProxy,
-  StETHPermitMock,
+  StETHPermit__MockForWithdrawalQueueDeploy,
   WithdrawalQueueERC721,
-  WstETHMock,
+  WstETH__MockForWithdrawalQueueDeploy,
 } from "typechain-types";
 
 import { ONE_ETHER, proxify, WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "lib";
@@ -40,13 +40,13 @@ interface WithdrawalQueueDeploymentParams extends BaseWithdrawalQueueDeploymentP
 export const MOCK_NFT_DESCRIPTOR_BASE_URI = "https://example-descriptor.com/";
 
 async function deployNftDescriptor() {
-  const nftDescriptor = await ethers.deployContract("NFTDescriptorMock", [MOCK_NFT_DESCRIPTOR_BASE_URI]);
+  const nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [MOCK_NFT_DESCRIPTOR_BASE_URI]);
 
   return { nftDescriptor, nftDescriptorAddress: await nftDescriptor.getAddress() };
 }
 
 async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
-  const stEth = await ethers.deployContract("StETHPermitMock", {
+  const stEth = await ethers.deployContract("StETHPermit__MockForWithdrawalQueueDeploy", {
     value: stEthSettings.initialStEth,
   });
 
@@ -67,7 +67,7 @@ async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
 }
 
 async function deployWstEthMock(stEthAddress: string) {
-  const wstEth = await ethers.deployContract("WstETHMock", [stEthAddress]);
+  const wstEth = await ethers.deployContract("WstETH__MockForWithdrawalQueueDeploy", [stEthAddress]);
   return { wstEth, wstEthAddress: await wstEth.getAddress() };
 }
 
@@ -117,11 +117,11 @@ export async function deployWithdrawalQueue({
   name: string;
   symbol: string;
   initTx: ContractTransactionResponse | null;
-  stEth: StETHPermitMock;
+  stEth: StETHPermit__MockForWithdrawalQueueDeploy;
   stEthAddress: string;
-  wstEth: WstETHMock;
+  wstEth: WstETH__MockForWithdrawalQueueDeploy;
   wstEthAddress: string;
-  nftDescriptor: NFTDescriptorMock;
+  nftDescriptor: NFTDescriptor__MockForWithdrawalQueue;
   nftDescriptorAddress: string;
   proxy: OssifiableProxy;
 }> {

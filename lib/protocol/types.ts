@@ -1,4 +1,4 @@
-import { BaseContract as EthersBaseContract } from "ethers";
+import { BaseContract as EthersBaseContract, ContractTransactionReceipt, LogDescription } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -22,16 +22,33 @@ import {
   WithdrawalVault,
 } from "typechain-types";
 
-type ProtocolNetworkItems = {
+export type ProtocolNetworkItems = {
   locator: string;
-  agent: string;
-  voting: string;
-  easyTrack: string;
-};
-
-export type ProtocolNetworkConfig = {
-  env: Record<keyof ProtocolNetworkItems, string>;
-  defaults: Record<keyof ProtocolNetworkItems, string>;
+  // signers
+  agentAddress: string;
+  votingAddress: string;
+  easyTrackAddress: string;
+  // foundation contracts
+  accountingOracle: string;
+  depositSecurityModule: string;
+  elRewardsVault: string;
+  legacyOracle: string;
+  lido: string;
+  oracleReportSanityChecker: string;
+  burner: string;
+  stakingRouter: string;
+  validatorsExitBusOracle: string;
+  withdrawalQueue: string;
+  withdrawalVault: string;
+  oracleDaemonConfig: string;
+  // aragon contracts
+  kernel: string;
+  acl: string;
+  // stacking modules
+  nor: string;
+  sdvt: string;
+  // hash consensus
+  hashConsensus: string;
 };
 
 export interface ContractTypes {
@@ -63,7 +80,7 @@ export type LoadedContract<T extends BaseContract = BaseContract> = T & {
   address: string;
 };
 
-export type FoundationContracts = {
+export type CoreContracts = {
   accountingOracle: LoadedContract<AccountingOracle>;
   depositSecurityModule: LoadedContract<DepositSecurityModule>;
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
@@ -83,19 +100,22 @@ export type AragonContracts = {
   acl: LoadedContract<ACL>;
 };
 
-export type StackingModulesContracts = {
+export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
 };
+
+export type StakingModuleName = "nor" | "sdvt";
 
 export type HashConsensusContracts = {
   hashConsensus: LoadedContract<HashConsensus>;
 };
 
-export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & FoundationContracts &
-  AragonContracts &
-  StackingModulesContracts &
-  HashConsensusContracts;
+export type ProtocolContracts = { locator: LoadedContract<LidoLocator> }
+  & CoreContracts
+  & AragonContracts
+  & StakingModuleContracts
+  & HashConsensusContracts;
 
 export type ProtocolSigners = {
   agent: string;
@@ -105,9 +125,15 @@ export type ProtocolSigners = {
 
 export type Signer = keyof ProtocolSigners;
 
+export type ProtocolContextFlags = {
+  withSimpleDvtModule: boolean;
+}
+
 export type ProtocolContext = {
   contracts: ProtocolContracts;
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
+  flags: ProtocolContextFlags;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
+  getEvents: (receipt: ContractTransactionReceipt, eventName: string) => LogDescription[];
 };

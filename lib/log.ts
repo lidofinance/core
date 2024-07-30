@@ -23,7 +23,7 @@ const LONG_LINE_LENGTH = 40;
 export const OK = gr("[✓]");
 export const NOT_OK = rd("[×]");
 
-const DEBUG_LOGS = process.env.DEBUG_LOGS || false;
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
 const _line = (length = LINE_LENGTH, minLength = LINE_LENGTH): string => "=".repeat(Math.max(length, minLength));
 
@@ -60,6 +60,8 @@ const _title = (title: string) => log(mg(title));
 const _record = (label: string, value: ConvertibleToString) => log(`${chalk.grey(label)}: ${yl(value.toString())}`);
 
 // TODO: add logging to file
+
+// TODO: fix log levels
 
 log.noEOL = (...args: ConvertibleToString[]) => process.stdout.write(args.toString() + " ");
 
@@ -105,7 +107,7 @@ log.done = (message: string) => {
 };
 
 log.debug = (title: string, records: Record<string, ConvertibleToString>) => {
-  if (!DEBUG_LOGS) return;
+  if (LOG_LEVEL != "debug" && LOG_LEVEL != "all") return;
 
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));

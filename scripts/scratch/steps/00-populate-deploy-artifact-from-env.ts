@@ -1,8 +1,7 @@
 import { ethers } from "hardhat";
 
-import { log, Sk } from "lib";
-
-import { persistNetworkState, readNetworkState } from "../../../lib/state-file";
+import { log } from "lib";
+import { persistNetworkState, readNetworkState, Sk } from "lib/state-file";
 
 function getEnvVariable(name: string, defaultValue?: string) {
   const value = process.env[name];

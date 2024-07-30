@@ -36,10 +36,10 @@ describe("StakeLimitUtils.sol", () => {
         await expect(tx).to.emit(stakeLimitUnstructuredStorage, "DataSet").withArgs(0n, 0n, 0n, 0n);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(0n);
-        expect(verifyValues.prevStakeLimit).to.be.equal(0n);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(0n);
-        expect(verifyValues.maxStakeLimit).to.be.equal(0n);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(0n);
+        expect(verifyValues.prevStakeLimit).to.equal(0n);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(0n);
+        expect(verifyValues.maxStakeLimit).to.equal(0n);
       });
 
       it("Max possible values", async () => {
@@ -57,10 +57,10 @@ describe("StakeLimitUtils.sol", () => {
           .withArgs(MAX_UINT32, MAX_UINT96, MAX_UINT32, MAX_UINT96);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(MAX_UINT32);
-        expect(verifyValues.prevStakeLimit).to.be.equal(MAX_UINT96);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(MAX_UINT32);
-        expect(verifyValues.maxStakeLimit).to.be.equal(MAX_UINT96);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(MAX_UINT32);
+        expect(verifyValues.prevStakeLimit).to.equal(MAX_UINT96);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(MAX_UINT32);
+        expect(verifyValues.maxStakeLimit).to.equal(MAX_UINT96);
       });
 
       it("Arbitrary valid values", async () => {
@@ -80,10 +80,10 @@ describe("StakeLimitUtils.sol", () => {
           .withArgs(prevStakeBlockNumber, prevStakeLimit, maxStakeLimitGrowthBlocks, maxStakeLimit);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
-        expect(verifyValues.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
-        expect(verifyValues.maxStakeLimit).to.be.equal(maxStakeLimit);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(prevStakeBlockNumber);
+        expect(verifyValues.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
+        expect(verifyValues.maxStakeLimit).to.equal(maxStakeLimit);
       });
     });
 
@@ -98,16 +98,16 @@ describe("StakeLimitUtils.sol", () => {
         await expect(tx).to.emit(stakeLimitUnstructuredStorage, "DataSet").withArgs(0n, 0n, 0n, 0n);
 
         const values = await stakeLimitUnstructuredStorage.getStorageStakeLimit();
-        expect(values.prevStakeBlockNumber).to.be.equal(0n);
-        expect(values.prevStakeLimit).to.be.equal(0n);
-        expect(values.maxStakeLimitGrowthBlocks).to.be.equal(0n);
-        expect(values.maxStakeLimit).to.be.equal(0n);
+        expect(values.prevStakeBlockNumber).to.equal(0n);
+        expect(values.prevStakeLimit).to.equal(0n);
+        expect(values.maxStakeLimitGrowthBlocks).to.equal(0n);
+        expect(values.maxStakeLimit).to.equal(0n);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(0n);
-        expect(verifyValues.prevStakeLimit).to.be.equal(0n);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(0n);
-        expect(verifyValues.maxStakeLimit).to.be.equal(0n);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(0n);
+        expect(verifyValues.prevStakeLimit).to.equal(0n);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(0n);
+        expect(verifyValues.maxStakeLimit).to.equal(0n);
       });
 
       it("Max possible values", async () => {
@@ -125,16 +125,16 @@ describe("StakeLimitUtils.sol", () => {
           .withArgs(MAX_UINT32, MAX_UINT96, MAX_UINT32, MAX_UINT96);
 
         const values = await stakeLimitUnstructuredStorage.getStorageStakeLimit();
-        expect(values.prevStakeBlockNumber).to.be.equal(MAX_UINT32);
-        expect(values.prevStakeLimit).to.be.equal(MAX_UINT96);
-        expect(values.maxStakeLimitGrowthBlocks).to.be.equal(MAX_UINT32);
-        expect(values.maxStakeLimit).to.be.equal(MAX_UINT96);
+        expect(values.prevStakeBlockNumber).to.equal(MAX_UINT32);
+        expect(values.prevStakeLimit).to.equal(MAX_UINT96);
+        expect(values.maxStakeLimitGrowthBlocks).to.equal(MAX_UINT32);
+        expect(values.maxStakeLimit).to.equal(MAX_UINT96);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(MAX_UINT32);
-        expect(verifyValues.prevStakeLimit).to.be.equal(MAX_UINT96);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(MAX_UINT32);
-        expect(verifyValues.maxStakeLimit).to.be.equal(MAX_UINT96);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(MAX_UINT32);
+        expect(verifyValues.prevStakeLimit).to.equal(MAX_UINT96);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(MAX_UINT32);
+        expect(verifyValues.maxStakeLimit).to.equal(MAX_UINT96);
       });
 
       it("Arbitrary valid values", async () => {
@@ -154,16 +154,16 @@ describe("StakeLimitUtils.sol", () => {
           .withArgs(prevStakeBlockNumber, prevStakeLimit, maxStakeLimitGrowthBlocks, maxStakeLimit);
 
         const values = await stakeLimitUnstructuredStorage.getStorageStakeLimit();
-        expect(values.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
-        expect(values.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(values.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
-        expect(values.maxStakeLimit).to.be.equal(maxStakeLimit);
+        expect(values.prevStakeBlockNumber).to.equal(prevStakeBlockNumber);
+        expect(values.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(values.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
+        expect(values.maxStakeLimit).to.equal(maxStakeLimit);
 
         const verifyValues = await stakeLimitUnstructuredStorage.harness__getStorageStakeLimit();
-        expect(verifyValues.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
-        expect(verifyValues.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(verifyValues.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
-        expect(verifyValues.maxStakeLimit).to.be.equal(maxStakeLimit);
+        expect(verifyValues.prevStakeBlockNumber).to.equal(prevStakeBlockNumber);
+        expect(verifyValues.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(verifyValues.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
+        expect(verifyValues.maxStakeLimit).to.equal(maxStakeLimit);
       });
     });
   });
@@ -193,7 +193,7 @@ describe("StakeLimitUtils.sol", () => {
       it("zero state results in zero limit", async () => {
         await stakeLimitUtils.harness_setState(0n, 0n, 0n, 0n);
 
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(0n);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(0n);
       });
 
       it("zero block increment results in static limit", async () => {
@@ -201,14 +201,14 @@ describe("StakeLimitUtils.sol", () => {
         const prevStakeBlockNumber1 = 10000n;
 
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber1, staticStakeLimit, 0n, staticStakeLimit);
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(staticStakeLimit);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
 
         const prevStakeBlockNumber2 = 11000n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber2, staticStakeLimit, 0n, staticStakeLimit);
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(staticStakeLimit);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
 
         await mineUpTo(123n + BigInt(await latestBlock()));
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(staticStakeLimit);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
       });
 
       it("the full limit gets restored after growth blocks", async () => {
@@ -216,20 +216,20 @@ describe("StakeLimitUtils.sol", () => {
         const baseStakeLimit = 0n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, 0n, maxStakeLimitGrowthBlocks, maxStakeLimit);
         // 1 block passed due to the setter call above
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
           maxStakeLimit / maxStakeLimitGrowthBlocks,
         );
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
           baseStakeLimit + maxStakeLimitGrowthBlocks * (maxStakeLimit / maxStakeLimitGrowthBlocks),
         );
 
         // move forward one more block to account for rounding and reach max
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
         // growth blocks mined, the limit should be full
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(maxStakeLimit);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit);
       });
 
       it("the whole limit can be consumed", async () => {
@@ -251,7 +251,7 @@ describe("StakeLimitUtils.sol", () => {
             maxStakeLimit,
           );
 
-          expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.be.equal(
+          expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
             curPrevStakeLimit + maxStakeLimit / maxStakeLimitGrowthBlocks,
           );
         }
@@ -308,11 +308,11 @@ describe("StakeLimitUtils.sol", () => {
 
           const state = await stakeLimitUtils.harness_getState();
 
-          expect(state.prevStakeBlockNumber).to.be.equal(baseStakeBlockNumber);
-          expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
-          expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+          expect(state.prevStakeBlockNumber).to.equal(baseStakeBlockNumber);
+          expect(state.maxStakeLimit).to.equal(maxStakeLimit);
+          expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
           // prev stake limit reset
-          expect(state.prevStakeLimit).to.be.equal(maxStakeLimit);
+          expect(state.prevStakeLimit).to.equal(maxStakeLimit);
         });
 
         it("staking was unlimited", async () => {
@@ -333,11 +333,11 @@ describe("StakeLimitUtils.sol", () => {
 
           const state = await stakeLimitUtils.harness_getState();
 
-          expect(state.prevStakeBlockNumber).to.be.equal(updatedBlock);
-          expect(state.maxStakeLimit).to.be.equal(updatedMaxStakeLimit);
-          expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+          expect(state.prevStakeBlockNumber).to.equal(updatedBlock);
+          expect(state.maxStakeLimit).to.equal(updatedMaxStakeLimit);
+          expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
           // prev stake limit reset
-          expect(state.prevStakeLimit).to.be.equal(updatedMaxStakeLimit);
+          expect(state.prevStakeLimit).to.equal(updatedMaxStakeLimit);
         });
 
         it("new max is lower than the prev stake limit", async () => {
@@ -350,11 +350,11 @@ describe("StakeLimitUtils.sol", () => {
 
           const state = await stakeLimitUtils.harness_getState();
 
-          expect(state.prevStakeBlockNumber).to.be.equal(updatedBlock);
-          expect(state.maxStakeLimit).to.be.equal(updatedMaxStakeLimit);
-          expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+          expect(state.prevStakeBlockNumber).to.equal(updatedBlock);
+          expect(state.maxStakeLimit).to.equal(updatedMaxStakeLimit);
+          expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
           // prev stake limit reset
-          expect(state.prevStakeLimit).to.be.equal(updatedMaxStakeLimit);
+          expect(state.prevStakeLimit).to.equal(updatedMaxStakeLimit);
         });
       });
 
@@ -366,12 +366,12 @@ describe("StakeLimitUtils.sol", () => {
 
         const state = await stakeLimitUtils.harness_getState();
 
-        expect(state.prevStakeBlockNumber).to.be.equal(updatedBlock);
-        expect(state.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
+        expect(state.prevStakeBlockNumber).to.equal(updatedBlock);
+        expect(state.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(state.maxStakeLimit).to.equal(maxStakeLimit);
 
         // the growth blocks number is zero
-        expect(state.maxStakeLimitGrowthBlocks).to.be.equal(0n);
+        expect(state.maxStakeLimitGrowthBlocks).to.equal(0n);
       });
 
       it("same prev stake limit", async () => {
@@ -383,10 +383,10 @@ describe("StakeLimitUtils.sol", () => {
 
         const state = await stakeLimitUtils.harness_getState();
 
-        expect(state.prevStakeBlockNumber).to.be.equal(updatedBlock);
-        expect(state.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
-        expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+        expect(state.prevStakeBlockNumber).to.equal(updatedBlock);
+        expect(state.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(state.maxStakeLimit).to.equal(maxStakeLimit);
+        expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
       });
     });
 
@@ -396,10 +396,10 @@ describe("StakeLimitUtils.sol", () => {
 
         const state = await stakeLimitUtils.harness_getState();
 
-        expect(state.prevStakeBlockNumber).to.be.equal(prevStakeBlockNumber);
-        expect(state.prevStakeLimit).to.be.equal(prevStakeLimit);
-        expect(state.maxStakeLimit).to.be.equal(0n); // unlimited
-        expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+        expect(state.prevStakeBlockNumber).to.equal(prevStakeBlockNumber);
+        expect(state.prevStakeLimit).to.equal(prevStakeLimit);
+        expect(state.maxStakeLimit).to.equal(0n); // unlimited
+        expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
       });
     });
 
@@ -421,20 +421,20 @@ describe("StakeLimitUtils.sol", () => {
 
         const state = await stakeLimitUtils.harness_getState();
 
-        expect(state.prevStakeBlockNumber).to.be.equal(stakeBlockNumber);
-        expect(state.prevStakeLimit).to.be.equal(updatedValue);
-        expect(state.maxStakeLimit).to.be.equal(maxStakeLimit);
-        expect(state.maxStakeLimitGrowthBlocks).to.be.equal(maxStakeLimitGrowthBlocks);
+        expect(state.prevStakeBlockNumber).to.equal(stakeBlockNumber);
+        expect(state.prevStakeLimit).to.equal(updatedValue);
+        expect(state.maxStakeLimit).to.equal(maxStakeLimit);
+        expect(state.maxStakeLimitGrowthBlocks).to.equal(maxStakeLimitGrowthBlocks);
       });
     });
 
     context("const gas min", () => {
       it("behaves like `min`", async () => {
-        expect(await stakeLimitUtils.constGasMin(0n, 0n)).to.be.equal(0n);
-        expect(await stakeLimitUtils.constGasMin(0n, 2n ** 256n - 1n)).to.be.equal(0n);
-        expect(await stakeLimitUtils.constGasMin(2n ** 256n - 1n, 0n)).to.be.equal(0n);
-        expect(await stakeLimitUtils.constGasMin(10n, 1000n)).to.be.equal(10n);
-        expect(await stakeLimitUtils.constGasMin(1000n, 10n)).to.be.equal(10n);
+        expect(await stakeLimitUtils.constGasMin(0n, 0n)).to.equal(0n);
+        expect(await stakeLimitUtils.constGasMin(0n, 2n ** 256n - 1n)).to.equal(0n);
+        expect(await stakeLimitUtils.constGasMin(2n ** 256n - 1n, 0n)).to.equal(0n);
+        expect(await stakeLimitUtils.constGasMin(10n, 1000n)).to.equal(10n);
+        expect(await stakeLimitUtils.constGasMin(1000n, 10n)).to.equal(10n);
       });
     });
   });
