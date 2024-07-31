@@ -8,6 +8,8 @@ import { report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
+const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
+
 const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 const ONE_DAY = 86400n;
 const MAX_BASIS_POINTS = 10000n;
@@ -38,6 +40,14 @@ describe("Protocol", () => {
 
   const roundToGwei = (value: bigint) => {
     return (value / ONE_GWEI) * ONE_GWEI;
+  };
+
+  const rebaseLimitWei = async (blockNumber: number) => {
+    const { oracleReportSanityChecker, lido } = ctx.contracts;
+
+    const maxPositiveTokeRebase = await oracleReportSanityChecker.getMaxPositiveTokenRebase();
+    const totalPooledEther = await lido.getTotalPooledEther({ blockTag: blockNumber });
+    return (maxPositiveTokeRebase * totalPooledEther) / LIMITER_PRECISION_BASE;
   };
 
   it("Should account correctly with no CL rebase", async () => {
@@ -205,5 +215,24 @@ describe("Protocol", () => {
     expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
       postTotalSharesEvent[0].args.postTotalPooledEther + withdrawalsFinalized[0].args.amountOfETHLocked,
     );
+  });
+
+  it("Should reverts report on sanity checks", async () => {
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
+
+    const blockBeforeReport = await ethers.provider.getBlockNumber();
+
+    const maxCLRebaseViaLimiter = await rebaseLimitWei(blockBeforeReport);
+    const annualIncreaseLimit = (await oracleReportSanityChecker.getOracleReportLimits()).annualBalanceIncreaseBPLimit;
+    const preCLBalance = (await lido.getBeaconStat()).slice(-1)[0];
+
+    const rebaseAmount =
+      (((annualIncreaseLimit + 1n) * ONE_DAY + 1n) * preCLBalance) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+
+    expect(maxCLRebaseViaLimiter).to.be.greaterThan(rebaseAmount);
+
+    await expect(report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true }))
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)")
+      .withArgs(1001);
   });
 });
