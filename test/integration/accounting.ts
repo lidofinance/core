@@ -232,4 +232,38 @@ describe("Protocol", () => {
       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)")
       .withArgs(1001);
   });
+
+  it("Should account correctly if no EL rewards", async () => {
+    const { lido, accountingOracle } = ctx.contracts;
+
+    const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
+    const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
+    const totalPooledEtherBefore = await lido.getTotalPooledEther();
+    const totalSharesBefore = await lido.getTotalShares();
+    const ethBalanceBefore = await ethers.provider.getBalance(lido.address);
+
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
+    const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+
+    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
+    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
+    expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
+
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
+    expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
+
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
+    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+
+    const totalSharesAfter = await lido.getTotalShares();
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+
+    const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
+    expect(ethBalanceBefore).to.equal(ethBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+
+    expect(getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
+    expect(getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
+  });
 });
