@@ -53,22 +53,20 @@ describe("Protocol", () => {
   it("Should account correctly with no CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
-    const blockBeforeReport = await ethers.provider.getBlockNumber();
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
     const totalPooledEtherBefore = await lido.getTotalPooledEther();
     const totalSharesBefore = await lido.getTotalShares();
-    const ethBalanceBefore = await ethers.provider.getBalance(lido.address, blockBeforeReport);
+    const ethBalanceBefore = await ethers.provider.getBalance(lido.address);
 
     // Report
     const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
-    const blockAfterReport = await ethers.provider.getBlockNumber();
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
     const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
 
-    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot({ blockTag: blockAfterReport });
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
 
     const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected({ blockTag: blockAfterReport });
@@ -89,7 +87,7 @@ describe("Protocol", () => {
       postTotalSharesEvent[0].args.postTotalPooledEther + withdrawalsFinalized[0].args.amountOfETHLocked,
     );
 
-    const ethBalanceAfter = await ethers.provider.getBalance(lido.address, blockAfterReport);
+    const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
   });
 
