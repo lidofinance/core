@@ -69,13 +69,13 @@ describe("Protocol", () => {
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
 
-    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected({ blockTag: blockAfterReport });
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
-    const totalPooledEtherAfter = await lido.getTotalPooledEther({ blockTag: blockAfterReport });
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
 
-    const totalSharesAfter = await lido.getTotalShares({ blockTag: blockAfterReport });
+    const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
 
     const tokenRebasedEvent = getEvents(reportTxReceipt, "TokenRebased");
@@ -103,24 +103,23 @@ describe("Protocol", () => {
 
     // Report
     const { reportTx } = await report(ctx, { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true });
-    const blockAfterReport = await ethers.provider.getBlockNumber();
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
     const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
 
-    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot({ blockTag: blockAfterReport });
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
 
-    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected({ blockTag: blockAfterReport });
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
-    const totalPooledEtherAfter = await lido.getTotalPooledEther({ blockTag: blockAfterReport });
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + REBASE_AMOUNT).to.equal(
       totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
     );
 
-    const totalSharesAfter = await lido.getTotalShares({ blockTag: blockAfterReport });
+    const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
 
     const tokenRebasedEvent = getEvents(reportTxReceipt, "TokenRebased");
