@@ -42,11 +42,11 @@ describe("Protocol", () => {
     return (value / ONE_GWEI) * ONE_GWEI;
   };
 
-  const rebaseLimitWei = async (blockNumber: number) => {
+  const rebaseLimitWei = async () => {
     const { oracleReportSanityChecker, lido } = ctx.contracts;
 
     const maxPositiveTokeRebase = await oracleReportSanityChecker.getMaxPositiveTokenRebase();
-    const totalPooledEther = await lido.getTotalPooledEther({ blockTag: blockNumber });
+    const totalPooledEther = await lido.getTotalPooledEther();
     return (maxPositiveTokeRebase * totalPooledEther) / LIMITER_PRECISION_BASE;
   };
 
@@ -217,9 +217,7 @@ describe("Protocol", () => {
   it("Should reverts report on sanity checks", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
-    const blockBeforeReport = await ethers.provider.getBlockNumber();
-
-    const maxCLRebaseViaLimiter = await rebaseLimitWei(blockBeforeReport);
+    const maxCLRebaseViaLimiter = await rebaseLimitWei();
     const annualIncreaseLimit = (await oracleReportSanityChecker.getOracleReportLimits()).annualBalanceIncreaseBPLimit;
     const preCLBalance = (await lido.getBeaconStat()).slice(-1)[0];
 
@@ -315,11 +313,9 @@ describe("Protocol", () => {
   });
 
   it("Should account correctly EL rewards at limits", async () => {
-    const { lido, oracleReportSanityChecker, accountingOracle, elRewardsVault } = ctx.contracts;
+    const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
-    const elRewards =
-      ((await oracleReportSanityChecker.getMaxPositiveTokenRebase()) * (await lido.getTotalPooledEther())) /
-      LIMITER_PRECISION_BASE;
+    const elRewards = await rebaseLimitWei();
 
     await impersonate(elRewardsVault.address, elRewards);
 
