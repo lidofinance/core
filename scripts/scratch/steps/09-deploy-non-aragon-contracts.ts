@@ -201,7 +201,7 @@ async function main() {
   // === Accounting ===
   //
   const accounting = await deployWithoutProxy(Sk.accounting, "Accounting", deployer, [locator.address, lidoAddress]);
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === AccountingOracle ===
