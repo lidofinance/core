@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, LogDescription } from "ethers";
 import { ethers } from "hardhat";
 
-import { ether, findEventsWithInterfaces, ONE_GWEI } from "lib";
+import { ether, findEventsWithInterfaces, impersonate, ONE_GWEI } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { report } from "lib/protocol/helpers";
 
@@ -276,6 +276,52 @@ describe("Protocol", () => {
 
     const elRewards = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elRewards).to.be.greaterThan(0);
+
+    const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
+    const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
+    const totalPooledEtherBefore = await lido.getTotalPooledEther();
+    const totalSharesBefore = await lido.getTotalShares();
+    const lidoBalanceBefore = await ethers.provider.getBalance(lido.address);
+
+    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: false });
+
+    const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+
+    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
+    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
+    expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
+
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
+    expect(totalELRewardsCollectedBefore + elRewards).to.equal(totalELRewardsCollectedAfter);
+
+    const elRewardsReceivedEvent = await getEvents(reportTxReceipt, "ELRewardsReceived")[0];
+    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
+
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
+    expect(totalPooledEtherBefore + elRewards).to.equal(
+      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+    );
+
+    const totalSharesAfter = await lido.getTotalShares();
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+
+    const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+
+    const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
+    expect(elVaultBalanceAfter).to.equal(0);
+  });
+
+  it("Should account correctly EL rewards at limits", async () => {
+    const { lido, oracleReportSanityChecker, accountingOracle, elRewardsVault } = ctx.contracts;
+
+    const elRewards =
+      ((await oracleReportSanityChecker.getMaxPositiveTokenRebase()) * (await lido.getTotalPooledEther())) /
+      LIMITER_PRECISION_BASE;
+
+    await impersonate(elRewardsVault.address, elRewards);
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
