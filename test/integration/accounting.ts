@@ -355,4 +355,52 @@ describe("Protocol", () => {
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0);
   });
+
+  it("Should account correctly EL rewards above limits", async () => {
+    const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
+
+    const rewardsExcess = ether("10");
+    const expectedRewards = await rebaseLimitWei();
+    const elRewards = expectedRewards + rewardsExcess;
+
+    await impersonate(elRewardsVault.address, elRewards);
+
+    const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
+    const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
+    const totalPooledEtherBefore = await lido.getTotalPooledEther();
+    const totalSharesBefore = await lido.getTotalShares();
+    const lidoBalanceBefore = await ethers.provider.getBalance(lido.address);
+
+    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: false });
+
+    const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+
+    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
+    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
+    expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
+
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
+    expect(totalELRewardsCollectedBefore + expectedRewards).to.equal(totalELRewardsCollectedAfter);
+
+    const elRewardsReceivedEvent = await getEvents(reportTxReceipt, "ELRewardsReceived")[0];
+    expect(elRewardsReceivedEvent.args.amount).to.equal(expectedRewards);
+
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
+    expect(totalPooledEtherBefore + expectedRewards).to.equal(
+      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+    );
+
+    const totalSharesAfter = await lido.getTotalShares();
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+
+    const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
+    expect(lidoBalanceBefore + expectedRewards).equal(
+      lidoBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+    );
+
+    const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
+    expect(elVaultBalanceAfter).to.equal(rewardsExcess);
+  });
 });
