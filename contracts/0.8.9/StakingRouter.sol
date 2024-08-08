@@ -1049,9 +1049,9 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         return _getStakingModuleById(_stakingModuleId).minDepositBlockDistance;
     }
 
-    /// @notice Returns the max deposit block distance for the staking module.
+    /// @notice Returns the max deposits count per block for the staking module.
     /// @param _stakingModuleId Id of the staking module.
-    /// @return Max deposit block distance for the staking module.
+    /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
         return _getStakingModuleById(_stakingModuleId).maxDepositsPerBlock;
     }
@@ -1421,7 +1421,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
             for (uint256 i; i < stakingModulesCount; ) {
                 allocations[i] = stakingModulesCache[i].activeValidatorsCount;
-                targetValidators = (stakingModulesCache[i].stakeShareLimit * totalActiveValidators) / TOTAL_BASIS_POINTS;
+                targetValidators = (stakingModulesCache[i].  * totalActiveValidators) / TOTAL_BASIS_POINTS;
                 capacities[i] = Math256.min(targetValidators, stakingModulesCache[i].activeValidatorsCount + stakingModulesCache[i].availableValidatorsCount);
 
                 unchecked {
