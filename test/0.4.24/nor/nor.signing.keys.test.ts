@@ -10,9 +10,11 @@ import {
   Lido,
   LidoLocator,
   LidoLocator__factory,
+  MinFirstAllocationStrategy__factory,
   NodeOperatorsRegistry__Harness,
   NodeOperatorsRegistry__Harness__factory,
 } from "typechain-types";
+import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
 
 import {
   addNodeOperator,
@@ -71,7 +73,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       stuckPenaltyEndAt: 0n,
     },
     {
-      name: " bar",
+      name: "bar",
       rewardAddress: certainAddress("node-operator-2"),
       totalSigningKeysCount: 12n,
       depositedSigningKeysCount: 7n,
@@ -125,7 +127,12 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       },
     }));
 
-    impl = await new NodeOperatorsRegistry__Harness__factory(deployer).deploy();
+    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
+    const allocLibAddr: NodeOperatorsRegistryLibraryAddresses = {
+      ["__contracts/common/lib/MinFirstAllocat__"]: await allocLib.getAddress(),
+    };
+
+    impl = await new NodeOperatorsRegistry__Harness__factory(allocLibAddr, deployer).deploy();
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -342,19 +349,6 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       await expect(
         addKeysFn(nor.connect(signingKeysManager), 0n, keysCount - 1, publicKeys, signatures),
       ).to.be.revertedWith("LENGTH_MISMATCH");
-    });
-
-    it("Reverts if too many keys in total across node operators", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
-        thirdNodeOperatorId,
-      );
-
-      const keysCount = 1;
-      const [publicKeys, signatures] = thirdNOKeys.slice(0, keysCount);
-
-      await expect(
-        addKeysFn(nor.connect(signingKeysManager), thirdNodeOperatorId, keysCount, publicKeys, signatures),
-      ).to.be.revertedWith("PACKED_OVERFLOW");
     });
 
     it("Reverts if too many keys passed for a single node operator", async () => {

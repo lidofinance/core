@@ -26,7 +26,7 @@ export const EPOCHS_PER_FRAME = 225n; // one day;
 // Oracle report related
 export const GENESIS_TIME = 100n;
 export const SLOTS_PER_EPOCH = 32n;
-export const CONSENSUS_VERSION = 1n;
+export const CONSENSUS_VERSION = 2n;
 export const INITIAL_EPOCH = 1n;
 export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0n;
 

@@ -23,7 +23,7 @@ interface IStakingModule {
 
     /// @notice Returns all-validators summary belonging to the node operator with the given id
     /// @param _nodeOperatorId id of the operator to return report for
-    /// @return isTargetLimitActive shows whether the current target limit applied to the node operator
+    /// @return targetLimitMode shows whether the current target limit applied to the node operator (0 = disabled, 1 = soft mode, 2 = forced mode)
     /// @return targetValidatorsCount relative target active validators limit for operator
     /// @return stuckValidatorsCount number of validators with an expired request to exit time
     /// @return refundedValidatorsCount number of validators that can't be withdrawn, but deposit
@@ -37,7 +37,7 @@ interface IStakingModule {
     ///     EXITED state this counter is not decreasing
     /// @return depositableValidatorsCount number of validators in the set available for deposit
     function getNodeOperatorSummary(uint256 _nodeOperatorId) external view returns (
-        bool isTargetLimitActive,
+        uint256 targetLimitMode,
         uint256 targetValidatorsCount,
         uint256 stuckValidatorsCount,
         uint256 refundedValidatorsCount,
@@ -86,6 +86,14 @@ interface IStakingModule {
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
     function onRewardsMinted(uint256 _totalShares) external;
 
+    /// @notice Called by StakingRouter to decrease the number of vetted keys for node operator with given id
+    /// @param _nodeOperatorIds bytes packed array of the node operators id
+    /// @param _vettedSigningKeysCounts bytes packed array of the new number of vetted keys for the node operators
+    function decreaseVettedSigningKeysCount(
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
+
     /// @notice Updates the number of the validators of the given node operator that were requested
     ///         to exit but failed to do so in the max allowed time
     /// @param _nodeOperatorIds bytes packed array of the node operators id
@@ -97,10 +105,10 @@ interface IStakingModule {
 
     /// @notice Updates the number of the validators in the EXITED state for node operator with given id
     /// @param _nodeOperatorIds bytes packed array of the node operators id
-        /// @param _stuckValidatorsCounts bytes packed array of the new number of EXITED validators for the node operators
+    /// @param _exitedValidatorsCounts bytes packed array of the new number of EXITED validators for the node operators
     function updateExitedValidatorsCount(
         bytes calldata _nodeOperatorIds,
-        bytes calldata _stuckValidatorsCounts
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     /// @notice Updates the number of the refunded validators for node operator with the given id
@@ -110,11 +118,11 @@ interface IStakingModule {
 
     /// @notice Updates the limit of the validators that can be used for deposit
     /// @param _nodeOperatorId Id of the node operator
-    /// @param _isTargetLimitActive Active flag
+    /// @param _targetLimitMode target limit mode
     /// @param _targetLimit Target limit of the node operator
     function updateTargetValidatorsLimits(
         uint256 _nodeOperatorId,
-        bool _isTargetLimitActive,
+        uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external;
 
@@ -163,4 +171,10 @@ interface IStakingModule {
 
     /// @dev Event to be emitted on StakingModule's nonce change
     event NonceChanged(uint256 nonce);
+
+    /// @dev Event to be emitted when a signing key is added to the StakingModule
+    event SigningKeyAdded(uint256 indexed nodeOperatorId, bytes pubkey);
+
+    /// @dev Event to be emitted when a signing key is removed from the StakingModule
+    event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
 }

@@ -1,6 +1,6 @@
 import { bigintToHex } from "bigint-conversion";
 import { assert } from "chai";
-import { keccak256 } from "ethers";
+import { keccak256, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { AccountingOracle, HashConsensus } from "typechain-types";
@@ -9,12 +9,23 @@ import { CONSENSUS_VERSION } from "lib/constants";
 
 import { numberToHex } from "./string";
 
+function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < inputArray.length; i += maxItemsPerChunk) {
+    const chunk: T[] = inputArray.slice(i, i + maxItemsPerChunk);
+    result.push(chunk);
+  }
+  return result;
+}
+
 export type OracleReport = AccountingOracle.ReportDataStruct;
 
 export type ReportAsArray = ReturnType<typeof getReportDataItems>;
 
 export type KeyType = { moduleId: number; nodeOpIds: number[]; keysCounts: number[] };
 export type ExtraDataType = { stuckKeys: KeyType[]; exitedKeys: KeyType[] };
+
+export type ItemType = KeyType & { type: bigint };
 
 export const EXTRA_DATA_FORMAT_EMPTY = 0n;
 export const EXTRA_DATA_FORMAT_LIST = 1n;
@@ -126,17 +137,6 @@ export async function reportOracle(
   return { report, submitDataTx, submitExtraDataTx };
 }
 
-// FIXME: kept for compat, remove after refactoring tests
-export function pushOracleReport(
-  consensus: HashConsensus,
-  oracle: AccountingOracle,
-  numValidators: bigint,
-  clBalance: bigint,
-  elRewardsVaultBalance: bigint,
-) {
-  return reportOracle(consensus, oracle, { numValidators, clBalance, elRewardsVaultBalance });
-}
-
 export function encodeExtraDataItem(
   itemIndex: number,
   itemType: bigint,
@@ -151,21 +151,117 @@ export function encodeExtraDataItem(
   return "0x" + itemHeader + payloadHeader + operatorIdsPayload + keysCountsPayload;
 }
 
+export function encodeExtraDataItemsArray(items: ItemType[]): string[] {
+  return items.map((item, index) =>
+    encodeExtraDataItem(index, item.type, item.moduleId, item.nodeOpIds, item.keysCounts),
+  );
+}
+
 export function encodeExtraDataItems(data: ExtraDataType) {
-  const items: string[] = [];
-  const encodeItem = (item: KeyType, type: bigint) =>
-    encodeExtraDataItem(items.length, type, item.moduleId, item.nodeOpIds, item.keysCounts);
-  data.stuckKeys.forEach((item: KeyType) => items.push(encodeItem(item, EXTRA_DATA_TYPE_STUCK_VALIDATORS)));
-  data.exitedKeys.forEach((item: KeyType) => items.push(encodeItem(item, EXTRA_DATA_TYPE_EXITED_VALIDATORS)));
-  return items;
+  const itemsWithType: ItemType[] = [];
+
+  const toItemWithType = (keys: KeyType[], type: bigint) => keys.map((item) => ({ ...item, type }));
+
+  itemsWithType.push(...toItemWithType(data.stuckKeys, EXTRA_DATA_TYPE_STUCK_VALIDATORS));
+  itemsWithType.push(...toItemWithType(data.exitedKeys, EXTRA_DATA_TYPE_EXITED_VALIDATORS));
+
+  return encodeExtraDataItemsArray(itemsWithType);
+}
+
+function packChunk(extraDataItems: string[], nextHash: string) {
+  const extraDataItemsBytes = extraDataItems.map((s) => s.substring(2)).join("");
+  return `${nextHash}${extraDataItemsBytes}`;
+}
+
+export function packExtraDataItemsToChunksLinkedByHash(extraDataItems: string[], maxItemsPerChunk: number) {
+  const chunks = splitArrayIntoChunks(extraDataItems, maxItemsPerChunk);
+  const packedChunks = [];
+
+  let nextHash = ethers.ZeroHash;
+  for (let i = chunks.length - 1; i >= 0; i--) {
+    const packed = packChunk(chunks[i], nextHash);
+    packedChunks.push(packed);
+    nextHash = calcExtraDataListHash(packed);
+  }
+
+  return packedChunks.reverse();
 }
 
 export function packExtraDataList(extraDataItems: string[]) {
-  return "0x" + extraDataItems.map((s) => s.substring(2)).join("");
+  const [chunk] = packExtraDataItemsToChunksLinkedByHash(extraDataItems, extraDataItems.length);
+
+  return chunk;
 }
 
 export function calcExtraDataListHash(packedExtraDataList: string) {
   return keccak256(packedExtraDataList);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isItemTypeArray(items: any[]): items is ItemType[] {
+  return items.every((item) => item.hasOwnProperty("moduleId") && item.hasOwnProperty("type"));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isExtraDataType(data: any): data is ExtraDataType {
+  return data.hasOwnProperty("stuckKeys") && data.hasOwnProperty("exitedKeys");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isStringArray(items: any[]): items is string[] {
+  return items.every((item) => typeof item === "string");
+}
+
+type ExtraDataConfig = {
+  maxItemsPerChunk?: number;
+};
+
+export type ReportFieldsWithoutExtraData = Omit<
+  OracleReport,
+  "extraDataHash" | "extraDataItemsCount" | "extraDataFormat"
+>;
+
+export type ExtraData = string[] | ItemType[] | ExtraDataType;
+export type OracleReportProps = {
+  reportFieldsWithoutExtraData: ReportFieldsWithoutExtraData;
+  extraData: ExtraData;
+  config?: ExtraDataConfig;
+};
+
+export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
+  const extraDataItems: string[] = [];
+
+  if (Array.isArray(extraData)) {
+    if (isStringArray(extraData)) {
+      extraDataItems.push(...extraData);
+    } else if (isItemTypeArray(extraData)) {
+      extraDataItems.push(...encodeExtraDataItemsArray(extraData));
+    }
+  } else if (isExtraDataType(extraData)) {
+    extraDataItems.push(...encodeExtraDataItems(extraData));
+  }
+
+  const extraDataItemsCount = extraDataItems.length;
+  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
+  const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
+  const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
+
+  const report: OracleReport = {
+    ...reportFieldsWithoutExtraData,
+    extraDataHash: extraDataItems.length ? extraDataChunkHashes[0] : ZeroHash,
+    extraDataItemsCount: extraDataItems.length,
+    extraDataFormat: extraDataItems.length ? EXTRA_DATA_FORMAT_LIST : EXTRA_DATA_FORMAT_EMPTY,
+  };
+
+  const reportHash = calcReportDataHash(getReportDataItems(report));
+
+  return {
+    extraDataChunks,
+    extraDataChunkHashes,
+    extraDataItemsCount,
+    report,
+    reportHash,
+  };
 }
 
 export async function getSecondsPerFrame(consensus: HashConsensus) {

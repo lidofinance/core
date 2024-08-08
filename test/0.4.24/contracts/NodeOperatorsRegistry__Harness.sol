@@ -112,7 +112,11 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
     uint256[] _nodeOperatorIds,
     uint256[] _activeKeyCountsAfterAllocation
   ) external returns (bytes memory pubkeys, bytes memory signatures) {
-    (pubkeys, signatures) = _loadAllocatedSigningKeys(_keysCountToLoad, _nodeOperatorIds, _activeKeyCountsAfterAllocation);
+    (pubkeys, signatures) = _loadAllocatedSigningKeys(
+      _keysCountToLoad,
+      _nodeOperatorIds,
+      _activeKeyCountsAfterAllocation
+    );
 
     obtainedPublicKeys = pubkeys;
     obtainedSignatures = signatures;
@@ -120,11 +124,17 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
     emit ValidatorsKeysLoaded(pubkeys, signatures);
   }
 
-  function harness__getSigningKeysAllocationData(uint256 _keysCount) external view returns (
-    uint256 allocatedKeysCount,
-    uint256[] memory nodeOperatorIds,
-    uint256[] memory activeKeyCountsAfterAllocation
-  ) {
+  function harness__getSigningKeysAllocationData(
+    uint256 _keysCount
+  )
+    external
+    view
+    returns (
+      uint256 allocatedKeysCount,
+      uint256[] memory nodeOperatorIds,
+      uint256[] memory activeKeyCountsAfterAllocation
+    )
+  {
     return _getSigningKeysAllocationData(_keysCount);
   }
 
@@ -160,5 +170,13 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
 
     signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, _newVettedKeys);
     _saveOperatorSigningKeysStats(_nodeOperatorId, signingKeysStats);
+  }
+
+  function harness__setRewardDistributionState(RewardDistributionState _state) external {
+    _updateRewardDistributionState(_state);
+  }
+
+  function harness__setBaseVersion(uint256 _newBaseVersion) external {
+    _setContractVersion(_newBaseVersion);
   }
 }

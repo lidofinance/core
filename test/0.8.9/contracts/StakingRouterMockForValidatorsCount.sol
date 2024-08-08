@@ -16,7 +16,7 @@ contract StakingRouter__MockForSanityChecker{
     }
 
     function addStakingModuleExitedValidators(uint24 moduleId, uint256 exitedValidators) external {
-        StakingRouter.StakingModule memory module = StakingRouter.StakingModule(moduleId, address(0), 0, 0, 0, 0, "", 0, 0, exitedValidators);
+        StakingRouter.StakingModule memory module = StakingRouter.StakingModule(moduleId, address(0), 0, 0, 0, 0, "", 0, 0, exitedValidators, 0, 0 ,0);
         modules[moduleId] = module;
         moduleIds.push(moduleId);
     }

@@ -6,9 +6,12 @@ import { streccak } from "lib/keccak";
 import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
 
-const NOR_STAKING_MODULE_TARGET_SHARE_BP = 10000; // 100%
+const NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP = 10000; // 100%
+const NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
 const NOR_STAKING_MODULE_MODULE_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_TREASURY_FEE_BP = 500; // 5%
+const NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
+const NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
 
 async function main() {
@@ -30,9 +33,12 @@ async function main() {
     [
       state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
       nodeOperatorsRegistry.address,
-      NOR_STAKING_MODULE_TARGET_SHARE_BP,
+      NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+      NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
       NOR_STAKING_MODULE_MODULE_FEE_BP,
       NOR_STAKING_MODULE_TREASURY_FEE_BP,
+      NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+      NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
     ],
     { from: deployer },
   );
