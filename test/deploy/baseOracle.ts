@@ -65,3 +65,12 @@ export async function deployBaseOracle(
 
   return { oracle, consensusContract };
 }
+
+const floor = (n: bigint): bigint => BigInt(Math.floor(parseInt(n.toString(), 10)));
+
+export const computeSlotAt = (time: bigint): bigint => floor((time - GENESIS_TIME) / SECONDS_PER_SLOT);
+export const computeEpochAt = (time: bigint): bigint => floor(computeSlotAt(time) / SLOTS_PER_EPOCH);
+export const computeEpochFirstSlot = (epoch: bigint): bigint => epoch * SLOTS_PER_EPOCH;
+export const computeEpochFirstSlotAt = (time: bigint): bigint => computeEpochFirstSlot(computeEpochAt(time));
+export const computeTimestampAtEpoch = (epoch: bigint): bigint => GENESIS_TIME + epoch * SECONDS_PER_EPOCH;
+export const computeTimestampAtSlot = (slot: bigint): bigint => GENESIS_TIME + slot * SECONDS_PER_SLOT;

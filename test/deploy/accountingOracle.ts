@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle } from "typechain-types";
+import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle, MockReportProcessor } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -74,7 +74,7 @@ export async function deployAccountingOracleSetup(
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {
-    reportProcessor: oracle,
+    reportProcessor: oracle as unknown as MockReportProcessor,
     epochsPerFrame,
     slotsPerEpoch,
     secondsPerSlot,

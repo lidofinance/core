@@ -300,7 +300,7 @@
     "address": "0x6885E36BFcb68CB383DfE90023a462C03BCB2AE5"
   },
   "dummyEmptyContract": {
-    "contract": "contracts/0.8.9/test_helpers/DummyEmptyContract.sol",
+    "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "address": "0xF30a674935479cc6f2254BA65d7534Eab8bD6ba2",
     "constructorArgs": []
   },
