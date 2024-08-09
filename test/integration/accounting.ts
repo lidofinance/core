@@ -14,7 +14,7 @@ const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 const ONE_DAY = 86400n;
 const MAX_BASIS_POINTS = 10000n;
 
-describe("Protocol", () => {
+describe("Accounting integration", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -50,6 +50,16 @@ describe("Protocol", () => {
     return (maxPositiveTokeRebase * totalPooledEther) / LIMITER_PRECISION_BASE;
   };
 
+  const getWithdrawalParams = (tx: ContractTransactionReceipt) => {
+    const withdrawalsFinalized = getEvents(tx, "WithdrawalsFinalized");
+    const amountOfETHLocked = (withdrawalsFinalized.length > 0) ?
+      amountOfETHLocked : 0n;
+
+    const sharesBurnt = getEvents(tx, "SharesBurnt");
+    const sharesBurntAmount = (sharesBurnt.length > 0) ? sharesBurntAmount : 0n;
+    return { amountOfETHLocked, sharesBurntAmount };
+  }
+
   it("Should account correctly with no CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
@@ -63,8 +73,7 @@ describe("Protocol", () => {
     const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -73,10 +82,10 @@ describe("Protocol", () => {
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const tokenRebasedEvent = getEvents(reportTxReceipt, "TokenRebased");
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
@@ -84,11 +93,11 @@ describe("Protocol", () => {
 
     const postTotalSharesEvent = getEvents(reportTxReceipt, "PostTotalShares");
     expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + withdrawalsFinalized[0].args.amountOfETHLocked,
+      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
     );
 
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(ethBalanceBefore).to.equal(ethBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
   });
 
   it("Should account correctly with negative CL rebase", async () => {
@@ -105,8 +114,7 @@ describe("Protocol", () => {
     const { reportTx } = await report(ctx, { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -116,11 +124,11 @@ describe("Protocol", () => {
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + REBASE_AMOUNT).to.equal(
-      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      totalPooledEtherAfter + amountOfETHLocked,
     );
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const tokenRebasedEvent = getEvents(reportTxReceipt, "TokenRebased");
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
@@ -133,7 +141,7 @@ describe("Protocol", () => {
 
     const postTotalSharesEvent = getEvents(reportTxReceipt, "PostTotalShares");
     expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + withdrawalsFinalized[0].args.amountOfETHLocked,
+      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked
     );
   });
 
@@ -155,8 +163,7 @@ describe("Protocol", () => {
     const { reportTx } = await report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -166,13 +173,13 @@ describe("Protocol", () => {
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + rebaseAmount).to.equal(
-      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      totalPooledEtherAfter + amountOfETHLocked,
     );
 
     const sharesAsFeesList = getEvents(reportTxReceipt, "TransferShares").map((e) => e.args.sharesValue);
     let mintedSharesSum = 0n;
 
-    if (withdrawalsFinalized[0].args.amountOfETHLocked == 0) {
+    if (amountOfETHLocked == 0) {
       expect(sharesAsFeesList.length).to.equal(3);
 
       const simpleDVTStats = await stakingRouter.getStakingModule(2);
@@ -200,7 +207,7 @@ describe("Protocol", () => {
     expect(tokenRebasedEvent[0].args.sharesMintedAsFees).to.equal(mintedSharesSum);
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore + mintedSharesSum).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore + mintedSharesSum).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
@@ -210,7 +217,7 @@ describe("Protocol", () => {
 
     const postTotalSharesEvent = getEvents(reportTxReceipt, "PostTotalShares");
     expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + withdrawalsFinalized[0].args.amountOfETHLocked,
+      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
     );
   });
 
@@ -243,8 +250,7 @@ describe("Protocol", () => {
     const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -253,13 +259,13 @@ describe("Protocol", () => {
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(ethBalanceBefore).to.equal(ethBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
 
     expect(getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
     expect(getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
@@ -285,8 +291,7 @@ describe("Protocol", () => {
 
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -299,14 +304,14 @@ describe("Protocol", () => {
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      totalPooledEtherAfter + amountOfETHLocked,
     );
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0);
@@ -329,8 +334,7 @@ describe("Protocol", () => {
 
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -343,14 +347,14 @@ describe("Protocol", () => {
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      totalPooledEtherAfter + amountOfETHLocked,
     );
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked);
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0);
@@ -375,8 +379,7 @@ describe("Protocol", () => {
 
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    const withdrawalsFinalized = getEvents(reportTxReceipt, "WithdrawalsFinalized");
-    const sharesBurnt = getEvents(reportTxReceipt, "SharesBurnt");
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
@@ -389,15 +392,15 @@ describe("Protocol", () => {
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
     expect(totalPooledEtherBefore + expectedRewards).to.equal(
-      totalPooledEtherAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      totalPooledEtherAfter + amountOfETHLocked,
     );
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurnt[0].args.sharesAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(lidoBalanceBefore + expectedRewards).equal(
-      lidoBalanceAfter + withdrawalsFinalized[0].args.amountOfETHLocked,
+      lidoBalanceAfter + amountOfETHLocked,
     );
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
