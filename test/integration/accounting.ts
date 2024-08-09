@@ -52,13 +52,13 @@ describe("Accounting integration", () => {
 
   const getWithdrawalParams = (tx: ContractTransactionReceipt) => {
     const withdrawalsFinalized = getEvents(tx, "WithdrawalsFinalized");
-    const amountOfETHLocked = (withdrawalsFinalized.length > 0) ?
-      amountOfETHLocked : 0n;
+    const amountOfETHLocked = withdrawalsFinalized.length > 0 ? withdrawalsFinalized[0].args.amountOfETHLocked : 0n;
 
     const sharesBurnt = getEvents(tx, "SharesBurnt");
-    const sharesBurntAmount = (sharesBurnt.length > 0) ? sharesBurntAmount : 0n;
+    const sharesBurntAmount = sharesBurnt.length > 0 ? sharesBurnt[0].args.sharesAmount : 0n;
+
     return { amountOfETHLocked, sharesBurntAmount };
-  }
+  };
 
   it("Should account correctly with no CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
@@ -123,9 +123,7 @@ describe("Accounting integration", () => {
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + REBASE_AMOUNT).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-    );
+    expect(totalPooledEtherBefore + REBASE_AMOUNT).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
@@ -141,7 +139,7 @@ describe("Accounting integration", () => {
 
     const postTotalSharesEvent = getEvents(reportTxReceipt, "PostTotalShares");
     expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked
+      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
     );
   });
 
@@ -172,9 +170,7 @@ describe("Accounting integration", () => {
     expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + rebaseAmount).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-    );
+    expect(totalPooledEtherBefore + rebaseAmount).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const sharesAsFeesList = getEvents(reportTxReceipt, "TransferShares").map((e) => e.args.sharesValue);
     let mintedSharesSum = 0n;
@@ -303,9 +299,7 @@ describe("Accounting integration", () => {
     expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-    );
+    expect(totalPooledEtherBefore + elRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
@@ -346,9 +340,7 @@ describe("Accounting integration", () => {
     expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-    );
+    expect(totalPooledEtherBefore + elRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
@@ -391,17 +383,13 @@ describe("Accounting integration", () => {
     expect(elRewardsReceivedEvent.args.amount).to.equal(expectedRewards);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + expectedRewards).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-    );
+    expect(totalPooledEtherBefore + expectedRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + expectedRewards).equal(
-      lidoBalanceAfter + amountOfETHLocked,
-    );
+    expect(lidoBalanceBefore + expectedRewards).equal(lidoBalanceAfter + amountOfETHLocked);
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(rewardsExcess);
