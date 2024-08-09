@@ -15,5 +15,5 @@
     }
   },
   "include": ["./test", "./typechain-types", "./lib", "./scripts"],
-  "files": ["./hardhat.config.ts", "./commitlint.config.ts"]
+  "files": ["./hardhat.config.ts", "./commitlint.config.ts", "./globals.d.ts"]
 }

@@ -12,6 +12,10 @@ export const ERC721METADATA_INTERFACE_ID = "0x5b5e139f";
 // 0x49064906 is magic number ERC4906 interfaceId as defined in the standard https://eips.ethereum.org/EIPS/eip-4906
 export const ERC4906_INTERFACE_ID = "0x49064906";
 
+// HashConsensus farFutureEpoch:
+// (2n ** 64n - 1n - GENESIS_TIME) / SECONDS_PER_SLOT / SLOTS_PER_EPOCH
+export const HASH_CONSENSUS_FAR_FUTURE_EPOCH = 48038396021015343n;
+
 // OZ Interfaces
 export const OZ_ACCESS_CONTROL_INTERFACE_ID = "0x7965db0b";
 export const OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID = "0x5a05180f";

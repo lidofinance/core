@@ -27,29 +27,29 @@ describe("OracleReportSanityChecker.sol", () => {
   let managersRoster: Record<string, HardhatEthersSigner[]>;
 
   const defaultLimitsList = {
-    churnValidatorsPerDayLimit: 55,
-    deprecatedOneOffCLBalanceDecreaseBPLimit: 0,
-    annualBalanceIncreaseBPLimit: 10_00, // 10%
-    simulatedShareRateDeviationBPLimit: 2_50, // 2.5%
-    maxValidatorExitRequestsPerReport: 2000,
-    maxAccountingExtraDataListItemsCount: 15,
-    maxNodeOperatorsPerExtraDataItemCount: 16,
-    requestTimestampMargin: 128,
-    maxPositiveTokenRebase: 5_000_000, // 0.05%
-    initialSlashingAmountPWei: 1000,
-    inactivityPenaltiesAmountPWei: 101,
-    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
+    churnValidatorsPerDayLimit: 55n,
+    deprecatedOneOffCLBalanceDecreaseBPLimit: 0n,
+    annualBalanceIncreaseBPLimit: 10_00n, // 10%
+    simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
+    maxValidatorExitRequestsPerReport: 2000n,
+    maxAccountingExtraDataListItemsCount: 15n,
+    maxNodeOperatorsPerExtraDataItemCount: 16n,
+    requestTimestampMargin: 128n,
+    maxPositiveTokenRebase: 5_000_000n, // 0.05%
+    initialSlashingAmountPWei: 1000n,
+    inactivityPenaltiesAmountPWei: 101n,
+    clBalanceOraclesErrorUpperBPLimit: 74n, // 0.74%
   };
 
   const correctLidoOracleReport = {
-    timeElapsed: 24 * 60 * 60,
+    timeElapsed: 24n * 60n * 60n,
     preCLBalance: ether("100000"),
     postCLBalance: ether("100001"),
-    withdrawalVaultBalance: 0,
-    elRewardsVaultBalance: 0,
-    sharesRequestedToBurn: 0,
-    preCLValidators: 0,
-    postCLValidators: 0,
+    withdrawalVaultBalance: 0n,
+    elRewardsVaultBalance: 0n,
+    sharesRequestedToBurn: 0n,
+    preCLValidators: 0n,
+    postCLValidators: 0n,
   };
   type CheckAccountingOracleReportParameters = [number, bigint, bigint, number, number, number, number, number];
   let deployer: HardhatEthersSigner;
@@ -456,15 +456,15 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   describe("checkWithdrawalQueueOracleReport()", () => {
-    const oldRequestId = 1;
-    const newRequestId = 2;
+    const oldRequestId = 1n;
+    const newRequestId = 2n;
     let oldRequestCreationTimestamp;
-    let newRequestCreationTimestamp: number;
+    let newRequestCreationTimestamp: bigint;
     const correctWithdrawalQueueOracleReport = {
       lastFinalizableRequestId: oldRequestId,
-      refReportTimestamp: -1,
+      refReportTimestamp: -1n,
     };
-    type CheckWithdrawalQueueOracleReportParameters = [number, number];
+    type CheckWithdrawalQueueOracleReportParameters = [bigint, bigint];
 
     before(async () => {
       const currentBlockTimestamp = await getCurrentBlockTimestamp();
@@ -472,7 +472,7 @@ describe("OracleReportSanityChecker.sol", () => {
       oldRequestCreationTimestamp = currentBlockTimestamp - defaultLimitsList.requestTimestampMargin;
       correctWithdrawalQueueOracleReport.lastFinalizableRequestId = oldRequestCreationTimestamp;
       await withdrawalQueueMock.setRequestTimestamp(oldRequestId, oldRequestCreationTimestamp);
-      newRequestCreationTimestamp = currentBlockTimestamp - Math.floor(defaultLimitsList.requestTimestampMargin / 2);
+      newRequestCreationTimestamp = currentBlockTimestamp - defaultLimitsList.requestTimestampMargin / 2n;
       await withdrawalQueueMock.setRequestTimestamp(newRequestId, newRequestCreationTimestamp);
     });
 
@@ -1029,10 +1029,10 @@ describe("OracleReportSanityChecker.sol", () => {
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values(defaultRebaseParams) as SmoothenTokenRebaseParameters),
         );
-      expect(withdrawals).to.be.equal(0);
-      expect(elRewards).to.be.equal(0);
-      expect(simulatedSharesToBurn).to.be.equal(0);
-      expect(sharesToBurn).to.be.equal(ether("10"));
+      expect(withdrawals).to.equal(0);
+      expect(elRewards).to.equal(0);
+      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal(ether("10"));
       // el rewards
       ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
@@ -1041,10 +1041,10 @@ describe("OracleReportSanityChecker.sol", () => {
             elRewardsVaultBalance: ether("5"),
           }) as SmoothenTokenRebaseParameters),
         ));
-      expect(withdrawals).to.be.equal(0);
-      expect(elRewards).to.be.equal(ether("2"));
-      expect(simulatedSharesToBurn).to.be.equal(0);
-      expect(sharesToBurn).to.be.equal("9615384615384615384"); // 100. - 94. / 1.04
+      expect(withdrawals).to.equal(0);
+      expect(elRewards).to.equal(ether("2"));
+      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // withdrawals
       ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
@@ -1053,10 +1053,10 @@ describe("OracleReportSanityChecker.sol", () => {
             withdrawalVaultBalance: ether("5"),
           }) as SmoothenTokenRebaseParameters),
         ));
-      expect(withdrawals).to.be.equal(ether("2"));
-      expect(elRewards).to.be.equal(0);
-      expect(simulatedSharesToBurn).to.be.equal(0);
-      expect(sharesToBurn).to.be.equal("9615384615384615384"); // 100. - 94. / 1.04
+      expect(withdrawals).to.equal(ether("2"));
+      expect(elRewards).to.equal(0);
+      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // withdrawals + el rewards
       ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
@@ -1066,10 +1066,10 @@ describe("OracleReportSanityChecker.sol", () => {
             elRewardsVaultBalance: ether("5"),
           }) as SmoothenTokenRebaseParameters),
         ));
-      expect(withdrawals).to.be.equal(ether("2"));
-      expect(elRewards).to.be.equal(0);
-      expect(simulatedSharesToBurn).to.be.equal(0);
-      expect(sharesToBurn).to.be.equal("9615384615384615384"); // 100. - 94. / 1.04
+      expect(withdrawals).to.equal(ether("2"));
+      expect(elRewards).to.equal(0);
+      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // shares requested to burn
       ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
@@ -1078,10 +1078,10 @@ describe("OracleReportSanityChecker.sol", () => {
             sharesRequestedToBurn: ether("5"),
           }) as SmoothenTokenRebaseParameters),
         ));
-      expect(withdrawals).to.be.equal(0);
-      expect(elRewards).to.be.equal(0);
-      expect(simulatedSharesToBurn).to.be.equal("1923076923076923076"); // ether("100. - (102. / 1.04))
-      expect(sharesToBurn).to.be.equal("11538461538461538461"); // ether("100. - (92. / 1.04))
+      expect(withdrawals).to.equal(0);
+      expect(elRewards).to.equal(0);
+      expect(simulatedSharesToBurn).to.equal("1923076923076923076"); // ether("100. - (102. / 1.04))
+      expect(sharesToBurn).to.equal("11538461538461538461"); // ether("100. - (92. / 1.04))
     });
 
     it("share rate ~1 case with huge withdrawal", async () => {
@@ -1158,13 +1158,14 @@ describe("OracleReportSanityChecker.sol", () => {
   describe("churn limit", () => {
     it("setChurnValidatorsPerDayLimit works", async () => {
       const oldChurnLimit = defaultLimitsList.churnValidatorsPerDayLimit;
+
       await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldChurnLimit);
-      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldChurnLimit + 1))
+      await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldChurnLimit + 1n))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedValidatorsLimitExceeded")
-        .withArgs(oldChurnLimit, oldChurnLimit + 1);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
-        oldChurnLimit,
-      );
+        .withArgs(oldChurnLimit, oldChurnLimit + 1n);
+
+      const { churnValidatorsPerDayLimit } = await oracleReportSanityChecker.getOracleReportLimits();
+      expect(churnValidatorsPerDayLimit).to.equal(oldChurnLimit);
 
       const newChurnLimit = 30;
       expect(newChurnLimit).to.not.equal(oldChurnLimit);
@@ -1188,7 +1189,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await expect(tx).to.emit(oracleReportSanityChecker, "ChurnValidatorsPerDayLimitSet").withArgs(newChurnLimit);
       // assert.emits(tx, 'ChurnValidatorsPerDayLimitSet', { churnValidatorsPerDayLimit: newChurnLimit })
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.equal(
         newChurnLimit,
       );
 
@@ -1200,9 +1201,9 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("checkAccountingOracleReport: churnLimit works", async () => {
       const churnLimit = defaultLimitsList.churnValidatorsPerDayLimit;
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).churnValidatorsPerDayLimit).to.be.equal(
-        churnLimit,
-      );
+
+      const { churnValidatorsPerDayLimit } = await oracleReportSanityChecker.getOracleReportLimits();
+      expect(churnValidatorsPerDayLimit).to.equal(churnLimit);
 
       await oracleReportSanityChecker.checkAccountingOracleReport(
         ...(Object.values({
@@ -1214,12 +1215,12 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleReportSanityChecker.checkAccountingOracleReport(
           ...(Object.values({
             ...correctLidoOracleReport,
-            postCLValidators: churnLimit + 1,
+            postCLValidators: churnLimit + 1n,
           }) as CheckAccountingOracleReportParameters),
         ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectAppearedValidators")
-        .withArgs(churnLimit, churnLimit + 1);
+        .withArgs(churnLimit, churnLimit + 1n);
     });
   });
 
@@ -1235,12 +1236,13 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("checkExitBusOracleReport works", async () => {
       const maxRequests = defaultLimitsList.maxValidatorExitRequestsPerReport;
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.be.equal(
+
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
         maxRequests,
       );
 
       await oracleReportSanityChecker.checkExitBusOracleReport(maxRequests);
-      await expect(oracleReportSanityChecker.checkExitBusOracleReport(maxRequests + 1))
+      await expect(oracleReportSanityChecker.checkExitBusOracleReport(maxRequests + 1n))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
         .withArgs(maxRequests);
     });
@@ -1248,10 +1250,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it("setMaxExitRequestsPerOracleReport", async () => {
       const oldMaxRequests = defaultLimitsList.maxValidatorExitRequestsPerReport;
       await oracleReportSanityChecker.checkExitBusOracleReport(oldMaxRequests);
-      await expect(oracleReportSanityChecker.checkExitBusOracleReport(oldMaxRequests + 1))
+      await expect(oracleReportSanityChecker.checkExitBusOracleReport(oldMaxRequests + 1n))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
         .withArgs(oldMaxRequests);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.be.equal(
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
         oldMaxRequests,
       );
 
@@ -1278,7 +1280,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(tx)
         .to.emit(oracleReportSanityChecker, "MaxValidatorExitRequestsPerReportSet")
         .withArgs(newMaxRequests);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.be.equal(
+      expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
         newMaxRequests,
       );
 
@@ -1321,7 +1323,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .setMaxNodeOperatorsPerExtraDataItemCount(newValue);
       expect(
         (await oracleReportSanityChecker.getOracleReportLimits()).maxNodeOperatorsPerExtraDataItemCount,
-      ).to.be.equal(newValue);
+      ).to.equal(newValue);
       await expect(tx)
         .to.emit(oracleReportSanityChecker, "MaxNodeOperatorsPerExtraDataItemCountSet")
         .withArgs(newValue);
@@ -1349,7 +1351,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .setMaxAccountingExtraDataListItemsCount(newValue);
       expect(
         (await oracleReportSanityChecker.getOracleReportLimits()).maxAccountingExtraDataListItemsCount,
-      ).to.be.equal(newValue);
+      ).to.equal(newValue);
       await expect(tx).to.emit(oracleReportSanityChecker, "MaxAccountingExtraDataListItemsCountSet").withArgs(newValue);
     });
 

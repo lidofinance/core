@@ -1,17 +1,20 @@
 {
   "parser": "@typescript-eslint/parser",
   "extends": ["plugin:@typescript-eslint/recommended", "prettier"],
-  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module", "project": ["./tsconfig.json"] },
+  "parserOptions": {
+    "ecmaVersion": 2022, "sourceType": "module", "project": ["./tsconfig.json"]
+  },
   "plugins": ["no-only-tests", "simple-import-sort"],
   "rules": {
     "@typescript-eslint/no-explicit-any": ["warn"],
     "@typescript-eslint/no-unused-vars": ["warn"],
     "@typescript-eslint/no-floating-promises": ["warn"],
+    "@typescript-eslint/no-shadow": ["error"],
     // prevents committing `describe.only` and `it.only` tests
     "no-only-tests/no-only-tests": "warn",
+    "no-shadow": "off",
     "simple-import-sort/imports": [
-      "error",
-      {
+      "error", {
         "groups": [
           ["^node:"],
           ["^\\u0000"],
@@ -22,17 +25,14 @@
           ["^test"],
           ["^../"],
           ["^./"],
-          ["^"],
-        ],
-      },
-    ],
+          ["^"]
+        ]
+      }
+    ]
   },
   "overrides": [
     {
-      "files": ["./scripts/{**/,}*.js", "./test/{**/,}*.js"],
-      "env": {
-        "mocha": true,
-      },
-    },
-  ],
+      "files": ["./scripts/{**/,}*.js", "./test/{**/,}*.js"], "env": {"mocha": true}
+    }
+  ]
 }

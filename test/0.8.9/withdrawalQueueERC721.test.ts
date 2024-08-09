@@ -190,7 +190,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Returns tokenURI without nftDescriptor and baseUri", async () => {
-      expect(await queue.tokenURI(requestId)).to.be.equal("");
+      expect(await queue.tokenURI(requestId)).to.equal("");
     });
 
     it("Returns correct tokenURI without nftDescriptor", async () => {

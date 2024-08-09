@@ -148,10 +148,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
 
   context("unsafeUpdateValidatorsCount", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
@@ -170,8 +170,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       const nonce = await nor.getNonce();
 
       const beforeNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(beforeNOSummary.stuckValidatorsCount).to.be.equal(0n);
-      expect(beforeNOSummary.totalExitedValidators).to.be.equal(1n);
+      expect(beforeNOSummary.stuckValidatorsCount).to.equal(0n);
+      expect(beforeNOSummary.totalExitedValidators).to.equal(1n);
 
       await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 3n, 2n))
         .to.emit(nor, "StuckPenaltyStateChanged")
@@ -184,8 +184,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(nonce + 1n);
 
       const middleNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(middleNOSummary.stuckValidatorsCount).to.be.equal(2n);
-      expect(middleNOSummary.totalExitedValidators).to.be.equal(3n);
+      expect(middleNOSummary.stuckValidatorsCount).to.equal(2n);
+      expect(middleNOSummary.totalExitedValidators).to.equal(3n);
 
       await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 1n, 2n))
         .to.emit(nor, "ExitedSigningKeysCountChanged")
@@ -197,8 +197,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .to.not.emit(nor, "StuckPenaltyStateChanged");
 
       const lastNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(lastNOSummary.stuckValidatorsCount).to.be.equal(2n);
-      expect(lastNOSummary.totalExitedValidators).to.be.equal(1n);
+      expect(lastNOSummary.stuckValidatorsCount).to.equal(2n);
+      expect(lastNOSummary.totalExitedValidators).to.equal(1n);
     });
   });
 
@@ -206,15 +206,15 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     let targetLimit = 0n;
 
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
 
-    it('reverts with "APP_AUTH_FAILED" error when called by sender without STAKING_ROUTER_ROLE', async () => {
+    it("reverts with \"APP_AUTH_FAILED\" error when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
         .false;
 
@@ -223,7 +223,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       );
     });
 
-    it('reverts with "OUT_OF_RANGE" error when called with targetLimit > UINT64_MAX', async () => {
+    it("reverts with \"OUT_OF_RANGE\" error when called with targetLimit > UINT64_MAX", async () => {
       const targetLimitWrong = BigInt("0x10000000000000000");
 
       await expect(
@@ -313,10 +313,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates all deposit data for every operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
 
@@ -335,13 +335,13 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(
           firstNodeOperatorId,
           NODE_OPERATORS[firstNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
         )
         .and.to.emit(nor, "NodeOperatorTotalKeysTrimmed")
         .withArgs(
           secondNodeOperatorId,
           NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
         )
         .to.emit(nor, "KeysOpIndexSet")
         .withArgs(nonce + 1n)
@@ -362,7 +362,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates the deposit data even if no trimming needed", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
 
@@ -377,10 +377,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates all deposit data for every operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
 
@@ -401,13 +401,13 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(
           firstNodeOperatorId,
           NODE_OPERATORS[firstNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
         )
         .and.to.emit(nor, "NodeOperatorTotalKeysTrimmed")
         .withArgs(
           secondNodeOperatorId,
           NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount -
-            NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
+          NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
         )
         .to.emit(nor, "KeysOpIndexSet")
         .withArgs(nonce + 1n)
@@ -426,45 +426,45 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Returns zero rewards if zero shares distributed", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
 
       const [recipients, shares, penalized] = await nor.getRewardsDistribution(0n);
 
-      expect(recipients.length).to.be.equal(1n);
-      expect(shares.length).to.be.equal(1n);
-      expect(penalized.length).to.be.equal(1n);
+      expect(recipients.length).to.equal(1n);
+      expect(shares.length).to.equal(1n);
+      expect(penalized.length).to.equal(1n);
 
-      expect(recipients[0]).to.be.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
-      expect(shares[0]).to.be.equal(0n);
-      expect(penalized[0]).to.be.equal(false);
+      expect(recipients[0]).to.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
+      expect(shares[0]).to.equal(0n);
+      expect(penalized[0]).to.equal(false);
     });
 
     it("Distributes all rewards to a single active operator if no others", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
 
       const [recipients, shares, penalized] = await nor.getRewardsDistribution(10n);
 
-      expect(recipients.length).to.be.equal(1n);
-      expect(shares.length).to.be.equal(1n);
-      expect(penalized.length).to.be.equal(1n);
+      expect(recipients.length).to.equal(1n);
+      expect(shares.length).to.equal(1n);
+      expect(penalized.length).to.equal(1n);
 
-      expect(recipients[0]).to.be.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
-      expect(shares[0]).to.be.equal(10n);
-      expect(penalized[0]).to.be.equal(false);
+      expect(recipients[0]).to.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
+      expect(shares[0]).to.equal(10n);
+      expect(penalized[0]).to.equal(false);
     });
 
     it("Returns correct reward distribution for multiple NOs", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
@@ -480,9 +480,9 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
 
       const [recipients, shares, penalized] = await nor.getRewardsDistribution(100n);
 
-      expect(recipients.length).to.be.equal(2n);
-      expect(shares.length).to.be.equal(2n);
-      expect(penalized.length).to.be.equal(2n);
+      expect(recipients.length).to.equal(2n);
+      expect(shares.length).to.equal(2n);
+      expect(penalized.length).to.equal(2n);
 
       const firstNOActiveKeys =
         NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount -
@@ -492,13 +492,13 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         NODE_OPERATORS[secondNodeOperatorId].exitedSigningKeysCount;
       const totalActiveKeys = firstNOActiveKeys + secondNOActiveKeys;
 
-      expect(recipients[0]).to.be.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
-      expect(shares[0]).to.be.equal((100n * firstNOActiveKeys) / totalActiveKeys);
-      expect(penalized[0]).to.be.equal(true);
+      expect(recipients[0]).to.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
+      expect(shares[0]).to.equal((100n * firstNOActiveKeys) / totalActiveKeys);
+      expect(penalized[0]).to.equal(true);
 
-      expect(recipients[1]).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
-      expect(shares[1]).to.be.equal((100n * secondNOActiveKeys) / totalActiveKeys);
-      expect(penalized[1]).to.be.equal(false);
+      expect(recipients[1]).to.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
+      expect(shares[1]).to.equal((100n * secondNOActiveKeys) / totalActiveKeys);
+      expect(penalized[1]).to.equal(false);
     });
   });
 });

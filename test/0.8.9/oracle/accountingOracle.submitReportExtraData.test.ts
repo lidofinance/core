@@ -563,14 +563,14 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         await oracle.connect(member1).submitReportExtraDataList(extraDataList);
 
         const callsCount = await stakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-        expect(callsCount).to.be.equal(extraData.stuckKeys.length);
+        expect(callsCount).to.equal(extraData.stuckKeys.length);
 
         for (let i = 0; i < callsCount; i++) {
           const call = await stakingRouter.calls_reportStuckKeysByNodeOperator(i);
           const item = extraData.stuckKeys[i];
-          expect(call.stakingModuleId).to.be.equal(item.moduleId);
-          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
-          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
+          expect(call.stakingModuleId).to.equal(item.moduleId);
+          expect(call.nodeOperatorIds).to.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
+          expect(call.keysCounts).to.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
         }
       });
 
@@ -582,14 +582,14 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         await oracle.connect(member1).submitReportExtraDataList(extraDataList);
 
         const callsCount = await stakingRouter.totalCalls_reportExitedKeysByNodeOperator();
-        expect(callsCount).to.be.equal(extraData.exitedKeys.length);
+        expect(callsCount).to.equal(extraData.exitedKeys.length);
 
         for (let i = 0; i < callsCount; i++) {
           const call = await stakingRouter.calls_reportExitedKeysByNodeOperator(i);
           const item = extraData.exitedKeys[i];
-          expect(call.stakingModuleId).to.be.equal(item.moduleId);
-          expect(call.nodeOperatorIds).to.be.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
-          expect(call.keysCounts).to.be.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
+          expect(call.stakingModuleId).to.equal(item.moduleId);
+          expect(call.nodeOperatorIds).to.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
+          expect(call.keysCounts).to.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
         }
       });
 
@@ -600,7 +600,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
         await oracle.connect(member1).submitReportExtraDataList(extraDataList);
         const callsCount = await stakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
-        expect(callsCount).to.be.equal(1);
+        expect(callsCount).to.equal(1);
       });
     });
 
@@ -610,8 +610,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
       await oracle.connect(member1).submitReportExtraDataList(extraDataList);
       const state = await oracle.getExtraDataProcessingState();
-      expect(state.itemsCount).to.be.equal(extraDataItems.length);
-      expect(state.itemsCount).to.be.equal(state.itemsProcessed);
+      expect(state.itemsCount).to.equal(extraDataItems.length);
+      expect(state.itemsCount).to.equal(state.itemsProcessed);
       await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
         oracle,
         "ExtraDataAlreadyProcessed",
@@ -654,28 +654,28 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
       const stateBefore = await oracle.getExtraDataProcessingState();
 
-      expect(stateBefore.refSlot).to.be.equal(reportFields.refSlot);
-      expect(stateBefore.dataFormat).to.be.equal(EXTRA_DATA_FORMAT_LIST);
+      expect(stateBefore.refSlot).to.equal(reportFields.refSlot);
+      expect(stateBefore.dataFormat).to.equal(EXTRA_DATA_FORMAT_LIST);
       expect(stateBefore.submitted).to.be.false;
-      expect(stateBefore.itemsCount).to.be.equal(extraDataItems.length);
-      expect(stateBefore.itemsProcessed).to.be.equal(0);
-      expect(stateBefore.lastSortingKey).to.be.equal("0");
-      expect(stateBefore.dataHash).to.be.equal(extraDataHash);
+      expect(stateBefore.itemsCount).to.equal(extraDataItems.length);
+      expect(stateBefore.itemsProcessed).to.equal(0);
+      expect(stateBefore.lastSortingKey).to.equal("0");
+      expect(stateBefore.dataHash).to.equal(extraDataHash);
 
       await oracle.connect(member1).submitReportExtraDataList(extraDataList);
 
       const stateAfter = await oracle.getExtraDataProcessingState();
 
-      expect(stateAfter.refSlot).to.be.equal(reportFields.refSlot);
-      expect(stateAfter.dataFormat).to.be.equal(EXTRA_DATA_FORMAT_LIST);
+      expect(stateAfter.refSlot).to.equal(reportFields.refSlot);
+      expect(stateAfter.dataFormat).to.equal(EXTRA_DATA_FORMAT_LIST);
       expect(stateAfter.submitted).to.be.true;
-      expect(stateAfter.itemsCount).to.be.equal(extraDataItems.length);
-      expect(stateAfter.itemsProcessed).to.be.equal(extraDataItems.length);
+      expect(stateAfter.itemsCount).to.equal(extraDataItems.length);
+      expect(stateAfter.itemsProcessed).to.equal(extraDataItems.length);
       // TODO: figure out how to build this value and test it properly
-      expect(stateAfter.lastSortingKey).to.be.equal(
+      expect(stateAfter.lastSortingKey).to.equal(
         "3533694129556768659166595001485837031654967793751237971583444623713894401",
       );
-      expect(stateAfter.dataHash).to.be.equal(extraDataHash);
+      expect(stateAfter.dataHash).to.equal(extraDataHash);
     });
   });
 });

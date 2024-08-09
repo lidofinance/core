@@ -26,7 +26,7 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
   suiteFunction(`${tokenName} ERC-2612 Compliance`, () => {
     let token: IERC20 & IERC2612;
     let domain: TypedDataDomain;
-    let owner: string;
+    let holder: string;
     let signer: Signer;
 
     let permit: Permit;
@@ -35,15 +35,15 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
     let originalState: string;
 
     before(async () => {
-      ({ token, domain, owner, signer } = await deploy());
+      ({ token, domain, owner: holder, signer } = await deploy());
 
-      const holderBalance = await token.balanceOf(owner);
+      const holderBalance = await token.balanceOf(holder);
 
       permit = {
-        owner,
+        owner: holder,
         spender: certainAddress("spender"),
         value: holderBalance,
-        nonce: await token.nonces(owner),
+        nonce: await token.nonces(holder),
         deadline: BigInt(await time.latest()) + days(7n),
       };
       signature = await signPermit(domain, permit, signer);

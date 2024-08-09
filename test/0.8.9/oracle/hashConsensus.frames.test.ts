@@ -23,7 +23,7 @@ import {
   ZERO_HASH,
 } from "test/deploy";
 
-describe("HashConsensus:frames", function () {
+describe("HashConsensus:frames", function() {
   const TEST_INITIAL_EPOCH = 3n;
 
   let admin: Signer;
@@ -131,7 +131,7 @@ describe("HashConsensus:frames", function () {
     it("after deploy, the initial epoch is far in the future", async () => {
       const maxTimestamp = BigInt(2) ** BigInt(64) - BigInt(1);
       const maxEpoch = (maxTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT / SLOTS_PER_EPOCH;
-      expect((await consensus.getFrameConfig()).initialEpoch).to.be.equal(maxEpoch);
+      expect((await consensus.getFrameConfig()).initialEpoch).to.equal(maxEpoch);
 
       const initialRefSlot = await consensus.getInitialRefSlot();
       expect(initialRefSlot).to.equal(maxEpoch * SLOTS_PER_EPOCH - 1n);
@@ -168,10 +168,10 @@ describe("HashConsensus:frames", function () {
       await consensus.setTimeInEpochs(TEST_INITIAL_EPOCH - 2n);
 
       await consensus.connect(admin).updateInitialEpoch(TEST_INITIAL_EPOCH - 1n);
-      expect((await consensus.getFrameConfig()).initialEpoch).to.be.equal(TEST_INITIAL_EPOCH - 1n);
+      expect((await consensus.getFrameConfig()).initialEpoch).to.equal(TEST_INITIAL_EPOCH - 1n);
 
       await consensus.connect(admin).updateInitialEpoch(TEST_INITIAL_EPOCH);
-      expect((await consensus.getFrameConfig()).initialEpoch).to.be.equal(TEST_INITIAL_EPOCH);
+      expect((await consensus.getFrameConfig()).initialEpoch).to.equal(TEST_INITIAL_EPOCH);
 
       const initialRefSlot = await consensus.getInitialRefSlot();
       expect(initialRefSlot).to.equal(TEST_INITIAL_EPOCH * SLOTS_PER_EPOCH - 1n);

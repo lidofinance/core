@@ -1,14 +1,14 @@
-name: Code Analysis
+name: Analysis
 
 on:
   push:
-    branches: [ master, develop, repovation ]
+    branches: [master, develop, repovation]
   pull_request:
-    branches: [ master, develop, repovation ]
+    branches: [master, develop, repovation]
 
 jobs:
   slither:
-    name: Solidity code analysis
+    name: Slither
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,18 +17,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - run: corepack enable
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: "yarn"
-
-      - name: Install dependencies
-        run: yarn install
+      - name: Common setup
+        uses: ./.github/workflows/setup
 
       # REVIEW: here and below steps taken from official guide
       # https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#caching-packages

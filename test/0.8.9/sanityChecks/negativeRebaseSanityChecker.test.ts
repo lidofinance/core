@@ -157,68 +157,67 @@ describe("OracleReportSanityChecker.sol", () => {
 
   context("OracleReportSanityChecker rebase report data", () => {
     async function newChecker() {
-      const checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+      return await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
         deployer.address,
         Object.values(defaultLimitsList),
       ]);
-      return checker;
     }
 
     it(`sums negative rebases for a few days`, async () => {
-      const checker = await newChecker();
+      const reportChecker = await newChecker();
       const timestamp = await time.latest();
-      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(0);
-      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 10, 100);
-      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 10, 150);
-      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(250);
+      expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(0);
+      await reportChecker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 10, 100);
+      await reportChecker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 10, 150);
+      expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(250);
     });
 
     it(`sums negative rebases for 18 days`, async () => {
-      const checker = await newChecker();
+      const reportChecker = await newChecker();
       const timestamp = await time.latest();
-      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 0, 700);
-      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 0, 13);
-      await checker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 0, 10);
-      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 0, 5);
-      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 0, 150);
-      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 0, 100);
-      expect(await checker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(100 + 150 + 5 + 10);
+      await reportChecker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 0, 700);
+      await reportChecker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 0, 13);
+      await reportChecker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 0, 10);
+      await reportChecker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 0, 5);
+      await reportChecker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 0, 150);
+      await reportChecker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 0, 100);
+      expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18 * SLOTS_PER_DAY)).to.equal(100 + 150 + 5 + 10);
     });
 
     it(`returns exited validators count`, async () => {
-      const checker = await newChecker();
+      const reportChecker = await newChecker();
       const timestamp = await time.latest();
-      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
-      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
-      await checker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 12, 100);
-      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
-      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
-      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 19 * SLOTS_PER_DAY)).to.equal(10);
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 18 * SLOTS_PER_DAY)).to.equal(11);
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 1 * SLOTS_PER_DAY)).to.equal(15);
+      await reportChecker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
+      await reportChecker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
+      await reportChecker.addReportData(timestamp - 17 * SLOTS_PER_DAY, 12, 100);
+      await reportChecker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
+      await reportChecker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
+      await reportChecker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 19 * SLOTS_PER_DAY)).to.equal(10);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 18 * SLOTS_PER_DAY)).to.equal(11);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 1 * SLOTS_PER_DAY)).to.equal(15);
     });
 
     it(`returns exited validators count for missed or non-existent report`, async () => {
-      const checker = await newChecker();
+      const reportChecker = await newChecker();
       const timestamp = await time.latest();
-      await checker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
-      await checker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
-      await checker.addReportData(timestamp - 15 * SLOTS_PER_DAY, 12, 100);
-      await checker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
-      await checker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
-      await checker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
+      await reportChecker.addReportData(timestamp - 19 * SLOTS_PER_DAY, 10, 100);
+      await reportChecker.addReportData(timestamp - 18 * SLOTS_PER_DAY, 11, 100);
+      await reportChecker.addReportData(timestamp - 15 * SLOTS_PER_DAY, 12, 100);
+      await reportChecker.addReportData(timestamp - 5 * SLOTS_PER_DAY, 13, 100);
+      await reportChecker.addReportData(timestamp - 2 * SLOTS_PER_DAY, 14, 100);
+      await reportChecker.addReportData(timestamp - 1 * SLOTS_PER_DAY, 15, 100);
       // Out of range: day -20
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 20 * SLOTS_PER_DAY)).to.equal(0);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 20 * SLOTS_PER_DAY)).to.equal(0);
       // Missed report: day -6
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 6 * SLOTS_PER_DAY)).to.equal(12);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 6 * SLOTS_PER_DAY)).to.equal(12);
       // Missed report: day -7
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 7 * SLOTS_PER_DAY)).to.equal(12);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 7 * SLOTS_PER_DAY)).to.equal(12);
       // Expected report: day 15
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 15 * SLOTS_PER_DAY)).to.equal(12);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 15 * SLOTS_PER_DAY)).to.equal(12);
       // Missed report: day -16
-      expect(await checker.exitedValidatorsAtTimestamp(timestamp - 16 * SLOTS_PER_DAY)).to.equal(11);
+      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 16 * SLOTS_PER_DAY)).to.equal(11);
     });
   });
 

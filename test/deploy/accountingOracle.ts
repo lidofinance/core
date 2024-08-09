@@ -147,10 +147,10 @@ export async function initAccountingOracle({
     await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), dataSubmitter);
   }
 
-  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.be.equal(EXTRA_DATA_FORMAT_EMPTY);
-  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.be.equal(EXTRA_DATA_FORMAT_LIST);
-  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
-  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.equal(EXTRA_DATA_FORMAT_EMPTY);
+  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.equal(EXTRA_DATA_FORMAT_LIST);
+  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
 
   return initTx;
 }

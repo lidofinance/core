@@ -2,31 +2,26 @@ name: Coverage
 
 on:
   push:
-    branches: [ master, develop, repovation ]
+    branches: [master, develop, repovation]
   pull_request:
-    branches: [ master, develop, repovation ]
+    branches: [master, develop, repovation]
 
 jobs:
   coverage:
-    name: Solidity coverage
+    name: Hardhat
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - run: corepack enable
+      - name: Common setup
+        uses: ./.github/workflows/setup
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: "yarn"
+      # Remove the integration tests from the test suite, as they require a mainnet fork to run properly
+      - name: Remove integration tests
+        run: rm -rf test/integration
 
-      - name: Install dependencies
-        run: yarn install
-
-      - name: Run Solidity coverage
+      - name: Collect coverage
         run: yarn test:coverage
 
       - name: Produce the coverage report
@@ -37,5 +32,5 @@ jobs:
           diff: true
           diff-branch: master
           diff-storage: _core_coverage_reports
-          coverage-summary-title: "Code Coverage Summary"
+          coverage-summary-title: "Hardhat Unit Tests Coverage Summary"
           togglable-report: true

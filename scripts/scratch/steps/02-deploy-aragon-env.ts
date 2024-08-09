@@ -9,7 +9,7 @@ import { deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
 import { assignENSName } from "lib/ens";
 import { findEvents } from "lib/event";
 import { streccak } from "lib/keccak";
-import { log, logSplitter } from "lib/log";
+import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 async function main() {
@@ -114,7 +114,7 @@ async function main() {
 async function deployAPM(owner: string, labelName: string, ens: ENS, apmRegistryFactory: LoadedContract) {
   log(`Deploying APM for node ${labelName}.eth...`);
 
-  logSplitter();
+  log.splitter();
   const { parentNode, labelHash, nodeName, node } = await assignENSName(
     "eth",
     labelName,
@@ -124,12 +124,12 @@ async function deployAPM(owner: string, labelName: string, ens: ENS, apmRegistry
     "APMRegistryFactory",
   );
 
-  logSplitter();
+  log.splitter();
   log(`Using APMRegistryFactory: ${chalk.yellow(apmRegistryFactory.address)}`);
   const receipt = await makeTx(apmRegistryFactory, "newAPM", [parentNode, labelHash, owner], { from: owner });
   const apmAddress = findEvents(receipt, "DeployAPM")[0].args.apm;
   log(`APMRegistry address: ${chalk.yellow(apmAddress)}`);
-  logSplitter();
+  log.splitter();
 
   const apmRegistry = await getContractAt("APMRegistry", apmAddress);
 
@@ -152,10 +152,10 @@ async function deployAragonID(owner: string, ens: ENS) {
   const fifsResolvingRegistrarArgs = [await ens.getAddress(), publicResolverAddress, node];
   const aragonID = await deployWithoutProxy(Sk.aragonId, "FIFSResolvingRegistrar", owner, fifsResolvingRegistrarArgs);
 
-  logSplitter();
+  log.splitter();
   await assignENSName("eth", "aragonid", owner, ens, aragonID.address, "AragonID");
 
-  logSplitter();
+  log.splitter();
   await makeTx(aragonID, "register", [streccak("owner"), owner], { from: owner });
 
   return aragonID;

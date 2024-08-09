@@ -23,6 +23,7 @@ const VIEW_NAMES_AND_CTOR_ARGS = [
 
 /////////////// GLOBAL VARIABLES ///////////////
 const g_newAddresses: { [key: string]: string } = {};
+
 /////////////// GLOBAL VARIABLES ///////////////
 
 async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract) {

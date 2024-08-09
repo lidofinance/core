@@ -11,7 +11,7 @@ import { Snapshot } from "test/suite";
 
 const manageReportProcessorRoleKeccak256 = streccak("MANAGE_REPORT_PROCESSOR_ROLE");
 
-describe("HashConsensus:reportProcessor", function () {
+describe("HashConsensus:reportProcessor", function() {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -44,7 +44,7 @@ describe("HashConsensus:reportProcessor", function () {
     afterEach(rollback);
 
     it("properly set initial report processor", async () => {
-      expect(await consensus.getReportProcessor()).to.be.equal(
+      expect(await consensus.getReportProcessor()).to.equal(
         await reportProcessor1.getAddress(),
         "processor address differs",
       );

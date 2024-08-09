@@ -8,7 +8,7 @@ import {
   deployWithoutProxy,
   updateProxyImplementation,
 } from "lib/deploy";
-import { log, logWideSplitter } from "lib/log";
+import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 async function main() {
@@ -32,7 +32,7 @@ async function main() {
   const admin = deployer;
 
   const sanityChecks = state["oracleReportSanityChecker"].deployParameters;
-  logWideSplitter();
+  log.wideSplitter();
 
   if (!chainSpec.depositContract) {
     throw new Error(`please specify deposit contract address in state file at /chainSpec/depositContract`);
@@ -49,7 +49,7 @@ async function main() {
     deployer,
     oracleDaemonConfigArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === DummyEmptyContract ===
@@ -67,7 +67,7 @@ async function main() {
     [],
     dummyContract.address,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === OracleReportSanityChecker ===
@@ -96,19 +96,19 @@ async function main() {
     deployer,
     oracleReportSanityCheckerArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === EIP712StETH ===
   //
   await deployWithoutProxy(Sk.eip712StETH, "EIP712StETH", deployer, [lidoAddress]);
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === WstETH ===
   //
   const wstETH = await deployWithoutProxy(Sk.wstETH, "WstETH", deployer, [lidoAddress]);
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === WithdrawalQueueERC721 ===
@@ -125,7 +125,7 @@ async function main() {
     deployer,
     withdrawalQueueERC721Args,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === WithdrawalVault ===
@@ -150,7 +150,7 @@ async function main() {
     },
     address: withdrawalsManagerProxy.address,
   });
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === LidoExecutionLayerRewardsVault ===
@@ -161,7 +161,7 @@ async function main() {
     deployer,
     [lidoAddress, treasuryAddress],
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === StakingRouter ===
@@ -197,7 +197,7 @@ async function main() {
       `NB: skipping deployment of DepositSecurityModule - using the predefined address ${depositSecurityModuleAddress} instead`,
     );
   }
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === AccountingOracle ===
@@ -216,7 +216,7 @@ async function main() {
     deployer,
     accountingOracleArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === HashConsensus for AccountingOracle ===
@@ -236,7 +236,7 @@ async function main() {
     deployer,
     hashConsensusForAccountingArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === ValidatorsExitBusOracle ===
@@ -249,7 +249,7 @@ async function main() {
     deployer,
     validatorsExitBusOracleArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === HashConsensus for ValidatorsExitBusOracle ===
@@ -269,7 +269,7 @@ async function main() {
     deployer,
     hashConsensusForExitBusArgs,
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === Burner ===
@@ -282,7 +282,7 @@ async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ];
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, burnerArgs);
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === LidoLocator: update to valid implementation ===

@@ -19,7 +19,7 @@ export function days(number: bigint): bigint {
 export async function getCurrentBlockTimestamp() {
   const blockNum = await ethers.provider.getBlockNumber();
   const block = await ethers.provider.getBlock(blockNum);
-  return block?.timestamp ?? 0;
+  return BigInt(block?.timestamp ?? 0);
 }
 
 export async function getNextBlockTimestamp() {
@@ -52,6 +52,7 @@ export function formatTimeInterval(sec: number | bigint) {
   if (typeof sec === "bigint") {
     sec = parseInt(sec.toString());
   }
+
   function floor(n: number, multiplier: number) {
     return Math.floor(n * multiplier) / multiplier;
   }

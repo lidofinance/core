@@ -254,8 +254,8 @@ describe("AccountingOracle.sol:happyPath", () => {
     it(`withdrawal queue got bunker mode report`, async () => {
       const onOracleReportLastCall = await mockWithdrawalQueue.lastCall__onOracleReport();
       expect(onOracleReportLastCall.callCount).to.equal(1);
-      expect(onOracleReportLastCall.isBunkerMode).to.be.equal(reportFields.isBunkerMode);
-      expect(onOracleReportLastCall.prevReportTimestamp).to.be.equal(
+      expect(onOracleReportLastCall.isBunkerMode).to.equal(reportFields.isBunkerMode);
+      expect(onOracleReportLastCall.prevReportTimestamp).to.equal(
         GENESIS_TIME + prevProcessingRefSlot * SECONDS_PER_SLOT,
       );
     });

@@ -296,13 +296,13 @@ describe("SigningKeys.sol", () => {
   // @note This also tests the `initKeysSigsBuf` function, because they are related
   context("loadKeysSigs", () => {
     it("Loads the keys and signatures correctly", async () => {
-      const [publicKeys, signatures] = firstNodeOperatorKeys.slice();
+      const [publicKeys, keySignatures] = firstNodeOperatorKeys.slice();
       await signingKeys.saveKeysSigs(
         firstNodeOperatorId,
         firstNodeOperatorStartIndex,
         firstNodeOperatorKeys.count,
         publicKeys,
-        signatures,
+        keySignatures,
       );
 
       for (let i = 0; i < firstNodeOperatorKeys.count; ++i) {

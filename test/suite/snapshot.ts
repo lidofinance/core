@@ -11,11 +11,15 @@ export class Snapshot {
 
   public static async restore(snapshot: string) {
     const result = await Snapshot.provider.send("evm_revert", [snapshot]);
-    if (!result) throw new Error("`evm_revert` failed.");
+    if (!result) {
+      throw new Error("`evm_revert` failed.");
+    }
   }
 
   public static async refresh(snapshot: string) {
-    if (snapshot) await Snapshot.restore(snapshot);
+    if (snapshot) {
+      await Snapshot.restore(snapshot);
+    }
 
     return Snapshot.take();
   }

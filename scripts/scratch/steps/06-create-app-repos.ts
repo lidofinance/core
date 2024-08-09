@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { getContractAt } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { log, logSplitter } from "lib/log";
+import { log } from "lib/log";
 import { readNetworkState, setValueInState, Sk } from "lib/state-file";
 
 const NULL_CONTENT_URI =
@@ -13,7 +13,7 @@ async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  logSplitter();
+  log.splitter();
   const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
 
   const createReposArguments = [

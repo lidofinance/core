@@ -52,7 +52,7 @@ describe("BaseOracle:accessControl", () => {
       const role = await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE();
       await expect(oracle.setConsensusContract(stranger)).to.be.revertedWithOZAccessControlError(admin.address, role);
 
-      expect(await oracle.getConsensusContract()).to.be.equal(await consensus.getAddress());
+      expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
     });
 
     it("Updates consensus contract with MANAGE_CONSENSUS_CONTRACT_ROLE", async () => {
@@ -71,7 +71,7 @@ describe("BaseOracle:accessControl", () => {
       await oracle.grantRole(role, manager);
       await oracle.connect(manager).setConsensusContract(await newConsensusContract.getAddress());
 
-      expect(await oracle.getConsensusContract()).to.be.equal(await newConsensusContract.getAddress());
+      expect(await oracle.getConsensusContract()).to.equal(await newConsensusContract.getAddress());
     });
   });
 
@@ -84,7 +84,7 @@ describe("BaseOracle:accessControl", () => {
         role,
       );
 
-      expect(await oracle.getConsensusVersion()).to.be.equal(CONSENSUS_VERSION);
+      expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
     });
 
     it("Updates consensus version with MANAGE_CONSENSUS_VERSION_ROLE", async () => {
@@ -93,7 +93,7 @@ describe("BaseOracle:accessControl", () => {
       await oracle.grantRole(role, manager);
       await oracle.connect(manager).setConsensusVersion(2);
 
-      expect(await oracle.getConsensusVersion()).to.be.equal(2);
+      expect(await oracle.getConsensusVersion()).to.equal(2);
     });
   });
 
@@ -109,13 +109,13 @@ describe("BaseOracle:accessControl", () => {
         oracle.connect(stranger).submitConsensusReport(HASH_1, initialRefSlot, initialRefSlot),
       ).to.be.revertedWithCustomError(oracle, "SenderIsNotTheConsensusContract");
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(0);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(0);
     });
 
     it("Submits report from a consensus contract", async () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, initialRefSlot + SLOTS_PER_FRAME);
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(1);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(1);
     });
   });
 
@@ -136,7 +136,7 @@ describe("BaseOracle:accessControl", () => {
     it("Discards report from a consensus contract", async () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, initialRefSlot + SLOTS_PER_FRAME);
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(1);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(1);
 
       await consensus.discardReportAsConsensus(initialRefSlot);
     });

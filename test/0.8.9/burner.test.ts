@@ -61,18 +61,18 @@ describe("Burner", () => {
     });
 
     it("Sets shares burnt to non-zero values", async () => {
-      const coverSharesBurnt = 1n;
-      const nonCoverSharesBurnt = 3n;
+      const differentCoverSharesBurnt = 1n;
+      const differentNonCoverSharesBurntNonZero = 3n;
 
       burner = await new Burner__factory(deployer).deploy(
         admin,
         treasury,
         steth,
-        coverSharesBurnt,
-        nonCoverSharesBurnt,
+        differentCoverSharesBurnt,
+        differentNonCoverSharesBurntNonZero,
       );
-      expect(await burner.getCoverSharesBurnt()).to.equal(coverSharesBurnt);
-      expect(await burner.getNonCoverSharesBurnt()).to.equal(nonCoverSharesBurnt);
+      expect(await burner.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
+      expect(await burner.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
     });
 
     it("Reverts if admin is zero address", async () => {
