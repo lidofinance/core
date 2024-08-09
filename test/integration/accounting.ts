@@ -394,38 +394,38 @@ describe("Accounting integration", () => {
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(rewardsExcess);
   });
-});
 
-it("Should account correctly with no withdrawals", async () => {
-  const { lido, accountingOracle } = ctx.contracts;
+  it("Should account correctly with no withdrawals", async () => {
+    const { lido, accountingOracle } = ctx.contracts;
 
-  const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
-  const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
-  const totalPooledEtherBefore = await lido.getTotalPooledEther();
-  const totalSharesBefore = await lido.getTotalShares();
-  const lidoBalanceBefore = await ethers.provider.getBalance(lido.address);
+    const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
+    const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
+    const totalPooledEtherBefore = await lido.getTotalPooledEther();
+    const totalSharesBefore = await lido.getTotalShares();
+    const lidoBalanceBefore = await ethers.provider.getBalance(lido.address);
 
-  const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
 
-  const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
+    const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-  const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParams(reportTxReceipt);
 
-  const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
-  expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
+    const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
+    expect(lastProcessingRefSlotBefore).to.be.lessThan(lastProcessingRefSlotAfter);
 
-  const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
-  expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
+    const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
+    expect(totalELRewardsCollectedBefore).to.equal(totalELRewardsCollectedAfter);
 
-  const totalPooledEtherAfter = await lido.getTotalPooledEther();
-  expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + amountOfETHLocked);
+    const totalPooledEtherAfter = await lido.getTotalPooledEther();
+    expect(totalPooledEtherBefore).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
-  const totalSharesAfter = await lido.getTotalShares();
-  expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
+    const totalSharesAfter = await lido.getTotalShares();
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
-  const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-  expect(lidoBalanceBefore).to.equal(lidoBalanceAfter + amountOfETHLocked);
+    const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
+    expect(lidoBalanceBefore).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
-  expect(getEvents(reportTxReceipt, "WithdrawalsReceived").length).be.equal(0);
-  expect(getEvents(reportTxReceipt, "ELRewardsReceived").length).be.equal(0);
+    expect(getEvents(reportTxReceipt, "WithdrawalsReceived").length).be.equal(0);
+    expect(getEvents(reportTxReceipt, "ELRewardsReceived").length).be.equal(0);
+  });
 });
