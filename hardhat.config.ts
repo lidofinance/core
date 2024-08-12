@@ -25,6 +25,11 @@ const config: HardhatUserConfig = {
     local: {
       url: RPC_URL,
     },
+    sepolia: {
+      url: RPC_URL,
+      chainId: 11155111,
+      timeout: 60000 * 15,
+    },
     hardhat: {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
