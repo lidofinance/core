@@ -11,10 +11,12 @@ async function main() {
   log.scriptStart(__filename);
   const deployer = process.env.DEPLOYER || "";
 
-  // 0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7 - for Sepolia
-  const lidoLocatorAddressProxy = "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"; // state[Sk.lidoLocator].proxy.address;
-
-  const admin = deployer;
+  let lidoLocatorAddressProxy = "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"; // state[Sk.lidoLocator].proxy.address;
+  let daoAdmin = "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c";
+  if (process.env.NETWORK == "sepolia") {
+    lidoLocatorAddressProxy = "0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7";
+    daoAdmin = "0x32A0E5828B62AAb932362a4816ae03b860b65e83";
+  }
 
   //
   // === OracleReportSanityChecker ===
@@ -37,7 +39,7 @@ async function main() {
 
   const oracleReportSanityCheckerArgs = [
     lidoLocatorAddressProxy,
-    admin,
+    daoAdmin,
     [
       sanityChecks.churnValidatorsPerDayLimit,
       sanityChecks.deprecatedOneOffCLBalanceDecreaseBPLimit,
