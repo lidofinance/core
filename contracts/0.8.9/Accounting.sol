@@ -406,6 +406,7 @@ contract Accounting is VaultHub {
         );
 
         if (_context.update.totalSharesToBurn > 0) {
+//            FIXME: expected to be called as StETH
             _contracts.burner.commitSharesToBurn(_context.update.totalSharesToBurn);
         }
 
