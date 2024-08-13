@@ -638,6 +638,16 @@ export const ensureOracleCommitteeMembers = async (
 
   const agentSigner = await ctx.getSigner("agent");
 
+  if (addresses.length >= minMembersCount) {
+    log.debug("Oracle committee members count is sufficient", {
+      "Min members count": minMembersCount,
+      "Members count": addresses.length,
+      "Members": addresses.join(", "),
+    });
+
+    return;
+  }
+
   const managementRole = await hashConsensus.MANAGE_MEMBERS_AND_QUORUM_ROLE();
   await hashConsensus.connect(agentSigner).grantRole(managementRole, agentSigner);
 

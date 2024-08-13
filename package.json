@@ -6,12 +6,12 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "yarn@4.3.1",
+  "packageManager": "yarn@4.4.0",
   "scripts": {
     "compile": "hardhat compile",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:sol:fix": "yarn lint:sol --fix",
-    "lint:ts": "eslint . --ignore-path .gitignore --max-warnings=0",
+    "lint:ts": "eslint . --max-warnings=0 --flag unstable_ts_config",
     "lint:ts:fix": "yarn lint:ts --fix",
     "lint": "yarn lint:sol && yarn lint:ts",
     "format": "prettier . --write",
@@ -32,15 +32,17 @@
   },
   "lint-staged": {
     "./**/*.ts": [
-      "eslint --ignore-path .gitignore --max-warnings=0"
+      "eslint --max-warnings=0 --flag unstable_ts_config"
     ],
     "./**/*.{ts,md,json}": [
       "prettier --write"
     ]
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.3.0",
+    "@commitlint/cli": "^19.4.0",
     "@commitlint/config-conventional": "^19.2.2",
+    "@eslint/compat": "^1.1.1",
+    "@eslint/js": "^9.9.0",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.7",
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-ignition": "^0.15.5",
@@ -51,38 +53,41 @@
     "@nomicfoundation/ignition-core": "^0.15.5",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
-    "@types/chai": "^4.3.16",
+    "@types/chai": "^4.3.17",
+    "@types/eslint": "^9.6.0",
+    "@types/eslint__js": "^8.42.3",
     "@types/mocha": "10.0.7",
-    "@types/node": "20.14.13",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
+    "@types/node": "20.14.15",
     "bigint-conversion": "^2.4.3",
     "chai": "^4.5.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.4.5",
-    "eslint": "^8.57.0",
+    "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-no-only-tests": "^3.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-simple-import-sort": "12.1.1",
     "ethereumjs-util": "^7.1.5",
     "ethers": "^6.13.2",
-    "glob": "^10.4.5",
-    "hardhat": "^2.22.7",
+    "glob": "^11.0.0",
+    "globals": "^15.9.0",
+    "hardhat": "^2.22.8",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-gas-reporter": "^1.0.10",
     "hardhat-ignore-warnings": "^0.2.11",
-    "hardhat-tracer": "3.0.3",
+    "hardhat-tracer": "3.1.0",
     "hardhat-watcher": "2.5.0",
     "husky": "^9.1.4",
-    "lint-staged": "^15.2.7",
+    "lint-staged": "^15.2.8",
     "prettier": "^3.3.3",
-    "solhint": "^5.0.2",
+    "solhint": "^5.0.3",
     "solhint-plugin-lido": "^0.0.4",
     "solidity-coverage": "^0.8.12",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typechain": "^8.3.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.0.1"
   },
   "dependencies": {
     "@aragon/apps-agent": "2.1.0",
