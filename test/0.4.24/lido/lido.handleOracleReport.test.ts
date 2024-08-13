@@ -579,9 +579,9 @@ describe("Lido:report", () => {
       expect(await locator.postTokenRebaseReceiver()).to.equal(ZeroAddress);
 
       const accountingOracleAddress = await locator.accountingOracle();
-      const accountingOracle = await impersonate(accountingOracleAddress, ether("1000.0"));
+      const accountingOracleSigner = await impersonate(accountingOracleAddress, ether("1000.0"));
 
-      await expect(lido.connect(accountingOracle).handleOracleReport(...report())).not.to.emit(
+      await expect(lido.connect(accountingOracleSigner).handleOracleReport(...report())).not.to.emit(
         postTokenRebaseReceiver,
         "Mock__PostTokenRebaseHandled",
       );

@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle } from "typechain-types";
+import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle, MockReportProcessor } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -28,7 +28,7 @@ export async function deployMockLegacyOracle({
   genesisTime = GENESIS_TIME,
   lastCompletedEpochId = V1_ORACLE_LAST_COMPLETED_EPOCH,
 } = {}) {
-  const legacyOracle = await ethers.deployContract("MockLegacyOracle");
+  const legacyOracle = await ethers.deployContract("LegacyOracle__MockForAccountingOracle");
   await legacyOracle.setParams(epochsPerFrame, slotsPerEpoch, secondsPerSlot, genesisTime, lastCompletedEpochId);
   return legacyOracle;
 }
@@ -75,7 +75,7 @@ export async function deployAccountingOracleSetup(
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {
-    reportProcessor: oracle,
+    reportProcessor: oracle as unknown as MockReportProcessor,
     epochsPerFrame,
     slotsPerEpoch,
     secondsPerSlot,
@@ -143,10 +143,10 @@ export async function initAccountingOracle({
     await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), dataSubmitter);
   }
 
-  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.be.equal(EXTRA_DATA_FORMAT_EMPTY);
-  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.be.equal(EXTRA_DATA_FORMAT_LIST);
-  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
-  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.equal(EXTRA_DATA_FORMAT_EMPTY);
+  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.equal(EXTRA_DATA_FORMAT_LIST);
+  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
 
   return initTx;
 }

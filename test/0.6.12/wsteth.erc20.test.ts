@@ -1,7 +1,6 @@
 import { ethers } from "hardhat";
 
-import { WstETH__factory } from "typechain-types";
-import { Steth__MinimalMock__factory } from "typechain-types";
+import { Steth__MinimalMock__factory, WstETH__factory } from "typechain-types";
 
 import { ether } from "lib/units";
 

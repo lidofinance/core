@@ -3,17 +3,15 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { OssifiableProxy } from "typechain-types";
-import { VersionedMock } from "typechain-types/contracts/0.4.24/test_helpers";
-import { VersionedMock__factory } from "typechain-types/factories/contracts/0.4.24/test_helpers";
+import { OssifiableProxy, Versioned__Harness0424, Versioned__Harness0424__factory } from "typechain-types";
 
 // TODO: rewrite to be reusable for any derived contract
 describe("Versioned", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let proxy: OssifiableProxy;
-  let impl: VersionedMock;
-  let versioned: VersionedMock;
+  let impl: Versioned__Harness0424;
+  let versioned: Versioned__Harness0424;
 
   const DEFAULT_VERSION = 0n;
   const INIT_VERSION = 1n;
@@ -23,13 +21,9 @@ describe("Versioned", () => {
 
     // because we have two VersionMocks, we have to specify the full path to the contract
     // which for some reason loses the typing
-    impl = (await ethers.deployContract(
-      "contracts/0.4.24/test_helpers/VersionedMock.sol:VersionedMock",
-    )) as unknown as VersionedMock;
-    proxy = await ethers.deployContract("OssifiableProxy", [await impl.getAddress(), admin.address, new Uint8Array()], {
-      from: admin,
-    });
-    versioned = VersionedMock__factory.connect(await proxy.getAddress(), user);
+    impl = await ethers.deployContract("Versioned__Harness0424");
+    proxy = await ethers.deployContract("OssifiableProxy", [await impl.getAddress(), admin.address, new Uint8Array()], { from: admin });
+    versioned = Versioned__Harness0424__factory.connect(await proxy.getAddress(), user);
   });
 
   it("Implementation is petrified.", async () => {

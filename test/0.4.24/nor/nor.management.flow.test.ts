@@ -134,7 +134,8 @@ describe("NodeOperatorsRegistry:management", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("addNodeOperator", () => {
-    beforeEach(async () => {});
+    beforeEach(async () => {
+    });
 
     it("Reverts if invalid name", async () => {
       await expect(nor.addNodeOperator("", certainAddress("reward-address-0"))).to.be.revertedWith("WRONG_NAME_LENGTH");
@@ -310,7 +311,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .withArgs(0n, "node-operator-0");
 
       const nodeOperator = await nor.getNodeOperator(0n, true);
-      expect(nodeOperator.name).to.be.equal("node-operator-0");
+      expect(nodeOperator.name).to.equal("node-operator-0");
     });
   });
 
@@ -347,19 +348,19 @@ describe("NodeOperatorsRegistry:management", () => {
         .withArgs(0n, addr);
 
       const nodeOperator = await nor.getNodeOperator(0n, true);
-      expect(nodeOperator.rewardAddress).to.be.equal(addr);
+      expect(nodeOperator.rewardAddress).to.equal(addr);
     });
   });
 
   context("setNodeOperatorStakingLimit", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
     });
@@ -392,7 +393,7 @@ describe("NodeOperatorsRegistry:management", () => {
       const newVetted = 5n;
       expect(newVetted < oldVetted);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(oldVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
       const oldNonce = await nor.getNonce();
 
       await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, newVetted))
@@ -403,7 +404,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .to.emit(nor, "NonceChanged")
         .withArgs(oldNonce + 1n);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(newVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(newVetted);
     });
 
     it("Able to increase vetted keys count", async () => {
@@ -411,7 +412,7 @@ describe("NodeOperatorsRegistry:management", () => {
       const newVetted = 8n;
       expect(newVetted > oldVetted);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(oldVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
       const oldNonce = await nor.getNonce();
 
       await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, newVetted))
@@ -422,7 +423,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .to.emit(nor, "NonceChanged")
         .withArgs(oldNonce + 1n);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(newVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(newVetted);
     });
 
     it("Vetted keys count can only be ≥ deposited", async () => {
@@ -433,7 +434,7 @@ describe("NodeOperatorsRegistry:management", () => {
       const firstNo = await nor.getNodeOperator(firstNodeOperatorId, false);
       expect(vettedBelowDeposited < firstNo.totalDepositedValidators);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(oldVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
       const oldNonce = await nor.getNonce();
 
       await expect(
@@ -446,7 +447,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .to.emit(nor, "NonceChanged")
         .withArgs(oldNonce + 1n);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(
         firstNo.totalDepositedValidators,
       );
     });
@@ -459,7 +460,7 @@ describe("NodeOperatorsRegistry:management", () => {
       const firstNo = await nor.getNodeOperator(firstNodeOperatorId, false);
       expect(vettedAboveTotal > firstNo.totalAddedValidators);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(oldVetted);
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
       const oldNonce = await nor.getNonce();
 
       await expect(
@@ -472,7 +473,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .to.emit(nor, "NonceChanged")
         .withArgs(oldNonce + 1n);
 
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.be.equal(
+      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(
         firstNo.totalAddedValidators,
       );
     });
@@ -480,13 +481,13 @@ describe("NodeOperatorsRegistry:management", () => {
 
   context("getNodeOperator", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
     });
@@ -500,11 +501,11 @@ describe("NodeOperatorsRegistry:management", () => {
 
       expect(noInfo.active).to.be.true;
       expect(noInfo.name).to.be.empty;
-      expect(noInfo.rewardAddress).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
-      expect(noInfo.totalVettedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount);
-      expect(noInfo.totalExitedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].exitedSigningKeysCount);
-      expect(noInfo.totalAddedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount);
-      expect(noInfo.totalDepositedValidators).to.be.equal(
+      expect(noInfo.rewardAddress).to.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
+      expect(noInfo.totalVettedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount);
+      expect(noInfo.totalExitedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].exitedSigningKeysCount);
+      expect(noInfo.totalAddedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount);
+      expect(noInfo.totalDepositedValidators).to.equal(
         NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
       );
     });
@@ -513,12 +514,12 @@ describe("NodeOperatorsRegistry:management", () => {
       const noInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
       expect(noInfo.active).to.be.true;
-      expect(noInfo.name).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].name);
-      expect(noInfo.rewardAddress).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
-      expect(noInfo.totalVettedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount);
-      expect(noInfo.totalExitedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].exitedSigningKeysCount);
-      expect(noInfo.totalAddedValidators).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount);
-      expect(noInfo.totalDepositedValidators).to.be.equal(
+      expect(noInfo.name).to.equal(NODE_OPERATORS[secondNodeOperatorId].name);
+      expect(noInfo.rewardAddress).to.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
+      expect(noInfo.totalVettedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount);
+      expect(noInfo.totalExitedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].exitedSigningKeysCount);
+      expect(noInfo.totalAddedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount);
+      expect(noInfo.totalDepositedValidators).to.equal(
         NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount,
       );
     });
@@ -526,7 +527,7 @@ describe("NodeOperatorsRegistry:management", () => {
 
   context("getType", () => {
     it("Returns module type", async () => {
-      expect(await nor.getType()).to.be.equal(moduleType);
+      expect(await nor.getType()).to.equal(moduleType);
     });
   });
 
@@ -534,27 +535,27 @@ describe("NodeOperatorsRegistry:management", () => {
     it("Returns zeros if no operators yet", async () => {
       const summary = await nor.getStakingModuleSummary();
 
-      expect(summary.totalExitedValidators).to.be.equal(0n);
-      expect(summary.totalDepositedValidators).to.be.equal(0n);
-      expect(summary.depositableValidatorsCount).to.be.equal(0n);
+      expect(summary.totalExitedValidators).to.equal(0n);
+      expect(summary.totalDepositedValidators).to.equal(0n);
+      expect(summary.depositableValidatorsCount).to.equal(0n);
     });
 
     it("Returns summarized key stats", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
       const summary = await nor.getStakingModuleSummary();
 
-      expect(summary.totalExitedValidators).to.be.equal(1n + 0n + 0n);
-      expect(summary.totalDepositedValidators).to.be.equal(5n + 7n + 0n);
-      expect(summary.depositableValidatorsCount).to.be.equal(1n + 3n + 0n);
+      expect(summary.totalExitedValidators).to.equal(1n + 0n + 0n);
+      expect(summary.totalDepositedValidators).to.equal(5n + 7n + 0n);
+      expect(summary.depositableValidatorsCount).to.equal(1n + 3n + 0n);
     });
   });
 
@@ -569,42 +570,42 @@ describe("NodeOperatorsRegistry:management", () => {
       const noSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
 
       expect(noSummary.isTargetLimitActive).to.be.false;
-      expect(noSummary.targetValidatorsCount).to.be.equal(0n);
-      expect(noSummary.stuckValidatorsCount).to.be.equal(0n);
-      expect(noSummary.refundedValidatorsCount).to.be.equal(0n);
-      expect(noSummary.stuckPenaltyEndTimestamp).to.be.equal(0n);
-      expect(noSummary.totalExitedValidators).to.be.equal(0n);
-      expect(noSummary.totalDepositedValidators).to.be.equal(0n);
-      expect(noSummary.depositableValidatorsCount).to.be.equal(0n);
+      expect(noSummary.targetValidatorsCount).to.equal(0n);
+      expect(noSummary.stuckValidatorsCount).to.equal(0n);
+      expect(noSummary.refundedValidatorsCount).to.equal(0n);
+      expect(noSummary.stuckPenaltyEndTimestamp).to.equal(0n);
+      expect(noSummary.totalExitedValidators).to.equal(0n);
+      expect(noSummary.totalDepositedValidators).to.equal(0n);
+      expect(noSummary.depositableValidatorsCount).to.equal(0n);
     });
 
     it("Returns zeros for a new node operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
       const noSummary = await nor.getNodeOperatorSummary(secondNodeOperatorId);
 
       expect(noSummary.isTargetLimitActive).to.be.false;
-      expect(noSummary.targetValidatorsCount).to.be.equal(0n);
-      expect(noSummary.stuckValidatorsCount).to.be.equal(0n);
-      expect(noSummary.refundedValidatorsCount).to.be.equal(0n);
-      expect(noSummary.stuckPenaltyEndTimestamp).to.be.equal(0n);
-      expect(noSummary.totalExitedValidators).to.be.equal(0n);
-      expect(noSummary.totalDepositedValidators).to.be.equal(7n);
-      expect(noSummary.depositableValidatorsCount).to.be.equal(3n);
+      expect(noSummary.targetValidatorsCount).to.equal(0n);
+      expect(noSummary.stuckValidatorsCount).to.equal(0n);
+      expect(noSummary.refundedValidatorsCount).to.equal(0n);
+      expect(noSummary.stuckPenaltyEndTimestamp).to.equal(0n);
+      expect(noSummary.totalExitedValidators).to.equal(0n);
+      expect(noSummary.totalDepositedValidators).to.equal(7n);
+      expect(noSummary.depositableValidatorsCount).to.equal(3n);
     });
   });
 
   context("getNodeOperatorsCount", () => {
     it("Returns zero if no operators added", async () => {
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(0n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(0n);
     });
 
     it("Returns all added node operators", async () => {
@@ -643,12 +644,12 @@ describe("NodeOperatorsRegistry:management", () => {
     it("Returns zero if no operators added", async () => {
       await Snapshot.restore(beforePopulating);
 
-      expect(await nor.getActiveNodeOperatorsCount()).to.be.equal(0n);
+      expect(await nor.getActiveNodeOperatorsCount()).to.equal(0n);
     });
 
     it("Returns all operators count if no one has been deactivated yet", async () => {
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
-      expect(await nor.getActiveNodeOperatorsCount()).to.be.equal(10n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
+      expect(await nor.getActiveNodeOperatorsCount()).to.equal(10n);
     });
 
     it("Returns zero if no active operators", async () => {
@@ -657,17 +658,17 @@ describe("NodeOperatorsRegistry:management", () => {
         expect(await nor.getNodeOperatorIsActive(i)).to.be.false;
       }
 
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
-      expect(await nor.getActiveNodeOperatorsCount()).to.be.equal(0n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
+      expect(await nor.getActiveNodeOperatorsCount()).to.equal(0n);
     });
 
     it("Returns active node operators only if some were deactivated", async () => {
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
 
       await nor.connect(nodeOperatorsManager).deactivateNodeOperator(5n);
       await nor.connect(nodeOperatorsManager).deactivateNodeOperator(3n);
 
-      expect(await nor.getActiveNodeOperatorsCount()).to.be.equal(10n - 2n);
+      expect(await nor.getActiveNodeOperatorsCount()).to.equal(10n - 2n);
     });
   });
 
@@ -688,7 +689,7 @@ describe("NodeOperatorsRegistry:management", () => {
     });
 
     it("Returns false if such an operator doesn't exist", async () => {
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
       expect(await nor.getNodeOperatorIsActive(11n)).to.be.false;
     });
 
@@ -744,115 +745,115 @@ describe("NodeOperatorsRegistry:management", () => {
 
       const ids = await nor.getNodeOperatorIds(0n, 10n);
 
-      expect(ids.length).to.be.equal(0n);
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(0n);
+      expect(ids.length).to.equal(0n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(0n);
     });
 
     it("Returns empty list if limit is zero", async () => {
       const ids = await nor.getNodeOperatorIds(0n, 0n);
 
-      expect(ids.length).to.be.equal(0n);
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(ids.length).to.equal(0n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
     });
 
     it("Returns empty list if offset is past the final element", async () => {
       const ids = await nor.getNodeOperatorIds(10n, 10n);
 
-      expect(ids.length).to.be.equal(0n);
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(ids.length).to.equal(0n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
     });
 
     it("Returns up to limit node operator ids", async () => {
       const ids = await nor.getNodeOperatorIds(0n, 5n);
 
-      expect(ids.length).to.be.equal(5n);
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(ids.length).to.equal(5n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
     });
 
     it("Returns all ids if limit hadn't been reached", async () => {
       const ids = await nor.getNodeOperatorIds(0n, 10n);
 
-      expect(ids.length).to.be.equal(10n);
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(10n);
+      expect(ids.length).to.equal(10n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(10n);
 
       for (let i = 0n; i < ids.length; ++i) {
-        expect(ids[Number(i)]).to.be.equal(i);
+        expect(ids[Number(i)]).to.equal(i);
       }
     });
   });
 
   context("getNonce", () => {
     it("Returns nonce value", async () => {
-      expect(await nor.getNonce()).to.be.equal(0n);
+      expect(await nor.getNonce()).to.equal(0n);
     });
 
     it("Allows reading the changed nonce value", async () => {
       await nor.harness__setNonce(123n);
-      expect(await nor.getNonce()).to.be.equal(123n);
+      expect(await nor.getNonce()).to.equal(123n);
     });
 
     it("Allows zero nonce", async () => {
       await nor.harness__setNonce(0n);
-      expect(await nor.getNonce()).to.be.equal(0n);
+      expect(await nor.getNonce()).to.equal(0n);
     });
   });
 
   context("getKeysOpIndex", () => {
     it("Returns keys op value", async () => {
-      expect(await nor.getKeysOpIndex()).to.be.equal(0n);
+      expect(await nor.getKeysOpIndex()).to.equal(0n);
     });
 
     it("Allows reading the changed keys op value", async () => {
       await nor.harness__setNonce(123n);
-      expect(await nor.getKeysOpIndex()).to.be.equal(123n);
+      expect(await nor.getKeysOpIndex()).to.equal(123n);
     });
 
     it("Allows zero keys op", async () => {
       await nor.harness__setNonce(0n);
-      expect(await nor.getKeysOpIndex()).to.be.equal(0n);
+      expect(await nor.getKeysOpIndex()).to.equal(0n);
     });
 
     it("Returns the same value as getNonce", async () => {
       for (let i = 0n; i < 100n; ++i) {
         await nor.harness__setNonce(i);
 
-        expect(await nor.getNonce()).to.be.equal(i);
-        expect(await nor.getKeysOpIndex()).to.be.equal(i);
+        expect(await nor.getNonce()).to.equal(i);
+        expect(await nor.getKeysOpIndex()).to.equal(i);
       }
     });
   });
 
   context("getLocator", () => {
     it("Returns LidoLocator address", async () => {
-      expect(await nor.getLocator()).to.be.equal(locator);
+      expect(await nor.getLocator()).to.equal(locator);
     });
 
     it("Allows reading the changed LidoLocator address", async () => {
       await nor.harness__setLocator(certainAddress("mocked-locator"));
-      expect(await nor.getLocator()).to.be.equal(certainAddress("mocked-locator"));
+      expect(await nor.getLocator()).to.equal(certainAddress("mocked-locator"));
     });
 
     it("Allows reading zero LidoLocator address", async () => {
       await nor.harness__setLocator(ZeroAddress);
-      expect(await nor.getLocator()).to.be.equal(ZeroAddress);
+      expect(await nor.getLocator()).to.equal(ZeroAddress);
     });
   });
 
   context("getStuckPenaltyDelay", () => {
     it("Returns stuck penalty delay", async () => {
-      expect(await nor.getStuckPenaltyDelay()).to.be.equal(penaltyDelay);
+      expect(await nor.getStuckPenaltyDelay()).to.equal(penaltyDelay);
     });
 
     it("Allows reading the changed stuck penalty delay", async () => {
       const maxStuckPenaltyDelay = await nor.MAX_STUCK_PENALTY_DELAY();
 
       await nor.harness__setStuckPenaltyDelay(maxStuckPenaltyDelay);
-      expect(await nor.getStuckPenaltyDelay()).to.be.equal(maxStuckPenaltyDelay);
+      expect(await nor.getStuckPenaltyDelay()).to.equal(maxStuckPenaltyDelay);
     });
 
     it("Allows reading zero stuck penalty delay", async () => {
       await nor.harness__setStuckPenaltyDelay(0n);
-      expect(await nor.getStuckPenaltyDelay()).to.be.equal(0n);
+      expect(await nor.getStuckPenaltyDelay()).to.equal(0n);
     });
   });
 
@@ -875,7 +876,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .withArgs(7200n);
 
       const stuckPenaltyDelay = await nor.getStuckPenaltyDelay();
-      expect(stuckPenaltyDelay).to.be.equal(7200n);
+      expect(stuckPenaltyDelay).to.equal(7200n);
     });
 
     it("Allows setting a zero delay", async () => {
@@ -884,7 +885,7 @@ describe("NodeOperatorsRegistry:management", () => {
         .withArgs(0n);
 
       const stuckPenaltyDelay = await nor.getStuckPenaltyDelay();
-      expect(stuckPenaltyDelay).to.be.equal(0n);
+      expect(stuckPenaltyDelay).to.equal(0n);
     });
   });
 });

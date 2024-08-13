@@ -5,6 +5,7 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@typechain/hardhat";
 
+import "dotenv/config";
 import "solidity-coverage";
 import "tsconfig-paths/register";
 import "hardhat-tracer";
@@ -37,10 +38,14 @@ function loadAccounts(networkName: string) {
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
-    local: {
-      url: RPC_URL,
+    "local": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
-    hardhat: {
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
       // gasPrice: 0,
@@ -55,7 +60,7 @@ const config: HardhatUserConfig = {
       },
       forking: HARDHAT_FORKING_URL ? { url: HARDHAT_FORKING_URL } : undefined,
     },
-    sepolia: {
+    "sepolia": {
       url: RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
@@ -115,6 +120,9 @@ const config: HardhatUserConfig = {
       },
     ],
   },
+  tracer: {
+    tasks: ["watch"],
+  },
   typechain: {
     outDir: "typechain-types",
     target: "ethers-v6",
@@ -132,6 +140,7 @@ const config: HardhatUserConfig = {
   },
   mocha: {
     rootHooks: mochaRootHooks,
+    timeout: 20 * 60 * 1000, // 20 minutes
   },
   warnings: {
     "@aragon/**/*": {

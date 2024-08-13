@@ -27,7 +27,7 @@ export async function makeTx(
   args: ConvertibleToString[],
   txParams: TxParams,
 ): Promise<ContractTransactionReceipt> {
-  log.lineWithArguments(`${yl(contract.name)}[${contract.address}].${yl(funcName)}`, args);
+  log.withArguments(`${yl(contract.name)}[${contract.address}].${yl(funcName)}`, args);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
   log(`tx sent: ${tx.hash} (nonce ${tx.nonce})...`);
@@ -54,7 +54,7 @@ async function getDeployTxParams(deployer: string) {
       maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
     };
   } else {
-    throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
+    throw new Error("Must specify gas ENV vars: \"GAS_PRIORITY_FEE\" and \"GAS_MAX_FEE\" in gwei (like just \"3\")");
   }
 }
 
@@ -108,7 +108,7 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
 ): Promise<DeployedContract> {
-  log.lineWithArguments(`Deploying ${artifactName} (without proxy) with constructor args: `, constructorArgs);
+  log.withArguments(`Deploying ${artifactName} (without proxy) with constructor args: `, constructorArgs);
 
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
@@ -129,10 +129,7 @@ export async function deployImplementation(
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
 ): Promise<DeployedContract> {
-  log.lineWithArguments(
-    `Deploying implementation for proxy of ${artifactName} with constructor args: `,
-    constructorArgs,
-  );
+  log.withArguments(`Deploying implementation for proxy of ${artifactName} with constructor args: `, constructorArgs);
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
   updateObjectInState(nameInState, {
@@ -154,10 +151,7 @@ export async function deployBehindOssifiableProxy(
   implementation: null | string = null,
 ) {
   if (implementation === null) {
-    log.lineWithArguments(
-      `Deploying implementation for proxy of ${artifactName} with constructor args: `,
-      constructorArgs,
-    );
+    log.withArguments(`Deploying implementation for proxy of ${artifactName} with constructor args: `, constructorArgs);
     const contract = await deployContract(artifactName, constructorArgs, deployer);
     implementation = contract.address;
   } else {
@@ -165,7 +159,7 @@ export async function deployBehindOssifiableProxy(
   }
 
   const proxyConstructorArgs = [implementation, proxyOwner, "0x"];
-  log.lineWithArguments(
+  log.withArguments(
     `Deploying ${PROXY_CONTRACT_NAME} for ${artifactName} with constructor args: `,
     proxyConstructorArgs,
   );

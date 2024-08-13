@@ -1,0 +1,19 @@
+name: Common setup
+
+on: workflow_call
+
+runs:
+  using: "composite"
+  steps:
+    - name: Enable corepack
+      shell: bash
+      run: corepack enable
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: yarn
+
+    - name: Install dependencies
+      shell: bash
+      run: yarn install

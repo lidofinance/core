@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { getContractAt } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { log, logWideSplitter } from "lib/log";
+import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
 
 async function main() {
@@ -49,7 +49,7 @@ async function main() {
     [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), lidoAddress],
     { from: deployer },
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === ValidatorsExitBusOracle
@@ -62,7 +62,7 @@ async function main() {
       [await validatorsExitBusOracle.getFunction("PAUSE_ROLE")(), gateSealAddress],
       { from: deployer },
     );
-    logWideSplitter();
+    log.wideSplitter();
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
   }
@@ -87,7 +87,7 @@ async function main() {
     [await withdrawalQueue.getFunction("ORACLE_ROLE")(), accountingOracleAddress],
     { from: deployer },
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === Burner

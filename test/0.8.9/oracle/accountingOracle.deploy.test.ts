@@ -123,7 +123,7 @@ describe("AccountingOracle.sol:deploy", () => {
 
       const refSlot = await deployed.oracle.getLastProcessingRefSlot();
       const epoch = await deployed.legacyOracle.getLastCompletedEpochId();
-      expect(refSlot).to.be.equal(epoch * BigInt(SLOTS_PER_EPOCH));
+      expect(refSlot).to.equal(epoch * BigInt(SLOTS_PER_EPOCH));
     });
 
     describe("deployment and init finishes successfully (default setup)", async () => {
@@ -147,25 +147,25 @@ describe("AccountingOracle.sol:deploy", () => {
       it("mock setup is correct", async () => {
         // check the mock time-travellable setup
         const time1 = await consensus.getTime();
-        expect(await oracle.getTime()).to.be.equal(time1);
+        expect(await oracle.getTime()).to.equal(time1);
 
         await consensus.advanceTimeBy(SECONDS_PER_SLOT);
 
         const time2 = await consensus.getTime();
-        expect(time2).to.be.equal(time1 + BigInt(SECONDS_PER_SLOT));
-        expect(await oracle.getTime()).to.be.equal(time2);
+        expect(time2).to.equal(time1 + BigInt(SECONDS_PER_SLOT));
+        expect(await oracle.getTime()).to.equal(time2);
 
         const handleOracleReportCallData = await mockLido.getLastCall_handleOracleReport();
-        expect(handleOracleReportCallData.callCount).to.be.equal(0);
+        expect(handleOracleReportCallData.callCount).to.equal(0);
 
         const updateExitedKeysByModuleCallData = await mockStakingRouter.lastCall_updateExitedKeysByModule();
-        expect(updateExitedKeysByModuleCallData.callCount).to.be.equal(0);
+        expect(updateExitedKeysByModuleCallData.callCount).to.equal(0);
 
-        expect(await mockStakingRouter.totalCalls_reportExitedKeysByNodeOperator()).to.be.equal(0);
-        expect(await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator()).to.be.equal(0);
+        expect(await mockStakingRouter.totalCalls_reportExitedKeysByNodeOperator()).to.equal(0);
+        expect(await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator()).to.equal(0);
 
         const onOracleReportLastCall = await mockWithdrawalQueue.lastCall__onOracleReport();
-        expect(onOracleReportLastCall.callCount).to.be.equal(0);
+        expect(onOracleReportLastCall.callCount).to.equal(0);
       });
 
       it("the initial reference slot is greater than the last one of the legacy oracle", async () => {
@@ -174,10 +174,10 @@ describe("AccountingOracle.sol:deploy", () => {
       });
 
       it("initial configuration is correct", async () => {
-        expect(await oracle.getConsensusContract()).to.be.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.be.equal(CONSENSUS_VERSION);
-        expect(await oracle.LIDO()).to.be.equal(await mockLido.getAddress());
-        expect(await oracle.SECONDS_PER_SLOT()).to.be.equal(SECONDS_PER_SLOT);
+        expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
+        expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+        expect(await oracle.LIDO()).to.equal(await mockLido.getAddress());
+        expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
       });
 
       it("constructor reverts if lido locator address is zero", async () => {

@@ -125,13 +125,13 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("constructor", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
     });
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Reverts if the `lido` is zero address", async () => {
@@ -208,14 +208,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setOwner`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       before(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       after(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `newValue` is zero address", async () => {
@@ -249,14 +249,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setPauseIntentValidityPeriodBlocks`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       before(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       after(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `newValue` is zero parameter", async () => {
@@ -289,14 +289,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setMaxDeposits`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       before(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       after(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `setMaxDeposits` called by not an owner", async () => {
@@ -325,14 +325,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setMinDepositBlockDistance`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       before(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       after(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `setMinDepositBlockDistance` called by not an owner", async () => {
@@ -374,15 +374,15 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setGuardianQuorum`", () => {
-      let originalState: string;
+      let originalContextState: string;
       const guardianQuorum = 1;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `setGuardianQuorum` called by not an owner", async () => {
@@ -427,14 +427,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `isGuardian`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Returns false if list of guardians is empty", async () => {
@@ -460,14 +460,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `getGuardianIndex`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Returns -1 if list of guardians is empty", async () => {
@@ -492,14 +492,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardian`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `addGuardian` called by not an owner", async () => {
@@ -555,14 +555,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardians`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `addGuardians` called by not an owner", async () => {
@@ -604,14 +604,14 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `removeGuardian`", () => {
-      let originalState: string;
+      let originalContextState: string;
 
       beforeEach(async () => {
-        originalState = await Snapshot.take();
+        originalContextState = await Snapshot.take();
       });
 
       afterEach(async () => {
-        await Snapshot.restore(originalState);
+        await Snapshot.restore(originalContextState);
       });
 
       it("Reverts if the `removeGuardian` called by not an owner", async () => {
@@ -695,16 +695,16 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `pauseDeposits`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await dsm.addGuardians([guardian1, guardian2], 0);
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Reverts if staking module is unregistered and fires `StakingModuleUnregistered` event on StakingRouter contract", async () => {
@@ -854,10 +854,10 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `unpauseDeposits`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await dsm.addGuardians([guardian1, guardian2], 0);
 
@@ -875,7 +875,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Reverts if called by not an owner", async () => {
@@ -927,14 +927,14 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `canDeposit`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Returns `false` if staking module is unregistered in StakingRouter", async () => {
@@ -1038,12 +1038,12 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `depositBufferedEther`", () => {
-    let originalState: string;
+    let originalContextState: string;
     let validAttestMessage: DSMAttestMessage;
     let block: Block;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
       block = await getLatestBlock();
 
       await stakingRouter.setStakingModuleNonce(DEPOSIT_NONCE);
@@ -1059,7 +1059,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     context("Total guardians: 0, quorum: 0", () => {

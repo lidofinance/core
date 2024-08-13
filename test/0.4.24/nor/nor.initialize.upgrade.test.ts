@@ -271,24 +271,24 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
     });
 
     it("Migrates the contract storage from v1 to v2", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.equal(
         fourthNodeOperatorId,
       );
 
       await nor.harness__unsafeResetModuleSummary();
       const resetSummary = await nor.getStakingModuleSummary();
-      expect(resetSummary.totalExitedValidators).to.be.equal(0n);
-      expect(resetSummary.totalDepositedValidators).to.be.equal(0n);
-      expect(resetSummary.depositableValidatorsCount).to.be.equal(0n);
+      expect(resetSummary.totalExitedValidators).to.equal(0n);
+      expect(resetSummary.totalDepositedValidators).to.equal(0n);
+      expect(resetSummary.depositableValidatorsCount).to.equal(0n);
 
       await nor.harness__unsafeSetVettedKeys(
         firstNodeOperatorId,
@@ -314,27 +314,27 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
         .withArgs(moduleType);
 
       const summary = await nor.getStakingModuleSummary();
-      expect(summary.totalExitedValidators).to.be.equal(1n + 0n + 0n + 1n);
-      expect(summary.totalDepositedValidators).to.be.equal(5n + 7n + 0n + 2n);
-      expect(summary.depositableValidatorsCount).to.be.equal(0n + 8n + 0n + 0n);
+      expect(summary.totalExitedValidators).to.equal(1n + 0n + 0n + 1n);
+      expect(summary.totalDepositedValidators).to.equal(5n + 7n + 0n + 2n);
+      expect(summary.depositableValidatorsCount).to.equal(0n + 8n + 0n + 0n);
 
       const firstNoInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
-      expect(firstNoInfo.totalVettedValidators).to.be.equal(
+      expect(firstNoInfo.totalVettedValidators).to.equal(
         NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
       );
 
       const secondNoInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
-      expect(secondNoInfo.totalVettedValidators).to.be.equal(
+      expect(secondNoInfo.totalVettedValidators).to.equal(
         NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount,
       );
 
       const thirdNoInfo = await nor.getNodeOperator(thirdNodeOperatorId, true);
-      expect(thirdNoInfo.totalVettedValidators).to.be.equal(
+      expect(thirdNoInfo.totalVettedValidators).to.equal(
         NODE_OPERATORS[thirdNodeOperatorId].depositedSigningKeysCount,
       );
 
       const fourthNoInfo = await nor.getNodeOperator(fourthNodeOperatorId, true);
-      expect(fourthNoInfo.totalVettedValidators).to.be.equal(
+      expect(fourthNoInfo.totalVettedValidators).to.equal(
         NODE_OPERATORS[fourthNodeOperatorId].vettedSigningKeysCount,
       );
     });

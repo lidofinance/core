@@ -45,10 +45,10 @@ describe("LidoLocator.sol", () => {
   context("constructor", () => {
     for (const service of services) {
       it(`Reverts if the \`config.${service}\` is zero address`, async () => {
-        const config = randomConfig();
-        config[service] = ZeroAddress;
+        const randomConfiguration = randomConfig();
+        randomConfiguration[service] = ZeroAddress;
 
-        await expect(ethers.deployContract("LidoLocator", [config])).to.be.revertedWithCustomError(
+        await expect(ethers.deployContract("LidoLocator", [randomConfiguration])).to.be.revertedWithCustomError(
           locator,
           "ZeroAddress",
         );

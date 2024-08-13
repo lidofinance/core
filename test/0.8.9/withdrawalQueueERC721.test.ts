@@ -7,7 +7,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   ERC721Receiver__MockWithdrawalQueueERC721,
-  NFTDescriptor__MockWithdrawalQueueERC721,
+  NFTDescriptor__MockForWithdrawalQueue,
   Receiver__MockForWithdrawalQueueBase,
   StETH__MockForWithdrawalQueue,
   WithdrawalQueueERC721,
@@ -45,7 +45,7 @@ describe("WithdrawalQueueERC721.sol", () => {
   let tokenManager: HardhatEthersSigner;
   let finalizer: HardhatEthersSigner;
 
-  let nftDescriptor: NFTDescriptor__MockWithdrawalQueueERC721;
+  let nftDescriptor: NFTDescriptor__MockForWithdrawalQueue;
   let nftDescriptorAddress: string;
   let stEth: StETH__MockForWithdrawalQueue;
   let stEthAddress: string;
@@ -61,7 +61,7 @@ describe("WithdrawalQueueERC721.sol", () => {
   before(async () => {
     [owner, user, stranger, tokenManager, finalizer] = await ethers.getSigners();
 
-    nftDescriptor = await ethers.deployContract("NFTDescriptor__MockWithdrawalQueueERC721", [
+    nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [
       MOCK_NFT_DESCRIPTOR_BASE_URI,
     ]);
     nftDescriptorAddress = await nftDescriptor.getAddress();
@@ -190,7 +190,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Returns tokenURI without nftDescriptor and baseUri", async () => {
-      expect(await queue.tokenURI(requestId)).to.be.equal("");
+      expect(await queue.tokenURI(requestId)).to.equal("");
     });
 
     it("Returns correct tokenURI without nftDescriptor", async () => {
@@ -253,7 +253,7 @@ describe("WithdrawalQueueERC721.sol", () => {
 
     it("Returns correct tokenURI after NFT Descriptor update", async () => {
       const NEW_NFT_URL = "https://example.com/";
-      const newNFTDescriptor = await ethers.deployContract("NFTDescriptorMock", [NEW_NFT_URL]);
+      const newNFTDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [NEW_NFT_URL]);
       const newNFTDescriptorAddress = await newNFTDescriptor.getAddress();
 
       await expect(queue.connect(tokenManager).setNFTDescriptorAddress(newNFTDescriptorAddress))
@@ -567,7 +567,7 @@ describe("WithdrawalQueueERC721.sol", () => {
           queue
             .connect(user)
             [
-              "safeTransferFrom(address,address,uint256,bytes)"
+            "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         ).revertedWith("ERC721_NOT_ACCEPT_TOKENS");
       });
@@ -580,7 +580,7 @@ describe("WithdrawalQueueERC721.sol", () => {
           queue
             .connect(user)
             [
-              "safeTransferFrom(address,address,uint256,bytes)"
+            "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         )
           .revertedWithCustomError(queue, "TransferToNonIERC721Receiver")
@@ -595,7 +595,7 @@ describe("WithdrawalQueueERC721.sol", () => {
           queue
             .connect(user)
             [
-              "safeTransferFrom(address,address,uint256,bytes)"
+            "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         )
           .to.emit(queue, "Transfer")
