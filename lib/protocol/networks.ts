@@ -36,6 +36,7 @@ const defaultEnv = {
   elRewardsVault: "EL_REWARDS_VAULT_ADDRESS",
   legacyOracle: "LEGACY_ORACLE_ADDRESS",
   lido: "LIDO_ADDRESS",
+  accounting: "ACCOUNTING_ADDRESS",
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",
   burner: "BURNER_ADDRESS",
   stakingRouter: "STAKING_ROUTER_ADDRESS",

@@ -317,7 +317,7 @@ const simulateReport = async (
 ): Promise<
   { postTotalPooledEther: bigint; postTotalShares: bigint; withdrawals: bigint; elRewards: bigint } | undefined
 > => {
-  const { hashConsensus, accountingOracle, lido } = ctx.contracts;
+  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
   const { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance } = params;
 
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
@@ -333,19 +333,22 @@ const simulateReport = async (
     "El Rewards Vault Balance": ethers.formatEther(elRewardsVaultBalance),
   });
 
-  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = await lido
+  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = await accounting
     .connect(accountingOracleAccount)
-    .handleOracleReport.staticCall(
-      reportTimestamp,
-      1n * 24n * 60n * 60n, // 1 day
-      beaconValidators,
+    .handleOracleReport.staticCall({
+      timestamp: reportTimestamp,
+      timeElapsed: 1n * 24n * 60n * 60n, // 1 day
+      clValidators: beaconValidators,
       clBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      0n,
-      [],
-      0n,
-    );
+      sharesRequestedToBurn: 0n,
+      withdrawalFinalizationBatches: [],
+      simulatedShareRate: 0n,
+      clBalances: [], // TODO: Add CL balances
+      elBalances: [], // TODO: Add EL balances
+      netCashFlows: [], // TODO: Add net cash flows
+    });
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": ethers.formatEther(postTotalPooledEther),
@@ -367,7 +370,7 @@ export const handleOracleReport = async (
     elRewardsVaultBalance: bigint;
   },
 ): Promise<void> => {
-  const { hashConsensus, accountingOracle, lido } = ctx.contracts;
+  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
   const { beaconValidators, clBalance, sharesRequestedToBurn, withdrawalVaultBalance, elRewardsVaultBalance } = params;
 
   const { refSlot } = await hashConsensus.getCurrentFrame();
@@ -385,19 +388,22 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": ethers.formatEther(elRewardsVaultBalance),
     });
 
-    const handleReportTx = await lido
+    const handleReportTx = await accounting
       .connect(accountingOracleAccount)
-      .handleOracleReport(
-        reportTimestamp,
-        1n * 24n * 60n * 60n, // 1 day
-        beaconValidators,
+      .handleOracleReport({
+        timestamp: reportTimestamp,
+        timeElapsed: 1n * 24n * 60n * 60n, // 1 day
+        clValidators: beaconValidators,
         clBalance,
         withdrawalVaultBalance,
         elRewardsVaultBalance,
         sharesRequestedToBurn,
-        [],
-        0n,
-      );
+        withdrawalFinalizationBatches: [],
+        simulatedShareRate: 0n,
+        clBalances: [], // TODO: Add CL balances
+        elBalances: [], // TODO: Add EL balances
+        netCashFlows: [], // TODO: Add net cash flows
+      });
 
     await trace("lido.handleOracleReport", handleReportTx);
   } catch (error) {
