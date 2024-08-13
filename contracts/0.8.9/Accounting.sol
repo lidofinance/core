@@ -438,10 +438,11 @@ contract Accounting is VaultHub {
 
         // TODO: vault fees
 
-        _completeTokenRebase(
-            _context,
-            _contracts.postTokenRebaseReceiver
-        );
+        // FIXME: Legacy Oracle call in fact, still in use? The event it fires was marked as deprecated.
+        // _completeTokenRebase(
+        //    _context,
+        //    _contracts.postTokenRebaseReceiver
+        // );
 
         LIDO.emitTokenRebase(
             _context.report.timestamp,
@@ -502,16 +503,15 @@ contract Accounting is VaultHub {
         IPostTokenRebaseReceiver _postTokenRebaseReceiver
     ) internal {
         if (address(_postTokenRebaseReceiver) != address(0)) {
-//            FIXME: Legacy Oracle call in fact, still in use? The event it fires was marked as deprecated.
-//            _postTokenRebaseReceiver.handlePostTokenRebase(
-//                _context.report.timestamp,
-//                _context.report.timeElapsed,
-//                _context.pre.totalShares,
-//                _context.pre.totalPooledEther,
-//                _context.update.postTotalShares,
-//                _context.update.postTotalPooledEther,
-//                _context.update.sharesToMintAsFees
-//            );
+            _postTokenRebaseReceiver.handlePostTokenRebase(
+                _context.report.timestamp,
+                _context.report.timeElapsed,
+                _context.pre.totalShares,
+                _context.pre.totalPooledEther,
+                _context.update.postTotalShares,
+                _context.update.postTotalPooledEther,
+                _context.update.sharesToMintAsFees
+            );
         }
     }
 
