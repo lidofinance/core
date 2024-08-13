@@ -9,7 +9,6 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracleTimeTravellable,
   HashConsensusTimeTravellable,
-  MockLegacyOracle,
   MockStakingRouterForAccountingOracle,
   MockWithdrawalQueueForAccountingOracle,
 } from "typechain-types";
