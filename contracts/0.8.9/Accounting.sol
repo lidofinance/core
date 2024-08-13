@@ -411,6 +411,7 @@ contract Accounting is VaultHub {
         );
 
         if (_context.update.totalSharesToBurn > 0) {
+//            FIXME: expected to be called as StETH
             _contracts.burner.commitSharesToBurn(_context.update.totalSharesToBurn);
         }
 
@@ -443,10 +444,11 @@ contract Accounting is VaultHub {
 
         // TODO: vault fees
 
-        _completeTokenRebase(
-            _context,
-            _contracts.postTokenRebaseReceiver
-        );
+        // FIXME: Legacy Oracle call in fact, still in use? The event it fires was marked as deprecated.
+        // _completeTokenRebase(
+        //    _context,
+        //    _contracts.postTokenRebaseReceiver
+        // );
 
         LIDO.emitTokenRebase(
             _context.report.timestamp,
@@ -576,16 +578,16 @@ contract Accounting is VaultHub {
     function _loadOracleReportContracts() internal view returns (Contracts memory) {
 
         (
-            address accountingOracle,
+            address accountingOracleAddress,
             address oracleReportSanityChecker,
             address burner,
             address withdrawalQueue,
-            address postTokenRebaseReceiver,
+            address postTokenRebaseReceiver, // TODO: Legacy Oracle? Still in use used?
             address stakingRouter
         ) = LIDO_LOCATOR.oracleReportComponents();
 
         return Contracts(
-            accountingOracle,
+            accountingOracleAddress,
             IOracleReportSanityChecker(oracleReportSanityChecker),
             IBurner(burner),
             IWithdrawalQueue(withdrawalQueue),

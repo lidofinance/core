@@ -274,6 +274,7 @@ async function checkSubmitDepositReportWithdrawal(
   const withdrawalFinalizationBatches = [1];
 
   const accountingOracleSigner = await ethers.provider.getSigner(accountingOracle.address);
+
   // Performing dry-run to estimate simulated share rate
   const [postTotalPooledEther, postTotalShares] = await accounting
     .connect(accountingOracleSigner)
@@ -283,10 +284,10 @@ async function checkSubmitDepositReportWithdrawal(
       clValidators: stat.depositedValidators,
       clBalance,
       withdrawalVaultBalance: 0n,
-      elRewardsVaultBalance: 0n,
-      sharesRequestedToBurn: 0,
+      elRewardsVaultBalance,
+      sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches,
-      simulatedShareRate: 0,
+      simulatedShareRate: 0n,
       clBalances: [],
       elBalances: [],
       netCashFlows: [],

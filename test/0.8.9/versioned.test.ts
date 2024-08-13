@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { VersionedConsumerMock } from "typechain-types";
+import { Versioned__Harness089 } from "typechain-types";
 
 import { MAX_UINT256, proxify, streccak } from "lib";
 
@@ -11,8 +11,8 @@ describe("Versioned.sol", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  let impl: VersionedConsumerMock;
-  let consumer: VersionedConsumerMock;
+  let impl: Versioned__Harness089;
+  let consumer: Versioned__Harness089;
 
   const initialVersion = 0n;
   const petrifiedVersion = MAX_UINT256;
@@ -20,8 +20,8 @@ describe("Versioned.sol", () => {
   beforeEach(async () => {
     [admin, user] = await ethers.getSigners();
 
-    impl = await ethers.deployContract("VersionedConsumerMock");
-    [consumer] = await proxify<VersionedConsumerMock>({
+    impl = await ethers.deployContract("Versioned__Harness089");
+    [consumer] = await proxify<Versioned__Harness089>({
       impl,
       admin,
       caller: user,
@@ -48,8 +48,7 @@ describe("Versioned.sol", () => {
 
   context("checkContractVersion", () => {
     it("Passes if the current and expected versions match", async () => {
-      const expectedVersion = initialVersion;
-      await consumer.checkContractVersion(expectedVersion);
+      await consumer.checkContractVersion(initialVersion);
     });
 
     it("Reverts if the current and expected versions do not match", async () => {
@@ -67,7 +66,6 @@ describe("Versioned.sol", () => {
 
     it("Reverts if the previous contract version is not 0", async () => {
       await consumer.updateContractVersion(1);
-
       await expect(consumer.initializeContractVersionTo(1)).to.be.reverted;
     });
   });

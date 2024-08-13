@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { getContractAt } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { log, logWideSplitter } from "lib/log";
+import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
 
 async function main() {
@@ -18,6 +18,7 @@ async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
+  const accountingAddress = state[Sk.accounting].address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
@@ -49,7 +50,13 @@ async function main() {
     [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), lidoAddress],
     { from: deployer },
   );
-  logWideSplitter();
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), accountingAddress],
+    { from: deployer },
+  );
+  log.wideSplitter();
 
   //
   // === ValidatorsExitBusOracle
@@ -62,7 +69,7 @@ async function main() {
       [await validatorsExitBusOracle.getFunction("PAUSE_ROLE")(), gateSealAddress],
       { from: deployer },
     );
-    logWideSplitter();
+    log.wideSplitter();
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
   }
@@ -87,7 +94,7 @@ async function main() {
     [await withdrawalQueue.getFunction("ORACLE_ROLE")(), accountingOracleAddress],
     { from: deployer },
   );
-  logWideSplitter();
+  log.wideSplitter();
 
   //
   // === Burner
@@ -98,6 +105,12 @@ async function main() {
     burner,
     "grantRole",
     [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), nodeOperatorsRegistryAddress],
+    { from: deployer },
+  );
+  await makeTx(
+    burner,
+    "grantRole",
+    [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), accountingAddress],
     { from: deployer },
   );
 
