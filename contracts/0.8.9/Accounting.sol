@@ -501,15 +501,16 @@ contract Accounting is VaultHub {
         IPostTokenRebaseReceiver _postTokenRebaseReceiver
     ) internal {
         if (address(_postTokenRebaseReceiver) != address(0)) {
-            _postTokenRebaseReceiver.handlePostTokenRebase(
-                _context.report.timestamp,
-                _context.report.timeElapsed,
-                _context.pre.totalShares,
-                _context.pre.totalPooledEther,
-                _context.update.postTotalShares,
-                _context.update.postTotalPooledEther,
-                _context.update.sharesToMintAsFees
-            );
+//            FIXME: Legacy Oracle call in fact, still in use? The event it fires was marked as deprecated.
+//            _postTokenRebaseReceiver.handlePostTokenRebase(
+//                _context.report.timestamp,
+//                _context.report.timeElapsed,
+//                _context.pre.totalShares,
+//                _context.pre.totalPooledEther,
+//                _context.update.postTotalShares,
+//                _context.update.postTotalPooledEther,
+//                _context.update.sharesToMintAsFees
+//            );
         }
     }
 
@@ -570,16 +571,16 @@ contract Accounting is VaultHub {
     function _loadOracleReportContracts() internal view returns (Contracts memory) {
 
         (
-            address accountingOracle,
+            address accountingOracleAddress,
             address oracleReportSanityChecker,
             address burner,
             address withdrawalQueue,
-            address postTokenRebaseReceiver,
+            address postTokenRebaseReceiver, // TODO: Legacy Oracle? Still in use used?
             address stakingRouter
         ) = LIDO_LOCATOR.oracleReportComponents();
 
         return Contracts(
-            accountingOracle,
+            accountingOracleAddress,
             IOracleReportSanityChecker(oracleReportSanityChecker),
             IBurner(burner),
             IWithdrawalQueue(withdrawalQueue),
