@@ -10,7 +10,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: feofanov/hardhat-node:2.22.4
+        image: feofanov/hardhat-node:2.22.8
         ports:
           - 8545:8545
         env:

@@ -1,5 +1,7 @@
 import * as process from "node:process";
 
+import { log } from "lib";
+
 import { ProtocolNetworkItems } from "./types";
 
 export async function parseLocalDeploymentJson() {
@@ -8,6 +10,7 @@ export async function parseLocalDeploymentJson() {
     // @ts-ignore - file is missing out of the box, that's why we need to catch the error
     return await import("../../deployed-local.json");
   } catch (e) {
+    log.error(e as Error);
     throw new Error("Failed to parse deployed-local.json. Did you run scratch deploy?");
   }
 }
@@ -67,7 +70,7 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
   const defaults = getDefaults(defaultEnv) as Record<keyof ProtocolNetworkItems, string>;
 
   switch (network) {
-    case "local":
+    case "local": {
       const config = await parseLocalDeploymentJson();
       return new ProtocolNetworkConfig(
         getPrefixedEnv("LOCAL", defaultEnv),
@@ -79,20 +82,24 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
           // Overrides for local development
           easyTrackAddress: config["app:aragon-agent"].proxy.address,
           sdvt: config["app:node-operators-registry"].proxy.address,
-        });
+        },
+      );
+    }
 
     case "mainnet-fork":
     case "hardhat":
-      const env = getPrefixedEnv("MAINNET", defaultEnv);
-      return new ProtocolNetworkConfig(env, {
-        ...defaults,
-        locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        // https://docs.lido.fi/deployed-contracts/#dao-contracts
-        agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-        votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
-        // https://docs.lido.fi/deployed-contracts/#easy-track
-        easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
-      });
+      return new ProtocolNetworkConfig(
+        getPrefixedEnv("MAINNET", defaultEnv),
+        {
+          ...defaults,
+          locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
+          // https://docs.lido.fi/deployed-contracts/#dao-contracts
+          agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
+          votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
+          // https://docs.lido.fi/deployed-contracts/#easy-track
+          easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
+        },
+      );
 
     default:
       throw new Error(`Network ${network} is not supported`);
