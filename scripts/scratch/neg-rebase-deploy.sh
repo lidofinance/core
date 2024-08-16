@@ -48,6 +48,8 @@ yarn compile
 rm -f ${NETWORK_STATE_FILE}
 cp ${NETWORK_STATE_DEFAULTS_FILE} ${NETWORK_STATE_FILE}
 
+
 yarn compile
 yarn hardhat --network $NETWORK run --no-compile scripts/scratch/steps/00-populate-deploy-artifact-from-env.ts
 yarn hardhat --network $NETWORK run --no-compile scripts/scratch/neg-rebase-sanity-checker-deploy.ts
+# yarn hardhat --network $NETWORK run --no-compile scripts/scratch/send-hardhat-mine.ts
