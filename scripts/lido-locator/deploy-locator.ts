@@ -5,13 +5,13 @@ import { deployImplementation, Sk } from "lib";
 async function main() {
   const wallet = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!);
 
-  const postTokenRebaseReceiverNew = "TBD";
+  const postTokenRebaseReceiverNew = "0xf91A6778521B0751DFee96F4Cd025A36441b1088";
 
   const config = {
     accountingOracle: "0x852deD011285fe67063a08005c71a85690503Cee",
     depositSecurityModule: "0xC77F8768774E1c9244BEed705C4354f2113CFc09",
     elRewardsVault: "0x388C818CA8B9251b393131C08a736A67ccB19297",
-    legacyOracle: "0x442af784A788A5bd6F42A01Ebe9F287a871243fb",
+    legacyOracle: "0x0000000000000000000000000000000000000000",
     lido: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
     oracleReportSanityChecker: "0x9305c1Dbfe22c12c66339184C0025d7006f0f1cC",
     postTokenRebaseReceiver: postTokenRebaseReceiverNew,

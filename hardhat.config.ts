@@ -44,6 +44,11 @@ const config: HardhatUserConfig = {
       url: RPC_URL,
       accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
     },
+    mainnet: {
+      chainId: 1,
+      url: RPC_URL,
+      accounts: [process.env.DEPLOYER_PRIVATE_KEY!],
+    },
   },
   solidity: {
     compilers: [
