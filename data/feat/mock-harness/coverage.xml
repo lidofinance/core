@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2851"  lines-covered="2755"  line-rate="0.9662999999999999"  branches-valid="1260"  branches-covered="1194"  branch-rate="0.9476"  timestamp="1724325365030" complexity="0" version="0.1">
+<coverage lines-valid="2851"  lines-covered="2755"  line-rate="0.9662999999999999"  branches-valid="1260"  branches-covered="1194"  branch-rate="0.9476"  timestamp="1724326863141" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -458,8 +458,8 @@
 			<method name="_spendAllowance"  hits="77"  signature="()V" >
 				<lines><line number="409"  hits="77" /></lines>
 			</method>
-			<method name="_getTotalShares"  hits="945"  signature="()V" >
-				<lines><line number="420"  hits="945" /></lines>
+			<method name="_getTotalShares"  hits="862"  signature="()V" >
+				<lines><line number="420"  hits="862" /></lines>
 			</method>
 			<method name="_sharesOf"  hits="317"  signature="()V" >
 				<lines><line number="427"  hits="317" /></lines>
@@ -467,8 +467,8 @@
 			<method name="_transferShares"  hits="114"  signature="()V" >
 				<lines><line number="441"  hits="114" /></lines>
 			</method>
-			<method name="_mintShares"  hits="197"  signature="()V" >
-				<lines><line number="465"  hits="197" /></lines>
+			<method name="_mintShares"  hits="114"  signature="()V" >
+				<lines><line number="465"  hits="114" /></lines>
 			</method>
 			<method name="_burnShares"  hits="4"  signature="()V" >
 				<lines><line number="491"  hits="4" /></lines>
@@ -528,7 +528,7 @@
 			<line number="411"  hits="77"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="412"  hits="54"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="413"  hits="50"  branch="false" />
-			<line number="421"  hits="945"  branch="false" />
+			<line number="421"  hits="862"  branch="false" />
 			<line number="428"  hits="317"  branch="false" />
 			<line number="442"  hits="114"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="443"  hits="113"  branch="true"  condition-coverage="100% (2/2)" />
@@ -538,10 +538,10 @@
 			<line number="448"  hits="105"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="450"  hits="102"  branch="false" />
 			<line number="451"  hits="102"  branch="false" />
-			<line number="466"  hits="197"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="468"  hits="196"  branch="false" />
-			<line number="469"  hits="196"  branch="false" />
-			<line number="471"  hits="196"  branch="false" />
+			<line number="466"  hits="114"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="468"  hits="113"  branch="false" />
+			<line number="469"  hits="113"  branch="false" />
+			<line number="471"  hits="113"  branch="false" />
 			<line number="492"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="494"  hits="3"  branch="false" />
 			<line number="495"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
@@ -1646,29 +1646,29 @@
 			<method name="_whenNotStopped"  hits="143"  signature="()V" >
 				<lines><line number="19"  hits="143" /></lines>
 			</method>
-			<method name="_whenStopped"  hits="158"  signature="()V" >
-				<lines><line number="23"  hits="158" /></lines>
+			<method name="_whenStopped"  hits="75"  signature="()V" >
+				<lines><line number="23"  hits="75" /></lines>
 			</method>
-			<method name="isStopped"  hits="17"  signature="()V" >
-				<lines><line number="27"  hits="17" /></lines>
+			<method name="isStopped"  hits="12"  signature="()V" >
+				<lines><line number="27"  hits="12" /></lines>
 			</method>
 			<method name="_stop"  hits="8"  signature="()V" >
 				<lines><line number="31"  hits="8" /></lines>
 			</method>
-			<method name="_resume"  hits="158"  signature="()V" >
-				<lines><line number="38"  hits="158" /></lines>
+			<method name="_resume"  hits="75"  signature="()V" >
+				<lines><line number="38"  hits="75" /></lines>
 			</method>
 		</methods>
 		<lines>
 			<line number="20"  hits="143"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="24"  hits="158"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="28"  hits="17"  branch="false" />
+			<line number="24"  hits="75"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="28"  hits="12"  branch="false" />
 			<line number="32"  hits="8"  branch="false" />
 			<line number="34"  hits="6"  branch="false" />
 			<line number="35"  hits="6"  branch="false" />
-			<line number="39"  hits="158"  branch="false" />
-			<line number="41"  hits="156"  branch="false" />
-			<line number="42"  hits="156"  branch="false" />
+			<line number="39"  hits="75"  branch="false" />
+			<line number="41"  hits="73"  branch="false" />
+			<line number="42"  hits="73"  branch="false" />
 		</lines>
 		</class>
 		<class name="Versioned.sol"  filename="contracts/0.4.24/utils/Versioned.sol"  line-rate="1"  branch-rate="1" >
@@ -1700,8 +1700,8 @@
 	<classes>
 		<class name="WstETH.sol"  filename="contracts/0.6.12/WstETH.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="48"  signature="()V" >
-				<lines><line number="37"  hits="48" /></lines>
+			<method name="constructor"  hits="4"  signature="()V" >
+				<lines><line number="37"  hits="4" /></lines>
 			</method>
 			<method name="wrap"  hits="16"  signature="()V" >
 				<lines><line number="53"  hits="16" /></lines>
@@ -1723,7 +1723,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="39"  hits="48"  branch="false" />
+			<line number="39"  hits="4"  branch="false" />
 			<line number="54"  hits="16"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="55"  hits="15"  branch="false" />
 			<line number="56"  hits="15"  branch="false" />
