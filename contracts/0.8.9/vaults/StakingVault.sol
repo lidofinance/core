@@ -5,9 +5,9 @@
 pragma solidity 0.8.9;
 
 import {BeaconChainDepositor} from "../BeaconChainDepositor.sol";
-import {Basic} from "./interfaces/Basic.sol";
+import {IStaking} from "./interfaces/IStaking.sol";
 
-contract BasicVault is Basic, BeaconChainDepositor {
+contract StakingVault is IStaking, BeaconChainDepositor {
     address public owner;
 
     modifier onlyOwner() {

@@ -5,8 +5,8 @@
 pragma solidity 0.8.9;
 
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {Connected} from "./interfaces/Connected.sol";
-import {Hub} from "./interfaces/Hub.sol";
+import {IConnected} from "./interfaces/IConnected.sol";
+import {IHub} from "./interfaces/IHub.sol";
 
 interface StETH {
     function getExternalEther() external view returns (uint256);
@@ -19,7 +19,7 @@ interface StETH {
     function transferShares(address, uint256) external returns (uint256);
 }
 
-contract VaultHub is AccessControlEnumerable, Hub {
+contract VaultHub is AccessControlEnumerable, IHub {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
 
     uint256 internal constant BPS_IN_100_PERCENT = 10000;
@@ -27,7 +27,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
     StETH public immutable STETH;
 
     struct VaultSocket {
-        Connected vault;
+        IConnected vault;
         /// @notice maximum number of stETH shares that can be minted for this vault
         /// TODO: figure out the fees interaction with the cap
         uint256 capShares;
@@ -35,7 +35,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
     }
 
     VaultSocket[] public vaults;
-    mapping(Connected => VaultSocket) public vaultIndex;
+    mapping(IConnected => VaultSocket) public vaultIndex;
 
     constructor(address _mintBurner) {
         STETH = StETH(_mintBurner);
@@ -46,7 +46,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
     }
 
     function addVault(
-        Connected _vault,
+        IConnected _vault,
         uint256 _capShares
     ) external onlyRole(VAULT_MASTER_ROLE) {
         // we should add here a register of vault implementations
@@ -54,9 +54,9 @@ contract VaultHub is AccessControlEnumerable, Hub {
 
         // TODO: ERC-165 check?
 
-        if (vaultIndex[_vault].vault != Connected(address(0))) revert("ALREADY_EXIST"); // TODO: custom error
+        if (vaultIndex[_vault].vault != IConnected(address(0))) revert("ALREADY_EXIST"); // TODO: custom error
 
-        VaultSocket memory vr = VaultSocket(Connected(_vault), _capShares, 0);
+        VaultSocket memory vr = VaultSocket(IConnected(_vault), _capShares, 0);
         vaults.push(vr); //TODO: uint256 and safecast
         vaultIndex[_vault] = vr;
 
@@ -67,7 +67,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
         address _receiver,
         uint256 _amountOfShares
     ) external returns (uint256 totalEtherToBackTheVault) {
-        Connected vault = Connected(msg.sender);
+        IConnected vault = IConnected(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
         uint256 mintedShares = socket.mintedShares + _amountOfShares;
@@ -91,7 +91,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
     }
 
     function burnSharesBackedByVault(address _account, uint256 _amountOfShares) external {
-        Connected vault = Connected(msg.sender);
+        IConnected vault = IConnected(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
         if (socket.mintedShares < _amountOfShares) revert("NOT_ENOUGH_SHARES");
@@ -107,7 +107,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
     }
 
     function forgive() external payable {
-        Connected vault = Connected(msg.sender);
+        IConnected vault = IConnected(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
         uint256 numberOfShares = STETH.getSharesByPooledEth(msg.value);
@@ -199,7 +199,7 @@ contract VaultHub is AccessControlEnumerable, Hub {
         }
     }
 
-    function _authedSocket(Connected _vault) internal view returns (VaultSocket memory) {
+    function _authedSocket(IConnected _vault) internal view returns (VaultSocket memory) {
         VaultSocket memory socket = vaultIndex[_vault];
         if (socket.vault != _vault) revert("NOT_CONNECTED_TO_HUB");
 

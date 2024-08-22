@@ -3,10 +3,10 @@
 
 pragma solidity 0.8.9;
 
-import {Basic} from "./Basic.sol";
-import {Connected} from "./Connected.sol";
+import {IStaking} from "./IStaking.sol";
+import {IConnected} from "./IConnected.sol";
 
-interface Liquid is Connected, Basic {
+interface ILiquid is IConnected, IStaking {
     function mintStETH(address _receiver, uint256 _amountOfShares) external;
     function burnStETH(address _from, uint256 _amountOfShares) external;
     function shrink(uint256 _amountOfETH) external;

@@ -4,10 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
-import {Basic} from "./interfaces/Basic.sol";
-import {BasicVault} from "./BasicVault.sol";
-import {Liquid} from "./interfaces/Liquid.sol";
-import {Hub} from "./interfaces/Hub.sol";
+import {IStaking} from "./interfaces/IStaking.sol";
+import {StakingVault} from "./StakingVault.sol";
+import {ILiquid} from "./interfaces/ILiquid.sol";
+import {IHub} from "./interfaces/IHub.sol";
 
 struct Report {
     uint96 cl;
@@ -15,11 +15,11 @@ struct Report {
     uint96 netCashFlow;
 }
 
-contract LiquidVault is BasicVault, Liquid {
+contract LiquidStakingVault is StakingVault, ILiquid {
     uint256 internal constant BPS_IN_100_PERCENT = 10000;
 
     uint256 public immutable BOND_BP;
-    Hub public immutable HUB;
+    IHub public immutable HUB;
 
     Report public lastReport;
     uint256 public locked;
@@ -32,8 +32,8 @@ contract LiquidVault is BasicVault, Liquid {
         address _vaultController,
         address _depositContract,
         uint256 _bondBP
-    ) BasicVault(_owner, _depositContract) {
-        HUB = Hub(_vaultController);
+    ) StakingVault(_owner, _depositContract) {
+        HUB = IHub(_vaultController);
         BOND_BP = _bondBP;
     }
 
@@ -48,7 +48,7 @@ contract LiquidVault is BasicVault, Liquid {
         locked = _locked;
     }
 
-    function deposit() public payable override(Basic, BasicVault) {
+    function deposit() public payable override(IStaking, StakingVault) {
         netCashFlow += int256(msg.value);
         super.deposit();
     }
@@ -57,13 +57,13 @@ contract LiquidVault is BasicVault, Liquid {
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
-    ) public override(BasicVault, Basic) {
+    ) public override(StakingVault, IStaking) {
         _mustBeHealthy();
 
         super.depositKeys(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
-    function withdraw(address _receiver, uint256 _amount) public override(Basic, BasicVault) {
+    function withdraw(address _receiver, uint256 _amount) public override(IStaking, StakingVault) {
         netCashFlow -= int256(_amount);
         _mustBeHealthy();
 

@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-interface Connected {
+interface IConnected {
     function BOND_BP() external view returns (uint256);
 
     function lastReport() external view returns (
