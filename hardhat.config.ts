@@ -78,6 +78,10 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "sepolia-fork": {
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
+      chainId: 11155111,
+    },
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY || "",
