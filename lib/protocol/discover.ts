@@ -119,7 +119,9 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  * Load staking modules contracts registered in the staking router.
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
-  const [nor, sdvt] = await stakingRouter.getStakingModules();
+  const [nor, initialSdvt] = await stakingRouter.getStakingModules();
+  // NOTE: Temporary workaround for missing staking modules in the staking router for Sepolia testnet.
+  const sdvt = initialSdvt ? initialSdvt : nor;
   return (await batch({
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
