@@ -33,11 +33,11 @@ export async function deployMockLegacyOracle({
   return legacyOracle;
 }
 
-async function deployMockLidoAndStakingRouter() {
+async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
-  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
-  return { lido, stakingRouter, withdrawalQueue };
+  const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
+  return { accounting, stakingRouter, withdrawalQueue };
 }
 
 export async function deployAccountingOracleSetup(
@@ -48,16 +48,15 @@ export async function deployAccountingOracleSetup(
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
-    getLidoAndStakingRouter = deployMockLidoAndStakingRouter,
+    getLidoAndStakingRouter = deployMockAccountingAndStakingRouter,
     getLegacyOracle = deployMockLegacyOracle,
     lidoLocatorAddr = null as string | null,
     legacyOracleAddr = null as string | null,
-    lidoAddr = null as string | null,
   } = {},
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
-  const { lido, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
+  const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   const legacyOracle = await getLegacyOracle();
@@ -68,7 +67,6 @@ export async function deployAccountingOracleSetup(
 
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
-    lidoAddr || (await lido.getAddress()),
     legacyOracleAddr || (await legacyOracle.getAddress()),
     secondsPerSlot,
     genesisTime,
@@ -84,18 +82,18 @@ export async function deployAccountingOracleSetup(
   });
 
   await updateLidoLocatorImplementation(locatorAddr, {
-    lido: lidoAddr || (await lido.getAddress()),
     stakingRouter: await stakingRouter.getAddress(),
     withdrawalQueue: await withdrawalQueue.getAddress(),
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
     accountingOracle: await oracle.getAddress(),
+    accounting: await accounting.getAddress(),
   });
 
   // pretend we're at the first slot of the initial frame's epoch
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
   return {
-    lido,
+    accounting,
     stakingRouter,
     withdrawalQueue,
     locatorAddr,

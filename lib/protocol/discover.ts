@@ -76,6 +76,7 @@ const getFoundationContracts = async (locator: LoadedContract<LidoLocator>, conf
     ),
     legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
+    accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
       config.get("oracleReportSanityChecker") || (await locator.oracleReportSanityChecker()),
@@ -149,6 +150,7 @@ export async function discover() {
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
+    "Accounting": foundationContracts.accounting.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,

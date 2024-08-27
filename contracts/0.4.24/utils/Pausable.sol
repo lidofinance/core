@@ -3,8 +3,7 @@
 
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/common/UnstructuredStorage.sol";
-
+import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
 contract Pausable {
     using UnstructuredStorage for bytes32;

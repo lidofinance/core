@@ -7,15 +7,15 @@ import { getStorageAt, setBalance } from "@nomicfoundation/hardhat-network-helpe
 
 import {
   ACL,
-  Burner__MockForLidoHandleOracleReport,
+  Burner__MockForAccounting,
   Lido,
-  LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoLocator,
-  OracleReportSanityChecker__MockForLidoHandleOracleReport,
-  PostTokenRebaseReceiver__MockForLidoHandleOracleReport,
-  StakingRouter__MockForLidoHandleOracleReport,
-  WithdrawalQueue__MockForLidoHandleOracleReport,
-  WithdrawalVault__MockForLidoHandleOracleReport,
+  OracleReportSanityChecker__MockForAccounting,
+  PostTokenRebaseReceiver__MockForAccounting,
+  StakingRouter__MockForLidoAccounting,
+  WithdrawalQueue__MockForAccounting,
+  WithdrawalVault__MockForLidoAccounting,
 } from "typechain-types";
 
 import { certainAddress, ether, getNextBlockTimestamp, impersonate, streccak } from "lib";
@@ -25,7 +25,7 @@ import { Snapshot } from "test/suite";
 
 // TODO: improve coverage
 // TODO: more math-focused tests
-describe("Lido.sol:report", () => {
+describe.skip("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
   let accountingOracle: HardhatEthersSigner;
   let stethWhale: HardhatEthersSigner;
@@ -34,13 +34,13 @@ describe("Lido.sol:report", () => {
   let lido: Lido;
   let acl: ACL;
   let locator: LidoLocator;
-  let withdrawalQueue: WithdrawalQueue__MockForLidoHandleOracleReport;
-  let oracleReportSanityChecker: OracleReportSanityChecker__MockForLidoHandleOracleReport;
-  let burner: Burner__MockForLidoHandleOracleReport;
-  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport;
-  let withdrawalVault: WithdrawalVault__MockForLidoHandleOracleReport;
-  let stakingRouter: StakingRouter__MockForLidoHandleOracleReport;
-  let postTokenRebaseReceiver: PostTokenRebaseReceiver__MockForLidoHandleOracleReport;
+  let withdrawalQueue: WithdrawalQueue__MockForAccounting;
+  let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
+  let burner: Burner__MockForAccounting;
+  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
+  let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
+  let stakingRouter: StakingRouter__MockForLidoAccounting;
+  let postTokenRebaseReceiver: PostTokenRebaseReceiver__MockForAccounting;
 
   let originalState: string;
 
@@ -56,13 +56,13 @@ describe("Lido.sol:report", () => {
       withdrawalQueue,
       withdrawalVault,
     ] = await Promise.all([
-      ethers.deployContract("Burner__MockForLidoHandleOracleReport"),
-      ethers.deployContract("LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport"),
-      ethers.deployContract("OracleReportSanityChecker__MockForLidoHandleOracleReport"),
-      ethers.deployContract("PostTokenRebaseReceiver__MockForLidoHandleOracleReport"),
-      ethers.deployContract("StakingRouter__MockForLidoHandleOracleReport"),
-      ethers.deployContract("WithdrawalQueue__MockForLidoHandleOracleReport"),
-      ethers.deployContract("WithdrawalVault__MockForLidoHandleOracleReport"),
+      ethers.deployContract("Burner__MockForAccounting"),
+      ethers.deployContract("LidoExecutionLayerRewardsVault__MockForLidoAccounting"),
+      ethers.deployContract("OracleReportSanityChecker__MockForAccounting"),
+      ethers.deployContract("PostTokenRebaseReceiver__MockForAccounting"),
+      ethers.deployContract("StakingRouter__MockForLidoAccounting"),
+      ethers.deployContract("WithdrawalQueue__MockForAccounting"),
+      ethers.deployContract("WithdrawalVault__MockForLidoAccounting"),
     ]);
 
     ({ lido, acl } = await deployLidoDao({

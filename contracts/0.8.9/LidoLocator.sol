@@ -28,6 +28,7 @@ contract LidoLocator is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address accounting;
     }
 
     error ZeroAddress();
@@ -46,6 +47,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
 
     /**
      * @notice declare service locations
@@ -67,6 +69,7 @@ contract LidoLocator is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        accounting = _assertNonZero(_config.accounting);
     }
 
     function coreComponents() external view returns(
@@ -87,8 +90,7 @@ contract LidoLocator is ILidoLocator {
         );
     }
 
-    function oracleReportComponentsForLido() external view returns(
-        address,
+    function oracleReportComponents() external view returns(
         address,
         address,
         address,
@@ -98,12 +100,11 @@ contract LidoLocator is ILidoLocator {
     ) {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter
         );
     }
 

@@ -5,6 +5,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
+  Accounting,
+  Accounting__factory,
   AccountingOracle,
   AccountingOracle__factory,
   Agent,
@@ -87,6 +89,7 @@ interface Protocol {
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
   withdrawalQueue: LoadedContract<WithdrawalQueue>;
   ldo: LoadedContract<MiniMeToken>;
+  accounting: LoadedContract<Accounting>;
 }
 
 async function loadDeployedProtocol(state: DeploymentState) {
@@ -117,6 +120,7 @@ async function loadDeployedProtocol(state: DeploymentState) {
       getAddress(Sk.withdrawalQueueERC721, state),
     ),
     ldo: await loadContract<MiniMeToken>(MiniMeToken__factory, getAddress(Sk.ldo, state)),
+    accounting: await loadContract<Accounting>(Accounting__factory, getAddress(Sk.accounting, state)),
   };
 }
 
@@ -202,6 +206,7 @@ async function checkSubmitDepositReportWithdrawal(
     hashConsensusForAO,
     elRewardsVault,
     withdrawalQueue,
+    accounting,
   } = protocol;
 
   const initialLidoBalance = await ethers.provider.getBalance(lido.address);
@@ -269,20 +274,24 @@ async function checkSubmitDepositReportWithdrawal(
   const withdrawalFinalizationBatches = [1];
 
   const accountingOracleSigner = await ethers.provider.getSigner(accountingOracle.address);
+
   // Performing dry-run to estimate simulated share rate
-  const [postTotalPooledEther, postTotalShares] = await lido
+  const [postTotalPooledEther, postTotalShares] = await accounting
     .connect(accountingOracleSigner)
-    .handleOracleReport.staticCall(
-      reportTimestamp,
+    .handleOracleReport.staticCall({
+      timestamp: reportTimestamp,
       timeElapsed,
-      stat.depositedValidators,
+      clValidators: stat.depositedValidators,
       clBalance,
-      0 /* withdrawals vault balance */,
+      withdrawalVaultBalance: 0n,
       elRewardsVaultBalance,
-      0 /* shares requested to burn */,
-      [] /* withdrawal finalization batches */,
-      0 /* simulated share rate */,
-    );
+      sharesRequestedToBurn: 0n,
+      withdrawalFinalizationBatches,
+      simulatedShareRate: 0n,
+      clBalances: [],
+      elBalances: [],
+      netCashFlows: [],
+    });
 
   log.success("Oracle report simulated");
 

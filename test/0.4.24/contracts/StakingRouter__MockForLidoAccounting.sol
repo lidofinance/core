@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-contract StakingRouter__MockForLidoHandleOracleReport {
+contract StakingRouter__MockForLidoAccounting {
     event Mock__MintedRewardsReported();
 
     address[] private recipients__mocked;

@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { BigNumberish, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -40,6 +40,7 @@ describe("OracleReportSanityChecker.sol", () => {
   };
 
   const correctLidoOracleReport = {
+    timestamp: 0n,
     timeElapsed: 24n * 60n * 60n,
     preCLBalance: ether("100000"),
     postCLBalance: ether("100001"),
@@ -48,8 +49,20 @@ describe("OracleReportSanityChecker.sol", () => {
     sharesRequestedToBurn: 0n,
     preCLValidators: 0n,
     postCLValidators: 0n,
+    depositedValidators: 0n,
   };
-  type CheckAccountingOracleReportParameters = [number, bigint, bigint, number, number, number, number, number];
+  type CheckAccountingOracleReportParameters = [
+    BigNumberish,
+    number,
+    bigint,
+    bigint,
+    number,
+    number,
+    number,
+    number,
+    number,
+    BigNumberish,
+  ];
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let withdrawalVault: string;
@@ -236,6 +249,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await expect(
         oracleReportSanityChecker.checkAccountingOracleReport(
+          correctLidoOracleReport.timestamp,
           correctLidoOracleReport.timeElapsed,
           preCLBalance,
           postCLBalance,
@@ -244,6 +258,7 @@ describe("OracleReportSanityChecker.sol", () => {
           correctLidoOracleReport.sharesRequestedToBurn,
           correctLidoOracleReport.preCLValidators,
           correctLidoOracleReport.postCLValidators,
+          correctLidoOracleReport.depositedValidators,
         ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceDecrease")
@@ -361,6 +376,7 @@ describe("OracleReportSanityChecker.sol", () => {
           preCLValidators: preCLValidators.toString(),
           postCLValidators: postCLValidators.toString(),
           timeElapsed: 0,
+          depositedValidators: postCLValidators,
         }) as CheckAccountingOracleReportParameters),
       );
     });
@@ -1075,6 +1091,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ...(Object.values({
           ...correctLidoOracleReport,
           postCLValidators: churnLimit,
+          depositedValidators: churnLimit,
         }) as CheckAccountingOracleReportParameters),
       );
       await expect(
@@ -1082,6 +1099,7 @@ describe("OracleReportSanityChecker.sol", () => {
           ...(Object.values({
             ...correctLidoOracleReport,
             postCLValidators: churnLimit + 1n,
+            depositedValidators: churnLimit + 1n,
           }) as CheckAccountingOracleReportParameters),
         ),
       )

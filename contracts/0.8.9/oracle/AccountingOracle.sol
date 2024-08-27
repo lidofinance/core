@@ -9,23 +9,11 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle, IConsensusContract } from "./BaseOracle.sol";
 
+import { ReportValues } from "../Accounting.sol";
 
-interface ILido {
-    function handleOracleReport(
-        // Oracle timings
-        uint256 _currentReportTimestamp,
-        uint256 _timeElapsedSeconds,
-        // CL values
-        uint256 _clValidators,
-        uint256 _clBalance,
-        // EL values
-        uint256 _withdrawalVaultBalance,
-        uint256 _elRewardsVaultBalance,
-        uint256 _sharesRequestedToBurn,
-        // Decision about withdrawals processing
-        uint256[] calldata _withdrawalFinalizationBatches,
-        uint256 _simulatedShareRate
-    ) external;
+
+interface IReportReceiver {
+    function handleOracleReport(ReportValues memory values) external;
 }
 
 
@@ -133,9 +121,8 @@ contract AccountingOracle is BaseOracle {
     bytes32 internal constant EXTRA_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.AccountingOracle.extraDataProcessingState");
 
-    address public immutable LIDO;
     ILidoLocator public immutable LOCATOR;
-    address public immutable LEGACY_ORACLE;
+    ILegacyOracle public immutable LEGACY_ORACLE;
 
     ///
     /// Initialization & admin functions
@@ -143,7 +130,6 @@ contract AccountingOracle is BaseOracle {
 
     constructor(
         address lidoLocator,
-        address lido,
         address legacyOracle,
         uint256 secondsPerSlot,
         uint256 genesisTime
@@ -152,10 +138,8 @@ contract AccountingOracle is BaseOracle {
     {
         if (lidoLocator == address(0)) revert LidoLocatorCannotBeZero();
         if (legacyOracle == address(0)) revert LegacyOracleCannotBeZero();
-        if (lido == address(0)) revert LidoCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
-        LIDO = lido;
-        LEGACY_ORACLE = legacyOracle;
+        LEGACY_ORACLE = ILegacyOracle(legacyOracle);
     }
 
     function initialize(
@@ -489,7 +473,7 @@ contract AccountingOracle is BaseOracle {
     /// 4. first new oracle's consensus report arrives
     ///
     function _checkOracleMigration(
-        address legacyOracle,
+        ILegacyOracle legacyOracle,
         address consensusContract
     )
         internal view returns (uint256)
@@ -506,7 +490,7 @@ contract AccountingOracle is BaseOracle {
             (uint256 legacyEpochsPerFrame,
                 uint256 legacySlotsPerEpoch,
                 uint256 legacySecondsPerSlot,
-                uint256 legacyGenesisTime) = ILegacyOracle(legacyOracle).getBeaconSpec();
+                uint256 legacyGenesisTime) = legacyOracle.getBeaconSpec();
             if (slotsPerEpoch != legacySlotsPerEpoch ||
                 secondsPerSlot != legacySecondsPerSlot ||
                 genesisTime != legacyGenesisTime
@@ -518,7 +502,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        uint256 legacyProcessedEpoch = ILegacyOracle(legacyOracle).getLastCompletedEpochId();
+        uint256 legacyProcessedEpoch = legacyOracle.getLastCompletedEpochId();
         if (initialEpoch != legacyProcessedEpoch + epochsPerFrame) {
             revert IncorrectOracleMigration(2);
         }
@@ -586,7 +570,7 @@ contract AccountingOracle is BaseOracle {
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkAccountingExtraDataListItemsCount(data.extraDataItemsCount);
 
-        ILegacyOracle(LEGACY_ORACLE).handleConsensusLayerReport(
+        LEGACY_ORACLE.handleConsensusLayerReport(
             data.refSlot,
             data.clBalanceGwei * 1e9,
             data.numValidators
@@ -610,7 +594,7 @@ contract AccountingOracle is BaseOracle {
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT
         );
 
-        ILido(LIDO).handleOracleReport(
+        IReportReceiver(LOCATOR.accounting()).handleOracleReport(ReportValues(
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
             slotsElapsed * SECONDS_PER_SLOT,
             data.numValidators,
@@ -619,8 +603,12 @@ contract AccountingOracle is BaseOracle {
             data.elRewardsVaultBalance,
             data.sharesRequestedToBurn,
             data.withdrawalFinalizationBatches,
-            data.simulatedShareRate
-        );
+            data.simulatedShareRate,
+            // TODO: vault values here
+            new uint256[](0),
+            new uint256[](0),
+            new uint256[](0)
+        ));
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({
             refSlot: data.refSlot.toUint64(),

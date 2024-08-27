@@ -3,6 +3,7 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, LogDesc
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   AccountingOracle,
   ACL,
   Burner,
@@ -34,6 +35,7 @@ export type ProtocolNetworkItems = {
   elRewardsVault: string;
   legacyOracle: string;
   lido: string;
+  accounting: string;
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
@@ -58,6 +60,7 @@ export interface ContractTypes {
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
   LegacyOracle: LegacyOracle;
   Lido: Lido;
+  Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
@@ -86,6 +89,7 @@ export type CoreContracts = {
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
   legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
+  accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;

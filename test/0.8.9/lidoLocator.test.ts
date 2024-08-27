@@ -21,6 +21,7 @@ const services = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
+  "accounting",
 ] as const;
 
 type Service = ArrayToUnion<typeof services>;
@@ -71,26 +72,24 @@ describe("LidoLocator.sol", () => {
     });
   });
 
-  context("oracleReportComponentsForLido", () => {
+  context("oracleReportComponents", () => {
     it("Returns correct services in correct order", async () => {
       const {
         accountingOracle,
-        elRewardsVault,
         oracleReportSanityChecker,
         burner,
         withdrawalQueue,
-        withdrawalVault,
         postTokenRebaseReceiver,
+        stakingRouter,
       } = config;
 
-      expect(await locator.oracleReportComponentsForLido()).to.deep.equal([
+      expect(await locator.oracleReportComponents()).to.deep.equal([
         accountingOracle,
-        elRewardsVault,
         oracleReportSanityChecker,
         burner,
         withdrawalQueue,
-        withdrawalVault,
         postTokenRebaseReceiver,
+        stakingRouter,
       ]);
     });
   });

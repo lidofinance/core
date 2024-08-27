@@ -3,7 +3,8 @@
 
 pragma solidity >=0.4.24 <0.9.0;
 
-import {AccountingOracle, ILido} from "contracts/0.8.9/oracle/AccountingOracle.sol";
+import { AccountingOracle, IReportReceiver } from "contracts/0.8.9/oracle/AccountingOracle.sol";
+import { ReportValues } from "contracts/0.8.9/Accounting.sol";
 
 interface ITimeProvider {
     function getTime() external view returns (uint256);
@@ -34,7 +35,7 @@ contract AccountingOracle__MockForLegacyOracle {
         uint256 slotsElapsed = data.refSlot - _lastRefSlot;
         _lastRefSlot = data.refSlot;
 
-        ILido(LIDO).handleOracleReport(
+        IReportReceiver(LIDO).handleOracleReport(ReportValues(
             data.refSlot * SECONDS_PER_SLOT,
             slotsElapsed * SECONDS_PER_SLOT,
             data.numValidators,
@@ -43,7 +44,11 @@ contract AccountingOracle__MockForLegacyOracle {
             data.elRewardsVaultBalance,
             data.sharesRequestedToBurn,
             data.withdrawalFinalizationBatches,
-            data.simulatedShareRate
+            data.simulatedShareRate,
+            new uint256[](0),
+            new uint256[](0),
+            new uint256[](0)
+            )
         );
     }
 

@@ -18,6 +18,7 @@ async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
+  const accountingAddress = state[Sk.accounting].address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
@@ -47,6 +48,12 @@ async function main() {
     stakingRouter,
     "grantRole",
     [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), lidoAddress],
+    { from: deployer },
+  );
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), accountingAddress],
     { from: deployer },
   );
   log.wideSplitter();
@@ -100,6 +107,9 @@ async function main() {
     [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), nodeOperatorsRegistryAddress],
     { from: deployer },
   );
+  await makeTx(burner, "grantRole", [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), accountingAddress], {
+    from: deployer,
+  });
 
   log.scriptFinish(__filename);
 }

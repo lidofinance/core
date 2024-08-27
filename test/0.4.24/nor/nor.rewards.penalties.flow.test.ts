@@ -87,7 +87,7 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, stranger] =
       await ethers.getSigners();
 
-    const burner = await ethers.deployContract("Burner__MockForLidoHandleOracleReport");
+    const burner = await ethers.deployContract("Burner__MockForAccounting");
 
     ({ lido, dao, acl } = await deployLidoDao({
       rootAccount: deployer,

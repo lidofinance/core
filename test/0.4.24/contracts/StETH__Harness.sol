@@ -25,11 +25,11 @@ contract StETH__Harness is StETH {
         totalPooledEther = _totalPooledEther;
     }
 
-    function mintShares(address _recipient, uint256 _sharesAmount) external returns (uint256) {
-        return super._mintShares(_recipient, _sharesAmount);
+    function mintShares(address _recipient, uint256 _sharesAmount) public {
+       super._mintShares(_recipient, _sharesAmount);
     }
 
-    function burnShares(address _account, uint256 _sharesAmount) external returns (uint256) {
-        return super._burnShares(_account, _sharesAmount);
+    function burnShares(address _account, uint256 _sharesAmount) public {
+        super._burnShares(_account, _sharesAmount);
     }
 }

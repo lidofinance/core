@@ -7,10 +7,10 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
   LegacyOracle__MockForAccountingOracle,
-  Lido__MockForAccountingOracle,
   OracleReportSanityChecker,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
@@ -51,7 +51,7 @@ describe("AccountingOracle.sol:submitReport", () => {
   let deadline: BigNumberish;
   let mockStakingRouter: StakingRouter__MockForAccountingOracle;
   let extraData: ExtraDataType;
-  let mockLido: Lido__MockForAccountingOracle;
+  let mockAccounting: Accounting__MockForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
   let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
   let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
@@ -112,7 +112,7 @@ describe("AccountingOracle.sol:submitReport", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     mockStakingRouter = deployed.stakingRouter;
-    mockLido = deployed.lido;
+    mockAccounting = deployed.accounting;
     sanityChecker = deployed.oracleReportSanityChecker;
     mockLegacyOracle = deployed.legacyOracle;
     mockWithdrawalQueue = deployed.withdrawalQueue;
@@ -168,7 +168,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       expect(oracleVersion).to.be.not.null;
       expect(deadline).to.be.not.null;
       expect(mockStakingRouter).to.be.not.null;
-      expect(mockLido).to.be.not.null;
+      expect(mockAccounting).to.be.not.null;
     });
   });
 
@@ -438,30 +438,30 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("delivers the data to corresponded contracts", () => {
-      it("should call handleOracleReport on Lido", async () => {
-        expect((await mockLido.getLastCall_handleOracleReport()).callCount).to.equal(0);
+      it("should call handleOracleReport on Accounting", async () => {
+        expect((await mockAccounting.lastCall__handleOracleReport()).callCount).to.equal(0);
         await consensus.setTime(deadline);
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
 
-        const lastOracleReportToLido = await mockLido.getLastCall_handleOracleReport();
+        const lastOracleReportToAccounting = await mockAccounting.lastCall__handleOracleReport();
 
-        expect(lastOracleReportToLido.callCount).to.equal(1);
-        expect(lastOracleReportToLido.currentReportTimestamp).to.equal(
+        expect(lastOracleReportToAccounting.callCount).to.equal(1);
+        expect(lastOracleReportToAccounting.arg.timestamp).to.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
-        expect(lastOracleReportToLido.callCount).to.equal(1);
-        expect(lastOracleReportToLido.currentReportTimestamp).to.equal(
+        expect(lastOracleReportToAccounting.callCount).to.equal(1);
+        expect(lastOracleReportToAccounting.arg.timestamp).to.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToLido.clBalance).to.equal(reportFields.clBalanceGwei + "000000000");
-        expect(lastOracleReportToLido.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
-        expect(lastOracleReportToLido.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
-        expect(lastOracleReportToLido.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
+        expect(lastOracleReportToAccounting.arg.clBalance).to.equal(reportFields.clBalanceGwei + "000000000");
+        expect(lastOracleReportToAccounting.arg.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
+        expect(lastOracleReportToAccounting.arg.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
+        expect(lastOracleReportToAccounting.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
           reportFields.withdrawalFinalizationBatches.map(Number),
         );
-        expect(lastOracleReportToLido.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
+        expect(lastOracleReportToAccounting.arg.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
       });
 
       it("should call updateExitedValidatorsCountByStakingModule on StakingRouter", async () => {
