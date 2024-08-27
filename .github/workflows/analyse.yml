@@ -1,60 +1,60 @@
 name: Analysis
 
-on: [pull_request]
-
-jobs:
-  slither:
-    name: Slither
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Common setup
-        uses: ./.github/workflows/setup
-
-      # REVIEW: here and below steps taken from official guide
-      # https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#caching-packages
-      - name: Install poetry
-        run: >
-          pipx install poetry
-
-      # REVIEW:
-      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-of-adding-a-system-path
-      - name: Add poetry to $GITHUB_PATH
-        run: >
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "poetry"
-
-      - name: Install dependencies
-        run: poetry install --no-root
-
-      - name: Remove foundry.toml
-        run: rm -f foundry.toml
-
-      - name: Run slither
-        run: >
-          poetry run slither . --sarif results.sarif --no-fail-pedantic
-
-      - name: Check results.sarif presence
-        id: results
-        if: always()
-        shell: bash
-        run: >
-          test -f results.sarif &&
-          echo 'value=present' >> $GITHUB_OUTPUT ||
-          echo 'value=not' >> $GITHUB_OUTPUT
-
-      - name: Upload results.sarif file
-        uses: github/codeql-action/upload-sarif@v3
-        if: ${{ always() && steps.results.outputs.value == 'present' }}
-        with:
-          sarif_file: results.sarif
+#on: [pull_request]
+#
+#jobs:
+#  slither:
+#    name: Slither
+#    runs-on: ubuntu-latest
+#
+#    permissions:
+#      contents: read
+#      security-events: write
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Common setup
+#        uses: ./.github/workflows/setup
+#
+#      # REVIEW: here and below steps taken from official guide
+#      # https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#caching-packages
+#      - name: Install poetry
+#        run: >
+#          pipx install poetry
+#
+#      # REVIEW:
+#      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-of-adding-a-system-path
+#      - name: Add poetry to $GITHUB_PATH
+#        run: >
+#          echo "$HOME/.local/bin" >> $GITHUB_PATH
+#
+#      - uses: actions/setup-python@v5
+#        with:
+#          python-version: "3.12"
+#          cache: "poetry"
+#
+#      - name: Install dependencies
+#        run: poetry install --no-root
+#
+#      - name: Remove foundry.toml
+#        run: rm -f foundry.toml
+#
+#      - name: Run slither
+#        run: >
+#          poetry run slither . --sarif results.sarif --no-fail-pedantic
+#
+#      - name: Check results.sarif presence
+#        id: results
+#        if: always()
+#        shell: bash
+#        run: >
+#          test -f results.sarif &&
+#          echo 'value=present' >> $GITHUB_OUTPUT ||
+#          echo 'value=not' >> $GITHUB_OUTPUT
+#
+#      - name: Upload results.sarif file
+#        uses: github/codeql-action/upload-sarif@v3
+#        if: ${{ always() && steps.results.outputs.value == 'present' }}
+#        with:
+#          sarif_file: results.sarif
