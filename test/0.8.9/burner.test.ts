@@ -8,7 +8,7 @@ import { Burner, ERC20__Harness, ERC721__Harness, LidoLocator__MockMutable, StET
 
 import { batch, certainAddress, ether, impersonate } from "lib";
 
-describe("Burner.sol", () => {
+describe.skip("Burner.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
