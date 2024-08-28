@@ -180,6 +180,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // The `amount` of ether was sent to the deposit_contract.deposit function
     event Unbuffered(uint256 amount);
 
+    // External shares minted for receiver
+    event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 stethAmount);
+
+    // External shares burned for account
+    event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
+
     /**
     * @dev As AragonApp, Lido contract must be initialized with following variables:
     *      NB: by default, staking and the whole Lido pool are in paused state
@@ -558,13 +564,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
     }
 
-    /// @notice mint shares backed by external vaults
-    function mintExternalShares(
-        address _receiver,
-        uint256 _amountOfShares
-    ) external {
+    /// @notice Mint shares backed by external vaults
+    ///
+    /// @param _receiver Address to receive the minted shares
+    /// @param _amountOfShares Amount of shares to mint
+    /// @return stethAmount The amount of stETH minted
+    ///
+    /// @dev authentication goes through isMinter in StETH
+    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
+        if (_receiver == address(0)) revert("MINT_RECEIVER_ZERO_ADDRESS");
+        if (_amountOfShares == 0) revert("MINT_ZERO_AMOUNT_OF_SHARES");
         _whenNotStopped();
-        // authentication goes through isMinter in StETH
+
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         // TODO: sanity check here to avoid 100% external balance
@@ -575,14 +586,20 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         mintShares(_receiver, _amountOfShares);
 
-        // TODO: emit something
+        emit ExternalSharesMinted(_receiver, _amountOfShares, stethAmount);
     }
 
-    function burnExternalShares(
-        address _account,
-        uint256 _amountOfShares
-    ) external {
+    /// @notice Burns external shares from a specified account
+    ///
+    /// @param _account Address from which to burn shares
+    /// @param _amountOfShares Amount of shares to burn
+    ///
+    /// @dev authentication goes through isMinter in StETH
+    function burnExternalShares(address _account, uint256 _amountOfShares) external {
+        if (_account == address(0)) revert("BURN_FROM_ZERO_ADDRESS");
+        if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
         _whenNotStopped();
+
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
 
@@ -592,7 +609,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         burnShares(_account, _amountOfShares);
 
-        // TODO: emit
+        emit ExternalSharesBurned(_account, _amountOfShares, stethAmount);
     }
 
     function processClStateUpdate(
@@ -604,6 +621,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ) external {
         // all data validation was done by Accounting and OracleReportSanityChecker
         _whenNotStopped();
+
         _auth(getLidoLocator().accounting());
 
         // Save the current CL balance and validators to
@@ -627,6 +645,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
         _whenNotStopped();
+
         ILidoLocator locator = getLidoLocator();
         _auth(locator.accounting());
 
