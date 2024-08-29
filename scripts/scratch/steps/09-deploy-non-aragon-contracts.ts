@@ -166,13 +166,7 @@ export async function main() {
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    [
-      locator.address,
-      lidoAddress,
-      legacyOracleAddress,
-      Number(chainSpec.secondsPerSlot),
-      Number(chainSpec.genesisTime),
-    ],
+    [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
   // Deploy HashConsensus for AccountingOracle
@@ -209,7 +203,7 @@ export async function main() {
   // Deploy Burner
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
-    treasuryAddress,
+    locator.address,
     lidoAddress,
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,

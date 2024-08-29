@@ -15,7 +15,7 @@ if (require.main === module) {
   applyMigrationScript(migrationFile)
     .then(() => process.exit(0))
     .catch((error) => {
-      log.error("Migration failed:", error);
+      log.error(`Migration failed: ${migrationFile}`, error);
       process.exit(1);
     });
 }

@@ -34,7 +34,8 @@ export async function deployScratchProtocol(networkName: string): Promise<void> 
 
       await ethers.provider.send("evm_mine", []); // Persist the state after each step
     } catch (error) {
-      log.error("Migration failed:", error as Error);
+      log.error(`Migration failed: ${migrationFile}`, error as Error);
+      process.exit(1);
     }
   }
 }
@@ -52,12 +53,7 @@ export async function applyMigrationScript(migrationFile: string): Promise<void>
     throw new Error(`Migration file ${migrationFile} does not export a 'main' function!`);
   }
 
-  try {
-    log.scriptStart(migrationFile);
-    await main();
-    log.scriptFinish(migrationFile);
-  } catch (error) {
-    log.error("Migration failed:", error as Error);
-    throw error;
-  }
+  log.scriptStart(migrationFile);
+  await main();
+  log.scriptFinish(migrationFile);
 }
