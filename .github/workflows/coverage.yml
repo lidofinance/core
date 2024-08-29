@@ -25,6 +25,7 @@ name: Coverage
 #        with:
 #          path: ./coverage/cobertura-coverage.xml
 #          publish: true
+#          threshold: 95
 #          diff: true
 #          diff-branch: master
 #          diff-storage: _core_coverage_reports
