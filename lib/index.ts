@@ -16,6 +16,7 @@ export * from "./nor";
 export * from "./oracle";
 export * from "./promise";
 export * from "./proxy";
+export * from "./scratch";
 export * from "./signing-keys";
 export * from "./state-file";
 export * from "./string";

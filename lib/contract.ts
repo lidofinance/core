@@ -34,17 +34,15 @@ export async function addContractHelperFields(contract: BaseContract, name: stri
 }
 
 export async function loadContract<ContractType extends BaseContract>(
-  factory: ContractFactoryHelper<ContractType>,
+  name: string,
   address: string,
   signer?: HardhatEthersSigner,
 ) {
   if (!signer) {
     signer = await ethers.provider.getSigner();
   }
-  const result = factory.connect(address, signer as ContractRunner);
-  const factoryName = factory.name;
-  const contractName = factoryName.slice(0, factoryName.indexOf("__"));
-  return (await addContractHelperFields(result, contractName)) as unknown as LoadedContract<ContractType>;
+  const result = await ethers.getContractAt(name, address, signer);
+  return (await addContractHelperFields(result, name)) as unknown as LoadedContract<ContractType>;
 }
 
 export async function getContractAt(name: string, address: string): Promise<LoadedContract> {
