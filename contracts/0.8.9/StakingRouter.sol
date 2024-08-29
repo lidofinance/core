@@ -191,17 +191,9 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
         uint256 stakingModulesCount = getStakingModulesCount();
 
-        if (stakingModulesCount != _priorityExitShareThresholds.length) {
-            revert ArraysLengthMismatch(stakingModulesCount, _priorityExitShareThresholds.length);
-        }
-
-        if (stakingModulesCount != _maxDepositsPerBlock.length) {
-            revert ArraysLengthMismatch(stakingModulesCount, _maxDepositsPerBlock.length);
-        }
-
-        if (stakingModulesCount != _minDepositBlockDistances.length) {
-            revert ArraysLengthMismatch(stakingModulesCount, _minDepositBlockDistances.length);
-        }
+        _validateEqualArrayLengths(stakingModulesCount, _priorityExitShareThresholds.length);
+        _validateEqualArrayLengths(stakingModulesCount, _maxDepositsPerBlock.length);
+        _validateEqualArrayLengths(stakingModulesCount, _minDepositBlockDistances.length);
 
         for (uint256 i; i < stakingModulesCount; ) {
             StakingModule storage stakingModule = _getStakingModuleByIndex(i);
@@ -401,9 +393,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         external
         onlyRole(REPORT_REWARDS_MINTED_ROLE)
     {
-        if (_stakingModuleIds.length != _totalShares.length) {
-            revert ArraysLengthMismatch(_stakingModuleIds.length, _totalShares.length);
-        }
+        _validateEqualArrayLengths(_stakingModuleIds.length, _totalShares.length);
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ) {
             if (_totalShares[i] > 0) {
@@ -475,9 +465,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
         returns (uint256)
     {
-        if (_stakingModuleIds.length != _exitedValidatorsCounts.length) {
-            revert ArraysLengthMismatch(_stakingModuleIds.length, _exitedValidatorsCounts.length);
-        }
+        _validateEqualArrayLengths(_stakingModuleIds.length, _exitedValidatorsCounts.length);
 
         uint256 newlyExitedValidatorsCount;
 
@@ -1478,5 +1466,11 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
     function _toE4Precision(uint256 _value, uint256 _precision) internal pure returns (uint16) {
         return uint16((_value * TOTAL_BASIS_POINTS) / _precision);
+    }
+
+    function _validateEqualArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength) internal pure {
+        if (firstArrayLength != secondArrayLength) {
+            revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
+        }
     }
 }
