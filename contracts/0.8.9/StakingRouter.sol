@@ -63,6 +63,10 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 currentNodeOpExitedValidatorsCount,
         uint256 currentNodeOpStuckValidatorsCount
     );
+    error UnexpectedFinalExitedValidatorsCount (
+        uint256 newModuleTotalExitedValidatorsCount,
+        uint256 newModuleTotalExitedValidatorsCountInStakingRouter
+    );
     error InvalidDepositsValue(uint256 etherValue, uint256 depositsCount);
     error StakingModuleAddressExists();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
@@ -484,7 +488,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
                 uint256 totalExitedValidators,
                 uint256 totalDepositedValidators,
                 /* uint256 depositableValidatorsCount */
-            ) = IStakingModule(stakingModule.stakingModuleAddress).getStakingModuleSummary();
+            ) = _getStakingModuleSummary(IStakingModule(stakingModule.stakingModuleAddress));
 
             if (_exitedValidatorsCounts[i] > totalDepositedValidators) {
                 revert ReportedExitedValidatorsExceedDeposited(
@@ -610,7 +614,26 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             _correction.newNodeOperatorStuckValidatorsCount
         );
 
+        (
+            uint256 moduleTotalExitedValidators,
+            uint256 moduleTotalDepositedValidators,
+        ) = _getStakingModuleSummary(stakingModule);
+
+        if (_correction.newModuleExitedValidatorsCount > moduleTotalDepositedValidators) {
+            revert ReportedExitedValidatorsExceedDeposited(
+                _correction.newModuleExitedValidatorsCount,
+                moduleTotalDepositedValidators
+            );
+        }
+
         if (_triggerUpdateFinish) {
+            if (moduleTotalExitedValidators != _correction.newModuleExitedValidatorsCount) {
+                revert UnexpectedFinalExitedValidatorsCount(
+                    moduleTotalExitedValidators,
+                    _correction.newModuleExitedValidatorsCount
+                );
+            }
+
             stakingModule.onExitedAndStuckValidatorsCountsUpdated();
         }
     }
@@ -657,7 +680,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             stakingModule = _getStakingModuleByIndex(i);
             moduleContract = IStakingModule(stakingModule.stakingModuleAddress);
 
-            (uint256 exitedValidatorsCount, , ) = moduleContract.getStakingModuleSummary();
+            (uint256 exitedValidatorsCount, , ) = _getStakingModuleSummary(moduleContract);
             if (exitedValidatorsCount == stakingModule.exitedValidatorsCount) {
                 // oracle finished updating exited validators for all node ops
                 try moduleContract.onExitedAndStuckValidatorsCountsUpdated() {}
@@ -820,7 +843,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             summary.totalExitedValidators,
             summary.totalDepositedValidators,
             summary.depositableValidatorsCount
-        ) = stakingModule.getStakingModuleSummary();
+        ) = _getStakingModuleSummary(stakingModule);
     }
 
 
@@ -1059,7 +1082,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
             /* uint256 depositableValidatorsCount */
-        ) = IStakingModule(stakingModule.stakingModuleAddress).getStakingModuleSummary();
+        ) = _getStakingModuleSummary(IStakingModule(stakingModule.stakingModuleAddress));
 
         activeValidatorsCount = totalDepositedValidators - Math256.max(
             stakingModule.exitedValidatorsCount, totalExitedValidators
@@ -1372,7 +1395,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
             uint256 depositableValidatorsCount
-        ) = IStakingModule(cacheItem.stakingModuleAddress).getStakingModuleSummary();
+        ) = _getStakingModuleSummary(IStakingModule(cacheItem.stakingModuleAddress));
 
         cacheItem.availableValidatorsCount = cacheItem.status == StakingModuleStatus.Active
             ? depositableValidatorsCount
@@ -1474,5 +1497,10 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         if (firstArrayLength != secondArrayLength) {
             revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
         }
+    }
+
+    /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
+    function _getStakingModuleSummary(IStakingModule stakingModule) internal view returns (uint256, uint256, uint256) {
+        return stakingModule.getStakingModuleSummary();
     }
 }
