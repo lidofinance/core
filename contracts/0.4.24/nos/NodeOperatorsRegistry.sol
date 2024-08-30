@@ -421,7 +421,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _authP(SET_NODE_OPERATOR_LIMIT_ROLE, arr(uint256(_nodeOperatorId), uint256(_vettedSigningKeysCount)));
         _onlyCorrectNodeOperatorState(getNodeOperatorIsActive(_nodeOperatorId));
 
-        _updateVettedSingingKeysCount(_nodeOperatorId, _vettedSigningKeysCount, true /* _allowIncrease */);
+        _updateVettedSigningKeysCount(_nodeOperatorId, _vettedSigningKeysCount, true /* _allowIncrease */);
         _increaseValidatorsKeysNonce();
     }
 
@@ -460,12 +460,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
                 i := add(i, 1)
             }
             _requireValidRange(nodeOperatorId < totalNodeOperatorsCount);
-            _updateVettedSingingKeysCount(nodeOperatorId, vettedKeysCount, false /* only decrease */);
+            _updateVettedSigningKeysCount(nodeOperatorId, vettedKeysCount, false /* only decrease */);
         }
         _increaseValidatorsKeysNonce();
     }
 
-    function _updateVettedSingingKeysCount(
+    function _updateVettedSigningKeysCount(
         uint256 _nodeOperatorId,
         uint256 _vettedSigningKeysCount,
         bool _allowIncrease
