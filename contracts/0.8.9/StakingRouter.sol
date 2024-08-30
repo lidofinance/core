@@ -69,6 +69,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     error UnrecoverableModuleError();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
+    error InvalidMaxDepositPerBlockValue();
 
     enum StakingModuleStatus {
         Active, // deposits and rewards allowed
@@ -337,7 +338,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         if (_priorityExitShareThreshold > TOTAL_BASIS_POINTS) revert InvalidPriorityExitShareThreshold();
         if (_stakeShareLimit > _priorityExitShareThreshold) revert InvalidPriorityExitShareThreshold();
         if (_stakingModuleFee + _treasuryFee > TOTAL_BASIS_POINTS) revert InvalidFeeSum();
-        if (_minDepositBlockDistance == 0) revert InvalidMinDepositBlockDistance();
+        if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) revert InvalidMinDepositBlockDistance();
+        if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
 
         stakingModule.stakeShareLimit = uint16(_stakeShareLimit);
         stakingModule.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
