@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity >=0.4.24 <0.9.0;
 
@@ -28,7 +28,7 @@ contract MinFirstAllocationStrategyInvariants is Test {
         uint256[] memory capacities = new uint256[](1);
         uint256 allocationSize = 0;
 
-        (uint256 allocated,,) = harness.allocateToBestCandidate(buckets, capacities, allocationSize);
+        (uint256 allocated, , ) = harness.allocateToBestCandidate(buckets, capacities, allocationSize);
 
         assertEq(allocated, 0, "INVALID_ALLOCATED_VALUE");
     }
@@ -45,7 +45,7 @@ contract MinFirstAllocationStrategyInvariants is Test {
         capacities[1] = 101;
         capacities[2] = 100;
 
-        (uint256 allocated, uint256[] memory newBuckets,) = harness.allocate(buckets, capacities, allocationSize);
+        (uint256 allocated, uint256[] memory newBuckets, ) = harness.allocate(buckets, capacities, allocationSize);
 
         assertEq(allocated, 101, "INVALID_ALLOCATED_VALUE");
 
@@ -63,8 +63,8 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_AllocatedOutput() public view {
-        (,, uint256 allocatedActual) = handler.getActualOutput();
-        (,, uint256 allocatedExpected) = handler.getExpectedOutput();
+        (, , uint256 allocatedActual) = handler.getActualOutput();
+        (, , uint256 allocatedExpected) = handler.getExpectedOutput();
 
         assertEq(allocatedExpected, allocatedActual, "INVALID_ALLOCATED_VALUE");
     }
@@ -78,8 +78,8 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_BucketsOutput() public view {
-        (uint256[] memory bucketsActual,,) = handler.getActualOutput();
-        (uint256[] memory bucketsExpected,,) = handler.getExpectedOutput();
+        (uint256[] memory bucketsActual, , ) = handler.getActualOutput();
+        (uint256[] memory bucketsExpected, , ) = handler.getExpectedOutput();
 
         for (uint256 i = 0; i < bucketsExpected.length; ++i) {
             assertEq(bucketsExpected[i], bucketsActual[i], "INVALID_ALLOCATED_VALUE");
@@ -95,8 +95,8 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_AllocatedBucketValuesNotExceedCapacities() public view {
-        (uint256[] memory inputBuckets, uint256[] memory inputCapacities,) = handler.getInput();
-        (uint256[] memory buckets, uint256[] memory capacities,) = handler.getActualOutput();
+        (uint256[] memory inputBuckets, uint256[] memory inputCapacities, ) = handler.getInput();
+        (uint256[] memory buckets, uint256[] memory capacities, ) = handler.getActualOutput();
 
         for (uint256 i = 0; i < buckets.length; ++i) {
             // when bucket initially overloaded skip it from the check
@@ -114,8 +114,8 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_AllocatedMatchesBucketChanges() public view {
-        (uint256[] memory inputBuckets,,) = handler.getInput();
-        (uint256[] memory buckets,, uint256 allocated) = handler.getActualOutput();
+        (uint256[] memory inputBuckets, , ) = handler.getInput();
+        (uint256[] memory buckets, , uint256 allocated) = handler.getActualOutput();
 
         uint256 inputSum = 0;
         uint256 outputSum = 0;
@@ -137,7 +137,7 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_AllocatedLessThenAllocationSizeOnlyWhenAllBucketsFilled() public view {
-        (,, uint256 allocationSize) = handler.getInput();
+        (, , uint256 allocationSize) = handler.getInput();
         (uint256[] memory buckets, uint256[] memory capacities, uint256 allocated) = handler.getActualOutput();
 
         if (allocationSize == allocated) return;
@@ -217,9 +217,11 @@ contract MinFirstAllocationStrategyBase {
 }
 
 contract MinFirstAllocationStrategyAllocateHandler is MinFirstAllocationStrategyBase {
-    function allocate(uint256[] memory _fuzzBuckets, uint256[] memory _fuzzCapacities, uint256 _fuzzAllocationSize)
-        public
-    {
+    function allocate(
+        uint256[] memory _fuzzBuckets,
+        uint256[] memory _fuzzCapacities,
+        uint256 _fuzzAllocationSize
+    ) public {
         _fillTestInput(_fuzzBuckets, _fuzzCapacities, _fuzzAllocationSize);
 
         _fillActualAllocateOutput();
@@ -252,21 +254,21 @@ contract MinFirstAllocationStrategyAllocateHandler is MinFirstAllocationStrategy
 }
 
 contract MinFirstAllocationStrategy__Harness {
-    function allocate(uint256[] memory _buckets, uint256[] memory _capacities, uint256 _allocationSize)
-        public
-        pure
-        returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities)
-    {
+    function allocate(
+        uint256[] memory _buckets,
+        uint256[] memory _capacities,
+        uint256 _allocationSize
+    ) public pure returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities) {
         allocated = MinFirstAllocationStrategy.allocate(_buckets, _capacities, _allocationSize);
         newBuckets = _buckets;
         newCapacities = _capacities;
     }
 
-    function allocateToBestCandidate(uint256[] memory _buckets, uint256[] memory _capacities, uint256 _allocationSize)
-        public
-        pure
-        returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities)
-    {
+    function allocateToBestCandidate(
+        uint256[] memory _buckets,
+        uint256[] memory _capacities,
+        uint256 _allocationSize
+    ) public pure returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities) {
         allocated = MinFirstAllocationStrategy.allocateToBestCandidate(_buckets, _capacities, _allocationSize);
         newBuckets = _buckets;
         newCapacities = _capacities;
@@ -276,11 +278,11 @@ contract MinFirstAllocationStrategy__Harness {
 library NaiveMinFirstAllocationStrategy {
     uint256 private constant MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
-    function allocate(uint256[] memory buckets, uint256[] memory capacities, uint256 allocationSize)
-        internal
-        pure
-        returns (uint256 allocated)
-    {
+    function allocate(
+        uint256[] memory buckets,
+        uint256[] memory capacities,
+        uint256 allocationSize
+    ) internal pure returns (uint256 allocated) {
         while (allocated < allocationSize) {
             uint256 bestCandidateIndex = MAX_UINT256;
             uint256 bestCandidateAllocation = MAX_UINT256;

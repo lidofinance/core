@@ -1,12 +1,4 @@
-import {
-  ContractTransactionReceipt,
-  EventLog,
-  Interface,
-  InterfaceAbi,
-  Log,
-  LogDescription,
-  TransactionReceipt,
-} from "ethers";
+import { ContractTransactionReceipt, EventLog, Interface, Log, LogDescription } from "ethers";
 
 import { log } from "./log";
 
@@ -42,11 +34,15 @@ const parseLogEntry = (entry: Log, interfaces: Interface[]): LogDescription | nu
   return null;
 };
 
-export function findEventsWithInterfaces(receipt: ContractTransactionReceipt, eventName: string, interfaces: Interface[]): LogDescription[] {
+export function findEventsWithInterfaces(
+  receipt: ContractTransactionReceipt,
+  eventName: string,
+  interfaces: Interface[],
+): LogDescription[] {
   const events: LogDescription[] = [];
   const notParsedLogs: Log[] = [];
 
-  receipt.logs.forEach(entry => {
+  receipt.logs.forEach((entry) => {
     const logDescription = parseLogEntry(entry, interfaces);
     if (logDescription) {
       events.push(logDescription);
@@ -59,7 +55,7 @@ export function findEventsWithInterfaces(receipt: ContractTransactionReceipt, ev
     // log.warning("The following logs could not be parsed:", notParsedLogs);
   }
 
-  return events.filter(e => e.name === eventName);
+  return events.filter((e) => e.name === eventName);
 }
 
 export function findEvents(receipt: ContractTransactionReceipt, eventName: string) {
@@ -72,22 +68,4 @@ export function findEvents(receipt: ContractTransactionReceipt, eventName: strin
   }
 
   return events;
-}
-
-export function findEventsWithAbi(receipt: TransactionReceipt, eventName: string, abi: InterfaceAbi): LogDescription[] {
-  const iface = new Interface(abi);
-  const foundEvents = [];
-
-  for (const entry of receipt.logs) {
-    try {
-      const event = iface.parseLog(entry);
-      if (event && event.name == eventName) {
-        foundEvents.push(event);
-      }
-    } catch (error) {
-      throw new Error(`Failed to find event ${eventName}, error: ${error}`);
-    }
-  }
-
-  return foundEvents;
 }

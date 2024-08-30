@@ -20,7 +20,7 @@ import {
   StakingRouter,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
-  WithdrawalVault
+  WithdrawalVault,
 } from "typechain-types";
 
 export type ProtocolNetworkItems = {
@@ -115,11 +115,10 @@ export type HashConsensusContracts = {
   hashConsensus: LoadedContract<HashConsensus>;
 };
 
-export type ProtocolContracts = { locator: LoadedContract<LidoLocator> }
-  & CoreContracts
-  & AragonContracts
-  & StakingModuleContracts
-  & HashConsensusContracts;
+export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
+  AragonContracts &
+  StakingModuleContracts &
+  HashConsensusContracts;
 
 export type ProtocolSigners = {
   agent: string;
@@ -131,7 +130,7 @@ export type Signer = keyof ProtocolSigners;
 
 export type ProtocolContextFlags = {
   withSimpleDvtModule: boolean;
-}
+};
 
 export type ProtocolContext = {
   contracts: ProtocolContracts;

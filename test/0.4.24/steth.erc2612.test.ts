@@ -1,11 +1,5 @@
 import { ethers } from "hardhat";
 
-import {
-  EIP712StETH__factory,
-  ERC1271Wallet__factory,
-  StethPermitMockWithEip712Initialization__factory,
-} from "typechain-types";
-
 import { ether, stethDomain } from "lib";
 
 import { testERC2612Compliance } from "../common/erc2612.test";
@@ -16,9 +10,12 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");
-    const steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, { value });
+    const steth = await ethers.deployContract("StETHPermit__HarnessWithEip712Initialization", [owner], {
+      value,
+      from: deployer,
+    });
 
-    const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
+    const eip712helper = await ethers.deployContract("EIP712StETH", [steth], deployer);
     await steth.initializeEIP712StETH(eip712helper);
 
     return {
@@ -36,12 +33,15 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
 
     const value = ether("1.0");
-    const steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, { value });
+    const steth = await ethers.deployContract("StETHPermit__HarnessWithEip712Initialization", [owner], {
+      value,
+      from: deployer,
+    });
 
-    const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
+    const eip712helper = await ethers.deployContract("EIP712StETH", [steth], deployer);
     await steth.initializeEIP712StETH(eip712helper);
 
-    const wallet = await new ERC1271Wallet__factory(deployer).deploy(owner.address);
+    const wallet = await ethers.deployContract("ERC1271Wallet", [owner], deployer);
     await steth.connect(owner).transfer(await wallet.getAddress(), await steth.balanceOf(owner));
 
     return {

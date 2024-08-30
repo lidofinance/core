@@ -18,7 +18,7 @@ import { Snapshot } from "test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 
-describe("AccessControlEnumerable", () => {
+describe("AccessControlEnumerable.sol", () => {
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 

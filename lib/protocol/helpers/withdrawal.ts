@@ -65,16 +65,12 @@ export const finalizeWithdrawalQueue = async (
       "Last request ID": lastRequestId,
     });
 
-    const submitTx = await ctx.contracts.lido
-      .connect(ethHolder)
-      .submit(ZeroAddress, { value: ether("10000") });
+    const submitTx = await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
 
     await trace("lido.submit", submitTx);
   }
 
-  const submitTx = await ctx.contracts.lido
-    .connect(ethHolder)
-    .submit(ZeroAddress, { value: ether("10000") });
+  const submitTx = await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
 
   await trace("lido.submit", submitTx);
 

@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable, MockReportProcessor, MockReportProcessor__factory } from "typechain-types";
+import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import { CONSENSUS_VERSION, streccak } from "lib";
 
@@ -11,15 +11,15 @@ import { Snapshot } from "test/suite";
 
 const manageReportProcessorRoleKeccak256 = streccak("MANAGE_REPORT_PROCESSOR_ROLE");
 
-describe("HashConsensus:reportProcessor", function() {
+describe("HashConsensus.sol:reportProcessor", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
   let stranger: Signer;
 
-  let consensus: HashConsensusTimeTravellable;
-  let reportProcessor1: MockReportProcessor;
-  let reportProcessor2: MockReportProcessor;
+  let consensus: HashConsensus__Harness;
+  let reportProcessor1: ReportProcessor__Mock;
+  let reportProcessor2: ReportProcessor__Mock;
 
   let snapshot: string;
 
@@ -29,7 +29,7 @@ describe("HashConsensus:reportProcessor", function() {
     consensus = deployed.consensus;
     reportProcessor1 = deployed.reportProcessor;
 
-    reportProcessor2 = await new MockReportProcessor__factory(admin).deploy(CONSENSUS_VERSION);
+    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
 
     snapshot = await Snapshot.take();
   };
@@ -167,7 +167,7 @@ describe("HashConsensus:reportProcessor", function() {
     it("equals to new processor version after it was changed", async () => {
       const CONSENSUS_VERSION_2 = 2;
 
-      const reportProcessor_v2 = await new MockReportProcessor__factory(admin).deploy(CONSENSUS_VERSION_2);
+      const reportProcessor_v2 = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION_2], admin);
 
       await consensus.setReportProcessor(await reportProcessor_v2.getAddress());
       expect(await consensus.getConsensusVersion()).to.equal(CONSENSUS_VERSION_2);

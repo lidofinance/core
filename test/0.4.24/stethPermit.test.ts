@@ -4,17 +4,13 @@ import { ethers } from "hardhat";
 
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  EIP712StETH__factory,
-  StethPermitMockWithEip712Initialization,
-  StethPermitMockWithEip712Initialization__factory,
-} from "typechain-types";
+import { StETHPermit__HarnessWithEip712Initialization } from "typechain-types";
 
 import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe("Permit", () => {
+describe("StETHPermit.sol", () => {
   let deployer: Signer;
   let signer: Signer;
 
@@ -22,13 +18,14 @@ describe("Permit", () => {
   let permit: Permit;
   let signature: Signature;
 
-  let steth: StethPermitMockWithEip712Initialization;
+  let steth: StETHPermit__HarnessWithEip712Initialization;
 
   before(async () => {
     [deployer, signer] = await ethers.getSigners();
 
-    steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(signer, {
+    steth = await ethers.deployContract("StETHPermit__HarnessWithEip712Initialization", [signer], {
       value: ether("10.0"),
+      from: deployer,
     });
 
     const holderBalance = await steth.balanceOf(signer);
@@ -88,7 +85,7 @@ describe("Permit", () => {
 
   context("Initialized", () => {
     beforeEach(async () => {
-      const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
+      const eip712helper = await ethers.deployContract("EIP712StETH", [steth], deployer);
       await steth.initializeEIP712StETH(eip712helper);
     });
 

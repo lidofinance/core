@@ -6,10 +6,10 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
-  MockStakingRouterForAccountingOracle,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   OracleReportSanityChecker,
+  StakingRouter__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -66,10 +66,10 @@ const getDefaultReportFields = (override = {}) => ({
 });
 
 describe("AccountingOracle.sol:submitReportExtraData", () => {
-  let consensus: HashConsensusTimeTravellable;
-  let oracle: AccountingOracleTimeTravellable;
+  let consensus: HashConsensus__Harness;
+  let oracle: AccountingOracle__Harness;
   let oracleVersion: bigint;
-  let stakingRouter: MockStakingRouterForAccountingOracle;
+  let stakingRouter: StakingRouter__MockForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
   let snapshot: string;
 

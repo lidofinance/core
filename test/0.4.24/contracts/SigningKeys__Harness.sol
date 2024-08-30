@@ -1,6 +1,5 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
-// for test purposes only
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity 0.4.24;
 
@@ -34,18 +33,20 @@ contract SigningKeys__Harness {
         return KEYSSIGS_POSITION.saveKeysSigs(_nodeOperatorId, _startIndex, _keysCount, _publicKeys, _signatures);
     }
 
-    function removeKeysSigs(uint256 _nodeOperatorId, uint256 _startIndex, uint256 _keysCount, uint256 _lastIndex)
-        external
-        returns (uint256)
-    {
+    function removeKeysSigs(
+        uint256 _nodeOperatorId,
+        uint256 _startIndex,
+        uint256 _keysCount,
+        uint256 _lastIndex
+    ) external returns (uint256) {
         return KEYSSIGS_POSITION.removeKeysSigs(_nodeOperatorId, _startIndex, _keysCount, _lastIndex);
     }
 
-    function loadKeysSigs(uint256 _nodeOperatorId, uint256 _startIndex, uint256 _keysCount)
-        external
-        view
-        returns (bytes memory pubkeys, bytes memory signatures)
-    {
+    function loadKeysSigs(
+        uint256 _nodeOperatorId,
+        uint256 _startIndex,
+        uint256 _keysCount
+    ) external view returns (bytes memory pubkeys, bytes memory signatures) {
         (pubkeys, signatures) = SigningKeys.initKeysSigsBuf(_keysCount);
 
         KEYSSIGS_POSITION.loadKeysSigs(

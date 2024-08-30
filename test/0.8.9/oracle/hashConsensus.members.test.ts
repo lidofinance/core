@@ -2,13 +2,14 @@ import { expect } from "chai";
 import { Signer, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable } from "typechain-types";
+import { HashConsensus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION } from "lib";
 
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
 
-describe("HashConsensus:members", function() {
+// TODO: This is a very heavy test, need to speed it up using proper Snapshot strategy
+describe("HashConsensus.sol:members", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -18,7 +19,7 @@ describe("HashConsensus:members", function() {
   let member6: Signer;
   let stranger: Signer;
 
-  let consensus: HashConsensusTimeTravellable;
+  let consensus: HashConsensus__Harness;
 
   const deploy = async () => {
     const deployed = await deployHashConsensus(await admin.getAddress());

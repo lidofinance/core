@@ -10,8 +10,9 @@ import { ACL, Lido } from "typechain-types";
 import { certainAddress, ether, ONE_ETHER } from "lib";
 
 import { deployLidoDao } from "test/deploy";
+import { Snapshot } from "test/suite";
 
-describe("Lido:staking-limit", () => {
+describe("Lido.sol:staking-limit", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -22,7 +23,9 @@ describe("Lido:staking-limit", () => {
   const maxStakeLimit = ether("10.0");
   const stakeLimitIncreasePerBlock = ether("2.0");
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, user, stranger] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
@@ -34,6 +37,10 @@ describe("Lido:staking-limit", () => {
 
     lido = lido.connect(user);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("getCurrentStakeLimit", () => {
     it("Returns zero if staking is paused", async () => {

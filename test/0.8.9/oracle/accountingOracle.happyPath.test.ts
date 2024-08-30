@@ -7,10 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting__MockForAccountingOracle,
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
+  LegacyOracle__MockForAccountingOracle,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -44,12 +45,12 @@ import {
 
 describe("AccountingOracle.sol:happyPath", () => {
   context("Happy path", () => {
-    let consensus: HashConsensusTimeTravellable;
-    let oracle: AccountingOracleTimeTravellable;
+    let consensus: HashConsensus__Harness;
+    let oracle: AccountingOracle__Harness;
     let oracleVersion: number;
     let mockAccounting: Accounting__MockForAccountingOracle;
-    let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
-    let mockStakingRouter: MockStakingRouterForAccountingOracle;
+    let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
+    let mockStakingRouter: StakingRouter__MockForAccountingOracle;
     let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
 
     let extraData: ExtraDataType;

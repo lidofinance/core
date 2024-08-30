@@ -2,14 +2,14 @@ import { expect } from "chai";
 import { MaxUint256, Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensus, HashConsensus__factory, MockReportProcessor } from "typechain-types";
+import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, findEventsWithAbi } from "lib";
+import { CONSENSUS_VERSION, findEventsWithInterfaces } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("HashConsensus:setQuorum", function () {
+describe("HashConsensus.sol:setQuorum", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -113,7 +113,7 @@ describe("HashConsensus:setQuorum", function () {
   describe("setQuorum changes the effective quorum", () => {
     let consensus: HashConsensus;
     let snapshot: string;
-    let reportProcessor: MockReportProcessor;
+    let reportProcessor: ReportProcessor__Mock;
     let frame: Awaited<ReturnType<typeof consensus.getCurrentFrame>>;
 
     const deployContractWithMembers = async () => {
@@ -191,8 +191,8 @@ describe("HashConsensus:setQuorum", function () {
         const tx3 = await consensus.setQuorum(2);
         await expect(tx3).to.emit(consensus, "ConsensusReached");
 
-        const receipt = await tx3.wait()!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", HashConsensus__factory.abi);
+        const receipt = (await tx3.wait())!;
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
 
         const consensusState = await consensus.getConsensusState();
@@ -200,29 +200,33 @@ describe("HashConsensus:setQuorum", function () {
       });
     });
 
-    describe('setQuorum can lead to consensus loss on quorum increase', () => {
+    describe("setQuorum can lead to consensus loss on quorum increase", () => {
       after(rollback);
 
-      it('2/3 members reach consensus with quorum of 2', async () => {
+      it("2/3 members reach consensus with quorum of 2", async () => {
         await consensus.setQuorum(2);
         const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-        await expect(tx1).to.emit(consensus, 'ReportReceived').withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
-        await expect(tx1).not.to.emit(consensus, 'ConsensusReached');
+        await expect(tx1)
+          .to.emit(consensus, "ReportReceived")
+          .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
+        await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
         const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-        await expect(tx2).to.emit(consensus, 'ReportReceived').withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
-        await expect(tx2).to.emit(consensus, 'ConsensusReached');
+        await expect(tx2)
+          .to.emit(consensus, "ReportReceived")
+          .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
+        await expect(tx2).to.emit(consensus, "ConsensusReached");
 
-        const receipt = await tx2.wait()!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", HashConsensus__factory.abi);
+        const receipt = (await tx2.wait())!;
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
 
         expect((await reportProcessor.getLastCall_submitReport()).callCount).to.equal(1);
       });
 
-      it('quorum goes up to 3 and consensus is lost', async () => {
+      it("quorum goes up to 3 and consensus is lost", async () => {
         const tx = await consensus.setQuorum(3);
-        await expect(tx).to.emit(consensus, 'ConsensusLost').withArgs(frame.refSlot);
+        await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(frame.refSlot);
 
         const consensusState = await consensus.getConsensusState();
         expect(consensusState.consensusReport).to.equal(ZERO_HASH);
@@ -230,9 +234,9 @@ describe("HashConsensus:setQuorum", function () {
         expect((await reportProcessor.getLastCall_discardReport()).callCount).to.equal(1);
       });
 
-      it('quorum goes down, the consensus is reached again', async () => {
+      it("quorum goes down, the consensus is reached again", async () => {
         const tx = await consensus.setQuorum(2);
-        await expect(tx).to.emit(consensus, 'ConsensusReached').withArgs(frame.refSlot, HASH_1, 2);
+        await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(frame.refSlot, HASH_1, 2);
 
         const consensusState = await consensus.getConsensusState();
         expect(consensusState.consensusReport).to.equal(HASH_1);
@@ -241,44 +245,48 @@ describe("HashConsensus:setQuorum", function () {
       });
     });
 
-    describe('setQuorum does not re-trigger consensus if hash is already being processed', () => {
+    describe("setQuorum does not re-trigger consensus if hash is already being processed", () => {
       after(rollback);
 
-      it('2/3 members reach consensus with Quorum of 2', async () => {
+      it("2/3 members reach consensus with Quorum of 2", async () => {
         await consensus.setQuorum(2);
         const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-        await expect(tx1).to.emit(consensus, 'ReportReceived').withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
-        await expect(tx1).not.to.emit(consensus, 'ConsensusReached');
+        await expect(tx1)
+          .to.emit(consensus, "ReportReceived")
+          .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
+        await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
         const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-        await expect(tx2).to.emit(consensus, 'ReportReceived').withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
+        await expect(tx2)
+          .to.emit(consensus, "ReportReceived")
+          .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
 
-        const receipt = await tx2.wait()!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", HashConsensus__factory.abi);
+        const receipt = (await tx2.wait())!;
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
       });
 
-      it('reportProcessor starts processing', async () => {
+      it("reportProcessor starts processing", async () => {
         await reportProcessor.startReportProcessing();
         const consensusState = await consensus.getConsensusState();
         expect(consensusState.consensusReport).to.equal(HASH_1);
         expect(consensusState.isReportProcessing).to.be.true;
       });
 
-      it('quorum increases while report is processing', async () => {
+      it("quorum increases while report is processing", async () => {
         const tx = await consensus.setQuorum(3);
-        await expect(tx).not.to.emit(consensus, 'ConsensusReached');
-        await expect(tx).not.to.emit(consensus, 'ConsensusLost');
+        await expect(tx).not.to.emit(consensus, "ConsensusReached");
+        await expect(tx).not.to.emit(consensus, "ConsensusLost");
 
         const consensusState = await consensus.getConsensusState();
         expect(consensusState.isReportProcessing).to.be.true;
         expect((await reportProcessor.getLastCall_discardReport()).callCount).to.equal(0);
       });
 
-      it('quorum decreases but no consensus is triggered', async () => {
+      it("quorum decreases but no consensus is triggered", async () => {
         const tx = await consensus.setQuorum(2);
-        await expect(tx).not.to.emit(consensus, 'ConsensusReached');
-        await expect(tx).not.to.emit(consensus, 'ConsensusLost');
+        await expect(tx).not.to.emit(consensus, "ConsensusReached");
+        await expect(tx).not.to.emit(consensus, "ConsensusLost");
         expect((await reportProcessor.getLastCall_submitReport()).callCount).to.equal(1);
         expect((await reportProcessor.getLastCall_discardReport()).callCount).to.equal(0);
       });

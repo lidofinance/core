@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BaseOracle__Harness, MockConsensusContract } from "typechain-types";
+import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import { SECONDS_PER_SLOT } from "lib";
 
@@ -19,13 +19,13 @@ import {
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("BaseOracle:submitReport", () => {
+describe("BaseOracle.sol:submitReport", () => {
   let admin: HardhatEthersSigner;
 
   let originalState: string;
   let baseOracle: BaseOracle__Harness;
   let initialRefSlot: bigint;
-  let consensus: MockConsensusContract;
+  let consensus: ConsensusContract__Mock;
 
   before(async () => {
     [admin] = await ethers.getSigners();

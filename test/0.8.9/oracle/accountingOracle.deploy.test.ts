@@ -7,11 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   Accounting__MockForAccountingOracle,
   AccountingOracle,
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
@@ -34,7 +34,8 @@ describe("AccountingOracle.sol:deploy", () => {
       [admin] = await ethers.getSigners();
       defaultOracle = (await deployAccountingOracleSetup(admin.address)).oracle;
     });
-    const updateInitialEpoch = async (consensus: HashConsensusTimeTravellable) => {
+
+    const updateInitialEpoch = async (consensus: HashConsensus__Harness) => {
       // pretend we're after the legacy oracle's last proc epoch but before the new oracle's initial epoch
       const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
       await consensus.setTime(voteExecTime);
@@ -127,11 +128,11 @@ describe("AccountingOracle.sol:deploy", () => {
     });
 
     describe("deployment and init finishes successfully (default setup)", async () => {
-      let consensus: HashConsensusTimeTravellable;
-      let oracle: AccountingOracleTimeTravellable;
+      let consensus: HashConsensus__Harness;
+      let oracle: AccountingOracle__Harness;
       let mockAccounting: Accounting__MockForAccountingOracle;
-      let mockStakingRouter: MockStakingRouterForAccountingOracle;
-      let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
+      let mockStakingRouter: StakingRouter__MockForAccountingOracle;
+      let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
       let legacyOracle: LegacyOracle;
       let locatorAddr: string;
 
@@ -139,11 +140,11 @@ describe("AccountingOracle.sol:deploy", () => {
         const deployed = await deployAndConfigureAccountingOracle(admin.address);
         consensus = deployed.consensus;
         oracle = deployed.oracle;
+        mockAccounting = deployed.accounting;
         mockStakingRouter = deployed.stakingRouter;
         mockWithdrawalQueue = deployed.withdrawalQueue;
         legacyOracle = deployed.legacyOracle;
         locatorAddr = deployed.locatorAddr;
-        mockAccounting = deployed.accounting;
       });
 
       it("mock setup is correct", async () => {
@@ -158,7 +159,7 @@ describe("AccountingOracle.sol:deploy", () => {
         expect(await oracle.getTime()).to.equal(time2);
 
         const handleOracleReportCallData = await mockAccounting.lastCall__handleOracleReport();
-        expect(handleOracleReportCallData.callCount).to.be.equal(0);
+        expect(handleOracleReportCallData.callCount).to.equal(0);
 
         const updateExitedKeysByModuleCallData = await mockStakingRouter.lastCall_updateExitedKeysByModule();
         expect(updateExitedKeysByModuleCallData.callCount).to.equal(0);
@@ -176,10 +177,10 @@ describe("AccountingOracle.sol:deploy", () => {
       });
 
       it("initial configuration is correct", async () => {
-        expect(await oracle.getConsensusContract()).to.be.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.be.equal(CONSENSUS_VERSION);
-        expect(await oracle.LOCATOR()).to.be.equal(locatorAddr);
-        expect(await oracle.SECONDS_PER_SLOT()).to.be.equal(SECONDS_PER_SLOT);
+        expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
+        expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+        expect(await oracle.LOCATOR()).to.equal(locatorAddr);
+        expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
       });
 
       it("constructor reverts if lido locator address is zero", async () => {

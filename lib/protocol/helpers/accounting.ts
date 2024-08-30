@@ -388,22 +388,20 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": ethers.formatEther(elRewardsVaultBalance),
     });
 
-    const handleReportTx = await accounting
-      .connect(accountingOracleAccount)
-      .handleOracleReport({
-        timestamp: reportTimestamp,
-        timeElapsed: 1n * 24n * 60n * 60n, // 1 day
-        clValidators: beaconValidators,
-        clBalance,
-        withdrawalVaultBalance,
-        elRewardsVaultBalance,
-        sharesRequestedToBurn,
-        withdrawalFinalizationBatches: [],
-        simulatedShareRate: 0n,
-        clBalances: [], // TODO: Add CL balances
-        elBalances: [], // TODO: Add EL balances
-        netCashFlows: [], // TODO: Add net cash flows
-      });
+    const handleReportTx = await accounting.connect(accountingOracleAccount).handleOracleReport({
+      timestamp: reportTimestamp,
+      timeElapsed: 1n * 24n * 60n * 60n, // 1 day
+      clValidators: beaconValidators,
+      clBalance,
+      withdrawalVaultBalance,
+      elRewardsVaultBalance,
+      sharesRequestedToBurn,
+      withdrawalFinalizationBatches: [],
+      simulatedShareRate: 0n,
+      clBalances: [], // TODO: Add CL balances
+      elBalances: [], // TODO: Add EL balances
+      netCashFlows: [], // TODO: Add net cash flows
+    });
 
     await trace("lido.handleOracleReport", handleReportTx);
   } catch (error) {
@@ -627,10 +625,7 @@ export const submitReport = async (
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (
-  ctx: ProtocolContext,
-  minMembersCount = MIN_MEMBERS_COUNT,
-) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();

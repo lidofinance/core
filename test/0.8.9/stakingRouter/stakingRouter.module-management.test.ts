@@ -4,15 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor__factory,
-  StakingRouter,
-  StakingRouter__factory,
-} from "typechain-types";
+import { StakingRouter } from "typechain-types";
 
 import { certainAddress, getNextBlock, proxify, randomString } from "lib";
 
-describe("StakingRouter:module-management", () => {
+describe("StakingRouter.sol:module-management", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -22,8 +18,8 @@ describe("StakingRouter:module-management", () => {
   beforeEach(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
-    const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const impl = await ethers.deployContract("StakingRouter", [depositContract], deployer);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -87,7 +83,7 @@ describe("StakingRouter:module-management", () => {
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
-    it("Reverts if the number of staking modules is reached", async () => {
+    it("Reverts if the staking module name is too long", async () => {
       const MAX_STAKING_MODULE_NAME_LENGTH = await stakingRouter.MAX_STAKING_MODULE_NAME_LENGTH();
       const NAME_TOO_LONG = randomString(Number(MAX_STAKING_MODULE_NAME_LENGTH + 1n));
 

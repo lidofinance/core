@@ -8,10 +8,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  DepositContractMockForDepositSecurityModule,
+  DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
-  LidoMockForDepositSecurityModule,
-  StakingRouterMockForDepositSecurityModule,
+  Lido__MockForDepositSecurityModule,
+  StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types";
 
 import { certainAddress, DSMAttestMessage, DSMPauseMessage, ether, streccak } from "lib";
@@ -62,9 +62,9 @@ describe("DepositSecurityModule.sol", () => {
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
-  let lido: LidoMockForDepositSecurityModule;
-  let stakingRouter: StakingRouterMockForDepositSecurityModule;
-  let depositContract: DepositContractMockForDepositSecurityModule;
+  let lido: Lido__MockForDepositSecurityModule;
+  let stakingRouter: StakingRouter__MockForDepositSecurityModule;
+  let depositContract: DepositContract__MockForDepositSecurityModule;
 
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -100,9 +100,9 @@ describe("DepositSecurityModule.sol", () => {
     await setBalance(unrelatedGuardian1.address, ether("100"));
     await setBalance(unrelatedGuardian2.address, ether("100"));
 
-    lido = await ethers.deployContract("LidoMockForDepositSecurityModule");
-    stakingRouter = await ethers.deployContract("StakingRouterMockForDepositSecurityModule", [STAKING_MODULE_ID]);
-    depositContract = await ethers.deployContract("DepositContractMockForDepositSecurityModule");
+    lido = await ethers.deployContract("Lido__MockForDepositSecurityModule");
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
+    depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
 
     config.lido = await lido.getAddress();
     config.stakingRouter = await stakingRouter.getAddress();
@@ -120,20 +120,11 @@ describe("DepositSecurityModule.sol", () => {
     originalState = await Snapshot.take();
   });
 
-  after(async () => {
-    await Snapshot.restore(originalState);
-  });
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    let originalContextState: string;
-
-    beforeEach(async () => {
-      originalContextState = await Snapshot.take();
-    });
-    afterEach(async () => {
-      await Snapshot.restore(originalContextState);
-    });
-
     it("Reverts if the `lido` is zero address", async () => {
       const cfg = { ...config };
       cfg.lido = ZeroAddress;
@@ -208,16 +199,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setOwner`", () => {
-      let originalContextState: string;
-
-      before(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `newValue` is zero address", async () => {
         await expect(dsm.setOwner(ZeroAddress)).to.be.revertedWithCustomError(dsm, "ZeroAddress");
       });
@@ -249,16 +230,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setPauseIntentValidityPeriodBlocks`", () => {
-      let originalContextState: string;
-
-      before(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `newValue` is zero parameter", async () => {
         await expect(dsm.setPauseIntentValidityPeriodBlocks(0)).to.be.revertedWithCustomError(dsm, "ZeroParameter");
       });
@@ -289,16 +260,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setMaxDeposits`", () => {
-      let originalContextState: string;
-
-      before(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `setMaxDeposits` called by not an owner", async () => {
         await expect(
           dsm.connect(stranger).setMaxDeposits(config.maxDepositsPerBlock + 1),
@@ -325,16 +286,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setMinDepositBlockDistance`", () => {
-      let originalContextState: string;
-
-      before(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `setMinDepositBlockDistance` called by not an owner", async () => {
         await expect(
           dsm.connect(stranger).setMinDepositBlockDistance(config.minDepositBlockDistance + 1),
@@ -374,16 +325,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setGuardianQuorum`", () => {
-      let originalContextState: string;
       const guardianQuorum = 1;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
 
       it("Reverts if the `setGuardianQuorum` called by not an owner", async () => {
         await expect(dsm.connect(stranger).setGuardianQuorum(guardianQuorum)).to.be.revertedWithCustomError(
@@ -427,16 +369,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `isGuardian`", () => {
-      let originalContextState: string;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Returns false if list of guardians is empty", async () => {
         expect(await dsm.isGuardian(guardian1)).to.equal(false);
       });
@@ -460,16 +392,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `getGuardianIndex`", () => {
-      let originalContextState: string;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Returns -1 if list of guardians is empty", async () => {
         expect(await dsm.getGuardianIndex(guardian1)).to.equal(-1);
       });
@@ -492,16 +414,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardian`", () => {
-      let originalContextState: string;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `addGuardian` called by not an owner", async () => {
         await expect(dsm.connect(stranger).addGuardian(guardian1, 0)).to.be.revertedWithCustomError(dsm, "NotAnOwner");
       });
@@ -555,16 +467,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardians`", () => {
-      let originalContextState: string;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `addGuardians` called by not an owner", async () => {
         await expect(dsm.connect(stranger).addGuardians([guardian1, guardian2], 0)).to.be.revertedWithCustomError(
           dsm,
@@ -604,16 +506,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `removeGuardian`", () => {
-      let originalContextState: string;
-
-      beforeEach(async () => {
-        originalContextState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalContextState);
-      });
-
       it("Reverts if the `removeGuardian` called by not an owner", async () => {
         await expect(dsm.connect(stranger).removeGuardian(guardian1, 0)).to.be.revertedWithCustomError(
           dsm,

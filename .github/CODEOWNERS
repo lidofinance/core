@@ -1,0 +1,7 @@
+# CODEOWNERS: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Any PR to `master` branch with changes to production contracts notifies the protocol team
+/contracts/ @lidofinance/lido-eth-protocol
+
+# Any PR to `master` branch with changes to GitHub workflows notifies the workflow review team
+/.github/workflows/ @lidofinance/review-gh-workflows

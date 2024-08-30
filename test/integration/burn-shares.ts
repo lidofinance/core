@@ -64,11 +64,11 @@ describe("Burn Shares", () => {
     });
   });
 
-  it.skip("Should not allow stranger to burn shares", async () => {
+  it("Should not allow stranger to burn shares", async () => {
     const { burner } = ctx.contracts;
     const burnTx = burner.connect(stranger).commitSharesToBurn(sharesToBurn);
 
-    await expect(burnTx).to.be.revertedWithCustomError(burner, "AppAuthLidoFailed");
+    await expect(burnTx).to.be.revertedWithCustomError(burner, "AppAuthFailed");
   });
 
   it("Should burn shares after report", async () => {

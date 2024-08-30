@@ -5,13 +5,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor__factory,
-  StakingRouter,
-  StakingRouter__factory,
-} from "typechain-types";
+import { StakingRouter } from "typechain-types";
 
 import { certainAddress, proxify } from "lib";
+
+import { Snapshot } from "test/suite";
 
 enum Status {
   Active,
@@ -19,7 +17,7 @@ enum Status {
   Stopped,
 }
 
-context("StakingRouter:status-control", () => {
+context("StakingRouter.sol:status-control", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -27,12 +25,14 @@ context("StakingRouter:status-control", () => {
   let stakingRouter: StakingRouter;
   let moduleId: bigint;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const impl = await ethers.deployContract("StakingRouter", [depositContract], deployer);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -60,6 +60,10 @@ context("StakingRouter:status-control", () => {
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("setStakingModuleStatus", () => {
     it("Reverts if the caller does not have the role", async () => {

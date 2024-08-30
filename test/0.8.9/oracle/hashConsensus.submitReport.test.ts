@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable, MockReportProcessor } from "typechain-types";
+import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import { CONSENSUS_VERSION } from "lib";
 
@@ -11,12 +11,12 @@ import { Snapshot } from "test/suite";
 
 const CONSENSUS_VERSION_2 = 2n;
 
-describe("HashConsensus:submitReport", function () {
+describe("HashConsensus.sol:submitReport", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
-  let consensus: HashConsensusTimeTravellable;
-  let reportProcessor: MockReportProcessor;
+  let consensus: HashConsensus__Harness;
+  let reportProcessor: ReportProcessor__Mock;
   let frame: Awaited<ReturnType<typeof consensus.getCurrentFrame>>;
   let originalState: string;
 

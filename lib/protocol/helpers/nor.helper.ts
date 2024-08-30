@@ -201,8 +201,11 @@ const norSetOperatorStakingLimit = async (
   log.success(`Set NOR operator ${operatorId} staking limit`);
 };
 
-export const getOperatorName = (module: StakingModuleName, id: bigint, group: bigint = 0n) => `${module}:op-${group}-${id}`;
+export const getOperatorName = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
+  `${module}:op-${group}-${id}`;
 
-export const getOperatorRewardAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) => certainAddress(`${module}:op:ra-${group}-${id}`);
+export const getOperatorRewardAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
+  certainAddress(`${module}:op:ra-${group}-${id}`);
 
-export const getOperatorManagerAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) => certainAddress(`${module}:op:ma-${group}-${id}`);
+export const getOperatorManagerAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
+  certainAddress(`${module}:op:ma-${group}-${id}`);

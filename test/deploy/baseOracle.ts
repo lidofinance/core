@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { MockConsensusContract } from "typechain-types";
+import { ConsensusContract__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -38,7 +38,7 @@ export async function deployBaseOracle(
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
     slotsPerEpoch = SLOTS_PER_EPOCH,
-    consensusContract = null as MockConsensusContract | null,
+    consensusContract = null as ConsensusContract__Mock | null,
     epochsPerFrame = EPOCHS_PER_FRAME,
     fastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
     initialEpoch = INITIAL_EPOCH,
@@ -46,7 +46,7 @@ export async function deployBaseOracle(
   } = {},
 ) {
   if (!consensusContract) {
-    consensusContract = await ethers.deployContract("MockConsensusContract", [
+    consensusContract = await ethers.deployContract("ConsensusContract__Mock", [
       slotsPerEpoch,
       secondsPerSlot,
       genesisTime,

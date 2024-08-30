@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable, MockReportProcessor } from "typechain-types";
+import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
 
@@ -22,22 +22,20 @@ import {
 
 const INITIAL_EPOCH = 3n;
 
-describe("HashConsensus:happyPath", function () {
+describe("HashConsensus.sol:happyPath", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
   let member3: Signer;
-  let consensus: HashConsensusTimeTravellable;
-  let reportProcessor: MockReportProcessor;
+  let consensus: HashConsensus__Harness;
+  let reportProcessor: ReportProcessor__Mock;
 
-  const deploy = async () => {
+  before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
     const deployed = await deployHashConsensus(await admin.getAddress(), { initialEpoch: INITIAL_EPOCH });
     consensus = deployed.consensus;
     reportProcessor = deployed.reportProcessor;
-  };
-
-  before(deploy);
+  });
 
   it("adding members", async () => {
     await consensus.connect(admin).addMember(await member1.getAddress(), 1);
@@ -102,8 +100,8 @@ describe("HashConsensus:happyPath", function () {
     const consensusState = await consensus.getConsensusState();
     expect(consensusState.consensusReport).to.equal(ZERO_HASH);
     expect(consensusState.isReportProcessing).to.be.false;
-    expect(await (await reportProcessor.getLastCall_submitReport()).callCount).to.equal(0);
-    expect(await (await reportProcessor.getLastCall_discardReport()).callCount).to.equal(0);
+    expect((await reportProcessor.getLastCall_submitReport()).callCount).to.equal(0);
+    expect((await reportProcessor.getLastCall_discardReport()).callCount).to.equal(0);
 
     const memberInfo = await consensus.getConsensusStateForMember(await member1.getAddress());
     expect(memberInfo.currentFrameConsensusReport).to.equal(ZERO_HASH);
@@ -370,7 +368,7 @@ describe("HashConsensus:happyPath", function () {
     expect(memberInfo.canReport).to.be.true;
   });
 
-  it('consensus is not reached', async () => {
+  it("consensus is not reached", async () => {
     const consensusState = await consensus.getConsensusState();
     expect(consensusState.consensusReport).to.equal(ZERO_HASH);
     expect(consensusState.isReportProcessing).to.be.false;

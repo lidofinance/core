@@ -1,5 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
 pragma solidity 0.8.4;
@@ -7,17 +6,17 @@ pragma solidity 0.8.4;
 import {Proxy} from "contracts/0.8.4/WithdrawalsManagerProxy.sol";
 
 contract Proxy__Harness is Proxy {
-  address private impl;
+    address private impl;
 
-  function setImplementation(address newImpl) external {
-    impl = newImpl;
-  }
+    function setImplementation(address newImpl) external {
+        impl = newImpl;
+    }
 
-  function implementation() external view returns (address) {
-    return _implementation();
-  }
+    function implementation() external view returns (address) {
+        return _implementation();
+    }
 
-  function _implementation() internal view override returns (address) {
-    return impl;
-  }
+    function _implementation() internal view override returns (address) {
+        return impl;
+    }
 }
