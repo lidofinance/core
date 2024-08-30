@@ -3,14 +3,14 @@ name: Integration Tests
 on: [push]
 
 jobs:
-  test_hardhat_integration:
-    name: Hardhat
+  test_hardhat_integration_mainnet:
+    name: Hardhat / Mainnet Fork
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
     services:
       hardhat-node:
-        image: feofanov/hardhat-node:2.22.8
+        image: feofanov/hardhat-node:2.22.9
         ports:
           - 8545:8545
         env:
@@ -26,6 +26,6 @@ jobs:
         run: cp .env.example .env
 
       - name: Run integration tests
-        run: yarn test:integration:fork
+        run: yarn test:integration:fork:mainnet
         env:
           LOG_LEVEL: debug
