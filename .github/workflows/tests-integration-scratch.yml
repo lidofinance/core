@@ -12,7 +12,7 @@ jobs:
       hardhat-node:
         image: feofanov/hardhat-node:2.22.9-scratch
         ports:
-          - 8545:8545
+          - 8555:8545
 
     steps:
       - uses: actions/checkout@v4
