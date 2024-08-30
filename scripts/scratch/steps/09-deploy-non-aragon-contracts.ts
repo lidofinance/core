@@ -11,16 +11,15 @@ import {
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
-async function main() {
-  log.scriptStart(__filename);
+export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = readNetworkState({ deployer });
+  const state = readNetworkState({ deployer });
 
+  // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
   const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const votingAddress = state[Sk.appVoting].proxy.address;
-  const agentAddress = state[Sk.appAgent].proxy.address;
-  const treasuryAddress = agentAddress;
+  const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
@@ -32,33 +31,23 @@ async function main() {
   const admin = deployer;
 
   const sanityChecks = state["oracleReportSanityChecker"].deployParameters;
-  log.wideSplitter();
 
   if (!chainSpec.depositContract) {
     throw new Error(`please specify deposit contract address in state file at /chainSpec/depositContract`);
   }
+
   const depositContract = state.chainSpec.depositContract;
 
-  //
-  // === OracleDaemonConfig ===
-  //
-  const oracleDaemonConfigArgs = [admin, []];
-  const oracleDaemonConfig = await deployWithoutProxy(
-    Sk.oracleDaemonConfig,
-    "OracleDaemonConfig",
-    deployer,
-    oracleDaemonConfigArgs,
-  );
-  log.wideSplitter();
+  // Deploy OracleDaemonConfig
+  const oracleDaemonConfig = await deployWithoutProxy(Sk.oracleDaemonConfig, "OracleDaemonConfig", deployer, [
+    admin,
+    [],
+  ]);
 
-  //
-  // === DummyEmptyContract ===
-  //
+  // Deploy DummyEmptyContract
   const dummyContract = await deployWithoutProxy(Sk.dummyEmptyContract, "DummyEmptyContract", deployer);
 
-  //
-  // === LidoLocator: dummy invalid implementation ===
-  //
+  // Deploy LidoLocator with dummy implementation
   const locator = await deployBehindOssifiableProxy(
     Sk.lidoLocator,
     "DummyEmptyContract",
@@ -67,11 +56,8 @@ async function main() {
     [],
     dummyContract.address,
   );
-  log.wideSplitter();
 
-  //
-  // === OracleReportSanityChecker ===
-  //
+  // Deploy OracleReportSanityChecker
   const oracleReportSanityCheckerArgs = [
     locator.address,
     admin,
@@ -88,58 +74,44 @@ async function main() {
     ],
     [[], [], [], [], [], [], [], [], [], []],
   ];
+
   const oracleReportSanityChecker = await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
     "OracleReportSanityChecker",
     deployer,
     oracleReportSanityCheckerArgs,
   );
-  log.wideSplitter();
 
-  //
-  // === EIP712StETH ===
-  //
+  // Deploy EIP712StETH
   await deployWithoutProxy(Sk.eip712StETH, "EIP712StETH", deployer, [lidoAddress]);
-  log.wideSplitter();
 
-  //
-  // === WstETH ===
-  //
+  // Deploy WstETH
   const wstETH = await deployWithoutProxy(Sk.wstETH, "WstETH", deployer, [lidoAddress]);
-  log.wideSplitter();
 
-  //
-  // === WithdrawalQueueERC721 ===
-  //
-  const withdrawalQueueERC721Args = [
-    wstETH.address,
-    withdrawalQueueERC721Params.name,
-    withdrawalQueueERC721Params.symbol,
-  ];
+  // Deploy WithdrawalQueueERC721
   const withdrawalQueueERC721 = await deployBehindOssifiableProxy(
     Sk.withdrawalQueueERC721,
     "WithdrawalQueueERC721",
     proxyContractsOwner,
     deployer,
-    withdrawalQueueERC721Args,
+    [wstETH.address, withdrawalQueueERC721Params.name, withdrawalQueueERC721Params.symbol],
   );
-  log.wideSplitter();
 
-  //
-  // === WithdrawalVault ===
-  //
+  // Deploy WithdrawalVault
   const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
     lidoAddress,
     treasuryAddress,
   ]);
-  state = readNetworkState();
+
   const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
   const withdrawalsManagerProxy = await deployContract(
     "WithdrawalsManagerProxy",
     withdrawalsManagerProxyConstructorArgs,
     deployer,
   );
+
   const withdrawalVaultAddress = withdrawalsManagerProxy.address;
+
   updateObjectInState(Sk.withdrawalVault, {
     proxy: {
       contract: await getContractPath("WithdrawalsManagerProxy"),
@@ -148,22 +120,16 @@ async function main() {
     },
     address: withdrawalsManagerProxy.address,
   });
-  log.wideSplitter();
 
-  //
-  // === LidoExecutionLayerRewardsVault ===
-  //
+  // Deploy LidoExecutionLayerRewardsVault
   const elRewardsVault = await deployWithoutProxy(
     Sk.executionLayerRewardsVault,
     "LidoExecutionLayerRewardsVault",
     deployer,
     [lidoAddress, treasuryAddress],
   );
-  log.wideSplitter();
 
-  //
-  // === StakingRouter ===
-  //
+  // Deploy StakingRouter
   const stakingRouter = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
@@ -172,54 +138,42 @@ async function main() {
     [depositContract],
   );
 
-  //
-  // === DepositSecurityModule ===
-  //
+  // Deploy or use predefined DepositSecurityModule
   let depositSecurityModuleAddress = depositSecurityModuleParams.usePredefinedAddressInstead;
   if (depositSecurityModuleAddress === null) {
-    const { maxDepositsPerBlock, minDepositBlockDistance, pauseIntentValidityPeriodBlocks } =
-      depositSecurityModuleParams;
-    const depositSecurityModuleArgs = [
-      lidoAddress,
-      depositContract,
-      stakingRouter.address,
-      maxDepositsPerBlock,
-      minDepositBlockDistance,
-      pauseIntentValidityPeriodBlocks,
-    ];
     depositSecurityModuleAddress = (
-      await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, depositSecurityModuleArgs)
+      await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
+        lidoAddress,
+        depositContract,
+        stakingRouter.address,
+        depositSecurityModuleParams.maxDepositsPerBlock,
+        depositSecurityModuleParams.minDepositBlockDistance,
+        depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
+      ])
     ).address;
   } else {
     log(
       `NB: skipping deployment of DepositSecurityModule - using the predefined address ${depositSecurityModuleAddress} instead`,
     );
   }
-  log.wideSplitter();
 
-  //
-  // === AccountingOracle ===
-  //
-  const accountingOracleArgs = [
-    locator.address,
-    lidoAddress,
-    legacyOracleAddress,
-    Number(chainSpec.secondsPerSlot),
-    Number(chainSpec.genesisTime),
-  ];
+  // Deploy AccountingOracle
   const accountingOracle = await deployBehindOssifiableProxy(
     Sk.accountingOracle,
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    accountingOracleArgs,
+    [
+      locator.address,
+      lidoAddress,
+      legacyOracleAddress,
+      Number(chainSpec.secondsPerSlot),
+      Number(chainSpec.genesisTime),
+    ],
   );
-  log.wideSplitter();
 
-  //
-  // === HashConsensus for AccountingOracle ===
-  //
-  const hashConsensusForAccountingArgs = [
+  // Deploy HashConsensus for AccountingOracle
+  await deployWithoutProxy(Sk.hashConsensusForAccountingOracle, "HashConsensus", deployer, [
     chainSpec.slotsPerEpoch,
     chainSpec.secondsPerSlot,
     chainSpec.genesisTime,
@@ -227,32 +181,19 @@ async function main() {
     hashConsensusForAccountingParams.fastLaneLengthSlots,
     admin, // admin
     accountingOracle.address, // reportProcessor
-  ];
-  await deployWithoutProxy(
-    Sk.hashConsensusForAccountingOracle,
-    "HashConsensus",
-    deployer,
-    hashConsensusForAccountingArgs,
-  );
-  log.wideSplitter();
+  ]);
 
-  //
-  // === ValidatorsExitBusOracle ===
-  //
-  const validatorsExitBusOracleArgs = [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address];
+  // Deploy ValidatorsExitBusOracle
   const validatorsExitBusOracle = await deployBehindOssifiableProxy(
     Sk.validatorsExitBusOracle,
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    validatorsExitBusOracleArgs,
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
   );
-  log.wideSplitter();
 
-  //
-  // === HashConsensus for ValidatorsExitBusOracle ===
-  //
-  const hashConsensusForExitBusArgs = [
+  // Deploy HashConsensus for ValidatorsExitBusOracle
+  await deployWithoutProxy(Sk.hashConsensusForValidatorsExitBusOracle, "HashConsensus", deployer, [
     chainSpec.slotsPerEpoch,
     chainSpec.secondsPerSlot,
     chainSpec.genesisTime,
@@ -260,32 +201,18 @@ async function main() {
     hashConsensusForExitBusParams.fastLaneLengthSlots,
     admin, // admin
     validatorsExitBusOracle.address, // reportProcessor
-  ];
-  await deployWithoutProxy(
-    Sk.hashConsensusForValidatorsExitBusOracle,
-    "HashConsensus",
-    deployer,
-    hashConsensusForExitBusArgs,
-  );
-  log.wideSplitter();
+  ]);
 
-  //
-  // === Burner ===
-  //
-  const burnerArgs = [
+  // Deploy Burner
+  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
     treasuryAddress,
     lidoAddress,
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,
-  ];
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, burnerArgs);
-  log.wideSplitter();
+  ]);
 
-  //
-  // === LidoLocator: update to valid implementation ===
-  //
-  const postTokenRebaseReceiver = legacyOracleAddress;
+  // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
     depositSecurityModuleAddress,
@@ -293,7 +220,7 @@ async function main() {
     legacyOracleAddress,
     lidoAddress,
     oracleReportSanityChecker.address,
-    postTokenRebaseReceiver,
+    legacyOracleAddress, // postTokenRebaseReceiver
     burner.address,
     stakingRouter.address,
     treasuryAddress,
@@ -303,13 +230,4 @@ async function main() {
     oracleDaemonConfig.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
-
-  log.scriptFinish(__filename);
 }
-
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });

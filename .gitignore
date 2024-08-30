@@ -20,6 +20,7 @@ foundry/out/
 .env
 accounts.json
 deployed-local.json
+deployed-hardhat.json
 
 # MacOS
 .DS_Store
