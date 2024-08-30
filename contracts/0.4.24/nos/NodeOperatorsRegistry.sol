@@ -61,6 +61,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     );
     event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
     event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
+    event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
 
     // Enum to represent the state of the reward distribution process
     enum RewardDistributionState {
@@ -1353,6 +1354,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _saveOperatorStuckPenaltyStats(_nodeOperatorId, stuckPenaltyStats);
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
         _increaseValidatorsKeysNonce();
+
+        emit NodeOperatorPenaltyCleared(_nodeOperatorId);
         return true;
     }
 
