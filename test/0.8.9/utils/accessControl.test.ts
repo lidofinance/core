@@ -18,7 +18,7 @@ import { Snapshot } from "test/suite";
 const TEST_ROLE = streccak("TEST_ROLE");
 const TEST_ADMIN_ROLE = streccak("TEST_ADMIN_ROLE");
 
-describe("AccessControl", () => {
+describe("AccessControl.sol", () => {
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -149,7 +149,7 @@ describe("AccessControl", () => {
 
   context("_setRoleAdmin", () => {
     it("Sets the role's admin role", async () => {
-      await expect(await contract.exposedSetupAdminRole(TEST_ROLE, TEST_ADMIN_ROLE))
+      await expect(await contract.harness__setupAdminRole(TEST_ROLE, TEST_ADMIN_ROLE))
         .to.emit(contract, "RoleAdminChanged")
         .withArgs(TEST_ROLE, DEFAULT_ADMIN_ROLE, TEST_ADMIN_ROLE);
 

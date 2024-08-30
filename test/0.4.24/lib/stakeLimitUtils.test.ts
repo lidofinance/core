@@ -216,9 +216,7 @@ describe("StakeLimitUtils.sol", () => {
         const baseStakeLimit = 0n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, 0n, maxStakeLimitGrowthBlocks, maxStakeLimit);
         // 1 block passed due to the setter call above
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
-          maxStakeLimit / maxStakeLimitGrowthBlocks,
-        );
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit / maxStakeLimitGrowthBlocks);
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);

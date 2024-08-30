@@ -7,13 +7,13 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle__MockForAccountingOracle,
-  MockLidoForAccountingOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  Lido__MockForAccountingOracle,
   OracleReportSanityChecker,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -39,8 +39,8 @@ import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "tes
 import { Snapshot } from "test/suite";
 
 describe("AccountingOracle.sol:submitReport", () => {
-  let consensus: HashConsensusTimeTravellable;
-  let oracle: AccountingOracleTimeTravellable;
+  let consensus: HashConsensus__Harness;
+  let oracle: AccountingOracle__Harness;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport & { refSlot: bigint };
   let reportHash: string;
@@ -49,12 +49,12 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraDataItems: string[];
   let oracleVersion: bigint;
   let deadline: BigNumberish;
-  let mockStakingRouter: MockStakingRouterForAccountingOracle;
+  let mockStakingRouter: StakingRouter__MockForAccountingOracle;
   let extraData: ExtraDataType;
-  let mockLido: MockLidoForAccountingOracle;
+  let mockLido: Lido__MockForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
   let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
-  let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
+  let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
   let snapshot: string;
 
   let admin: HardhatEthersSigner;
@@ -144,11 +144,11 @@ describe("AccountingOracle.sol:submitReport", () => {
 
   async function prepareNextReportInNextFrame(newReportFields: OracleReport) {
     const { refSlot } = await consensus.getCurrentFrame();
-    const next = await prepareNextReport({
+
+    return await prepareNextReport({
       ...newReportFields,
       refSlot: refSlot + SLOTS_PER_FRAME,
     });
-    return next;
   }
 
   before(deploy);

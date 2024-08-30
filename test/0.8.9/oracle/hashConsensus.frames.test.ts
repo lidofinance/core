@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable, MockReportProcessor } from "typechain-types";
+import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -22,8 +22,9 @@ import {
   SLOTS_PER_FRAME,
   ZERO_HASH,
 } from "test/deploy";
+import { Snapshot } from "test/suite";
 
-describe("HashConsensus:frames", function() {
+describe("HashConsensus.sol:frames", function () {
   const TEST_INITIAL_EPOCH = 3n;
 
   let admin: Signer;
@@ -32,19 +33,21 @@ describe("HashConsensus:frames", function() {
   let member2: Signer;
   let member3: Signer;
 
+  let originalState: string;
+
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
   });
 
-  describe("Frame methods", () => {
-    let consensus: HashConsensusTimeTravellable;
+  context("Frame methods", () => {
+    let consensus: HashConsensus__Harness;
 
     const deploy = async () => {
       const deployed = await deployHashConsensus(await admin.getAddress());
       consensus = deployed.consensus;
     };
 
-    describe("getFrameConfig", () => {
+    context("getFrameConfig", () => {
       before(deploy);
 
       it("should return initial data", async () => {
@@ -63,8 +66,12 @@ describe("HashConsensus:frames", function() {
       });
     });
 
-    describe("setFrameConfig", () => {
-      beforeEach(deploy);
+    context("setFrameConfig", () => {
+      before(deploy);
+
+      beforeEach(async () => (originalState = await Snapshot.take()));
+
+      afterEach(async () => await Snapshot.restore(originalState));
 
       it("should set data", async () => {
         await consensus.setFrameConfig(100, 50);
@@ -118,9 +125,10 @@ describe("HashConsensus:frames", function() {
       });
     });
   });
+
   context("State before initial epoch", () => {
-    let consensus: HashConsensusTimeTravellable;
-    let reportProcessor: MockReportProcessor;
+    let consensus: HashConsensus__Harness;
+    let reportProcessor: ReportProcessor__Mock;
 
     before(async () => {
       const deployed = await deployHashConsensus(await admin.getAddress(), { initialEpoch: null });
@@ -269,13 +277,17 @@ describe("HashConsensus:frames", function() {
   });
 
   context("Reporting interval manipulation", () => {
-    let consensus: HashConsensusTimeTravellable;
+    let consensus: HashConsensus__Harness;
 
-    beforeEach(async () => {
+    before(async () => {
       const deployed = await deployHashConsensus(await admin.getAddress(), { initialEpoch: 1n });
       consensus = deployed.consensus;
       await consensus.connect(admin).addMember(await member1.getAddress(), 1);
     });
+
+    beforeEach(async () => (originalState = await Snapshot.take()));
+
+    afterEach(async () => await Snapshot.restore(originalState));
 
     it("crossing frame boundary time advances reference and deadline slots by the frame size", async () => {
       expect(await consensus.getTime()).to.equal(computeTimestampAtEpoch(1n));

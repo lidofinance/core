@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable } from "typechain-types";
+import { HashConsensus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION, MAX_UINT256 } from "lib";
 
@@ -22,7 +22,7 @@ const prepareFrameData = async ({
   };
 };
 
-describe("HashConsensus:Fastlane members", () => {
+describe("HashConsensus.sol:fastlaneMembers", () => {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -30,7 +30,7 @@ describe("HashConsensus:Fastlane members", () => {
   let member4: Signer;
   let member5: Signer;
   let stranger: Signer;
-  let consensus: HashConsensusTimeTravellable;
+  let consensus: HashConsensus__Harness;
 
   const deploy = async (options?: DeployHashConsensusParams) => {
     [admin, member1, member2, member3, member4, member5, stranger] = await ethers.getSigners();
@@ -60,6 +60,7 @@ describe("HashConsensus:Fastlane members", () => {
       expect(fastLaneMembers.addresses).to.be.empty;
     });
   });
+
   context("Basic scenario", () => {
     const fastLaneLengthSlots = 10n;
 
@@ -175,6 +176,7 @@ describe("HashConsensus:Fastlane members", () => {
         });
       });
     });
+
     const testAllInFastLane = ({ quorumSize }: { quorumSize: bigint }) => {
       before(async () => {
         await deploy({ fastLaneLengthSlots: 10n });

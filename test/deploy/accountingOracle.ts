@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle, MockReportProcessor } from "typechain-types";
+import { AccountingOracle, HashConsensus__Harness, LegacyOracle, ReportProcessor__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -34,9 +34,9 @@ export async function deployMockLegacyOracle({
 }
 
 async function deployMockLidoAndStakingRouter() {
-  const stakingRouter = await ethers.deployContract("MockStakingRouterForAccountingOracle");
-  const withdrawalQueue = await ethers.deployContract("MockWithdrawalQueueForAccountingOracle");
-  const lido = await ethers.deployContract("MockLidoForAccountingOracle");
+  const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
+  const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
   return { lido, stakingRouter, withdrawalQueue };
 }
 
@@ -66,7 +66,7 @@ export async function deployAccountingOracleSetup(
     initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + epochsPerFrame;
   }
 
-  const oracle = await ethers.deployContract("AccountingOracleTimeTravellable", [
+  const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
     lidoAddr || (await lido.getAddress()),
     legacyOracleAddr || (await legacyOracle.getAddress()),
@@ -75,7 +75,7 @@ export async function deployAccountingOracleSetup(
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {
-    reportProcessor: oracle as unknown as MockReportProcessor,
+    reportProcessor: oracle as unknown as ReportProcessor__Mock,
     epochsPerFrame,
     slotsPerEpoch,
     secondsPerSlot,
@@ -109,7 +109,7 @@ export async function deployAccountingOracleSetup(
 interface AccountingOracleConfig {
   admin: string;
   oracle: AccountingOracle;
-  consensus: HashConsensusTimeTravellable;
+  consensus: HashConsensus__Harness;
   dataSubmitter?: string;
   consensusVersion?: bigint;
   shouldMigrateLegacyOracle?: boolean;
@@ -161,7 +161,7 @@ async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string,
 
 interface AccountingOracleSetup {
   admin: string;
-  consensus: HashConsensusTimeTravellable;
+  consensus: HashConsensus__Harness;
   oracle: AccountingOracle;
   legacyOracle: LegacyOracle;
   dataSubmitter?: string;

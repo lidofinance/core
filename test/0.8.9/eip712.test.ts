@@ -2,16 +2,20 @@ import { expect } from "chai";
 import { MaxUint256, TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { EIP712StETH, EIP712StETH__factory } from "typechain-types";
+import { EIP712StETH } from "typechain-types";
 
 import { certainAddress } from "lib";
+
+import { Snapshot } from "test/suite";
 
 describe("EIP712StETH.sol", () => {
   let domain: TypedDataDomain;
 
   let eip712steth: EIP712StETH;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     domain = {
       name: "Liquid staked Ether 2.0",
       version: "2",
@@ -20,16 +24,21 @@ describe("EIP712StETH.sol", () => {
     };
 
     const [deployer] = await ethers.getSigners();
-    const factory = new EIP712StETH__factory(deployer);
-    eip712steth = await factory.deploy(domain.verifyingContract!);
+    eip712steth = await ethers.deployContract("EIP712StETH", [domain.verifyingContract!], deployer);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
     it("Reverts if the verifying contract is zero address", async () => {
       const [deployer] = await ethers.getSigners();
-      const factory = new EIP712StETH__factory(deployer);
 
-      await expect(factory.deploy(ZeroAddress)).to.be.revertedWithCustomError(eip712steth, "ZeroStETHAddress");
+      await expect(ethers.deployContract("EIP712StETH", [ZeroAddress], deployer)).to.be.revertedWithCustomError(
+        eip712steth,
+        "ZeroStETHAddress",
+      );
     });
   });
 

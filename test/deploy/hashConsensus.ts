@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { MockReportProcessor } from "typechain-types";
+import { ReportProcessor__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -13,7 +13,7 @@ import {
 } from "lib";
 
 export interface DeployHashConsensusParams {
-  reportProcessor?: MockReportProcessor;
+  reportProcessor?: ReportProcessor__Mock;
   slotsPerEpoch?: bigint | undefined;
   secondsPerSlot?: bigint | undefined;
   genesisTime?: bigint | undefined;
@@ -35,10 +35,10 @@ export async function deployHashConsensus(
   }: DeployHashConsensusParams = {},
 ) {
   if (!reportProcessor) {
-    reportProcessor = await ethers.deployContract("MockReportProcessor", [CONSENSUS_VERSION]);
+    reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION]);
   }
 
-  const consensus = await ethers.deployContract("HashConsensusTimeTravellable", [
+  const consensus = await ethers.deployContract("HashConsensus__Harness", [
     slotsPerEpoch,
     secondsPerSlot,
     genesisTime,

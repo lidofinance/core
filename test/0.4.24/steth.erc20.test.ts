@@ -1,7 +1,5 @@
 import { ethers } from "hardhat";
 
-import { Steth__MinimalMock__factory } from "typechain-types";
-
 import { ether } from "lib/units";
 
 import { testERC20Compliance } from "../common/erc20.test";
@@ -26,8 +24,7 @@ async function deploy(rebaseFactor: bigint = 100n) {
   const [deployer, holder, recipient, spender] = signers;
   const holderBalance = ether("10.0");
 
-  const factory = new Steth__MinimalMock__factory(deployer);
-  const steth = await factory.deploy(holder, { value: holderBalance });
+  const steth = await ethers.deployContract("StETH__Harness", [holder], { value: holderBalance, from: deployer });
 
   const totalSupply = (holderBalance * rebaseFactor) / 100n;
   await steth.setTotalPooledEther(totalSupply);

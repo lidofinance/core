@@ -5,22 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  ACL,
-  Kernel,
-  Lido,
-  LidoLocator,
-  LidoLocator__factory,
-  NodeOperatorsRegistry__Harness,
-  NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
+import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import { addNodeOperator, certainAddress, NodeOperatorConfig } from "lib";
 
 import { addAragonApp, deployLidoDao, deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
+describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
@@ -105,7 +97,7 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
       },
     }));
 
-    const impl = await new NodeOperatorsRegistry__Harness__factory(deployer).deploy();
+    const impl = await ethers.deployContract("NodeOperatorsRegistry__Harness", deployer);
     expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
     const appProxy = await addAragonApp({
       dao,
@@ -114,7 +106,7 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
       rootAccount: deployer,
     });
 
-    nor = NodeOperatorsRegistry__Harness__factory.connect(appProxy, deployer);
+    nor = await ethers.getContractAt("NodeOperatorsRegistry__Harness", appProxy, deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
@@ -127,7 +119,7 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
     // inside the harness__requestValidatorsKeysForDeposits() method
     await acl.grantPermission(nor, nor, await nor.STAKING_ROUTER_ROLE());
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -319,24 +311,16 @@ describe("NodeOperatorsRegistry:initialize-and-upgrade", () => {
       expect(summary.depositableValidatorsCount).to.equal(0n + 8n + 0n + 0n);
 
       const firstNoInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
-      expect(firstNoInfo.totalVettedValidators).to.equal(
-        NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount,
-      );
+      expect(firstNoInfo.totalVettedValidators).to.equal(NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount);
 
       const secondNoInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
-      expect(secondNoInfo.totalVettedValidators).to.equal(
-        NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount,
-      );
+      expect(secondNoInfo.totalVettedValidators).to.equal(NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount);
 
       const thirdNoInfo = await nor.getNodeOperator(thirdNodeOperatorId, true);
-      expect(thirdNoInfo.totalVettedValidators).to.equal(
-        NODE_OPERATORS[thirdNodeOperatorId].depositedSigningKeysCount,
-      );
+      expect(thirdNoInfo.totalVettedValidators).to.equal(NODE_OPERATORS[thirdNodeOperatorId].depositedSigningKeysCount);
 
       const fourthNoInfo = await nor.getNodeOperator(fourthNodeOperatorId, true);
-      expect(fourthNoInfo.totalVettedValidators).to.equal(
-        NODE_OPERATORS[fourthNodeOperatorId].vettedSigningKeysCount,
-      );
+      expect(fourthNoInfo.totalVettedValidators).to.equal(NODE_OPERATORS[fourthNodeOperatorId].vettedSigningKeysCount);
     });
   });
 });

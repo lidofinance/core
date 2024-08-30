@@ -385,19 +385,17 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": ethers.formatEther(elRewardsVaultBalance),
     });
 
-    const handleReportTx = await lido
-      .connect(accountingOracleAccount)
-      .handleOracleReport(
-        reportTimestamp,
-        1n * 24n * 60n * 60n, // 1 day
-        beaconValidators,
-        clBalance,
-        withdrawalVaultBalance,
-        elRewardsVaultBalance,
-        sharesRequestedToBurn,
-        [],
-        0n,
-      );
+    const handleReportTx = await lido.connect(accountingOracleAccount).handleOracleReport(
+      reportTimestamp,
+      1n * 24n * 60n * 60n, // 1 day
+      beaconValidators,
+      clBalance,
+      withdrawalVaultBalance,
+      elRewardsVaultBalance,
+      sharesRequestedToBurn,
+      [],
+      0n,
+    );
 
     await trace("lido.handleOracleReport", handleReportTx);
   } catch (error) {
@@ -621,10 +619,7 @@ export const submitReport = async (
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (
-  ctx: ProtocolContext,
-  minMembersCount = MIN_MEMBERS_COUNT,
-) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();

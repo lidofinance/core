@@ -1,0 +1,32 @@
+name: Integration Tests
+
+on: [push]
+
+jobs:
+  test_hardhat_integration_scratch:
+    name: Hardhat / Scratch deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    services:
+      hardhat-node:
+        image: feofanov/hardhat-node:2.22.9-scratch
+        ports:
+          - 8555:8545
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Set env
+        run: cp .env.example .env
+
+      - name: Run scratch deployment
+        run: ./scripts/scratch/dao-local-deploy.sh || exit 0
+
+      - name: Run integration tests
+        run: yarn test:integration:local
+        env:
+          LOG_LEVEL: debug

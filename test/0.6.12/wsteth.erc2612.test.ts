@@ -1,7 +1,5 @@
 import { ethers, network } from "hardhat";
 
-import { Steth__MinimalMock__factory, WstETH__factory } from "typechain-types";
-
 import { ether } from "lib/units";
 
 import { testERC2612Compliance } from "../common/erc2612.test";
@@ -12,13 +10,10 @@ testERC2612Compliance({
     const [deployer, owner] = await ethers.getSigners();
     const totalSupply = ether("10.0");
 
-    const stethFactory = new Steth__MinimalMock__factory(deployer);
-    const steth = await stethFactory.deploy(owner, { value: totalSupply });
+    const steth = await ethers.deployContract("StETH__Harness", [owner], { value: totalSupply, from: deployer });
+    const wsteth = await ethers.deployContract("WstETH", [steth], deployer);
 
-    const wstethFactory = new WstETH__factory(deployer);
-    const wsteth = await wstethFactory.deploy(await steth.getAddress());
-
-    await steth.connect(owner).approve(await wsteth.getAddress(), totalSupply);
+    await steth.connect(owner).approve(wsteth, totalSupply);
     await wsteth.connect(owner).wrap(totalSupply);
 
     return {

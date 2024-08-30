@@ -2,17 +2,17 @@ import { expect } from "chai";
 import { MaxUint256, Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensus, MockReportProcessor, MockReportProcessor__factory } from "typechain-types";
+import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
 import { CONSENSUS_VERSION, DEFAULT_ADMIN_ROLE, EPOCHS_PER_FRAME, streccak } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("HashConsensus:AccessControl", function () {
+describe("HashConsensus.sol:accessControl", function () {
   let consensus: HashConsensus;
-  let reportProcessor: MockReportProcessor;
-  let reportProcessor2: MockReportProcessor;
+  let reportProcessor: ReportProcessor__Mock;
+  let reportProcessor2: ReportProcessor__Mock;
 
   let baseSnapshot: string;
   let snapshot: string;
@@ -41,7 +41,7 @@ describe("HashConsensus:AccessControl", function () {
     consensus = deployed.consensus;
     reportProcessor = deployed.reportProcessor;
 
-    reportProcessor2 = await new MockReportProcessor__factory(admin).deploy(CONSENSUS_VERSION);
+    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
 
     snapshot = await Snapshot.take();
   };
@@ -55,7 +55,7 @@ describe("HashConsensus:AccessControl", function () {
       await deploy({ initialEpoch: null });
     });
 
-    afterEach(refresh);
+    beforeEach(refresh);
 
     context("updateInitialEpoch", () => {
       it("reverts when called without DEFAULT_ADMIN_ROLE", async () => {
@@ -83,7 +83,7 @@ describe("HashConsensus:AccessControl", function () {
       await deploy({});
     });
 
-    beforeEach(async () => (snapshot = await Snapshot.refresh(snapshot)));
+    beforeEach(refresh);
 
     context("deploying", () => {
       it("deploying hash consensus", async () => {

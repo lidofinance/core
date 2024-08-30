@@ -1,6 +1,5 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
-// for test purposes only
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity ^0.4.24;
 

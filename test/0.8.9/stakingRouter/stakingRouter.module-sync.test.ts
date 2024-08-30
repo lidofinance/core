@@ -5,18 +5,13 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor__factory,
-  StakingModule__Mock,
-  StakingModule__Mock__factory,
-  StakingRouter,
-  StakingRouter__factory,
-} from "typechain-types";
+import { DepositContract__MockForBeaconChainDepositor, StakingModule__Mock, StakingRouter } from "typechain-types";
 
 import { ether, getNextBlock, proxify } from "lib";
 
-describe("StakingRouter:module-sync", () => {
+import { Snapshot } from "test/suite";
+
+describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -37,11 +32,13 @@ describe("StakingRouter:module-sync", () => {
   const treasuryFee = 5_00n;
   const targetShare = 1_00n;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
-    depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const impl = await ethers.deployContract("StakingRouter", [depositContract], deployer);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -64,7 +61,7 @@ describe("StakingRouter:module-sync", () => {
     ]);
 
     // add staking module
-    stakingModule = await new StakingModule__Mock__factory(deployer).deploy();
+    stakingModule = await ethers.deployContract("StakingModule__Mock", deployer);
     stakingModuleAddress = await stakingModule.getAddress();
     const { timestamp, number } = await getNextBlock();
     lastDepositAt = timestamp;
@@ -74,6 +71,10 @@ describe("StakingRouter:module-sync", () => {
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("Getters", () => {
     let stakingModuleInfo: [bigint, string, bigint, bigint, bigint, bigint, string, bigint, bigint, bigint];

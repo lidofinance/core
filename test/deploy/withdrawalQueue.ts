@@ -6,9 +6,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   NFTDescriptor__MockForWithdrawalQueue,
   OssifiableProxy,
-  StETHPermit__MockForWithdrawalQueueDeploy,
+  StETHPermit__HarnessForWithdrawalQueueDeploy,
   WithdrawalQueueERC721,
-  WstETH__MockForWithdrawalQueueDeploy,
+  WstETH__HarnessForWithdrawalQueueDeploy,
 } from "typechain-types";
 
 import { ONE_ETHER, proxify, WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "lib";
@@ -40,13 +40,15 @@ interface WithdrawalQueueDeploymentParams extends BaseWithdrawalQueueDeploymentP
 export const MOCK_NFT_DESCRIPTOR_BASE_URI = "https://example-descriptor.com/";
 
 async function deployNftDescriptor() {
-  const nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [MOCK_NFT_DESCRIPTOR_BASE_URI]);
+  const nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [
+    MOCK_NFT_DESCRIPTOR_BASE_URI,
+  ]);
 
   return { nftDescriptor, nftDescriptorAddress: await nftDescriptor.getAddress() };
 }
 
 async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
-  const stEth = await ethers.deployContract("StETHPermit__MockForWithdrawalQueueDeploy", {
+  const stEth = await ethers.deployContract("StETHPermit__HarnessForWithdrawalQueueDeploy", {
     value: stEthSettings.initialStEth,
   });
 
@@ -67,7 +69,7 @@ async function deployStEthMock(stEthSettings: StEthDeploymentParams) {
 }
 
 async function deployWstEthMock(stEthAddress: string) {
-  const wstEth = await ethers.deployContract("WstETH__MockForWithdrawalQueueDeploy", [stEthAddress]);
+  const wstEth = await ethers.deployContract("WstETH__HarnessForWithdrawalQueueDeploy", [stEthAddress]);
   return { wstEth, wstEthAddress: await wstEth.getAddress() };
 }
 
@@ -117,9 +119,9 @@ export async function deployWithdrawalQueue({
   name: string;
   symbol: string;
   initTx: ContractTransactionResponse | null;
-  stEth: StETHPermit__MockForWithdrawalQueueDeploy;
+  stEth: StETHPermit__HarnessForWithdrawalQueueDeploy;
   stEthAddress: string;
-  wstEth: WstETH__MockForWithdrawalQueueDeploy;
+  wstEth: WstETH__HarnessForWithdrawalQueueDeploy;
   wstEthAddress: string;
   nftDescriptor: NFTDescriptor__MockForWithdrawalQueue;
   nftDescriptorAddress: string;

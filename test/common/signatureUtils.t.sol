@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity >=0.4.24 <0.9.0;
 
@@ -172,11 +172,13 @@ contract SignatureUtilsTest is Test {
 }
 
 contract SignatureUtils__Harness {
-    function isValidSignature(address signer, bytes32 msgHash, uint8 v, bytes32 r, bytes32 s)
-        public
-        view
-        returns (bool)
-    {
+    function isValidSignature(
+        address signer,
+        bytes32 msgHash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public view returns (bool) {
         return SignatureUtils.isValidSignature(signer, msgHash, v, r, s);
     }
 

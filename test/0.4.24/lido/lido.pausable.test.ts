@@ -6,8 +6,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ACL, Lido } from "typechain-types";
 
 import { deployLidoDao } from "test/deploy";
+import { Snapshot } from "test/suite";
 
-describe("Lido:Pausable", () => {
+describe("Lido.sol:pausable", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -15,7 +16,9 @@ describe("Lido:Pausable", () => {
   let lido: Lido;
   let acl: ACL;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, user, stranger] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
@@ -27,6 +30,10 @@ describe("Lido:Pausable", () => {
 
     lido = lido.connect(user);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("resumeStaking", () => {
     it("Resumes staking", async () => {

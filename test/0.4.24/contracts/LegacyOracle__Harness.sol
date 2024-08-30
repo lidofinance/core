@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity 0.4.24;
 
 import {LegacyOracle} from "contracts/0.4.24/oracle/LegacyOracle.sol";
@@ -9,7 +10,6 @@ interface ITimeProvider {
 }
 
 contract LegacyOracle__Harness is LegacyOracle {
-
     // @dev this is a way to not use block.timestamp in the tests
     function _getTime() internal view returns (uint256) {
         address accountingOracle = ACCOUNTING_ORACLE_POSITION.getStorageAddress();

@@ -8,18 +8,15 @@ import {
   ACL,
   Lido,
   LidoLocator,
-  LidoLocator__factory,
   StakingRouter__MockForLidoMisc,
-  StakingRouter__MockForLidoMisc__factory,
   WithdrawalQueue__MockForLidoMisc,
-  WithdrawalQueue__MockForLidoMisc__factory,
 } from "typechain-types";
 
 import { batch, certainAddress, ether, impersonate, ONE_ETHER } from "lib";
 
 import { deployLidoDao } from "test/deploy";
 
-describe("Lido:misc", () => {
+describe("Lido.sol:misc", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -36,11 +33,12 @@ describe("Lido:misc", () => {
   const elRewardsVaultBalance = ether("100.0");
   const withdrawalsVaultBalance = ether("100.0");
 
+  /// @notice structure of the test does not allow Snapshot usage
   beforeEach(async () => {
     [deployer, user, stranger, depositSecurityModule] = await ethers.getSigners();
 
-    withdrawalQueue = await new WithdrawalQueue__MockForLidoMisc__factory(deployer).deploy();
-    stakingRouter = await new StakingRouter__MockForLidoMisc__factory(deployer).deploy();
+    withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForLidoMisc", deployer);
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoMisc", deployer);
 
     ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -57,7 +55,7 @@ describe("Lido:misc", () => {
     await acl.createPermission(user, lido, await lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE(), deployer);
     lido = lido.connect(user);
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     elRewardsVault = await impersonate(await locator.elRewardsVault(), elRewardsVaultBalance);
     withdrawalsVault = await impersonate(await locator.withdrawalVault(), withdrawalsVaultBalance);

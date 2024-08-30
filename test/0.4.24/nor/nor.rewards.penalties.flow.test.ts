@@ -5,16 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  ACL,
-  Burner__MockForLidoHandleOracleReport__factory,
-  Kernel,
-  Lido,
-  LidoLocator,
-  LidoLocator__factory,
-  NodeOperatorsRegistry__Harness,
-  NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
+import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import {
   addNodeOperator,
@@ -28,7 +19,7 @@ import {
 import { addAragonApp, deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:rewards-penalties", () => {
+describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -96,7 +87,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, stranger] =
       await ethers.getSigners();
 
-    const burner = await new Burner__MockForLidoHandleOracleReport__factory(deployer).deploy();
+    const burner = await ethers.deployContract("Burner__MockForLidoHandleOracleReport");
 
     ({ lido, dao, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -107,7 +98,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       },
     }));
 
-    impl = await new NodeOperatorsRegistry__Harness__factory(deployer).deploy();
+    impl = await ethers.deployContract("NodeOperatorsRegistry__Harness");
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -115,7 +106,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       rootAccount: deployer,
     });
 
-    nor = NodeOperatorsRegistry__Harness__factory.connect(appProxy, deployer);
+    nor = await ethers.getContractAt("NodeOperatorsRegistry__Harness", appProxy, deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
@@ -128,7 +119,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
     // inside the testing_requestValidatorsKeysForDeposits() method
     await acl.grantPermission(nor, nor, await nor.STAKING_ROUTER_ROLE());
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
     await expect(nor.initialize(locator, moduleType, penaltyDelay))

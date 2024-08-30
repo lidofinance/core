@@ -54,7 +54,7 @@ async function getDeployTxParams(deployer: string) {
       maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
     };
   } else {
-    throw new Error("Must specify gas ENV vars: \"GAS_PRIORITY_FEE\" and \"GAS_MAX_FEE\" in gwei (like just \"3\")");
+    throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
   }
 }
 

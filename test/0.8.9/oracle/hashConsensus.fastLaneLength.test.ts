@@ -2,19 +2,26 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable } from "typechain-types";
+import { HashConsensus__Harness } from "typechain-types";
 
 import { deployHashConsensus, DeployHashConsensusParams } from "test/deploy";
+import { Snapshot } from "test/suite";
 
-describe("HashConsensus:fastLaneLength", function () {
+describe("HashConsensus.sol:fastLaneLength", function () {
   let admin: Signer;
-  let consensus: HashConsensusTimeTravellable;
+  let consensus: HashConsensus__Harness;
+
+  let originalState: string;
 
   const deploy = async (options?: DeployHashConsensusParams) => {
     [admin] = await ethers.getSigners();
     const deployed = await deployHashConsensus(await admin.getAddress(), options);
     consensus = deployed.consensus;
   };
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("initial data", () => {
     it("sets properly", async () => {
@@ -26,7 +33,7 @@ describe("HashConsensus:fastLaneLength", function () {
   });
 
   context("setFastLaneLengthSlots", () => {
-    beforeEach(() => deploy());
+    before(() => deploy());
 
     const getFastLaneLengthSlotsLimit = async () => {
       const { slotsPerEpoch } = await consensus.getChainConfig();

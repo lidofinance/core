@@ -7,6 +7,8 @@ import { Versioned__Harness089 } from "typechain-types";
 
 import { MAX_UINT256, proxify, streccak } from "lib";
 
+import { Snapshot } from "test/suite";
+
 describe("Versioned.sol", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -14,10 +16,12 @@ describe("Versioned.sol", () => {
   let impl: Versioned__Harness089;
   let consumer: Versioned__Harness089;
 
+  let originalState: string;
+
   const initialVersion = 0n;
   const petrifiedVersion = MAX_UINT256;
 
-  beforeEach(async () => {
+  before(async () => {
     [admin, user] = await ethers.getSigners();
 
     impl = await ethers.deployContract("Versioned__Harness089");
@@ -27,6 +31,10 @@ describe("Versioned.sol", () => {
       caller: user,
     });
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
     it("Petrifies the implementation", async () => {

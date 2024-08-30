@@ -6,12 +6,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   AccountingOracle,
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle,
-  MockLidoForAccountingOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  Lido__MockForAccountingOracle,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
@@ -34,7 +34,8 @@ describe("AccountingOracle.sol:deploy", () => {
       [admin] = await ethers.getSigners();
       defaultOracle = (await deployAccountingOracleSetup(admin.address)).oracle;
     });
-    const updateInitialEpoch = async (consensus: HashConsensusTimeTravellable) => {
+
+    const updateInitialEpoch = async (consensus: HashConsensus__Harness) => {
       // pretend we're after the legacy oracle's last proc epoch but before the new oracle's initial epoch
       const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
       await consensus.setTime(voteExecTime);
@@ -127,11 +128,11 @@ describe("AccountingOracle.sol:deploy", () => {
     });
 
     describe("deployment and init finishes successfully (default setup)", async () => {
-      let consensus: HashConsensusTimeTravellable;
-      let oracle: AccountingOracleTimeTravellable;
-      let mockLido: MockLidoForAccountingOracle;
-      let mockStakingRouter: MockStakingRouterForAccountingOracle;
-      let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
+      let consensus: HashConsensus__Harness;
+      let oracle: AccountingOracle__Harness;
+      let mockLido: Lido__MockForAccountingOracle;
+      let mockStakingRouter: StakingRouter__MockForAccountingOracle;
+      let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
       let legacyOracle: LegacyOracle;
 
       before(async () => {

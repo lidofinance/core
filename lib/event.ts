@@ -42,11 +42,15 @@ const parseLogEntry = (entry: Log, interfaces: Interface[]): LogDescription | nu
   return null;
 };
 
-export function findEventsWithInterfaces(receipt: ContractTransactionReceipt, eventName: string, interfaces: Interface[]): LogDescription[] {
+export function findEventsWithInterfaces(
+  receipt: ContractTransactionReceipt,
+  eventName: string,
+  interfaces: Interface[],
+): LogDescription[] {
   const events: LogDescription[] = [];
   const notParsedLogs: Log[] = [];
 
-  receipt.logs.forEach(entry => {
+  receipt.logs.forEach((entry) => {
     const logDescription = parseLogEntry(entry, interfaces);
     if (logDescription) {
       events.push(logDescription);
@@ -59,7 +63,7 @@ export function findEventsWithInterfaces(receipt: ContractTransactionReceipt, ev
     // log.warning("The following logs could not be parsed:", notParsedLogs);
   }
 
-  return events.filter(e => e.name === eventName);
+  return events.filter((e) => e.name === eventName);
 }
 
 export function findEvents(receipt: ContractTransactionReceipt, eventName: string) {

@@ -6,12 +6,12 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle__MockForAccountingOracle,
-  MockLidoForAccountingOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  Lido__MockForAccountingOracle,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -45,12 +45,12 @@ import {
 
 describe("AccountingOracle.sol:happyPath", () => {
   context("Happy path", () => {
-    let consensus: HashConsensusTimeTravellable;
-    let oracle: AccountingOracleTimeTravellable;
+    let consensus: HashConsensus__Harness;
+    let oracle: AccountingOracle__Harness;
     let oracleVersion: number;
-    let mockLido: MockLidoForAccountingOracle;
-    let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
-    let mockStakingRouter: MockStakingRouterForAccountingOracle;
+    let mockLido: Lido__MockForAccountingOracle;
+    let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
+    let mockStakingRouter: StakingRouter__MockForAccountingOracle;
     let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
 
     let extraData: ExtraDataType;

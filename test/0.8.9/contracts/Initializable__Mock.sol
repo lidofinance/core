@@ -1,27 +1,27 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 contract Initializable__Mock {
-  uint8 private _version;
-  bool private _initialized;
-  event Initialized(uint256 version);
-  event ReceiveCalled();
+    uint8 private _version;
+    bool private _initialized;
 
-  function initialize(uint8 _v) public payable {
-    require(!_initialized, "Contract is already initialized");
-    _version = _v;
-    _initialized = true;
-    emit Initialized(_v);
-  }
+    event Initialized(uint256 version);
+    event ReceiveCalled();
 
-  function version() public view returns (uint8) {
-    return _version;
-  }
+    function initialize(uint8 _v) public payable {
+        require(!_initialized, "Contract is already initialized");
+        _version = _v;
+        _initialized = true;
+        emit Initialized(_v);
+    }
 
-  receive() external payable {
-    emit ReceiveCalled();
-  }
+    function version() public view returns (uint8) {
+        return _version;
+    }
+
+    receive() external payable {
+        emit ReceiveCalled();
+    }
 }

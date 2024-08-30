@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  StETH__MockForWithdrawalQueue,
+  StETH__HarnessForWithdrawalQueue,
   WithdrawalsQueue__Harness,
   WstETH__MockForWithdrawalQueue,
 } from "typechain-types";
@@ -53,7 +53,7 @@ describe("WithdrawalQueue.sol", () => {
   let user: HardhatEthersSigner;
   let oracle: HardhatEthersSigner;
 
-  let stEth: StETH__MockForWithdrawalQueue;
+  let stEth: StETH__HarnessForWithdrawalQueue;
   let stEthAddress: string;
   let wstEth: WstETH__MockForWithdrawalQueue;
   let wstEthAddress: string;
@@ -67,10 +67,10 @@ describe("WithdrawalQueue.sol", () => {
   before(async () => {
     [owner, stranger, user, oracle] = await ethers.getSigners();
 
-    stEth = await ethers.deployContract("StETH__MockForWithdrawalQueue", []);
+    stEth = await ethers.deployContract("StETH__HarnessForWithdrawalQueue", []);
     stEthAddress = await stEth.getAddress();
 
-    wstEth = await ethers.deployContract("WstETH__MockForWithdrawalQueue", [await stEth.getAddress()]);
+    wstEth = await ethers.deployContract("WstETH__MockForWithdrawalQueue", [stEth]);
     wstEthAddress = await wstEth.getAddress();
 
     impl = await ethers.deployContract("WithdrawalsQueue__Harness", [wstEthAddress], owner);
@@ -270,8 +270,8 @@ describe("WithdrawalQueue.sol", () => {
 
     context("requestWithdrawals", () => {
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("600.00"));
-        await stEth.exposedMintShares(user, shares(300n));
+        await stEth.mock__setTotalPooledEther(ether("600.00"));
+        await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queueAddress, ether("300.00"));
       });
 
@@ -343,10 +343,10 @@ describe("WithdrawalQueue.sol", () => {
 
     context("requestWithdrawalsWstETH", () => {
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("600.00"));
-        await stEth.exposedMintShares(wstEthAddress, shares(100n));
-        await stEth.exposedMintShares(user, shares(100n));
-        await wstEth.exposedMint(user, ether("100.00"));
+        await stEth.mock__setTotalPooledEther(ether("600.00"));
+        await stEth.harness__mintShares(wstEthAddress, shares(100n));
+        await stEth.harness__mintShares(user, shares(100n));
+        await wstEth.mock__mint(user, ether("100.00"));
         await wstEth.connect(user).approve(queueAddress, ether("300.00"));
       });
 
@@ -420,8 +420,8 @@ describe("WithdrawalQueue.sol", () => {
       };
 
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("100.00"));
-        await stEth.exposedMintShares(alice, shares(100n));
+        await stEth.mock__setTotalPooledEther(ether("100.00"));
+        await stEth.harness__mintShares(alice, shares(100n));
         await stEth.connect(alice).approve(queueAddress, ether("100.00"));
       });
 
@@ -434,7 +434,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts bad permit with `INVALID_SIGNATURE`", async () => {
-        await stEth.workaroundSetIsSignatureValid(false);
+        await stEth.mock__setIsSignatureValid(false);
 
         await expect(queue.connect(alice).requestWithdrawalsWithPermit(requests, owner, permit)).to.be.revertedWith(
           "INVALID_SIGNATURE",
@@ -480,11 +480,11 @@ describe("WithdrawalQueue.sol", () => {
       const permit = { ...DEFAULT_PERMIT, value: amount };
 
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("200.00"));
-        await stEth.exposedMintShares(wstEthAddress, shares(100n));
-        await stEth.exposedMintShares(alice, shares(100n));
+        await stEth.mock__setTotalPooledEther(ether("200.00"));
+        await stEth.harness__mintShares(wstEthAddress, shares(100n));
+        await stEth.harness__mintShares(alice, shares(100n));
 
-        await wstEth.exposedMint(alice, ether("100.00"));
+        await wstEth.mock__mint(alice, ether("100.00"));
         await wstEth.connect(alice).approve(queueAddress, ether("300.00"));
       });
 
@@ -497,7 +497,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts bad permit with `ERC20Permit: invalid signature`", async () => {
-        await wstEth.workaroundSetIsSignatureValid(false);
+        await wstEth.mock__setIsSignatureValid(false);
 
         await expect(
           queue.connect(alice).requestWithdrawalsWstETHWithPermit(requests, owner, permit),
@@ -539,8 +539,8 @@ describe("WithdrawalQueue.sol", () => {
 
     context("getWithdrawalRequests", () => {
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("1000.00"));
-        await stEth.exposedMintShares(user, shares(300n));
+        await stEth.mock__setTotalPooledEther(ether("1000.00"));
+        await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queueAddress, ether("300.00"));
       });
 
@@ -557,10 +557,10 @@ describe("WithdrawalQueue.sol", () => {
 
     context("getWithdrawalStatus", () => {
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("1000.00"));
+        await stEth.mock__setTotalPooledEther(ether("1000.00"));
         await setBalance(stEthAddress, ether("1001.00"));
 
-        await stEth.exposedMintShares(user, shares(300n));
+        await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queueAddress, ether("300.00"));
       });
 
@@ -603,15 +603,15 @@ describe("WithdrawalQueue.sol", () => {
       await queue.grantRole(await queue.RESUME_ROLE(), owner);
       await queue.resume();
 
-      await stEth.mockSetTotalPooledEther(ether("300.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("300.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queueAddress, ether("300.00"));
 
       await queue.connect(user).requestWithdrawals(amounts, stranger);
       await queue.prefinalize(requests, shareRate(1n));
 
       // Only finalize the first request, the second one will be finalized later in the test
-      await queue.exposedFinalize(1, shareRate(1n), { value: amounts[0] });
+      await queue.harness__finalize(1, shareRate(1n), { value: amounts[0] });
 
       lastCheckpointIndex = await queue.getLastCheckpointIndex();
     });
@@ -640,7 +640,7 @@ describe("WithdrawalQueue.sol", () => {
 
     it("Returns the claimable ether", async () => {
       await queue.connect(user).requestWithdrawals([], stranger);
-      await queue.exposedFinalize(2, shareRate(1n), { value: amounts[0] }); // Finalize the second request
+      await queue.harness__finalize(2, shareRate(1n), { value: amounts[0] }); // Finalize the second request
 
       lastCheckpointIndex = await queue.getLastCheckpointIndex();
       const hints = await queue.findCheckpointHints(requests, 1, lastCheckpointIndex);
@@ -682,9 +682,9 @@ describe("WithdrawalQueue.sol", () => {
         const requests = [1, 2];
 
         for (const requestId of requests) {
-          await queue.exposedEnqueue(ether("1.00"), shares(1n), owner);
+          await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
           await queue.prefinalize([requestId], shareRate(1n));
-          await queue.exposedFinalize(requestId, shareRate(1n), { value: ether("1.00") });
+          await queue.harness__finalize(requestId, shareRate(1n), { value: ether("1.00") });
         }
 
         const lastCheckpointIndex = await queue.getLastCheckpointIndex();
@@ -721,9 +721,9 @@ describe("WithdrawalQueue.sol", () => {
         const requests = [1, 2];
 
         for (const requestId of requests) {
-          await queue.exposedEnqueue(ether("1.00"), shares(1n), owner);
+          await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
           await queue.prefinalize([requestId], shareRate(1n));
-          await queue.exposedFinalize(requestId, shareRate(1n), { value: ether("1.00") });
+          await queue.harness__finalize(requestId, shareRate(1n), { value: ether("1.00") });
         }
 
         const lastCheckpointIndex = await queue.getLastCheckpointIndex();
@@ -751,9 +751,9 @@ describe("WithdrawalQueue.sol", () => {
         const requestId = 1;
 
         await setBalance(queueAddress, ether("10.00"));
-        await queue.exposedEnqueue(ether("1.00"), shares(1n), owner);
+        await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
         await queue.prefinalize([requestId], shareRate(1n));
-        await queue.exposedFinalize(requestId, shareRate(1n), { value: ether("1.00") });
+        await queue.harness__finalize(requestId, shareRate(1n), { value: ether("1.00") });
 
         await expect(queue.connect(owner).claimWithdrawal(requestId))
           .to.emit(queue, "WithdrawalClaimed")
@@ -774,9 +774,9 @@ describe("WithdrawalQueue.sol", () => {
       await queue.resume();
 
       for (const requestId of requests) {
-        await queue.exposedEnqueue(ether("1.00"), shares(1n), owner);
+        await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
         await queue.prefinalize([requestId], shareRate(1n));
-        await queue.exposedFinalize(requestId, shareRate(1n), { value: ether("1.00") });
+        await queue.harness__finalize(requestId, shareRate(1n), { value: ether("1.00") });
       }
 
       lastCheckpointIndex = await queue.getLastCheckpointIndex();

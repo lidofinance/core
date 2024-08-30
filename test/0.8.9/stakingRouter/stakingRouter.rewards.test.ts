@@ -4,30 +4,28 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor__factory,
-  StakingModule__Mock,
-  StakingModule__Mock__factory,
-  StakingRouter,
-  StakingRouter__factory,
-} from "typechain-types";
+import { StakingModule__Mock, StakingRouter } from "typechain-types";
 
 import { certainAddress, ether, proxify } from "lib";
 
-describe("StakingRouter:deposits", () => {
+import { Snapshot } from "test/suite";
+
+describe("StakingRouter.sol:deposits", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
 
+  let originalState: string;
+
   const DEPOSIT_VALUE = ether("32.0");
   const DEFAULT_CONFIG: ModuleConfig = { targetShare: 100_00n, moduleFee: 5_00n, treasuryFee: 5_00n };
 
-  beforeEach(async () => {
+  before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-    const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const impl = await new StakingRouter__factory(deployer).deploy(depositContract);
+    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const impl = await ethers.deployContract("StakingRouter", [depositContract], deployer);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -42,6 +40,10 @@ describe("StakingRouter:deposits", () => {
 
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("getStakingModuleMaxDepositsCount", () => {
     it("Reverts if the module does not exist", async () => {
@@ -424,7 +426,7 @@ describe("StakingRouter:deposits", () => {
     status = Status.Active,
   }: ModuleConfig): Promise<[StakingModule__Mock, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
-    const module = await new StakingModule__Mock__factory(deployer).deploy();
+    const module = await ethers.deployContract("StakingModule__Mock", deployer);
 
     await stakingRouter
       .connect(admin)

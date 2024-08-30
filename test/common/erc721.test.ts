@@ -5,7 +5,7 @@ import { ExclusiveSuiteFunction, PendingSuiteFunction } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ERC721, ERC721ReceiverMock } from "typechain-types";
+import { ERC721, ERC721Receiver__Mock } from "typechain-types";
 
 import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "lib";
 
@@ -71,7 +71,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
     let spender: HardhatEthersSigner;
     let newSpender: HardhatEthersSigner;
     let eoaRecipient: HardhatEthersSigner;
-    let contractRecipient: ERC721ReceiverMock;
+    let contractRecipient: ERC721Receiver__Mock;
     let stranger: HardhatEthersSigner;
 
     let originalState: string;
@@ -80,7 +80,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       ({ token, name, symbol, holder, holderTokenId } = await deploy());
       [spender, newSpender, eoaRecipient, stranger] = await ethers.getSigners();
 
-      contractRecipient = await ethers.deployContract("ERC721ReceiverMock");
+      contractRecipient = await ethers.deployContract("ERC721Receiver__Mock");
     });
 
     beforeEach(async () => (originalState = await Snapshot.take()));
@@ -251,7 +251,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Allows the holder to transfer the token to the IERC721 contract", async () => {
-        await contractRecipient.setDoesAcceptTokens(true);
+        await contractRecipient.mock__setDoesAcceptTokens(true);
 
         await expect(
           token.connect(spender)["safeTransferFrom(address,address,uint256)"](holder, contractRecipient, holderTokenId),
@@ -261,7 +261,7 @@ export function testERC721Compliance({ tokenName, deploy, suiteFunction = descri
       });
 
       it("Allows the holder to transfer the token to the IERC721 contract (with data)", async () => {
-        await contractRecipient.setDoesAcceptTokens(true);
+        await contractRecipient.mock__setDoesAcceptTokens(true);
 
         await expect(
           token

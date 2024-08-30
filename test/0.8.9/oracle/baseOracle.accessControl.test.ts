@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BaseOracle__Harness, MockConsensusContract } from "typechain-types";
+import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -17,12 +17,12 @@ import {
 import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("BaseOracle:accessControl", () => {
+describe("BaseOracle.sol:accessControl", () => {
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let oracle: BaseOracle__Harness;
-  let consensus: MockConsensusContract;
+  let consensus: ConsensusContract__Mock;
   let originalState: string;
 
   before(async () => {
@@ -56,7 +56,7 @@ describe("BaseOracle:accessControl", () => {
     });
 
     it("Updates consensus contract with MANAGE_CONSENSUS_CONTRACT_ROLE", async () => {
-      const newConsensusContract = await ethers.deployContract("MockConsensusContract", [
+      const newConsensusContract = await ethers.deployContract("ConsensusContract__Mock", [
         SECONDS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,

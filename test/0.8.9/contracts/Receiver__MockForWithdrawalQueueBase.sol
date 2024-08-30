@@ -1,20 +1,18 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
 pragma solidity 0.8.9;
 
 contract Receiver__MockForWithdrawalQueueBase {
+    bool public canReceive;
 
-  bool public canReceive;
-
-  function setCanReceive(bool _value) external {
-    canReceive = _value;
-  }
-
-  receive() external payable {
-    if (!canReceive) {
-      revert("RECEIVER_NOT_ACCEPT_TOKENS");
+    function mock__setCanReceive(bool _value) external {
+        canReceive = _value;
     }
-  }
+
+    receive() external payable {
+        if (!canReceive) {
+            revert("RECEIVER_NOT_ACCEPT_TOKENS");
+        }
+    }
 }

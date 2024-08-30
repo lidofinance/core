@@ -1,17 +1,9 @@
 import { BaseContract } from "ethers";
+import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  ACL__factory,
-  DAOFactory__factory,
-  EIP712StETH__factory,
-  EVMScriptRegistryFactory__factory,
-  Kernel,
-  Kernel__factory,
-  Lido__factory,
-  LidoLocator,
-} from "typechain-types";
+import { Kernel, LidoLocator } from "typechain-types";
 
 import { ether, findEvents, streccak } from "lib";
 
@@ -31,17 +23,21 @@ interface DeployLidoDaoArgs {
 }
 
 async function createAragonDao(rootAccount: HardhatEthersSigner) {
-  const kernelBase = await new Kernel__factory(rootAccount).deploy(true);
-  const aclBase = await new ACL__factory(rootAccount).deploy();
-  const EvmScriptRegistryFactory = await new EVMScriptRegistryFactory__factory(rootAccount).deploy();
-  const daoFactory = await new DAOFactory__factory(rootAccount).deploy(kernelBase, aclBase, EvmScriptRegistryFactory);
+  const kernelBase = await ethers.deployContract("Kernel", [true], rootAccount);
+  const aclBase = await ethers.deployContract("ACL", rootAccount);
+  const evmScriptRegistryFactory = await ethers.deployContract("EVMScriptRegistryFactory", rootAccount);
+  const daoFactory = await ethers.deployContract(
+    "DAOFactory",
+    [kernelBase, aclBase, evmScriptRegistryFactory],
+    rootAccount,
+  );
 
   const tx = await daoFactory.newDAO(rootAccount);
   const txReceipt = await tx.wait();
   const daoAddress = findEvents(txReceipt!, "DeployDAO")[0].args[0];
 
-  const dao = Kernel__factory.connect(daoAddress, rootAccount);
-  const acl = ACL__factory.connect(await dao.acl(), rootAccount);
+  const dao = await ethers.getContractAt("Kernel", daoAddress, rootAccount);
+  const acl = await ethers.getContractAt("ACL", await dao.acl(), rootAccount);
   const APP_MANAGER_ROLE = await kernelBase.APP_MANAGER_ROLE();
   await acl.createPermission(rootAccount, await dao.getAddress(), APP_MANAGER_ROLE, rootAccount);
 
@@ -66,7 +62,7 @@ export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAp
 export async function deployLidoDao({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
   const { dao, acl } = await createAragonDao(rootAccount);
 
-  const impl = await new Lido__factory(rootAccount).deploy();
+  const impl = await ethers.deployContract("Lido", rootAccount);
 
   const lidoProxyAddress = await addAragonApp({
     dao,
@@ -75,11 +71,11 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
     rootAccount,
   });
 
-  const lido = Lido__factory.connect(lidoProxyAddress, rootAccount);
+  const lido = await ethers.getContractAt("Lido", lidoProxyAddress, rootAccount);
 
   if (initialized) {
     const locator = await deployLidoLocator({ lido, ...locatorConfig }, rootAccount);
-    const eip712steth = await new EIP712StETH__factory(rootAccount).deploy(lido);
+    const eip712steth = await ethers.deployContract("EIP712StETH", [lido], rootAccount);
     await lido.initialize(locator, eip712steth, { value: ether("1.0") });
   }
 
