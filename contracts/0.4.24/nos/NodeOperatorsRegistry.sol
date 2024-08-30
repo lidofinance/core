@@ -1353,6 +1353,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _saveOperatorStuckPenaltyStats(_nodeOperatorId, stuckPenaltyStats);
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
         _increaseValidatorsKeysNonce();
+        return true;
     }
 
     /// @notice Returns total number of node operators
