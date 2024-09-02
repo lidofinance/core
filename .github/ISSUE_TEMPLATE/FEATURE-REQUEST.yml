@@ -1,0 +1,39 @@
+name: Feature Request
+description: Submit a feature request.
+title: "[Feature Request]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request form!
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Short summary of the feature
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Existing problem that the feature solves
+    validations:
+      required: true
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation
+      description: Possible ways to implement this feature
+    validations:
+      required: false
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Guidelines
+      options:
+        - label: I agree to follow [Code of Conduct](https://github.com/lidofinance/core/blob/master/CODE_OF_CONDUCT.md).
+          required: true
+        - label: I have read [Lido Contribution Guide](https://github.com/lidofinance/core/blob/master/CONTRIBUTING.md).
+          required: true
