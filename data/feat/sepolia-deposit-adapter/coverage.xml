@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2930"  lines-covered="2811"  line-rate="0.9594"  branches-valid="1300"  branches-covered="1221"  branch-rate="0.9392"  timestamp="1725455195382" complexity="0" version="0.1">
+<coverage lines-valid="2929"  lines-covered="2811"  line-rate="0.9597"  branches-valid="1300"  branches-covered="1221"  branch-rate="0.9392"  timestamp="1725457498955" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -5242,47 +5242,46 @@
 		<class name="SepoliaDepositAdapter.sol"  filename="contracts/testnets/sepolia/SepoliaDepositAdapter.sol"  line-rate="0"  branch-rate="0" >
 		<methods>
 			<method name="initializeOwnable"  hits="0"  signature="()V" >
-				<lines><line number="51"  hits="0" /></lines>
+				<lines><line number="50"  hits="0" /></lines>
 			</method>
 			<method name="get_deposit_root"  hits="0"  signature="()V" >
-				<lines><line number="61"  hits="0" /></lines>
+				<lines><line number="59"  hits="0" /></lines>
 			</method>
 			<method name="get_deposit_count"  hits="0"  signature="()V" >
-				<lines><line number="65"  hits="0" /></lines>
+				<lines><line number="63"  hits="0" /></lines>
 			</method>
 			<method name="recoverEth"  hits="0"  signature="()V" >
-				<lines><line number="73"  hits="0" /></lines>
+				<lines><line number="71"  hits="0" /></lines>
 			</method>
 			<method name="recoverBepolia"  hits="0"  signature="()V" >
-				<lines><line number="83"  hits="0" /></lines>
+				<lines><line number="81"  hits="0" /></lines>
 			</method>
 			<method name="deposit"  hits="0"  signature="()V" >
-				<lines><line number="92"  hits="0" /></lines>
+				<lines><line number="90"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="52"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="53"  hits="0"  branch="false" />
+			<line number="51"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="52"  hits="0"  branch="false" />
+			<line number="54"  hits="0"  branch="false" />
 			<line number="55"  hits="0"  branch="false" />
-			<line number="56"  hits="0"  branch="false" />
-			<line number="57"  hits="0"  branch="false" />
-			<line number="62"  hits="0"  branch="false" />
-			<line number="66"  hits="0"  branch="false" />
-			<line number="70"  hits="0"  branch="false" />
+			<line number="60"  hits="0"  branch="false" />
+			<line number="64"  hits="0"  branch="false" />
+			<line number="68"  hits="0"  branch="false" />
+			<line number="72"  hits="0"  branch="false" />
 			<line number="74"  hits="0"  branch="false" />
+			<line number="75"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="76"  hits="0"  branch="false" />
-			<line number="77"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="78"  hits="0"  branch="false" />
-			<line number="80"  hits="0"  branch="false" />
-			<line number="84"  hits="0"  branch="false" />
+			<line number="82"  hits="0"  branch="false" />
+			<line number="83"  hits="0"  branch="false" />
+			<line number="84"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="85"  hits="0"  branch="false" />
-			<line number="86"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="87"  hits="0"  branch="false" />
-			<line number="89"  hits="0"  branch="false" />
+			<line number="96"  hits="0"  branch="false" />
 			<line number="98"  hits="0"  branch="false" />
+			<line number="99"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="100"  hits="0"  branch="false" />
-			<line number="101"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="102"  hits="0"  branch="false" />
 		</lines>
 		</class>
 	</classes>
