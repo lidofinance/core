@@ -1,11 +1,9 @@
 {
   "deployer": null,
   "gateSeal": {
-    "address": null,
     "factoryAddress": null,
     "sealDuration": 518400,
-    "expiryTimestamp": 1714521600,
-    "sealingCommittee": []
+    "expiryTimestamp": 1714521600
   },
   "lidoApmEnsName": "lidopm.eth",
   "lidoApmEnsRegDurationSec": 94608000,
