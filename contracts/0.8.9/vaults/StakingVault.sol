@@ -22,16 +22,16 @@ contract StakingVault is IStaking, BeaconChainDepositor {
         owner = _owner;
     }
 
+    function getWithdrawalCredentials() public view returns (bytes32) {
+        return bytes32((0x01 << 248) + uint160(address(this)));
+    }
+
     receive() external payable virtual {
         // emit EL reward flow
     }
 
     function deposit() public payable virtual {
         // emit deposit flow
-    }
-
-    function getWithdrawalCredentials() public view returns (bytes32) {
-        return bytes32(0x01 << 254 + uint160(address(this)));
     }
 
     function depositKeys(
