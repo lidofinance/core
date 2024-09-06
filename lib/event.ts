@@ -1,12 +1,4 @@
-import {
-  ContractTransactionReceipt,
-  EventLog,
-  Interface,
-  InterfaceAbi,
-  Log,
-  LogDescription,
-  TransactionReceipt,
-} from "ethers";
+import { ContractTransactionReceipt, EventLog, Interface, Log, LogDescription } from "ethers";
 
 import { log } from "./log";
 
@@ -76,22 +68,4 @@ export function findEvents(receipt: ContractTransactionReceipt, eventName: strin
   }
 
   return events;
-}
-
-export function findEventsWithAbi(receipt: TransactionReceipt, eventName: string, abi: InterfaceAbi): LogDescription[] {
-  const iface = new Interface(abi);
-  const foundEvents = [];
-
-  for (const entry of receipt.logs) {
-    try {
-      const event = iface.parseLog(entry);
-      if (event && event.name == eventName) {
-        foundEvents.push(event);
-      }
-    } catch (error) {
-      throw new Error(`Failed to find event ${eventName}, error: ${error}`);
-    }
-  }
-
-  return foundEvents;
 }

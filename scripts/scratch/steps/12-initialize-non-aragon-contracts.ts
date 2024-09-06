@@ -2,23 +2,20 @@ import { ethers } from "hardhat";
 
 import { getContractAt } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
 import { en0x } from "lib/string";
 
-async function main() {
-  log.scriptStart(__filename);
+export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
+  // Extract addresses from state
   const lidoAddress = state[Sk.appLido].proxy.address;
   const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const nodeOperatorsRegistryParams = state["nodeOperatorsRegistry"].deployParameters;
-
   const validatorsExitBusOracleParams = state[Sk.validatorsExitBusOracle].deployParameters;
   const accountingOracleParams = state[Sk.accountingOracle].deployParameters;
-
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const lidoLocatorAddress = state[Sk.lidoLocator].proxy.address;
@@ -30,83 +27,75 @@ async function main() {
   const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
 
+  // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
   const accountingOracleAdmin = testnetAdmin;
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
 
-  //
-  // === NodeOperatorsRegistry: initialize ===
-  //
+  // Initialize NodeOperatorsRegistry
+
   // https://github.com/ethereum/solidity-examples/blob/master/docs/bytes/Bytes.md#description
   const stakingModuleTypeId =
     "0x" +
     ethers.AbiCoder.defaultAbiCoder().encode(["string"], [nodeOperatorsRegistryParams.stakingModuleTypeId]).slice(-64);
 
-  const nodeOperatorsRegistryArgs = [
-    lidoLocatorAddress,
-    stakingModuleTypeId,
-    nodeOperatorsRegistryParams.stuckPenaltyDelay,
-  ];
   const nodeOperatorsRegistry = await getContractAt("NodeOperatorsRegistry", nodeOperatorsRegistryAddress);
-  await makeTx(nodeOperatorsRegistry, "initialize", nodeOperatorsRegistryArgs, { from: deployer });
+  await makeTx(
+    nodeOperatorsRegistry,
+    "initialize",
+    [lidoLocatorAddress, stakingModuleTypeId, nodeOperatorsRegistryParams.stuckPenaltyDelay],
+    { from: deployer },
+  );
 
-  //
-  // === Lido: initialize ===
-  //
-  const lidoInitArgs = [lidoLocatorAddress, eip712StETHAddress];
+  // Initialize Lido
   const bootstrapInitBalance = 10n; // wei
   const lido = await getContractAt("Lido", lidoAddress);
-  await makeTx(lido, "initialize", lidoInitArgs, { value: bootstrapInitBalance, from: deployer });
-  log.wideSplitter();
+  await makeTx(lido, "initialize", [lidoLocatorAddress, eip712StETHAddress], {
+    value: bootstrapInitBalance,
+    from: deployer,
+  });
 
-  //
-  // === LegacyOracle: initialize ===
-  //
-  const legacyOracleArgs = [lidoLocatorAddress, hashConsensusForAccountingAddress];
+  // Initialize LegacyOracle
   const legacyOracle = await getContractAt("LegacyOracle", legacyOracleAddress);
-  await makeTx(legacyOracle, "initialize", legacyOracleArgs, { from: deployer });
+  await makeTx(legacyOracle, "initialize", [lidoLocatorAddress, hashConsensusForAccountingAddress], { from: deployer });
 
   const zeroLastProcessingRefSlot = 0;
 
-  //
-  // === AccountingOracle: initialize ===
-  //
-  //! NB: LegacyOracle must be initialized before
+  // Initialize AccountingOracle
   const accountingOracle = await getContractAt("AccountingOracle", accountingOracleAddress);
-  const accountingOracleArgs = [
-    accountingOracleAdmin,
-    hashConsensusForAccountingAddress,
-    accountingOracleParams.consensusVersion,
-    zeroLastProcessingRefSlot,
-  ];
-  await makeTx(accountingOracle, "initializeWithoutMigration", accountingOracleArgs, { from: deployer });
+  await makeTx(
+    accountingOracle,
+    "initializeWithoutMigration",
+    [
+      accountingOracleAdmin,
+      hashConsensusForAccountingAddress,
+      accountingOracleParams.consensusVersion,
+      zeroLastProcessingRefSlot,
+    ],
+    { from: deployer },
+  );
 
-  //
-  // === ValidatorsExitBusOracle: initialize ===
-  //
+  // Initialize ValidatorsExitBusOracle
   const validatorsExitBusOracle = await getContractAt("ValidatorsExitBusOracle", ValidatorsExitBusOracleAddress);
-  const validatorsExitBusOracleArgs = [
-    exitBusOracleAdmin, // admin
-    hashConsensusForValidatorsExitBusOracleAddress,
-    validatorsExitBusOracleParams.consensusVersion,
-    zeroLastProcessingRefSlot,
-  ];
-  await makeTx(validatorsExitBusOracle, "initialize", validatorsExitBusOracleArgs, { from: deployer });
+  await makeTx(
+    validatorsExitBusOracle,
+    "initialize",
+    [
+      exitBusOracleAdmin,
+      hashConsensusForValidatorsExitBusOracleAddress,
+      validatorsExitBusOracleParams.consensusVersion,
+      zeroLastProcessingRefSlot,
+    ],
+    { from: deployer },
+  );
 
-  //
-  // === WithdrawalQueue: initialize ===
-  //
+  // Initialize WithdrawalQueue
   const withdrawalQueue = await getContractAt("WithdrawalQueueERC721", withdrawalQueueAddress);
-  const withdrawalQueueArgs = [
-    withdrawalQueueAdmin, // _admin
-  ];
-  await makeTx(withdrawalQueue, "initialize", withdrawalQueueArgs, { from: deployer });
+  await makeTx(withdrawalQueue, "initialize", [withdrawalQueueAdmin], { from: deployer });
 
-  //
-  // === WithdrawalQueue: setBaseURI ===
-  //
+  // Set WithdrawalQueue base URI if provided
   const withdrawalQueueBaseUri = state["withdrawalQueueERC721"].deployParameters.baseUri;
   if (withdrawalQueueBaseUri !== null && withdrawalQueueBaseUri !== "") {
     const MANAGE_TOKEN_URI_ROLE = await withdrawalQueue.getFunction("MANAGE_TOKEN_URI_ROLE")();
@@ -115,36 +104,22 @@ async function main() {
     await makeTx(withdrawalQueue, "renounceRole", [MANAGE_TOKEN_URI_ROLE, deployer], { from: deployer });
   }
 
-  //
-  // === StakingRouter: initialize ===
-  //
+  // Initialize StakingRouter
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalVaultAddress.slice(2)}`;
-  const stakingRouterArgs = [
-    stakingRouterAdmin, // _admin
-    lidoAddress, // _lido
-    withdrawalCredentials, // _withdrawalCredentials
-  ];
   const stakingRouter = await getContractAt("StakingRouter", stakingRouterAddress);
-  await makeTx(stakingRouter, "initialize", stakingRouterArgs, { from: deployer });
-  log.wideSplitter();
+  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
+    from: deployer,
+  });
 
-  //
-  // === OracleDaemonConfig: set parameters ===
-  //
+  // Set OracleDaemonConfig parameters
   const oracleDaemonConfig = await getContractAt("OracleDaemonConfig", oracleDaemonConfigAddress);
   const CONFIG_MANAGER_ROLE = await oracleDaemonConfig.getFunction("CONFIG_MANAGER_ROLE")();
   await makeTx(oracleDaemonConfig, "grantRole", [CONFIG_MANAGER_ROLE, testnetAdmin], { from: testnetAdmin });
+
+  // Set each parameter in the OracleDaemonConfig
   for (const [key, value] of Object.entries(state.oracleDaemonConfig.deployParameters)) {
     await makeTx(oracleDaemonConfig, "set", [key, en0x(value as number)], { from: deployer });
   }
+
   await makeTx(oracleDaemonConfig, "renounceRole", [CONFIG_MANAGER_ROLE, testnetAdmin], { from: testnetAdmin });
-
-  log.scriptFinish(__filename);
 }
-
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });

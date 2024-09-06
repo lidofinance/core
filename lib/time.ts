@@ -43,8 +43,8 @@ export async function getNextBlock() {
   };
 }
 
-export async function advanceChainTime(seconds: number) {
-  await ethers.provider.send("evm_increaseTime", [seconds]);
+export async function advanceChainTime(seconds: bigint) {
+  await ethers.provider.send("evm_increaseTime", [Number(seconds)]);
   await ethers.provider.send("evm_mine");
 }
 

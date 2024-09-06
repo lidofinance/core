@@ -3,22 +3,17 @@ import { ethers } from "hardhat";
 import { log } from "lib";
 import { persistNetworkState, readNetworkState, Sk } from "lib/state-file";
 
-function getEnvVariable(name: string, defaultValue?: string) {
-  const value = process.env[name];
+function getEnvVariable(name: string, defaultValue?: string): string {
+  const value = process.env[name] ?? defaultValue;
   if (value === undefined) {
-    if (defaultValue === undefined) {
-      throw new Error(`Env variable ${name} must be set`);
-    }
-    return defaultValue;
-  } else {
-    log(`Using env variable ${name}=${value}`);
-    return value;
+    throw new Error(`Environment variable ${name} is required`);
   }
+  log(`${name} = ${value}`);
+  return value;
 }
 
-async function main() {
-  log.scriptStart(__filename);
-
+export async function main() {
+  // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const gateSealFactoryAddress = getEnvVariable("GATE_SEAL_FACTORY", "");
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
@@ -28,43 +23,44 @@ async function main() {
 
   const state = readNetworkState();
 
+  // Update network-related information
   state.networkId = parseInt(await ethers.provider.send("net_version"));
   state.chainId = parseInt((await ethers.provider.getNetwork()).chainId.toString());
   state.deployer = deployer;
+
+  // Update state with new values from environment variables
+  state.chainSpec = { ...state.chainSpec, genesisTime };
+
+  if (depositContractAddress) {
+    state.chainSpec.depositContract = ethers.getAddress(depositContractAddress);
+  }
+
   if (gateSealFactoryAddress) {
     state.gateSeal = {
       ...state.gateSeal,
       factoryAddress: gateSealFactoryAddress,
     };
   }
-  state.chainSpec = {
-    ...state.chainSpec,
-    genesisTime: genesisTime,
-  };
-  if (depositContractAddress) {
-    state.chainSpec.depositContract = ethers.getAddress(depositContractAddress);
-  }
+
   if (withdrawalQueueBaseUri) {
     state.withdrawalQueueERC721.deployParameters = {
       ...state.withdrawalQueueERC721.deployParameters,
       baseUri: withdrawalQueueBaseUri,
     };
   }
+
   if (dsmPredefinedAddress) {
+    state.depositSecurityModule.address = dsmPredefinedAddress;
     state.depositSecurityModule.deployParameters = {
       ...state.depositSecurityModule.deployParameters,
       usePredefinedAddressInstead: ethers.getAddress(dsmPredefinedAddress),
     };
-    state.depositSecurityModule.address = dsmPredefinedAddress;
   }
-  state[Sk.scratchDeployGasUsed] = 0n.toString();
-  persistNetworkState(state);
-  log.scriptFinish(__filename);
-}
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });
+  // Initialize gas usage tracking
+  state[Sk.scratchDeployGasUsed] = 0n.toString();
+
+  persistNetworkState(state);
+
+  log.emptyLine(); // Add an empty line for better readability
+}

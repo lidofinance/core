@@ -20,7 +20,16 @@ import { mochaRootHooks } from "test/hooks";
 
 const RPC_URL: string = process.env.RPC_URL || "";
 const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
+const INTEGRATION_SCRATCH_DEPLOY = process.env.INTEGRATION_SCRATCH_DEPLOY || "off";
 const ACCOUNTS_PATH = "./accounts.json";
+
+/**
+ * Determines the forking configuration for Hardhat.
+ * @returns The forking configuration object or undefined.
+ */
+function getHardhatForkingConfig() {
+  return INTEGRATION_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL ? undefined : { url: HARDHAT_FORKING_URL };
+}
 
 function loadAccounts(networkName: string) {
   // TODO: this plaintext accounts.json private keys management is a subject
@@ -58,7 +67,7 @@ const config: HardhatUserConfig = {
         count: 30,
         accountsBalance: "100000000000000000000000",
       },
-      forking: HARDHAT_FORKING_URL ? { url: HARDHAT_FORKING_URL } : undefined,
+      forking: getHardhatForkingConfig(),
     },
     "sepolia": {
       url: RPC_URL,

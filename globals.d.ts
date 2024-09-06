@@ -7,7 +7,8 @@ declare namespace NodeJS {
     LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none";
 
     /* flags for changing the behavior of the integration tests */
-    INTEGRATION_SIMPLE_DVT_MODULE?: "on" | "off";
+    INTEGRATION_SCRATCH_DEPLOY?: "on" | "off"; // if "on" test will use scratch deploy instead of forking
+    INTEGRATION_SIMPLE_DVT_MODULE?: "on" | "off"; // if "on" test will use simple DVT module instead of linking NOR
 
     /**
      * Network configuration for the protocol discovery.

@@ -3,6 +3,11 @@ import path from "path";
 
 import { TraceableTransaction } from "./type";
 
+// @ts-expect-error TS2339: Property 'toJSON' does not exist on type 'BigInt'.
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 export type ConvertibleToString = string | number | boolean | { toString(): string };
 
 export const rd = (s: ConvertibleToString) => chalk.red(s);
@@ -14,14 +19,13 @@ export const mg = (s: ConvertibleToString) => chalk.magenta(s);
 
 export const log = (...args: ConvertibleToString[]) => console.log(...args);
 
-const INDENT = "    ";
-
 const MIN_LINE_LENGTH = 4;
 const LINE_LENGTH = 20;
 const LONG_LINE_LENGTH = 40;
 
 export const OK = gr("[✓]");
 export const NOT_OK = rd("[×]");
+export const WARN = yl("[!]");
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
@@ -46,13 +50,15 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
   const line = _line(totalLength + 4, minLength);
   const paddedTitle = title.padStart((totalLength + title.length) / 2).padEnd(totalLength);
 
-  console.error(`\n${cy(line)}`);
+  console.error(`${cy(line)}`);
   console.error(`${cy("=")} ${mg(paddedTitle)} ${cy("=")}`);
   console.error(`${cy(line)}`);
 
   if (args.length > 1) {
     console.error(...args.slice(1).map((s) => s.toString()));
   }
+
+  log.emptyLine();
 };
 
 const _title = (title: string) => log(mg(title));
@@ -63,15 +69,15 @@ const _record = (label: string, value: ConvertibleToString) => log(`${chalk.grey
 
 // TODO: fix log levels
 
-log.noEOL = (...args: ConvertibleToString[]) => process.stdout.write(args.toString() + " ");
+log.noEOL = (...args: ConvertibleToString[]) => process.stdout.write(args.toString());
 
 log.success = (...args: ConvertibleToString[]) => console.log(OK, ...args);
 
 log.error = (...args: ConvertibleToString[]) => console.error(NOT_OK, ...args);
 
-log.splitter = (...args: ConvertibleToString[]) => _splitter(LINE_LENGTH, ...args);
+log.warning = (...args: ConvertibleToString[]) => console.error(WARN, ...args);
 
-log.wideSplitter = (...args: ConvertibleToString[]) => _splitter(LONG_LINE_LENGTH, ...args);
+log.splitter = (...args: ConvertibleToString[]) => _splitter(LONG_LINE_LENGTH, ...args);
 
 log.table = (...args: ConvertibleToString[]) => console.table(...args);
 
@@ -80,25 +86,33 @@ log.emptyLine = () => console.log();
 log.header = (...args: ConvertibleToString[]) => _header(LINE_LENGTH, ...args);
 
 log.withArguments = (firstLine: string, args: ConvertibleToString[]) => {
-  log.noEOL(`${firstLine.trim()} (`);
-  if (args.length > 0) {
-    log.emptyLine();
+  log.noEOL(`${firstLine}(`);
+
+  if (args.length === 0) {
+    log(`)`);
+    return;
   }
-  for (const arg of args) {
-    log(`${INDENT}${arg}`);
+
+  if (args.length === 1) {
+    log(`${mg(JSON.stringify(args[0]))})`);
+    return;
   }
-  log(`)... `);
+
+  log.emptyLine();
+  args.forEach((arg) => log(` ${mg(JSON.stringify(arg))},`));
+  log(`)`);
 };
 
 log.scriptStart = (filename: string) => {
+  log.splitter();
+  log(`Started script: ${bl(path.basename(filename))}`);
+  log.splitter();
   log.emptyLine();
-  log.wideSplitter();
-  log(`Started script ${bl(path.basename(filename))}`);
-  log.wideSplitter();
 };
 
 log.scriptFinish = (filename: string) => {
-  log(`Finished running script ${bl(path.basename(filename))}`);
+  log.success(`Finished script: ${bl(path.basename(filename))}`);
+  log.emptyLine();
 };
 
 log.done = (message: string) => {
@@ -111,12 +125,6 @@ log.debug = (title: string, records: Record<string, ConvertibleToString>) => {
 
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
-  log.emptyLine();
-};
-
-log.warning = (title: string, ...args: ConvertibleToString[]): void => {
-  log(chalk.bold.yellow(title));
-  args.forEach((arg) => log(arg));
   log.emptyLine();
 };
 

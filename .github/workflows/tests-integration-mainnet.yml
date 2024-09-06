@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   test_hardhat_integration_fork:
-    name: Hardhat / Mainnet Fork
+    name: Hardhat / Mainnet
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -26,6 +26,6 @@ jobs:
         run: cp .env.example .env
 
       - name: Run integration tests
-        run: yarn test:integration:fork
+        run: yarn test:integration:fork:mainnet
         env:
           LOG_LEVEL: debug

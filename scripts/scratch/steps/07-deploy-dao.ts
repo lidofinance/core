@@ -1,19 +1,13 @@
 import { assert } from "chai";
-import chalk from "chalk";
 import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
-import {
-  ERCProxy__factory,
-  EVMScriptRegistryFactory,
-  EVMScriptRegistryFactory__factory,
-  Kernel__factory,
-} from "typechain-types";
+import { ERCProxy, EVMScriptRegistryFactory, Kernel } from "typechain-types";
 
 import { getContractAt, getContractPath, loadContract, LoadedContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
-import { findEvents, findEventsWithAbi } from "lib/event";
-import { log } from "lib/log";
+import { findEvents, findEventsWithInterfaces } from "lib/event";
+import { cy, log, yl } from "lib/log";
 import {
   AppNames,
   DeploymentState,
@@ -26,24 +20,6 @@ import {
 
 // See KernelConstants.sol
 const KERNEL_DEFAULT_ACL_APP_ID = "0xe3262375f45a6e2026b7e7b18c2b807434f2508fe1a2a3dfb493c7df8f4aad6a";
-
-async function main() {
-  log.scriptStart(__filename);
-  const deployer = (await ethers.provider.getSigner()).address;
-  let state = readNetworkState({ deployer });
-
-  const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
-  if (state[Sk.lidoTemplate].deployBlock) {
-    log(`Using LidoTemplate deploy block: ${chalk.yellow(state.lidoTemplate.deployBlock)}`);
-  }
-
-  const newDAOReceipt = await doTemplateNewDAO(template, deployer, state[Sk.daoInitialSettings]);
-  state = setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
-
-  await saveStateFromNewDAOTx(newDAOReceipt);
-
-  log.scriptFinish(__filename);
-}
 
 async function doTemplateNewDAO(
   template: LoadedContract,
@@ -59,18 +35,21 @@ async function doTemplateNewDAO(
 
   log(`Using DAO token settings:`, daoInitialSettings.token);
   log(`Using DAO voting settings:`, daoInitialSettings.voting);
-  const receipt = await makeTx(
+  log.emptyLine();
+
+  // Create a new DAO using the template
+  return await makeTx(
     template,
     "newDAO",
     [daoInitialSettings.token.name, daoInitialSettings.token.symbol, votingSettings],
     { from: deployer },
   );
-  return receipt;
 }
 
 function updateAgentVestingAddressPlaceholder(state: DeploymentState) {
   const AGENT_VESTING_PLACEHOLDER = "lido-aragon-agent-placeholder";
   if (state[Sk.appAgent]) {
+    // Replace placeholder with actual agent address
     const agentAddress = state[Sk.appAgent].proxy.address;
     const vestingAmount = state[Sk.vestingParams].holders[AGENT_VESTING_PLACEHOLDER];
     state[Sk.vestingParams].holders[agentAddress] = vestingAmount;
@@ -85,21 +64,22 @@ function updateAgentVestingAddressPlaceholder(state: DeploymentState) {
 async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) {
   let state = readNetworkState();
 
+  // Extract DAO and token addresses from the event
   const newDAOEvent = findEvents(newDAOReceipt, "TmplDAOAndTokenDeployed")[0];
-
   const kernelProxyAddress = newDAOEvent.args.dao;
+  const daoTokenAddress = newDAOEvent.args.token;
+
+  // Update state with kernel proxy information
   state = updateObjectInState(Sk.aragonKernel, {
     proxy: {
       address: kernelProxyAddress,
       contract: await getContractPath("KernelProxy"),
-      constructorArgs: [
-        // see DAOFactory.newDAO
-        state[Sk.aragonKernel].implementation.address,
-      ],
+      // see DAOFactory.newDAO
+      constructorArgs: [state[Sk.aragonKernel].implementation.address],
     },
   });
 
-  const daoTokenAddress = newDAOEvent.args.token;
+  // Update state with DAO token information
   state = updateObjectInState(Sk.ldo, {
     address: daoTokenAddress,
     contract: await getContractPath("MiniMeToken"),
@@ -115,16 +95,19 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     ],
   });
 
+  // Load EVM script registry factory and update state
   const evmScriptRegistryFactory = await loadContract<EVMScriptRegistryFactory>(
-    EVMScriptRegistryFactory__factory,
+    "EVMScriptRegistryFactory",
     state[Sk.evmScriptRegistryFactory].address,
   );
+
   state = updateObjectInState(Sk.callsScript, {
     address: await evmScriptRegistryFactory.baseCallScript(),
     contract: await getContractPath("CallsScript"),
-    constructorArgs: [], // see EVMScriptRegistryFactory.baseCallScript
+    constructorArgs: [],
   });
 
+  // Process installed apps
   const appInstalledEvents = findEvents(newDAOReceipt, "TmplAppInstalled");
   const lidoApmEnsName = state[Sk.lidoApmEnsName];
 
@@ -133,6 +116,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   const appNameByAppId = Object.fromEntries(appIdNameEntries);
   const expectedAppIds = appIdNameEntries.map((e) => e[0]);
 
+  // Verify all expected apps are installed
   const idsCheckDesc = `all (and only) expected apps are installed`;
   assert.sameMembers(
     appInstalledEvents.map((evt) => evt.args.appId),
@@ -141,22 +125,23 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   );
   log.success(idsCheckDesc);
 
-  const kernel = await Kernel__factory.connect(kernelProxyAddress, ethers.provider);
+  const kernel = await loadContract<Kernel>("Kernel", kernelProxyAddress);
   const APP_BASES_NAMESPACE = await kernel.APP_BASES_NAMESPACE();
 
+  // Process each installed app
   const dataByAppName: { [key: string]: { [key: string]: string } } = {};
   for (const evt of appInstalledEvents) {
     const appId = evt.args.appId;
     const appName = appNameByAppId[appId];
-
     const proxyAddress = ethers.getAddress(evt.args.appProxy);
 
-    const proxy = await ERCProxy__factory.connect(proxyAddress, ethers.provider);
+    const proxy = await loadContract<ERCProxy>("ERCProxy", proxyAddress);
     const implAddress = await proxy.implementation();
 
     const kernelBaseAddr = await kernel.getApp(APP_BASES_NAMESPACE, appId);
 
-    const baseCheckDesc = `${appName}: the installed app base is ${chalk.yellow(implAddress)}`;
+    // Verify app base
+    const baseCheckDesc = `${appName}: the installed app base is ${cy(implAddress)}`;
     assert.equal(ethers.getAddress(kernelBaseAddr), ethers.getAddress(implAddress), baseCheckDesc);
     log.success(baseCheckDesc);
 
@@ -169,6 +154,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     };
   }
 
+  // Update state with app information
   state = readNetworkState();
   for (const [appName, appData] of Object.entries(dataByAppName)) {
     const key = `app:${appName}`;
@@ -182,20 +168,16 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       proxy: {
         address: proxyAddress,
         contract: await getContractPath("AppProxyUpgradeable"),
-        constructorArgs: [
-          // see AppProxyFactory
-          kernelProxyAddress,
-          appData.id,
-          initializeData,
-        ],
+        // see AppProxyFactory
+        constructorArgs: [kernelProxyAddress, appData.id, initializeData],
       },
     };
   }
   updateAgentVestingAddressPlaceholder(state);
   persistNetworkState(state);
 
-  // Get missing proxies
-  const newAppProxyEvents = findEventsWithAbi(newDAOReceipt, "NewAppProxy", Kernel__factory.abi);
+  // Process missing proxies (ACL and EVMScriptRegistry)
+  const newAppProxyEvents = findEventsWithInterfaces(newDAOReceipt, "NewAppProxy", [kernel.interface]);
   for (const e of newAppProxyEvents) {
     const appId = e.args.appId;
     if (appNameByAppId[appId] !== undefined) continue;
@@ -206,7 +188,6 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       proxyContractName = "AppProxyUpgradeable";
       appName = Sk.aragonAcl;
     } else {
-      // otherwise it is EvmScriptRegistry
       proxyContractName = "AppProxyPinned";
       appName = Sk.aragonEvmScriptRegistry;
     }
@@ -217,12 +198,8 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       ...state[appName],
       proxy: {
         address: proxy.address,
-        constructorArgs: [
-          // See Kernel.initialize
-          kernelProxyAddress,
-          appId,
-          "0x00",
-        ],
+        // See Kernel.initialize
+        constructorArgs: [kernelProxyAddress, appId, "0x00"],
         contract: await getContractPath(proxyContractName),
       },
       aragonApp: {
@@ -238,12 +215,24 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       };
     }
   }
+
+  log.emptyLine(); // Make the output more readable
+
   persistNetworkState(state);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });
+export async function main() {
+  const deployer = (await ethers.provider.getSigner()).address;
+  const state = readNetworkState({ deployer });
+
+  const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
+  if (state[Sk.lidoTemplate].deployBlock) {
+    log(`Using LidoTemplate deploy block: ${yl(state.lidoTemplate.deployBlock)}`);
+  }
+
+  const newDAOReceipt = await doTemplateNewDAO(template, deployer, state[Sk.daoInitialSettings]);
+
+  setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
+
+  await saveStateFromNewDAOTx(newDAOReceipt);
+}

@@ -11,9 +11,10 @@
     "paths": {
       "lib": ["./lib"],
       "test": ["./test"],
+      "scripts": ["./scripts"],
       "typechain-types": ["./typechain-types"]
     }
   },
-  "include": ["./test", "./typechain-types", "./lib", "./scripts"],
+  "include": ["./test", "./typechain-types", "./lib", "./scripts", "./deployed-*.json"],
   "files": ["./hardhat.config.ts", "./commitlint.config.ts", "./globals.d.ts"]
 }

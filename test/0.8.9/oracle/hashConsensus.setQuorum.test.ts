@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, findEventsWithAbi } from "lib";
+import { CONSENSUS_VERSION, findEventsWithInterfaces } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -192,7 +192,7 @@ describe("HashConsensus.sol:setQuorum", function () {
         await expect(tx3).to.emit(consensus, "ConsensusReached");
 
         const receipt = (await tx3.wait())!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", consensus.interface.fragments);
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
 
         const consensusState = await consensus.getConsensusState();
@@ -218,7 +218,7 @@ describe("HashConsensus.sol:setQuorum", function () {
         await expect(tx2).to.emit(consensus, "ConsensusReached");
 
         const receipt = (await tx2.wait())!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", consensus.interface.fragments);
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
 
         expect((await reportProcessor.getLastCall_submitReport()).callCount).to.equal(1);
@@ -262,7 +262,7 @@ describe("HashConsensus.sol:setQuorum", function () {
           .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
 
         const receipt = (await tx2.wait())!;
-        const consensusReachedEvents = findEventsWithAbi(receipt!, "ConsensusReached", consensus.interface.fragments);
+        const consensusReachedEvents = findEventsWithInterfaces(receipt!, "ConsensusReached", [consensus.interface]);
         expect(consensusReachedEvents.length).to.equal(1);
       });
 

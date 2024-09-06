@@ -6,26 +6,16 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   AccountingOracle,
-  AccountingOracle__factory,
   Agent,
-  Agent__factory,
   DepositSecurityModule,
   HashConsensus,
-  HashConsensus__factory,
   Lido,
-  Lido__factory,
   LidoExecutionLayerRewardsVault,
-  LidoExecutionLayerRewardsVault__factory,
   MiniMeToken,
-  MiniMeToken__factory,
   NodeOperatorsRegistry,
-  NodeOperatorsRegistry__factory,
   StakingRouter,
-  StakingRouter__factory,
   Voting,
-  Voting__factory,
   WithdrawalQueue,
-  WithdrawalQueue__factory,
 } from "typechain-types";
 
 import { loadContract, LoadedContract } from "lib/contract";
@@ -91,32 +81,29 @@ interface Protocol {
 
 async function loadDeployedProtocol(state: DeploymentState) {
   return {
-    stakingRouter: await loadContract<StakingRouter>(StakingRouter__factory, getAddress(Sk.stakingRouter, state)),
-    lido: await loadContract<Lido>(Lido__factory, getAddress(Sk.appLido, state)),
-    voting: await loadContract<Voting>(Voting__factory, getAddress(Sk.appVoting, state)),
-    agent: await loadContract<Agent>(Agent__factory, getAddress(Sk.appAgent, state)),
+    stakingRouter: await loadContract<StakingRouter>("StakingRouter", getAddress(Sk.stakingRouter, state)),
+    lido: await loadContract<Lido>("Lido", getAddress(Sk.appLido, state)),
+    voting: await loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
+    agent: await loadContract<Agent>("Agent", getAddress(Sk.appAgent, state)),
     nodeOperatorsRegistry: await loadContract<NodeOperatorsRegistry>(
-      NodeOperatorsRegistry__factory,
+      "NodeOperatorsRegistry",
       getAddress(Sk.appNodeOperatorsRegistry, state),
     ),
     depositSecurityModuleAddress: getAddress(Sk.depositSecurityModule, state),
-    accountingOracle: await loadContract<AccountingOracle>(
-      AccountingOracle__factory,
-      getAddress(Sk.accountingOracle, state),
-    ),
+    accountingOracle: await loadContract<AccountingOracle>("AccountingOracle", getAddress(Sk.accountingOracle, state)),
     hashConsensusForAO: await loadContract<HashConsensus>(
-      HashConsensus__factory,
+      "HashConsensus",
       getAddress(Sk.hashConsensusForAccountingOracle, state),
     ),
     elRewardsVault: await loadContract<LidoExecutionLayerRewardsVault>(
-      LidoExecutionLayerRewardsVault__factory,
+      "LidoExecutionLayerRewardsVault",
       getAddress(Sk.executionLayerRewardsVault, state),
     ),
     withdrawalQueue: await loadContract<WithdrawalQueue>(
-      WithdrawalQueue__factory,
+      "WithdrawalQueue",
       getAddress(Sk.withdrawalQueueERC721, state),
     ),
-    ldo: await loadContract<MiniMeToken>(MiniMeToken__factory, getAddress(Sk.ldo, state)),
+    ldo: await loadContract<MiniMeToken>("MiniMeToken", getAddress(Sk.ldo, state)),
   };
 }
 
@@ -257,7 +244,7 @@ async function checkSubmitDepositReportWithdrawal(
 
   const timeToWaitTillReportWindow = nextReportEpochTimestamp - latestBlockTimestamp + secondsPerSlot;
 
-  await advanceChainTime(parseInt(timeToWaitTillReportWindow.toString()));
+  await advanceChainTime(timeToWaitTillReportWindow);
 
   const stat = await lido.getBeaconStat();
   const clBalance = BigInt(stat.depositedValidators) * ether("32");

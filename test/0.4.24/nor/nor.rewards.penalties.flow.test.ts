@@ -658,7 +658,7 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
       expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.false;
       expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
 
-      await advanceChainTime(Number(await nor.getStuckPenaltyDelay()) + 1);
+      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
 
       await nor.clearNodeOperatorPenalty(firstNodeOperatorId);
 
@@ -741,7 +741,7 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
       await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 5n);
       await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 5n);
 
-      await advanceChainTime(Number(await nor.getStuckPenaltyDelay()) + 1);
+      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
 
       expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
       expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.false;

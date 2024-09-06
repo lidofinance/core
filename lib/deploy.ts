@@ -8,7 +8,7 @@ import {
   getContractPath,
   LoadedContract,
 } from "lib/contract";
-import { ConvertibleToString, log, yl } from "lib/log";
+import { ConvertibleToString, cy, gr, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
@@ -21,21 +21,30 @@ type TxParams = {
   value?: bigint | string;
 };
 
+function logWithConstructorArgs(message: string, constructorArgs: ConvertibleToString[] = []) {
+  if (constructorArgs.length > 0) {
+    log.withArguments(`${message} with constructor args `, constructorArgs);
+  } else {
+    log(message);
+  }
+}
+
 export async function makeTx(
   contract: LoadedContract,
   funcName: string,
   args: ConvertibleToString[],
   txParams: TxParams,
 ): Promise<ContractTransactionReceipt> {
-  log.withArguments(`${yl(contract.name)}[${contract.address}].${yl(funcName)}`, args);
+  log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
-  log(`tx sent: ${tx.hash} (nonce ${tx.nonce})...`);
+  log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})...`);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed);
-  log(`tx executed: gasUsed ${gasUsed}`);
+
+  log(` Executed (gas used: ${yl(gasUsed)})`);
   log.emptyLine();
 
   return receipt;
@@ -70,19 +79,22 @@ async function deployContractType2(
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
-  log(`sent deployment tx ${tx.hash} (nonce ${tx.nonce})...`);
+
+  log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})`);
 
   const receipt = await tx.wait();
   if (!receipt) {
-    throw new Error(`Failed to wait till the tx ${tx.hash} execution`);
+    throw new Error(`Failed to wait till the transaction ${tx.hash} execution!`);
   }
 
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
-  log(`deployed at ${receipt.contractAddress} (gas used ${gasUsed})`);
+
+  log(` Deployed: ${gr(receipt.contractAddress!)} (gas used: ${yl(gasUsed)})`);
   log.emptyLine();
+
   await addContractHelperFields(contract, artifactName);
 
   return contract as DeployedContract;
@@ -94,11 +106,11 @@ export async function deployContract(
   deployer: string,
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
-  if (txParams.type === 2) {
-    return await deployContractType2(artifactName, constructorArgs, deployer);
-  } else {
-    throw Error("Tx type 1 is not supported");
+  if (txParams.type !== 2) {
+    throw new Error("Only EIP-1559 transactions (type 2) are supported");
   }
+
+  return await deployContractType2(artifactName, constructorArgs, deployer);
 }
 
 export async function deployWithoutProxy(
@@ -108,15 +120,16 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
 ): Promise<DeployedContract> {
-  log.withArguments(`Deploying ${artifactName} (without proxy) with constructor args: `, constructorArgs);
+  logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
   if (nameInState) {
+    const contractPath = await getContractPath(artifactName);
     updateObjectInState(nameInState, {
-      contract: await getContractPath(artifactName),
+      contract: contractPath,
       [addressFieldName]: contract.address,
-      constructorArgs: constructorArgs,
+      constructorArgs,
     });
   }
 
@@ -129,7 +142,8 @@ export async function deployImplementation(
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
 ): Promise<DeployedContract> {
-  log.withArguments(`Deploying implementation for proxy of ${artifactName} with constructor args: `, constructorArgs);
+  logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)}`, constructorArgs);
+
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
   updateObjectInState(nameInState, {
@@ -150,19 +164,20 @@ export async function deployBehindOssifiableProxy(
   constructorArgs: ConvertibleToString[] = [],
   implementation: null | string = null,
 ) {
-  if (implementation === null) {
-    log.withArguments(`Deploying implementation for proxy of ${artifactName} with constructor args: `, constructorArgs);
+  if (implementation !== null) {
+    log(`Using pre-deployed implementation of ${yl(artifactName)}: ${cy(implementation)}`);
+  } else {
+    logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)} (with proxy)`, constructorArgs);
     const contract = await deployContract(artifactName, constructorArgs, deployer);
     implementation = contract.address;
-  } else {
-    log(`Using pre-deployed implementation of ${artifactName}: ${implementation}`);
   }
 
   const proxyConstructorArgs = [implementation, proxyOwner, "0x"];
   log.withArguments(
-    `Deploying ${PROXY_CONTRACT_NAME} for ${artifactName} with constructor args: `,
+    `Deploying ${yl(PROXY_CONTRACT_NAME)} for ${yl(artifactName)} with constructor args `,
     proxyConstructorArgs,
   );
+
   const proxy = await deployContract(PROXY_CONTRACT_NAME, proxyConstructorArgs, deployer);
 
   if (nameInState) {
@@ -190,6 +205,11 @@ export async function updateProxyImplementation(
   proxyOwner: string,
   constructorArgs: unknown[],
 ) {
+  logWithConstructorArgs(
+    `Upgrading proxy ${cy(proxyAddress)} to new implementation: ${yl(artifactName)}`,
+    constructorArgs as ConvertibleToString[],
+  );
+
   const implementation = await deployContract(artifactName, constructorArgs, proxyOwner);
 
   const proxy = await getContractAt(PROXY_CONTRACT_NAME, proxyAddress);

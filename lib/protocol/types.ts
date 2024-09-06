@@ -20,6 +20,7 @@ import {
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
   WithdrawalVault,
+  WstETH,
 } from "typechain-types";
 
 export type ProtocolNetworkItems = {
@@ -41,6 +42,7 @@ export type ProtocolNetworkItems = {
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
+  wstETH: string;
   // aragon contracts
   kernel: string;
   acl: string;
@@ -69,6 +71,7 @@ export interface ContractTypes {
   ACL: ACL;
   HashConsensus: HashConsensus;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
+  WstETH: WstETH;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -93,6 +96,7 @@ export type CoreContracts = {
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
+  wstETH: LoadedContract<WstETH>;
 };
 
 export type AragonContracts = {
@@ -111,10 +115,15 @@ export type HashConsensusContracts = {
   hashConsensus: LoadedContract<HashConsensus>;
 };
 
+export type WstETHContracts = {
+  wstETH: LoadedContract<WstETH>;
+};
+
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
   AragonContracts &
   StakingModuleContracts &
-  HashConsensusContracts;
+  HashConsensusContracts &
+  WstETHContracts;
 
 export type ProtocolSigners = {
   agent: string;

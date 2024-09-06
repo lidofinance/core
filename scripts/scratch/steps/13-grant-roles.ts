@@ -5,15 +5,13 @@ import { makeTx } from "lib/deploy";
 import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
 
-async function main() {
-  log.scriptStart(__filename);
+export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
   const lidoAddress = state[Sk.appLido].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const gateSealAddress = state.gateSeal.address;
-
   const burnerAddress = state[Sk.burner].address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
@@ -21,9 +19,7 @@ async function main() {
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
-  //
-  // === StakingRouter
-  //
+  // StakingRouter
   const stakingRouter = await getContractAt("StakingRouter", stakingRouterAddress);
   await makeTx(
     stakingRouter,
@@ -49,11 +45,8 @@ async function main() {
     [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), lidoAddress],
     { from: deployer },
   );
-  log.wideSplitter();
 
-  //
-  // === ValidatorsExitBusOracle
-  //
+  // ValidatorsExitBusOracle
   if (gateSealAddress) {
     const validatorsExitBusOracle = await getContractAt("ValidatorsExitBusOracle", validatorsExitBusOracleAddress);
     await makeTx(
@@ -62,14 +55,12 @@ async function main() {
       [await validatorsExitBusOracle.getFunction("PAUSE_ROLE")(), gateSealAddress],
       { from: deployer },
     );
-    log.wideSplitter();
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
+    log.emptyLine();
   }
 
-  //
-  // === WithdrawalQueue
-  //
+  // WithdrawalQueue
   const withdrawalQueue = await getContractAt("WithdrawalQueueERC721", withdrawalQueueAddress);
   if (gateSealAddress) {
     await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.getFunction("PAUSE_ROLE")(), gateSealAddress], {
@@ -77,21 +68,21 @@ async function main() {
     });
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalQueue`);
+    log.emptyLine();
   }
+
   await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.getFunction("FINALIZE_ROLE")(), lidoAddress], {
     from: deployer,
   });
+
   await makeTx(
     withdrawalQueue,
     "grantRole",
     [await withdrawalQueue.getFunction("ORACLE_ROLE")(), accountingOracleAddress],
     { from: deployer },
   );
-  log.wideSplitter();
 
-  //
-  // === Burner
-  //
+  // Burner
   const burner = await getContractAt("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
   await makeTx(
@@ -100,13 +91,4 @@ async function main() {
     [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), nodeOperatorsRegistryAddress],
     { from: deployer },
   );
-
-  log.scriptFinish(__filename);
 }
-
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });

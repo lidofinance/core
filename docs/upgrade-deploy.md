@@ -23,9 +23,11 @@ postTokenRebaseReceiver=<PUT-YOU-VALUE> \
 GAS_MAX_FEE=100 GAS_PRIORITY_FEE=2 \
 DEPLOYER=<PUT-YOU-VALUE> \
 RPC_URL=<PUT-YOU-VALUE> \
-yarn hardhat --network sepolia run --no-compile scripts/upgrade/deploy-locator.ts
+STEPS_FILE=scripts/upgrade/steps.json \
+yarn hardhat --network sepolia run --no-compile scripts/utils/migrate.ts
 ```
 
 specifying require values under `<PUT-YOU-VALUE>`.
 
-Names of env variables specifying new addresses (e.g. `postTokenRebaseReceiver`) correspond to immutables names of `LidoLocator` contract.
+Names of env variables specifying new addresses (e.g. `postTokenRebaseReceiver`) correspond to immutables names of
+`LidoLocator` contract.

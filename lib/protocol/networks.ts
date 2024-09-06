@@ -1,14 +1,26 @@
 import * as process from "node:process";
 
+import hre from "hardhat";
+
 import { log } from "lib";
 
 import { ProtocolNetworkItems } from "./types";
 
-export async function parseLocalDeploymentJson() {
+// If we are running in Hardhat without fork, we need to deploy the contracts from scratch deploy first to run integration tests
+export function isNonForkingHardhatNetwork() {
+  const networkName = hre.network.name;
+  if (networkName === "hardhat") {
+    const networkConfig = hre.config.networks[networkName];
+    return !networkConfig.forking?.enabled;
+  }
+  return false;
+}
+
+export async function parseDeploymentJson(name: string) {
   try {
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore - file is missing out of the box, that's why we need to catch the error
-    return await import("../../deployed-local.json");
+    return await import(`../../deployed-${name}.json`);
   } catch (e) {
     log.error(e as Error);
     throw new Error("Failed to parse deployed-local.json. Did you run scratch deploy?");
@@ -19,6 +31,7 @@ export class ProtocolNetworkConfig {
   constructor(
     public readonly env: Record<keyof ProtocolNetworkItems, string>,
     public readonly defaults: Record<keyof ProtocolNetworkItems, string>,
+    public readonly source: string,
   ) {}
 
   get(key: keyof ProtocolNetworkItems): string {
@@ -55,41 +68,47 @@ const defaultEnv = {
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
 } as ProtocolNetworkItems;
 
-const getPrefixedEnv = (prefix: string, obj: Record<string, string>): Record<string, string> =>
-  Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, `${prefix}_${value}`]));
+const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
+  Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, `${prefix}_${value}`])) as ProtocolNetworkItems;
 
-const getDefaults = (obj: Record<string, string>): Record<string, string> =>
-  Object.fromEntries(Object.entries(obj).map(([key]) => [key, ""]));
+const getDefaults = (obj: ProtocolNetworkItems) =>
+  Object.fromEntries(Object.entries(obj).map(([key]) => [key, ""])) as ProtocolNetworkItems;
+
+async function getLocalNetworkConfig(network: string, source: string): Promise<ProtocolNetworkConfig> {
+  const config = await parseDeploymentJson(network);
+  const defaults: Record<keyof ProtocolNetworkItems, string> = {
+    ...getDefaults(defaultEnv),
+    locator: config["lidoLocator"].proxy.address,
+    agentAddress: config["app:aragon-agent"].proxy.address,
+    votingAddress: config["app:aragon-voting"].proxy.address,
+    easyTrackAddress: config["app:aragon-agent"].proxy.address,
+    sdvt: config["app:node-operators-registry"].proxy.address,
+  };
+  return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
+}
+
+async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
+  const defaults: Record<keyof ProtocolNetworkItems, string> = {
+    ...getDefaults(defaultEnv),
+    locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
+    agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
+    votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
+    easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
+  };
+  return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
+}
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
-  const defaults = getDefaults(defaultEnv) as Record<keyof ProtocolNetworkItems, string>;
-
   switch (network) {
-    case "local": {
-      const config = await parseLocalDeploymentJson();
-      return new ProtocolNetworkConfig(getPrefixedEnv("LOCAL", defaultEnv), {
-        ...defaults,
-        locator: config["lidoLocator"].proxy.address,
-        agentAddress: config["app:aragon-agent"].proxy.address,
-        votingAddress: config["app:aragon-voting"].proxy.address,
-        // Overrides for local development
-        easyTrackAddress: config["app:aragon-agent"].proxy.address,
-        sdvt: config["app:node-operators-registry"].proxy.address,
-      });
-    }
-
+    case "local":
+      return getLocalNetworkConfig(network, "fork");
     case "mainnet-fork":
+      return getMainnetForkNetworkConfig();
     case "hardhat":
-      return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), {
-        ...defaults,
-        locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        // https://docs.lido.fi/deployed-contracts/#dao-contracts
-        agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-        votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
-        // https://docs.lido.fi/deployed-contracts/#easy-track
-        easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
-      });
-
+      if (isNonForkingHardhatNetwork()) {
+        return getLocalNetworkConfig(network, "scratch");
+      }
+      return getMainnetForkNetworkConfig();
     default:
       throw new Error(`Network ${network} is not supported`);
   }

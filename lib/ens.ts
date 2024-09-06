@@ -1,9 +1,8 @@
-import chalk from "chalk";
 import { ethers } from "hardhat";
 
 import { ENS } from "typechain-types";
 
-import { LoadedContract, log, makeTx, streccak } from "lib";
+import { cy, LoadedContract, log, makeTx, streccak, yl } from "lib";
 
 // Default parentName is "eth"
 export async function assignENSName(
@@ -14,17 +13,17 @@ export async function assignENSName(
   assigneeAddress: string,
   assigneeDesc: string,
 ) {
-  const assigneeFullDesc = assigneeDesc ? `${assigneeDesc} at ${assigneeAddress}` : assigneeAddress;
-  log(`Assigning ENS name '${labelName}.${parentName}' to ${assigneeFullDesc}...`);
+  const assigneeFullDesc = assigneeDesc ? `${yl(assigneeDesc)} at ${cy(assigneeAddress)}` : `${cy(assigneeAddress)}`;
+  log(`Assigning ENS name ${yl(`${labelName}.${parentName}`)} to ${assigneeFullDesc}...`);
 
   const parentNode = ethers.namehash(parentName);
   const labelHash = streccak(labelName);
   const nodeName = `${labelName}.${parentName}`;
   const node = ethers.namehash(nodeName);
 
-  log(`Node: ${chalk.yellow(nodeName)} (${node})`);
-  log(`Parent node: ${chalk.yellow(parentName)} (${parentNode})`);
-  log(`Label: ${chalk.yellow(labelName)} (${labelHash})`);
+  log(`Node: ${yl(nodeName)} (${cy(node)})`);
+  log(`Parent node: ${yl(parentName)} (${cy(parentNode)})`);
+  log(`Label: ${yl(labelName)} (${cy(labelHash)})`);
 
   let receipt;
   if ((await ens.owner(node)) === owner) {
