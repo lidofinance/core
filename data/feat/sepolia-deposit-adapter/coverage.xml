@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2872"  lines-covered="2755"  line-rate="0.9593"  branches-valid="1272"  branches-covered="1194"  branch-rate="0.9387000000000001"  timestamp="1725615897311" complexity="0" version="0.1">
+<coverage lines-valid="2872"  lines-covered="2755"  line-rate="0.9593"  branches-valid="1272"  branches-covered="1194"  branch-rate="0.9387000000000001"  timestamp="1725617210500" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -5160,8 +5160,11 @@
 	<classes>
 		<class name="SepoliaDepositAdapter.sol"  filename="contracts/testnets/sepolia/SepoliaDepositAdapter.sol"  line-rate="0"  branch-rate="0" >
 		<methods>
-			<method name="initializeOwnable"  hits="0"  signature="()V" >
-				<lines><line number="50"  hits="0" /></lines>
+			<method name="constructor"  hits="0"  signature="()V" >
+				<lines><line number="48"  hits="0" /></lines>
+			</method>
+			<method name="initialize"  hits="0"  signature="()V" >
+				<lines><line number="52"  hits="0" /></lines>
 			</method>
 			<method name="get_deposit_root"  hits="0"  signature="()V" >
 				<lines><line number="59"  hits="0" /></lines>
@@ -5180,10 +5183,10 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="51"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="52"  hits="0"  branch="false" />
-			<line number="54"  hits="0"  branch="false" />
+			<line number="49"  hits="0"  branch="false" />
+			<line number="53"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="55"  hits="0"  branch="false" />
+			<line number="56"  hits="0"  branch="false" />
 			<line number="60"  hits="0"  branch="false" />
 			<line number="64"  hits="0"  branch="false" />
 			<line number="68"  hits="0"  branch="false" />
