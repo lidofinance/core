@@ -32,6 +32,7 @@ contract VaultHub is AccessControlEnumerable, IHub {
         /// TODO: figure out the fees interaction with the cap
         uint256 capShares;
         uint256 mintedShares; // TODO: optimize
+        uint256 minimumBondShareBP;
     }
 
     VaultSocket[] public vaults;
@@ -47,40 +48,43 @@ contract VaultHub is AccessControlEnumerable, IHub {
 
     function addVault(
         IConnected _vault,
-        uint256 _capShares
+        uint256 _capShares,
+        uint256 _minimumBondShareBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         // we should add here a register of vault implementations
         // and deploy proxies directing to these
 
-        // TODO: ERC-165 check?
-
         if (vaultIndex[_vault].vault != IConnected(address(0))) revert("ALREADY_EXIST"); // TODO: custom error
 
-        VaultSocket memory vr = VaultSocket(IConnected(_vault), _capShares, 0);
+        VaultSocket memory vr = VaultSocket(IConnected(_vault), _capShares, 0, _minimumBondShareBP);
         vaults.push(vr); //TODO: uint256 and safecast
         vaultIndex[_vault] = vr;
 
         // TODO: emit
     }
 
+    /// @notice mint shares backed by vault external balance to the receiver address
+    /// @param _receiver address of the receiver
+    /// @param _shares amount of shares to mint
+    /// @return totalEtherToLock total amount of ether that should be locked
     function mintSharesBackedByVault(
         address _receiver,
-        uint256 _amountOfShares
-    ) external returns (uint256 totalEtherToBackTheVault) {
+        uint256 _shares
+    ) external returns (uint256 totalEtherToLock) {
         IConnected vault = IConnected(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
-        uint256 mintedShares = socket.mintedShares + _amountOfShares;
+        uint256 mintedShares = socket.mintedShares + _shares;
         if (mintedShares >= socket.capShares) revert("CAP_REACHED");
 
-        totalEtherToBackTheVault = STETH.getPooledEthByShares(mintedShares);
-        if (totalEtherToBackTheVault * BPS_IN_100_PERCENT >= (BPS_IN_100_PERCENT - vault.BOND_BP()) * vault.value()) {
+        totalEtherToLock = STETH.getPooledEthByShares(mintedShares) * BPS_IN_100_PERCENT / (BPS_IN_100_PERCENT - socket.minimumBondShareBP);
+        if (totalEtherToLock >= vault.value()) {
             revert("MAX_MINT_RATE_REACHED");
         }
 
         vaultIndex[vault].mintedShares = mintedShares; // SSTORE
 
-        STETH.mintExternalShares(_receiver, _amountOfShares);
+        STETH.mintExternalShares(_receiver, _shares);
 
         // TODO: events
 
@@ -99,8 +103,6 @@ contract VaultHub is AccessControlEnumerable, IHub {
         vaultIndex[vault].mintedShares = socket.mintedShares - _amountOfShares;
 
         STETH.burnExternalShares(_account, _amountOfShares);
-
-        // lockedBalance
 
         // TODO: events
         // TODO: invariants
@@ -149,19 +151,17 @@ contract VaultHub is AccessControlEnumerable, IHub {
         // for each vault
         lockedEther = new uint256[](vaults.length);
 
-        uint256 BPS_BASE = 10000;
-
         for (uint256 i = 0; i < vaults.length; ++i) {
             VaultSocket memory socket = vaults[i];
             uint256 externalEther = socket.mintedShares * shareRate.eth / shareRate.shares;
 
-            lockedEther[i] = externalEther * BPS_BASE / (BPS_BASE - socket.vault.BOND_BP());
+            lockedEther[i] = externalEther * BPS_IN_100_PERCENT / (BPS_IN_100_PERCENT - socket.minimumBondShareBP);
         }
 
         // here we need to pre-calculate the new locked balance for each vault
         // factoring in stETH APR, treasury fee, optionality fee and NO fee
 
-        // rebalance fee //
+        // rebalance fee //TODO: implement
 
         // fees is calculated based on the current `balance.locked` of the vault
         // minting new fees as new external shares

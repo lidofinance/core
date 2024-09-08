@@ -16,9 +16,6 @@ struct Report {
 }
 
 contract LiquidStakingVault is StakingVault, ILiquid, IConnected {
-    uint256 internal constant BPS_IN_100_PERCENT = 10000;
-
-    uint256 public immutable BOND_BP;
     IHub public immutable HUB;
 
     Report public lastReport;
@@ -31,11 +28,9 @@ contract LiquidStakingVault is StakingVault, ILiquid, IConnected {
     constructor(
         address _owner,
         address _vaultController,
-        address _depositContract,
-        uint256 _bondBP
+        address _depositContract
     ) StakingVault(_owner, _depositContract) {
         HUB = IHub(_vaultController);
-        BOND_BP = _bondBP;
     }
 
     function value() public view override returns (uint256) {
@@ -76,9 +71,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, IConnected {
     }
 
     function mintStETH(address _receiver, uint256 _amountOfShares) external onlyOwner {
-        uint256 newLocked =
-            uint96((HUB.mintSharesBackedByVault(_receiver, _amountOfShares) * BPS_IN_100_PERCENT) /
-            (BPS_IN_100_PERCENT - BOND_BP)); //TODO: SafeCast
+        uint256 newLocked = HUB.mintSharesBackedByVault(_receiver, _amountOfShares);
 
         if (newLocked > locked) {
             locked = newLocked;

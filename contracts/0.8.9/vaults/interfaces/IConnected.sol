@@ -4,9 +4,6 @@
 pragma solidity 0.8.9;
 
 interface IConnected {
-    function BOND_BP() external view returns (uint256);
-
-
     function lastReport() external view returns (
         uint128 value,
         int128 netCashFlow
