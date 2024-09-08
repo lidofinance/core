@@ -46,8 +46,7 @@ contract AccountingOracle__MockForLegacyOracle {
             data.withdrawalFinalizationBatches,
             data.simulatedShareRate,
             new uint256[](0),
-            new uint256[](0),
-            new uint256[](0)
+            new int256[](0)
             )
         );
     }

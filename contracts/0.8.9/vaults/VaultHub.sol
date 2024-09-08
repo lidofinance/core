@@ -74,7 +74,7 @@ contract VaultHub is AccessControlEnumerable, IHub {
         if (mintedShares >= socket.capShares) revert("CAP_REACHED");
 
         totalEtherToBackTheVault = STETH.getPooledEthByShares(mintedShares);
-        if (totalEtherToBackTheVault * BPS_IN_100_PERCENT >= (BPS_IN_100_PERCENT - vault.BOND_BP()) * vault.getValue()) {
+        if (totalEtherToBackTheVault * BPS_IN_100_PERCENT >= (BPS_IN_100_PERCENT - vault.BOND_BP()) * vault.value()) {
             revert("MAX_MINT_RATE_REACHED");
         }
 
@@ -184,15 +184,13 @@ contract VaultHub is AccessControlEnumerable, IHub {
     }
 
     function _updateVaults(
-        uint256[] memory clBalances,
-        uint256[] memory elBalances,
-        uint256[] memory netCashFlows,
+        uint256[] memory values,
+        int256[] memory netCashFlows,
         uint256[] memory lockedEther
     ) internal {
         for(uint256 i; i < vaults.length; ++i) {
             vaults[i].vault.update(
-                clBalances[i],
-                elBalances[i],
+                values[i],
                 netCashFlows[i],
                 lockedEther[i]
             );

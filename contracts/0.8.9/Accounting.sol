@@ -157,12 +157,13 @@ struct ReportValues {
     uint256[] withdrawalFinalizationBatches;
     /// @notice share rate that was simulated by oracle when the report data created (1e27 precision)
     uint256 simulatedShareRate;
-    /// @notice array of aggregated balances of validators for each Lido vault
-    uint256[] clBalances;
-    /// @notice balances of Lido vaults
-    uint256[] elBalances;
-    /// @notice value of netCashFlow of each Lido vault
-    uint256[] netCashFlows;
+    /// @notice array of combined values for each Lido vault
+    ///         (sum of all the balances of Lido validators of the vault
+    ///          plus the balance of the vault itself)
+    uint256[] vaultValues;
+    /// @notice netCashFlow of each Lido vault
+    ///         (defference between deposits to and withdrawals from the vault)
+    int256[] netCashFlows;
 }
 
 /// This contract is responsible for handling oracle reports
@@ -436,8 +437,7 @@ contract Accounting is VaultHub {
         );
 
         _updateVaults(
-            _context.report.clBalances,
-            _context.report.elBalances,
+            _context.report.vaultValues,
             _context.report.netCashFlows,
             _context.update.lockedEther
         );

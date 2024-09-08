@@ -606,8 +606,7 @@ contract AccountingOracle is BaseOracle {
             data.simulatedShareRate,
             // TODO: vault values here
             new uint256[](0),
-            new uint256[](0),
-            new uint256[](0)
+            new int256[](0)
         ));
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({
