@@ -53,14 +53,14 @@ contract LiquidStakingVault is StakingVault, ILiquid {
         super.deposit();
     }
 
-    function depositKeys(
+    function createValidators(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
     ) public override(StakingVault, IStaking) {
         _mustBeHealthy();
 
-        super.depositKeys(_keysCount, _publicKeysBatch, _signaturesBatch);
+        super.createValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
     function withdraw(address _receiver, uint256 _amount) public override(IStaking, StakingVault) {

@@ -7,11 +7,19 @@ pragma solidity 0.8.9;
 import {BeaconChainDepositor} from "../BeaconChainDepositor.sol";
 import {IStaking} from "./interfaces/IStaking.sol";
 
+// TODO: add NodeOperator role
+// TODO: add depositor whitelist
+// TODO: trigger validator exit
+// TODO: add recover functions
+
+/// @title StakingVault
+/// @author folkyatina
+/// @notice Simple vault for staking. Allows to deposit ETH and create validators.
 contract StakingVault is IStaking, BeaconChainDepositor {
     address public owner;
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert("ONLY_OWNER");
+        if (msg.sender != owner) revert NotAnOwner(msg.sender);
         _;
     }
 
@@ -27,14 +35,16 @@ contract StakingVault is IStaking, BeaconChainDepositor {
     }
 
     receive() external payable virtual {
-        // emit EL reward flow
+        emit ELRewardsReceived(msg.sender, msg.value);
     }
 
+    /// @notice Deposit ETH to the vault
     function deposit() public payable virtual {
-        // emit deposit flow
+        emit Deposit(msg.sender, msg.value);
     }
 
-    function depositKeys(
+    /// @notice Create validators on the Beacon Chain
+    function createValidators(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
@@ -46,18 +56,24 @@ contract StakingVault is IStaking, BeaconChainDepositor {
             _publicKeysBatch,
             _signaturesBatch
         );
+
+        emit ValidatorsCreated(msg.sender, _keysCount);
     }
 
+    /// @notice Withdraw ETH from the vault
     function withdraw(
         address _receiver,
         uint256 _amount
     ) public virtual onlyOwner {
-        _requireNonZeroAddress(_receiver);
+        if (msg.sender == address(0)) revert ZeroAddress();
+
         (bool success, ) = _receiver.call{value: _amount}("");
-        if(!success) revert("TRANSFER_FAILED");
+        if(!success) revert TransferFailed(_receiver, _amount);
+
+        emit Withdrawal(_receiver, _amount);
     }
 
-    function _requireNonZeroAddress(address _address) private pure {
-        if (_address == address(0)) revert("ZERO_ADDRESS");
-    }
+    error NotAnOwner(address sender);
+    error ZeroAddress();
+    error TransferFailed(address receiver, uint256 amount);
 }
