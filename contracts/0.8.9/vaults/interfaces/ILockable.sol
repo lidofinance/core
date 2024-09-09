@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-interface IConnected {
+interface ILockable {
     function lastReport() external view returns (
         uint128 value,
         int128 netCashFlow

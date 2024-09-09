@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {IStaking} from "./interfaces/IStaking.sol";
 import {StakingVault} from "./StakingVault.sol";
 import {ILiquid} from "./interfaces/ILiquid.sol";
-import {IConnected} from "./interfaces/IConnected.sol";
+import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 
 struct Report {
@@ -15,7 +15,7 @@ struct Report {
     int128 netCashFlow;
 }
 
-contract LiquidStakingVault is StakingVault, ILiquid, IConnected {
+contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     IHub public immutable HUB;
 
     // TODO: unstructured storage
