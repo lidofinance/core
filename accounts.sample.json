@@ -1,0 +1,21 @@
+{
+  "eth": {
+    "dev-example": {
+      "mnemonic": "test test test test test test test test test test test junk",
+      "path": "m/44'/60'/0'/0",
+      "initialIndex": 0,
+      "count": 20
+    },
+    "fork-example": ["ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"]
+  },
+  "infura": {
+    "projectId": "INFURA_PROJECT_ID"
+  },
+  "etherscan": {
+    "apiKey": "ETHERSCAN_API_KEY"
+  },
+  "infura_ipfs": {
+    "projectId": "",
+    "projectSecret": ""
+  }
+}
