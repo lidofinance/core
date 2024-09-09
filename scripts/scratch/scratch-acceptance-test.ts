@@ -274,8 +274,7 @@ async function checkSubmitDepositReportWithdrawal(
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches,
       simulatedShareRate: 0n,
-      clBalances: [],
-      elBalances: [],
+      vaultValues: [],
       netCashFlows: [],
     });
 

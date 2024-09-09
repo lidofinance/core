@@ -345,8 +345,7 @@ const simulateReport = async (
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
       simulatedShareRate: 0n,
-      clBalances: [], // TODO: Add CL balances
-      elBalances: [], // TODO: Add EL balances
+      vaultValues: [], // TODO: Add CL balances
       netCashFlows: [], // TODO: Add net cash flows
     });
 
@@ -398,8 +397,7 @@ export const handleOracleReport = async (
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
       simulatedShareRate: 0n,
-      clBalances: [], // TODO: Add CL balances
-      elBalances: [], // TODO: Add EL balances
+      vaultValues: [], // TODO: Add EL balances
       netCashFlows: [], // TODO: Add net cash flows
     });
 
