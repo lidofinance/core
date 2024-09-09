@@ -7,8 +7,8 @@ pragma solidity 0.8.9;
 interface IStaking {
     event Deposit(address indexed sender, uint256 amount);
     event Withdrawal(address indexed receiver, uint256 amount);
-    event ValidatorsCreated(address indexed operator, uint256 number);
-    event ELRewardsReceived(address indexed sender, uint256 amount);
+    event ValidatorsTopup(address indexed operator, uint256 numberOfKeys, uint256 ethAmount);
+    event ELRewards(address indexed sender, uint256 amount);
 
     function getWithdrawalCredentials() external view returns (bytes32);
 
@@ -16,7 +16,7 @@ interface IStaking {
     receive() external payable;
     function withdraw(address receiver, uint256 etherToWithdraw) external;
 
-    function createValidators(
+    function topupValidators(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
