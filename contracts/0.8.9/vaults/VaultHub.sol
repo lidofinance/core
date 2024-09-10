@@ -18,6 +18,7 @@ interface StETH {
 
     function transferShares(address, uint256) external returns (uint256);
 }
+// TODO: add fees
 
 contract VaultHub is AccessControlEnumerable, IHub {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
@@ -106,6 +107,34 @@ contract VaultHub is AccessControlEnumerable, IHub {
 
         // TODO: events
         // TODO: invariants
+    }
+
+    function forceRebalance(ILockable _vault) external {
+        VaultSocket memory socket = _authedSocket(_vault);
+
+        // find the amount of ETH that should be moved out
+        // of the vault to rebalance it to target bond rate
+
+        uint256 mintedStETH = STETH.getPooledEthByShares(socket.mintedShares);
+        uint256 maxMintedShare =  (BPS_IN_100_PERCENT - socket.minimumBondShareBP);
+        uint256 requiredValue = mintedStETH * BPS_IN_100_PERCENT / maxMintedShare;
+        uint256 realValue = _vault.value();
+
+        if (realValue < requiredValue) {
+            // (mintedStETH - X) / (socket.vault.value() - X) == (BPS_IN_100_PERCENT - socket.minimumBondShareBP)
+            //
+            // X is amountToRebalance
+            uint256 amountToRebalance =
+                (mintedStETH * BPS_IN_100_PERCENT - maxMintedShare * realValue)
+                    / socket.minimumBondShareBP;
+
+            // TODO: add some gas compensation here
+
+            _vault.rebalance(amountToRebalance);
+        }
+
+        // events
+        // assert isHealthy
     }
 
     function forgive() external payable {

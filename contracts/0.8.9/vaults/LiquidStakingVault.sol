@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
-import {IStaking} from "./interfaces/IStaking.sol";
 import {StakingVault} from "./StakingVault.sol";
 import {ILiquid} from "./interfaces/ILiquid.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
@@ -28,10 +27,10 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     constructor(
         address _owner,
-        address _vaultController,
+        address _vaultHub,
         address _depositContract
     ) StakingVault(_owner, _depositContract) {
-        HUB = IHub(_vaultController);
+        HUB = IHub(_vaultHub);
     }
 
     function value() public view override returns (uint256) {
@@ -104,13 +103,19 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         HUB.burnSharesBackedByVault(_from, _amountOfShares);
     }
 
-    function shrink(uint256 _amountOfETH) external onlyRole(VAULT_MANAGER_ROLE) {
+    function rebalance(uint256 _amountOfETH) external {
         require(_amountOfETH > 0, "ZERO_AMOUNT");
         require(address(this).balance >= _amountOfETH, "NOT_ENOUGH_BALANCE");
 
-        // TODO: check rounding here
-        // mint some stETH in Lido v2 and burn it on the vault
-        HUB.forgive{value: _amountOfETH}();
+        if (hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
+           (!isHealthy() && msg.sender == address(HUB))) { // force rebalance
+            // TODO: check that amount of ETH is minimal
+            // TODO: check rounding here
+            // mint some stETH in Lido v2 and burn it on the vault
+            HUB.forgive{value: _amountOfETH}();
+        } else {
+            revert("AUTH:REBALANCE");
+        }
     }
 
     function _mustBeHealthy() private view {

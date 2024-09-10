@@ -13,4 +13,5 @@ interface ILockable {
     function netCashFlow() external view returns (int256);
 
     function update(uint256 value, int256 ncf, uint256 locked) external;
+    function rebalance(uint256 amountOfETH) external;
 }
