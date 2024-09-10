@@ -8,7 +8,8 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {VaultHub} from "./vaults/VaultHub.sol";
 
-import "hardhat/console.sol";
+// TODO: remove
+//import "hardhat/console.sol";
 
 interface IOracleReportSanityChecker {
     function checkAccountingOracleReport(
@@ -371,7 +372,8 @@ contract Accounting is VaultHub {
     ) internal pure returns (ShareRate memory shareRate, uint256 sharesToMintAsFees) {
         shareRate.shares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
 
-        console.log("shareRate.shares: ", shareRate.shares);
+//        TODO: remove
+//        console.log("shareRate.shares: ", shareRate.shares);
 
         shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
 
@@ -391,7 +393,8 @@ contract Accounting is VaultHub {
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
 
-            console.log("sharesToMintAsFees: ", sharesToMintAsFees);
+//        TODO: remove
+//            console.log("sharesToMintAsFees: ", sharesToMintAsFees);
         } else {
             uint256 totalPenalty = _calculated.principalClBalance - unifiedBalance;
             shareRate.eth -= totalPenalty;
