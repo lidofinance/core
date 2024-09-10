@@ -14,9 +14,8 @@ export GAS_PRIORITY_FEE=1
 export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-${NETWORK}.json"
-export NETWORK_STATE_DEFAULTS_FILE="scripts/scratch/deployed-testnet-defaults.json"
 
-bash scripts/dao-deploy.sh
+bash scripts/dao-upgrade.sh
 
 # Need this to get sure the last transactions are mined
 yarn hardhat --network $NETWORK run --no-compile scripts/scratch/send-hardhat-mine.ts

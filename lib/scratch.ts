@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 import { ethers } from "hardhat";
@@ -5,40 +6,40 @@ import { ethers } from "hardhat";
 import { log } from "./log";
 import { resetStateFile } from "./state-file";
 
+const deployedSteps: string[] = [];
+
 export async function deployScratchProtocol(networkName: string): Promise<void> {
+  const stepsFile = process.env.STEPS_FILE || "scratch/steps.json";
+  const steps = loadSteps(stepsFile);
+
+  if (steps.every((step) => deployedSteps.includes(step))) {
+    return; // All steps have been deployed
+  }
+
   await resetStateFile(networkName);
 
-  const steps = [
-    "scratch/steps/00-populate-deploy-artifact-from-env",
-    "scratch/steps/01-deploy-deposit-contract",
-    "scratch/steps/02-deploy-aragon-env",
-    "scratch/steps/03-deploy-template-and-app-bases",
-    "scratch/steps/04-register-ens-domain",
-    "scratch/steps/05-deploy-apm",
-    "scratch/steps/06-create-app-repos",
-    "scratch/steps/07-deploy-dao",
-    "scratch/steps/08-issue-tokens",
-    "scratch/steps/09-deploy-non-aragon-contracts",
-    "scratch/steps/10-gate-seal",
-    "scratch/steps/11-finalize-dao",
-    "scratch/steps/12-initialize-non-aragon-contracts",
-    "scratch/steps/13-grant-roles",
-    "scratch/steps/14-plug-curated-staking-module",
-    "scratch/steps/15-transfer-roles",
-  ];
-
   for (const step of steps) {
-    const migrationFile = path.resolve(process.cwd(), `scripts/${step}`);
-    try {
-      await applyMigrationScript(migrationFile);
+    const migrationFile = resolveMigrationFile(step);
 
-      await ethers.provider.send("evm_mine", []); // Persist the state after each step
-    } catch (error) {
-      log.error(`Migration failed: ${migrationFile}`, error as Error);
-      process.exit(1);
-    }
+    await applyMigrationScript(migrationFile);
+    await ethers.provider.send("evm_mine", []); // Persist the state after each step
+
+    deployedSteps.push(step);
   }
 }
+
+type StepsFile = {
+  steps: string[];
+};
+
+export const loadSteps = (stepsFile: string): string[] => {
+  const stepsPath = path.resolve(process.cwd(), `scripts/${stepsFile}`);
+  return (JSON.parse(fs.readFileSync(stepsPath, "utf8")) as StepsFile).steps;
+};
+
+export const resolveMigrationFile = (step: string): string => {
+  return path.resolve(process.cwd(), `scripts/${step}`);
+};
 
 /**
  * Executes a migration script.
@@ -53,7 +54,12 @@ export async function applyMigrationScript(migrationFile: string): Promise<void>
     throw new Error(`Migration file ${migrationFile} does not export a 'main' function!`);
   }
 
-  log.scriptStart(migrationFile);
-  await main();
-  log.scriptFinish(migrationFile);
+  try {
+    log.scriptStart(migrationFile);
+    await main();
+    log.scriptFinish(migrationFile);
+  } catch (error) {
+    log.error("Migration failed:", error as Error);
+    throw error;
+  }
 }

@@ -4,7 +4,6 @@ import { ethers } from "hardhat";
 import { deployImplementation, getContractAt, LoadedContract, log, readNetworkState, Sk } from "lib";
 
 const VIEW_NAMES_AND_CTOR_ARGS = [
-  // As view names on LidoLocator
   "accountingOracle",
   "depositSecurityModule",
   "elRewardsVault",
@@ -21,12 +20,9 @@ const VIEW_NAMES_AND_CTOR_ARGS = [
   "oracleDaemonConfig",
 ];
 
-/////////////// GLOBAL VARIABLES ///////////////
 const g_newAddresses: { [key: string]: string } = {};
 
-/////////////// GLOBAL VARIABLES ///////////////
-
-async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract) {
+async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract): Promise<string> {
   const valueFromEnv = process.env[name];
   if (valueFromEnv) {
     if (!ethers.isAddress(valueFromEnv)) {
@@ -39,9 +35,22 @@ async function getNewFromEnvOrCurrent(name: string, locator: LoadedContract) {
   return await locator.getFunction(name).staticCall();
 }
 
-async function main() {
-  log.scriptStart(__filename);
+async function getConstructorArgs(locator: LoadedContract): Promise<string[]> {
+  return await Promise.all(VIEW_NAMES_AND_CTOR_ARGS.map((name) => getNewFromEnvOrCurrent(name, locator)));
+}
 
+async function deployNewLocator(deployer: string, ctorArgs: string[]): Promise<LoadedContract> {
+  return await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [ctorArgs]);
+}
+
+async function verifyConstructorArgs(newLocator: LoadedContract, locator: LoadedContract): Promise<void> {
+  for (const viewName of VIEW_NAMES_AND_CTOR_ARGS) {
+    const actual = await newLocator.getFunction(viewName).staticCall();
+    assert.equal(actual, await getNewFromEnvOrCurrent(viewName, locator));
+  }
+}
+
+export async function main(): Promise<void> {
   const deployer = (await ethers.provider.getSigner()).address;
   assert.equal(process.env.DEPLOYER, deployer);
 
@@ -49,35 +58,16 @@ async function main() {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const locator = await getContractAt("LidoLocator", locatorAddress);
 
-  const newOrCurrent = async (name: string) => {
-    return await getNewFromEnvOrCurrent(name, locator);
-  };
-  const ctorArgs = await Promise.all(VIEW_NAMES_AND_CTOR_ARGS.map(newOrCurrent));
-
+  const ctorArgs = await getConstructorArgs(locator);
   if (Object.keys(g_newAddresses).length === 0) {
     log(`No new addresses specified: exiting doing nothing`);
     process.exit(0);
   }
-  log.splitter();
+
   for (const name in g_newAddresses) {
-    log(`(!) "${name}" new address: ${g_newAddresses[name]}`);
-  }
-  log.splitter();
-
-  const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [ctorArgs]);
-
-  // To check order in ctor args was not broken
-  for (const viewName of VIEW_NAMES_AND_CTOR_ARGS) {
-    const actual = await newLocator.getFunction(viewName).staticCall();
-    assert.equal(actual, await getNewFromEnvOrCurrent(viewName, locator));
+    log.warning(`"${name}" new address: ${g_newAddresses[name]}`);
   }
 
-  log.scriptFinish(__filename);
+  const newLocator = await deployNewLocator(deployer, ctorArgs);
+  await verifyConstructorArgs(newLocator, locator);
 }
-
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });

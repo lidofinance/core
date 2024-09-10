@@ -7,6 +7,7 @@ export {
   OracleReportPushOptions,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  getReportTimeElapsed,
   waitNextAvailableReportTime,
   handleOracleReport,
   submitReport,

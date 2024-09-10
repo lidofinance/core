@@ -231,7 +231,7 @@ Requires a local deployment to be running on port `8555` and `deployed-local.jso
 (automatically generated during the scratch deployment).
 
 ```bash
-yarn test:integration:fork:local
+yarn test:integration:fork:scratch
 ```
 
 #### Foundry tests
