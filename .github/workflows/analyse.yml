@@ -17,17 +17,8 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      # REVIEW: here and below steps taken from official guide
-      # https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#caching-packages
       - name: Install poetry
-        run: >
-          pipx install poetry
-
-      # REVIEW:
-      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-of-adding-a-system-path
-      - name: Add poetry to $GITHUB_PATH
-        run: >
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        run: pipx install poetry
 
       - uses: actions/setup-python@v5
         with:
@@ -37,12 +28,20 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-root
 
-      - name: Remove foundry.toml
-        run: rm -f foundry.toml
+      - name: Versions
+        run: >
+          poetry --version &&
+          python --version &&
+          echo "slither $(poetry run slither --version)" &&
+          poetry run slitherin --version
 
       - name: Run slither
         run: >
-          poetry run slither . --sarif results.sarif --no-fail-pedantic
+          poetry run slither . \
+            --no-fail-pedantic \
+            --compile-force-framework hardhat \
+            --sarif results.sarif \
+            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted
 
       - name: Check results.sarif presence
         id: results

@@ -25,6 +25,7 @@ const LONG_LINE_LENGTH = 40;
 
 export const OK = gr("[✓]");
 export const NOT_OK = rd("[×]");
+export const WARN = yl("[!]");
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
@@ -74,9 +75,9 @@ log.success = (...args: ConvertibleToString[]) => console.log(OK, ...args);
 
 log.error = (...args: ConvertibleToString[]) => console.error(NOT_OK, ...args);
 
-log.splitter = (...args: ConvertibleToString[]) => _splitter(LINE_LENGTH, ...args);
+log.warning = (...args: ConvertibleToString[]) => console.error(WARN, ...args);
 
-log.wideSplitter = (...args: ConvertibleToString[]) => _splitter(LONG_LINE_LENGTH, ...args);
+log.splitter = (...args: ConvertibleToString[]) => _splitter(LONG_LINE_LENGTH, ...args);
 
 log.table = (...args: ConvertibleToString[]) => console.table(...args);
 
@@ -103,9 +104,9 @@ log.withArguments = (firstLine: string, args: ConvertibleToString[]) => {
 };
 
 log.scriptStart = (filename: string) => {
-  log.wideSplitter();
+  log.splitter();
   log(`Started script: ${bl(path.basename(filename))}`);
-  log.wideSplitter();
+  log.splitter();
   log.emptyLine();
 };
 
@@ -124,12 +125,6 @@ log.debug = (title: string, records: Record<string, ConvertibleToString>) => {
 
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
-  log.emptyLine();
-};
-
-log.warning = (title: string, ...args: ConvertibleToString[]): void => {
-  log(chalk.bold.yellow(title));
-  args.forEach((arg) => log(arg));
   log.emptyLine();
 };
 

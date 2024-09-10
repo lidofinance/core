@@ -1,0 +1,3 @@
+{
+  "steps": ["upgrade/steps/00-deploy-locator"]
+}

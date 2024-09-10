@@ -244,7 +244,7 @@ async function checkSubmitDepositReportWithdrawal(
 
   const timeToWaitTillReportWindow = nextReportEpochTimestamp - latestBlockTimestamp + secondsPerSlot;
 
-  await advanceChainTime(parseInt(timeToWaitTillReportWindow.toString()));
+  await advanceChainTime(timeToWaitTillReportWindow);
 
   const stat = await lido.getBeaconStat();
   const clBalance = BigInt(stat.depositedValidators) * ether("32");

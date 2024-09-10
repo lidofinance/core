@@ -18,14 +18,11 @@ if [[ -z "${NETWORK}" ]]; then
 fi
 echo "NETWORK is $NETWORK"
 
-rm -f "${NETWORK_STATE_FILE}"
-cp "${NETWORK_STATE_DEFAULTS_FILE}" "${NETWORK_STATE_FILE}"
-
 # Compile contracts
 yarn compile
 
 # Generic migration steps file
-export STEPS_FILE=scratch/steps.json
+export STEPS_FILE=upgrade/steps.json
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
 

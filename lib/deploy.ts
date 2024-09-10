@@ -21,6 +21,14 @@ type TxParams = {
   value?: bigint | string;
 };
 
+function logWithConstructorArgs(message: string, constructorArgs: ConvertibleToString[] = []) {
+  if (constructorArgs.length > 0) {
+    log.withArguments(`${message} with constructor args `, constructorArgs);
+  } else {
+    log(message);
+  }
+}
+
 export async function makeTx(
   contract: LoadedContract,
   funcName: string,
@@ -112,11 +120,7 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
 ): Promise<DeployedContract> {
-  if (constructorArgs.length > 0) {
-    log.withArguments(`Deploying: ${yl(artifactName)} (without proxy) with constructor args `, constructorArgs);
-  } else {
-    log(`Deploying: ${yl(artifactName)} (without proxy)`);
-  }
+  logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
@@ -138,11 +142,8 @@ export async function deployImplementation(
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
 ): Promise<DeployedContract> {
-  if (constructorArgs.length > 0) {
-    log.withArguments(`Deploying implementation: ${yl(artifactName)} with constructor args `, constructorArgs);
-  } else {
-    log(`Deploying implementation: ${yl(artifactName)}`);
-  }
+  logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)}`, constructorArgs);
+
   const contract = await deployContract(artifactName, constructorArgs, deployer);
 
   updateObjectInState(nameInState, {
@@ -165,22 +166,15 @@ export async function deployBehindOssifiableProxy(
 ) {
   if (implementation !== null) {
     log(`Using pre-deployed implementation of ${yl(artifactName)}: ${cy(implementation)}`);
-  } else if (constructorArgs.length > 0) {
-    log.withArguments(
-      `Deploying implementation: ${yl(artifactName)} (with proxy) with constructor args: `,
-      constructorArgs,
-    );
-    const contract = await deployContract(artifactName, constructorArgs, deployer);
-    implementation = contract.address;
   } else {
-    log(`Deploying implementation: ${yl(artifactName)} (with proxy)`);
-    const contract = await deployContract(artifactName, [], deployer);
+    logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)} (with proxy)`, constructorArgs);
+    const contract = await deployContract(artifactName, constructorArgs, deployer);
     implementation = contract.address;
   }
 
   const proxyConstructorArgs = [implementation, proxyOwner, "0x"];
   log.withArguments(
-    `Deploying ${yl(PROXY_CONTRACT_NAME)} for ${yl(artifactName)} with constructor args: `,
+    `Deploying ${yl(PROXY_CONTRACT_NAME)} for ${yl(artifactName)} with constructor args `,
     proxyConstructorArgs,
   );
 
@@ -211,14 +205,10 @@ export async function updateProxyImplementation(
   proxyOwner: string,
   constructorArgs: unknown[],
 ) {
-  if (constructorArgs.length > 0) {
-    log.withArguments(
-      `Upgrading proxy ${cy(proxyAddress)} to new implementation: ${yl(artifactName)}`,
-      constructorArgs as ConvertibleToString[],
-    );
-  } else {
-    log(`Upgrading proxy ${cy(proxyAddress)} to new implementation: ${yl(artifactName)}`);
-  }
+  logWithConstructorArgs(
+    `Upgrading proxy ${cy(proxyAddress)} to new implementation: ${yl(artifactName)}`,
+    constructorArgs as ConvertibleToString[],
+  );
 
   const implementation = await deployContract(artifactName, constructorArgs, proxyOwner);
 
