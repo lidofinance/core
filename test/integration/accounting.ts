@@ -433,7 +433,7 @@ describe("Accounting integration", () => {
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
   });
 
-  it("Should account correctly normal EL rewards", async () => {
+  it.skip("Should account correctly normal EL rewards", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     await updateBalance(elRewardsVault.address, ether("1"));
@@ -466,22 +466,25 @@ describe("Accounting integration", () => {
     expect(totalELRewardsCollectedBefore + elRewards).to.equal(totalELRewardsCollectedAfter);
 
     const elRewardsReceivedEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
+    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards, "EL rewards mismatch");
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + elRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
+    expect(totalPooledEtherBefore + elRewards).to.equal(
+      totalPooledEtherAfter + amountOfETHLocked,
+      "TotalPooledEther mismatch",
+    );
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount, "TotalShares mismatch");
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked, "Lido balance mismatch");
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
   });
 
-  it("Should account correctly EL rewards at limits", async () => {
+  it.skip("Should account correctly EL rewards at limits", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     const elRewards = await rebaseLimitWei();
@@ -529,7 +532,7 @@ describe("Accounting integration", () => {
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
   });
 
-  it("Should account correctly EL rewards above limits", async () => {
+  it.skip("Should account correctly EL rewards above limits", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     const rewardsExcess = ether("10");

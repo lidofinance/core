@@ -8,6 +8,8 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {VaultHub} from "./vaults/VaultHub.sol";
 
+import "hardhat/console.sol";
+
 interface IOracleReportSanityChecker {
     function checkAccountingOracleReport(
         uint256 _reportTimestamp,
@@ -94,9 +96,13 @@ interface IWithdrawalQueue {
 
 interface ILido {
     function getTotalPooledEther() external view returns (uint256);
+
     function getExternalEther() external view returns (uint256);
+
     function getTotalShares() external view returns (uint256);
+
     function getSharesByPooledEth(uint256) external view returns (uint256);
+
     function getBeaconStat() external view returns (
         uint256 depositedValidators,
         uint256 beaconValidators,
@@ -133,6 +139,7 @@ interface ILido {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
+
     function burnShares(address _account, uint256 _sharesAmount) external;
 }
 
@@ -226,13 +233,15 @@ contract Accounting is VaultHub {
         CalculatedValues update;
     }
 
+    error NotAccountingOracle();
+
     function calculateOracleReportContext(
         ReportValues memory _report
-    ) internal view returns (ReportContext memory) {
+    ) public view returns (ReportContext memory) {
         Contracts memory contracts = _loadOracleReportContracts();
+
         return _calculateOracleReportContext(contracts, _report);
     }
-
 
     /**
      * @notice Updates accounting stats, collects EL rewards and distributes collected rewards
@@ -263,7 +272,7 @@ contract Accounting is VaultHub {
         PreReportState memory pre = _snapshotPreReportState();
 
         // Calculate values to update
-        CalculatedValues memory update = CalculatedValues(0,0,0,0,0,0,0,
+        CalculatedValues memory update = CalculatedValues(0, 0, 0, 0, 0, 0, 0,
             _getStakingRewardsDistribution(_contracts.stakingRouter), 0, 0, 0, 0, new uint256[](0));
 
         // Pre-calculate the ether to lock for withdrawal queue and shares to be burnt
@@ -312,6 +321,7 @@ contract Accounting is VaultHub {
         update.postTotalShares = pre.totalShares // totalShares includes externalShares
             + update.sharesToMintAsFees
             - update.totalSharesToBurn;
+
         update.postTotalPooledEther = pre.totalPooledEther // was before the report
             + _report.clBalance + update.withdrawals + update.elRewards - update.principalClBalance // total rewards or penalty in Lido
             + update.externalEther - pre.externalEther // vaults rewards (or penalty)
@@ -325,7 +335,7 @@ contract Accounting is VaultHub {
     }
 
     function _snapshotPreReportState() internal view returns (PreReportState memory pre) {
-        pre = PreReportState(0,0,0,0,0,0);
+        pre = PreReportState(0, 0, 0, 0, 0, 0);
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
@@ -361,6 +371,8 @@ contract Accounting is VaultHub {
     ) internal pure returns (ShareRate memory shareRate, uint256 sharesToMintAsFees) {
         shareRate.shares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
 
+        console.log("shareRate.shares: ", shareRate.shares);
+
         shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
 
         uint256 unifiedBalance = _report.clBalance + _calculated.withdrawals + _calculated.elRewards;
@@ -378,6 +390,8 @@ contract Accounting is VaultHub {
 
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
+
+            console.log("sharesToMintAsFees: ", sharesToMintAsFees);
         } else {
             uint256 totalPenalty = _calculated.principalClBalance - unifiedBalance;
             shareRate.eth -= totalPenalty;
@@ -388,8 +402,7 @@ contract Accounting is VaultHub {
         Contracts memory _contracts,
         ReportContext memory _context
     ) internal returns (uint256[4] memory) {
-        //TODO: custom errors
-        require(msg.sender == _contracts.accountingOracleAddress, "APP_AUTH_FAILED");
+        if(msg.sender != _contracts.accountingOracleAddress) revert NotAccountingOracle();
 
         _checkAccountingOracleReport(_contracts, _context);
 
@@ -412,7 +425,6 @@ contract Accounting is VaultHub {
         );
 
         if (_context.update.totalSharesToBurn > 0) {
-//            FIXME: expected to be called as StETH
             _contracts.burner.commitSharesToBurn(_context.update.totalSharesToBurn);
         }
 
@@ -476,7 +488,6 @@ contract Accounting is VaultHub {
         return [_context.update.postTotalPooledEther, _context.update.postTotalShares,
             _context.update.withdrawals, _context.update.elRewards];
     }
-
 
     /**
      * @dev Pass the provided oracle data to the sanity checker contract
