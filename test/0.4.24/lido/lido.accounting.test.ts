@@ -159,6 +159,7 @@ describe("Lido:accounting", () => {
     }
   });
 
+  // TODO: [@tamtamchik] restore tests
   context.skip("handleOracleReport", () => {
     // it("Update CL validators count if reported more", async () => {
     //   let depositedValidators = 100n;

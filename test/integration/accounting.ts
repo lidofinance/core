@@ -29,6 +29,8 @@ const SIMPLE_DVT_MODULE_ID = 2n;
 
 const ZERO_HASH = new Uint8Array(32).fill(0);
 
+// TODO: [@tamtamchik] restore checks for PostTotalShares event
+
 describe("Accounting integration", () => {
   let ctx: ProtocolContext;
 
@@ -205,10 +207,11 @@ describe("Accounting integration", () => {
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
 
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    );
+    // FIXME: no Legacy oracle report events
+    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
+    // expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
+    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
+    // );
 
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
@@ -259,11 +262,12 @@ describe("Accounting integration", () => {
       "ETHDistributed: CL balance differs from expected",
     );
 
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-      "PostTotalShares: TotalPooledEther differs from expected",
-    );
+    // FIXME: no Legacy oracle report events
+    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
+    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
+    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
+    //   "PostTotalShares: TotalPooledEther differs from expected",
+    // );
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
@@ -381,11 +385,12 @@ describe("Accounting integration", () => {
       "ETHDistributed: CL balance has not increased",
     );
 
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-      "PostTotalShares: TotalPooledEther has not increased",
-    );
+    // FIXME: no Legacy oracle report events
+    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
+    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
+    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
+    //   "PostTotalShares: TotalPooledEther has not increased",
+    // );
   });
 
   it("Should account correctly if no EL rewards", async () => {
