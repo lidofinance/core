@@ -8,9 +8,6 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {VaultHub} from "./vaults/VaultHub.sol";
 
-// TODO: remove
-//import "hardhat/console.sol";
-
 interface IOracleReportSanityChecker {
     function checkAccountingOracleReport(
         uint256 _reportTimestamp,
@@ -449,11 +446,10 @@ contract Accounting is VaultHub {
 
         // TODO: vault fees
 
-        // FIXME: Legacy Oracle call in fact, still in use? The event it fires was marked as deprecated.
-        // _completeTokenRebase(
-        //    _context,
-        //    _contracts.postTokenRebaseReceiver
-        // );
+         _completeTokenRebase(
+            _context,
+            _contracts.postTokenRebaseReceiver
+         );
 
         LIDO.emitTokenRebase(
             _context.report.timestamp,

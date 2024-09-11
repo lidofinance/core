@@ -420,7 +420,7 @@ export const handleOracleReport = async (
       netCashFlows: [], // TODO: Add net cash flows
     });
 
-    await trace("lido.handleOracleReport", handleReportTx);
+    await trace("accounting.handleOracleReport", handleReportTx);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;

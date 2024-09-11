@@ -82,6 +82,7 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   accounting = "accounting",
+  tokenRebaseNotifier = "tokenRebaseNotifier",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -127,6 +128,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.accounting:
+    case Sk.tokenRebaseNotifier:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
