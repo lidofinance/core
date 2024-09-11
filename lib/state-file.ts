@@ -191,7 +191,6 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
   }
 }
 
-// If network name is undefined current hardhat network will be used
 export function persistNetworkState(state: DeploymentState, networkName: string = hardhatNetwork.name): void {
   const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
   const stateSorted = _sortKeysAlphabetically(state);

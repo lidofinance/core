@@ -36,8 +36,8 @@ const ADDRESS_2 = "0x0000000000000000000000000000000000000002";
 
 const MANAGE_MEMBERS_AND_QUORUM_ROLE = streccak("MANAGE_MEMBERS_AND_QUORUM_ROLE");
 
-if (!process.env.HARDHAT_FORKING_URL) {
-  log.error("Env variable HARDHAT_FORKING_URL must be set to run fork acceptance tests");
+if (!process.env.MAINNET_FORKING_URL) {
+  log.error("Env variable MAINNET_FORKING_URL must be set to run fork acceptance tests");
   process.exit(1);
 }
 if (!process.env.NETWORK_STATE_FILE) {

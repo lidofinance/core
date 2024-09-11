@@ -134,6 +134,7 @@ export type ProtocolSigners = {
 export type Signer = keyof ProtocolSigners;
 
 export type ProtocolContextFlags = {
+  isScratchDeploy: boolean;
   withSimpleDvtModule: boolean;
 };
 

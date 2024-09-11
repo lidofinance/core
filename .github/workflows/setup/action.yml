@@ -16,4 +16,4 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: yarn install
+      run: yarn install --frozen-lockfile

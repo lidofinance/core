@@ -6,7 +6,6 @@ import { log } from "lib";
 
 import { ProtocolNetworkItems } from "./types";
 
-// If we are running in Hardhat without fork, we need to deploy the contracts from scratch deploy first to run integration tests
 export function isNonForkingHardhatNetwork() {
   const networkName = hre.network.name;
   if (networkName === "hardhat") {

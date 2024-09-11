@@ -19,7 +19,7 @@ import { HardhatUserConfig, subtask } from "hardhat/config";
 import { mochaRootHooks } from "test/hooks";
 
 const RPC_URL: string = process.env.RPC_URL || "";
-const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
+const MAINNET_FORKING_URL = process.env.MAINNET_FORKING_URL || "";
 const INTEGRATION_SCRATCH_DEPLOY = process.env.INTEGRATION_SCRATCH_DEPLOY || "off";
 const ACCOUNTS_PATH = "./accounts.json";
 
@@ -28,7 +28,7 @@ const ACCOUNTS_PATH = "./accounts.json";
  * @returns The forking configuration object or undefined.
  */
 function getHardhatForkingConfig() {
-  return INTEGRATION_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL ? undefined : { url: HARDHAT_FORKING_URL };
+  return INTEGRATION_SCRATCH_DEPLOY === "on" || !MAINNET_FORKING_URL ? undefined : { url: MAINNET_FORKING_URL };
 }
 
 function loadAccounts(networkName: string) {

@@ -24,9 +24,21 @@ jobs:
         run: cp .env.example .env
 
       - name: Run scratch deployment
-        run: ./scripts/dao-ci-deploy.sh
+        run: ./scripts/dao-deploy.sh
+        env:
+          NETWORK: "local"
+          RPC_URL: "http://localhost:8555"
+          GENESIS_TIME: 1639659600 # just a random time
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" # first acc of default mnemonic "test test ..."
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: "deployed-local.json"
+          NETWORK_STATE_DEFAULTS_FILE: "scripts/scratch/deployed-testnet-defaults.json"
+
+      - name: Finalize scratch deployment
+        run: yarn hardhat --network local run --no-compile scripts/scratch/send-hardhat-mine.ts
 
       - name: Run integration tests
-        run: yarn test:integration:fork:scratch
+        run: yarn test:integration:fork:local
         env:
           LOG_LEVEL: debug

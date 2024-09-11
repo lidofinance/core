@@ -2,9 +2,6 @@
 set -e +u
 set -o pipefail
 
-# TODO: Do we still need to set these variable?
-# ARAGON_APPS_REPO_REF=import-shared-minime
-
 # Check for required environment variables
 if [[ -z "${DEPLOYER}" ]]; then
   echo "Error: Environment variable DEPLOYER must be set"
