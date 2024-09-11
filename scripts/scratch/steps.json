@@ -1,0 +1,20 @@
+{
+  "steps": [
+    "scratch/steps/00-populate-deploy-artifact-from-env",
+    "scratch/steps/01-deploy-deposit-contract",
+    "scratch/steps/02-deploy-aragon-env",
+    "scratch/steps/03-deploy-template-and-app-bases",
+    "scratch/steps/04-register-ens-domain",
+    "scratch/steps/05-deploy-apm",
+    "scratch/steps/06-create-app-repos",
+    "scratch/steps/07-deploy-dao",
+    "scratch/steps/08-issue-tokens",
+    "scratch/steps/09-deploy-non-aragon-contracts",
+    "scratch/steps/10-gate-seal",
+    "scratch/steps/11-finalize-dao",
+    "scratch/steps/12-initialize-non-aragon-contracts",
+    "scratch/steps/13-grant-roles",
+    "scratch/steps/14-plug-curated-staking-module",
+    "scratch/steps/15-transfer-roles"
+  ]
+}
