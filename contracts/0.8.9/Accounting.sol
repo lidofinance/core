@@ -330,7 +330,7 @@ contract Accounting is VaultHub {
 
         update.lockedEther = _calculateVaultsRebase(newShareRate);
 
-        // TODO: assert resuting shareRate == newShareRate
+        // TODO: assert resulting shareRate == newShareRate
 
         return ReportContext(_report, pre, update);
     }
@@ -343,10 +343,7 @@ contract Accounting is VaultHub {
         pre.externalEther = LIDO.getExternalEther();
     }
 
-    /**
-     * @dev return amount to lock on withdrawal queue and shares to burn
-     * depending on the finalization batch parameters
-     */
+    /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
     function _calculateWithdrawals(
         Contracts memory _contracts,
         ReportValues memory _report
@@ -371,20 +368,16 @@ contract Accounting is VaultHub {
         uint256 _externalShares
     ) internal pure returns (ShareRate memory shareRate, uint256 sharesToMintAsFees) {
         shareRate.shares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
+        shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ + _calculated.elRewards;
 
-//        TODO: remove
-//        console.log("shareRate.shares: ", shareRate.shares);
+        uint256 unifiedClBalance = _report.clBalance + _calculated.withdrawals;
 
-        shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
-
-        uint256 unifiedBalance = _report.clBalance + _calculated.withdrawals + _calculated.elRewards;
-
-        // Don’t mint/distribute any protocol fee on the non-profitable Lido oracle report
+        // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
-        if (unifiedBalance > _calculated.principalClBalance) {
-            uint256 totalRewards = unifiedBalance - _calculated.principalClBalance;
+        if (unifiedClBalance > _calculated.principalClBalance) {
+            uint256 totalRewards = unifiedClBalance - _calculated.principalClBalance;
             uint256 totalFee = _calculated.rewardDistribution.totalFee;
             uint256 precision = _calculated.rewardDistribution.precisionPoints;
             uint256 feeEther = totalRewards * totalFee / precision;
@@ -392,11 +385,8 @@ contract Accounting is VaultHub {
 
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
-
-//        TODO: remove
-//            console.log("sharesToMintAsFees: ", sharesToMintAsFees);
         } else {
-            uint256 totalPenalty = _calculated.principalClBalance - unifiedBalance;
+            uint256 totalPenalty = _calculated.principalClBalance - unifiedClBalance;
             shareRate.eth -= totalPenalty;
         }
     }
@@ -596,7 +586,7 @@ contract Accounting is VaultHub {
             address oracleReportSanityChecker,
             address burner,
             address withdrawalQueue,
-            address postTokenRebaseReceiver, // TODO: Legacy Oracle? Still in use used?
+            address postTokenRebaseReceiver,
             address stakingRouter
         ) = LIDO_LOCATOR.oracleReportComponents();
 

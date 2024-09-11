@@ -433,7 +433,7 @@ describe("Accounting integration", () => {
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
   });
 
-  it.skip("Should account correctly normal EL rewards", async () => {
+  it("Should account correctly normal EL rewards", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     await updateBalance(elRewardsVault.address, ether("1"));
@@ -484,7 +484,7 @@ describe("Accounting integration", () => {
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
   });
 
-  it.skip("Should account correctly EL rewards at limits", async () => {
+  it("Should account correctly EL rewards at limits", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     const elRewards = await rebaseLimitWei();
@@ -532,7 +532,7 @@ describe("Accounting integration", () => {
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
   });
 
-  it.skip("Should account correctly EL rewards above limits", async () => {
+  it("Should account correctly EL rewards above limits", async () => {
     const { lido, accountingOracle, elRewardsVault } = ctx.contracts;
 
     const rewardsExcess = ether("10");
