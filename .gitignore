@@ -17,6 +17,9 @@ artifacts/
 foundry/cache/
 foundry/out/
 
+# Extracted ABI files
+lib/abi/*.json
+
 .env
 accounts.json
 deployed-local.json

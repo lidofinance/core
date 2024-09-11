@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
@@ -71,7 +71,7 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
     function recoverEth() external onlyOwner {
         uint256 balance = address(this).balance;
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = owner().call{value: balance}("");
+        (bool success,) = owner().call{value: balance}("");
         if (!success) {
             revert EthRecoverFailed();
         }
@@ -95,7 +95,7 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
     ) external payable override {
         originalContract.deposit{value: msg.value}(pubkey, withdrawal_credentials, signature, deposit_data_root);
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = owner().call{value: msg.value}("");
+        (bool success,) = owner().call{value: msg.value}("");
         if (!success) {
             revert DepositFailed();
         }

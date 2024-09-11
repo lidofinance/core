@@ -46,7 +46,7 @@ These are the deployment setups, supported currently:
 Each is described in the details in the sections below.
 
 > NB: Aragon UI for Lido DAO is to be deprecated and replaced by a custom solution, thus not included in the deployment
-> script.
+> script, see https://research.lido.fi/t/discontinuation-of-aragon-ui-use/7992.
 
 ### Deploy steps
 

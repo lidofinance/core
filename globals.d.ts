@@ -1,14 +1,19 @@
 declare namespace NodeJS {
   export interface ProcessEnv {
-    /* forking url for hardhat internal node, required for tracing e.g. */
-    HARDHAT_FORKING_URL?: string;
+    /* RPC URL for Hardhat Network forking, required for running tests on mainnet fork with tracing */
+    MAINNET_FORKING_URL?: string;
 
     /* logging verbosity */
     LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none";
 
-    /* flags for changing the behavior of the integration tests */
-    INTEGRATION_SCRATCH_DEPLOY?: "on" | "off"; // if "on" test will use scratch deploy instead of forking
-    INTEGRATION_SIMPLE_DVT_MODULE?: "on" | "off"; // if "on" test will use simple DVT module instead of linking NOR
+    /**
+     * Flags for changing the behavior of the integration tests
+     */
+
+    /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
+    INTEGRATION_SCRATCH_DEPLOY?: "on" | "off";
+    /* if "on" the integration tests will enable assertions and checks for the simple DVT module */
+    INTEGRATION_SIMPLE_DVT_MODULE?: "on" | "off";
 
     /**
      * Network configuration for the protocol discovery.

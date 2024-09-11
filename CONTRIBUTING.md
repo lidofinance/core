@@ -193,9 +193,9 @@ the project (you can use `.env.example` as a template).
 
 ###### Hardhat Mainnet Fork
 
-This is the most common way to run integration tests. It uses the Hardhat mainnet fork to simulate the mainnet
-environment. Requires `HARDHAT_FORKING_URL` and `HARDHAT_FORKING_BLOCK_NUMBER` (optional) to be set in the `.env` file
-along with some `MAINNET_*` env variables (see `.env.example`).
+This is the most common way to run integration tests. It uses instance of Hardhat Network that forks mainnet
+environment. Requires `MAINNET_FORKING_URL` to be set in the `.env` file along with some `MAINNET_*` env variables (see
+`.env.example`).
 
 ```bash
 yarn test:integration             # Run all integration tests
@@ -231,7 +231,7 @@ Requires a local deployment to be running on port `8555` and `deployed-local.jso
 (automatically generated during the scratch deployment).
 
 ```bash
-yarn test:integration:fork:scratch
+yarn test:integration:fork:local
 ```
 
 #### Foundry tests
