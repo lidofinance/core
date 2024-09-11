@@ -25,7 +25,8 @@ interface IHashConsensus {
 
     function getFrameConfig() external view returns (
         uint256 initialEpoch,
-        uint256 epochsPerFrame
+        uint256 epochsPerFrame,
+        uint256 fastLaneLengthSlots
     );
 
     function getCurrentFrame() external view returns (
@@ -147,7 +148,7 @@ contract LegacyOracle is Versioned, AragonApp {
             uint64 genesisTime
         )
     {
-        (, uint256 epochsPerFrame_) = _getAccountingConsensusContract().getFrameConfig();
+        (, uint256 epochsPerFrame_,) = _getAccountingConsensusContract().getFrameConfig();
         epochsPerFrame = uint64(epochsPerFrame_);
 
         ChainSpec memory spec = _getChainSpec();
@@ -365,7 +366,7 @@ contract LegacyOracle is Versioned, AragonApp {
     {
         IHashConsensus consensus = IHashConsensus(_accountingOracleConsensusContract);
         (uint256 slotsPerEpoch, uint256 secondsPerSlot, uint256 genesisTime) = consensus.getChainConfig();
-        (, uint256 epochsPerFrame_) = consensus.getFrameConfig();
+        (, uint256 epochsPerFrame_,) = consensus.getFrameConfig();
 
         spec.epochsPerFrame = uint64(epochsPerFrame_);
         spec.slotsPerEpoch = uint64(slotsPerEpoch);

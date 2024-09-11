@@ -80,10 +80,11 @@ contract HashConsensus__MockForLegacyOracle is IHashConsensus {
 
     function getFrameConfig() external view returns (
         uint256 initialEpoch,
-        uint256 epochsPerFrame
+        uint256 epochsPerFrame,
+        uint256 fastLaneLengthSlots
     ) {
         FrameConfig memory config = _frameConfig;
-        return (config.initialEpoch, config.epochsPerFrame);
+        return (config.initialEpoch, config.epochsPerFrame, config.fastLaneLengthSlots);
     }
 
     function getCurrentFrame() external view returns (
