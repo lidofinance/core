@@ -109,6 +109,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     uint8 internal constant TARGET_VALIDATORS_COUNT_OFFSET = 1;
     /// @dev actual operators's number of keys which could be deposited
     uint8 internal constant MAX_VALIDATORS_COUNT_OFFSET = 2;
+    /// @dev Forced target limit mode
+    uint8 internal constant FORCED_TARGET_LIMIT_MODE = 2;
 
     // StuckPenaltyStats
     /// @dev stuck keys count from oracle report
@@ -694,6 +696,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
         _requireValidRange(_targetLimit <= UINT64_MAX);
+        _requireValidRange(_targetLimitMode <= FORCED_TARGET_LIMIT_MODE);
 
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
         operatorTargetStats.set(TARGET_LIMIT_MODE_OFFSET, _targetLimitMode);

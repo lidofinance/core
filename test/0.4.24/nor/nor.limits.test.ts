@@ -173,6 +173,14 @@ describe("NodeOperatorsRegistry:validatorsLimits", () => {
 
       await expect(nor[updateTargetLimits](firstNodeOperatorId, 0n, targetLimit)).to.be.revertedWith("APP_AUTH_FAILED");
     });
+
+    it('reverts with "OUT_OF_RANGE" error when called with targetMode > 2', async () => {
+      const targetModeWrong = 3n;
+
+      await expect(nor[updateTargetLimits](firstNodeOperatorId, targetModeWrong, 0n)).to.be.revertedWith(
+        "OUT_OF_RANGE",
+      );
+    });
   });
 
   const runTests = (updateTargetLimitsMethod: UpdateTargetLimitsMethods) => {
