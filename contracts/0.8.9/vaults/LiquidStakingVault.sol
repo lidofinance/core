@@ -9,13 +9,15 @@ import {ILiquid} from "./interfaces/ILiquid.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 
-struct Report {
-    uint128 value;
-    int128 netCashFlow;
-}
-
+// TODO: add erc-4626-like can* methods
+// TODO: add depositAndMint method
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     IHub public immutable HUB;
+
+    struct Report {
+        uint128 value;
+        int128 netCashFlow;
+    }
 
     // TODO: unstructured storage
     Report public lastReport;
@@ -26,15 +28,15 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     int256 public netCashFlow;
 
     constructor(
-        address _owner,
         address _vaultHub,
+        address _owner,
         address _depositContract
     ) StakingVault(_owner, _depositContract) {
         HUB = IHub(_vaultHub);
     }
 
     function value() public view override returns (uint256) {
-        return uint256(int128(lastReport.value) - lastReport.netCashFlow + netCashFlow);
+        return uint256(int128(lastReport.value) + netCashFlow - lastReport.netCashFlow);
     }
 
     function isHealthy() public view returns (bool) {
@@ -42,7 +44,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     }
 
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
-        if (msg.sender != address(HUB)) revert("ONLY_HUB");
+        if (msg.sender != address(HUB)) revert NotAuthorized("update");
 
         lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;
@@ -67,24 +69,27 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     }
 
     function withdraw(address _receiver, uint256 _amount) public override(StakingVault) {
-        require(_amount + locked <= address(this).balance, "NOT_ENOUGH_UNLOCKED_BALANCE");
-        require(_receiver != address(0), "ZERO_ADDRESS");
-        require(_amount > 0, "ZERO_AMOUNT");
+        if (_receiver == address(0)) revert ZeroArgument("receiver");
+        if (_amount == 0) revert ZeroArgument("amount");
+        if (_amount + locked > value()) revert NotHealthy(locked, value() - _amount);
 
         netCashFlow -= int256(_amount);
 
         super.withdraw(_receiver, _amount);
+
+        _mustBeHealthy();
     }
 
     function mintStETH(
         address _receiver,
         uint256 _amountOfShares
     ) external onlyRole(VAULT_MANAGER_ROLE) {
-        require(_receiver != address(0), "ZERO_ADDRESS");
-        require(_amountOfShares > 0, "ZERO_AMOUNT");
-        _mustBeHealthy();
+        if (_receiver == address(0)) revert ZeroArgument("receiver");
+        if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
         uint256 newLocked = HUB.mintSharesBackedByVault(_receiver, _amountOfShares);
+
+        if (newLocked > value()) revert NotHealthy(newLocked, value());
 
         if (newLocked > locked) {
             locked = newLocked;
@@ -97,15 +102,16 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         address _from,
         uint256 _amountOfShares
     ) external onlyRole(VAULT_MANAGER_ROLE) {
-        require(_from != address(0), "ZERO_ADDRESS");
-        require(_amountOfShares > 0, "ZERO_AMOUNT");
+        if (_from == address(0)) revert ZeroArgument("from");
+        if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
+
         // burn shares at once but unlock balance later
         HUB.burnSharesBackedByVault(_from, _amountOfShares);
     }
 
     function rebalance(uint256 _amountOfETH) external {
-        require(_amountOfETH > 0, "ZERO_AMOUNT");
-        require(address(this).balance >= _amountOfETH, "NOT_ENOUGH_BALANCE");
+        if (_amountOfETH == 0) revert ZeroArgument("amountOfETH");
+        if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
 
         if (hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
            (!isHealthy() && msg.sender == address(HUB))) { // force rebalance
@@ -114,11 +120,13 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
             // mint some stETH in Lido v2 and burn it on the vault
             HUB.forgive{value: _amountOfETH}();
         } else {
-            revert("AUTH:REBALANCE");
+            revert NotAuthorized("rebalance");
         }
     }
 
     function _mustBeHealthy() private view {
-        require(locked <= value() , "HEALTH_LIMIT");
+        if (locked > value()) revert NotHealthy(locked, value());
     }
+
+    error NotHealthy(uint256 locked, uint256 value);
 }

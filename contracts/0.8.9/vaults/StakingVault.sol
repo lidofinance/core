@@ -35,15 +35,19 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
     }
 
     receive() external payable virtual {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
         emit ELRewards(msg.sender, msg.value);
     }
 
     /// @notice Deposit ETH to the vault
     function deposit() public payable virtual {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
         if (hasRole(DEPOSITOR_ROLE, EVERYONE) || hasRole(DEPOSITOR_ROLE, msg.sender)) {
             emit Deposit(msg.sender, msg.value);
         } else {
-            revert NotADepositor(msg.sender);
+            revert NotAuthorized("deposit");
         }
     }
 
@@ -53,6 +57,7 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
     ) public virtual onlyRole(NODE_OPERATOR_ROLE) {
+        if (_keysCount == 0) revert ZeroArgument("keysCount");
         // TODO: maxEB + DSM support
         _makeBeaconChainDeposits32ETH(
             _keysCount,
@@ -68,7 +73,9 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
         address _receiver,
         uint256 _amount
     ) public virtual onlyRole(VAULT_MANAGER_ROLE) {
-        if (_receiver == address(0)) revert ZeroAddress();
+        if (_receiver == address(0)) revert ZeroArgument("receiver");
+        if (_amount == 0) revert ZeroArgument("amount");
+        if (_amount > address(this).balance) revert NotEnoughBalance(address(this).balance);
 
         (bool success, ) = _receiver.call{value: _amount}("");
         if(!success) revert TransferFailed(_receiver, _amount);
@@ -76,7 +83,8 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
         emit Withdrawal(_receiver, _amount);
     }
 
-    error ZeroAddress();
+    error ZeroArgument(string argument);
     error TransferFailed(address receiver, uint256 amount);
-    error NotADepositor(address sender);
+    error NotEnoughBalance(uint256 balance);
+    error NotAuthorized(string operation);
 }
