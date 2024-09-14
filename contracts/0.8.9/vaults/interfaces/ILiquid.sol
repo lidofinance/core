@@ -5,5 +5,5 @@ pragma solidity 0.8.9;
 
 interface ILiquid {
     function mintStETH(address _receiver, uint256 _amountOfShares) external;
-    function burnStETH(address _from, uint256 _amountOfShares) external;
+    function burnStETH(uint256 _amountOfShares) external;
 }

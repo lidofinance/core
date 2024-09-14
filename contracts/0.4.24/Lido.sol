@@ -591,12 +591,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @notice Burns external shares from a specified account
     ///
-    /// @param _account Address from which to burn shares
     /// @param _amountOfShares Amount of shares to burn
     ///
     /// @dev authentication goes through isMinter in StETH
-    function burnExternalShares(address _account, uint256 _amountOfShares) external {
-        if (_account == address(0)) revert("BURN_FROM_ZERO_ADDRESS");
+    function burnExternalShares(uint256 _amountOfShares) external {
         if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
         _whenNotStopped();
 
@@ -607,9 +605,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(extBalance - stethAmount);
 
-        burnShares(_account, _amountOfShares);
+        burnShares(msg.sender, _amountOfShares);
 
-        emit ExternalSharesBurned(_account, _amountOfShares, stethAmount);
+        emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
 
     function processClStateUpdate(

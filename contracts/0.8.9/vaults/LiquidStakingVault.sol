@@ -11,6 +11,9 @@ import {IHub} from "./interfaces/IHub.sol";
 
 // TODO: add erc-4626-like can* methods
 // TODO: add depositAndMint method
+// TODO: escape hatch (permissionless update and burn and withdraw)
+// TODO: add sanity checks
+// TODO: unstructured storage
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     IHub public immutable HUB;
 
@@ -19,7 +22,6 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         int128 netCashFlow;
     }
 
-    // TODO: unstructured storage
     Report public lastReport;
 
     uint256 public locked;
@@ -43,29 +45,10 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         return locked <= value();
     }
 
-    function update(uint256 _value, int256 _ncf, uint256 _locked) external {
-        if (msg.sender != address(HUB)) revert NotAuthorized("update");
-
-        lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
-        locked = _locked;
-    }
-
     function deposit() public payable override(StakingVault) {
         netCashFlow += int256(msg.value);
 
         super.deposit();
-    }
-
-    function topupValidators(
-        uint256 _keysCount,
-        bytes calldata _publicKeysBatch,
-        bytes calldata _signaturesBatch
-    ) public override(StakingVault) {
-        // unhealthy vaults are up to force rebalancing
-        // so, we don't want it to send eth back to the Beacon Chain
-        _mustBeHealthy();
-
-        super.topupValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
     function withdraw(address _receiver, uint256 _amount) public override(StakingVault) {
@@ -78,6 +61,18 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         super.withdraw(_receiver, _amount);
 
         _mustBeHealthy();
+    }
+
+    function topupValidators(
+        uint256 _keysCount,
+        bytes calldata _publicKeysBatch,
+        bytes calldata _signaturesBatch
+    ) public override(StakingVault) {
+        // unhealthy vaults are up to force rebalancing
+        // so, we don't want it to send eth back to the Beacon Chain
+        _mustBeHealthy();
+
+        super.topupValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
     function mintStETH(
@@ -93,20 +88,18 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
         if (newLocked > locked) {
             locked = newLocked;
+
+            emit Locked(newLocked);
         }
 
         _mustBeHealthy();
     }
 
-    function burnStETH(
-        address _from,
-        uint256 _amountOfShares
-    ) external onlyRole(VAULT_MANAGER_ROLE) {
-        if (_from == address(0)) revert ZeroArgument("from");
+    function burnStETH(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
-        // burn shares at once but unlock balance later
-        HUB.burnSharesBackedByVault(_from, _amountOfShares);
+        // burn shares at once but unlock balance later during the report
+        HUB.burnSharesBackedByVault(_amountOfShares);
     }
 
     function rebalance(uint256 _amountOfETH) external {
@@ -115,13 +108,23 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
         if (hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
            (!isHealthy() && msg.sender == address(HUB))) { // force rebalance
-            // TODO: check that amount of ETH is minimal
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             HUB.forgive{value: _amountOfETH}();
+
+            emit Rebalanced(_amountOfETH);
         } else {
             revert NotAuthorized("rebalance");
         }
+    }
+
+    function update(uint256 _value, int256 _ncf, uint256 _locked) external {
+        if (msg.sender != address(HUB)) revert NotAuthorized("update");
+
+        lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
+        locked = _locked;
+
+        emit Reported(_value, _ncf, _locked);
     }
 
     function _mustBeHealthy() private view {
