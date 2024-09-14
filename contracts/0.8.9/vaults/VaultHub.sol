@@ -9,15 +9,13 @@ import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 
 interface StETH {
-    function getExternalEther() external view returns (uint256);
     function mintExternalShares(address, uint256) external;
     function burnExternalShares(uint256) external;
 
     function getPooledEthByShares(uint256) external view returns (uint256);
     function getSharesByPooledEth(uint256) external view returns (uint256);
-
-    function transferShares(address, uint256) external returns (uint256);
 }
+
 // TODO: add Lido fees
 // TODO: rebalance gas compensation
 // TODO: optimize storage
