@@ -23,6 +23,7 @@ export async function main() {
     { name: "WithdrawalQueueERC721", address: state.withdrawalQueueERC721.proxy.address },
     { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
+    { name: "Accounting", address: state.accounting.address },
   ];
 
   for (const contract of ozAdminTransfers) {

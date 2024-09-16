@@ -178,7 +178,7 @@ contract Accounting is VaultHub {
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(address(_lido)){
+    constructor(address _admin, ILidoLocator _lidoLocator, ILido _lido) VaultHub(_admin, address(_lido)){
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }

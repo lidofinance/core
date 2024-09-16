@@ -42,8 +42,10 @@ contract VaultHub is AccessControlEnumerable, IHub {
     /// @notice mapping from vault address to its socket
     mapping(ILockable => VaultSocket) public vaultIndex;
 
-    constructor(address _stETH) {
+    constructor(address _admin, address _stETH) {
         STETH = StETH(_stETH);
+
+        _setupRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
     /// @notice returns the number of vaults connected to the hub
