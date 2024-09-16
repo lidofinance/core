@@ -242,6 +242,17 @@ contract AccountingOracle is BaseOracle {
         bool isBunkerMode;
 
         ///
+        /// Liquid Staking Vaults
+        ///
+
+        /// @dev The values of the vaults as observed at the reference slot.
+        /// Sum of all the balances of Lido validators of the lstVault plus the balance of the lstVault itself.
+        uint256[] vaultsValues;
+
+        /// @dev The net cash flows of the vaults as observed at the reference slot.
+        int256[] vaultsNetCashFlows;
+
+        ///
         /// Extra data — the oracle information that allows asynchronous processing, potentially in
         /// chunks, after the main data is processed. The oracle doesn't enforce that extra data
         /// attached to some data report is processed in full before the processing deadline expires
@@ -605,8 +616,8 @@ contract AccountingOracle is BaseOracle {
             data.withdrawalFinalizationBatches,
             data.simulatedShareRate,
             // TODO: vault values here
-            new uint256[](0),
-            new int256[](0)
+            data.vaultsValues,
+            data.vaultsNetCashFlows
         ));
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({

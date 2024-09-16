@@ -263,5 +263,5 @@ contract VaultHub is AccessControlEnumerable, IHub {
     error AlreadyConnected(address vault);
     error NotConnectedToHub(address vault);
     error RebalanceFailed(address vault);
-    error NotAuthorized(string operation);
+    error NotAuthorized(string operation, address addr);
 }

@@ -9,7 +9,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
   norEnsureOperators,
-  OracleReportOptions,
+  OracleReportParams,
   report,
   sdvtEnsureOperators,
 } from "lib/protocol/helpers";
@@ -310,7 +310,7 @@ describe("Happy Path", () => {
 
     // Stranger deposited 100 ETH, enough to deposit 3 validators, need to reflect this in the report
     // 0.01 ETH is added to the clDiff to simulate some rewards
-    const reportData: Partial<OracleReportOptions> = {
+    const reportData: Partial<OracleReportParams> = {
       clDiff: ether("96.01"),
       clAppearedValidators: 3n,
     };
