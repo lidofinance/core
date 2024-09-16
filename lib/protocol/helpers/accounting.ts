@@ -503,8 +503,8 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultValues?: bigint[];
-  netCashFlows?: bigint[];
+  vaultsValues: bigint[];
+  vaultsNetCashFlows: bigint[];
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -534,8 +534,8 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultValues = [],
-    netCashFlows = [],
+    vaultsValues = [],
+    vaultsNetCashFlows = [],
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -556,8 +556,8 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults values": vaultValues,
-    "Vaults net cash flows": netCashFlows,
+    "Vaults values": vaultsValues,
+    "Vaults net cash flows": vaultsNetCashFlows,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -580,8 +580,8 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsValues: vaultValues,
-    vaultsNetCashFlows: netCashFlows,
+    vaultsValues,
+    vaultsNetCashFlows,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
