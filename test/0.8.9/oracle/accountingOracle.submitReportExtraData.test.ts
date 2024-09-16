@@ -59,6 +59,8 @@ const getDefaultReportFields = (override = {}) => ({
   withdrawalFinalizationBatches: [1],
   simulatedShareRate: shareRate(1n),
   isBunkerMode: true,
+  vaultsValues: [],
+  vaultsNetCashFlows: [],
   extraDataFormat: EXTRA_DATA_FORMAT_LIST,
   extraDataHash: ZeroHash,
   extraDataItemsCount: 0,
