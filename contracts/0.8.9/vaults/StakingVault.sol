@@ -47,7 +47,7 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
         if (hasRole(DEPOSITOR_ROLE, EVERYONE) || hasRole(DEPOSITOR_ROLE, msg.sender)) {
             emit Deposit(msg.sender, msg.value);
         } else {
-            revert NotAuthorized("deposit");
+            revert NotAuthorized("deposit", msg.sender);
         }
     }
 
@@ -86,5 +86,5 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
     error ZeroArgument(string argument);
     error TransferFailed(address receiver, uint256 amount);
     error NotEnoughBalance(uint256 balance);
-    error NotAuthorized(string operation);
+    error NotAuthorized(string operation, address addr);
 }

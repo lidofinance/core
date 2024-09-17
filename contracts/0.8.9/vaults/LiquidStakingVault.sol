@@ -114,12 +114,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
             emit Rebalanced(_amountOfETH);
         } else {
-            revert NotAuthorized("rebalance");
+            revert NotAuthorized("rebalance", msg.sender);
         }
     }
 
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
-        if (msg.sender != address(HUB)) revert NotAuthorized("update");
+        if (msg.sender != address(HUB)) revert NotAuthorized("update", msg.sender);
 
         lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;

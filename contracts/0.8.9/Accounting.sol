@@ -167,7 +167,7 @@ struct ReportValues {
     ///          plus the balance of the vault itself)
     uint256[] vaultValues;
     /// @notice netCashFlow of each Lido vault
-    ///         (defference between deposits to and withdrawals from the vault)
+    ///         (difference between deposits to and withdrawals from the vault)
     int256[] netCashFlows;
 }
 
@@ -178,7 +178,7 @@ contract Accounting is VaultHub {
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(address(_lido)){
+    constructor(address _admin, ILidoLocator _lidoLocator, ILido _lido) VaultHub(_admin, address(_lido)){
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -230,8 +230,6 @@ contract Accounting is VaultHub {
         PreReportState pre;
         CalculatedValues update;
     }
-
-    error NotAccountingOracle();
 
     function calculateOracleReportContext(
         ReportValues memory _report
@@ -392,7 +390,7 @@ contract Accounting is VaultHub {
         Contracts memory _contracts,
         ReportContext memory _context
     ) internal returns (uint256[4] memory) {
-        if(msg.sender != _contracts.accountingOracleAddress) revert NotAccountingOracle();
+        if(msg.sender != _contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
 
         _checkAccountingOracleReport(_contracts, _context);
 

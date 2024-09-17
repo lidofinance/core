@@ -35,6 +35,8 @@ const DEFAULT_REPORT_FIELDS: OracleReport = {
   withdrawalFinalizationBatches: [],
   simulatedShareRate: 0n,
   isBunkerMode: false,
+  vaultsValues: [],
+  vaultsNetCashFlows: [],
   extraDataFormat: 0n,
   extraDataHash: ethers.ZeroHash,
   extraDataItemsCount: 0n,
@@ -54,6 +56,8 @@ export function getReportDataItems(r: OracleReport) {
     r.withdrawalFinalizationBatches,
     r.simulatedShareRate,
     r.isBunkerMode,
+    r.vaultsValues,
+    r.vaultsNetCashFlows,
     r.extraDataFormat,
     r.extraDataHash,
     r.extraDataItemsCount,
@@ -63,7 +67,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, uint256[], int256[], uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
