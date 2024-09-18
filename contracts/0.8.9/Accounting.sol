@@ -363,7 +363,7 @@ contract Accounting is VaultHub {
         uint256 _externalShares
     ) internal pure returns (ShareRate memory shareRate, uint256 sharesToMintAsFees) {
         shareRate.shares = _pre.totalShares - _calculated.totalSharesToBurn - _externalShares;
-        shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ + _calculated.elRewards;
+        shareRate.eth = _pre.totalPooledEther - _pre.externalEther - _calculated.etherToFinalizeWQ;
 
         uint256 unifiedClBalance = _report.clBalance + _calculated.withdrawals;
 
@@ -372,7 +372,7 @@ contract Accounting is VaultHub {
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
         if (unifiedClBalance > _calculated.principalClBalance) {
-            uint256 totalRewards = unifiedClBalance - _calculated.principalClBalance;
+            uint256 totalRewards = unifiedClBalance - _calculated.principalClBalance + _calculated.elRewards;
             uint256 totalFee = _calculated.rewardDistribution.totalFee;
             uint256 precision = _calculated.rewardDistribution.precisionPoints;
             uint256 feeEther = totalRewards * totalFee / precision;
