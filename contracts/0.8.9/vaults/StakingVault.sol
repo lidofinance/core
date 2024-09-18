@@ -10,10 +10,14 @@ import {IStaking} from "./interfaces/IStaking.sol";
 
 // TODO: trigger validator exit
 // TODO: add recover functions
+// TODO: max size
+// TODO: move roles to the external contract
 
 /// @title StakingVault
 /// @author folkyatina
-/// @notice Simple vault for staking. Allows to deposit ETH and create validators.
+/// @notice Basic ownable vault for staking. Allows to deposit ETH, create
+/// batches of validators withdrawal credentials set to the vault, receive
+/// various rewards and withdraw ETH.
 contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable {
     address public constant EVERYONE = address(0x4242424242424242424242424242424242424242);
 
@@ -66,6 +70,14 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
             _signaturesBatch
         );
         emit ValidatorsTopup(msg.sender, _keysCount, _keysCount * 32 ether);
+    }
+
+    function triggerValidatorExit(
+        uint256 _numberOfKeys
+    ) public virtual onlyRole(VAULT_MANAGER_ROLE) {
+        // [here will be triggerable exit]
+
+        emit ValidatorExitTriggered(msg.sender, _numberOfKeys);
     }
 
     /// @notice Withdraw ETH from the vault
