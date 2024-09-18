@@ -381,8 +381,8 @@ contract Accounting is VaultHub {
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
         } else {
-            uint256 totalPenalty = _calculated.principalClBalance - unifiedClBalance;
-            shareRate.eth = shareRate.eth - totalPenalty + _calculated.elRewards;
+            uint256 clPenalty = _calculated.principalClBalance - unifiedClBalance;
+            shareRate.eth = shareRate.eth - clPenalty + _calculated.elRewards;
         }
     }
 
