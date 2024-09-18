@@ -7,15 +7,18 @@ pragma solidity 0.8.9;
 import {StakingVault} from "./StakingVault.sol";
 import {ILiquid} from "./interfaces/ILiquid.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
-import {IHub} from "./interfaces/IHub.sol";
+import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 // TODO: add erc-4626-like can* methods
 // TODO: add depositAndMint method
 // TODO: escape hatch (permissionless update and burn and withdraw)
 // TODO: add sanity checks
 // TODO: unstructured storage
+// TODO: add rewards fee
+// TODO: add AUM fee
+
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
-    IHub public immutable HUB;
+    ILiquidity public immutable LIQUIDITY_PROVIDER;
 
     struct Report {
         uint128 value;
@@ -30,11 +33,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     int256 public netCashFlow;
 
     constructor(
-        address _vaultHub,
+        address _liquidityProvider,
         address _owner,
         address _depositContract
     ) StakingVault(_owner, _depositContract) {
-        HUB = IHub(_vaultHub);
+        LIQUIDITY_PROVIDER = ILiquidity(_liquidityProvider);
     }
 
     function value() public view override returns (uint256) {
@@ -75,14 +78,14 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         super.topupValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
-    function mintStETH(
+    function mint(
         address _receiver,
         uint256 _amountOfShares
     ) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
-        uint256 newLocked = HUB.mintSharesBackedByVault(_receiver, _amountOfShares);
+        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
 
         if (newLocked > value()) revert NotHealthy(newLocked, value());
 
@@ -95,11 +98,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         _mustBeHealthy();
     }
 
-    function burnStETH(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
+    function burn(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
         // burn shares at once but unlock balance later during the report
-        HUB.burnSharesBackedByVault(_amountOfShares);
+        LIQUIDITY_PROVIDER.burnSharesBackedByVault(_amountOfShares);
     }
 
     function rebalance(uint256 _amountOfETH) external {
@@ -107,21 +110,21 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
 
         if (hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
-           (!isHealthy() && msg.sender == address(HUB))) { // force rebalance
+           (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) { // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             netCashFlow -= int256(_amountOfETH);
 
-            HUB.forgive{value: _amountOfETH}();
+            emit Withdrawal(msg.sender, _amountOfETH);
 
-            emit Rebalanced(_amountOfETH);
+            LIQUIDITY_PROVIDER.rebalance{value: _amountOfETH}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
     }
 
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
-        if (msg.sender != address(HUB)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(LIQUIDITY_PROVIDER)) revert NotAuthorized("update", msg.sender);
 
         lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;

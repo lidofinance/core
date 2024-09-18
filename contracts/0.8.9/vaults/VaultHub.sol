@@ -7,6 +7,7 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
+import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
@@ -19,7 +20,7 @@ interface StETH {
 // TODO: add Lido fees
 // TODO: rebalance gas compensation
 // TODO: optimize storage
-contract VaultHub is AccessControlEnumerable, IHub {
+contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
 
     uint256 internal constant BPS_BASE = 10000;
@@ -152,11 +153,9 @@ contract VaultHub is AccessControlEnumerable, IHub {
         _vault.rebalance(amountToRebalance);
 
         if (mintRateBefore > _mintRate(socket)) revert RebalanceFailed(address(_vault));
-
-        emit VaultRebalanced(address(_vault), socket.minBondRateBP, amountToRebalance);
     }
 
-    function forgive() external payable {
+    function rebalance() external payable {
         ILockable vault = ILockable(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
@@ -170,6 +169,8 @@ contract VaultHub is AccessControlEnumerable, IHub {
 
         // and burn on behalf of this node (shares- TPE-)
         STETH.burnExternalShares(numberOfShares);
+
+        emit VaultRebalanced(address(vault), numberOfShares, socket.minBondRateBP);
     }
 
     struct ShareRate {
