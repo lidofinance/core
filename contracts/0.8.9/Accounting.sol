@@ -382,7 +382,7 @@ contract Accounting is VaultHub {
             sharesToMintAsFees = feeEther * shareRate.shares / shareRate.eth;
         } else {
             uint256 totalPenalty = _calculated.principalClBalance - unifiedClBalance;
-            shareRate.eth -= totalPenalty;
+            shareRate.eth = shareRate.eth - totalPenalty + _calculated.elRewards;
         }
     }
 
