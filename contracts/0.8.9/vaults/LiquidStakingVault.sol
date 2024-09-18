@@ -110,6 +110,8 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
            (!isHealthy() && msg.sender == address(HUB))) { // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
+            netCashFlow -= int256(_amountOfETH);
+
             HUB.forgive{value: _amountOfETH}();
 
             emit Rebalanced(_amountOfETH);
