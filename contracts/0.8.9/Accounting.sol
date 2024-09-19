@@ -159,7 +159,7 @@ contract Accounting is VaultHub {
         /// @notice number of stETH shares to transfer to Burner because of WQ finalization
         uint256 sharesToFinalizeWQ;
         /// @notice number of stETH shares transferred from WQ that will be burned this (to be removed)
-        uint256 sharesToBurnDueToWQThisReport;
+        uint256 sharesToBurnForWithdrawals;
         /// @notice number of stETH shares that will be burned from Burner this report
         uint256 totalSharesToBurn;
 
@@ -177,9 +177,9 @@ contract Accounting is VaultHub {
         /// @notice rebased amount of external ether
         uint256 externalEther;
         /// @notice amount of ether to be locked in the vaults
-        uint256[] lockedEther;
+        uint256[] vaultsLockedEther;
         /// @notice amount of shares to be minted as vault fees to the treasury
-        uint256[] treasuryFeeShares;
+        uint256[] vaultsTreasuryFeeShares;
     }
 
     function calculateOracleReportContext(
@@ -234,12 +234,11 @@ contract Accounting is VaultHub {
 
         // 5. Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in elrevards vault or withdrawals vault
-        // and/or
-        // (they also may contribute to rebase)
+        // and/or leaving some shares unburnt on Burner to be processed on future reports
         (
             update.withdrawals,
             update.elRewards,
-            update.sharesToBurnDueToWQThisReport,
+            update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
             pre.totalPooledEther,
@@ -276,7 +275,7 @@ contract Accounting is VaultHub {
 
         // 8. Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (update.lockedEther, update.treasuryFeeShares) = _calculateVaultsRebase(
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares) = _calculateVaultsRebase(
             update.postTotalShares,
             update.postTotalPooledEther,
             pre.totalShares,
@@ -402,8 +401,8 @@ contract Accounting is VaultHub {
         _updateVaults(
             _report.vaultValues,
             _report.netCashFlows,
-            _update.lockedEther,
-            _update.treasuryFeeShares
+            _update.vaultsLockedEther,
+            _update.vaultsTreasuryFeeShares
         );
 
         _completeTokenRebase(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
@@ -424,7 +423,7 @@ contract Accounting is VaultHub {
                 _update.postTotalPooledEther,
                 _update.postTotalShares,
                 _update.etherToFinalizeWQ,
-                _update.sharesToBurnDueToWQThisReport,
+                _update.sharesToBurnForWithdrawals,
                 _report.simulatedShareRate
             );
         }

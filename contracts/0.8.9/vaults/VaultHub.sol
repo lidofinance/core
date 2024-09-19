@@ -248,9 +248,12 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     ) internal view returns (uint256 treasuryFeeShares) {
         ILockable vault = _socket.vault;
 
+        // treasury fee is calculated as:
+        // treasuryFeeShares = value * treasuryFeeRate * lidoRewardRate
+        // = value * treasuryFeeRate * postShareRateWithoutFees / preShareRate
         treasuryFeeShares = vault.value()
             * _socket.treasuryFeeBP * postTotalPooledEther * preTotalShares
-            / BPS_BASE * (postTotalSharesNoFees * preTotalPooledEther); // TODO: check overflow and rounding
+            /      BPS_BASE    *    (postTotalSharesNoFees * preTotalPooledEther); // TODO: check overflow and rounding
     }
 
     function _updateVaults(
