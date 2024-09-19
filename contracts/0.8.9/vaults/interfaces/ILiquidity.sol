@@ -9,7 +9,7 @@ interface ILiquidity {
     function burnSharesBackedByVault(uint256 _amountOfShares) external;
     function rebalance() external payable;
 
-    event MintedSharesOnVault(address indexed vault, uint256 totalSharesMintedOnVault);
-    event BurnedSharesOnVault(address indexed vault, uint256 totalSharesMintedOnVault);
+    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurnt, uint256 newBondRateBP);
 }

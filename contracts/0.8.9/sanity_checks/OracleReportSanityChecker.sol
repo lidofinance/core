@@ -346,7 +346,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _newSharesToBurnForWithdrawals new shares to burn due to withdrawal request finalization
     /// @return withdrawals ETH amount allowed to be taken from the withdrawals vault
     /// @return elRewards ETH amount allowed to be taken from the EL rewards vault
-    /// @return simulatedSharesToBurn simulated amount to be burnt (if no ether locked on withdrawals)
+    /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
     function smoothenTokenRebase(
         uint256 _preTotalPooledEther,
@@ -361,7 +361,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) external view returns (
         uint256 withdrawals,
         uint256 elRewards,
-        uint256 simulatedSharesToBurn,
+        uint256 sharesFromWQToBurn,
         uint256 sharesToBurn
     ) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
@@ -382,9 +382,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // determining the shares to burn limit that would have been
         // if no withdrawals finalized during the report
         // it's used to check later the provided `simulatedShareRate` value
-        // after the off-chain calculation via `eth_call` of `Lido.handleOracleReport()`
-        // see also step 9 of the `Lido._handleOracleReport()`
-        simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
+        uint256 simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
 
         // remove ether to lock for withdrawals from total pooled ether
         tokenRebaseLimiter.decreaseEther(_etherToLockForWithdrawals);
@@ -393,6 +391,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             tokenRebaseLimiter.getSharesToBurnLimit(),
             _newSharesToBurnForWithdrawals + _sharesRequestedToBurn
         );
+
+        sharesFromWQToBurn = sharesToBurn - simulatedSharesToBurn;
     }
 
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report

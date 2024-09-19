@@ -560,7 +560,7 @@ describe("OracleReportSanityChecker.sol", () => {
     });
 
     it("all zero data works", async () => {
-      const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -573,7 +573,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
     });
 
@@ -583,7 +583,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
         .setMaxPositiveTokenRebase(newRebaseLimit);
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -593,11 +593,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
 
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -607,10 +607,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("0.1"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -620,10 +620,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("0.1"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -633,7 +633,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(ether("0.1"));
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(ether("0.1"));
     });
 
@@ -643,7 +643,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
         .setMaxPositiveTokenRebase(newRebaseLimit);
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -652,11 +652,11 @@ describe("OracleReportSanityChecker.sol", () => {
         );
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
 
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -666,10 +666,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("0.1"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -679,10 +679,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("0.1"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -692,7 +692,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(ether("0.1"));
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(ether("0.1"));
     });
 
@@ -702,7 +702,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
         .setMaxPositiveTokenRebase(newRebaseLimit);
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -711,10 +711,10 @@ describe("OracleReportSanityChecker.sol", () => {
         );
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -724,10 +724,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("2"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -737,10 +737,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("2"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals + el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -751,10 +751,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("2"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -764,8 +764,8 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal("1980198019801980198"); // ether(100. - (99. / 1.01))
-      expect(sharesToBurn).to.equal("1980198019801980198"); // the same as above since no withdrawals
+      expect(sharesFromWQToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal("1980198019801980198"); // ether(100. - (99. / 1.01))
     });
 
     it("non-trivial smoothen rebase works when post CL > pre CL and no withdrawals", async () => {
@@ -774,7 +774,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
         .setMaxPositiveTokenRebase(newRebaseLimit);
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -783,10 +783,10 @@ describe("OracleReportSanityChecker.sol", () => {
         );
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -796,10 +796,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("1"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -809,10 +809,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("1"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // withdrawals + el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -823,10 +823,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("1"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
       // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultSmoothenTokenRebaseParams,
@@ -836,8 +836,8 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal("980392156862745098"); // ether(100. - (101. / 1.02))
-      expect(sharesToBurn).to.equal("980392156862745098"); // the same as above since no withdrawals
+      expect(sharesFromWQToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal("980392156862745098"); // ether(100. - (101. / 1.02))
     });
 
     it("non-trivial smoothen rebase works when post CL < pre CL and withdrawals", async () => {
@@ -853,16 +853,16 @@ describe("OracleReportSanityChecker.sol", () => {
         newSharesToBurnForWithdrawals: ether("10"),
       };
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values(defaultRebaseParams) as SmoothenTokenRebaseParameters),
         );
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(ether("10"));
       expect(sharesToBurn).to.equal(ether("10"));
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -871,10 +871,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("1.5"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9950248756218905472");
       expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -883,10 +883,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("1.5"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9950248756218905472");
       expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
       // withdrawals + el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -896,10 +896,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("1.5"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9950248756218905472");
       expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
       // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -908,7 +908,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal("1492537313432835820"); // ether("100. - (99. / 1.005))
+      expect(sharesFromWQToBurn).to.equal("9950248756218905473"); // ether("(99. / 1.005) - (89. / 1.005))
       expect(sharesToBurn).to.equal("11442786069651741293"); // ether("100. - (89. / 1.005))
     });
 
@@ -925,16 +925,16 @@ describe("OracleReportSanityChecker.sol", () => {
         newSharesToBurnForWithdrawals: ether("10"),
       };
 
-      let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      let { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values(defaultRebaseParams) as SmoothenTokenRebaseParameters),
         );
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(ether("10"));
       expect(sharesToBurn).to.equal(ether("10"));
       // el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -943,10 +943,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(ether("2"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9615384615384615384");
       expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // withdrawals
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -955,10 +955,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("2"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9615384615384615384");
       expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // withdrawals + el rewards
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -968,10 +968,10 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(ether("2"));
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("9615384615384615384");
       expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
       // shares requested to burn
-      ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      ({ withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({
             ...defaultRebaseParams,
@@ -980,7 +980,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ));
       expect(withdrawals).to.equal(0);
       expect(elRewards).to.equal(0);
-      expect(simulatedSharesToBurn).to.equal("1923076923076923076"); // ether("100. - (102. / 1.04))
+      expect(sharesFromWQToBurn).to.equal("9615384615384615385"); // ether("(102. / 1.04) - (92. / 1.04))
       expect(sharesToBurn).to.equal("11538461538461538461"); // ether("100. - (92. / 1.04))
     });
 
@@ -1002,14 +1002,14 @@ describe("OracleReportSanityChecker.sol", () => {
         newSharesToBurnForWithdrawals: ether("40000"),
       };
 
-      const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values(rebaseParams) as SmoothenTokenRebaseParameters),
         );
 
       expect(withdrawals).to.equal(ether("500"));
       expect(elRewards).to.equal(ether("500"));
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal("39960039960039960039960");
       expect(sharesToBurn).to.equal("39960039960039960039960"); // ether(1000000 - 961000. / 1.001)
     });
 
@@ -1031,14 +1031,14 @@ describe("OracleReportSanityChecker.sol", () => {
         newSharesToBurnForWithdrawals: 0n,
       };
 
-      const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
+      const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values(rebaseParams) as SmoothenTokenRebaseParameters),
         );
 
       expect(withdrawals).to.equal(129959459000000000n);
       expect(elRewards).to.equal(95073654397722094176n);
-      expect(simulatedSharesToBurn).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
     });
   });
