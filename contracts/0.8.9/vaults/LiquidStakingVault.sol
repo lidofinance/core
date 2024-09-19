@@ -18,6 +18,7 @@ import {ILiquidity} from "./interfaces/ILiquidity.sol";
 // TODO: add AUM fee
 
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
+    uint256 private constant MAX_FEE = 10000;
     ILiquidity public immutable LIQUIDITY_PROVIDER;
 
     struct Report {
@@ -26,11 +27,14 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     }
 
     Report public lastReport;
+    Report public lastClaimedReport;
 
     uint256 public locked;
 
     // Is direct validator depositing affects this accounting?
     int256 public netCashFlow;
+
+    uint256 nodeOperatorFee;
 
     constructor(
         address _liquidityProvider,
@@ -85,17 +89,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
-        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
-
-        if (newLocked > value()) revert NotHealthy(newLocked, value());
-
-        if (newLocked > locked) {
-            locked = newLocked;
-
-            emit Locked(newLocked);
-        }
-
-        _mustBeHealthy();
+        _mint(_receiver, _amountOfShares);
     }
 
     function burn(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
@@ -114,7 +108,6 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             netCashFlow -= int256(_amountOfETH);
-
             emit Withdrawal(msg.sender, _amountOfETH);
 
             LIQUIDITY_PROVIDER.rebalance{value: _amountOfETH}();
@@ -130,6 +123,36 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         locked = _locked;
 
         emit Reported(_value, _ncf, _locked);
+    }
+
+    function setNodeOperatorFee(uint256 _nodeOperatorFee) external onlyRole(VAULT_MANAGER_ROLE) {
+        nodeOperatorFee = _nodeOperatorFee;
+    }
+
+    function claimNodeOperatorFee() external {
+        if (!hasRole(NODE_OPERATOR_ROLE, msg.sender)) revert NotAuthorized("claimNodeOperatorFee", msg.sender);
+
+        int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
+                - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
+
+        if (earnedRewards > 0) {
+            lastClaimedReport = lastReport;
+
+            uint256 nodeOperatorFeeAmount = uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
+            _mint(msg.sender, nodeOperatorFeeAmount);
+
+            // TODO: emit event
+        }
+    }
+
+    function _mint(address _receiver, uint256 _amountOfShares) internal {
+        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
+
+        if (newLocked > locked) {
+            locked = newLocked;
+
+            emit Locked(newLocked);
+        }
     }
 
     function _mustBeHealthy() private view {
