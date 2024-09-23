@@ -230,7 +230,7 @@ contract Accounting is VaultHub {
         // 3. Principal CL balance is the sum of the current CL balance and
         // validator deposits during this report
         // TODO: to support maxEB we need to get rid of validator counting
-        update.principalClBalance = pre.clBalance + _report.clValidators - pre.clValidators * DEPOSIT_SIZE;
+        update.principalClBalance = pre.clBalance + (_report.clValidators - pre.clValidators) * DEPOSIT_SIZE;
 
         // 5. Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in elrevards vault or withdrawals vault
