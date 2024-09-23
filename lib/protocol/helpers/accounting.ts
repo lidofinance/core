@@ -307,12 +307,10 @@ const simulateReport = async (
     netCashFlows,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
-  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
+  const { hashConsensus, accounting } = ctx.contracts;
 
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
   const reportTimestamp = genesisTime + refSlot * secondsPerSlot;
-
-  const accountingOracleAccount = await impersonate(accountingOracle.address, ether("100"));
 
   log.debug("Simulating oracle report", {
     "Ref Slot": refSlot,
@@ -322,30 +320,33 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = await accounting
-    .connect(accountingOracleAccount)
-    .handleOracleReport.staticCall({
-      timestamp: reportTimestamp,
-      timeElapsed: 24n * 60n * 60n, // 1 day
-      clValidators: beaconValidators,
-      clBalance,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      sharesRequestedToBurn: 0n,
-      withdrawalFinalizationBatches: [],
-      simulatedShareRate: 0n,
-      vaultValues,
-      netCashFlows,
-    });
-
-  log.debug("Simulation result", {
-    "Post Total Pooled Ether": formatEther(postTotalPooledEther),
-    "Post Total Shares": postTotalShares,
-    "Withdrawals": formatEther(withdrawals),
-    "El Rewards": formatEther(elRewards),
+  const [, update] = await accounting.calculateOracleReportContext({
+    timestamp: reportTimestamp,
+    timeElapsed: 24n * 60n * 60n, // 1 day
+    clValidators: beaconValidators,
+    clBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    sharesRequestedToBurn: 0n,
+    withdrawalFinalizationBatches: [],
+    simulatedShareRate: 0n,
+    vaultValues,
+    netCashFlows,
   });
 
-  return { postTotalPooledEther, postTotalShares, withdrawals, elRewards };
+  log.debug("Simulation result", {
+    "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
+    "Post Total Shares": update.postTotalShares,
+    "Withdrawals": formatEther(update.withdrawals),
+    "El Rewards": formatEther(update.elRewards),
+  });
+
+  return {
+    postTotalPooledEther: update.postTotalPooledEther,
+    postTotalShares: update.postTotalShares,
+    withdrawals: update.withdrawals,
+    elRewards: update.elRewards,
+  };
 };
 
 type HandleOracleReportParams = {
