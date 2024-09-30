@@ -23,7 +23,7 @@ interface StETH {
 abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
 
-    uint256 internal constant BPS_BASE = 10000;
+    uint256 internal constant BPS_BASE = 1e4;
 
     StETH public immutable STETH;
     address public immutable treasury;
@@ -236,7 +236,6 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
             uint256 externalEther = totalMintedShares * postTotalPooledEther / postTotalShares; //TODO: check rounding
             lockedEther[i] = externalEther * BPS_BASE / (BPS_BASE - socket.minBondRateBP);
         }
-        // TODO: rebalance fee
     }
 
     function _calculateLidoFees(
@@ -248,12 +247,20 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     ) internal view returns (uint256 treasuryFeeShares) {
         ILockable vault = _socket.vault;
 
-        // treasury fee is calculated as:
-        // treasuryFeeShares = value * treasuryFeeRate * lidoRewardRate
-        // = value * treasuryFeeRate * postShareRateWithoutFees / preShareRate
-        treasuryFeeShares = vault.value()
-            * _socket.treasuryFeeBP * postTotalPooledEther * preTotalShares
-            /      BPS_BASE    *    (postTotalSharesNoFees * preTotalPooledEther); // TODO: check overflow and rounding
+        uint256 chargeableValue = _max(vault.value(), _socket.capShares * preTotalPooledEther / preTotalShares);
+
+        // treasury fee is calculated as a share of potential rewards that
+        // Lido curated validators could earn if vault's ETH was staked in Lido
+        // itself and minted as stETH shares
+        //
+        // treasuryFeeShares = value * lidoGrossAPR * treasuryFeeRate / preShareRate
+        // lidoGrossAPR = postShareRateWithoutFees / preShareRate - 1
+        // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
+
+        uint256 potentialRewards = (chargeableValue * (postTotalPooledEther * preTotalShares) / (postTotalSharesNoFees * preTotalPooledEther) - chargeableValue);
+        uint256 treasuryFee = potentialRewards * _socket.treasuryFeeBP / BPS_BASE;
+
+        treasuryFeeShares = treasuryFee * preTotalShares / preTotalPooledEther;
     }
 
     function _updateVaults(
@@ -284,6 +291,10 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (socket.vault != _vault) revert NotConnectedToHub(address(_vault));
 
         return socket;
+    }
+
+    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
     }
 
     error StETHMintFailed(address vault);
