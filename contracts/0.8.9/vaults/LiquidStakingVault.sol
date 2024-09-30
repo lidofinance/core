@@ -89,7 +89,13 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
 
-        _mint(_receiver, _amountOfShares);
+        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
+
+        if (newLocked > locked) {
+            locked = newLocked;
+
+            emit Locked(newLocked);
+        }
     }
 
     function burn(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
@@ -129,7 +135,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         nodeOperatorFee = _nodeOperatorFee;
     }
 
-    function claimNodeOperatorFee() external {
+    function claimNodeOperatorFee(address _receiver) external {
         if (!hasRole(NODE_OPERATOR_ROLE, msg.sender)) revert NotAuthorized("claimNodeOperatorFee", msg.sender);
 
         int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
@@ -139,19 +145,13 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
             lastClaimedReport = lastReport;
 
             uint256 nodeOperatorFeeAmount = uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
-            _mint(msg.sender, nodeOperatorFeeAmount);
+            uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, nodeOperatorFeeAmount);
 
-            // TODO: emit event
-        }
-    }
+            if (newLocked > locked) {
+                locked = newLocked;
 
-    function _mint(address _receiver, uint256 _amountOfShares) internal {
-        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
-
-        if (newLocked > locked) {
-            locked = newLocked;
-
-            emit Locked(newLocked);
+                emit Locked(newLocked);
+            }
         }
     }
 

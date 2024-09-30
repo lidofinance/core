@@ -97,10 +97,11 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     /// @param _receiver address of the receiver
     /// @param _amountOfShares amount of shares to mint
     /// @return totalEtherToLock total amount of ether that should be locked on the vault
+    /// @dev can be used by vaults only
     function mintSharesBackedByVault(
         address _receiver,
         uint256 _amountOfShares
-    ) external returns (uint256 totalEtherToLock) {
+    ) public returns (uint256 totalEtherToLock) {
         ILockable vault = ILockable(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
@@ -114,40 +115,29 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         _mintSharesBackedByVault(socket, _receiver, _amountOfShares);
     }
 
-    function _mintSharesBackedByVault(
-        VaultSocket memory _socket,
+    /// @notice mint StETH tokens  backed by vault external balance to the receiver address
+    /// @param _receiver address of the receiver
+    /// @param _amountOfTokens amount of stETH tokens to mint
+    /// @return totalEtherToLock total amount of ether that should be locked on the vault
+    /// @dev can be used by vaults only
+    function mintStethBackedByVault(
         address _receiver,
-        uint256 _amountOfShares
-    ) internal {
-        ILockable vault = _socket.vault;
+        uint256 _amountOfTokens
+    ) external returns (uint256) {
+        uint256 sharesToMintAsFees = STETH.getSharesByPooledEth(_amountOfTokens);
 
-        vaultIndex[vault].mintedShares += _amountOfShares;
-        STETH.mintExternalShares(_receiver, _amountOfShares);
-        emit MintedSharesOnVault(address(vault), _amountOfShares);
-
-        // TODO: invariants
-        // mintedShares <= lockedBalance in shares
-        // mintedShares <= capShares
-        // externalBalance == sum(lockedBalance - bond )
+        return mintSharesBackedByVault(_receiver, sharesToMintAsFees);
     }
 
     /// @notice burn shares backed by vault external balance
     /// @dev shares should be approved to be spend by this contract
     /// @param _amountOfShares amount of shares to burn
+    /// @dev can be used by vaults only
     function burnSharesBackedByVault(uint256 _amountOfShares) external {
         ILockable vault = ILockable(msg.sender);
         VaultSocket memory socket = _authedSocket(vault);
 
         _burnSharesBackedByVault(socket, _amountOfShares);
-    }
-
-    function _burnSharesBackedByVault(VaultSocket memory _socket, uint256 _amountOfShares) internal {
-        ILockable vault = _socket.vault;
-        if (_socket.mintedShares < _amountOfShares) revert NotEnoughShares(address(vault), _socket.mintedShares);
-
-        vaultIndex[vault].mintedShares -= _amountOfShares;
-        STETH.burnExternalShares(_amountOfShares);
-        emit BurnedSharesOnVault(address(vault), _amountOfShares);
     }
 
     function forceRebalance(ILockable _vault) external {
@@ -186,6 +176,32 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         _burnSharesBackedByVault(socket, numberOfShares);
 
         emit VaultRebalanced(address(vault), numberOfShares, socket.minBondRateBP);
+    }
+
+    function _mintSharesBackedByVault(
+        VaultSocket memory _socket,
+        address _receiver,
+        uint256 _amountOfShares
+    ) internal {
+        ILockable vault = _socket.vault;
+
+        vaultIndex[vault].mintedShares += _amountOfShares;
+        STETH.mintExternalShares(_receiver, _amountOfShares);
+        emit MintedSharesOnVault(address(vault), _amountOfShares);
+
+        // TODO: invariants
+        // mintedShares <= lockedBalance in shares
+        // mintedShares <= capShares
+        // externalBalance == sum(lockedBalance - bond )
+    }
+
+    function _burnSharesBackedByVault(VaultSocket memory _socket, uint256 _amountOfShares) internal {
+        ILockable vault = _socket.vault;
+        if (_socket.mintedShares < _amountOfShares) revert NotEnoughShares(address(vault), _socket.mintedShares);
+
+        vaultIndex[vault].mintedShares -= _amountOfShares;
+        STETH.burnExternalShares(_amountOfShares);
+        emit BurnedSharesOnVault(address(vault), _amountOfShares);
     }
 
     function _calculateVaultsRebase(

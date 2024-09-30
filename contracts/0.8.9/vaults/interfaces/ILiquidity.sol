@@ -5,7 +5,8 @@ pragma solidity 0.8.9;
 
 
 interface ILiquidity {
-    function mintSharesBackedByVault(address _receiver, uint256 _amountOfShares) external returns (uint256);
+    function mintStethBackedByVault(address _receiver, uint256 _amountOfTokens) external returns (uint256 totalEtherToLock);
+    function mintSharesBackedByVault(address _receiver, uint256 _amountOfShares) external returns (uint256 totalEtherToLock);
     function burnSharesBackedByVault(uint256 _amountOfShares) external;
     function rebalance() external payable;
 
