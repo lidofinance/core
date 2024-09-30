@@ -247,7 +247,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     ) internal view returns (uint256 treasuryFeeShares) {
         ILockable vault = _socket.vault;
 
-        uint256 chargeableValue = _max(vault.value(), _socket.capShares * preTotalPooledEther / preTotalShares);
+        uint256 chargeableValue = _min(vault.value(), _socket.capShares * preTotalPooledEther / preTotalShares);
 
         // treasury fee is calculated as a share of potential rewards that
         // Lido curated validators could earn if vault's ETH was staked in Lido
@@ -257,6 +257,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         // lidoGrossAPR = postShareRateWithoutFees / preShareRate - 1
         // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
 
+        // TODO: optimize potential rewards calculation
         uint256 potentialRewards = (chargeableValue * (postTotalPooledEther * preTotalShares) / (postTotalSharesNoFees * preTotalPooledEther) - chargeableValue);
         uint256 treasuryFee = potentialRewards * _socket.treasuryFeeBP / BPS_BASE;
 
@@ -293,8 +294,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         return socket;
     }
 
-    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a > b ? a : b;
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     error StETHMintFailed(address vault);
