@@ -14,7 +14,6 @@ import {ILiquidity} from "./interfaces/ILiquidity.sol";
 // TODO: escape hatch (permissionless update and burn and withdraw)
 // TODO: add sanity checks
 // TODO: unstructured storage
-// TODO: add rewards fee
 // TODO: add AUM fee
 
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
