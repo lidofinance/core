@@ -84,12 +84,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     function mint(
         address _receiver,
-        uint256 _amountOfShares
+        uint256 _amountOfTokens
     ) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
-        if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
+        if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
-        uint256 newLocked = LIQUIDITY_PROVIDER.mintSharesBackedByVault(_receiver, _amountOfShares);
+        uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, _amountOfTokens);
 
         if (newLocked > locked) {
             locked = newLocked;
@@ -98,11 +98,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         }
     }
 
-    function burn(uint256 _amountOfShares) external onlyRole(VAULT_MANAGER_ROLE) {
-        if (_amountOfShares == 0) revert ZeroArgument("amountOfShares");
+    function burn(uint256 _amountOfTokens) external onlyRole(VAULT_MANAGER_ROLE) {
+        if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
         // burn shares at once but unlock balance later during the report
-        LIQUIDITY_PROVIDER.burnSharesBackedByVault(_amountOfShares);
+        LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
     }
 
     function rebalance(uint256 _amountOfETH) external {

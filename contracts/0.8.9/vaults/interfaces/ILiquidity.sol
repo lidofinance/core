@@ -6,11 +6,10 @@ pragma solidity 0.8.9;
 
 interface ILiquidity {
     function mintStethBackedByVault(address _receiver, uint256 _amountOfTokens) external returns (uint256 totalEtherToLock);
-    function mintSharesBackedByVault(address _receiver, uint256 _amountOfShares) external returns (uint256 totalEtherToLock);
-    function burnSharesBackedByVault(uint256 _amountOfShares) external;
+    function burnStethBackedByVault(uint256 _amountOfTokens) external;
     function rebalance() external payable;
 
-    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
-    event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
-    event VaultRebalanced(address indexed vault, uint256 sharesBurnt, uint256 newBondRateBP);
+    event MintedStETHOnVault(address indexed vault, uint256 amountOfTokens);
+    event BurnedStETHOnVault(address indexed vault, uint256 amountOfTokens);
+    event VaultRebalanced(address indexed vault, uint256 tokensBurnt, uint256 newBondRateBP);
 }
