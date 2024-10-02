@@ -10,7 +10,6 @@ import {ILockable} from "./interfaces/ILockable.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 // TODO: add erc-4626-like can* methods
-// TODO: add depositAndMint method
 // TODO: escape hatch (permissionless update and burn and withdraw)
 // TODO: add sanity checks
 // TODO: unstructured storage
@@ -84,7 +83,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     function mint(
         address _receiver,
         uint256 _amountOfTokens
-    ) external onlyRole(VAULT_MANAGER_ROLE) {
+    ) external payable onlyRole(VAULT_MANAGER_ROLE) andDeposit() {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
@@ -104,7 +103,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external {
+    function rebalance(uint256 _amountOfETH) external payable andDeposit(){
         if (_amountOfETH == 0) revert ZeroArgument("amountOfETH");
         if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
 
@@ -156,6 +155,13 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     function _mustBeHealthy() private view {
         if (locked > value()) revert NotHealthy(locked, value());
+    }
+
+    modifier andDeposit() {
+        if (msg.value > 0) {
+            deposit();
+        }
+        _;
     }
 
     error NotHealthy(uint256 locked, uint256 value);
