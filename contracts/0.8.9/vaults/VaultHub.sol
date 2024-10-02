@@ -15,15 +15,20 @@ interface StETH {
 
     function getPooledEthByShares(uint256) external view returns (uint256);
     function getSharesByPooledEth(uint256) external view returns (uint256);
+    function getTotalShares() external view returns (uint256);
 }
 
 // TODO: rebalance gas compensation
 // TODO: optimize storage
 // TODO: add limits for vaults length
+
+/// @notice Vaults registry contract that is an interface to the Lido protocol
+/// in the same time
+/// @author folkyatina
 abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
-
     uint256 internal constant BPS_BASE = 1e4;
+    uint256 internal constant MAX_VAULTS_COUNT = 500;
 
     StETH public immutable STETH;
     address public immutable treasury;
@@ -32,12 +37,12 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         /// @notice vault address
         ILockable vault;
         /// @notice maximum number of stETH shares that can be minted by vault owner
-        uint256 capShares;
+        uint96 capShares;
         /// @notice total number of stETH shares minted by the vault
-        uint256 mintedShares;
+        uint96 mintedShares;
         /// @notice minimum bond rate in basis points
-        uint256 minBondRateBP;
-        uint256 treasuryFeeBP;
+        uint16 minBondRateBP;
+        uint16 treasuryFeeBP;
     }
 
     /// @notice vault sockets with vaults connected to the hub
@@ -83,11 +88,20 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         uint256 _minBondRateBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_capShares == 0) revert ZeroArgument("capShares");
+        if (_minBondRateBP == 0) revert ZeroArgument("minBondRateBP");
+        if (_treasuryFeeBP == 0) revert ZeroArgument("treasuryFeeBP");
+        if (address(_vault) == address(0)) revert ZeroArgument("vault");
+
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault));
+        if (vaultsCount() >= MAX_VAULTS_COUNT) revert TooManyVaults();
+        if (_capShares > STETH.getTotalShares() / 10) {
+            revert CapTooHigh(address(_vault), _capShares, STETH.getTotalShares()/10);
+        }
+        if (_minBondRateBP > BPS_BASE) revert MinBondRateTooHigh(address(_vault), _minBondRateBP, BPS_BASE);
+        if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
-        //TODO: sanity checks on parameters
-
-        VaultSocket memory vr = VaultSocket(ILockable(_vault), _capShares, 0, _minBondRateBP, _treasuryFeeBP);
+        VaultSocket memory vr = VaultSocket(ILockable(_vault), uint96(_capShares), 0, uint16(_minBondRateBP), uint16(_treasuryFeeBP));
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
@@ -95,13 +109,24 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     }
 
     /// @notice disconnects a vault from the hub
+    /// @param _vault vault address
     function disconnectVault(ILockable _vault) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == ILockable(address(0))) revert ZeroArgument("vault");
 
         uint256 index = vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(address(_vault));
+        VaultSocket memory socket = sockets[index];
 
-        // TODO: check mintedShares first
+        if (socket.mintedShares > 0) {
+            uint256 stethToBurn = STETH.getPooledEthByShares(socket.mintedShares);
+            if (address(_vault).balance >= stethToBurn) {
+                _vault.rebalance(stethToBurn);
+            } else {
+                revert NotEnoughBalance(address(_vault), address(_vault).balance, stethToBurn);
+            }
+        }
+
+        _vault.update(_vault.value(), _vault.netCashFlow(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
@@ -138,7 +163,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         totalEtherToLock = newMintedStETH * BPS_BASE / (BPS_BASE - socket.minBondRateBP);
         if (totalEtherToLock > vault_.value()) revert BondLimitReached(msg.sender);
 
-        sockets[index].mintedShares = sharesMintedOnVault;
+        sockets[index].mintedShares = uint96(sharesMintedOnVault);
 
         STETH.mintExternalShares(_receiver, sharesToMint);
 
@@ -156,10 +181,9 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         VaultSocket memory socket = sockets[index];
 
         uint256 amountOfShares = STETH.getSharesByPooledEth(_amountOfTokens);
-
         if (socket.mintedShares < amountOfShares) revert NotEnoughShares(msg.sender, socket.mintedShares);
 
-        sockets[index].mintedShares -= amountOfShares;
+        sockets[index].mintedShares -= uint96(amountOfShares);
         STETH.burnExternalShares(amountOfShares);
 
         emit BurnedStETHOnVault(msg.sender, _amountOfTokens);
@@ -204,7 +228,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         (bool success,) = address(STETH).call{value: msg.value}("");
         if (!success) revert StETHMintFailed(msg.sender);
 
-        sockets[index].mintedShares -= amountOfShares;
+        sockets[index].mintedShares -= uint96(amountOfShares);
         STETH.burnExternalShares(amountOfShares);
 
         emit VaultRebalanced(msg.sender, amountOfShares, _mintRate(socket));
@@ -298,7 +322,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
             VaultSocket memory socket = sockets[i + 1];
             // TODO: can be aggregated and optimized
             if (treasuryFeeShares[i] > 0) {
-                socket.mintedShares += treasuryFeeShares[i];
+                socket.mintedShares += uint96(treasuryFeeShares[i]);
                 totalTreasuryShares += treasuryFeeShares[i];
             }
 
@@ -330,4 +354,9 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     error RebalanceFailed(address vault);
     error NotAuthorized(string operation, address addr);
     error ZeroArgument(string argument);
+    error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
+    error TooManyVaults();
+    error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
+    error MinBondRateTooHigh(address vault, uint256 minBondRateBP, uint256 maxMinBondRateBP);
+    error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
 }
