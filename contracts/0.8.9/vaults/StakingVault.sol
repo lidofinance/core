@@ -89,8 +89,8 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
         if (_amount == 0) revert ZeroArgument("amount");
         if (_amount > address(this).balance) revert NotEnoughBalance(address(this).balance);
 
-        (bool success, ) = _receiver.call{value: _amount}("");
-        if(!success) revert TransferFailed(_receiver, _amount);
+        (bool success,) = _receiver.call{value: _amount}("");
+        if (!success) revert TransferFailed(_receiver, _amount);
 
         emit Withdrawal(_receiver, _amount);
     }

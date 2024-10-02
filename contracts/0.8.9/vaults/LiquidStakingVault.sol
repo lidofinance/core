@@ -61,20 +61,28 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         }
     }
 
+    function canWithdraw() public view returns (uint256) {
+        uint256 reallyLocked = _max(locked, accumulatedNodeOperatorFee() + accumulatedVaultOwnerFee);
+        if (reallyLocked > value()) return 0;
+
+        return value() - reallyLocked;
+    }
+
     function deposit() public payable override(StakingVault) {
         netCashFlow += int256(msg.value);
 
         super.deposit();
     }
 
-    function withdraw(address _receiver, uint256 _amount) public override(StakingVault) {
+    function withdraw(
+        address _receiver,
+        uint256 _amount
+    ) public override(StakingVault) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amount == 0) revert ZeroArgument("amount");
-        if (_amount + locked > value()) revert NotHealthy(locked, value() - _amount);
+        if (canWithdraw() < _amount) revert NotEnoughUnlockedEth(canWithdraw(), _amount);
 
-        netCashFlow -= int256(_amount);
-
-        super.withdraw(_receiver, _amount);
+        _withdraw(_receiver, _amount);
 
         _mustBeHealthy();
     }
@@ -146,7 +154,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         vaultOwnerFee = _vaultOwnerFee;
     }
 
-    function claimNodeOperatorFee(address _receiver) external onlyRole(VAULT_MANAGER_ROLE) {
+    function claimNodeOperatorFee(address _receiver, bool _liquid) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
 
         uint256 feesToClaim = accumulatedNodeOperatorFee();
@@ -154,20 +162,44 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (feesToClaim > 0) {
             lastClaimedReport = lastReport;
 
-            _mint(_receiver, feesToClaim);
+            if (_liquid) {
+                _mint(_receiver, feesToClaim);
+            } else {
+                 _withdrawFeeInEther(_receiver, feesToClaim);
+            }
         }
     }
 
-    function claimVaultOwnerFee(address _receiver) external onlyRole(VAULT_MANAGER_ROLE) {
-         if (_receiver == address(0)) revert ZeroArgument("receiver");
+    function claimVaultOwnerFee(
+        address _receiver,
+        bool _liquid
+    ) external onlyRole(VAULT_MANAGER_ROLE) {
+        if (_receiver == address(0)) revert ZeroArgument("receiver");
+        _mustBeHealthy();
 
-         uint256 feesToClaim = accumulatedVaultOwnerFee;
+        uint256 feesToClaim = accumulatedVaultOwnerFee;
 
-         if (feesToClaim > 0) {
+        if (feesToClaim > 0) {
             accumulatedVaultOwnerFee = 0;
 
-            _mint(_receiver, feesToClaim);
-         }
+            if (_liquid) {
+                _mint(_receiver, feesToClaim);
+            } else {
+                _withdrawFeeInEther(_receiver, feesToClaim);
+            }
+        }
+    }
+
+    function _withdrawFeeInEther(address _receiver, uint256 _amountOfTokens) internal {
+        int256 unlocked = int256(value()) - int256(locked);
+        uint256 canWithdrawFee = unlocked >= 0 ? uint256(unlocked) : 0;
+        if (canWithdrawFee < _amountOfTokens) revert NotEnoughUnlockedEth(canWithdrawFee, _amountOfTokens);
+        _withdraw(_receiver, _amountOfTokens);
+    }
+
+    function _withdraw(address _receiver, uint256 _amountOfTokens) internal {
+        netCashFlow -= int256(_amountOfTokens);
+        super.withdraw(_receiver, _amountOfTokens);
     }
 
     function _mint(address _receiver, uint256 _amountOfTokens) internal {
@@ -191,6 +223,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         _;
     }
 
+    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
+    }
+
     error NotHealthy(uint256 locked, uint256 value);
+    error NotEnoughUnlockedEth(uint256 unlocked, uint256 amount);
     error NeedToClaimAccumulatedNodeOperatorFee();
 }
