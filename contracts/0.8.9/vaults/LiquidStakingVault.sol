@@ -10,11 +10,8 @@ import {ILockable} from "./interfaces/ILockable.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 // TODO: add erc-4626-like can* methods
-// TODO: escape hatch (permissionless update and burn and withdraw)
 // TODO: add sanity checks
 // TODO: unstructured storage
-// TODO: add AUM fee
-
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     uint256 private constant MAX_FEE = 10000;
     ILiquidity public immutable LIQUIDITY_PROVIDER;
@@ -33,6 +30,9 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     int256 public netCashFlow;
 
     uint256 nodeOperatorFee;
+    uint256 vaultOwnerFee;
+
+    uint256 public accumulatedVaultOwnerFee;
 
     constructor(
         address _liquidityProvider,
@@ -48,6 +48,17 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     function isHealthy() public view returns (bool) {
         return locked <= value();
+    }
+
+    function accumulatedNodeOperatorFee() public view returns (uint256) {
+        int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
+                - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
+
+        if (earnedRewards > 0) {
+            return uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
+        } else {
+            return 0;
+        }
     }
 
     function deposit() public payable override(StakingVault) {
@@ -87,13 +98,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
-        uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, _amountOfTokens);
-
-        if (newLocked > locked) {
-            locked = newLocked;
-
-            emit Locked(newLocked);
-        }
+        _mint(_receiver, _amountOfTokens);
     }
 
     function burn(uint256 _amountOfTokens) external onlyRole(VAULT_MANAGER_ROLE) {
@@ -126,30 +131,52 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;
 
+        accumulatedVaultOwnerFee += _value * vaultOwnerFee / 365 / MAX_FEE;
+
         emit Reported(_value, _ncf, _locked);
     }
 
     function setNodeOperatorFee(uint256 _nodeOperatorFee) external onlyRole(VAULT_MANAGER_ROLE) {
         nodeOperatorFee = _nodeOperatorFee;
+
+        if (accumulatedNodeOperatorFee() > 0) revert NeedToClaimAccumulatedNodeOperatorFee();
     }
 
-    function claimNodeOperatorFee(address _receiver) external {
-        if (!hasRole(NODE_OPERATOR_ROLE, msg.sender)) revert NotAuthorized("claimNodeOperatorFee", msg.sender);
+    function setVaultOwnerFee(uint256 _vaultOwnerFee) external onlyRole(VAULT_MANAGER_ROLE) {
+        vaultOwnerFee = _vaultOwnerFee;
+    }
 
-        int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
-                - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
+    function claimNodeOperatorFee(address _receiver) external onlyRole(VAULT_MANAGER_ROLE) {
+        if (_receiver == address(0)) revert ZeroArgument("receiver");
 
-        if (earnedRewards > 0) {
+        uint256 feesToClaim = accumulatedNodeOperatorFee();
+
+        if (feesToClaim > 0) {
             lastClaimedReport = lastReport;
 
-            uint256 nodeOperatorFeeAmount = uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
-            uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, nodeOperatorFeeAmount);
+            _mint(_receiver, feesToClaim);
+        }
+    }
 
-            if (newLocked > locked) {
-                locked = newLocked;
+    function claimVaultOwnerFee(address _receiver) external onlyRole(VAULT_MANAGER_ROLE) {
+         if (_receiver == address(0)) revert ZeroArgument("receiver");
 
-                emit Locked(newLocked);
-            }
+         uint256 feesToClaim = accumulatedVaultOwnerFee;
+
+         if (feesToClaim > 0) {
+            accumulatedVaultOwnerFee = 0;
+
+            _mint(_receiver, feesToClaim);
+         }
+    }
+
+    function _mint(address _receiver, uint256 _amountOfTokens) internal {
+        uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, _amountOfTokens);
+
+        if (newLocked > locked) {
+            locked = newLocked;
+
+            emit Locked(newLocked);
         }
     }
 
@@ -165,4 +192,5 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     }
 
     error NotHealthy(uint256 locked, uint256 value);
+    error NeedToClaimAccumulatedNodeOperatorFee();
 }
