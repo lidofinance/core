@@ -21,6 +21,7 @@ interface StETH {
 // TODO: rebalance gas compensation
 // TODO: optimize storage
 // TODO: add limits for vaults length
+// TODO: unstructured storag and upgradability
 
 /// @notice Vaults registry contract that is an interface to the Lido protocol
 /// in the same time
@@ -333,7 +334,9 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
             );
         }
 
-        STETH.mintExternalShares(treasury, totalTreasuryShares);
+        if (totalTreasuryShares > 0) {
+            STETH.mintExternalShares(treasury, totalTreasuryShares);
+        }
     }
 
     function _mintRate(VaultSocket memory _socket) internal view returns (uint256) {
