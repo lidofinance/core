@@ -162,6 +162,7 @@ export async function main() {
     admin,
     locator.address,
     lidoAddress,
+    treasuryAddress,
   ]);
 
   // Deploy AccountingOracle
