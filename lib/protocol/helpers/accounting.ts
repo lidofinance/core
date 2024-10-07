@@ -71,7 +71,6 @@ export const report = async (
     withdrawalVaultBalance = null,
     sharesRequestedToBurn = null,
     withdrawalFinalizationBatches = [],
-    simulatedShareRate = null,
     refSlot = null,
     dryRun = false,
     excludeVaultsBalances = false,
@@ -162,7 +161,7 @@ export const report = async (
       "El Rewards": formatEther(elRewards),
     });
 
-    simulatedShareRate = simulatedShareRate ?? (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
+    const simulatedShareRate = (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
 
     if (withdrawalFinalizationBatches.length === 0) {
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
@@ -175,8 +174,6 @@ export const report = async (
     isBunkerMode = (await lido.getTotalPooledEther()) > postTotalPooledEther;
 
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
-  } else {
-    simulatedShareRate = simulatedShareRate ?? 0n;
   }
 
   const reportData = {
@@ -190,7 +187,6 @@ export const report = async (
     elRewardsVaultBalance,
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
-    simulatedShareRate,
     isBunkerMode,
     vaultsValues: vaultValues,
     vaultsNetCashFlows: netCashFlows,
@@ -329,7 +325,6 @@ const simulateReport = async (
     elRewardsVaultBalance,
     sharesRequestedToBurn: 0n,
     withdrawalFinalizationBatches: [],
-    simulatedShareRate: 0n,
     vaultValues,
     netCashFlows,
   });
@@ -397,7 +392,6 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      simulatedShareRate: 0n,
       vaultValues,
       netCashFlows,
     });
@@ -499,7 +493,6 @@ export type OracleReportSubmitParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   sharesRequestedToBurn: bigint;
-  simulatedShareRate: bigint;
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
@@ -530,7 +523,6 @@ const submitReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
-    simulatedShareRate,
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
@@ -552,7 +544,6 @@ const submitReport = async (
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "El rewards vault": formatEther(elRewardsVaultBalance),
     "Shares requested to burn": sharesRequestedToBurn,
-    "Simulated share rate": simulatedShareRate,
     "Staking module ids with newly exited validators": stakingModuleIdsWithNewlyExitedValidators,
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
@@ -576,7 +567,6 @@ const submitReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
-    simulatedShareRate,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
@@ -712,7 +702,6 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.elRewardsVaultBalance,
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
-  data.simulatedShareRate,
   data.isBunkerMode,
   data.vaultsValues,
   data.vaultsNetCashFlows,
@@ -736,7 +725,6 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
     "uint256", // elRewardsVaultBalance
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
-    "uint256", // simulatedShareRate
     "bool", // isBunkerMode
     "uint256[]", // vaultsValues
     "int256[]", // vaultsNetCashFlow

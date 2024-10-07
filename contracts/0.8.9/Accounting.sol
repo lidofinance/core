@@ -107,8 +107,6 @@ struct ReportValues {
     /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
-    /// @notice share rate that was simulated by oracle when the report data created (1e27 precision)
-    uint256 simulatedShareRate;
     /// @notice array of combined values for each Lido vault
     ///         (sum of all the balances of Lido validators of the vault
     ///          plus the balance of the vault itself)
@@ -190,7 +188,9 @@ contract Accounting is VaultHub {
     ) {
         Contracts memory contracts = _loadOracleReportContracts();
 
-        return _calculateOracleReportContext(contracts, _report);
+        uint256 simulatedShareRate = _simulateOracleReportContext(contracts, _report);
+
+        return _calculateOracleReportContext(contracts, _report, simulatedShareRate);
     }
 
     /**
@@ -202,14 +202,26 @@ contract Accounting is VaultHub {
         ReportValues memory _report
     ) external {
         Contracts memory contracts = _loadOracleReportContracts();
+        uint256 simulatedShareRate = _simulateOracleReportContext(contracts, _report);
         (PreReportState memory pre, CalculatedValues memory update)
-            = _calculateOracleReportContext(contracts, _report);
-        _applyOracleReportContext(contracts, _report, pre, update);
+            = _calculateOracleReportContext(contracts, _report, simulatedShareRate);
+
+        _applyOracleReportContext(contracts, _report, pre, update, simulatedShareRate);
+    }
+
+    function _simulateOracleReportContext(
+        Contracts memory _contracts,
+        ReportValues memory _report
+    ) internal view returns (uint256 simulatedShareRate) {
+        (,CalculatedValues memory update) = _calculateOracleReportContext(_contracts, _report, 0);
+
+        simulatedShareRate = update.postTotalPooledEther * 1e27 / update.postTotalShares;
     }
 
     function _calculateOracleReportContext(
         Contracts memory _contracts,
-        ReportValues memory _report
+        ReportValues memory _report,
+        uint256 _simulatedShareRate
     ) internal view returns (
         PreReportState memory pre,
         CalculatedValues memory update
@@ -222,10 +234,12 @@ contract Accounting is VaultHub {
             new uint256[](0), new uint256[](0));
 
         // 2. Get the ether to lock for withdrawal queue and shares to move to Burner to finalize requests
-        (
-            update.etherToFinalizeWQ,
-            update.sharesToFinalizeWQ
-        ) = _calculateWithdrawals(_contracts, _report);
+        if (_simulatedShareRate != 0) {
+            (
+                update.etherToFinalizeWQ,
+                update.sharesToFinalizeWQ
+            ) = _calculateWithdrawals(_contracts, _report, _simulatedShareRate);
+        }
 
         // 3. Principal CL balance is the sum of the current CL balance and
         // validator deposits during this report
@@ -251,8 +265,6 @@ contract Accounting is VaultHub {
             update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
-
-        // TODO: check simulatedShareRate here or get rid of it or calculate it on-chain
 
         // 6. Pre-calculate total amount of protocol fees for this rebase
         // amount of shares that will be minted to pay it
@@ -295,17 +307,13 @@ contract Accounting is VaultHub {
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
     function _calculateWithdrawals(
         Contracts memory _contracts,
-        ReportValues memory _report
+        ReportValues memory _report,
+        uint256 _simulatedShareRate
     ) internal view returns (uint256 etherToLock, uint256 sharesToBurn) {
         if (_report.withdrawalFinalizationBatches.length != 0 && !_contracts.withdrawalQueue.isPaused()) {
-            _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
-                _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
-                _report.timestamp
-            );
-
             (etherToLock, sharesToBurn) = _contracts.withdrawalQueue.prefinalize(
                 _report.withdrawalFinalizationBatches,
-                _report.simulatedShareRate
+                _simulatedShareRate
             );
         }
     }
@@ -350,11 +358,12 @@ contract Accounting is VaultHub {
         Contracts memory _contracts,
         ReportValues memory _report,
         PreReportState memory _pre,
-        CalculatedValues memory _update
+        CalculatedValues memory _update,
+        uint256 _simulatedShareRate
     ) internal {
         if (msg.sender != _contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        _checkAccountingOracleReport(_contracts, _report, _pre, _update);
+        _checkAccountingOracleReport(_contracts, _report, _pre, _update, _simulatedShareRate);
 
         uint256 lastWithdrawalRequestToFinalize;
         if (_update.sharesToFinalizeWQ > 0) {
@@ -394,7 +403,7 @@ contract Accounting is VaultHub {
             _update.withdrawals,
             _update.elRewards,
             lastWithdrawalRequestToFinalize,
-            _report.simulatedShareRate,
+            _simulatedShareRate,
             _update.etherToFinalizeWQ
         );
 
@@ -417,17 +426,6 @@ contract Accounting is VaultHub {
             _update.sharesToMintAsFees
         );
 
-        if (_report.withdrawalFinalizationBatches.length != 0) {
-            // TODO: Is there any sense to check if simulated == real on no withdrawals
-            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                _update.postTotalPooledEther,
-                _update.postTotalShares,
-                _update.etherToFinalizeWQ,
-                _update.sharesToBurnForWithdrawals,
-                _report.simulatedShareRate
-            );
-        }
-
         // TODO: assert realPostTPE and realPostTS against calculated
     }
 
@@ -439,7 +437,8 @@ contract Accounting is VaultHub {
         Contracts memory _contracts,
         ReportValues memory _report,
         PreReportState memory _pre,
-        CalculatedValues memory _update
+        CalculatedValues memory _update,
+        uint256 _simulatedShareRate
     ) internal view {
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timestamp,
@@ -453,6 +452,19 @@ contract Accounting is VaultHub {
             _report.clValidators,
             _pre.depositedValidators
         );
+        if (_report.withdrawalFinalizationBatches.length > 0) {
+            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
+                _update.postTotalPooledEther,
+                _update.postTotalShares,
+                _update.etherToFinalizeWQ,
+                _update.sharesToBurnForWithdrawals,
+                _simulatedShareRate
+            );
+            _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
+                _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
+                _report.timestamp
+            );
+        }
     }
 
     /**

@@ -24,7 +24,6 @@ import {
   OracleReport,
   packExtraDataList,
   ReportAsArray,
-  shareRate,
 } from "lib";
 
 import { deployAndConfigureAccountingOracle } from "test/deploy";
@@ -75,7 +74,6 @@ describe("AccountingOracle.sol:accessControl", () => {
       elRewardsVaultBalance: ether("2"),
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
-      simulatedShareRate: shareRate(1n),
       isBunkerMode: true,
       vaultsValues: [],
       vaultsNetCashFlows: [],

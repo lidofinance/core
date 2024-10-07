@@ -186,7 +186,7 @@ describe("Happy Path", () => {
       );
     } else {
       expect(stakingLimitAfterSubmit).to.equal(
-        stakingLimitBeforeSubmit - AMOUNT + growthPerBlock,
+        stakingLimitBeforeSubmit - AMOUNT + BigInt(growthPerBlock),
         "Staking limit after submit",
       );
     }
