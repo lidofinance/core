@@ -32,7 +32,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     uint256 internal constant MAX_VAULTS_COUNT = 500;
 
     StETH public immutable STETH;
-    address public immutable treasury;
+    address public immutable TREASURE;
 
     struct VaultSocket {
         /// @notice vault address
@@ -55,7 +55,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
 
     constructor(address _admin, address _stETH, address _treasury) {
         STETH = StETH(_stETH);
-        treasury = _treasury;
+        TREASURE = _treasury;
 
         sockets.push(VaultSocket(ILockable(address(0)), 0, 0, 0, 0)); // stone in the elevator
 
@@ -83,6 +83,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     /// @param _vault vault address
     /// @param _capShares maximum number of stETH shares that can be minted by the vault
     /// @param _minBondRateBP minimum bond rate in basis points
+    /// @param _treasuryFeeBP fee that goes to the treasury
     function connectVault(
         ILockable _vault,
         uint256 _capShares,
@@ -335,7 +336,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         }
 
         if (totalTreasuryShares > 0) {
-            STETH.mintExternalShares(treasury, totalTreasuryShares);
+            STETH.mintExternalShares(TREASURE, totalTreasuryShares);
         }
     }
 

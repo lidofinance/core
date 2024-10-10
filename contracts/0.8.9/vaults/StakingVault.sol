@@ -4,9 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
+import {IStaking} from "./interfaces/IStaking.sol";
 import {BeaconChainDepositor} from "../BeaconChainDepositor.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {IStaking} from "./interfaces/IStaking.sol";
+import {Versioned} from "../utils/Versioned.sol";
 
 // TODO: trigger validator exit
 // TODO: add recover functions
@@ -18,20 +19,34 @@ import {IStaking} from "./interfaces/IStaking.sol";
 /// @notice Basic ownable vault for staking. Allows to deposit ETH, create
 /// batches of validators withdrawal credentials set to the vault, receive
 /// various rewards and withdraw ETH.
-contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable {
+contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable, Versioned {
+
+    uint8 private constant _version = 1;
+
     address public constant EVERYONE = address(0x4242424242424242424242424242424242424242);
 
     bytes32 public constant NODE_OPERATOR_ROLE = keccak256("NODE_OPERATOR_ROLE");
     bytes32 public constant VAULT_MANAGER_ROLE = keccak256("VAULT_MANAGER_ROLE");
     bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR_ROLE");
 
-    constructor(
-        address _owner,
-        address _depositContract
-    ) BeaconChainDepositor(_depositContract) {
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-        _grantRole(VAULT_MANAGER_ROLE, _owner);
+    error ZeroAddress(string field);
+
+    constructor(address _depositContract) BeaconChainDepositor(_depositContract) {}
+
+    /// @notice Initialize the contract storage explicitly.
+    /// @param _admin admin address that can TBD
+    function initialize(address _admin) public {
+        if (_admin == address(0)) revert ZeroAddress("_admin");
+
+        _initializeContractVersionTo(1);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(VAULT_MANAGER_ROLE, _admin);
         _grantRole(DEPOSITOR_ROLE, EVERYONE);
+    }
+
+    function version() public pure virtual returns(uint8) {
+        return _version;
     }
 
     function getWithdrawalCredentials() public view returns (bytes32) {

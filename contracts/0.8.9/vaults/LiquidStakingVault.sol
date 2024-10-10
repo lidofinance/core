@@ -36,9 +36,8 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     constructor(
         address _liquidityProvider,
-        address _owner,
         address _depositContract
-    ) StakingVault(_owner, _depositContract) {
+    ) StakingVault(_depositContract) {
         LIQUIDITY_PROVIDER = ILiquidity(_liquidityProvider);
     }
 
