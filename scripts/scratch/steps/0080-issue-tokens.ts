@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { getContractAt } from "lib/contract";
+import { loadContract } from "lib";
 import { makeTx } from "lib/deploy";
 import { cy, log, yl } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -47,7 +47,7 @@ export async function main() {
   log(` Total batches:`, yl(totalTransactions));
   log.emptyLine();
 
-  const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
+  const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
   let endTotalSupply = 0n;
 
   // Issue tokens in batches

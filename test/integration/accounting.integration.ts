@@ -31,7 +31,7 @@ const ZERO_HASH = new Uint8Array(32).fill(0);
 
 // TODO: [@tamtamchik] restore checks for PostTotalShares event
 
-describe("Accounting integration", () => {
+describe("Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
@@ -52,16 +52,16 @@ describe("Accounting integration", () => {
     await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
     await norEnsureOperators(ctx, 3n, 5n);
-    if (ctx.flags.withSimpleDvtModule) {
-      await sdvtEnsureOperators(ctx, 3n, 5n);
-    }
+    await sdvtEnsureOperators(ctx, 3n, 5n);
 
+    // Deposit node operators
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     await report(ctx, {
-      clDiff: ether("32") * 3n, // 32 ETH * 3 validators
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
+      clAppearedValidators: 6n,
       excludeVaultsBalances: true,
     });
   });
@@ -329,7 +329,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -676,7 +676,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -776,7 +776,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,

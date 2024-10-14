@@ -1,19 +1,17 @@
-# Why we use different compilers
+# Compiler Versions Used in Lido Project
 
-For Lido project coordination, governance and funds management we use [Aragon](https://aragon.org/dao), a well-developed and proven DAO Framework. The current stable release of its Kernel, [4.4.0](https://github.com/aragon/aragonOS/tree/v4.4.0) is fixed on the specific compiler version - [solc 0.4.24](https://solidity.readthedocs.io/en/v0.4.24/), that is currently outdated. Keeping security and consistency in mind, we decided to stay on an older yet proven combination - for all the contracts under Aragon management (`Lido`, `stETH`, `LegacyOracle`) we use solc 0.4.24 release.
+For Lido project coordination, governance, and funds management, we use [Aragon](https://aragon.org/dao), a
+well-developed and proven DAO Framework. The current stable release of its
+Kernel, [4.4.0](https://github.com/aragon/aragonOS/tree/v4.4.0), is fixed on a specific compiler
+version - [solc 0.4.24](https://solidity.readthedocs.io/en/v0.4.24/), which is currently outdated. Keeping security and
+consistency in mind, we decided to stay on an older yet proven combination. Therefore, for all the contracts under
+Aragon management (`Lido`, `stETH`, `LegacyOracle`), we use the `solc 0.4.24` release.
 
-cstETH token, that acts as autonomous wrapper and not governed by Aragon, was inherited from OpenZeppelin's library, using one of its stable releases [3.1.0](https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v3.1.0).
+For the `wstETH` contract, we use `solc 0.6.12`, as it is non-upgradeable and bound to this version.
 
-# How to compile
+For the other contracts, newer compiler versions are used.
 
-Separately:
-
-```bash
-yarn compile:4
-yarn compile:6
-```
-
-All at once:
+# Compilation Instructions
 
 ```bash
 yarn compile

@@ -1,14 +1,6 @@
-## Disclaimer: WIP!
+## Disclaimer!
 
-This repository is currently a **work-in-progress**.
-
-This repository is the modernized iteration of the outdated [`lido-dao` repository](https://github.com/lidofinance/lido-dao). Significant efforts were undertaken to update the tooling and infrastructure to align with current standards and best practices. As part of this modernization process:
-
-- the codebase has been transitioned from JavaScript to TypeScript to leverage TypeScript's robust type-checking, IDE autocompletion, and scalability features;
-- the test suite was revamped and restructured to ensure consistent approach and comprehensive testing coverage;
-- deprecated dependencies (e.g. Waffle testing framework) were removed or replaced by modern alternatives;
-- outdated dependencies such as Hardhat, ethers and others were upgraded to their latest versions to improve performance, compatibility and developer experience;
-- Lido Aragon Apps will be migrated to the [Lido Aragon Apps repository](https://github.com/lidofinance/aragon-apps).
+This is the core repository of the Lido on Ethereum protocol. The entire codebase, excluding contracts, has undergone significant refactoring and tooling modernization. For historical context or legacy information, refer to the [last legacy commit](https://github.com/lidofinance/lido-dao/tree/de9e895879126b482effedd8fa1f2af3f7dc2dd4).
 
 ---
 
@@ -59,7 +51,7 @@ Users can deposit ether to the Lido smart contract and receive stETH tokens in r
 
 ## Bug Bounty
 
-At the moment, the [Lido bug bounty program](https://immunefi.com/bounty/lido/) covers only the contracts in the [Lido DAO repository](https://github.com/lidofinance/lido-dao). Once the work on this repository is finished, the bug bounty program will be updated.
+Please refer to the [Lido Bug Bounry](/bugbounty.md).
 
 ## Contributing
 
