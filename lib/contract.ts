@@ -45,11 +45,6 @@ export async function loadContract<ContractType extends BaseContract>(
   return (await addContractHelperFields(result, name)) as unknown as LoadedContract<ContractType>;
 }
 
-export async function getContractAt(name: string, address: string): Promise<LoadedContract> {
-  const contract = await ethers.getContractAt(name, address);
-  return await addContractHelperFields(contract, name);
-}
-
 export async function getContractPath(contractName: string) {
   const artifact = await artifacts.readArtifact(contractName);
   return artifact.sourceName;

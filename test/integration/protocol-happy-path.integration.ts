@@ -23,7 +23,7 @@ const SIMPLE_DVT_MODULE_ID = 2n;
 
 const ZERO_HASH = new Uint8Array(32).fill(0);
 
-describe("Happy Path", () => {
+describe("Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -77,10 +77,8 @@ describe("Happy Path", () => {
     await norEnsureOperators(ctx, 3n, 5n);
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(3n);
 
-    if (ctx.flags.withSimpleDvtModule) {
-      await sdvtEnsureOperators(ctx, 3n, 5n);
-      expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(3n);
-    }
+    await sdvtEnsureOperators(ctx, 3n, 5n);
+    expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(3n);
   });
 
   it("Should allow ETH holders to submit 100 ETH stake", async () => {
@@ -222,25 +220,23 @@ describe("Happy Path", () => {
     const depositCountsNor = unbufferedAmountNor / ether("32");
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit - unbufferedAmountNor;
 
-    if (ctx.flags.withSimpleDvtModule) {
-      const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-      const depositSdvtReceipt = await trace<ContractTransactionReceipt>("lido.deposit (Simple DVT)", depositSdvtTx);
+    const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
+    const depositSdvtReceipt = await trace<ContractTransactionReceipt>("lido.deposit (Simple DVT)", depositSdvtTx);
 
-      const unbufferedEventSdvt = ctx.getEvents(depositSdvtReceipt, "Unbuffered")[0];
-      const depositedValidatorsChangedEventSdvt = ctx.getEvents(depositSdvtReceipt, "DepositedValidatorsChanged")[0];
+    const unbufferedEventSdvt = ctx.getEvents(depositSdvtReceipt, "Unbuffered")[0];
+    const depositedValidatorsChangedEventSdvt = ctx.getEvents(depositSdvtReceipt, "DepositedValidatorsChanged")[0];
 
-      const unbufferedAmountSdvt = unbufferedEventSdvt.args[0];
-      const newValidatorsCountSdvt = depositedValidatorsChangedEventSdvt.args[0];
+    const unbufferedAmountSdvt = unbufferedEventSdvt.args[0];
+    const newValidatorsCountSdvt = depositedValidatorsChangedEventSdvt.args[0];
 
-      const depositCountsTotal = depositCountsNor + unbufferedAmountSdvt / ether("32");
-      expectedBufferedEtherAfterDeposit -= unbufferedAmountSdvt;
+    const depositCountsTotal = depositCountsNor + unbufferedAmountSdvt / ether("32");
+    expectedBufferedEtherAfterDeposit -= unbufferedAmountSdvt;
 
-      expect(depositCountsTotal).to.be.gt(0n, "Deposit counts");
-      expect(newValidatorsCountSdvt).to.equal(
-        depositedValidatorsBefore + depositCountsTotal,
-        "New validators count after deposit",
-      );
-    }
+    expect(depositCountsTotal).to.be.gt(0n, "Deposit counts");
+    expect(newValidatorsCountSdvt).to.equal(
+      depositedValidatorsBefore + depositCountsTotal,
+      "New validators count after deposit",
+    );
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
 
@@ -287,23 +283,16 @@ describe("Happy Path", () => {
     let expectedBurnerTransfers = norStatus.hasPenalizedOperators ? 1n : 0n;
     let expectedTransfers = norStatus.activeOperators;
 
-    let sdvtStatusLog = {};
-    if (ctx.flags.withSimpleDvtModule) {
-      const sdvtStatus = await getNodeOperatorsStatus(sdvt);
+    const sdvtStatus = await getNodeOperatorsStatus(sdvt);
 
-      expectedBurnerTransfers += sdvtStatus.hasPenalizedOperators ? 1n : 0n;
-      expectedTransfers += sdvtStatus.activeOperators;
-
-      sdvtStatusLog = {
-        "SDVT active operators": sdvtStatus.activeOperators,
-        "SDVT (transfer to burner)": sdvtStatus.hasPenalizedOperators,
-      };
-    }
+    expectedBurnerTransfers += sdvtStatus.hasPenalizedOperators ? 1n : 0n;
+    expectedTransfers += sdvtStatus.activeOperators;
 
     log.debug("Expected distributions", {
       "NOR active operators": norStatus.activeOperators,
       "NOR (transfer to burner)": norStatus.hasPenalizedOperators,
-      ...sdvtStatusLog,
+      "SDVT active operators": sdvtStatus.activeOperators,
+      "SDVT (transfer to burner)": sdvtStatus.hasPenalizedOperators,
     });
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
@@ -339,10 +328,9 @@ describe("Happy Path", () => {
 
     const toBurnerTransfer = transferEvents[0];
     const toNorTransfer = transferEvents[1];
-    const toSdvtTransfer = ctx.flags.withSimpleDvtModule ? transferEvents[2] : undefined;
-    const toTreasuryTransfer = ctx.flags.withSimpleDvtModule ? transferEvents[3] : transferEvents[2];
-
-    const expectedTransferEvents = ctx.flags.withSimpleDvtModule ? 4 : 3;
+    const toSdvtTransfer = transferEvents[2];
+    const toTreasuryTransfer = transferEvents[3];
+    const expectedTransferEvents = 4;
 
     expect(transferEvents.length).to.equal(expectedTransferEvents, "Transfer events count");
 
@@ -362,15 +350,13 @@ describe("Happy Path", () => {
       "Transfer to NOR",
     );
 
-    if (ctx.flags.withSimpleDvtModule) {
-      expect(toSdvtTransfer?.args.toObject()).to.include(
-        {
-          from: ZeroAddress,
-          to: sdvt.address,
-        },
-        "Transfer to SDVT",
-      );
-    }
+    expect(toSdvtTransfer?.args.toObject()).to.include(
+      {
+        from: ZeroAddress,
+        to: sdvt.address,
+      },
+      "Transfer to SDVT",
+    );
 
     expect(toTreasuryTransfer?.args.toObject()).to.include(
       {
