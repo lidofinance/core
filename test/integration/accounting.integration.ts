@@ -29,8 +29,6 @@ const SIMPLE_DVT_MODULE_ID = 2n;
 
 const ZERO_HASH = new Uint8Array(32).fill(0);
 
-// TODO: [@tamtamchik] restore checks for PostTotalShares event
-
 describe("Accounting", () => {
   let ctx: ProtocolContext;
 
@@ -207,12 +205,6 @@ describe("Accounting", () => {
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
 
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    // );
-
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
   });
@@ -261,13 +253,6 @@ describe("Accounting", () => {
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance differs from expected",
     );
-
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    //   "PostTotalShares: TotalPooledEther differs from expected",
-    // );
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
@@ -384,13 +369,6 @@ describe("Accounting", () => {
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance has not increased",
     );
-
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    //   "PostTotalShares: TotalPooledEther has not increased",
-    // );
   });
 
   it("Should account correctly if no EL rewards", async () => {
@@ -466,19 +444,16 @@ describe("Accounting", () => {
     expect(totalELRewardsCollectedBefore + elRewards).to.equal(totalELRewardsCollectedAfter);
 
     const elRewardsReceivedEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards, "EL rewards mismatch");
+    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-      "TotalPooledEther mismatch",
-    );
+    expect(totalPooledEtherBefore + elRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount, "TotalShares mismatch");
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked, "Lido balance mismatch");
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
