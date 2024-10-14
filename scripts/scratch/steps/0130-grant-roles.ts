@@ -1,6 +1,8 @@
 import { ethers } from "hardhat";
 
-import { getContractAt } from "lib/contract";
+import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+
+import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { log } from "lib/log";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -10,7 +12,9 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   const lidoAddress = state[Sk.appLido].proxy.address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
+  const simpleDvtApp = state[Sk.appSimpleDvt].proxy.address;
   const gateSealAddress = state.gateSeal.address;
   const burnerAddress = state[Sk.burner].address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
@@ -20,50 +24,50 @@ export async function main() {
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
   // StakingRouter
-  const stakingRouter = await getContractAt("StakingRouter", stakingRouterAddress);
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.getFunction("STAKING_MODULE_PAUSE_ROLE")(), depositSecurityModuleAddress],
+    [await stakingRouter.STAKING_MODULE_PAUSE_ROLE(), depositSecurityModuleAddress],
     { from: deployer },
   );
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.getFunction("STAKING_MODULE_RESUME_ROLE")(), depositSecurityModuleAddress],
+    [await stakingRouter.STAKING_MODULE_RESUME_ROLE(), depositSecurityModuleAddress],
     { from: deployer },
   );
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.getFunction("REPORT_EXITED_VALIDATORS_ROLE")(), accountingOracleAddress],
+    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), accountingOracleAddress],
     { from: deployer },
   );
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), lidoAddress],
-    { from: deployer },
-  );
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), lidoAddress], {
+    from: deployer,
+  });
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
+    from: deployer,
+  });
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
-    const validatorsExitBusOracle = await getContractAt("ValidatorsExitBusOracle", validatorsExitBusOracleAddress);
-    await makeTx(
-      validatorsExitBusOracle,
-      "grantRole",
-      [await validatorsExitBusOracle.getFunction("PAUSE_ROLE")(), gateSealAddress],
-      { from: deployer },
+    const validatorsExitBusOracle = await loadContract<ValidatorsExitBusOracle>(
+      "ValidatorsExitBusOracle",
+      validatorsExitBusOracleAddress,
     );
+    await makeTx(validatorsExitBusOracle, "grantRole", [await validatorsExitBusOracle.PAUSE_ROLE(), gateSealAddress], {
+      from: deployer,
+    });
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
   }
 
   // WithdrawalQueue
-  const withdrawalQueue = await getContractAt("WithdrawalQueueERC721", withdrawalQueueAddress);
+  const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
   if (gateSealAddress) {
-    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.getFunction("PAUSE_ROLE")(), gateSealAddress], {
+    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), gateSealAddress], {
       from: deployer,
     });
   } else {
@@ -71,24 +75,21 @@ export async function main() {
     log.emptyLine();
   }
 
-  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.getFunction("FINALIZE_ROLE")(), lidoAddress], {
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.FINALIZE_ROLE(), lidoAddress], {
     from: deployer,
   });
 
-  await makeTx(
-    withdrawalQueue,
-    "grantRole",
-    [await withdrawalQueue.getFunction("ORACLE_ROLE")(), accountingOracleAddress],
-    { from: deployer },
-  );
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
+    from: deployer,
+  });
 
   // Burner
-  const burner = await getContractAt("Burner", burnerAddress);
+  const burner = await loadContract<Burner>("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(
-    burner,
-    "grantRole",
-    [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), nodeOperatorsRegistryAddress],
-    { from: deployer },
-  );
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
+    from: deployer,
+  });
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+    from: deployer,
+  });
 }

@@ -132,6 +132,12 @@
       "stuckPenaltyDelay": 172800
     }
   },
+  "simpleDvt": {
+    "deployParameters": {
+      "stakingModuleTypeId": "curated-onchain-v1",
+      "stuckPenaltyDelay": 432000
+    }
+  },
   "withdrawalQueueERC721": {
     "deployParameters": {
       "name": "Lido: stETH Withdrawal NFT",

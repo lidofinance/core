@@ -1,6 +1,6 @@
 name: Integration Tests
 
-on: [push]
+on: [ push ]
 
 jobs:
   test_hardhat_integration_scratch:
@@ -10,7 +10,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: feofanov/hardhat-node:2.22.9-scratch
+        image: ghcr.io/lidofinance/hardhat-node:2.22.12-scratch
         ports:
           - 8555:8545
 
@@ -36,7 +36,7 @@ jobs:
           NETWORK_STATE_DEFAULTS_FILE: "scripts/scratch/deployed-testnet-defaults.json"
 
       - name: Finalize scratch deployment
-        run: yarn hardhat --network local run --no-compile scripts/scratch/send-hardhat-mine.ts
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
 
       - name: Run integration tests
         run: yarn test:integration:fork:local

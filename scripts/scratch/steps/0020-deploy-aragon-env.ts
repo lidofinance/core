@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { DAOFactory, ENS } from "typechain-types";
 
-import { getContractAt, loadContract, LoadedContract } from "lib/contract";
+import { loadContract, LoadedContract } from "lib/contract";
 import { deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
 import { assignENSName } from "lib/ens";
 import { findEvents } from "lib/event";
@@ -33,7 +33,7 @@ async function deployAPM(
   log(`Using APMRegistry: ${cy(apmAddress)}`);
   log.emptyLine();
 
-  const apmRegistry = await getContractAt("APMRegistry", apmAddress);
+  const apmRegistry = await loadContract("APMRegistry", apmAddress);
 
   return {
     apmRegistry,

@@ -1,19 +1,21 @@
 declare namespace NodeJS {
   export interface ProcessEnv {
-    /* RPC URL for Hardhat Network forking, required for running tests on mainnet fork with tracing */
-    MAINNET_FORKING_URL?: string;
+    /* iternal logging verbosity (used in scratch deploy / integration tests) */
+    LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none"; // default: "info"
 
-    /* logging verbosity */
-    LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none";
+    /**
+     * Flags for changing the behavior of the Hardhat Network
+     */
+
+    /* RPC URL for Hardhat Network forking, required for running tests on mainnet fork with tracing */
+    HARDHAT_FORKING_URL?: string;
 
     /**
      * Flags for changing the behavior of the integration tests
      */
 
     /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
-    INTEGRATION_SCRATCH_DEPLOY?: "on" | "off";
-    /* if "on" the integration tests will enable assertions and checks for the simple DVT module */
-    INTEGRATION_SIMPLE_DVT_MODULE?: "on" | "off";
+    INTEGRATION_ON_SCRATCH?: "on" | "off"; // default: "off"
 
     /**
      * Network configuration for the protocol discovery.
@@ -66,5 +68,8 @@ declare namespace NodeJS {
     MAINNET_VALIDATORS_EXIT_BUS_ORACLE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_QUEUE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
+
+    /* for contract sourcecode verification with `hardhat-verify` */
+    ETHERSCAN_API_KEY?: string;
   }
 }

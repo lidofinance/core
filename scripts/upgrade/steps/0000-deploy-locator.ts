@@ -1,7 +1,10 @@
 import { assert } from "chai";
 import { ethers } from "hardhat";
 
-import { deployImplementation, getContractAt, LoadedContract, log, readNetworkState, Sk } from "lib";
+import { log } from "lib";
+import { loadContract, LoadedContract } from "lib/contract";
+import { deployImplementation } from "lib/deploy";
+import { readNetworkState, Sk } from "lib/state-file";
 
 const VIEW_NAMES_AND_CTOR_ARGS = [
   "accountingOracle",
@@ -56,7 +59,7 @@ export async function main(): Promise<void> {
 
   const state = readNetworkState();
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const locator = await getContractAt("LidoLocator", locatorAddress);
+  const locator = await loadContract("LidoLocator", locatorAddress);
 
   const ctorArgs = await getConstructorArgs(locator);
   if (Object.keys(g_newAddresses).length === 0) {

@@ -14,6 +14,5 @@ export {
   report,
 } from "./accounting";
 
-export { sdvtEnsureOperators } from "./sdvt.helper";
-
-export { norEnsureOperators } from "./nor.helper";
+export { sdvtEnsureOperators } from "./sdvt";
+export { norEnsureOperators } from "./nor";

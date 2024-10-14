@@ -12,11 +12,12 @@ export type DeploymentState = {
   [key: string]: any;
 };
 
-export const AppNames = {
+export const TemplateAppNames = {
   // Lido apps
   LIDO: "lido",
   ORACLE: "oracle",
   NODE_OPERATORS_REGISTRY: "node-operators-registry",
+  SIMPLE_DVT: "simple-dvt",
   // Aragon apps
   ARAGON_AGENT: "aragon-agent",
   ARAGON_FINANCE: "aragon-finance",
@@ -32,6 +33,7 @@ export enum Sk {
   appLido = "app:lido",
   appOracle = `app:oracle`,
   appNodeOperatorsRegistry = "app:node-operators-registry",
+  appSimpleDvt = "app:simple-dvt",
   aragonAcl = "aragon-acl",
   aragonEvmScriptRegistry = "aragon-evm-script-registry",
   aragonApmRegistry = "aragon-apm-registry",
@@ -57,6 +59,8 @@ export enum Sk {
   lidoTemplate = "lidoTemplate",
   miniMeTokenFactory = "miniMeTokenFactory",
   lidoTemplateCreateStdAppReposTx = "lidoTemplateCreateStdAppReposTx",
+  nodeOperatorsRegistry = "nodeOperatorsRegistry",
+  simpleDvt = "simpleDvt",
   createAppReposTx = "createAppReposTx",
   lidoTemplateNewDaoTx = "lidoTemplateNewDaoTx",
   callsScript = "callsScript",
@@ -138,13 +142,25 @@ export function readNetworkState({
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
+  const networkName = hardhatNetwork.name;
+  const networkChainId = hardhatNetwork.config.chainId;
+
   const fileName = networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(hardhatNetwork.name, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+    : _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+
   const state = _readStateFile(fileName);
 
+  // Validate the deployer
   if (deployer !== undefined && deployer != state.deployer) {
-    throw new Error(`The specified deployer ${deployer} does not match the one ${state.deployer} in the state file`);
+    throw new Error(`The specified deployer ${deployer} does not match the one ${state.deployer} in the state file!`);
+  }
+
+  // Validate the chainId
+  if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
+    throw new Error(
+      `The chainId: ${networkChainId} does not match the one (${state[Sk.chainSpec].chainId}) in the state file!`,
+    );
   }
 
   return state;
