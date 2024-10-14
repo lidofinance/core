@@ -35,9 +35,7 @@ describe("Liquid Staking Vaults", () => {
     await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
     await norEnsureOperators(ctx, 3n, 5n);
-    if (ctx.flags.withSimpleDvtModule) {
-      await sdvtEnsureOperators(ctx, 3n, 5n);
-    }
+    await sdvtEnsureOperators(ctx, 3n, 5n);
 
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
