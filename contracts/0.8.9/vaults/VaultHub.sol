@@ -112,33 +112,29 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     }
 
     /// @notice disconnects a vault from the hub
-    /// @param _vault vault address
-    function disconnectVault(ILockable _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == ILockable(address(0))) revert ZeroArgument("vault");
+    /// @dev can be called by vaults only
+    function disconnectVault() external {
+        uint256 index = vaultIndex[ILockable(msg.sender)];
+        if (index == 0) revert NotConnectedToHub(msg.sender);
 
-        uint256 index = vaultIndex[_vault];
-        if (index == 0) revert NotConnectedToHub(address(_vault));
         VaultSocket memory socket = sockets[index];
+        ILockable vr = socket.vault;
 
         if (socket.mintedShares > 0) {
             uint256 stethToBurn = STETH.getPooledEthByShares(socket.mintedShares);
-            if (address(_vault).balance >= stethToBurn) {
-                _vault.rebalance(stethToBurn);
-            } else {
-                revert NotEnoughBalance(address(_vault), address(_vault).balance, stethToBurn);
-            }
+            vr.rebalance(stethToBurn);
         }
 
-        _vault.update(_vault.value(), _vault.netCashFlow(), 0);
+        vr.update(vr.value(), vr.netCashFlow(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
         vaultIndex[lastSocket.vault] = index;
         sockets.pop();
 
-        delete vaultIndex[_vault];
+        delete vaultIndex[vr];
 
-        emit VaultDisconnected(address(_vault));
+        emit VaultDisconnected(address(vr));
     }
 
     /// @notice mint StETH tokens backed by vault external balance to the receiver address

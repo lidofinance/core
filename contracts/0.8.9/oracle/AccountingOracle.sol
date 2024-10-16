@@ -240,10 +240,11 @@ contract AccountingOracle is BaseOracle {
         ///
 
         /// @dev The values of the vaults as observed at the reference slot.
-        /// Sum of all the balances of Lido validators of the lstVault plus the balance of the lstVault itself.
+        /// Sum of all the balances of Lido validators of the vault plus the balance of the vault itself.
         uint256[] vaultsValues;
 
         /// @dev The net cash flows of the vaults as observed at the reference slot.
+        /// Flow of the funds in and out of the vaults (deposit/withdrawal) without the rewards.
         int256[] vaultsNetCashFlows;
 
         ///

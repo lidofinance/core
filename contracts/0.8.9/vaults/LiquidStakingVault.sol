@@ -133,6 +133,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         }
     }
 
+    function disconnectFromHub() external payable andDeposit() onlyRole(VAULT_MANAGER_ROLE) {
+        // TODO: check what guards we should have here
+
+        LIQUIDITY_PROVIDER.disconnectVault();
+    }
+
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
         if (msg.sender != address(LIQUIDITY_PROVIDER)) revert NotAuthorized("update", msg.sender);
 

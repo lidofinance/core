@@ -8,6 +8,7 @@ interface ILiquidity {
     function mintStethBackedByVault(address _receiver, uint256 _amountOfTokens) external returns (uint256 totalEtherToLock);
     function burnStethBackedByVault(address _holder, uint256 _amountOfTokens) external;
     function rebalance() external payable;
+    function disconnectVault() external;
 
     event MintedStETHOnVault(address indexed vault, uint256 amountOfTokens);
     event BurnedStETHOnVault(address indexed vault, uint256 amountOfTokens);
