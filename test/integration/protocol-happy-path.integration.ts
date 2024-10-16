@@ -15,13 +15,9 @@ import {
 } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
+import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
-const SIMPLE_DVT_MODULE_ID = 2n;
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 describe("Protocol Happy Path", () => {
   let ctx: ProtocolContext;

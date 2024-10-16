@@ -18,6 +18,7 @@ import {
 import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
+import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
 type Vault = {
   vault: LiquidStakingVault;
@@ -35,7 +36,7 @@ const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("32");
 const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 
-const ONE_YEAR = 365n * 24n * 60n * 60n;
+const ONE_YEAR = 365n * ONE_DAY;
 const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 const MAX_BASIS_POINTS = 100_00n; // 100%
@@ -132,10 +133,10 @@ describe("Staking Vaults Happy Path", () => {
     await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
-    const depositNorTx = await lido.connect(dsmSigner).deposit(150n, 1n, new Uint8Array(32).fill(0));
+    const depositNorTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
     await trace("lido.deposit", depositNorTx);
 
-    const depositSdvtTx = await lido.connect(dsmSigner).deposit(150n, 2n, new Uint8Array(32).fill(0));
+    const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
     await trace("lido.deposit", depositSdvtTx);
 
     const reportData: Partial<OracleReportParams> = {
