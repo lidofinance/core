@@ -177,7 +177,7 @@ export async function main() {
   // Deploy token rebase notifier
   const tokenRebaseNotifier = await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [
     treasuryAddress,
-    accounting,
+    accounting.address,
   ]);
 
   // Deploy HashConsensus for AccountingOracle
