@@ -13,6 +13,7 @@ interface IHub {
         uint256 _treasuryFeeBP) external;
     function disconnectVault(ILockable _vault) external;
 
-    event VaultConnected(address indexed vault, uint256 capShares, uint256 minBondRateBP);
+    event VaultConnected(address indexed vault, uint256 capShares, uint256 minBondRateBP, uint256 treasuryFeeBP);
     event VaultDisconnected(address indexed vault);
+    event VaultReported(address indexed vault, uint256 value, int256 netCashFlow, uint256 locked);
 }

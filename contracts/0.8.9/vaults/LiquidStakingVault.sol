@@ -109,11 +109,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         _mint(_receiver, _amountOfTokens);
     }
 
-    function burn(uint256 _amountOfTokens) external onlyRole(VAULT_MANAGER_ROLE) {
+    function burn(address _holder, uint256 _amountOfTokens) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
         // burn shares at once but unlock balance later during the report
-        LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
+        LIQUIDITY_PROVIDER.burnStethBackedByVault(_holder, _amountOfTokens);
     }
 
     function rebalance(uint256 _amountOfETH) external payable andDeposit(){

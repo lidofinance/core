@@ -13,6 +13,8 @@ interface StETH {
     function mintExternalShares(address, uint256) external;
     function burnExternalShares(uint256) external;
 
+    function transferFrom(address, address, uint256) external;
+
     function getPooledEthByShares(uint256) external view returns (uint256);
     function getSharesByPooledEth(uint256) external view returns (uint256);
     function getTotalShares() external view returns (uint256);
@@ -106,7 +108,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
-        emit VaultConnected(address(_vault), _capShares, _minBondRateBP);
+        emit VaultConnected(address(_vault), _capShares, _minBondRateBP, _treasuryFeeBP);
     }
 
     /// @notice disconnects a vault from the hub
@@ -139,7 +141,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         emit VaultDisconnected(address(_vault));
     }
 
-    /// @notice mint StETH tokens  backed by vault external balance to the receiver address
+    /// @notice mint StETH tokens backed by vault external balance to the receiver address
     /// @param _receiver address of the receiver
     /// @param _amountOfTokens amount of stETH tokens to mint
     /// @return totalEtherToLock total amount of ether that should be locked on the vault
@@ -172,9 +174,10 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     }
 
     /// @notice burn steth from the balance of the vault contract
+    /// @param _holder address of the holder of the stETH tokens to burn
     /// @param _amountOfTokens amount of tokens to burn
     /// @dev can be used by vaults only
-    function burnStethBackedByVault(uint256 _amountOfTokens) external {
+    function burnStethBackedByVault(address _holder, uint256 _amountOfTokens) external {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
 
         uint256 index = vaultIndex[ILockable(msg.sender)];
@@ -185,6 +188,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (socket.mintedShares < amountOfShares) revert NotEnoughShares(msg.sender, socket.mintedShares);
 
         sockets[index].mintedShares -= uint96(amountOfShares);
+
+        STETH.transferFrom(_holder, address(this), _amountOfTokens);
         STETH.burnExternalShares(amountOfShares);
 
         emit BurnedStETHOnVault(msg.sender, _amountOfTokens);
@@ -332,6 +337,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
                 netCashFlows[i],
                 lockedEther[i]
             );
+
+            emit VaultReported(address(socket.vault), values[i], netCashFlows[i], lockedEther[i]);
         }
 
         if (totalTreasuryShares > 0) {
