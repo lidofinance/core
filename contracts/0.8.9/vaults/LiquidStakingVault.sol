@@ -154,7 +154,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         vaultOwnerFee = _vaultOwnerFee;
     }
 
-    function claimNodeOperatorFee(address _receiver, bool _liquid) external onlyRole(VAULT_MANAGER_ROLE) {
+    function claimNodeOperatorFee(address _receiver, bool _liquid) external onlyRole(NODE_OPERATOR_ROLE) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
 
         uint256 feesToClaim = accumulatedNodeOperatorFee();
