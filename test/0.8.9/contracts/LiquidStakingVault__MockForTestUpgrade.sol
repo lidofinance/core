@@ -6,25 +6,21 @@ import {ILiquid} from "contracts/0.8.9/vaults/interfaces/ILiquid.sol";
 import {ILockable} from "contracts/0.8.9/vaults/interfaces/ILockable.sol";
 import {ILiquidity} from "contracts/0.8.9/vaults/interfaces/ILiquidity.sol";
 import {BeaconChainDepositor} from "contracts/0.8.9/BeaconChainDepositor.sol";
+import {BeaconProxyUtils} from 'contracts/0.8.9/utils/BeaconProxyUtils.sol';
 
 pragma solidity 0.8.9;
 
 contract LiquidStakingVault__MockForTestUpgrade is StakingVault, ILiquid, ILockable {
 
-    uint8 private constant _version = 2;
-
-    function version() public pure override returns(uint8) {
-        return _version;
-    }
+    uint8 private constant VERSION = 2;
 
     constructor(
         address _depositContract
     ) StakingVault(_depositContract) {
     }
 
-    function finalizeUpgrade_v2() external {
-        _checkContractVersion(1);
-        _updateContractVersion(2);
+    function version() public pure override returns(uint8) {
+        return VERSION;
     }
 
     function burn(uint256 _amountOfShares) external {}

@@ -7,7 +7,8 @@ pragma solidity 0.8.9;
 import {IStaking} from "./interfaces/IStaking.sol";
 import {BeaconChainDepositor} from "../BeaconChainDepositor.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {Versioned} from "../utils/Versioned.sol";
+import {BeaconProxyUtils} from "../utils/BeaconProxyUtils.sol";
+import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 // TODO: trigger validator exit
 // TODO: add recover functions
@@ -19,9 +20,9 @@ import {Versioned} from "../utils/Versioned.sol";
 /// @notice Basic ownable vault for staking. Allows to deposit ETH, create
 /// batches of validators withdrawal credentials set to the vault, receive
 /// various rewards and withdraw ETH.
-contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable, Versioned {
+contract StakingVault is IStaking, IBeaconProxy, BeaconChainDepositor, AccessControlEnumerable {
 
-    uint8 private constant _version = 1;
+    uint8 private constant VERSION = 1;
 
     address public constant EVERYONE = address(0x4242424242424242424242424242424242424242);
 
@@ -37,8 +38,7 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
     /// @param _admin admin address that can TBD
     function initialize(address _admin) public {
         if (_admin == address(0)) revert ZeroAddress("_admin");
-
-        _initializeContractVersionTo(1);
+        if (getBeacon() == address(0)) revert NonProxyCall();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(VAULT_MANAGER_ROLE, _admin);
@@ -46,7 +46,11 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
     }
 
     function version() public pure virtual returns(uint8) {
-        return _version;
+        return VERSION;
+    }
+
+    function getBeacon() public view returns (address) {
+        return BeaconProxyUtils.getBeacon();
     }
 
     function getWithdrawalCredentials() public view returns (bytes32) {
@@ -114,4 +118,5 @@ contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable
     error TransferFailed(address receiver, uint256 amount);
     error NotEnoughBalance(uint256 balance);
     error NotAuthorized(string operation, address addr);
+    error NonProxyCall();
 }

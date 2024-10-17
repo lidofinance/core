@@ -4,10 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
+import {IBeacon} from "@openzeppelin/contracts-v4.4/proxy/beacon/IBeacon.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
+import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
@@ -53,6 +55,24 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     /// @dev if vault is not connected to the hub, it's index is zero
     mapping(ILockable => uint256) private vaultIndex;
 
+    event VaultImplAdded(address impl);
+    event VaultFactoryAdded(address factory);
+
+    mapping (address => bool) public vaultFactories;
+    mapping (address => bool) public vaultImpl;
+
+    function addFactory(address factory) public onlyRole(VAULT_MASTER_ROLE) {
+        if (vaultFactories[factory]) revert AlreadyExists(factory);
+        vaultFactories[factory] = true;
+        emit VaultFactoryAdded(factory);
+    }
+
+    function addImpl(address impl) public onlyRole(VAULT_MASTER_ROLE) {
+        if (vaultImpl[impl]) revert AlreadyExists(impl);
+        vaultImpl[impl] = true;
+        emit VaultImplAdded(impl);
+    }
+
     constructor(address _admin, address _stETH, address _treasury) {
         STETH = StETH(_stETH);
         TREASURE = _treasury;
@@ -95,6 +115,12 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (_treasuryFeeBP == 0) revert ZeroArgument("treasuryFeeBP");
         if (address(_vault) == address(0)) revert ZeroArgument("vault");
 
+        address factory = IBeaconProxy(address (_vault)).getBeacon();
+        if (!vaultFactories[factory]) revert FactoryNotAllowed(factory);
+
+        address impl = IBeacon(factory).implementation();
+        if (!vaultImpl[impl]) revert ImplNotAllowed(impl);
+
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault));
         if (vaultsCount() >= MAX_VAULTS_COUNT) revert TooManyVaults();
         if (_capShares > STETH.getTotalShares() / 10) {
@@ -103,7 +129,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (_minBondRateBP > BPS_BASE) revert MinBondRateTooHigh(address(_vault), _minBondRateBP, BPS_BASE);
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
-        VaultSocket memory vr = VaultSocket(ILockable(_vault), uint96(_capShares), 0, uint16(_minBondRateBP), uint16(_treasuryFeeBP));
+        VaultSocket memory vr = VaultSocket(_vault, uint96(_capShares), 0, uint16(_minBondRateBP), uint16(_treasuryFeeBP));
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
@@ -363,4 +389,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error MinBondRateTooHigh(address vault, uint256 minBondRateBP, uint256 maxMinBondRateBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
+    error AlreadyExists(address addr);
+    error FactoryNotAllowed(address beacon);
+    error ImplNotAllowed(address impl);
 }
