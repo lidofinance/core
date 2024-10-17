@@ -88,7 +88,6 @@ interface ILido {
     function burnShares(address _account, uint256 _sharesAmount) external;
 }
 
-
 struct ReportValues {
     /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
     uint256 timestamp;
@@ -202,6 +201,8 @@ contract Accounting is VaultHub {
         ReportValues memory _report
     ) external {
         Contracts memory contracts = _loadOracleReportContracts();
+        if (msg.sender != contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
+
         uint256 simulatedShareRate = _simulateOracleReportContext(contracts, _report);
         (PreReportState memory pre, CalculatedValues memory update)
             = _calculateOracleReportContext(contracts, _report, simulatedShareRate);
@@ -361,9 +362,7 @@ contract Accounting is VaultHub {
         CalculatedValues memory _update,
         uint256 _simulatedShareRate
     ) internal {
-        if (msg.sender != _contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
-
-        _checkAccountingOracleReport(_contracts, _report, _pre, _update, _simulatedShareRate);
+        _checkAccountingOracleReport(_contracts, _report, _pre, _update);
 
         uint256 lastWithdrawalRequestToFinalize;
         if (_update.sharesToFinalizeWQ > 0) {
@@ -437,8 +436,7 @@ contract Accounting is VaultHub {
         Contracts memory _contracts,
         ReportValues memory _report,
         PreReportState memory _pre,
-        CalculatedValues memory _update,
-        uint256 _simulatedShareRate
+        CalculatedValues memory _update
     ) internal view {
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timestamp,
@@ -453,13 +451,6 @@ contract Accounting is VaultHub {
             _pre.depositedValidators
         );
         if (_report.withdrawalFinalizationBatches.length > 0) {
-            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                _update.postTotalPooledEther,
-                _update.postTotalShares,
-                _update.etherToFinalizeWQ,
-                _update.sharesToBurnForWithdrawals,
-                _simulatedShareRate
-            );
             _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
                 _report.timestamp
