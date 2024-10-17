@@ -317,8 +317,7 @@ const simulateReport = async (
   });
 
   const { timeElapsed } = await getReportTimeElapsed(ctx);
-
-  const [pre, update] = await accounting.calculateOracleReportContext({
+  const update = await accounting.simulateOracleReportWithoutWithdrawals({
     timestamp: reportTimestamp,
     timeElapsed,
     clValidators: beaconValidators,
@@ -332,8 +331,6 @@ const simulateReport = async (
   });
 
   log.debug("Simulation result", {
-    "Pre Total Pooled Ether": formatEther(pre.totalPooledEther),
-    "Pre Total Shares": pre.totalShares,
     "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
     "Post Total Shares": update.postTotalShares,
     "Withdrawals": formatEther(update.withdrawals),
