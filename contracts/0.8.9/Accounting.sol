@@ -179,16 +179,15 @@ contract Accounting is VaultHub {
         uint256[] vaultsTreasuryFeeShares;
     }
 
-    function calculateOracleReportContext(
+    function simulateOracleReportWithoutWithdrawals(
         ReportValues memory _report
     ) public view returns (
-        PreReportState memory pre,
-        CalculatedValues memory update,
-        uint256 simulatedShareRate
+        CalculatedValues memory update
     ) {
         Contracts memory contracts = _loadOracleReportContracts();
+        PreReportState memory pre = _snapshotPreReportState();
 
-        return _calculateOracleReportContext(contracts, _report);
+        return _simulateOracleReport(contracts, pre, _report, 0);
     }
 
     /**

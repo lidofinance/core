@@ -316,7 +316,7 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const [, update] = await accounting.calculateOracleReportContext({
+  const update = await accounting.simulateOracleReportWithoutWithdrawals({
     timestamp: reportTimestamp,
     timeElapsed: 24n * 60n * 60n, // 1 day
     clValidators: beaconValidators,
