@@ -65,7 +65,6 @@ export async function main() {
       sanityChecks.churnValidatorsPerDayLimit,
       sanityChecks.oneOffCLBalanceDecreaseBPLimit,
       sanityChecks.annualBalanceIncreaseBPLimit,
-      sanityChecks.simulatedShareRateDeviationBPLimit,
       sanityChecks.maxValidatorExitRequestsPerReport,
       sanityChecks.maxAccountingExtraDataListItemsCount,
       sanityChecks.maxNodeOperatorsPerExtraDataItemCount,
