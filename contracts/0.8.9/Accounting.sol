@@ -438,8 +438,12 @@ contract Accounting is VaultHub {
         PreReportState memory _pre,
         CalculatedValues memory _update
     ) internal view {
+        if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
+        if (_report.clValidators < _pre.clValidators || _report.clValidators >  _pre.depositedValidators) {
+            revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
+
+        }
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
-            _report.timestamp,
             _report.timeElapsed,
             _update.principalClBalance,
             _report.clBalance,
@@ -447,8 +451,7 @@ contract Accounting is VaultHub {
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
             _pre.clValidators,
-            _report.clValidators,
-            _pre.depositedValidators
+            _report.clValidators
         );
         if (_report.withdrawalFinalizationBatches.length > 0) {
             _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
@@ -577,4 +580,7 @@ contract Accounting is VaultHub {
         require(ret.recipients.length == ret.modulesFees.length, "WRONG_RECIPIENTS_INPUT");
         require(ret.moduleIds.length == ret.modulesFees.length, "WRONG_MODULE_IDS_INPUT");
     }
+
+    error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
+    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
 }

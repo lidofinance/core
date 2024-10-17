@@ -390,7 +390,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _preCLValidators Lido-participating validators on the CL side before the current oracle report
     /// @param _postCLValidators Lido-participating validators on the CL side after the current oracle report
     function checkAccountingOracleReport(
-        uint256 _reportTimestamp,
         uint256 _timeElapsed,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
@@ -398,14 +397,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
         uint256 _preCLValidators,
-        uint256 _postCLValidators,
-        uint256 _depositedValidators
+        uint256 _postCLValidators
     ) external view {
-        // TODO: custom errors
-        require(_reportTimestamp <= block.timestamp, "INVALID_REPORT_TIMESTAMP");
-        require(_postCLValidators <= _depositedValidators, "REPORTED_MORE_DEPOSITED");
-        require(_postCLValidators >= _preCLValidators, "REPORTED_LESS_VALIDATORS");
-
         LimitsList memory limitsList = _limits.unpack();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
