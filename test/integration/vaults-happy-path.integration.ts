@@ -148,7 +148,7 @@ describe("Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Alice to create vaults and assign Bob as node operator", async () => {
-    const vaultParams = [ctx.contracts.accounting, alice, depositContract];
+    const vaultParams = [ctx.contracts.accounting, ctx.contracts.lido, alice, depositContract];
 
     for (let i = 0n; i < VAULTS_COUNT; i++) {
       // Alice can create a vault
@@ -384,12 +384,12 @@ describe("Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Alice to burn shares to repay debt", async () => {
-    const { lido, accounting } = ctx.contracts;
+    const { lido } = ctx.contracts;
 
-    const approveTx = await lido.connect(alice).approve(accounting, vault101Minted);
+    const approveTx = await lido.connect(alice).approve(vault101.address, vault101Minted);
     await trace("lido.approve", approveTx);
 
-    const burnTx = await vault101.vault.connect(alice).burn(alice, vault101Minted);
+    const burnTx = await vault101.vault.connect(alice).burn(vault101Minted);
     await trace("vault.burn", burnTx);
 
     const { vaultRewards, netCashFlows } = await calculateReportValues();

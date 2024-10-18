@@ -13,8 +13,6 @@ interface StETH {
     function mintExternalShares(address, uint256) external;
     function burnExternalShares(uint256) external;
 
-    function transferFrom(address, address, uint256) external;
-
     function getPooledEthByShares(uint256) external view returns (uint256);
     function getSharesByPooledEth(uint256) external view returns (uint256);
     function getTotalShares() external view returns (uint256);
@@ -170,10 +168,9 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     }
 
     /// @notice burn steth from the balance of the vault contract
-    /// @param _holder address of the holder of the stETH tokens to burn
     /// @param _amountOfTokens amount of tokens to burn
     /// @dev can be used by vaults only
-    function burnStethBackedByVault(address _holder, uint256 _amountOfTokens) external {
+    function burnStethBackedByVault(uint256 _amountOfTokens) external {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
 
         uint256 index = vaultIndex[ILockable(msg.sender)];
@@ -185,7 +182,6 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
 
         sockets[index].mintedShares -= uint96(amountOfShares);
 
-        STETH.transferFrom(_holder, address(this), _amountOfTokens);
         STETH.burnExternalShares(amountOfShares);
 
         emit BurnedStETHOnVault(msg.sender, _amountOfTokens);
