@@ -118,23 +118,23 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (index == 0) revert NotConnectedToHub(msg.sender);
 
         VaultSocket memory socket = sockets[index];
-        ILockable vr = socket.vault;
+        ILockable vaultToDisconnect = socket.vault;
 
         if (socket.mintedShares > 0) {
             uint256 stethToBurn = STETH.getPooledEthByShares(socket.mintedShares);
-            vr.rebalance(stethToBurn);
+            vaultToDisconnect.rebalance(stethToBurn);
         }
 
-        vr.update(vr.value(), vr.netCashFlow(), 0);
+        vaultToDisconnect.update(vaultToDisconnect.value(), vaultToDisconnect.netCashFlow(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
         vaultIndex[lastSocket.vault] = index;
         sockets.pop();
 
-        delete vaultIndex[vr];
+        delete vaultIndex[vaultToDisconnect];
 
-        emit VaultDisconnected(address(vr));
+        emit VaultDisconnected(address(vaultToDisconnect));
     }
 
     /// @notice mint StETH tokens backed by vault external balance to the receiver address
