@@ -11,6 +11,8 @@ For the `wstETH` contract, we use `solc 0.6.12`, as it is non-upgradeable and bo
 
 For the other contracts, newer compiler versions are used.
 
+The 0.8.25 version of the compiler was introduced for Lido Vaults to be able to support [OpenZeppelin v0.5.2](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.0.2) dependencies.
+
 # Compilation Instructions
 
 ```bash
