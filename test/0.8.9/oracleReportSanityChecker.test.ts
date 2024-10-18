@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { BigNumberish, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -51,18 +51,8 @@ describe("OracleReportSanityChecker.sol", () => {
     postCLValidators: 0n,
     depositedValidators: 0n,
   };
-  type CheckAccountingOracleReportParameters = [
-    BigNumberish,
-    number,
-    bigint,
-    bigint,
-    number,
-    number,
-    number,
-    number,
-    number,
-    BigNumberish,
-  ];
+  type CheckAccountingOracleReportParameters = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let withdrawalVault: string;
@@ -146,10 +136,6 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(limitsBefore.churnValidatorsPerDayLimit).to.not.equal(newLimitsList.churnValidatorsPerDayLimit);
       expect(limitsBefore.oneOffCLBalanceDecreaseBPLimit).to.not.equal(newLimitsList.oneOffCLBalanceDecreaseBPLimit);
       expect(limitsBefore.annualBalanceIncreaseBPLimit).to.not.equal(newLimitsList.annualBalanceIncreaseBPLimit);
-      expect(limitsBefore.simulatedShareRateDeviationBPLimit).to.not.equal(
-        newLimitsList.simulatedShareRateDeviationBPLimit,
-      );
-
       expect(limitsBefore.maxValidatorExitRequestsPerReport).to.not.equal(
         newLimitsList.maxValidatorExitRequestsPerReport,
       );
@@ -175,7 +161,6 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(limitsAfter.churnValidatorsPerDayLimit).to.equal(newLimitsList.churnValidatorsPerDayLimit);
       expect(limitsAfter.oneOffCLBalanceDecreaseBPLimit).to.equal(newLimitsList.oneOffCLBalanceDecreaseBPLimit);
       expect(limitsAfter.annualBalanceIncreaseBPLimit).to.equal(newLimitsList.annualBalanceIncreaseBPLimit);
-      expect(limitsAfter.simulatedShareRateDeviationBPLimit).to.equal(newLimitsList.simulatedShareRateDeviationBPLimit);
       expect(limitsAfter.maxValidatorExitRequestsPerReport).to.equal(newLimitsList.maxValidatorExitRequestsPerReport);
       expect(limitsAfter.maxAccountingExtraDataListItemsCount).to.equal(
         newLimitsList.maxAccountingExtraDataListItemsCount,
@@ -249,7 +234,6 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await expect(
         oracleReportSanityChecker.checkAccountingOracleReport(
-          correctLidoOracleReport.timestamp,
           correctLidoOracleReport.timeElapsed,
           preCLBalance,
           postCLBalance,
@@ -258,7 +242,6 @@ describe("OracleReportSanityChecker.sol", () => {
           correctLidoOracleReport.sharesRequestedToBurn,
           correctLidoOracleReport.preCLValidators,
           correctLidoOracleReport.postCLValidators,
-          correctLidoOracleReport.depositedValidators,
         ),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceDecrease")
@@ -380,27 +363,6 @@ describe("OracleReportSanityChecker.sol", () => {
         }) as CheckAccountingOracleReportParameters),
       );
     });
-
-    it("set simulated share rate deviation", async () => {
-      const previousValue = (await oracleReportSanityChecker.getOracleReportLimits())
-        .simulatedShareRateDeviationBPLimit;
-      const newValue = 7;
-      expect(newValue).to.not.equal(previousValue);
-
-      await expect(
-        oracleReportSanityChecker.connect(deployer).setSimulatedShareRateDeviationBPLimit(newValue),
-      ).to.be.revertedWithOZAccessControlError(
-        deployer.address,
-        await oracleReportSanityChecker.SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE(),
-      );
-      const tx = await oracleReportSanityChecker
-        .connect(managersRoster.shareRateDeviationLimitManagers[0])
-        .setSimulatedShareRateDeviationBPLimit(newValue);
-      expect((await oracleReportSanityChecker.getOracleReportLimits()).simulatedShareRateDeviationBPLimit).to.equal(
-        newValue,
-      );
-      await expect(tx).to.emit(oracleReportSanityChecker, "SimulatedShareRateDeviationBPLimitSet").withArgs(newValue);
-    });
   });
 
   describe("checkWithdrawalQueueOracleReport()", () => {
@@ -458,65 +420,6 @@ describe("OracleReportSanityChecker.sol", () => {
         .setRequestTimestampMargin(newValue);
       expect((await oracleReportSanityChecker.getOracleReportLimits()).requestTimestampMargin).to.equal(newValue);
       await expect(tx).to.emit(oracleReportSanityChecker, "RequestTimestampMarginSet").withArgs(newValue);
-    });
-  });
-
-  describe("checkSimulatedShareRate", () => {
-    const correctSimulatedShareRate = {
-      postTotalPooledEther: ether("9"),
-      postTotalShares: ether("4"),
-      etherLockedOnWithdrawalQueue: ether("1"),
-      sharesBurntFromWithdrawalQueue: ether("1"),
-      simulatedShareRate: 2n * 10n ** 27n,
-    };
-    type CheckSimulatedShareRateParameters = [bigint, bigint, bigint, bigint, bigint];
-
-    it("reverts with error IncorrectSimulatedShareRate() when simulated share rate is higher than expected", async () => {
-      const simulatedShareRate = ether("2.1") * 10n ** 9n;
-      const actualShareRate = 2n * 10n ** 27n;
-      await expect(
-        oracleReportSanityChecker.checkSimulatedShareRate(
-          ...(Object.values({
-            ...correctSimulatedShareRate,
-            simulatedShareRate: simulatedShareRate.toString(),
-          }) as CheckSimulatedShareRateParameters),
-        ),
-      )
-        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate")
-        .withArgs(simulatedShareRate, actualShareRate);
-    });
-
-    it("reverts with error IncorrectSimulatedShareRate() when simulated share rate is lower than expected", async () => {
-      const simulatedShareRate = ether("1.9") * 10n ** 9n;
-      const actualShareRate = 2n * 10n ** 27n;
-      await expect(
-        oracleReportSanityChecker.checkSimulatedShareRate(
-          ...(Object.values({
-            ...correctSimulatedShareRate,
-            simulatedShareRate: simulatedShareRate,
-          }) as CheckSimulatedShareRateParameters),
-        ),
-      )
-        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate")
-        .withArgs(simulatedShareRate, actualShareRate);
-    });
-
-    it("reverts with error ActualShareRateIsZero() when actual share rate is zero", async () => {
-      await expect(
-        oracleReportSanityChecker.checkSimulatedShareRate(
-          ...(Object.values({
-            ...correctSimulatedShareRate,
-            etherLockedOnWithdrawalQueue: ether("0"),
-            postTotalPooledEther: ether("0"),
-          }) as CheckSimulatedShareRateParameters),
-        ),
-      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "ActualShareRateIsZero");
-    });
-
-    it("passes all checks with correct share rate", async () => {
-      await oracleReportSanityChecker.checkSimulatedShareRate(
-        ...(Object.values(correctSimulatedShareRate) as CheckSimulatedShareRateParameters),
-      );
     });
   });
 
@@ -1253,14 +1156,6 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleReportSanityChecker
           .connect(managersRoster.allLimitsManagers[0])
           .setOracleReportLimits({ ...defaultLimitsList, annualBalanceIncreaseBPLimit: INVALID_BASIS_POINTS }),
-      )
-        .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-        .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
-
-      await expect(
-        oracleReportSanityChecker
-          .connect(managersRoster.allLimitsManagers[0])
-          .setOracleReportLimits({ ...defaultLimitsList, simulatedShareRateDeviationBPLimit: 10001 }),
       )
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
         .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
