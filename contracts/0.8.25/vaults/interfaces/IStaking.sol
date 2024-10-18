@@ -14,7 +14,9 @@ interface IStaking {
     function getWithdrawalCredentials() external view returns (bytes32);
 
     function deposit() external payable;
+
     receive() external payable;
+
     function withdraw(address receiver, uint256 etherToWithdraw) external;
 
     function topupValidators(

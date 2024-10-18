@@ -51,11 +51,11 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     }
 
     function accumulatedNodeOperatorFee() public view returns (uint256) {
-        int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
-                - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
+        int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value) -
+            (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
 
         if (earnedRewards > 0) {
-            return uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
+            return (uint128(earnedRewards) * nodeOperatorFee) / MAX_FEE;
         } else {
             return 0;
         }
@@ -74,10 +74,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         super.deposit();
     }
 
-    function withdraw(
-        address _receiver,
-        uint256 _amount
-    ) public override(StakingVault) {
+    function withdraw(address _receiver, uint256 _amount) public override(StakingVault) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amount == 0) revert ZeroArgument("amount");
         if (canWithdraw() < _amount) revert NotEnoughUnlockedEth(canWithdraw(), _amount);
@@ -99,10 +96,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         super.topupValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
-    function mint(
-        address _receiver,
-        uint256 _amountOfTokens
-    ) external payable onlyOwner andDeposit() {
+    function mint(address _receiver, uint256 _amountOfTokens) external payable onlyOwner andDeposit {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
@@ -116,12 +110,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external payable andDeposit(){
+    function rebalance(uint256 _amountOfETH) external payable andDeposit {
         if (_amountOfETH == 0) revert ZeroArgument("amountOfETH");
         if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
 
-        if (owner() == msg.sender ||
-           (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) { // force rebalance
+        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) {
+            // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             netCashFlow -= int256(_amountOfETH);
@@ -139,7 +133,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;
 
-        accumulatedVaultOwnerFee += _value * vaultOwnerFee / 365 / MAX_FEE;
+        accumulatedVaultOwnerFee += (_value * vaultOwnerFee) / 365 / MAX_FEE;
 
         emit Reported(_value, _ncf, _locked);
     }
@@ -165,15 +159,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
             if (_liquid) {
                 _mint(_receiver, feesToClaim);
             } else {
-                 _withdrawFeeInEther(_receiver, feesToClaim);
+                _withdrawFeeInEther(_receiver, feesToClaim);
             }
         }
     }
 
-    function claimVaultOwnerFee(
-        address _receiver,
-        bool _liquid
-    ) external onlyOwner {
+    function claimVaultOwnerFee(address _receiver, bool _liquid) external onlyOwner {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         _mustBeHealthy();
 
