@@ -24,6 +24,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     error Zero(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
+    error VaultNotHealthy();
 
     uint256 private constant MAX_FEE = 10_000;
 
@@ -85,8 +86,24 @@ contract DelegatorAlligator is AccessControlEnumerable {
         ILiquidVault(vault).rebalance(_amountOfETH);
     }
 
-    function claimManagementDue(address _receiver, bool _liquid) external onlyRole(MANAGER_ROLE) {
-        // TODO
+    function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
+        if (_recipient == address(0)) revert Zero("_recipient");
+
+        if (!ILiquidVault(vault).isHealthy()) {
+            revert VaultNotHealthy();
+        }
+
+        uint256 due = managementDue;
+
+        if (due > 0) {
+            managementDue = 0;
+
+            if (_liquid) {
+                mint(_recipient, due);
+            } else {
+                _withdrawFeeInEther(_recipient, due);
+            }
+        }
     }
 
     /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
