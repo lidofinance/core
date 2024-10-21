@@ -30,10 +30,16 @@ interface ILiquidVault {
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
     event Rebalanced(uint256 amount);
     event Locked(uint256 amount);
+    event UpdateCallbackFailed(address target, bytes4 selector);
 
     struct Report {
         uint128 valuation;
         int128 inOutDelta;
+    }
+
+    struct ReportSubscription {
+        address subscriber;
+        bytes4 callback;
     }
 
     function getHub() external view returns (IHub);

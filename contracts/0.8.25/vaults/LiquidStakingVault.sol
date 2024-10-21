@@ -19,8 +19,7 @@ contract LiquidVault is ILiquidVault, Vault {
     uint256 private locked;
     int256 private inOutDelta; // Is direct validator depositing affects this accounting?
 
-    uint256 private managementFee;
-    uint256 private managementDue;
+    ReportSubscription[] reportSubscriptions;
 
     constructor(address _hub, address _owner, address _depositContract) Vault(_owner, _depositContract) {
         hub = IHub(_hub);
@@ -40,14 +39,6 @@ contract LiquidVault is ILiquidVault, Vault {
 
     function getInOutDelta() external view returns (int256) {
         return inOutDelta;
-    }
-
-    function getManagementFee() external view returns (uint256) {
-        return managementFee;
-    }
-
-    function getManagementDue() external view returns (uint256) {
-        return managementDue;
     }
 
     function valuation() public view returns (uint256) {
@@ -130,15 +121,33 @@ contract LiquidVault is ILiquidVault, Vault {
         }
     }
 
-    function update(uint256 _value, int256 _ncf, uint256 _locked) external {
+    function update(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(hub)) revert NotAuthorized("update", msg.sender);
 
-        latestReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
+        latestReport = Report(uint128(_valuation), int128(_inOutDelta)); //TODO: safecast
         locked = _locked;
 
-        managementDue += (_value * managementFee) / 365 / MAX_FEE;
+        for (uint256 i = 0; i < reportSubscriptions.length; i++) {
+            ReportSubscription memory subscription = reportSubscriptions[i];
+            (bool success, ) = subscription.subscriber.call(
+                abi.encodePacked(subscription.callback, _valuation, _inOutDelta, _locked)
+            );
 
-        emit Reported(_value, _ncf, _locked);
+            if (!success) {
+                emit UpdateCallbackFailed(subscription.subscriber, subscription.callback);
+            }
+        }
+
+        emit Reported(_valuation, _inOutDelta, _locked);
+    }
+
+    function subscribe(address _subscriber, bytes4 _callback) external onlyOwner {
+        reportSubscriptions.push(ReportSubscription(_subscriber, _callback));
+    }
+
+    function unsubscribe(uint256 _index) external onlyOwner {
+        reportSubscriptions[_index] = reportSubscriptions[reportSubscriptions.length - 1];
+        reportSubscriptions.pop();
     }
 
     function _revertIfNotHealthy() private view {

@@ -51,6 +51,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     error Zero(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
+    error NotVault();
 
     uint256 private constant MAX_FEE = 10_000;
 
@@ -182,6 +183,12 @@ contract DelegatorAlligator is AccessControlEnumerable {
         uint256 canWithdrawFee = unlocked >= 0 ? uint256(unlocked) : 0;
         if (canWithdrawFee < _amountOfTokens) revert InsufficientUnlockedAmount(canWithdrawFee, _amountOfTokens);
         IStaking(vault).withdraw(_receiver, _amountOfTokens);
+    }
+
+    function setManagementDue(uint256 _valuation) external {
+        if (msg.sender != vault) revert NotVault();
+
+        managementDue += (_valuation * managementFee) / 365 / MAX_FEE;
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256) {
