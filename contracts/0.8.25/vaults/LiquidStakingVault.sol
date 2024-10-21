@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {StakingVault} from "./StakingVault.sol";
+import {Vault} from "./Vault.sol";
 import {ILiquid} from "./interfaces/ILiquid.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
@@ -12,7 +12,7 @@ import {ILiquidity} from "./interfaces/ILiquidity.sol";
 // TODO: add erc-4626-like can* methods
 // TODO: add sanity checks
 // TODO: unstructured storage
-contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
+contract LiquidStakingVault is Vault, ILiquid, ILockable {
     uint256 private constant MAX_FEE = 10000;
     ILiquidity public immutable LIQUIDITY_PROVIDER;
 
@@ -32,11 +32,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     uint256 public accumulatedVaultOwnerFee;
 
-    constructor(
-        address _liquidityProvider,
-        address _owner,
-        address _depositContract
-    ) StakingVault(_owner, _depositContract) {
+    constructor(address _liquidityProvider, address _owner, address _depositContract) Vault(_owner, _depositContract) {
         LIQUIDITY_PROVIDER = ILiquidity(_liquidityProvider);
     }
 
@@ -54,15 +50,15 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         return value() - locked;
     }
 
-    function deposit() public payable override(StakingVault) {
+    function fund() public payable override(Vault) {
         netCashFlow += int256(msg.value);
 
-        super.deposit();
+        super.fund();
     }
 
-    function withdraw(address _receiver, uint256 _amount) public override(StakingVault) {
-        if (_receiver == address(0)) revert ZeroArgument("receiver");
-        if (_amount == 0) revert ZeroArgument("amount");
+    function withdraw(address _receiver, uint256 _amount) public override(Vault) {
+        if (_receiver == address(0)) revert Zero("receiver");
+        if (_amount == 0) revert Zero("amount");
         if (canWithdraw() < _amount) revert NotEnoughUnlockedEth(canWithdraw(), _amount);
 
         _withdraw(_receiver, _amount);
@@ -70,42 +66,42 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         _mustBeHealthy();
     }
 
-    function topupValidators(
+    function deposit(
         uint256 _keysCount,
         bytes calldata _publicKeysBatch,
         bytes calldata _signaturesBatch
-    ) public override(StakingVault) {
+    ) public override(Vault) {
         // unhealthy vaults are up to force rebalancing
         // so, we don't want it to send eth back to the Beacon Chain
         _mustBeHealthy();
 
-        super.topupValidators(_keysCount, _publicKeysBatch, _signaturesBatch);
+        super.deposit(_keysCount, _publicKeysBatch, _signaturesBatch);
     }
 
-    function mint(address _receiver, uint256 _amountOfTokens) external payable onlyOwner andDeposit {
-        if (_receiver == address(0)) revert ZeroArgument("receiver");
-        if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
+    function mint(address _receiver, uint256 _amountOfTokens) external payable onlyOwner andFund {
+        if (_receiver == address(0)) revert Zero("receiver");
+        if (_amountOfTokens == 0) revert Zero("amountOfShares");
 
         _mint(_receiver, _amountOfTokens);
     }
 
     function burn(uint256 _amountOfTokens) external onlyOwner {
-        if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
+        if (_amountOfTokens == 0) revert Zero("amountOfShares");
 
         // burn shares at once but unlock balance later during the report
         LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external payable andDeposit {
-        if (_amountOfETH == 0) revert ZeroArgument("amountOfETH");
-        if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
+    function rebalance(uint256 _amountOfETH) external payable andFund {
+        if (_amountOfETH == 0) revert Zero("amountOfETH");
+        if (address(this).balance < _amountOfETH) revert InsufficientBalance(address(this).balance);
 
         if (owner() == msg.sender || (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) {
             // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             netCashFlow -= int256(_amountOfETH);
-            emit Withdrawal(msg.sender, _amountOfETH);
+            emit Withdrawn(msg.sender, msg.sender, _amountOfETH);
 
             LIQUIDITY_PROVIDER.rebalance{value: _amountOfETH}();
         } else {
@@ -143,9 +139,9 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         if (locked > value()) revert NotHealthy(locked, value());
     }
 
-    modifier andDeposit() {
+    modifier andFund() {
         if (msg.value > 0) {
-            deposit();
+            fund();
         }
         _;
     }
@@ -157,4 +153,5 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     error NotHealthy(uint256 locked, uint256 value);
     error NotEnoughUnlockedEth(uint256 unlocked, uint256 amount);
     error NeedToClaimAccumulatedNodeOperatorFee();
+    error NotAuthorized(string operation, address sender);
 }
