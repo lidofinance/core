@@ -8,6 +8,8 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions
 import {IVault} from "./interfaces/IVault.sol";
 import {ILiquidVault} from "./interfaces/ILiquidVault.sol";
 
+interface DelegatedVault is ILiquidVault, IVault {}
+
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator
 //             .-._   _ _ _ _ _ _ _ _
@@ -33,7 +35,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
     bytes32 public constant VAULT_ROLE = keccak256("Vault.DelegatorAlligator.VaultRole");
 
-    address payable public vault;
+    DelegatedVault public vault;
 
     ILiquidVault.Report public lastClaimedReport;
 
@@ -42,10 +44,10 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     uint256 public managementDue;
 
-    constructor(address payable _vault, address _admin) {
+    constructor(DelegatedVault _vault, address _admin) {
         vault = _vault;
 
-        _grantRole(VAULT_ROLE, _vault);
+        _grantRole(VAULT_ROLE, address(_vault));
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
@@ -62,7 +64,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function getPerformanceDue() public view returns (uint256) {
-        ILiquidVault.Report memory latestReport = ILiquidVault(vault).getLatestReport();
+        ILiquidVault.Report memory latestReport = vault.getLatestReport();
 
         int128 _performanceDue = int128(latestReport.valuation - lastClaimedReport.valuation) -
             int128(latestReport.inOutDelta - lastClaimedReport.inOutDelta);
@@ -75,21 +77,21 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).mint(_recipient, _tokens);
+        vault.mint(_recipient, _tokens);
     }
 
     function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).burn(_tokens);
+        vault.burn(_tokens);
     }
 
     function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).rebalance(_ether);
+        vault.rebalance(_ether);
     }
 
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert Zero("_recipient");
 
-        if (!ILiquidVault(vault).isHealthy()) {
+        if (!vault.isHealthy()) {
             revert VaultNotHealthy();
         }
 
@@ -109,8 +111,8 @@ contract DelegatorAlligator is AccessControlEnumerable {
     /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
 
     function getWithdrawableAmount() public view returns (uint256) {
-        uint256 reserved = _max(ILiquidVault(vault).getLocked(), managementDue + getPerformanceDue());
-        uint256 value = ILiquidVault(vault).valuation();
+        uint256 reserved = _max(vault.getLocked(), managementDue + getPerformanceDue());
+        uint256 value = vault.valuation();
 
         if (reserved > value) {
             return 0;
@@ -120,7 +122,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function fund() external payable onlyRole(DEPOSITOR_ROLE) {
-        IVault(vault).fund();
+        vault.fund();
     }
 
     function withdraw(address _recipient, uint256 _ether) external onlyRole(DEPOSITOR_ROLE) {
@@ -128,11 +130,11 @@ contract DelegatorAlligator is AccessControlEnumerable {
         if (_ether == 0) revert Zero("_ether");
         if (getWithdrawableAmount() < _ether) revert InsufficientWithdrawableAmount(getWithdrawableAmount(), _ether);
 
-        IVault(vault).withdraw(_recipient, _ether);
+        vault.withdraw(_recipient, _ether);
     }
 
     function exitValidators(uint256 _numberOfValidators) external onlyRole(DEPOSITOR_ROLE) {
-        IVault(vault).exitValidators(_numberOfValidators);
+        vault.exitValidators(_numberOfValidators);
     }
 
     /// * * * * * OPERATOR FUNCTIONS * * * * * ///
@@ -142,7 +144,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         bytes calldata _pubkeys,
         bytes calldata _signatures
     ) external onlyRole(OPERATOR_ROLE) {
-        IVault(vault).deposit(_numberOfDeposits, _pubkeys, _signatures);
+        vault.deposit(_numberOfDeposits, _pubkeys, _signatures);
     }
 
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
@@ -151,7 +153,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         uint256 due = getPerformanceDue();
 
         if (due > 0) {
-            lastClaimedReport = ILiquidVault(vault).getLatestReport();
+            lastClaimedReport = vault.getLatestReport();
 
             if (_liquid) {
                 mint(_recipient, due);
@@ -170,11 +172,11 @@ contract DelegatorAlligator is AccessControlEnumerable {
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
 
     function _withdrawFeeInEther(address _recipient, uint256 _ether) internal {
-        int256 unlocked = int256(ILiquidVault(vault).valuation()) - int256(ILiquidVault(vault).getLocked());
+        int256 unlocked = int256(vault.valuation()) - int256(vault.getLocked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
         if (unreserved < _ether) revert InsufficientUnlockedAmount(unreserved, _ether);
 
-        IVault(vault).withdraw(_recipient, _ether);
+        vault.withdraw(_recipient, _ether);
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256) {
