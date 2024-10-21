@@ -5,153 +5,143 @@
 pragma solidity 0.8.25;
 
 import {Vault} from "./Vault.sol";
-import {ILiquid} from "./interfaces/ILiquid.sol";
-import {ILockable} from "./interfaces/ILockable.sol";
-import {ILiquidity} from "./interfaces/ILiquidity.sol";
+import {IHub, ILiquidVault} from "./interfaces/ILiquidVault.sol";
 
 // TODO: add erc-4626-like can* methods
 // TODO: add sanity checks
-// TODO: unstructured storage
-contract LiquidStakingVault is Vault, ILiquid, ILockable {
+contract LiquidVault is ILiquidVault, Vault {
     uint256 private constant MAX_FEE = 10000;
-    ILiquidity public immutable LIQUIDITY_PROVIDER;
 
-    struct Report {
-        uint128 value;
-        int128 netCashFlow;
+    IHub private immutable hub;
+
+    Report private latestReport;
+
+    uint256 private locked;
+    int256 private inOutDelta; // Is direct validator depositing affects this accounting?
+
+    uint256 private managementFee;
+    uint256 private managementDue;
+
+    constructor(address _hub, address _owner, address _depositContract) Vault(_owner, _depositContract) {
+        hub = IHub(_hub);
     }
 
-    Report public lastReport;
-
-    uint256 public locked;
-
-    // Is direct validator depositing affects this accounting?
-    int256 public netCashFlow;
-
-    uint256 vaultOwnerFee;
-
-    uint256 public accumulatedVaultOwnerFee;
-
-    constructor(address _liquidityProvider, address _owner, address _depositContract) Vault(_owner, _depositContract) {
-        LIQUIDITY_PROVIDER = ILiquidity(_liquidityProvider);
+    function getHub() external view returns (IHub) {
+        return hub;
     }
 
-    function value() public view override returns (uint256) {
-        return uint256(int128(lastReport.value) + netCashFlow - lastReport.netCashFlow);
+    function getLatestReport() external view returns (Report memory) {
+        return latestReport;
+    }
+
+    function getLocked() external view returns (uint256) {
+        return locked;
+    }
+
+    function getInOutDelta() external view returns (int256) {
+        return inOutDelta;
+    }
+
+    function getManagementFee() external view returns (uint256) {
+        return managementFee;
+    }
+
+    function getManagementDue() external view returns (uint256) {
+        return managementDue;
+    }
+
+    function valuation() public view returns (uint256) {
+        return uint256(int128(latestReport.valuation) + inOutDelta - latestReport.inOutDelta);
     }
 
     function isHealthy() public view returns (bool) {
-        return locked <= value();
+        return locked <= valuation();
     }
 
-    function canWithdraw() public view returns (uint256) {
-        if (locked > value()) return 0;
+    function getWithdrawableAmount() public view returns (uint256) {
+        if (locked > valuation()) return 0;
 
-        return value() - locked;
+        return valuation() - locked;
     }
 
     function fund() public payable override(Vault) {
-        netCashFlow += int256(msg.value);
+        inOutDelta += int256(msg.value);
 
         super.fund();
     }
 
-    function withdraw(address _receiver, uint256 _amount) public override(Vault) {
-        if (_receiver == address(0)) revert Zero("receiver");
-        if (_amount == 0) revert Zero("amount");
-        if (canWithdraw() < _amount) revert NotEnoughUnlockedEth(canWithdraw(), _amount);
+    function withdraw(address _recipient, uint256 _ether) public override(Vault) {
+        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_ether == 0) revert Zero("_ether");
+        if (getWithdrawableAmount() < _ether) revert InsufficientUnlocked(getWithdrawableAmount(), _ether);
 
-        _withdraw(_receiver, _amount);
+        inOutDelta -= int256(_ether);
+        super.withdraw(_recipient, _ether);
 
-        _mustBeHealthy();
+        _revertIfNotHealthy();
     }
 
     function deposit(
-        uint256 _keysCount,
-        bytes calldata _publicKeysBatch,
-        bytes calldata _signaturesBatch
+        uint256 _numberOfDeposits,
+        bytes calldata _pubkeys,
+        bytes calldata _signatures
     ) public override(Vault) {
         // unhealthy vaults are up to force rebalancing
         // so, we don't want it to send eth back to the Beacon Chain
-        _mustBeHealthy();
+        _revertIfNotHealthy();
 
-        super.deposit(_keysCount, _publicKeysBatch, _signaturesBatch);
+        super.deposit(_numberOfDeposits, _pubkeys, _signatures);
     }
 
-    function mint(address _receiver, uint256 _amountOfTokens) external payable onlyOwner andFund {
-        if (_receiver == address(0)) revert Zero("receiver");
-        if (_amountOfTokens == 0) revert Zero("amountOfShares");
+    function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
+        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_tokens == 0) revert Zero("_shares");
 
-        _mint(_receiver, _amountOfTokens);
+        uint256 newlyLocked = hub.mintStethBackedByVault(_recipient, _tokens);
+
+        if (newlyLocked > locked) {
+            locked = newlyLocked;
+
+            emit Locked(newlyLocked);
+        }
     }
 
-    function burn(uint256 _amountOfTokens) external onlyOwner {
-        if (_amountOfTokens == 0) revert Zero("amountOfShares");
+    function burn(uint256 _tokens) external onlyOwner {
+        if (_tokens == 0) revert Zero("_tokens");
 
         // burn shares at once but unlock balance later during the report
-        LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
+        hub.burnStethBackedByVault(_tokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external payable andFund {
-        if (_amountOfETH == 0) revert Zero("amountOfETH");
-        if (address(this).balance < _amountOfETH) revert InsufficientBalance(address(this).balance);
+    function rebalance(uint256 _ether) external payable {
+        if (_ether == 0) revert Zero("_ether");
+        if (address(this).balance < _ether) revert InsufficientBalance(address(this).balance);
 
-        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) {
+        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(hub))) {
             // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
-            netCashFlow -= int256(_amountOfETH);
-            emit Withdrawn(msg.sender, msg.sender, _amountOfETH);
+            inOutDelta -= int256(_ether);
+            emit Withdrawn(msg.sender, msg.sender, _ether);
 
-            LIQUIDITY_PROVIDER.rebalance{value: _amountOfETH}();
+            hub.rebalance{value: _ether}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
     }
 
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
-        if (msg.sender != address(LIQUIDITY_PROVIDER)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(hub)) revert NotAuthorized("update", msg.sender);
 
-        lastReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
+        latestReport = Report(uint128(_value), int128(_ncf)); //TODO: safecast
         locked = _locked;
 
-        accumulatedVaultOwnerFee += (_value * vaultOwnerFee) / 365 / MAX_FEE;
+        managementDue += (_value * managementFee) / 365 / MAX_FEE;
 
         emit Reported(_value, _ncf, _locked);
     }
 
-    function _withdraw(address _receiver, uint256 _amountOfTokens) internal {
-        netCashFlow -= int256(_amountOfTokens);
-        super.withdraw(_receiver, _amountOfTokens);
+    function _revertIfNotHealthy() private view {
+        if (!isHealthy()) revert NotHealthy(locked, valuation());
     }
-
-    function _mint(address _receiver, uint256 _amountOfTokens) internal {
-        uint256 newLocked = LIQUIDITY_PROVIDER.mintStethBackedByVault(_receiver, _amountOfTokens);
-
-        if (newLocked > locked) {
-            locked = newLocked;
-
-            emit Locked(newLocked);
-        }
-    }
-
-    function _mustBeHealthy() private view {
-        if (locked > value()) revert NotHealthy(locked, value());
-    }
-
-    modifier andFund() {
-        if (msg.value > 0) {
-            fund();
-        }
-        _;
-    }
-
-    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a > b ? a : b;
-    }
-
-    error NotHealthy(uint256 locked, uint256 value);
-    error NotEnoughUnlockedEth(uint256 unlocked, uint256 amount);
-    error NeedToClaimAccumulatedNodeOperatorFee();
-    error NotAuthorized(string operation, address sender);
 }
