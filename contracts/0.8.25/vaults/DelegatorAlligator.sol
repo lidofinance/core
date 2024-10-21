@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "../../openzeppelin/nonupgradeable/5.0.2/access/extensions/AccessControlEnumerable.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts/access/extensions/AccessControlEnumerable.sol";
 import {IStaking} from "./interfaces/IStaking.sol";
 import {ILiquid} from "./interfaces/ILiquid.sol";
 

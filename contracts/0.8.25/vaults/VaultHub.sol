@@ -4,17 +4,20 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerableUpgradeable} from "../../openzeppelin/upgradeable/5.0.2/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from "@openzeppelin/contracts-upgradeable-v5.0.2/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
+
     function burnExternalShares(uint256) external;
 
     function getPooledEthByShares(uint256) external view returns (uint256);
+
     function getSharesByPooledEth(uint256) external view returns (uint256);
+
     function getTotalShares() external view returns (uint256);
 }
 
@@ -97,12 +100,18 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault));
         if (vaultsCount() >= MAX_VAULTS_COUNT) revert TooManyVaults();
         if (_capShares > STETH.getTotalShares() / 10) {
-            revert CapTooHigh(address(_vault), _capShares, STETH.getTotalShares()/10);
+            revert CapTooHigh(address(_vault), _capShares, STETH.getTotalShares() / 10);
         }
         if (_minBondRateBP > BPS_BASE) revert MinBondRateTooHigh(address(_vault), _minBondRateBP, BPS_BASE);
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
-        VaultSocket memory vr = VaultSocket(ILockable(_vault), uint96(_capShares), 0, uint16(_minBondRateBP), uint16(_treasuryFeeBP));
+        VaultSocket memory vr = VaultSocket(
+            ILockable(_vault),
+            uint96(_capShares),
+            0,
+            uint16(_minBondRateBP),
+            uint16(_treasuryFeeBP)
+        );
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
@@ -161,7 +170,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         if (sharesMintedOnVault > socket.capShares) revert MintCapReached(msg.sender);
 
         uint256 newMintedStETH = STETH.getPooledEthByShares(sharesMintedOnVault);
-        totalEtherToLock = newMintedStETH * BPS_BASE / (BPS_BASE - socket.minBondRateBP);
+        totalEtherToLock = (newMintedStETH * BPS_BASE) / (BPS_BASE - socket.minBondRateBP);
         if (totalEtherToLock > vault_.value()) revert BondLimitReached(msg.sender);
 
         sockets[index].mintedShares = uint96(sharesMintedOnVault);
@@ -204,8 +213,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         // (mintedStETH - X) / (vault.value() - X) == (BPS_BASE - minBondRateBP)
         //
         // X is amountToRebalance
-        uint256 amountToRebalance =
-            (mintedStETH * BPS_BASE - maxMintedShare * _vault.value()) / socket.minBondRateBP;
+        uint256 amountToRebalance = (mintedStETH * BPS_BASE - maxMintedShare * _vault.value()) / socket.minBondRateBP;
 
         // TODO: add some gas compensation here
 
@@ -226,7 +234,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         if (socket.mintedShares < amountOfShares) revert NotEnoughShares(msg.sender, socket.mintedShares);
 
         // mint stETH (shares+ TPE+)
-        (bool success,) = address(STETH).call{value: msg.value}("");
+        (bool success, ) = address(STETH).call{value: msg.value}("");
         if (!success) revert StETHMintFailed(msg.sender);
 
         sockets[index].mintedShares -= uint96(amountOfShares);
@@ -241,10 +249,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         uint256 preTotalShares,
         uint256 preTotalPooledEther,
         uint256 sharesToMintAsFees
-    ) internal view returns (
-        uint256[] memory lockedEther,
-        uint256[] memory treasuryFeeShares
-    ) {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGONS
 
         //                 \||/
@@ -281,8 +286,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
             }
 
             uint256 totalMintedShares = socket.mintedShares + treasuryFeeShares[i];
-            uint256 mintedStETH = totalMintedShares * postTotalPooledEther / postTotalShares; //TODO: check rounding
-            lockedEther[i] = mintedStETH * BPS_BASE / (BPS_BASE - socket.minBondRateBP);
+            uint256 mintedStETH = (totalMintedShares * postTotalPooledEther) / postTotalShares; //TODO: check rounding
+            lockedEther[i] = (mintedStETH * BPS_BASE) / (BPS_BASE - socket.minBondRateBP);
         }
     }
 
@@ -295,7 +300,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     ) internal view returns (uint256 treasuryFeeShares) {
         ILockable vault_ = _socket.vault;
 
-        uint256 chargeableValue = _min(vault_.value(), _socket.capShares * preTotalPooledEther / preTotalShares);
+        uint256 chargeableValue = _min(vault_.value(), (_socket.capShares * preTotalPooledEther) / preTotalShares);
 
         // treasury fee is calculated as a share of potential rewards that
         // Lido curated validators could earn if vault's ETH was staked in Lido
@@ -306,20 +311,22 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
 
         // TODO: optimize potential rewards calculation
-        uint256 potentialRewards = (chargeableValue * (postTotalPooledEther * preTotalShares) / (postTotalSharesNoFees * preTotalPooledEther) - chargeableValue);
-        uint256 treasuryFee = potentialRewards * _socket.treasuryFeeBP / BPS_BASE;
+        uint256 potentialRewards = ((chargeableValue * (postTotalPooledEther * preTotalShares)) /
+            (postTotalSharesNoFees * preTotalPooledEther) -
+            chargeableValue);
+        uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / BPS_BASE;
 
-        treasuryFeeShares = treasuryFee * preTotalShares / preTotalPooledEther;
+        treasuryFeeShares = (treasuryFee * preTotalShares) / preTotalPooledEther;
     }
 
     function _updateVaults(
         uint256[] memory values,
-         int256[] memory netCashFlows,
+        int256[] memory netCashFlows,
         uint256[] memory lockedEther,
         uint256[] memory treasuryFeeShares
     ) internal {
         uint256 totalTreasuryShares;
-        for(uint256 i = 0; i < values.length; ++i) {
+        for (uint256 i = 0; i < values.length; ++i) {
             VaultSocket memory socket = sockets[i + 1];
             // TODO: can be aggregated and optimized
             if (treasuryFeeShares[i] > 0) {
@@ -327,11 +334,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
                 totalTreasuryShares += treasuryFeeShares[i];
             }
 
-            socket.vault.update(
-                values[i],
-                netCashFlows[i],
-                lockedEther[i]
-            );
+            socket.vault.update(values[i], netCashFlows[i], lockedEther[i]);
         }
 
         if (totalTreasuryShares > 0) {
@@ -340,7 +343,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     }
 
     function _mintRate(VaultSocket memory _socket) internal view returns (uint256) {
-        return STETH.getPooledEthByShares(_socket.mintedShares) * BPS_BASE / _socket.vault.value(); //TODO: check rounding
+        return (STETH.getPooledEthByShares(_socket.mintedShares) * BPS_BASE) / _socket.vault.value(); //TODO: check rounding
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {

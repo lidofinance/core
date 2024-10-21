@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {OwnableUpgradeable} from "../../openzeppelin/upgradeable/5.0.2/access/OwnableUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable-v5.0.2/access/OwnableUpgradeable.sol";
 import {IStaking} from "./interfaces/IStaking.sol";
 
 // TODO: trigger validator exit
@@ -19,10 +19,7 @@ import {IStaking} from "./interfaces/IStaking.sol";
 /// batches of validators withdrawal credentials set to the vault, receive
 /// various rewards and withdraw ETH.
 contract StakingVault is IStaking, VaultBeaconChainDepositor, OwnableUpgradeable {
-    constructor(
-        address _owner,
-        address _depositContract
-    ) VaultBeaconChainDepositor(_depositContract) {
+    constructor(address _owner, address _depositContract) VaultBeaconChainDepositor(_depositContract) {
         _transferOwnership(_owner);
     }
 
@@ -60,24 +57,19 @@ contract StakingVault is IStaking, VaultBeaconChainDepositor, OwnableUpgradeable
         emit ValidatorsTopup(msg.sender, _keysCount, _keysCount * 32 ether);
     }
 
-    function triggerValidatorExit(
-        uint256 _numberOfKeys
-    ) public virtual onlyOwner {
+    function triggerValidatorExit(uint256 _numberOfKeys) public virtual onlyOwner {
         // [here will be triggerable exit]
 
         emit ValidatorExitTriggered(msg.sender, _numberOfKeys);
     }
 
     /// @notice Withdraw ETH from the vault
-    function withdraw(
-        address _receiver,
-        uint256 _amount
-    ) public virtual onlyOwner {
+    function withdraw(address _receiver, uint256 _amount) public virtual onlyOwner {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
         if (_amount == 0) revert ZeroArgument("amount");
         if (_amount > address(this).balance) revert NotEnoughBalance(address(this).balance);
 
-        (bool success,) = _receiver.call{value: _amount}("");
+        (bool success, ) = _receiver.call{value: _amount}("");
         if (!success) revert TransferFailed(_receiver, _amount);
 
         emit Withdrawal(_receiver, _amount);
