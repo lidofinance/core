@@ -30,7 +30,7 @@ interface ILiquidVault {
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
     event Rebalanced(uint256 amount);
     event Locked(uint256 amount);
-    event UpdateCallbackFailed(address target, bytes4 selector);
+    event ReportSubscriptionFailed(address subscriber, bytes4 callback);
 
     struct Report {
         uint128 valuation;

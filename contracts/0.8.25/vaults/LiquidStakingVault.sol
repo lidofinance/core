@@ -134,7 +134,7 @@ contract LiquidVault is ILiquidVault, Vault {
             );
 
             if (!success) {
-                emit UpdateCallbackFailed(subscription.subscriber, subscription.callback);
+                emit ReportSubscriptionFailed(subscription.subscriber, subscription.callback);
             }
         }
 
