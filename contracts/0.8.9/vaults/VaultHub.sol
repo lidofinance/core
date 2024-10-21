@@ -106,40 +106,36 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
-        emit VaultConnected(address(_vault), _capShares, _minBondRateBP);
+        emit VaultConnected(address(_vault), _capShares, _minBondRateBP, _treasuryFeeBP);
     }
 
     /// @notice disconnects a vault from the hub
-    /// @param _vault vault address
-    function disconnectVault(ILockable _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == ILockable(address(0))) revert ZeroArgument("vault");
+    /// @dev can be called by vaults only
+    function disconnectVault() external {
+        uint256 index = vaultIndex[ILockable(msg.sender)];
+        if (index == 0) revert NotConnectedToHub(msg.sender);
 
-        uint256 index = vaultIndex[_vault];
-        if (index == 0) revert NotConnectedToHub(address(_vault));
         VaultSocket memory socket = sockets[index];
+        ILockable vaultToDisconnect = socket.vault;
 
         if (socket.mintedShares > 0) {
             uint256 stethToBurn = STETH.getPooledEthByShares(socket.mintedShares);
-            if (address(_vault).balance >= stethToBurn) {
-                _vault.rebalance(stethToBurn);
-            } else {
-                revert NotEnoughBalance(address(_vault), address(_vault).balance, stethToBurn);
-            }
+            vaultToDisconnect.rebalance(stethToBurn);
         }
 
-        _vault.update(_vault.value(), _vault.netCashFlow(), 0);
+        vaultToDisconnect.update(vaultToDisconnect.value(), vaultToDisconnect.netCashFlow(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
         vaultIndex[lastSocket.vault] = index;
         sockets.pop();
 
-        delete vaultIndex[_vault];
+        delete vaultIndex[vaultToDisconnect];
 
-        emit VaultDisconnected(address(_vault));
+        emit VaultDisconnected(address(vaultToDisconnect));
     }
 
-    /// @notice mint StETH tokens  backed by vault external balance to the receiver address
+    /// @notice mint StETH tokens backed by vault external balance to the receiver address
     /// @param _receiver address of the receiver
     /// @param _amountOfTokens amount of stETH tokens to mint
     /// @return totalEtherToLock total amount of ether that should be locked on the vault
@@ -185,6 +181,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (socket.mintedShares < amountOfShares) revert NotEnoughShares(msg.sender, socket.mintedShares);
 
         sockets[index].mintedShares -= uint96(amountOfShares);
+
         STETH.burnExternalShares(amountOfShares);
 
         emit BurnedStETHOnVault(msg.sender, _amountOfTokens);
@@ -332,6 +329,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
                 netCashFlows[i],
                 lockedEther[i]
             );
+
+            emit VaultReported(address(socket.vault), values[i], netCashFlows[i], lockedEther[i]);
         }
 
         if (totalTreasuryShares > 0) {

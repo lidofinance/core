@@ -307,6 +307,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit StakingLimitSet(_maxStakeLimit, _stakeLimitIncreasePerBlock);
     }
 
+    // TODO: add a function to set Vaults cap
+
     /**
      * @notice Removes the staking rate limit
      *
@@ -574,7 +576,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
         if (_receiver == address(0)) revert("MINT_RECEIVER_ZERO_ADDRESS");
         if (_amountOfShares == 0) revert("MINT_ZERO_AMOUNT_OF_SHARES");
-        _whenNotStopped();
+
+        _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
@@ -596,7 +599,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev authentication goes through isMinter in StETH
     function burnExternalShares(uint256 _amountOfShares) external {
         if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
-        _whenNotStopped();
+
+        _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
@@ -856,7 +860,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev override isBurner from StETH to allow accounting to burn
     function _isBurner(address _sender) internal view returns (bool) {
-        return _sender == getLidoLocator().burner();
+        return _sender == getLidoLocator().burner() || _sender == getLidoLocator().accounting();
     }
 
     function _pauseStaking() internal {
@@ -930,5 +934,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             emit Submitted(INITIAL_TOKEN_HOLDER, balance, 0);
             _mintInitialShares(balance);
         }
+    }
+
+    // There is an invariant that protocol pause also implies staking pause.
+    // Thus, no need to check protocol pause explicitly.
+    function _whenNotStakingPaused() internal view {
+        require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
     }
 }

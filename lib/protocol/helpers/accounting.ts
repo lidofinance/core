@@ -316,9 +316,10 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
+  const { timeElapsed } = await getReportTimeElapsed(ctx);
   const update = await accounting.simulateOracleReportWithoutWithdrawals({
     timestamp: reportTimestamp,
-    timeElapsed: 24n * 60n * 60n, // 1 day
+    timeElapsed,
     clValidators: beaconValidators,
     clBalance,
     withdrawalVaultBalance,
@@ -383,9 +384,11 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
     });
 
+    const { timeElapsed } = await getReportTimeElapsed(ctx);
+
     const handleReportTx = await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
-      timeElapsed: 1n * 24n * 60n * 60n, // 1 day
+      timeElapsed, // 1 day
       clValidators: beaconValidators,
       clBalance,
       withdrawalVaultBalance,
