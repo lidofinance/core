@@ -24,7 +24,6 @@ contract DelegatorAlligator is AccessControlEnumerable {
     error Zero(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
-    error NotVault();
 
     uint256 private constant MAX_FEE = 10_000;
 
