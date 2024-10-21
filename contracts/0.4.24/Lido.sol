@@ -323,6 +323,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(_maxExternalBalancePercent > 0 && _maxExternalBalancePercent <= 100, "INVALID_MAX_EXTERNAL_BALANCE_PERCENT");
 
         MAX_EXTERNAL_BALANCE_PERCENT_POSITION.setStorageUint256(_maxExternalBalancePercent);
+
         emit MaxExternalBalancePercentSet(_maxExternalBalancePercent);
     }
 
@@ -599,11 +600,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(stethAmount);
-        uint256 maxExternalBalancePercent = MAX_EXTERNAL_BALANCE_PERCENT_POSITION.getStorageUint256();
-
-        require(maxExternalBalancePercent > 0 && maxExternalBalancePercent <= 100, "INVALID_MAX_EXTERNAL_BALANCE_PERCENT");
-
-        uint256 maxExternalBalance = _getTotalPooledEther().mul(maxExternalBalancePercent).div(100);
+        uint256 maxExternalBalance = _getTotalPooledEther()
+            .mul(MAX_EXTERNAL_BALANCE_PERCENT_POSITION.getStorageUint256())
+            .div(100);
 
         require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
