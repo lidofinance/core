@@ -26,6 +26,7 @@ interface ILiquidVault {
     error InsufficientUnlocked(uint256 unlocked, uint256 requested);
     error NeedToClaimAccumulatedNodeOperatorFee();
     error NotAuthorized(string operation, address sender);
+    error MaxReportSubscriptionsReached();
 
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
     event Rebalanced(uint256 amount);

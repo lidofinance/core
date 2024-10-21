@@ -19,6 +19,7 @@ contract LiquidVault is ILiquidVault, Vault {
     uint256 private locked;
     int256 private inOutDelta; // Is direct validator depositing affects this accounting?
 
+    uint256 private constant MAX_SUBSCRIPTIONS = 10;
     ReportSubscription[] reportSubscriptions;
 
     constructor(address _hub, address _owner, address _depositContract) Vault(_owner, _depositContract) {
@@ -142,6 +143,8 @@ contract LiquidVault is ILiquidVault, Vault {
     }
 
     function subscribe(address _subscriber, bytes4 _callback) external onlyOwner {
+        if (reportSubscriptions.length == MAX_SUBSCRIPTIONS) revert MaxReportSubscriptionsReached();
+
         reportSubscriptions.push(ReportSubscription(_subscriber, _callback));
     }
 
