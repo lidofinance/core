@@ -27,7 +27,7 @@ interface IVault {
     /// @notice Emitted when validator exits are triggered
     /// @param sender The address that triggered the exits
     /// @param numberOfValidators The number of validators exited
-    event ValidatorExitsTriggered(address indexed sender, uint256 numberOfValidators);
+    event ValidatorsExited(address indexed sender, uint256 numberOfValidators);
 
     /// @notice Emitted when execution rewards are received
     /// @param sender The address that sent the rewards
@@ -62,7 +62,7 @@ interface IVault {
 
     /// @notice Trigger exits for a specified number of validators
     /// @param _numberOfValidators The number of validator keys to exit
-    function triggerValidatorExits(uint256 _numberOfValidators) external;
+    function exitValidators(uint256 _numberOfValidators) external;
 
     /// @notice Withdraw ether from the vault
     /// @param _recipient The address to receive the withdrawn ether

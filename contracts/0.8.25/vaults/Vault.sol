@@ -59,16 +59,16 @@ contract Vault is IVault, VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     /// @inheritdoc IVault
-    function triggerValidatorExits(uint256 _numberOfValidators) public virtual onlyOwner {
+    function exitValidators(uint256 _numberOfValidators) public virtual onlyOwner {
         // [here will be triggerable exit]
 
-        emit ValidatorExitsTriggered(msg.sender, _numberOfValidators);
+        emit ValidatorsExited(msg.sender, _numberOfValidators);
     }
 
     /// @inheritdoc IVault
     function withdraw(address _recipient, uint256 _amount) public virtual onlyOwner {
-        if (_recipient == address(0)) revert Zero("receiver");
-        if (_amount == 0) revert Zero("amount");
+        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_amount == 0) revert Zero("_amount");
         if (_amount > address(this).balance) revert InsufficientBalance(address(this).balance);
 
         (bool success, ) = _recipient.call{value: _amount}("");
