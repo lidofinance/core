@@ -74,16 +74,16 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
     }
 
-    function mint(address _receiver, uint256 _amountOfTokens) public payable onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).mint(_receiver, _amountOfTokens);
+    function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) {
+        ILiquidVault(vault).mint(_recipient, _tokens);
     }
 
-    function burn(uint256 _amountOfShares) external onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).burn(_amountOfShares);
+    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
+        ILiquidVault(vault).burn(_tokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external payable onlyRole(MANAGER_ROLE) {
-        ILiquidVault(vault).rebalance(_amountOfETH);
+    function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) {
+        ILiquidVault(vault).rebalance(_ether);
     }
 
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
@@ -123,16 +123,16 @@ contract DelegatorAlligator is AccessControlEnumerable {
         IVault(vault).fund();
     }
 
-    function withdraw(address _receiver, uint256 _amount) external onlyRole(DEPOSITOR_ROLE) {
-        if (_receiver == address(0)) revert Zero("receiver");
-        if (_amount == 0) revert Zero("amount");
-        if (getWithdrawableAmount() < _amount) revert InsufficientWithdrawableAmount(getWithdrawableAmount(), _amount);
+    function withdraw(address _recipient, uint256 _ether) external onlyRole(DEPOSITOR_ROLE) {
+        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_ether == 0) revert Zero("_ether");
+        if (getWithdrawableAmount() < _ether) revert InsufficientWithdrawableAmount(getWithdrawableAmount(), _ether);
 
-        IVault(vault).withdraw(_receiver, _amount);
+        IVault(vault).withdraw(_recipient, _ether);
     }
 
-    function exitValidators(uint256 _numberOfKeys) external onlyRole(DEPOSITOR_ROLE) {
-        IVault(vault).exitValidators(_numberOfKeys);
+    function exitValidators(uint256 _numberOfValidators) external onlyRole(DEPOSITOR_ROLE) {
+        IVault(vault).exitValidators(_numberOfValidators);
     }
 
     /// * * * * * OPERATOR FUNCTIONS * * * * * ///
@@ -145,8 +145,8 @@ contract DelegatorAlligator is AccessControlEnumerable {
         IVault(vault).deposit(_numberOfDeposits, _pubkeys, _signatures);
     }
 
-    function claimPerformanceDue(address _receiver, bool _liquid) external onlyRole(OPERATOR_ROLE) {
-        if (_receiver == address(0)) revert Zero("_receiver");
+    function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
+        if (_recipient == address(0)) revert Zero("_recipient");
 
         uint256 due = getPerformanceDue();
 
@@ -154,9 +154,9 @@ contract DelegatorAlligator is AccessControlEnumerable {
             lastClaimedReport = ILiquidVault(vault).getLatestReport();
 
             if (_liquid) {
-                mint(_receiver, due);
+                mint(_recipient, due);
             } else {
-                _withdrawFeeInEther(_receiver, due);
+                _withdrawFeeInEther(_recipient, due);
             }
         }
     }
@@ -169,11 +169,12 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
 
-    function _withdrawFeeInEther(address _receiver, uint256 _amountOfTokens) internal {
+    function _withdrawFeeInEther(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(ILiquidVault(vault).valuation()) - int256(ILiquidVault(vault).getLocked());
-        uint256 canWithdrawFee = unlocked >= 0 ? uint256(unlocked) : 0;
-        if (canWithdrawFee < _amountOfTokens) revert InsufficientUnlockedAmount(canWithdrawFee, _amountOfTokens);
-        IVault(vault).withdraw(_receiver, _amountOfTokens);
+        uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
+        if (unreserved < _ether) revert InsufficientUnlockedAmount(unreserved, _ether);
+
+        IVault(vault).withdraw(_recipient, _ether);
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256) {
