@@ -172,9 +172,9 @@ describe("Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, accounting } = ctx.contracts;
 
-    // only equivalent of 10% of total eth can be minted as stETH on the vaults
+    // only equivalent of 10.0% of total eth can be minted as stETH on the vaults
     const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalBalancePercent(10n);
+    await lido.connect(votingSigner).setMaxExternalBalanceBP(10_00n);
 
     // TODO: make cap and minBondRateBP reflect the real values
     const capShares = (await lido.getTotalShares()) / 10n; // 10% of total shares

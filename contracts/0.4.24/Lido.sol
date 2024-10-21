@@ -96,6 +96,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
+    uint256 internal constant BPS_BASE = 1e4;
+
     /// @dev storage slot position for the Lido protocol contracts locator
     bytes32 internal constant LIDO_LOCATOR_POSITION =
         0x9ef78dff90f100ea94042bd00ccb978430524befc391d3e510b5f55ff3166df7; // keccak256("lido.Lido.lidoLocator")
@@ -123,8 +125,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant EXTERNAL_BALANCE_POSITION =
         0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
     /// @dev maximum allowed external balance as a percentage of total pooled ether
-    bytes32 internal constant MAX_EXTERNAL_BALANCE_PERCENT_POSITION =
-        0xaaf675b5316deadaa2ab32af599042afbfa6adc7e063bd12bd2ba8ddd7a0c904; // keccak256("lido.Lido.maxExternalBalancePercent")
+    bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
+        0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalBalanceBP")
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -189,8 +191,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // External shares burned for account
     event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
 
-    // Maximum external balance percentage set
-    event MaxExternalBalancePercentSet(uint256 maxExternalBalancePercent);
+    // Maximum external balance percent from the total pooled ether set
+    event MaxExternalBalanceBPSet(uint256 maxExternalBalanceBP);
 
     /**
     * @dev As AragonApp, Lido contract must be initialized with following variables:
@@ -314,20 +316,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Sets the maximum allowed external balance as a percentage of total pooled ether
-     * @param _maxExternalBalancePercent The maximum percentage (0-100)
-     */
-    function setMaxExternalBalancePercent(uint256 _maxExternalBalancePercent) external {
-        _auth(STAKING_CONTROL_ROLE);
-
-        require(_maxExternalBalancePercent > 0 && _maxExternalBalancePercent <= 100, "INVALID_MAX_EXTERNAL_BALANCE_PERCENT");
-
-        MAX_EXTERNAL_BALANCE_PERCENT_POSITION.setStorageUint256(_maxExternalBalancePercent);
-
-        emit MaxExternalBalancePercentSet(_maxExternalBalancePercent);
-    }
-
-    /**
      * @notice Removes the staking rate limit
      *
      * Emits `StakingLimitRemoved` event
@@ -392,6 +380,20 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         maxStakeLimitGrowthBlocks = stakeLimitData.maxStakeLimitGrowthBlocks;
         prevStakeLimit = stakeLimitData.prevStakeLimit;
         prevStakeBlockNumber = stakeLimitData.prevStakeBlockNumber;
+    }
+
+    /**
+     * @notice Sets the maximum allowed external balance as a percentage of total pooled ether
+     * @param _maxExternalBalanceBP The maximum percentage in basis points (0-10000)
+     */
+    function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
+        _auth(STAKING_CONTROL_ROLE);
+
+        require(_maxExternalBalanceBP > 0 && _maxExternalBalanceBP <= BPS_BASE, "INVALID_MAX_EXTERNAL_BALANCE");
+
+        MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
+
+        emit MaxExternalBalanceBPSet(_maxExternalBalanceBP);
     }
 
     /**
@@ -491,6 +493,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function getExternalEther() external view returns (uint256) {
         return EXTERNAL_BALANCE_POSITION.getStorageUint256();
+    }
+
+    function getMaxExternalBalance() external view returns (uint256) {
+        return _getMaxExternalBalance();
     }
 
     /**
@@ -600,9 +606,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(stethAmount);
-        uint256 maxExternalBalance = _getTotalPooledEther()
-            .mul(MAX_EXTERNAL_BALANCE_PERCENT_POSITION.getStorageUint256())
-            .div(100);
+        uint256 maxExternalBalance = _getMaxExternalBalance();
 
         require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
@@ -861,6 +865,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         assert(depositedValidators >= clValidators);
 
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
+    }
+
+    function _getMaxExternalBalance() internal view returns (uint256) {
+        return _getTotalPooledEther().mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256()).div(BPS_BASE);
     }
 
     /**
