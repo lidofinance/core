@@ -96,7 +96,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
-    uint256 internal constant BPS_BASE = 1e4;
+    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
     /// @dev storage slot position for the Lido protocol contracts locator
     bytes32 internal constant LIDO_LOCATOR_POSITION =
@@ -389,7 +389,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
         _auth(STAKING_CONTROL_ROLE);
 
-        require(_maxExternalBalanceBP > 0 && _maxExternalBalanceBP <= BPS_BASE, "INVALID_MAX_EXTERNAL_BALANCE");
+        require(_maxExternalBalanceBP > 0 && _maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
 
         MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
 
@@ -739,6 +739,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     // DEPRECATED PUBLIC METHODS
+
     /**
      * @notice Returns current withdrawal credentials of deposited validators
      * @dev DEPRECATED: use StakingRouter.getWithdrawalCredentials() instead
@@ -851,6 +852,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return BUFFERED_ETHER_POSITION.getStorageUint256();
     }
 
+    /**
+     * @dev Sets the amount of Ether temporary buffered on this contract balance
+     * @param _newBufferedEther new amount of buffered funds in wei
+     */
     function _setBufferedEther(uint256 _newBufferedEther) internal {
         BUFFERED_ETHER_POSITION.setStorageUint256(_newBufferedEther);
     }
@@ -867,8 +872,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
 
+    /**
+     * @dev Gets the maximum allowed external balance as a percentage of total pooled ether
+     * @return max external balance in wei
+     */
     function _getMaxExternalBalance() internal view returns (uint256) {
-        return _getTotalPooledEther().mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256()).div(BPS_BASE);
+        return _getTotalPooledEther().mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256()).div(TOTAL_BASIS_POINTS);
     }
 
     /**

@@ -9,6 +9,7 @@
   "packageManager": "yarn@4.5.0",
   "scripts": {
     "compile": "hardhat compile",
+    "cleanup": "hardhat clean",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:sol:fix": "yarn lint:sol --fix",
     "lint:ts": "eslint . --max-warnings=0",
@@ -21,7 +22,7 @@
     "test:sequential": "hardhat test test/**/*.test.ts",
     "test:trace": "hardhat test test/**/*.test.ts --trace --disabletracer",
     "test:fulltrace": "hardhat test test/**/*.test.ts --fulltrace --disabletracer",
-    "test:watch": "hardhat watch",
+    "test:watch": "hardhat watch test",
     "test:integration": "hardhat test test/integration/**/*.ts --bail",
     "test:integration:trace": "hardhat test test/integration/**/*.ts --trace --disabletracer --bail",
     "test:integration:fulltrace": "hardhat test test/integration/**/*.ts --fulltrace --disabletracer --bail",
