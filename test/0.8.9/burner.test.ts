@@ -49,6 +49,9 @@ describe("Burner.sol", () => {
     // Accounting is granted the permission to burn shares as a part of the protocol setup
     accountingSigner = await impersonate(accounting, ether("1.0"));
     await burner.connect(admin).grantRole(await burner.REQUEST_BURN_SHARES_ROLE(), accountingSigner);
+
+    await steth.mock__setBurner(await burner.getAddress());
+    await steth.mock__setMinter(accounting);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -662,7 +665,7 @@ describe("Burner.sol", () => {
       expect(coverShares).to.equal(0n);
       expect(nonCoverShares).to.equal(0n);
 
-      await steth.mintShares(burner, 1n);
+      await steth.connect(accountingSigner).mintShares(burner, 1n);
 
       expect(await burner.getExcessStETH()).to.equal(0n);
     });
