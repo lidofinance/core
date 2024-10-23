@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable-v5.0.2/access/OwnableUpgradeable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 import {IVault} from "./interfaces/IVault.sol";
 

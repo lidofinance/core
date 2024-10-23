@@ -5,7 +5,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.6.12;
 
-import "@openzeppelin/contracts-v3.4.0/drafts/ERC20Permit.sol";
+import "@openzeppelin/contracts/drafts/ERC20Permit.sol";
 import "./interfaces/IStETH.sol";
 
 /**

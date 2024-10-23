@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerableUpgradeable} from "@openzeppelin/contracts-upgradeable-v5.0.2/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {IHub} from "./interfaces/IHub.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
