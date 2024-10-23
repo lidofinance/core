@@ -71,7 +71,7 @@ async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnv
   const contractName = contract.contract.split("/").pop()?.split(".")[0];
   const verificationParams = {
     address: contract.address,
-    constructorArguments: contract.constructorArgs,
+    constructorArguments: contract.constructorArgs ?? [],
     contract: `${contract.contract}:${contractName}`,
   };
 
