@@ -6,8 +6,6 @@ pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {IVault} from "./interfaces/IVault.sol";
-import {IHub} from "./interfaces/IHub.sol";
-import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
@@ -29,7 +27,13 @@ interface StETH {
 /// @notice Vaults registry contract that is an interface to the Lido protocol
 /// in the same time
 /// @author folkyatina
-abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidity {
+abstract contract VaultHub is AccessControlEnumerableUpgradeable {
+    event MintedStETHOnVault(address indexed vault, uint256 amountOfTokens);
+    event BurnedStETHOnVault(address indexed vault, uint256 amountOfTokens);
+    event VaultRebalanced(address indexed vault, uint256 tokensBurnt, uint256 newBondRateBP);
+    event VaultConnected(address indexed vault, uint256 capShares, uint256 minBondRateBP);
+    event VaultDisconnected(address indexed vault);
+
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
     uint256 internal constant BPS_BASE = 1e4;
     uint256 internal constant MAX_VAULTS_COUNT = 500;

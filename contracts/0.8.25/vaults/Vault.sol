@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {IHub} from "./interfaces/ILiquidVault.sol";
+import {IVaultHub} from "./interfaces/IHub.sol";
 
 interface ReportHook {
     function onReport(uint256 _valuation) external;
@@ -35,7 +35,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
 
     uint256 private constant MAX_FEE = 100_00;
 
-    IHub public immutable hub;
+    IVaultHub public immutable hub;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
@@ -45,7 +45,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         address _hub,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
-        hub = IHub(_hub);
+        hub = IVaultHub(_hub);
 
         _transferOwnership(_owner);
     }
