@@ -31,9 +31,11 @@ contract WstETH is ERC20Permit {
     /**
      * @param _stETH address of the StETH token to wrap
      */
-    constructor(
-        IStETH _stETH
-    ) public ERC20Permit("Wrapped liquid staked Ether 2.0") ERC20("Wrapped liquid staked Ether 2.0", "wstETH") {
+    constructor(IStETH _stETH)
+        public
+        ERC20Permit("Wrapped liquid staked Ether 2.0")
+        ERC20("Wrapped liquid staked Ether 2.0", "wstETH")
+    {
         stETH = _stETH;
     }
 
@@ -73,8 +75,8 @@ contract WstETH is ERC20Permit {
     }
 
     /**
-     * @notice Shortcut to stake ETH and auto-wrap returned stETH
-     */
+    * @notice Shortcut to stake ETH and auto-wrap returned stETH
+    */
     receive() external payable {
         uint256 shares = stETH.submit{value: msg.value}(address(0));
         _mint(msg.sender, shares);
