@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-import {ILockable} from "./interfaces/ILockable.sol";
+import {IVault} from "./interfaces/IVault.sol";
 import {IHub} from "./interfaces/IHub.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
@@ -39,7 +39,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
 
     struct VaultSocket {
         /// @notice vault address
-        ILockable vault;
+        IVault vault;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 capShares;
         /// @notice total number of stETH shares minted by the vault
@@ -54,13 +54,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     VaultSocket[] private sockets;
     /// @notice mapping from vault address to its socket
     /// @dev if vault is not connected to the hub, it's index is zero
-    mapping(ILockable => uint256) private vaultIndex;
+    mapping(IVault => uint256) private vaultIndex;
 
     constructor(address _admin, address _stETH, address _treasury) {
         STETH = StETH(_stETH);
         treasury = _treasury;
 
-        sockets.push(VaultSocket(ILockable(address(0)), 0, 0, 0, 0)); // stone in the elevator
+        sockets.push(VaultSocket(IVault(address(0)), 0, 0, 0, 0)); // stone in the elevator
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -70,7 +70,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         return sockets.length - 1;
     }
 
-    function vault(uint256 _index) public view returns (ILockable) {
+    function vault(uint256 _index) public view returns (IVault) {
         return sockets[_index + 1].vault;
     }
 
@@ -78,7 +78,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         return sockets[_index + 1];
     }
 
-    function vaultSocket(ILockable _vault) public view returns (VaultSocket memory) {
+    function vaultSocket(IVault _vault) public view returns (VaultSocket memory) {
         return sockets[vaultIndex[_vault]];
     }
 
@@ -87,7 +87,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     /// @param _capShares maximum number of stETH shares that can be minted by the vault
     /// @param _minBondRateBP minimum bond rate in basis points
     function connectVault(
-        ILockable _vault,
+        IVault _vault,
         uint256 _capShares,
         uint256 _minBondRateBP,
         uint256 _treasuryFeeBP
@@ -106,7 +106,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
         VaultSocket memory vr = VaultSocket(
-            ILockable(_vault),
+            IVault(_vault),
             uint96(_capShares),
             0,
             uint16(_minBondRateBP),
@@ -120,8 +120,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
 
     /// @notice disconnects a vault from the hub
     /// @param _vault vault address
-    function disconnectVault(ILockable _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == ILockable(address(0))) revert ZeroArgument("vault");
+    function disconnectVault(IVault _vault) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_vault == IVault(address(0))) revert ZeroArgument("vault");
 
         uint256 index = vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(address(_vault));
@@ -136,7 +136,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
             }
         }
 
-        _vault.update(_vault.value(), _vault.netCashFlow(), 0);
+        _vault.update(_vault.valuation(), _vault.inOutDelta(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
@@ -160,7 +160,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
         if (_receiver == address(0)) revert ZeroArgument("receivers");
 
-        ILockable vault_ = ILockable(msg.sender);
+        IVault vault_ = IVault(msg.sender);
         uint256 index = vaultIndex[vault_];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
@@ -171,7 +171,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
 
         uint256 newMintedStETH = STETH.getPooledEthByShares(sharesMintedOnVault);
         totalEtherToLock = (newMintedStETH * BPS_BASE) / (BPS_BASE - socket.minBondRateBP);
-        if (totalEtherToLock > vault_.value()) revert BondLimitReached(msg.sender);
+        if (totalEtherToLock > vault_.valuation()) revert BondLimitReached(msg.sender);
 
         sockets[index].mintedShares = uint96(sharesMintedOnVault);
 
@@ -186,7 +186,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     function burnStethBackedByVault(uint256 _amountOfTokens) external {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
 
-        uint256 index = vaultIndex[ILockable(msg.sender)];
+        uint256 index = vaultIndex[IVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
@@ -199,7 +199,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         emit BurnedStETHOnVault(msg.sender, _amountOfTokens);
     }
 
-    function forceRebalance(ILockable _vault) external {
+    function forceRebalance(IVault _vault) external {
         uint256 index = vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
@@ -213,7 +213,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         // (mintedStETH - X) / (vault.value() - X) == (BPS_BASE - minBondRateBP)
         //
         // X is amountToRebalance
-        uint256 amountToRebalance = (mintedStETH * BPS_BASE - maxMintedShare * _vault.value()) / socket.minBondRateBP;
+        uint256 amountToRebalance = (mintedStETH * BPS_BASE - maxMintedShare * _vault.valuation()) /
+            socket.minBondRateBP;
 
         // TODO: add some gas compensation here
 
@@ -226,7 +227,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     function rebalance() external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
-        uint256 index = vaultIndex[ILockable(msg.sender)];
+        uint256 index = vaultIndex[IVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
@@ -298,9 +299,9 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
         uint256 preTotalShares,
         uint256 preTotalPooledEther
     ) internal view returns (uint256 treasuryFeeShares) {
-        ILockable vault_ = _socket.vault;
+        IVault vault_ = _socket.vault;
 
-        uint256 chargeableValue = _min(vault_.value(), (_socket.capShares * preTotalPooledEther) / preTotalShares);
+        uint256 chargeableValue = _min(vault_.valuation(), (_socket.capShares * preTotalPooledEther) / preTotalShares);
 
         // treasury fee is calculated as a share of potential rewards that
         // Lido curated validators could earn if vault's ETH was staked in Lido
@@ -343,7 +344,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable, IHub, ILiquidi
     }
 
     function _mintRate(VaultSocket memory _socket) internal view returns (uint256) {
-        return (STETH.getPooledEthByShares(_socket.mintedShares) * BPS_BASE) / _socket.vault.value(); //TODO: check rounding
+        return (STETH.getPooledEthByShares(_socket.mintedShares) * BPS_BASE) / _socket.vault.valuation(); //TODO: check rounding
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {
