@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { task } from "hardhat/config";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { HardhatRuntimeEnvironment, TaskArguments } from "hardhat/types";
 
 import { cy, log, yl } from "lib/log";
 
@@ -26,13 +26,16 @@ type NetworkState = {
 
 const errors = [] as string[];
 
-task("verify:deployed", "Verifies deployed contracts based on state file").setAction(
-  async (_: unknown, hre: HardhatRuntimeEnvironment) => {
+task("verify:deployed", "Verifies deployed contracts based on state file")
+  .addOptionalParam("file", "Path to network state file")
+  .setAction(async (taskArgs: TaskArguments, hre: HardhatRuntimeEnvironment) => {
     try {
       const network = hre.network.name;
       log("Verifying contracts for network:", network);
 
-      const networkStateFile = `deployed-${network}.json`;
+      const networkStateFile = taskArgs.file ?? `deployed-${network}.json`;
+      log("Using network state file:", networkStateFile);
+
       const networkStateFilePath = path.resolve("./", networkStateFile);
       const data = await fs.readFile(networkStateFilePath, "utf8");
       const networkState = JSON.parse(data) as NetworkState;
@@ -43,6 +46,12 @@ task("verify:deployed", "Verifies deployed contracts based on state file").setAc
 
       // Not using Promise.all to avoid logging messages out of order
       for (const contract of deployedContracts) {
+        if (!contract.contract || !contract.address) {
+          log.error("Invalid contract:", contract);
+          log.emptyLine();
+          continue;
+        }
+
         await verifyContract(contract, hre);
       }
     } catch (error) {
@@ -54,10 +63,11 @@ task("verify:deployed", "Verifies deployed contracts based on state file").setAc
       log.error(`Failed to verify ${errors.length} contract(s):`, errors as string[]);
       process.exitCode = errors.length;
     }
-  },
-);
+  });
 
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
+  log.splitter();
+
   const contractName = contract.contract.split("/").pop()?.split(".")[0];
   const verificationParams = {
     address: contract.address,

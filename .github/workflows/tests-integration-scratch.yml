@@ -33,7 +33,7 @@ jobs:
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
           NETWORK_STATE_FILE: "deployed-local.json"
-          NETWORK_STATE_DEFAULTS_FILE: "scripts/scratch/deployed-testnet-defaults.json"
+          NETWORK_STATE_DEFAULTS_FILE: "scripts/defaults/deployed-testnet-defaults.json"
 
       - name: Finalize scratch deployment
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
