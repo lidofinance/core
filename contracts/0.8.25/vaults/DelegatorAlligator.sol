@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 // DelegatorAlligator: Vault Delegated Owner
@@ -50,6 +51,10 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
+
+    function transferOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
+        OwnableUpgradeable(address(vault)).transferOwnership(_newOwner);
+    }
 
     function setManagementFee(uint256 _managementFee) external onlyRole(MANAGER_ROLE) {
         managementFee = _managementFee;
