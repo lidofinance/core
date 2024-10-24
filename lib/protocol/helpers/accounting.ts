@@ -317,18 +317,21 @@ const simulateReport = async (
   });
 
   const { timeElapsed } = await getReportTimeElapsed(ctx);
-  const update = await accounting.simulateOracleReportWithoutWithdrawals({
-    timestamp: reportTimestamp,
-    timeElapsed,
-    clValidators: beaconValidators,
-    clBalance,
-    withdrawalVaultBalance,
-    elRewardsVaultBalance,
-    sharesRequestedToBurn: 0n,
-    withdrawalFinalizationBatches: [],
-    vaultValues,
-    netCashFlows,
-  });
+  const update = await accounting.simulateOracleReport(
+    {
+      timestamp: reportTimestamp,
+      timeElapsed,
+      clValidators: beaconValidators,
+      clBalance,
+      withdrawalVaultBalance,
+      elRewardsVaultBalance,
+      sharesRequestedToBurn: 0n,
+      withdrawalFinalizationBatches: [],
+      vaultValues,
+      netCashFlows,
+    },
+    0n,
+  );
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
