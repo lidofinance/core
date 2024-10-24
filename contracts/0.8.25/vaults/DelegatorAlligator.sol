@@ -101,7 +101,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
             if (_liquid) {
                 mint(_recipient, due);
             } else {
-                _withdrawFeeInEther(_recipient, due);
+                _withdrawDue(_recipient, due);
             }
         }
     }
@@ -156,7 +156,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
             if (_liquid) {
                 mint(_recipient, due);
             } else {
-                _withdrawFeeInEther(_recipient, due);
+                _withdrawDue(_recipient, due);
             }
         }
     }
@@ -178,7 +178,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         _;
     }
 
-    function _withdrawFeeInEther(address _recipient, uint256 _ether) internal {
+    function _withdrawDue(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(vault.valuation()) - int256(vault.locked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
         if (unreserved < _ether) revert InsufficientUnlockedAmount(unreserved, _ether);
