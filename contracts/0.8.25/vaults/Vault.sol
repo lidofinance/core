@@ -6,11 +6,9 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {IVaultHub} from "./interfaces/IHub.sol";
-
-interface ReportHook {
-    function onReport(uint256 _valuation) external;
-}
+import {IHub} from "./interfaces/IHub.sol";
+import {IReportValuationReceiver} from "./interfaces/IReportValuationReceiver.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 
 contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
@@ -21,7 +19,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Locked(uint256 locked);
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
 
-    error ZeroInvalid(string name);
+    error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
     error InsufficientUnlocked(uint256 unlocked);
     error TransferFailed(address recipient, uint256 amount);
@@ -35,7 +33,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
 
     uint256 private constant MAX_FEE = 100_00;
 
-    IVaultHub public immutable hub;
+    IHub public immutable hub;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
@@ -45,13 +43,15 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         address _hub,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
-        hub = IVaultHub(_hub);
+        if (_owner == address(0)) revert ZeroArgument("_owner");
+        if (_hub == address(0)) revert ZeroArgument("_hub");
 
+        hub = IHub(_hub);
         _transferOwnership(_owner);
     }
 
     receive() external payable {
-        if (msg.value == 0) revert ZeroInvalid("msg.value");
+        if (msg.value == 0) revert ZeroArgument("msg.value");
 
         emit ExecutionLayerRewardsReceived(msg.sender, msg.value);
     }
@@ -77,17 +77,17 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
-    function fund() public payable onlyOwner {
-        if (msg.value == 0) revert ZeroInvalid("msg.value");
+    function fund() external payable onlyOwner {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
 
         inOutDelta += int256(msg.value);
 
         emit Funded(msg.sender, msg.value);
     }
 
-    function withdraw(address _recipient, uint256 _ether) public onlyOwner {
-        if (_recipient == address(0)) revert ZeroInvalid("_recipient");
-        if (_ether == 0) revert ZeroInvalid("_ether");
+    function withdraw(address _recipient, uint256 _ether) external onlyOwner {
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_ether == 0) revert ZeroArgument("_ether");
         uint256 _unlocked = unlocked();
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
@@ -104,23 +104,23 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
-    ) public onlyOwner {
-        if (_numberOfDeposits == 0) revert ZeroInvalid("_numberOfDeposits");
+    ) external onlyOwner {
+        if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isHealthy()) revert NotHealthy();
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
     }
 
-    function exitValidators(uint256 _numberOfValidators) public virtual onlyOwner {
+    function exitValidators(uint256 _numberOfValidators) external virtual onlyOwner {
         // [here will be triggerable exit]
 
         emit ValidatorsExited(msg.sender, _numberOfValidators);
     }
 
     function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
-        if (_recipient == address(0)) revert ZeroInvalid("_recipient");
-        if (_tokens == 0) revert ZeroInvalid("_tokens");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_tokens == 0) revert ZeroArgument("_tokens");
 
         uint256 newlyLocked = hub.mintStethBackedByVault(_recipient, _tokens);
 
@@ -132,13 +132,13 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     function burn(uint256 _tokens) external onlyOwner {
-        if (_tokens == 0) revert ZeroInvalid("_tokens");
+        if (_tokens == 0) revert ZeroArgument("_tokens");
 
         hub.burnStethBackedByVault(_tokens);
     }
 
     function rebalance(uint256 _ether) external payable {
-        if (_ether == 0) revert ZeroInvalid("_ether");
+        if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
         if (owner() == msg.sender || (!isHealthy() && msg.sender == address(hub))) {
@@ -154,13 +154,13 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         }
     }
 
-    function update(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(hub)) revert NotAuthorized("update", msg.sender);
 
-        latestReport = Report(uint128(_valuation), int128(_inOutDelta)); //TODO: safecast
+        latestReport = Report(SafeCast.toUint128(_valuation), SafeCast.toInt128(_inOutDelta));
         locked = _locked;
 
-        ReportHook(owner()).onReport(_valuation);
+        IReportValuationReceiver(owner()).onReport(_valuation);
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }

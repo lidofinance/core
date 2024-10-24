@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import {IVault} from "./IVault.sol";
 
-interface IVaultHub {
+interface IHub {
     struct VaultSocket {
         IVault vault;
         uint96 capShares;
