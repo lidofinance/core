@@ -51,13 +51,6 @@ function loadAccounts(networkName: string) {
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   networks: {
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
     "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
@@ -72,6 +65,17 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+    },
+    "local": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+    },
+    "holesky-vaults-devnet-0": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
     },
     "holesky": {
       url: process.env.HOLESKY_RPC_URL || RPC_URL,
