@@ -73,8 +73,13 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "holesky": {
+      url: process.env.HOLESKY_RPC_URL || RPC_URL,
+      chainId: 17000,
+      accounts: loadAccounts("holesky"),
+    },
     "sepolia": {
-      url: RPC_URL,
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
