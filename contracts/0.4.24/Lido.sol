@@ -596,7 +596,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///
     /// @param _amountOfShares Amount of shares to burn
     ///
-    /// @dev authentication goes through isMinter in StETH
+    /// @dev authentication goes through _isBurner() method
     function burnExternalShares(uint256 _amountOfShares) external {
         if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
 
@@ -614,6 +614,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
 
+    /// @notice processes CL related state changes as a part of the report processing
+    /// @dev all data validation was done by Accounting and OracleReportSanityChecker
+    /// @param _reportTimestamp timestamp of the report
+    /// @param _preClValidators number of validators in the previous CL state (for event compatibility)
+    /// @param _reportClValidators number of validators in the current CL state
+    /// @param _reportClBalance total balance of the current CL state
+    /// @param _postExternalBalance total balance of the external balance
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
@@ -621,7 +628,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _reportClBalance,
         uint256 _postExternalBalance
     ) external {
-        // all data validation was done by Accounting and OracleReportSanityChecker
         _whenNotStopped();
 
         _auth(getLidoLocator().accounting());
@@ -633,9 +639,19 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
-        // cl and external balance change are reported in ETHDistributed event later
+        // cl and external balance change are logged in ETHDistributed event later
     }
 
+    /// @notice processes withdrawals and rewards as a part of the report processing
+    /// @dev all data validation was done by Accounting and OracleReportSanityChecker
+    /// @param _reportTimestamp timestamp of the report
+    /// @param _reportClBalance total balance of validators reported by the oracle
+    /// @param _adjustedPreCLBalance total balance of validators in the previouce report and deposits made since then
+    /// @param _withdrawalsToWithdraw amount of withdrawals to collect from WithdrawalsVault
+    /// @param _elRewardsToWithdraw amount of EL rewards to collect from ELRewardsVault
+    /// @param _lastWithdrawalRequestToFinalize last withdrawal request ID to finalize
+    /// @param _withdrawalsShareRate share rate used to fulfill withdrawal requests
+    /// @param _etherToLockOnWithdrawalQueue amount of ETH to lock on the WithdrawalQueue to fulfill withdrawal requests
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
@@ -643,7 +659,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
-        uint256 _simulatedShareRate,
+        uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
         _whenNotStopped();
@@ -668,7 +684,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             IWithdrawalQueue(locator.withdrawalQueue())
                 .finalize.value(_etherToLockOnWithdrawalQueue)(
                     _lastWithdrawalRequestToFinalize,
-                    _simulatedShareRate
+                    _withdrawalsShareRate
                 );
         }
 
@@ -690,7 +706,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /// @notice emit TokenRebase event
-    /// @dev should stay here for back compatibility reasons
+    /// @dev it's here for back compatibility reasons
     function emitTokenRebase(
         uint256 _reportTimestamp,
         uint256 _timeElapsed,

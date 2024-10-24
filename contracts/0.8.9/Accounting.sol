@@ -121,18 +121,13 @@ struct ReportValues {
 /// calculating all the state changes that is required to apply the report
 /// and distributing calculated values to relevant parts of the protocol
 contract Accounting is VaultHub {
-    /// @notice deposit size in wei (for pre-maxEB accounting)
-    uint256 private constant DEPOSIT_SIZE = 32 ether;
-
-    /// @notice Lido Locator contract
-    ILidoLocator public immutable LIDO_LOCATOR;
-    /// @notice Lido contract
-    ILido public immutable LIDO;
-
-    constructor(address _admin, ILidoLocator _lidoLocator, ILido _lido, address _treasury)
-        VaultHub(_admin, address(_lido), _treasury){
-        LIDO_LOCATOR = _lidoLocator;
-        LIDO = _lido;
+    struct Contracts {
+        address accountingOracleAddress;
+        OracleReportSanityChecker oracleReportSanityChecker;
+        IBurner burner;
+        IWithdrawalQueue withdrawalQueue;
+        IPostTokenRebaseReceiver postTokenRebaseReceiver;
+        IStakingRouter stakingRouter;
     }
 
     struct PreReportState {
@@ -179,73 +174,102 @@ contract Accounting is VaultHub {
         uint256[] vaultsTreasuryFeeShares;
     }
 
-    function simulateOracleReportWithoutWithdrawals(
-        ReportValues memory _report
+    struct StakingRewardsDistribution {
+        address[] recipients;
+        uint256[] moduleIds;
+        uint96[] modulesFees;
+        uint96 totalFee;
+        uint256 precisionPoints;
+    }
+
+    /// @notice deposit size in wei (for pre-maxEB accounting)
+    uint256 private constant DEPOSIT_SIZE = 32 ether;
+
+    /// @notice Lido Locator contract
+    ILidoLocator public immutable LIDO_LOCATOR;
+    /// @notice Lido contract
+    ILido public immutable LIDO;
+
+    constructor(address _admin, ILidoLocator _lidoLocator, ILido _lido, address _treasury)
+        VaultHub(_admin, address(_lido), _treasury){
+        LIDO_LOCATOR = _lidoLocator;
+        LIDO = _lido;
+    }
+
+    /// @notice calculates all the state changes that is required to apply the report
+    /// @param _report report values
+    /// @param _withdrawalShareRate maximum share rate used for withdrawal resolution
+    ///                             if _withdrawalShareRate == 0, no withdrawals are
+    ///                             simulated
+    function simulateOracleReport(
+        ReportValues memory _report,
+        uint256 _withdrawalShareRate
     ) public view returns (
         CalculatedValues memory update
     ) {
         Contracts memory contracts = _loadOracleReportContracts();
         PreReportState memory pre = _snapshotPreReportState();
 
-        return _simulateOracleReport(contracts, pre, _report, 0);
+        return _simulateOracleReport(contracts, pre, _report, _withdrawalShareRate);
     }
 
-    /**
-     * @notice Updates accounting stats, collects EL rewards and distributes collected rewards
-     *         if beacon balance increased, performs withdrawal requests finalization
-     * @dev periodically called by the AccountingOracle contract
-     */
+    /// @notice Updates accounting stats, collects EL rewards and distributes collected rewards
+    ///        if beacon balance increased, performs withdrawal requests finalization
+    /// @dev periodically called by the AccountingOracle contract
     function handleOracleReport(
         ReportValues memory _report
     ) external {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        (PreReportState memory pre, CalculatedValues memory update, uint256 simulatedShareRate)
+        (PreReportState memory pre, CalculatedValues memory update, uint256 withdrawalsShareRate)
             = _calculateOracleReportContext(contracts, _report);
 
-        _applyOracleReportContext(contracts, _report, pre, update, simulatedShareRate);
+        _applyOracleReportContext(contracts, _report, pre, update, withdrawalsShareRate);
     }
 
+    /// @dev prepare all the required data to process the report
     function _calculateOracleReportContext(
         Contracts memory _contracts,
         ReportValues memory _report
     ) internal view returns (
         PreReportState memory pre,
         CalculatedValues memory update,
-        uint256 simulatedShareRate
+        uint256 withdrawalsShareRate
     ) {
         pre = _snapshotPreReportState();
 
         CalculatedValues memory updateNoWithdrawals = _simulateOracleReport(_contracts, pre, _report, 0);
 
-        simulatedShareRate = updateNoWithdrawals.postTotalPooledEther * 1e27 / updateNoWithdrawals.postTotalShares;
+        withdrawalsShareRate = updateNoWithdrawals.postTotalPooledEther * 1e27 / updateNoWithdrawals.postTotalShares;
 
-        update = _simulateOracleReport(_contracts, pre, _report, simulatedShareRate);
+        update = _simulateOracleReport(_contracts, pre, _report, withdrawalsShareRate);
     }
 
+    /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState() internal view returns (PreReportState memory pre) {
-        pre = PreReportState(0, 0, 0, 0, 0, 0);
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalEther = LIDO.getExternalEther();
     }
 
+    /// @dev calculates all the state changes that is required to apply the report
+    /// @dev if _withdrawalsShareRate == 0, no withdrawals are simulated
     function _simulateOracleReport(
         Contracts memory _contracts,
         PreReportState memory _pre,
         ReportValues memory _report,
-        uint256 _simulatedShareRate
+        uint256 _withdrawalsShareRate
     ) internal view returns (CalculatedValues memory update){
         update.rewardDistribution = _getStakingRewardsDistribution(_contracts.stakingRouter);
 
-        if (_simulatedShareRate != 0) {
+        if (_withdrawalsShareRate != 0) {
             // Get the ether to lock for withdrawal queue and shares to move to Burner to finalize requests
             (
                 update.etherToFinalizeWQ,
                 update.sharesToFinalizeWQ
-            ) = _calculateWithdrawals(_contracts, _report, _simulatedShareRate);
+            ) = _calculateWithdrawals(_contracts, _report, _withdrawalsShareRate);
         }
 
         // Principal CL balance is the sum of the current CL balance and
@@ -317,6 +341,8 @@ contract Accounting is VaultHub {
         }
     }
 
+    /// @dev calculates shares that are minted to treasury as the protocol fees
+    ///      and rebased value of the external balance
     function _calculateFeesAndExternalBalance(
         ReportValues memory _report,
         PreReportState memory _pre,
@@ -353,6 +379,7 @@ contract Accounting is VaultHub {
         externalEther = externalShares * eth / shares;
     }
 
+    /// @dev applies the precalculated changes to the protocol state
     function _applyOracleReportContext(
         Contracts memory _contracts,
         ReportValues memory _report,
@@ -411,7 +438,7 @@ contract Accounting is VaultHub {
             _update.vaultsTreasuryFeeShares
         );
 
-        _completeTokenRebase(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
+        _notifyObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
         LIDO.emitTokenRebase(
             _report.timestamp,
@@ -422,14 +449,11 @@ contract Accounting is VaultHub {
             _update.postTotalPooledEther,
             _update.sharesToMintAsFees
         );
-
-        // TODO: assert realPostTPE and realPostTS against calculated
     }
 
-    /**
-     * @dev Pass the provided oracle data to the sanity checker contract
-     * Works with structures to overcome `stack too deep`
-     */
+
+    /// @dev checks the provided oracle data internally and against the sanity checker contract
+    /// reverts if a check fails
     function _checkAccountingOracleReport(
         Contracts memory _contracts,
         ReportValues memory _report,
@@ -441,6 +465,7 @@ contract Accounting is VaultHub {
             revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
 
         }
+
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
             _update.principalClBalance,
@@ -451,6 +476,7 @@ contract Accounting is VaultHub {
             _pre.clValidators,
             _report.clValidators
         );
+
         if (_report.withdrawalFinalizationBatches.length > 0) {
             _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
@@ -459,11 +485,8 @@ contract Accounting is VaultHub {
         }
     }
 
-    /**
-     * @dev Notify observers about the completed token rebase.
-     * Emit events and call external receivers.
-     */
-    function _completeTokenRebase(
+    /// @dev Notify observer about the completed token rebase.
+    function _notifyObserver(
         IPostTokenRebaseReceiver _postTokenRebaseReceiver,
         ReportValues memory _report,
         PreReportState memory _pre,
@@ -482,20 +505,21 @@ contract Accounting is VaultHub {
         }
     }
 
+    /// @dev mints protocol fees to the treasury and node operators
     function _distributeFee(
         IStakingRouter _stakingRouter,
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
         (uint256[] memory moduleRewards, uint256 totalModuleRewards) =
-            _transferModuleRewards(
+            _mintModuleRewards(
                 _rewardsDistribution.recipients,
                 _rewardsDistribution.modulesFees,
                 _rewardsDistribution.totalFee,
                 _sharesToMintAsFees
             );
 
-        _transferTreasuryRewards(_sharesToMintAsFees - totalModuleRewards);
+        _mintTreasuryRewards(_sharesToMintAsFees - totalModuleRewards);
 
         _stakingRouter.reportRewardsMinted(
             _rewardsDistribution.moduleIds,
@@ -503,41 +527,34 @@ contract Accounting is VaultHub {
         );
     }
 
-    function _transferModuleRewards(
-        address[] memory recipients,
-        uint96[] memory modulesFees,
-        uint256 totalFee,
-        uint256 totalRewards
+    /// @dev mint rewards to the StakingModule recipients
+    function _mintModuleRewards(
+        address[] memory _recipients,
+        uint96[] memory _modulesFees,
+        uint256 _totalFee,
+        uint256 _totalRewards
     ) internal returns (uint256[] memory moduleRewards, uint256 totalModuleRewards) {
-        moduleRewards = new uint256[](recipients.length);
+        moduleRewards = new uint256[](_recipients.length);
 
-        for (uint256 i; i < recipients.length; ++i) {
-            if (modulesFees[i] > 0) {
-                uint256 iModuleRewards = totalRewards * modulesFees[i] / totalFee;
+        for (uint256 i; i < _recipients.length; ++i) {
+            if (_modulesFees[i] > 0) {
+                uint256 iModuleRewards = _totalRewards * _modulesFees[i] / _totalFee;
                 moduleRewards[i] = iModuleRewards;
-                LIDO.mintShares(recipients[i], iModuleRewards);
+                LIDO.mintShares(_recipients[i], iModuleRewards);
                 totalModuleRewards = totalModuleRewards + iModuleRewards;
             }
         }
     }
 
-    function _transferTreasuryRewards(uint256 treasuryReward) internal {
+    /// @dev mints treasury rewards
+    function _mintTreasuryRewards(uint256 _amount) internal {
         address treasury = LIDO_LOCATOR.treasury();
 
-        LIDO.mintShares(treasury, treasuryReward);
+        LIDO.mintShares(treasury, _amount);
     }
 
-    struct Contracts {
-        address accountingOracleAddress;
-        OracleReportSanityChecker oracleReportSanityChecker;
-        IBurner burner;
-        IWithdrawalQueue withdrawalQueue;
-        IPostTokenRebaseReceiver postTokenRebaseReceiver;
-        IStakingRouter stakingRouter;
-    }
-
+    /// @dev loads the required contracts from the LidoLocator to the struct in the memory
     function _loadOracleReportContracts() internal view returns (Contracts memory) {
-
         (
             address accountingOracleAddress,
             address oracleReportSanityChecker,
@@ -557,14 +574,7 @@ contract Accounting is VaultHub {
         );
     }
 
-    struct StakingRewardsDistribution {
-        address[] recipients;
-        uint256[] moduleIds;
-        uint96[] modulesFees;
-        uint96 totalFee;
-        uint256 precisionPoints;
-    }
-
+    /// @dev loads the staking rewards distribution to the struct in the memory
     function _getStakingRewardsDistribution(IStakingRouter _stakingRouter)
         internal view returns (StakingRewardsDistribution memory ret) {
         (
@@ -575,10 +585,11 @@ contract Accounting is VaultHub {
             ret.precisionPoints
         ) = _stakingRouter.getStakingRewardsDistribution();
 
-        require(ret.recipients.length == ret.modulesFees.length, "WRONG_RECIPIENTS_INPUT");
-        require(ret.moduleIds.length == ret.modulesFees.length, "WRONG_MODULE_IDS_INPUT");
+        if (ret.recipients.length != ret.modulesFees.length) revert InequalArrayLengths(ret.recipients.length, ret.modulesFees.length);
+        if (ret.moduleIds.length != ret.modulesFees.length) revert InequalArrayLengths(ret.moduleIds.length, ret.modulesFees.length);
     }
 
+    error InequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
 }
