@@ -9,6 +9,7 @@
   "packageManager": "yarn@4.5.0",
   "scripts": {
     "compile": "hardhat compile",
+    "cleanup": "hardhat clean",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:sol:fix": "yarn lint:sol --fix",
     "lint:ts": "eslint . --max-warnings=0",

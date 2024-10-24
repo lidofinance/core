@@ -52,7 +52,6 @@ describe("Staking Vaults Happy Path", () => {
   let alice: HardhatEthersSigner;
   let bob: HardhatEthersSigner;
 
-  let agentSigner: HardhatEthersSigner;
   let depositContract: string;
 
   const vaults: Vault[] = [];
@@ -72,8 +71,6 @@ describe("Staking Vaults Happy Path", () => {
     [ethHolder, alice, bob] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
-
-    agentSigner = await ctx.getSigner("agent");
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
 
     snapshot = await Snapshot.take();
@@ -175,10 +172,15 @@ describe("Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, accounting } = ctx.contracts;
 
-    // TODO: make cap and minBondRateBP suite the real values
+    // only equivalent of 10.0% of total eth can be minted as stETH on the vaults
+    const votingSigner = await ctx.getSigner("voting");
+    await lido.connect(votingSigner).setMaxExternalBalanceBP(10_00n);
+
+    // TODO: make cap and minBondRateBP reflect the real values
     const capShares = (await lido.getTotalShares()) / 10n; // 10% of total shares
     const minBondRateBP = 10_00n; // 10% of ETH allocation as a bond
 
+    const agentSigner = await ctx.getSigner("agent");
     for (const { vault } of vaults) {
       const connectTx = await accounting
         .connect(agentSigner)
