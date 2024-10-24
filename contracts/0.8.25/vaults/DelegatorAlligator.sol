@@ -20,19 +20,19 @@ import {IVault} from "./interfaces/IVault.sol";
 //                           '-._____.-'
 contract DelegatorAlligator is AccessControlEnumerable {
     error PerformanceDueUnclaimed();
-    error Zero(string);
+    error ZeroArgument(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
     error VaultNotHealthy();
+    error OnlyVaultCanCallOnReportHook();
 
     uint256 private constant MAX_FEE = 10_000;
 
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
     bytes32 public constant DEPOSITOR_ROLE = keccak256("Vault.DelegatorAlligator.DepositorRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
-    bytes32 public constant VAULT_ROLE = keccak256("Vault.DelegatorAlligator.VaultRole");
 
-    IVault public vault;
+    IVault public immutable vault;
 
     IVault.Report public lastClaimedReport;
 
@@ -41,11 +41,12 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     uint256 public managementDue;
 
-    constructor(address _vault, address _admin) {
-        vault = IVault(_vault);
+    constructor(address _vault, address _defaultAdmin) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
-        _grantRole(VAULT_ROLE, address(_vault));
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        vault = IVault(_vault);
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
@@ -55,9 +56,9 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function setPerformanceFee(uint256 _performanceFee) external onlyRole(MANAGER_ROLE) {
-        performanceFee = _performanceFee;
-
         if (getPerformanceDue() > 0) revert PerformanceDueUnclaimed();
+
+        performanceFee = _performanceFee;
     }
 
     function getPerformanceDue() public view returns (uint256) {
@@ -86,7 +87,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
-        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
         if (!vault.isHealthy()) {
             revert VaultNotHealthy();
@@ -107,7 +108,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
 
-    function getWithdrawableAmount() public view returns (uint256) {
+    function withdrawable() public view returns (uint256) {
         uint256 reserved = _max(vault.locked(), managementDue + getPerformanceDue());
         uint256 value = vault.valuation();
 
@@ -123,9 +124,9 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function withdraw(address _recipient, uint256 _ether) external onlyRole(DEPOSITOR_ROLE) {
-        if (_recipient == address(0)) revert Zero("_recipient");
-        if (_ether == 0) revert Zero("_ether");
-        if (getWithdrawableAmount() < _ether) revert InsufficientWithdrawableAmount(getWithdrawableAmount(), _ether);
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_ether == 0) revert ZeroArgument("_ether");
+        if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
 
         vault.withdraw(_recipient, _ether);
     }
@@ -145,7 +146,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
-        if (_recipient == address(0)) revert Zero("_recipient");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
         uint256 due = getPerformanceDue();
 
@@ -162,7 +163,9 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * VAULT CALLBACK * * * * * ///
 
-    function updateManagementDue(uint256 _valuation) external onlyRole(VAULT_ROLE) {
+    function onReport(uint256 _valuation) external {
+        if (msg.sender != address(vault)) revert OnlyVaultCanCallOnReportHook();
+
         managementDue += (_valuation * managementFee) / 365 / MAX_FEE;
     }
 
