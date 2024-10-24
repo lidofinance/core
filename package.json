@@ -30,6 +30,7 @@
     "test:integration:scratch:fulltrace": "INTEGRATION_WITH_SCRATCH_DEPLOY=on hardhat test test/integration/**/*.ts --fulltrace --disabletracer --bail",
     "test:integration:fork:local": "hardhat test test/integration/**/*.ts --network local --bail",
     "test:integration:fork:mainnet": "hardhat test test/integration/**/*.ts --network mainnet-fork --bail",
+    "test:integration:fork:holesky:vaults:dev0": "hardhat test test/integration/**/*.ts --network holesky-vaults-devnet-0 --bail",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
