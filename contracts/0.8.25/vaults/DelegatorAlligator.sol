@@ -73,7 +73,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
     }
 
-    function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) {
+    function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) fundAndProceed {
         vault.mint(_recipient, _tokens);
     }
 
@@ -81,7 +81,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         vault.burn(_tokens);
     }
 
-    function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) {
+    function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) fundAndProceed {
         vault.rebalance(_ether);
     }
 
@@ -118,7 +118,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         return value - reserved;
     }
 
-    function fund() external payable onlyRole(DEPOSITOR_ROLE) {
+    function fund() public payable onlyRole(DEPOSITOR_ROLE) {
         vault.fund();
     }
 
@@ -167,6 +167,13 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
+
+    modifier fundAndProceed() {
+        if (msg.value > 0) {
+            fund();
+        }
+        _;
+    }
 
     function _withdrawFeeInEther(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(vault.valuation()) - int256(vault.locked());
