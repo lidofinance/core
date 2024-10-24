@@ -8,6 +8,7 @@ import { cy, log, yl } from "lib/log";
 
 type DeployedContract = {
   contract: string;
+  contractName?: string;
   address: string;
   constructorArgs: unknown[];
 };
@@ -68,7 +69,7 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
   log.splitter();
 
-  const contractName = contract.contract.split("/").pop()?.split(".")[0];
+  const contractName = contract.contractName ?? contract.contract.split("/").pop()?.split(".")[0];
   const verificationParams = {
     address: contract.address,
     constructorArguments: contract.constructorArgs ?? [],

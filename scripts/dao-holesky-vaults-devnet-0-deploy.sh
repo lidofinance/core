@@ -5,7 +5,7 @@ set -o pipefail
 # Check for required environment variables
 export NETWORK=holesky
 export NETWORK_STATE_FILE="deployed-${NETWORK}-vaults-devnet-0.json"
-export NETWORK_STATE_DEFAULTS_FILE="deployed-testnet-defaults.json"
+export NETWORK_STATE_DEFAULTS_FILE="testnet-defaults.json"
 
 # Holesky params: https://github.com/eth-clients/holesky/blob/main/README.md
 export DEPOSIT_CONTRACT=0x4242424242424242424242424242424242424242
