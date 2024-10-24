@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-interface IVault {
+interface IStakingVault {
     struct Report {
         uint128 valuation;
         int128 inOutDelta;

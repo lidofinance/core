@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IVault} from "./IVault.sol";
+import {IStakingVault} from "./IStakingVault.sol";
 
-interface IHub {
+interface IVaultHub {
     struct VaultSocket {
-        IVault vault;
+        IStakingVault vault;
         uint96 capShares;
         uint96 mintedShares;
         uint16 minBondRateBP;
@@ -20,15 +20,20 @@ interface IHub {
 
     function vaultsCount() external view returns (uint256);
 
-    function vault(uint256 _index) external view returns (IVault);
+    function vault(uint256 _index) external view returns (IStakingVault);
 
     function vaultSocket(uint256 _index) external view returns (VaultSocket memory);
 
-    function vaultSocket(IVault _vault) external view returns (VaultSocket memory);
+    function vaultSocket(IStakingVault _vault) external view returns (VaultSocket memory);
 
-    function connectVault(IVault _vault, uint256 _capShares, uint256 _minBondRateBP, uint256 _treasuryFeeBP) external;
+    function connectVault(
+        IStakingVault _vault,
+        uint256 _capShares,
+        uint256 _minBondRateBP,
+        uint256 _treasuryFeeBP
+    ) external;
 
-    function disconnectVault(IVault _vault) external;
+    function disconnectVault(IStakingVault _vault) external;
 
     function mintStethBackedByVault(
         address _receiver,
@@ -37,7 +42,7 @@ interface IHub {
 
     function burnStethBackedByVault(uint256 _amountOfTokens) external;
 
-    function forceRebalance(IVault _vault) external;
+    function forceRebalance(IStakingVault _vault) external;
 
     function rebalance() external payable;
 

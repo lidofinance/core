@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {IVault} from "./interfaces/IVault.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator
@@ -32,9 +32,9 @@ contract DelegatorAlligator is AccessControlEnumerable {
     bytes32 public constant DEPOSITOR_ROLE = keccak256("Vault.DelegatorAlligator.DepositorRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
 
-    IVault public immutable vault;
+    IStakingVault public immutable vault;
 
-    IVault.Report public lastClaimedReport;
+    IStakingVault.Report public lastClaimedReport;
 
     uint256 public managementFee;
     uint256 public performanceFee;
@@ -45,7 +45,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
-        vault = IVault(_vault);
+        vault = IStakingVault(_vault);
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
     }
 
@@ -62,7 +62,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function getPerformanceDue() public view returns (uint256) {
-        IVault.Report memory latestReport = vault.latestReport();
+        IStakingVault.Report memory latestReport = vault.latestReport();
 
         int128 _performanceDue = int128(latestReport.valuation - lastClaimedReport.valuation) -
             int128(latestReport.inOutDelta - lastClaimedReport.inOutDelta);

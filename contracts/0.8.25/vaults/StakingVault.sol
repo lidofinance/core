@@ -6,11 +6,11 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {IHub} from "./interfaces/IHub.sol";
+import {IVaultHub} from "./interfaces/IVaultHub.sol";
 import {IReportValuationReceiver} from "./interfaces/IReportValuationReceiver.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 
-contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
+contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
     event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 amount);
@@ -33,7 +33,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
 
     uint256 private constant MAX_FEE = 100_00;
 
-    IHub public immutable hub;
+    IVaultHub public immutable vaultHub;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
@@ -46,7 +46,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (_hub == address(0)) revert ZeroArgument("_hub");
 
-        hub = IHub(_hub);
+        vaultHub = IVaultHub(_hub);
         _transferOwnership(_owner);
     }
 
@@ -122,7 +122,7 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
-        uint256 newlyLocked = hub.mintStethBackedByVault(_recipient, _tokens);
+        uint256 newlyLocked = vaultHub.mintStethBackedByVault(_recipient, _tokens);
 
         if (newlyLocked > locked) {
             locked = newlyLocked;
@@ -134,28 +134,28 @@ contract Vault is VaultBeaconChainDepositor, OwnableUpgradeable {
     function burn(uint256 _tokens) external onlyOwner {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
-        hub.burnStethBackedByVault(_tokens);
+        vaultHub.burnStethBackedByVault(_tokens);
     }
 
     function rebalance(uint256 _ether) external payable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(hub))) {
+        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(vaultHub))) {
             // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             inOutDelta -= int256(_ether);
             emit Withdrawn(msg.sender, msg.sender, _ether);
 
-            hub.rebalance{value: _ether}();
+            vaultHub.rebalance{value: _ether}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
     }
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(hub)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
 
         latestReport = Report(SafeCast.toUint128(_valuation), SafeCast.toInt128(_inOutDelta));
         locked = _locked;
