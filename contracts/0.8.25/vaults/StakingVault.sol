@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {IVaultHub} from "./interfaces/IVaultHub.sol";
+import {VaultHub} from "./VaultHub.sol";
 import {IReportValuationReceiver} from "./interfaces/IReportValuationReceiver.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 
@@ -31,9 +31,10 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         int128 inOutDelta;
     }
 
-    uint256 private constant MAX_FEE = 100_00;
+    uint256 private constant BP_BASE = 100_00;
+    uint256 private constant MAX_FEE = BP_BASE;
 
-    IVaultHub public immutable vaultHub;
+    VaultHub public immutable vaultHub;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
@@ -46,7 +47,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (_hub == address(0)) revert ZeroArgument("_hub");
 
-        vaultHub = IVaultHub(_hub);
+        vaultHub = VaultHub(_hub);
         _transferOwnership(_owner);
     }
 
