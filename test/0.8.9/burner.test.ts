@@ -1,54 +1,111 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
+import { before, beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Burner, ERC20__Harness, ERC721__Harness, LidoLocator__MockMutable, StETH__Harness } from "typechain-types";
+import { Burner, ERC20__Harness, ERC721__Harness, LidoLocator, StETH__Harness } from "typechain-types";
 
 import { batch, certainAddress, ether, impersonate } from "lib";
 
-describe.skip("Burner.sol", () => {
+import { deployLidoLocator } from "test/deploy";
+import { Snapshot } from "test/suite";
+
+describe("Burner.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let stethAsSigner: HardhatEthersSigner;
+  let stethSigner: HardhatEthersSigner;
+  let accountingSigner: HardhatEthersSigner;
 
   let burner: Burner;
   let steth: StETH__Harness;
-  let locator: LidoLocator__MockMutable;
+  let locator: LidoLocator;
 
   const treasury = certainAddress("test:burner:treasury");
+  const accounting = certainAddress("test:burner:accounting");
   const coverSharesBurnt = 0n;
   const nonCoverSharesBurnt = 0n;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, admin, holder, stranger] = await ethers.getSigners();
 
-    locator = await ethers.deployContract("LidoLocator__MockMutable", [treasury], deployer);
+    locator = await deployLidoLocator({ treasury, accounting }, deployer);
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0"), from: deployer });
-    burner = await ethers.deployContract(
-      "Burner",
-      [admin, locator, steth, coverSharesBurnt, nonCoverSharesBurnt],
-      deployer,
-    );
+
+    burner = await ethers
+      .getContractFactory("Burner")
+      .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, coverSharesBurnt, nonCoverSharesBurnt));
 
     steth = steth.connect(holder);
     burner = burner.connect(holder);
 
-    stethAsSigner = await impersonate(await steth.getAddress(), ether("1.0"));
+    stethSigner = await impersonate(await steth.getAddress(), ether("1.0"));
+
+    // Accounting is granted the permission to burn shares as a part of the protocol setup
+    accountingSigner = await impersonate(accounting, ether("1.0"));
+    await burner.connect(admin).grantRole(await burner.REQUEST_BURN_SHARES_ROLE(), accountingSigner);
+
+    await steth.mock__setBurner(await burner.getAddress());
+    await steth.mock__setMinter(accounting);
   });
 
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
+
   context("constructor", () => {
+    context("Reverts", () => {
+      it("if admin is zero address", async () => {
+        await expect(
+          ethers
+            .getContractFactory("Burner")
+            .then((f) =>
+              f.connect(deployer).deploy(ZeroAddress, locator, steth, coverSharesBurnt, nonCoverSharesBurnt),
+            ),
+        )
+          .to.be.revertedWithCustomError(burner, "ZeroAddress")
+          .withArgs("_admin");
+      });
+
+      it("if locator is zero address", async () => {
+        await expect(
+          ethers
+            .getContractFactory("Burner")
+            .then((f) =>
+              f.connect(deployer).deploy(admin.address, ZeroAddress, steth, coverSharesBurnt, nonCoverSharesBurnt),
+            ),
+        )
+          .to.be.revertedWithCustomError(burner, "ZeroAddress")
+          .withArgs("_locator");
+      });
+
+      it("if stETH is zero address", async () => {
+        await expect(
+          ethers
+            .getContractFactory("Burner")
+            .then((f) =>
+              f.connect(deployer).deploy(admin.address, locator, ZeroAddress, coverSharesBurnt, nonCoverSharesBurnt),
+            ),
+        )
+          .to.be.revertedWithCustomError(burner, "ZeroAddress")
+          .withArgs("_stETH");
+      });
+    });
+
     it("Sets up roles, addresses and shares burnt", async () => {
       const adminRole = await burner.DEFAULT_ADMIN_ROLE();
       expect(await burner.getRoleMemberCount(adminRole)).to.equal(1);
       expect(await burner.hasRole(adminRole, admin)).to.equal(true);
 
       const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
-      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(1);
+      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(2);
       expect(await burner.hasRole(requestBurnSharesRole, steth)).to.equal(true);
+      expect(await burner.hasRole(requestBurnSharesRole, accounting)).to.equal(true);
 
       expect(await burner.STETH()).to.equal(steth);
       expect(await burner.LOCATOR()).to.equal(locator);
@@ -61,172 +118,226 @@ describe.skip("Burner.sol", () => {
       const differentCoverSharesBurnt = 1n;
       const differentNonCoverSharesBurntNonZero = 3n;
 
-      burner = await ethers.deployContract(
-        "Burner",
-        [admin, locator, steth, differentCoverSharesBurnt, differentNonCoverSharesBurntNonZero],
-        deployer,
-      );
+      const deployed = await ethers
+        .getContractFactory("Burner")
+        .then((f) =>
+          f
+            .connect(deployer)
+            .deploy(admin.address, locator, steth, differentCoverSharesBurnt, differentNonCoverSharesBurntNonZero),
+        );
 
-      expect(await burner.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
-      expect(await burner.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
-    });
-
-    it("Reverts if admin is zero address", async () => {
-      await expect(
-        ethers.deployContract("Burner", [ZeroAddress, locator, steth, coverSharesBurnt, nonCoverSharesBurnt], deployer),
-      )
-        .to.be.revertedWithCustomError(burner, "ZeroAddress")
-        .withArgs("_admin");
-    });
-
-    it("Reverts if Treasury is zero address", async () => {
-      await expect(
-        ethers.deployContract("Burner", [admin, ZeroAddress, steth, coverSharesBurnt, nonCoverSharesBurnt], deployer),
-      )
-        .to.be.revertedWithCustomError(burner, "ZeroAddress")
-        .withArgs("_treasury");
-    });
-
-    it("Reverts if stETH is zero address", async () => {
-      await expect(
-        ethers.deployContract("Burner", [admin, locator, ZeroAddress, coverSharesBurnt, nonCoverSharesBurnt], deployer),
-      )
-        .to.be.revertedWithCustomError(burner, "ZeroAddress")
-        .withArgs("_stETH");
+      expect(await deployed.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
+      expect(await deployed.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
     });
   });
 
-  for (const isCover of [false, true]) {
-    const requestBurnMethod = isCover ? "requestBurnMyStETHForCover" : "requestBurnMyStETH";
-    const sharesType = isCover ? "coverShares" : "nonCoverShares";
+  let burnAmount: bigint;
+  let burnAmountInShares: bigint;
 
-    context(requestBurnMethod, () => {
-      let burnAmount: bigint;
-      let burnAmountInShares: bigint;
+  async function setupBurnStETH() {
+    // holder does not yet have permission
+    const requestBurnMyStethRole = await burner.REQUEST_BURN_MY_STETH_ROLE();
+    expect(await burner.hasRole(requestBurnMyStethRole, holder)).to.equal(false);
 
-      beforeEach(async () => {
-        // holder does not yet have permission
-        const requestBurnMyStethRole = await burner.REQUEST_BURN_MY_STETH_ROLE();
-        expect(await burner.getRoleMemberCount(requestBurnMyStethRole)).to.equal(0);
-        expect(await burner.hasRole(requestBurnMyStethRole, holder)).to.equal(false);
+    await burner.connect(admin).grantRole(requestBurnMyStethRole, holder);
 
-        await burner.connect(admin).grantRole(requestBurnMyStethRole, holder);
+    // holder now has the permission
+    expect(await burner.hasRole(requestBurnMyStethRole, holder)).to.equal(true);
 
-        // holder now has the permission
-        expect(await burner.getRoleMemberCount(requestBurnMyStethRole)).to.equal(1);
-        expect(await burner.hasRole(requestBurnMyStethRole, holder)).to.equal(true);
+    burnAmount = await steth.balanceOf(holder);
+    burnAmountInShares = await steth.getSharesByPooledEth(burnAmount);
 
-        burnAmount = await steth.balanceOf(holder);
-        burnAmountInShares = await steth.getSharesByPooledEth(burnAmount);
+    await expect(steth.approve(burner, burnAmount))
+      .to.emit(steth, "Approval")
+      .withArgs(holder.address, await burner.getAddress(), burnAmount);
 
-        await expect(steth.approve(burner, burnAmount))
-          .to.emit(steth, "Approval")
-          .withArgs(holder.address, await burner.getAddress(), burnAmount);
+    expect(await steth.allowance(holder, burner)).to.equal(burnAmount);
+  }
 
-        expect(await steth.allowance(holder, burner)).to.equal(burnAmount);
+  context("requestBurnMyStETHForCover", () => {
+    beforeEach(async () => await setupBurnStETH());
+
+    context("Reverts", () => {
+      it("if the caller does not have the permission", async () => {
+        await expect(
+          burner.connect(stranger).requestBurnMyStETHForCover(burnAmount),
+        ).to.be.revertedWithOZAccessControlError(stranger.address, await burner.REQUEST_BURN_MY_STETH_ROLE());
       });
 
-      it("Requests the specified amount of stETH to burn for cover", async () => {
-        const before = await batch({
-          holderBalance: steth.balanceOf(holder),
-          sharesRequestToBurn: burner.getSharesRequestedToBurn(),
-        });
+      it("if the burn amount is zero", async () => {
+        await expect(burner.requestBurnMyStETHForCover(0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
+      });
+    });
 
-        await expect(burner[requestBurnMethod](burnAmount))
-          .to.emit(steth, "Transfer")
-          .withArgs(holder.address, await burner.getAddress(), burnAmount)
-          .and.to.emit(burner, "StETHBurnRequested")
-          .withArgs(isCover, holder.address, burnAmount, burnAmountInShares);
-
-        const after = await batch({
-          holderBalance: steth.balanceOf(holder),
-          sharesRequestToBurn: burner.getSharesRequestedToBurn(),
-        });
-
-        expect(after.holderBalance).to.equal(before.holderBalance - burnAmount);
-        expect(after.sharesRequestToBurn[sharesType]).to.equal(
-          before.sharesRequestToBurn[sharesType] + burnAmountInShares,
-        );
+    it("Requests the specified amount of stETH to burn for cover", async () => {
+      const balancesBefore = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
-      it("Reverts if the caller does not have the permission", async () => {
-        await expect(burner.connect(stranger)[requestBurnMethod](burnAmount)).to.be.revertedWithOZAccessControlError(
+      await expect(burner.requestBurnMyStETHForCover(burnAmount))
+        .to.emit(steth, "Transfer")
+        .withArgs(holder.address, await burner.getAddress(), burnAmount)
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(true, holder.address, burnAmount, burnAmountInShares);
+
+      const balancesAfter = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      expect(balancesAfter.holderBalance).to.equal(balancesBefore.holderBalance - burnAmount);
+      expect(balancesAfter.sharesRequestToBurn["coverShares"]).to.equal(
+        balancesBefore.sharesRequestToBurn["coverShares"] + burnAmountInShares,
+      );
+    });
+  });
+
+  context("requestBurnMyStETH", () => {
+    beforeEach(async () => await setupBurnStETH());
+
+    context("Reverts", () => {
+      it("if the caller does not have the permission", async () => {
+        await expect(burner.connect(stranger).requestBurnMyStETH(burnAmount)).to.be.revertedWithOZAccessControlError(
           stranger.address,
           await burner.REQUEST_BURN_MY_STETH_ROLE(),
         );
       });
 
-      it("Reverts if the burn amount is zero", async () => {
-        await expect(burner[requestBurnMethod](0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
+      it("if the burn amount is zero", async () => {
+        await expect(burner.requestBurnMyStETH(0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
       });
     });
+
+    it("Requests the specified amount of stETH to burn", async () => {
+      const balancesBefore = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      await expect(burner.requestBurnMyStETH(burnAmount))
+        .to.emit(steth, "Transfer")
+        .withArgs(holder.address, await burner.getAddress(), burnAmount)
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(false, holder.address, burnAmount, burnAmountInShares);
+
+      const balancesAfter = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      expect(balancesAfter.holderBalance).to.equal(balancesBefore.holderBalance - burnAmount);
+      expect(balancesAfter.sharesRequestToBurn["nonCoverShares"]).to.equal(
+        balancesBefore.sharesRequestToBurn["nonCoverShares"] + burnAmountInShares,
+      );
+    });
+  });
+
+  async function setupBurnShares() {
+    burnAmount = await steth.balanceOf(holder);
+    burnAmountInShares = await steth.getSharesByPooledEth(burnAmount);
+
+    await expect(steth.approve(burner, burnAmount))
+      .to.emit(steth, "Approval")
+      .withArgs(holder.address, await burner.getAddress(), burnAmount);
+
+    expect(await steth.allowance(holder, burner)).to.equal(burnAmount);
   }
 
-  for (const isCover of [false, true]) {
-    const requestBurnMethod = isCover ? "requestBurnSharesForCover" : "requestBurnShares";
-    const sharesType = isCover ? "coverShares" : "nonCoverShares";
+  context("requestBurnSharesForCover", () => {
+    beforeEach(async () => await setupBurnShares());
 
-    context(requestBurnMethod, () => {
-      let burnAmount: bigint;
-      let burnAmountInShares: bigint;
-
-      beforeEach(async () => {
-        burnAmount = await steth.balanceOf(holder);
-        burnAmountInShares = await steth.getSharesByPooledEth(burnAmount);
-
-        await expect(steth.approve(burner, burnAmount))
-          .to.emit(steth, "Approval")
-          .withArgs(holder.address, await burner.getAddress(), burnAmount);
-
-        expect(await steth.allowance(holder, burner)).to.equal(burnAmount);
-
-        burner = burner.connect(stethAsSigner);
-      });
-
-      it("Requests the specified amount of holder's shares to burn for cover", async () => {
-        const before = await batch({
-          holderBalance: steth.balanceOf(holder),
-          sharesRequestToBurn: burner.getSharesRequestedToBurn(),
-        });
-
-        await expect(burner[requestBurnMethod](holder, burnAmount))
-          .to.emit(steth, "Transfer")
-          .withArgs(holder.address, await burner.getAddress(), burnAmount)
-          .and.to.emit(burner, "StETHBurnRequested")
-          .withArgs(isCover, await steth.getAddress(), burnAmount, burnAmountInShares);
-
-        const after = await batch({
-          holderBalance: steth.balanceOf(holder),
-          sharesRequestToBurn: burner.getSharesRequestedToBurn(),
-        });
-
-        expect(after.holderBalance).to.equal(before.holderBalance - burnAmount);
-        expect(after.sharesRequestToBurn[sharesType]).to.equal(
-          before.sharesRequestToBurn[sharesType] + burnAmountInShares,
-        );
-      });
-
-      it("Reverts if the caller does not have the permission", async () => {
+    context("Reverts", () => {
+      it("if the caller does not have the permission", async () => {
         await expect(
-          burner.connect(stranger)[requestBurnMethod](holder, burnAmount),
+          burner.connect(stranger).requestBurnSharesForCover(holder, burnAmount),
         ).to.be.revertedWithOZAccessControlError(stranger.address, await burner.REQUEST_BURN_SHARES_ROLE());
       });
 
-      it("Reverts if the burn amount is zero", async () => {
-        await expect(burner[requestBurnMethod](holder, 0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
+      it("if the burn amount is zero", async () => {
+        await expect(burner.connect(stethSigner).requestBurnSharesForCover(holder, 0n)).to.be.revertedWithCustomError(
+          burner,
+          "ZeroBurnAmount",
+        );
       });
     });
-  }
+
+    it("Requests the specified amount of holder's shares to burn for cover", async () => {
+      const balancesBefore = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      await expect(burner.connect(stethSigner).requestBurnSharesForCover(holder, burnAmount))
+        .to.emit(steth, "Transfer")
+        .withArgs(holder.address, await burner.getAddress(), burnAmount)
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(true, await steth.getAddress(), burnAmount, burnAmountInShares);
+
+      const balancesAfter = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      expect(balancesAfter.holderBalance).to.equal(balancesBefore.holderBalance - burnAmount);
+      expect(balancesAfter.sharesRequestToBurn["coverShares"]).to.equal(
+        balancesBefore.sharesRequestToBurn["coverShares"] + burnAmountInShares,
+      );
+    });
+  });
+
+  context("requestBurnShares", () => {
+    beforeEach(async () => await setupBurnShares());
+
+    context("Reverts", () => {
+      it("if the caller does not have the permission", async () => {
+        await expect(
+          burner.connect(stranger).requestBurnShares(holder, burnAmount),
+        ).to.be.revertedWithOZAccessControlError(stranger.address, await burner.REQUEST_BURN_SHARES_ROLE());
+      });
+
+      it("if the burn amount is zero", async () => {
+        await expect(burner.connect(stethSigner).requestBurnShares(holder, 0n)).to.be.revertedWithCustomError(
+          burner,
+          "ZeroBurnAmount",
+        );
+      });
+    });
+
+    it("Requests the specified amount of holder's shares to burn", async () => {
+      const balancesBefore = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      await expect(burner.connect(stethSigner).requestBurnShares(holder, burnAmount))
+        .to.emit(steth, "Transfer")
+        .withArgs(holder.address, await burner.getAddress(), burnAmount)
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(false, await steth.getAddress(), burnAmount, burnAmountInShares);
+
+      const balancesAfter = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      expect(balancesAfter.holderBalance).to.equal(balancesBefore.holderBalance - burnAmount);
+      expect(balancesAfter.sharesRequestToBurn["nonCoverShares"]).to.equal(
+        balancesBefore.sharesRequestToBurn["nonCoverShares"] + burnAmountInShares,
+      );
+    });
+  });
 
   context("recoverExcessStETH", () => {
     it("Doesn't do anything if there's no excess steth", async () => {
       // making sure there's no excess steth, i.e. total shares request to burn == steth balance
       const { coverShares, nonCoverShares } = await burner.getSharesRequestedToBurn();
+
       expect(await steth.balanceOf(burner)).to.equal(coverShares + nonCoverShares);
       await expect(burner.recoverExcessStETH()).not.to.emit(burner, "ExcessStETHRecovered");
     });
 
-    context("When there is some excess stETH", () => {
+    context("When some excess stETH", () => {
       const excessStethAmount = ether("1.0");
 
       beforeEach(async () => {
@@ -237,7 +348,7 @@ describe.skip("Burner.sol", () => {
       });
 
       it("Transfers excess stETH to Treasury", async () => {
-        const before = await batch({
+        const balancesBefore = await batch({
           burnerBalance: steth.balanceOf(burner),
           treasuryBalance: steth.balanceOf(treasury),
         });
@@ -248,13 +359,13 @@ describe.skip("Burner.sol", () => {
           .and.to.emit(steth, "Transfer")
           .withArgs(await burner.getAddress(), treasury, excessStethAmount);
 
-        const after = await batch({
+        const balancesAfter = await batch({
           burnerBalance: steth.balanceOf(burner),
           treasuryBalance: steth.balanceOf(treasury),
         });
 
-        expect(after.burnerBalance).to.equal(before.burnerBalance - excessStethAmount);
-        expect(after.treasuryBalance).to.equal(before.treasuryBalance + excessStethAmount);
+        expect(balancesAfter.burnerBalance).to.equal(balancesBefore.burnerBalance - excessStethAmount);
+        expect(balancesAfter.treasuryBalance).to.equal(balancesBefore.treasuryBalance + excessStethAmount);
       });
     });
   });
@@ -280,33 +391,35 @@ describe.skip("Burner.sol", () => {
       expect(await token.balanceOf(burner)).to.equal(ether("1.0"));
     });
 
-    it("Reverts if recovering zero amount", async () => {
-      await expect(burner.recoverERC20(token, 0n)).to.be.revertedWithCustomError(burner, "ZeroRecoveryAmount");
-    });
+    context("Reverts", () => {
+      it("if recovering zero amount", async () => {
+        await expect(burner.recoverERC20(token, 0n)).to.be.revertedWithCustomError(burner, "ZeroRecoveryAmount");
+      });
 
-    it("Reverts if recovering stETH", async () => {
-      await expect(burner.recoverERC20(steth, 1n)).to.be.revertedWithCustomError(burner, "StETHRecoveryWrongFunc");
+      it("if recovering stETH", async () => {
+        await expect(burner.recoverERC20(steth, 1n)).to.be.revertedWithCustomError(burner, "StETHRecoveryWrongFunc");
+      });
     });
 
     it("Transfers the tokens to Treasury", async () => {
-      const before = await batch({
+      const balancesBefore = await batch({
         burnerBalance: token.balanceOf(burner),
         treasuryBalance: token.balanceOf(treasury),
       });
 
-      await expect(burner.recoverERC20(token, before.burnerBalance))
+      await expect(burner.recoverERC20(token, balancesBefore.burnerBalance))
         .to.emit(burner, "ERC20Recovered")
-        .withArgs(holder.address, await token.getAddress(), before.burnerBalance)
+        .withArgs(holder.address, await token.getAddress(), balancesBefore.burnerBalance)
         .and.to.emit(token, "Transfer")
-        .withArgs(await burner.getAddress(), treasury, before.burnerBalance);
+        .withArgs(await burner.getAddress(), treasury, balancesBefore.burnerBalance);
 
-      const after = await batch({
+      const balancesAfter = await batch({
         burnerBalance: token.balanceOf(burner),
         treasuryBalance: token.balanceOf(treasury),
       });
 
-      expect(after.burnerBalance).to.equal(0n);
-      expect(after.treasuryBalance).to.equal(before.treasuryBalance + before.burnerBalance);
+      expect(balancesAfter.burnerBalance).to.equal(0n);
+      expect(balancesAfter.treasuryBalance).to.equal(balancesBefore.treasuryBalance + balancesBefore.burnerBalance);
     });
   });
 
@@ -330,7 +443,7 @@ describe.skip("Burner.sol", () => {
     });
 
     it("Transfers the NFT to Treasury", async () => {
-      const before = await batch({
+      const balancesBefore = await batch({
         burnerBalance: nft.balanceOf(burner),
         treasuryBalance: nft.balanceOf(treasury),
       });
@@ -341,15 +454,15 @@ describe.skip("Burner.sol", () => {
         .and.to.emit(nft, "Transfer")
         .withArgs(await burner.getAddress(), treasury, tokenId);
 
-      const after = await batch({
+      const balancesAfter = await batch({
         burnerBalance: nft.balanceOf(burner),
         treasuryBalance: nft.balanceOf(treasury),
         owner: nft.ownerOf(tokenId),
       });
 
-      expect(after.burnerBalance).to.equal(before.burnerBalance - 1n);
-      expect(after.treasuryBalance).to.equal(before.treasuryBalance + 1n);
-      expect(after.owner).to.equal(treasury);
+      expect(balancesAfter.burnerBalance).to.equal(balancesBefore.burnerBalance - 1n);
+      expect(balancesAfter.treasuryBalance).to.equal(balancesBefore.treasuryBalance + 1n);
+      expect(balancesAfter.owner).to.equal(treasury);
     });
   });
 
@@ -360,88 +473,88 @@ describe.skip("Burner.sol", () => {
         .withArgs(holder.address, await burner.getAddress(), MaxUint256);
 
       expect(await steth.allowance(holder, burner)).to.equal(MaxUint256);
-
-      burner = burner.connect(stethAsSigner);
     });
 
-    it("Reverts if the caller is not stETH", async () => {
-      await expect(burner.connect(stranger).commitSharesToBurn(1n)).to.be.revertedWithCustomError(
-        burner,
-        "AppAuthLidoFailed",
-      );
+    context("Reverts", () => {
+      it("if the caller is not stETH", async () => {
+        await expect(burner.connect(stranger).commitSharesToBurn(1n)).to.be.revertedWithCustomError(
+          burner,
+          "AppAuthFailed",
+        );
+      });
+
+      it("if passing more shares to burn that what is stored on the contract", async () => {
+        const { coverShares, nonCoverShares } = await burner.getSharesRequestedToBurn();
+        const totalSharesRequestedToBurn = coverShares + nonCoverShares;
+        const invalidAmount = totalSharesRequestedToBurn + 1n;
+
+        await expect(burner.connect(accountingSigner).commitSharesToBurn(invalidAmount))
+          .to.be.revertedWithCustomError(burner, "BurnAmountExceedsActual")
+          .withArgs(invalidAmount, totalSharesRequestedToBurn);
+      });
     });
 
     it("Doesn't do anything if passing zero shares to burn", async () => {
-      await expect(burner.connect(stethAsSigner).commitSharesToBurn(0n)).not.to.emit(burner, "StETHBurnt");
-    });
-
-    it("Reverts if passing more shares to burn that what is stored on the contract", async () => {
-      const { coverShares, nonCoverShares } = await burner.getSharesRequestedToBurn();
-      const totalSharesRequestedToBurn = coverShares + nonCoverShares;
-      const invalidAmount = totalSharesRequestedToBurn + 1n;
-
-      await expect(burner.commitSharesToBurn(invalidAmount))
-        .to.be.revertedWithCustomError(burner, "BurnAmountExceedsActual")
-        .withArgs(invalidAmount, totalSharesRequestedToBurn);
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(0n)).not.to.emit(burner, "StETHBurnt");
     });
 
     it("Marks shares as burnt when there are only cover shares to burn", async () => {
       const coverSharesToBurn = ether("1.0");
 
       // request cover share to burn
-      await burner.requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
 
-      const before = await batch({
+      const balancesBefore = await batch({
         stethRequestedToBurn: steth.getSharesByPooledEth(coverSharesToBurn),
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
         coverSharesBurnt: burner.getCoverSharesBurnt(),
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.commitSharesToBurn(coverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn))
         .to.emit(burner, "StETHBurnt")
-        .withArgs(true, before.stethRequestedToBurn, coverSharesToBurn);
+        .withArgs(true, balancesBefore.stethRequestedToBurn, coverSharesToBurn);
 
-      const after = await batch({
+      const balancesAfter = await batch({
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
         coverSharesBurnt: burner.getCoverSharesBurnt(),
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      expect(after.sharesRequestedToBurn.coverShares).to.equal(
-        before.sharesRequestedToBurn.coverShares - coverSharesToBurn,
+      expect(balancesAfter.sharesRequestedToBurn.coverShares).to.equal(
+        balancesBefore.sharesRequestedToBurn.coverShares - coverSharesToBurn,
       );
-      expect(after.coverSharesBurnt).to.equal(before.coverSharesBurnt + coverSharesToBurn);
-      expect(after.nonCoverSharesBurnt).to.equal(before.nonCoverSharesBurnt);
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt + coverSharesToBurn);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt);
     });
 
     it("Marks shares as burnt when there are only cover shares to burn", async () => {
       const nonCoverSharesToBurn = ether("1.0");
 
-      await burner.requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
-      const before = await batch({
+      const balancesBefore = await batch({
         stethRequestedToBurn: steth.getSharesByPooledEth(nonCoverSharesToBurn),
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
         coverSharesBurnt: burner.getCoverSharesBurnt(),
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.commitSharesToBurn(nonCoverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn))
         .to.emit(burner, "StETHBurnt")
-        .withArgs(false, before.stethRequestedToBurn, nonCoverSharesToBurn);
+        .withArgs(false, balancesBefore.stethRequestedToBurn, nonCoverSharesToBurn);
 
-      const after = await batch({
+      const balancesAfter = await batch({
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
         coverSharesBurnt: burner.getCoverSharesBurnt(),
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      expect(after.sharesRequestedToBurn.nonCoverShares).to.equal(
-        before.sharesRequestedToBurn.nonCoverShares - nonCoverSharesToBurn,
+      expect(balancesAfter.sharesRequestedToBurn.nonCoverShares).to.equal(
+        balancesBefore.sharesRequestedToBurn.nonCoverShares - nonCoverSharesToBurn,
       );
-      expect(after.nonCoverSharesBurnt).to.equal(before.nonCoverSharesBurnt + nonCoverSharesToBurn);
-      expect(after.coverSharesBurnt).to.equal(before.coverSharesBurnt);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverSharesToBurn);
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt);
     });
 
     it("Marks shares as burnt when there are both cover and non-cover shares to burn", async () => {
@@ -449,10 +562,10 @@ describe.skip("Burner.sol", () => {
       const nonCoverSharesToBurn = ether("2.0");
       const totalCoverSharesToBurn = coverSharesToBurn + nonCoverSharesToBurn;
 
-      await burner.requestBurnSharesForCover(holder, coverSharesToBurn);
-      await burner.requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
-      const before = await batch({
+      const balancesBefore = await batch({
         coverStethRequestedToBurn: steth.getSharesByPooledEth(coverSharesToBurn),
         nonCoverStethRequestedToBurn: steth.getSharesByPooledEth(nonCoverSharesToBurn),
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
@@ -460,27 +573,27 @@ describe.skip("Burner.sol", () => {
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.commitSharesToBurn(totalCoverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(totalCoverSharesToBurn))
         .to.emit(burner, "StETHBurnt")
-        .withArgs(true, before.coverStethRequestedToBurn, coverSharesToBurn)
+        .withArgs(true, balancesBefore.coverStethRequestedToBurn, coverSharesToBurn)
         .and.to.emit(burner, "StETHBurnt")
-        .withArgs(false, before.nonCoverStethRequestedToBurn, nonCoverSharesToBurn);
+        .withArgs(false, balancesBefore.nonCoverStethRequestedToBurn, nonCoverSharesToBurn);
 
-      const after = await batch({
+      const balancesAfter = await batch({
         sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
         coverSharesBurnt: burner.getCoverSharesBurnt(),
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      expect(after.sharesRequestedToBurn.coverShares).to.equal(
-        before.sharesRequestedToBurn.coverShares - coverSharesToBurn,
+      expect(balancesAfter.sharesRequestedToBurn.coverShares).to.equal(
+        balancesBefore.sharesRequestedToBurn.coverShares - coverSharesToBurn,
       );
-      expect(after.coverSharesBurnt).to.equal(before.coverSharesBurnt + coverSharesToBurn);
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt + coverSharesToBurn);
 
-      expect(after.sharesRequestedToBurn.nonCoverShares).to.equal(
-        before.sharesRequestedToBurn.nonCoverShares - nonCoverSharesToBurn,
+      expect(balancesAfter.sharesRequestedToBurn.nonCoverShares).to.equal(
+        balancesBefore.sharesRequestedToBurn.nonCoverShares - nonCoverSharesToBurn,
       );
-      expect(after.nonCoverSharesBurnt).to.equal(before.nonCoverSharesBurnt + nonCoverSharesToBurn);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverSharesToBurn);
     });
   });
 
@@ -488,20 +601,18 @@ describe.skip("Burner.sol", () => {
     it("Returns cover and non-cover shares requested to burn", async () => {
       const coverSharesToBurn = ether("1.0");
       const nonCoverSharesToBurn = ether("2.0");
-
       await steth.approve(burner, MaxUint256);
-      burner = burner.connect(stethAsSigner);
 
-      const before = await burner.getSharesRequestedToBurn();
-      expect(before.coverShares).to.equal(0);
-      expect(before.nonCoverShares).to.equal(0);
+      const balancesBefore = await burner.getSharesRequestedToBurn();
+      expect(balancesBefore.coverShares).to.equal(0);
+      expect(balancesBefore.nonCoverShares).to.equal(0);
 
-      await burner.requestBurnSharesForCover(holder, coverSharesToBurn);
-      await burner.requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
-      const after = await burner.getSharesRequestedToBurn();
-      expect(after.coverShares).to.equal(coverSharesToBurn);
-      expect(after.nonCoverShares).to.equal(nonCoverSharesToBurn);
+      const balancesAfter = await burner.getSharesRequestedToBurn();
+      expect(balancesAfter.coverShares).to.equal(coverSharesToBurn);
+      expect(balancesAfter.nonCoverShares).to.equal(nonCoverSharesToBurn);
     });
   });
 
@@ -509,13 +620,13 @@ describe.skip("Burner.sol", () => {
     it("Returns cover and non-cover shares requested to burn", async () => {
       const coverSharesToBurn = ether("1.0");
       await steth.approve(burner, MaxUint256);
-      burner = burner.connect(stethAsSigner);
+
       await burner.getSharesRequestedToBurn();
-      await burner.requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
 
       const coverSharesToBurnBefore = await burner.getCoverSharesBurnt();
 
-      await burner.commitSharesToBurn(coverSharesToBurn);
+      await burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn);
 
       expect(await burner.getCoverSharesBurnt()).to.equal(coverSharesToBurnBefore + coverSharesToBurn);
     });
@@ -525,13 +636,13 @@ describe.skip("Burner.sol", () => {
     it("Returns cover and non-cover shares requested to burn", async () => {
       const nonCoverSharesToBurn = ether("1.0");
       await steth.approve(burner, MaxUint256);
-      burner = burner.connect(stethAsSigner);
+
       await burner.getSharesRequestedToBurn();
-      await burner.requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
       const nonCoverSharesToBurnBefore = await burner.getNonCoverSharesBurnt();
 
-      await burner.commitSharesToBurn(nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn);
 
       expect(await burner.getNonCoverSharesBurnt()).to.equal(nonCoverSharesToBurnBefore + nonCoverSharesToBurn);
     });
@@ -554,7 +665,7 @@ describe.skip("Burner.sol", () => {
       expect(coverShares).to.equal(0n);
       expect(nonCoverShares).to.equal(0n);
 
-      await steth.mintShares(burner, 1n);
+      await steth.connect(accountingSigner).mintShares(burner, 1n);
 
       expect(await burner.getExcessStETH()).to.equal(0n);
     });

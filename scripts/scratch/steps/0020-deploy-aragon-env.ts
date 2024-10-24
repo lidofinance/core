@@ -135,7 +135,12 @@ export async function main() {
   );
 
   updateObjectInState(Sk.ensNode, { nodeName: ensNodeName, nodeIs: ensNode });
-  state = updateObjectInState(Sk.aragonApmRegistry, { proxy: { address: apmRegistry.address } });
+  state = updateObjectInState(Sk.aragonApmRegistry, {
+    proxy: {
+      address: apmRegistry.address,
+      contract: apmRegistry.contractPath,
+    },
+  });
 
   // Deploy or load MiniMeTokenFactory
   log.header(`MiniMeTokenFactory`);

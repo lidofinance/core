@@ -9,12 +9,17 @@ import {ILiquid} from "./interfaces/ILiquid.sol";
 import {ILockable} from "./interfaces/ILockable.sol";
 import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
+interface StETH {
+    function transferFrom(address, address, uint256) external;
+}
+
 // TODO: add erc-4626-like can* methods
 // TODO: add sanity checks
 // TODO: unstructured storage
 contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     uint256 private constant MAX_FEE = 10000;
     ILiquidity public immutable LIQUIDITY_PROVIDER;
+    StETH public immutable STETH;
 
     struct Report {
         uint128 value;
@@ -36,10 +41,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     constructor(
         address _liquidityProvider,
+        address _liquidityToken,
         address _owner,
         address _depositContract
     ) StakingVault(_owner, _depositContract) {
         LIQUIDITY_PROVIDER = ILiquidity(_liquidityProvider);
+        STETH = StETH(_liquidityToken);
     }
 
     function value() public view override returns (uint256) {
@@ -52,7 +59,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
 
     function accumulatedNodeOperatorFee() public view returns (uint256) {
         int128 earnedRewards = int128(lastReport.value - lastClaimedReport.value)
-                - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
+            - (lastReport.netCashFlow - lastClaimedReport.netCashFlow);
 
         if (earnedRewards > 0) {
             return uint128(earnedRewards) * nodeOperatorFee / MAX_FEE;
@@ -112,16 +119,21 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
     function burn(uint256 _amountOfTokens) external onlyRole(VAULT_MANAGER_ROLE) {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfShares");
 
+        // transfer stETH to the accounting from the owner on behalf of the vault
+        STETH.transferFrom(msg.sender, address(LIQUIDITY_PROVIDER), _amountOfTokens);
+
         // burn shares at once but unlock balance later during the report
         LIQUIDITY_PROVIDER.burnStethBackedByVault(_amountOfTokens);
     }
 
-    function rebalance(uint256 _amountOfETH) external payable andDeposit(){
+    function rebalance(uint256 _amountOfETH) external payable andDeposit() {
         if (_amountOfETH == 0) revert ZeroArgument("amountOfETH");
         if (address(this).balance < _amountOfETH) revert NotEnoughBalance(address(this).balance);
 
-        if (hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
-           (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))) { // force rebalance
+        if (
+            hasRole(VAULT_MANAGER_ROLE, msg.sender) ||
+            (!isHealthy() && msg.sender == address(LIQUIDITY_PROVIDER))
+        ) { // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             netCashFlow -= int256(_amountOfETH);
@@ -131,6 +143,12 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
+    }
+
+    function disconnectFromHub() external payable andDeposit() onlyRole(VAULT_MANAGER_ROLE) {
+        // TODO: check what guards we should have here
+
+        LIQUIDITY_PROVIDER.disconnectVault();
     }
 
     function update(uint256 _value, int256 _ncf, uint256 _locked) external {
@@ -154,7 +172,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
         vaultOwnerFee = _vaultOwnerFee;
     }
 
-    function claimNodeOperatorFee(address _receiver, bool _liquid) external onlyRole(VAULT_MANAGER_ROLE) {
+    function claimNodeOperatorFee(address _receiver, bool _liquid) external onlyRole(NODE_OPERATOR_ROLE) {
         if (_receiver == address(0)) revert ZeroArgument("receiver");
 
         uint256 feesToClaim = accumulatedNodeOperatorFee();
@@ -165,7 +183,7 @@ contract LiquidStakingVault is StakingVault, ILiquid, ILockable {
             if (_liquid) {
                 _mint(_receiver, feesToClaim);
             } else {
-                 _withdrawFeeInEther(_receiver, feesToClaim);
+                _withdrawFeeInEther(_receiver, feesToClaim);
             }
         }
     }

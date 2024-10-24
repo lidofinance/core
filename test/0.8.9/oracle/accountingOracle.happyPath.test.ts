@@ -31,7 +31,6 @@ import {
   packExtraDataList,
   ReportAsArray,
   SECONDS_PER_SLOT,
-  shareRate,
 } from "lib";
 
 import {
@@ -150,7 +149,6 @@ describe("AccountingOracle.sol:happyPath", () => {
         elRewardsVaultBalance: ether("2"),
         sharesRequestedToBurn: ether("3"),
         withdrawalFinalizationBatches: [1],
-        simulatedShareRate: shareRate(1n),
         isBunkerMode: true,
         vaultsValues: [],
         vaultsNetCashFlows: [],
@@ -250,7 +248,6 @@ describe("AccountingOracle.sol:happyPath", () => {
       expect(lastOracleReportCall.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
         reportFields.withdrawalFinalizationBatches.map(Number),
       );
-      expect(lastOracleReportCall.arg.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
     });
 
     it(`withdrawal queue got bunker mode report`, async () => {
