@@ -61,7 +61,7 @@ contract LidoLocator is ILidoLocator {
         legacyOracle = _assertNonZero(_config.legacyOracle);
         lido = _assertNonZero(_config.lido);
         oracleReportSanityChecker = _assertNonZero(_config.oracleReportSanityChecker);
-        postTokenRebaseReceiver = _assertNonZero(_config.postTokenRebaseReceiver);
+        postTokenRebaseReceiver = _config.postTokenRebaseReceiver;
         burner = _assertNonZero(_config.burner);
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);

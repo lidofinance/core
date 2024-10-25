@@ -592,11 +592,6 @@
       "constructorArgs": ["0x4242424242424242424242424242424242424242"]
     }
   },
-  "tokenRebaseNotifier": {
-    "contract": "contracts/0.8.9/TokenRateNotifier.sol",
-    "address": "0xcbcCf679706C3c8bFf1F3CE11dBe1C63B157A382",
-    "constructorArgs": ["0xB5506A7438c3a928A8Cb3428c064A8049E560661", "0x0AC1dA6AA962906dA7dDBE5e89fD672Cefb0AA75"]
-  },
   "validatorsExitBusOracle": {
     "deployParameters": {
       "consensusVersion": 1
