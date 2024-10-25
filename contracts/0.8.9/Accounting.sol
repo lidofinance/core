@@ -6,20 +6,11 @@ pragma solidity 0.8.9;
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
+import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
+
 import {VaultHub} from "./vaults/VaultHub.sol";
 import {OracleReportSanityChecker} from "./sanity_checks/OracleReportSanityChecker.sol";
 
-interface IPostTokenRebaseReceiver {
-    function handlePostTokenRebase(
-        uint256 _reportTimestamp,
-        uint256 _timeElapsed,
-        uint256 _preTotalShares,
-        uint256 _preTotalEther,
-        uint256 _postTotalShares,
-        uint256 _postTotalEther,
-        uint256 _sharesMintedAsFees
-    ) external;
-}
 
 interface IStakingRouter {
     function getStakingRewardsDistribution()
