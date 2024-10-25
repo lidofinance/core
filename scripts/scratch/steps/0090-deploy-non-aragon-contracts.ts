@@ -1,3 +1,4 @@
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { getContractPath } from "lib/contract";
@@ -173,12 +174,6 @@ export async function main() {
     [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
-  // Deploy token rebase notifier
-  const tokenRebaseNotifier = await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [
-    treasuryAddress,
-    accounting.address,
-  ]);
-
   // Deploy HashConsensus for AccountingOracle
   await deployWithoutProxy(Sk.hashConsensusForAccountingOracle, "HashConsensus", deployer, [
     chainSpec.slotsPerEpoch,
@@ -227,7 +222,7 @@ export async function main() {
     legacyOracleAddress,
     lidoAddress,
     oracleReportSanityChecker.address,
-    tokenRebaseNotifier.address, // postTokenRebaseReceiver
+    ZeroAddress,
     burner.address,
     stakingRouter.address,
     treasuryAddress,
