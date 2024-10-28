@@ -5,17 +5,17 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IReportValuationReceiver} from "./interfaces/IReportValuationReceiver.sol";
-import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
+import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
 contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
-    event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 amount);
+    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
-    event ValidatorsExited(address indexed sender, uint256 numberOfValidators);
+    event ValidatorsExited(address indexed sender, uint256 validators);
     event Locked(uint256 locked);
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
 
@@ -30,9 +30,6 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         uint128 valuation;
         int128 inOutDelta;
     }
-
-    uint256 private constant BP_BASE = 100_00;
-    uint256 private constant MAX_FEE = BP_BASE;
 
     VaultHub public immutable vaultHub;
     Report public latestReport;
