@@ -26,8 +26,10 @@ contract DelegatorAlligator is AccessControlEnumerable {
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
     error VaultNotHealthy();
     error OnlyVaultCanCallOnReportHook();
+    error FeeCannotExceed100();
 
-    uint256 private constant MAX_FEE = 10_000;
+    uint256 private constant BP_BASE = 100_00;
+    uint256 private constant MAX_FEE = BP_BASE;
 
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
     bytes32 public constant DEPOSITOR_ROLE = keccak256("Vault.DelegatorAlligator.DepositorRole");
@@ -57,10 +59,12 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     function setManagementFee(uint256 _managementFee) external onlyRole(MANAGER_ROLE) {
+        if (_managementFee > MAX_FEE) revert FeeCannotExceed100();
         managementFee = _managementFee;
     }
 
     function setPerformanceFee(uint256 _performanceFee) external onlyRole(MANAGER_ROLE) {
+        if (_performanceFee > MAX_FEE) revert FeeCannotExceed100();
         if (getPerformanceDue() > 0) revert PerformanceDueUnclaimed();
 
         performanceFee = _performanceFee;
@@ -73,7 +77,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
             int128(latestReport.inOutDelta - lastClaimedReport.inOutDelta);
 
         if (_performanceDue > 0) {
-            return (uint128(_performanceDue) * performanceFee) / MAX_FEE;
+            return (uint128(_performanceDue) * performanceFee) / BP_BASE;
         } else {
             return 0;
         }
@@ -171,7 +175,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     function onReport(uint256 _valuation) external {
         if (msg.sender != address(vault)) revert OnlyVaultCanCallOnReportHook();
 
-        managementDue += (_valuation * managementFee) / 365 / MAX_FEE;
+        managementDue += (_valuation * managementFee) / 365 / BP_BASE;
     }
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
