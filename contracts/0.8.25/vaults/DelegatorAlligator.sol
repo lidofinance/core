@@ -32,9 +32,12 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
-    bytes32 public constant FUNDER_ROLE = keccak256("Vault.DelegatorAlligator.FunderRole");
-    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
+    // keccak256("Vault.DelegatorAlligator.ManagerRole");
+    bytes32 public constant MANAGER_ROLE = 0xb76ea5e9e5e686442be458aa57eaee1d748941e7efc36af94182e53336a0b5f1;
+    // keccak256("Vault.DelegatorAlligator.FunderRole");
+    bytes32 public constant FUNDER_ROLE = 0xe77526c6214935c305635a8b5890823c57893efbdda8020909004c556138c19e;
+    // keccak256("Vault.DelegatorAlligator.OperatorRole");
+    bytes32 public constant OPERATOR_ROLE = 0x37c209a80597e4b021a8b6c8b06a3d48779ff84682d5a96ac23aba2eb1d3173a;
 
     IStakingVault public immutable vault;
 
