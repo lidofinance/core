@@ -7,7 +7,6 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator
@@ -20,9 +19,10 @@ import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 //                              (((-'\ .' /
 //                            _____..'  .'
 //                           '-._____.-'
-contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
+contract DelegatorAlligator is AccessControlEnumerable {
+    error ZeroArgument(string name);
+    error NewFeeCannotExceedMaxFee();
     error PerformanceDueUnclaimed();
-    error ZeroArgument(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
     error VaultNotHealthy();
@@ -32,14 +32,11 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    // keccak256("Vault.DelegatorAlligator.ManagerRole");
-    bytes32 public constant MANAGER_ROLE = 0xb76ea5e9e5e686442be458aa57eaee1d748941e7efc36af94182e53336a0b5f1;
-    // keccak256("Vault.DelegatorAlligator.FunderRole");
-    bytes32 public constant FUNDER_ROLE = 0xe77526c6214935c305635a8b5890823c57893efbdda8020909004c556138c19e;
-    // keccak256("Vault.DelegatorAlligator.OperatorRole");
-    bytes32 public constant OPERATOR_ROLE = 0x37c209a80597e4b021a8b6c8b06a3d48779ff84682d5a96ac23aba2eb1d3173a;
+    bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
+    bytes32 public constant FUNDER_ROLE = keccak256("Vault.DelegatorAlligator.FunderRole");
+    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
 
-    IStakingVault public immutable vault;
+    IStakingVault public immutable stakingVault;
 
     IStakingVault.Report public lastClaimedReport;
 
@@ -48,34 +45,35 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
 
     uint256 public managementDue;
 
-    constructor(address _vault, address _defaultAdmin) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+    constructor(address _stakingVault, address _defaultAdmin) {
+        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
-        vault = IStakingVault(_vault);
+        stakingVault = IStakingVault(_stakingVault);
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
 
-    function transferOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
-        OwnableUpgradeable(address(vault)).transferOwnership(_newOwner);
+    function transferOwnershipOverStakingVault(address _newOwner) external onlyRole(MANAGER_ROLE) {
+        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
     }
 
-    function setManagementFee(uint256 _managementFee) external onlyRole(MANAGER_ROLE) {
-        if (_managementFee > MAX_FEE) revert FeeCannotExceed100();
-        managementFee = _managementFee;
+    function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
+        if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
+
+        managementFee = _newManagementFee;
     }
 
-    function setPerformanceFee(uint256 _performanceFee) external onlyRole(MANAGER_ROLE) {
-        if (_performanceFee > MAX_FEE) revert FeeCannotExceed100();
+    function setPerformanceFee(uint256 _newPerformanceFee) external onlyRole(MANAGER_ROLE) {
+        if (_newPerformanceFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
         if (getPerformanceDue() > 0) revert PerformanceDueUnclaimed();
 
-        performanceFee = _performanceFee;
+        performanceFee = _newPerformanceFee;
     }
 
     function getPerformanceDue() public view returns (uint256) {
-        IStakingVault.Report memory latestReport = vault.latestReport();
+        IStakingVault.Report memory latestReport = stakingVault.latestReport();
 
         int128 _performanceDue = int128(latestReport.valuation - lastClaimedReport.valuation) -
             int128(latestReport.inOutDelta - lastClaimedReport.inOutDelta);
@@ -87,22 +85,22 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
         }
     }
 
-    function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        vault.mint(_recipient, _tokens);
+    function mintSteth(address _recipient, uint256 _steth) public payable onlyRole(MANAGER_ROLE) fundAndProceed {
+        stakingVault.mint(_recipient, _steth);
     }
 
-    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
-        vault.burn(_tokens);
+    function burnSteth(uint256 _steth) external onlyRole(MANAGER_ROLE) {
+        stakingVault.burn(_steth);
     }
 
     function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        vault.rebalance(_ether);
+        stakingVault.rebalance(_ether);
     }
 
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
-        if (!vault.isHealthy()) {
+        if (!stakingVault.isHealthy()) {
             revert VaultNotHealthy();
         }
 
@@ -112,7 +110,7 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
             managementDue = 0;
 
             if (_liquid) {
-                mint(_recipient, due);
+                mintSteth(_recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -122,8 +120,8 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
 
     function withdrawable() public view returns (uint256) {
-        uint256 reserved = _max(vault.locked(), managementDue + getPerformanceDue());
-        uint256 value = vault.valuation();
+        uint256 reserved = _max(stakingVault.locked(), managementDue + getPerformanceDue());
+        uint256 value = stakingVault.valuation();
 
         if (reserved > value) {
             return 0;
@@ -133,7 +131,7 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     }
 
     function fund() public payable onlyRole(FUNDER_ROLE) {
-        vault.fund();
+        stakingVault.fund();
     }
 
     function withdraw(address _recipient, uint256 _ether) external onlyRole(FUNDER_ROLE) {
@@ -141,11 +139,11 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
 
-        vault.withdraw(_recipient, _ether);
+        stakingVault.withdraw(_recipient, _ether);
     }
 
     function exitValidators(uint256 _numberOfValidators) external onlyRole(FUNDER_ROLE) {
-        vault.exitValidators(_numberOfValidators);
+        stakingVault.exitValidators(_numberOfValidators);
     }
 
     /// * * * * * OPERATOR FUNCTIONS * * * * * ///
@@ -155,7 +153,7 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
         bytes calldata _pubkeys,
         bytes calldata _signatures
     ) external onlyRole(OPERATOR_ROLE) {
-        vault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
+        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
@@ -164,10 +162,10 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
         uint256 due = getPerformanceDue();
 
         if (due > 0) {
-            lastClaimedReport = vault.latestReport();
+            lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                mint(_recipient, due);
+                mintSteth(_recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -176,8 +174,8 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
 
     /// * * * * * VAULT CALLBACK * * * * * ///
 
-    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(vault)) revert OnlyVaultCanCallOnReportHook();
+    function onReport(uint256 _valuation) external {
+        if (msg.sender != address(stakingVault)) revert OnlyVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
     }
@@ -192,11 +190,11 @@ contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     }
 
     function _withdrawDue(address _recipient, uint256 _ether) internal {
-        int256 unlocked = int256(vault.valuation()) - int256(vault.locked());
+        int256 unlocked = int256(stakingVault.valuation()) - int256(stakingVault.locked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
         if (unreserved < _ether) revert InsufficientUnlockedAmount(unreserved, _ether);
 
-        vault.withdraw(_recipient, _ether);
+        stakingVault.withdraw(_recipient, _ether);
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256) {
