@@ -4,6 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-interface IReportValuationReceiver {
-    function onReport(uint256 _valuation) external;
+interface IReportReceiver {
+    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
 }

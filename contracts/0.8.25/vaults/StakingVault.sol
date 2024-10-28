@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 import {VaultHub} from "./VaultHub.sol";
-import {IReportValuationReceiver} from "./interfaces/IReportValuationReceiver.sol";
+import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
 contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
@@ -158,7 +158,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         latestReport = Report(SafeCast.toUint128(_valuation), SafeCast.toInt128(_inOutDelta));
         locked = _locked;
 
-        IReportValuationReceiver(owner()).onReport(_valuation);
+        IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked);
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }

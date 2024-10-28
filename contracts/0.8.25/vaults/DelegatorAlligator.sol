@@ -7,6 +7,7 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator
@@ -19,7 +20,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 //                              (((-'\ .' /
 //                            _____..'  .'
 //                           '-._____.-'
-contract DelegatorAlligator is AccessControlEnumerable {
+contract DelegatorAlligator is IReportReceiver, AccessControlEnumerable {
     error PerformanceDueUnclaimed();
     error ZeroArgument(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
@@ -32,7 +33,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     uint256 private constant MAX_FEE = BP_BASE;
 
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
-    bytes32 public constant DEPOSITOR_ROLE = keccak256("Vault.DelegatorAlligator.DepositorRole");
+    bytes32 public constant FUNDER_ROLE = keccak256("Vault.DelegatorAlligator.FunderRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
 
     IStakingVault public immutable vault;
@@ -128,11 +129,11 @@ contract DelegatorAlligator is AccessControlEnumerable {
         return value - reserved;
     }
 
-    function fund() public payable onlyRole(DEPOSITOR_ROLE) {
+    function fund() public payable onlyRole(FUNDER_ROLE) {
         vault.fund();
     }
 
-    function withdraw(address _recipient, uint256 _ether) external onlyRole(DEPOSITOR_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external onlyRole(FUNDER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
@@ -140,7 +141,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         vault.withdraw(_recipient, _ether);
     }
 
-    function exitValidators(uint256 _numberOfValidators) external onlyRole(DEPOSITOR_ROLE) {
+    function exitValidators(uint256 _numberOfValidators) external onlyRole(FUNDER_ROLE) {
         vault.exitValidators(_numberOfValidators);
     }
 
@@ -172,7 +173,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * VAULT CALLBACK * * * * * ///
 
-    function onReport(uint256 _valuation) external {
+    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(vault)) revert OnlyVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
