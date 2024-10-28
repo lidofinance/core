@@ -29,9 +29,7 @@ const SIMPLE_DVT_MODULE_ID = 2n;
 
 const ZERO_HASH = new Uint8Array(32).fill(0);
 
-// TODO: [@tamtamchik] restore checks for PostTotalShares event
-
-describe("Accounting integration", () => {
+describe("Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
@@ -52,16 +50,16 @@ describe("Accounting integration", () => {
     await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
     await norEnsureOperators(ctx, 3n, 5n);
-    if (ctx.flags.withSimpleDvtModule) {
-      await sdvtEnsureOperators(ctx, 3n, 5n);
-    }
+    await sdvtEnsureOperators(ctx, 3n, 5n);
 
+    // Deposit node operators
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     await report(ctx, {
-      clDiff: ether("32") * 3n, // 32 ETH * 3 validators
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
+      clAppearedValidators: 6n,
       excludeVaultsBalances: true,
     });
   });
@@ -207,12 +205,6 @@ describe("Accounting integration", () => {
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
 
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    // );
-
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
   });
@@ -261,13 +253,6 @@ describe("Accounting integration", () => {
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance differs from expected",
     );
-
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    //   "PostTotalShares: TotalPooledEther differs from expected",
-    // );
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
@@ -329,7 +314,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -384,13 +369,6 @@ describe("Accounting integration", () => {
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance has not increased",
     );
-
-    // FIXME: no Legacy oracle report events
-    // const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    // expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
-    //   postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    //   "PostTotalShares: TotalPooledEther has not increased",
-    // );
   });
 
   it("Should account correctly if no EL rewards", async () => {
@@ -466,19 +444,16 @@ describe("Accounting integration", () => {
     expect(totalELRewardsCollectedBefore + elRewards).to.equal(totalELRewardsCollectedAfter);
 
     const elRewardsReceivedEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards, "EL rewards mismatch");
+    expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
 
     const totalPooledEtherAfter = await lido.getTotalPooledEther();
-    expect(totalPooledEtherBefore + elRewards).to.equal(
-      totalPooledEtherAfter + amountOfETHLocked,
-      "TotalPooledEther mismatch",
-    );
+    expect(totalPooledEtherBefore + elRewards).to.equal(totalPooledEtherAfter + amountOfETHLocked);
 
     const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount, "TotalShares mismatch");
+    expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
-    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked, "Lido balance mismatch");
+    expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
@@ -676,7 +651,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -776,7 +751,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,

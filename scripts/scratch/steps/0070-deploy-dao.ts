@@ -4,17 +4,17 @@ import { ethers } from "hardhat";
 
 import { ERCProxy, EVMScriptRegistryFactory, Kernel } from "typechain-types";
 
-import { getContractAt, getContractPath, loadContract, LoadedContract } from "lib/contract";
+import { getContractPath, loadContract, LoadedContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { findEvents, findEventsWithInterfaces } from "lib/event";
 import { cy, log, yl } from "lib/log";
 import {
-  AppNames,
   DeploymentState,
   persistNetworkState,
   readNetworkState,
   setValueInState,
   Sk,
+  TemplateAppNames,
   updateObjectInState,
 } from "lib/state-file";
 
@@ -111,7 +111,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   const appInstalledEvents = findEvents(newDAOReceipt, "TmplAppInstalled");
   const lidoApmEnsName = state[Sk.lidoApmEnsName];
 
-  const VALID_APP_NAMES = Object.entries(AppNames).map((e) => e[1]);
+  const VALID_APP_NAMES = Object.entries(TemplateAppNames).map((e) => e[1]);
   const appIdNameEntries = VALID_APP_NAMES.map((name) => [ethers.namehash(`${name}.${lidoApmEnsName}`), name]);
   const appNameByAppId = Object.fromEntries(appIdNameEntries);
   const expectedAppIds = appIdNameEntries.map((e) => e[0]);
@@ -192,7 +192,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       appName = Sk.aragonEvmScriptRegistry;
     }
 
-    const proxy = await getContractAt(proxyContractName, e.args.proxy);
+    const proxy = await loadContract(proxyContractName, e.args.proxy);
 
     state[appName] = {
       ...state[appName],
@@ -225,7 +225,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
+  const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
   if (state[Sk.lidoTemplate].deployBlock) {
     log(`Using LidoTemplate deploy block: ${yl(state.lidoTemplate.deployBlock)}`);
   }
