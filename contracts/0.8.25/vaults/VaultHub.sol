@@ -140,7 +140,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             }
         }
 
-        _vault.update(_vault.valuation(), _vault.inOutDelta(), 0);
+        _vault.report(_vault.valuation(), _vault.inOutDelta(), 0);
 
         VaultSocket memory lastSocket = sockets[sockets.length - 1];
         sockets[index] = lastSocket;
@@ -339,7 +339,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
                 totalTreasuryShares += treasuryFeeShares[i];
             }
 
-            socket.vault.update(values[i], netCashFlows[i], lockedEther[i]);
+            socket.vault.report(values[i], netCashFlows[i], lockedEther[i]);
         }
 
         if (totalTreasuryShares > 0) {
