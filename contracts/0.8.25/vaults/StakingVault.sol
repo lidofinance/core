@@ -6,8 +6,10 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
 contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
@@ -32,6 +34,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     VaultHub public immutable vaultHub;
+    IERC20 public immutable stETH;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
@@ -39,12 +42,14 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     constructor(
         address _owner,
         address _hub,
+        address _stETH,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (_hub == address(0)) revert ZeroArgument("_hub");
 
         vaultHub = VaultHub(_hub);
+        stETH = IERC20(_stETH);
         _transferOwnership(_owner);
     }
 
@@ -132,6 +137,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     function burn(uint256 _tokens) external onlyOwner {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(_tokens);
     }
 
@@ -161,5 +167,9 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked);
 
         emit Reported(_valuation, _inOutDelta, _locked);
+    }
+
+    function disconnectFromHub() external payable onlyOwner {
+        vaultHub.disconnectVault(IStakingVault(address(this)));
     }
 }
