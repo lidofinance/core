@@ -1,4 +1,4 @@
-import { ContractTransactionReceipt } from "ethers";
+import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 
 import { deployScratchProtocol, ether, findEventsWithInterfaces, impersonate, log } from "lib";
@@ -36,8 +36,8 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     interfaces,
     flags,
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
-    getEvents: (receipt: ContractTransactionReceipt, eventName: string) =>
-      findEventsWithInterfaces(receipt, eventName, interfaces),
+    getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
+      findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
   await provision(context);

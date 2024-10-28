@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import { Accounting, Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -99,7 +99,13 @@ export async function main() {
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
     from: deployer,
   });
-  await makeTx(burner, "grantRole", [await burner.getFunction("REQUEST_BURN_SHARES_ROLE")(), accountingAddress], {
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), accountingAddress], {
+    from: deployer,
+  });
+
+  // Accounting
+  const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
+  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), agentAddress], {
     from: deployer,
   });
 }
