@@ -4,84 +4,15 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {VaultHub} from "./vaults/VaultHub.sol";
+
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
-
-import {VaultHub} from "./vaults/VaultHub.sol";
+import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecker.sol";
-
-interface IStakingRouter {
-    function getStakingRewardsDistribution()
-        external
-        view
-        returns (
-            address[] memory recipients,
-            uint256[] memory stakingModuleIds,
-            uint96[] memory stakingModuleFees,
-            uint96 totalFee,
-            uint256 precisionPoints
-        );
-
-    function reportRewardsMinted(uint256[] memory _stakingModuleIds, uint256[] memory _totalShares) external;
-}
-
-interface IWithdrawalQueue {
-    function prefinalize(
-        uint256[] memory _batches,
-        uint256 _maxShareRate
-    ) external view returns (uint256 ethToLock, uint256 sharesToBurn);
-
-    function isPaused() external view returns (bool);
-}
-
-interface ILido {
-    function getTotalPooledEther() external view returns (uint256);
-
-    function getExternalEther() external view returns (uint256);
-
-    function getTotalShares() external view returns (uint256);
-
-    function getSharesByPooledEth(uint256) external view returns (uint256);
-
-    function getBeaconStat()
-        external
-        view
-        returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance);
-
-    function processClStateUpdate(
-        uint256 _reportTimestamp,
-        uint256 _preClValidators,
-        uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _postExternalBalance
-    ) external;
-
-    function collectRewardsAndProcessWithdrawals(
-        uint256 _reportTimestamp,
-        uint256 _reportClBalance,
-        uint256 _adjustedPreCLBalance,
-        uint256 _withdrawalsToWithdraw,
-        uint256 _elRewardsToWithdraw,
-        uint256 _lastWithdrawalRequestToFinalize,
-        uint256 _simulatedShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
-    ) external;
-
-    function emitTokenRebase(
-        uint256 _reportTimestamp,
-        uint256 _timeElapsed,
-        uint256 _preTotalShares,
-        uint256 _preTotalEther,
-        uint256 _postTotalShares,
-        uint256 _postTotalEther,
-        uint256 _sharesMintedAsFees
-    ) external;
-
-    function mintShares(address _recipient, uint256 _sharesAmount) external;
-
-    function burnShares(address _account, uint256 _sharesAmount) external;
-}
+import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
+import {ILido} from "./interfaces/ILido.sol";
 
 struct ReportValues {
     /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
