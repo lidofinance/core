@@ -9,10 +9,8 @@ interface IHub {
     function connectVault(
         ILockable _vault,
         uint256 _capShares,
-        uint256 _minimumBondShareBP,
+        uint256 _minReserveRatioBP,
         uint256 _treasuryFeeBP) external;
 
-    event VaultConnected(address indexed vault, uint256 capShares, uint256 minBondRateBP, uint256 treasuryFeeBP);
-    event VaultDisconnected(address indexed vault);
-    event VaultReported(address indexed vault, uint256 value, int256 netCashFlow, uint256 locked);
+    event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatioBP, uint256 treasuryFeeBP);
 }

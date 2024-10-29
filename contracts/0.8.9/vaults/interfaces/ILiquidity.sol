@@ -13,4 +13,5 @@ interface ILiquidity {
     event MintedStETHOnVault(address indexed vault, uint256 amountOfTokens);
     event BurnedStETHOnVault(address indexed vault, uint256 amountOfTokens);
     event VaultRebalanced(address indexed vault, uint256 tokensBurnt, uint256 newBondRateBP);
+    event VaultDisconnected(address indexed vault);
 }
