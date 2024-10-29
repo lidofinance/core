@@ -231,12 +231,6 @@ contract AccountingOracle is BaseOracle {
         /// requests should be finalized.
         uint256[] withdrawalFinalizationBatches;
 
-        /// @dev The share/ETH rate with the 10^27 precision (i.e. the price of one stETH share
-        /// in ETH where one ETH is denominated as 10^27) that would be effective as the result of
-        /// applying this oracle report at the reference slot, with withdrawalFinalizationBatches
-        /// set to empty array and simulatedShareRate set to 0.
-        uint256 simulatedShareRate;
-
         /// @dev Whether, based on the state observed at the reference slot, the protocol should
         /// be in the bunker mode.
         bool isBunkerMode;
@@ -246,10 +240,11 @@ contract AccountingOracle is BaseOracle {
         ///
 
         /// @dev The values of the vaults as observed at the reference slot.
-        /// Sum of all the balances of Lido validators of the lstVault plus the balance of the lstVault itself.
+        /// Sum of all the balances of Lido validators of the vault plus the balance of the vault itself.
         uint256[] vaultsValues;
 
         /// @dev The net cash flows of the vaults as observed at the reference slot.
+        /// Flow of the funds in and out of the vaults (deposit/withdrawal) without the rewards.
         int256[] vaultsNetCashFlows;
 
         ///
@@ -614,8 +609,6 @@ contract AccountingOracle is BaseOracle {
             data.elRewardsVaultBalance,
             data.sharesRequestedToBurn,
             data.withdrawalFinalizationBatches,
-            data.simulatedShareRate,
-            // TODO: vault values here
             data.vaultsValues,
             data.vaultsNetCashFlows
         ));

@@ -6,10 +6,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
-  LiquidStakingVault,
-  LiquidStakingVault__factory,
-  LiquidStakingVault__MockForTestUpgrade,
-  LiquidStakingVault__MockForTestUpgrade__factory,
+  StakingVault,
+  StakingVault__factory,
+  StakingVault__MockForVault,
+  StakingVault__MockForVault__factory,
   StETH__Harness,
   VaultFactory,
   VaultHub,
@@ -60,8 +60,8 @@ describe("VaultFactory.sol", () => {
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let vaultHub: VaultHub;
-  let implOld: LiquidStakingVault;
-  let implNew: LiquidStakingVault__MockForTestUpgrade;
+  let implOld: StakingVault;
+  let implNew: StakingVault__Harness;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__Harness;
@@ -107,15 +107,15 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     //VaultHub
-    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("LiquidStakingVault", [vaultHub, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("LiquidStakingVault__MockForTestUpgrade", [depositContract], {
+    vaultHub = await ethers.deployContract("VaultHub__Harness", [admin, locator, steth, treasury], { from: deployer });
+    implOld = await ethers.deployContract("contracts/0.8.25/vaults/StakingVault.sol:StakingVault", [vaultHub, steth, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__MockForVault", [vaultHub, steth, depositContract], {
       from: deployer,
     });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [implOld, admin], { from: deployer });
 
     //add role to factory
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    // await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger)).to.revertedWithCustomError(implOld, "NonProxyCall");
@@ -172,9 +172,9 @@ describe("VaultFactory.sol", () => {
       const vaultsAfter = await vaultHub.vaultsCount();
       expect(vaultsAfter).to.eq(2);
 
-      const vaultContract1 = new ethers.Contract(vault1event.vault, LiquidStakingVault__factory.abi, ethers.provider);
+      const vaultContract1 = new ethers.Contract(vault1event.vault, StakingVault__factory.abi, ethers.provider);
       // const vaultContract1New = new ethers.Contract(vault1event?.vault, LiquidStakingVault__MockForTestUpgrade__factory.abi, ethers.provider);
-      const vaultContract2 = new ethers.Contract(vault2event.vault, LiquidStakingVault__factory.abi, ethers.provider);
+      const vaultContract2 = new ethers.Contract(vault2event.vault, StakingVault__factory.abi, ethers.provider);
 
       const version1Before = await vaultContract1.version();
       const version2Before = await vaultContract2.version();
@@ -192,7 +192,7 @@ describe("VaultFactory.sol", () => {
       const vault3event = await createVaultProxy(vaultOwner1);
       const vaultContract3 = new ethers.Contract(
         vault3event?.vault,
-        LiquidStakingVault__MockForTestUpgrade__factory.abi,
+        StakingVault__MockForVault__factory.abi,
         ethers.provider,
       );
 

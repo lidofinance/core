@@ -146,13 +146,8 @@ export function readNetworkState({
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const networkName = hardhatNetwork.name;
   const networkChainId = hardhatNetwork.config.chainId;
-
-  const fileName = networkStateFile
-    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
-
+  const fileName = _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
   // Validate the deployer
@@ -211,8 +206,8 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
   }
 }
 
-export function persistNetworkState(state: DeploymentState, networkName: string = hardhatNetwork.name): void {
-  const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+export function persistNetworkState(state: DeploymentState): void {
+  const fileName = _getStateFileFileName();
   const stateSorted = _sortKeysAlphabetically(state);
   const data = JSON.stringify(stateSorted, null, 2);
 
@@ -221,6 +216,15 @@ export function persistNetworkState(state: DeploymentState, networkName: string 
   } catch (error) {
     throw new Error(`Failed to write network state file ${fileName}: ${(error as Error).message}`);
   }
+}
+
+function _getStateFileFileName(networkStateFile = "") {
+  // Use the specified network state file or the one from the environment
+  networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
+
+  return networkStateFile
+    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
+    : _getFileName(hardhatNetwork.name, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
 }
 
 function _getFileName(networkName: string, baseName: string, dir: string) {

@@ -74,7 +74,7 @@ const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
 const getDefaults = (obj: ProtocolNetworkItems) =>
   Object.fromEntries(Object.entries(obj).map(([key]) => [key, ""])) as ProtocolNetworkItems;
 
-async function getLocalNetworkConfig(network: string, source: string): Promise<ProtocolNetworkConfig> {
+async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"): Promise<ProtocolNetworkConfig> {
   const config = await parseDeploymentJson(network);
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
@@ -99,15 +99,18 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
-    case "local":
-      return getLocalNetworkConfig(network, "fork");
-    case "mainnet-fork":
-      return getMainnetForkNetworkConfig();
     case "hardhat":
       if (isNonForkingHardhatNetwork()) {
         return getLocalNetworkConfig(network, "scratch");
       }
       return getMainnetForkNetworkConfig();
+    case "local":
+      return getLocalNetworkConfig(network, "fork");
+    case "mainnet-fork":
+      return getMainnetForkNetworkConfig();
+    case "holesky-vaults-devnet-0":
+      return getLocalNetworkConfig(network, "fork");
+
     default:
       throw new Error(`Network ${network} is not supported`);
   }

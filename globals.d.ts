@@ -69,7 +69,13 @@ declare namespace NodeJS {
     MAINNET_WITHDRAWAL_QUEUE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
 
+    HOLESKY_RPC_URL?: string;
+    SEPOLIA_RPC_URL?: string;
+
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;
+
+    /* Scratch deploy environment variables */
+    NETWORK_STATE_FILE?: string;
   }
 }

@@ -4,11 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
-import {IStaking} from "./interfaces/IStaking.sol";
 import {BeaconChainDepositor} from "../BeaconChainDepositor.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {BeaconProxyUtils} from "../utils/BeaconProxyUtils.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+import {IStaking} from "./interfaces/IStaking.sol";
 
 // TODO: trigger validator exit
 // TODO: add recover functions
@@ -20,37 +18,20 @@ import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 /// @notice Basic ownable vault for staking. Allows to deposit ETH, create
 /// batches of validators withdrawal credentials set to the vault, receive
 /// various rewards and withdraw ETH.
-contract StakingVault is IStaking, IBeaconProxy, BeaconChainDepositor, AccessControlEnumerable {
-
-    uint8 private constant VERSION = 1;
-
+contract StakingVault is IStaking, BeaconChainDepositor, AccessControlEnumerable {
     address public constant EVERYONE = address(0x4242424242424242424242424242424242424242);
 
     bytes32 public constant NODE_OPERATOR_ROLE = keccak256("NODE_OPERATOR_ROLE");
     bytes32 public constant VAULT_MANAGER_ROLE = keccak256("VAULT_MANAGER_ROLE");
     bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR_ROLE");
 
-    error ZeroAddress(string field);
-
-    constructor(address _depositContract) BeaconChainDepositor(_depositContract) {}
-
-    /// @notice Initialize the contract storage explicitly.
-    /// @param _admin admin address that can TBD
-    function initialize(address _admin) public {
-        if (_admin == address(0)) revert ZeroAddress("_admin");
-        if (getBeacon() == address(0)) revert NonProxyCall();
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(VAULT_MANAGER_ROLE, _admin);
+    constructor(
+        address _owner,
+        address _depositContract
+    ) BeaconChainDepositor(_depositContract) {
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(VAULT_MANAGER_ROLE, _owner);
         _grantRole(DEPOSITOR_ROLE, EVERYONE);
-    }
-
-    function version() public pure virtual returns(uint8) {
-        return VERSION;
-    }
-
-    function getBeacon() public view returns (address) {
-        return BeaconProxyUtils.getBeacon();
     }
 
     function getWithdrawalCredentials() public view returns (bytes32) {
@@ -118,5 +99,4 @@ contract StakingVault is IStaking, IBeaconProxy, BeaconChainDepositor, AccessCon
     error TransferFailed(address receiver, uint256 amount);
     error NotEnoughBalance(uint256 balance);
     error NotAuthorized(string operation, address addr);
-    error NonProxyCall();
 }

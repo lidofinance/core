@@ -151,10 +151,34 @@ export async function initAccountingOracle({
 
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
   const churnValidatorsPerDayLimit = 100;
-  const limitsList = [churnValidatorsPerDayLimit, 0, 0, 0, 32 * 12, 15, 16, 0, 0];
-  const managersRoster = [[admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin], [admin]];
-
-  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList, managersRoster]);
+  return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
+    f.deploy(
+      lidoLocator,
+      admin,
+      {
+        churnValidatorsPerDayLimit,
+        oneOffCLBalanceDecreaseBPLimit: 0n,
+        annualBalanceIncreaseBPLimit: 0n,
+        maxValidatorExitRequestsPerReport: 32n * 12n,
+        maxAccountingExtraDataListItemsCount: 15n,
+        maxNodeOperatorsPerExtraDataItemCount: 16n,
+        requestTimestampMargin: 0n,
+        maxPositiveTokenRebase: 0n,
+      },
+      {
+        allLimitsManagers: [admin],
+        churnValidatorsPerDayLimitManagers: [admin],
+        oneOffCLBalanceDecreaseLimitManagers: [admin],
+        annualBalanceIncreaseLimitManagers: [admin],
+        shareRateDeviationLimitManagers: [admin],
+        maxValidatorExitRequestsPerReportManagers: [admin],
+        maxAccountingExtraDataListItemsCountManagers: [admin],
+        maxNodeOperatorsPerExtraDataItemCountManagers: [admin],
+        requestTimestampMarginManagers: [admin],
+        maxPositiveTokenRebaseManagers: [admin],
+      },
+    ),
+  );
 }
 
 interface AccountingOracleSetup {

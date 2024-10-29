@@ -6,11 +6,15 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
-contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
+contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
     event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
@@ -25,27 +29,46 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     error TransferFailed(address recipient, uint256 amount);
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
+    error NonProxyCall();
 
     struct Report {
         uint128 valuation;
         int128 inOutDelta;
     }
 
+    uint8 private constant _version = 1;
     VaultHub public immutable vaultHub;
+    IERC20 public immutable stETH;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
 
     constructor(
-        address _owner,
         address _hub,
+        address _stETH,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
-        if (_owner == address(0)) revert ZeroArgument("_owner");
         if (_hub == address(0)) revert ZeroArgument("_hub");
 
         vaultHub = VaultHub(_hub);
+        stETH = IERC20(_stETH);
+    }
+
+    /// @notice Initialize the contract storage explicitly.
+    /// @param _owner owner address that can TBD
+    function initialize(address _owner) public {
+        if (_owner == address(0)) revert ZeroArgument("_owner");
+        if (getBeacon() == address(0)) revert NonProxyCall();
+
         _transferOwnership(_owner);
+    }
+
+    function version() public pure virtual returns(uint8) {
+        return _version;
+    }
+
+    function getBeacon() public view returns (address) {
+        return ERC1967Utils.getBeacon();
     }
 
     receive() external payable {
@@ -132,6 +155,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     function burn(uint256 _tokens) external onlyOwner {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(_tokens);
     }
 
@@ -161,5 +185,9 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked);
 
         emit Reported(_valuation, _inOutDelta, _locked);
+    }
+
+    function disconnectFromHub() external payable onlyOwner {
+        vaultHub.disconnectVault(IStakingVault(address(this)));
     }
 }

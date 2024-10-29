@@ -32,7 +32,6 @@ import {
   packExtraDataList,
   ReportAsArray,
   SECONDS_PER_SLOT,
-  shareRate,
 } from "lib";
 
 import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "test/deploy";
@@ -72,7 +71,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     elRewardsVaultBalance: ether("2"),
     sharesRequestedToBurn: ether("3"),
     withdrawalFinalizationBatches: [1],
-    simulatedShareRate: shareRate(1n),
     isBunkerMode: true,
     vaultsValues: [],
     vaultsNetCashFlows: [],
@@ -463,7 +461,6 @@ describe("AccountingOracle.sol:submitReport", () => {
         expect(lastOracleReportToAccounting.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
           reportFields.withdrawalFinalizationBatches.map(Number),
         );
-        expect(lastOracleReportToAccounting.arg.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
       });
 
       it("should call updateExitedValidatorsCountByStakingModule on StakingRouter", async () => {

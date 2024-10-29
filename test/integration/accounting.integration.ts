@@ -16,18 +16,18 @@ import {
 } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
+import {
+  CURATED_MODULE_ID,
+  LIMITER_PRECISION_BASE,
+  MAX_BASIS_POINTS,
+  MAX_DEPOSIT,
+  ONE_DAY,
+  SHARE_RATE_PRECISION,
+  SIMPLE_DVT_MODULE_ID,
+  ZERO_HASH,
+} from "test/suite/constants";
 
-const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
-
-const SHARE_RATE_PRECISION = BigInt(10 ** 27);
-const ONE_DAY = 86400n;
-const MAX_BASIS_POINTS = 10000n;
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
-const SIMPLE_DVT_MODULE_ID = 2n;
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 describe("Accounting", () => {
   let ctx: ProtocolContext;

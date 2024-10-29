@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-import {UpgradeableBeacon} from "@openzeppelin/contracts-v4.4/proxy/beacon/UpgradeableBeacon.sol";
-import {BeaconProxy} from "@openzeppelin/contracts-v4.4/proxy/beacon/BeaconProxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
 import {StakingVault} from "./StakingVault.sol";
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
 contract VaultFactory is UpgradeableBeacon {
 
@@ -19,9 +19,7 @@ contract VaultFactory is UpgradeableBeacon {
         address indexed vault
     );
 
-    constructor(address _owner, address _implementation) UpgradeableBeacon(_implementation) {
-        transferOwnership(_owner);
-    }
+    constructor(address _implementation, address _owner) UpgradeableBeacon(_implementation, _owner) {}
 
     function createVault() external returns(address vault) {
         vault = address(

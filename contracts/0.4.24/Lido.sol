@@ -96,6 +96,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
+    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
+
     /// @dev storage slot position for the Lido protocol contracts locator
     bytes32 internal constant LIDO_LOCATOR_POSITION =
         0x9ef78dff90f100ea94042bd00ccb978430524befc391d3e510b5f55ff3166df7; // keccak256("lido.Lido.lidoLocator")
@@ -122,6 +124,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev amount of external balance that is counted into total pooled eth
     bytes32 internal constant EXTERNAL_BALANCE_POSITION =
         0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
+    /// @dev maximum allowed external balance as a percentage of total pooled ether
+    bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
+        0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalBalanceBP")
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -185,6 +190,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // External shares burned for account
     event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
+
+    // Maximum external balance percent from the total pooled ether set
+    event MaxExternalBalanceBPSet(uint256 maxExternalBalanceBP);
 
     /**
     * @dev As AragonApp, Lido contract must be initialized with following variables:
@@ -375,6 +383,20 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
+     * @notice Sets the maximum allowed external balance as a percentage of total pooled ether
+     * @param _maxExternalBalanceBP The maximum percentage in basis points (0-10000)
+     */
+    function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
+        _auth(STAKING_CONTROL_ROLE);
+
+        require(_maxExternalBalanceBP > 0 && _maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
+
+        MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
+
+        emit MaxExternalBalanceBPSet(_maxExternalBalanceBP);
+    }
+
+    /**
     * @notice Send funds to the pool
     * @dev Users are able to submit their funds by transacting to the fallback function.
     * Unlike vanilla Ethereum Deposit contract, accepting only 32-Ether transactions, Lido
@@ -471,6 +493,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function getExternalEther() external view returns (uint256) {
         return EXTERNAL_BALANCE_POSITION.getStorageUint256();
+    }
+
+    function getMaxExternalBalance() external view returns (uint256) {
+        return _getMaxExternalBalance();
     }
 
     /**
@@ -574,15 +600,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
         if (_receiver == address(0)) revert("MINT_RECEIVER_ZERO_ADDRESS");
         if (_amountOfShares == 0) revert("MINT_ZERO_AMOUNT_OF_SHARES");
-        _whenNotStopped();
+
+        _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
-        // TODO: sanity check here to avoid 100% external balance
+        uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(stethAmount);
+        uint256 maxExternalBalance = _getMaxExternalBalance();
 
-        EXTERNAL_BALANCE_POSITION.setStorageUint256(
-            EXTERNAL_BALANCE_POSITION.getStorageUint256() + stethAmount
-        );
+        require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
+
+        EXTERNAL_BALANCE_POSITION.setStorageUint256(newExternalBalance);
 
         mintShares(_receiver, _amountOfShares);
 
@@ -593,10 +621,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///
     /// @param _amountOfShares Amount of shares to burn
     ///
-    /// @dev authentication goes through isMinter in StETH
+    /// @dev authentication goes through _isBurner() method
     function burnExternalShares(uint256 _amountOfShares) external {
         if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
-        _whenNotStopped();
+
+        _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
         uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
@@ -610,6 +639,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
 
+    /// @notice processes CL related state changes as a part of the report processing
+    /// @dev all data validation was done by Accounting and OracleReportSanityChecker
+    /// @param _reportTimestamp timestamp of the report
+    /// @param _preClValidators number of validators in the previous CL state (for event compatibility)
+    /// @param _reportClValidators number of validators in the current CL state
+    /// @param _reportClBalance total balance of the current CL state
+    /// @param _postExternalBalance total balance of the external balance
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
@@ -617,7 +653,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _reportClBalance,
         uint256 _postExternalBalance
     ) external {
-        // all data validation was done by Accounting and OracleReportSanityChecker
         _whenNotStopped();
 
         _auth(getLidoLocator().accounting());
@@ -629,9 +664,19 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
-        // cl and external balance change are reported in ETHDistributed event later
+        // cl and external balance change are logged in ETHDistributed event later
     }
 
+    /// @notice processes withdrawals and rewards as a part of the report processing
+    /// @dev all data validation was done by Accounting and OracleReportSanityChecker
+    /// @param _reportTimestamp timestamp of the report
+    /// @param _reportClBalance total balance of validators reported by the oracle
+    /// @param _adjustedPreCLBalance total balance of validators in the previouce report and deposits made since then
+    /// @param _withdrawalsToWithdraw amount of withdrawals to collect from WithdrawalsVault
+    /// @param _elRewardsToWithdraw amount of EL rewards to collect from ELRewardsVault
+    /// @param _lastWithdrawalRequestToFinalize last withdrawal request ID to finalize
+    /// @param _withdrawalsShareRate share rate used to fulfill withdrawal requests
+    /// @param _etherToLockOnWithdrawalQueue amount of ETH to lock on the WithdrawalQueue to fulfill withdrawal requests
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
@@ -639,7 +684,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
-        uint256 _simulatedShareRate,
+        uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external {
         _whenNotStopped();
@@ -664,7 +709,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             IWithdrawalQueue(locator.withdrawalQueue())
                 .finalize.value(_etherToLockOnWithdrawalQueue)(
                     _lastWithdrawalRequestToFinalize,
-                    _simulatedShareRate
+                    _withdrawalsShareRate
                 );
         }
 
@@ -686,7 +731,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /// @notice emit TokenRebase event
-    /// @dev should stay here for back compatibility reasons
+    /// @dev it's here for back compatibility reasons
     function emitTokenRebase(
         uint256 _reportTimestamp,
         uint256 _timeElapsed,
@@ -710,6 +755,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     // DEPRECATED PUBLIC METHODS
+
     /**
      * @notice Returns current withdrawal credentials of deposited validators
      * @dev DEPRECATED: use StakingRouter.getWithdrawalCredentials() instead
@@ -822,6 +868,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return BUFFERED_ETHER_POSITION.getStorageUint256();
     }
 
+    /**
+     * @dev Sets the amount of Ether temporary buffered on this contract balance
+     * @param _newBufferedEther new amount of buffered funds in wei
+     */
     function _setBufferedEther(uint256 _newBufferedEther) internal {
         BUFFERED_ETHER_POSITION.setStorageUint256(_newBufferedEther);
     }
@@ -836,6 +886,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         assert(depositedValidators >= clValidators);
 
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
+    }
+
+    /**
+     * @dev Gets the maximum allowed external balance as a percentage of total pooled ether
+     * @return max external balance in wei
+     */
+    function _getMaxExternalBalance() internal view returns (uint256) {
+        return _getTotalPooledEther().mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256()).div(TOTAL_BASIS_POINTS);
     }
 
     /**
@@ -856,7 +914,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev override isBurner from StETH to allow accounting to burn
     function _isBurner(address _sender) internal view returns (bool) {
-        return _sender == getLidoLocator().burner();
+        return _sender == getLidoLocator().burner() || _sender == getLidoLocator().accounting();
     }
 
     function _pauseStaking() internal {
@@ -930,5 +988,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             emit Submitted(INITIAL_TOKEN_HOLDER, balance, 0);
             _mintInitialShares(balance);
         }
+    }
+
+    // There is an invariant that protocol pause also implies staking pause.
+    // Thus, no need to check protocol pause explicitly.
+    function _whenNotStakingPaused() internal view {
+        require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
     }
 }
