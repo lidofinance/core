@@ -8,8 +8,11 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/ext
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
+// TODO: add NO reward role -> claims due, assign deposit ROLE
+//  DEPOSIT ROLE -> depost to beacon chain
+
 // DelegatorAlligator: Vault Delegated Owner
-// 3-Party Role Setup: Manager, Depositor, Operator
+// 3-Party Role Setup: Manager, Depositor, Operator (Keymaker)
 //             .-._   _ _ _ _ _ _ _ _
 //  .-''-.__.-'00  '-' ' ' ' ' ' ' ' '-.
 // '.___ '    .   .--_'-' '-' '-' _'-' '._
@@ -35,6 +38,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
     bytes32 public constant FUNDER_ROLE = keccak256("Vault.DelegatorAlligator.FunderRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
+    bytes32 public constant KEYMAKER_ROLE = keccak256("Vault.DelegatorAlligator.KeymakerRole");
 
     IStakingVault public immutable stakingVault;
 
@@ -51,6 +55,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
         stakingVault = IStakingVault(_stakingVault);
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _setRoleAdmin(KEYMAKER_ROLE, OPERATOR_ROLE);
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
@@ -146,15 +151,17 @@ contract DelegatorAlligator is AccessControlEnumerable {
         stakingVault.exitValidators(_numberOfValidators);
     }
 
-    /// * * * * * OPERATOR FUNCTIONS * * * * * ///
+    /// * * * * * KEYMAKER FUNCTIONS * * * * * ///
 
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
-    ) external onlyRole(OPERATOR_ROLE) {
+    ) external onlyRole(KEYMAKER_ROLE) {
         stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
+
+    /// * * * * * OPERATOR FUNCTIONS * * * * * ///
 
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
