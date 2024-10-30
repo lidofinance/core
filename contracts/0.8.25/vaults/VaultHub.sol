@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IHubVault} from "./interfaces/IHubVault.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
@@ -33,7 +33,7 @@ interface StETH {
 /// @author folkyatina
 abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice role that allows to connect vaults to the hub
-    bytes32 public constant VAULT_MASTER_ROLE = keccak256("VAULT_MASTER_ROLE");
+    bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @dev basis points base
     uint256 internal constant BPS_BASE = 100_00;
     /// @dev maximum number of vaults that can be connected to the hub
@@ -46,7 +46,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     struct VaultSocket {
         /// @notice vault address
-        IStakingVault vault;
+        IHubVault vault;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 capShares;
         /// @notice total number of stETH shares minted by the vault
@@ -62,13 +62,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     VaultSocket[] private sockets;
     /// @notice mapping from vault address to its socket
     /// @dev if vault is not connected to the hub, it's index is zero
-    mapping(IStakingVault => uint256) private vaultIndex;
+    mapping(IHubVault => uint256) private vaultIndex;
 
     constructor(address _admin, address _stETH, address _treasury) {
         STETH = StETH(_stETH);
         treasury = _treasury;
 
-        sockets.push(VaultSocket(IStakingVault(address(0)), 0, 0, 0, 0)); // stone in the elevator
+        sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0)); // stone in the elevator
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -78,7 +78,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return sockets.length - 1;
     }
 
-    function vault(uint256 _index) public view returns (IStakingVault) {
+    function vault(uint256 _index) public view returns (IHubVault) {
         return sockets[_index + 1].vault;
     }
 
@@ -86,11 +86,11 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return sockets[_index + 1];
     }
 
-    function vaultSocket(IStakingVault _vault) public view returns (VaultSocket memory) {
+    function vaultSocket(IHubVault _vault) public view returns (VaultSocket memory) {
         return sockets[vaultIndex[_vault]];
     }
 
-    function reserveRatio(IStakingVault _vault) public view returns (uint256) {
+    function reserveRatio(IHubVault _vault) public view returns (uint256) {
         return _reserveRatio(vaultSocket(_vault));
     }
 
@@ -100,7 +100,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _minReserveRatioBP minimum reserve ratio in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
     function connectVault(
-        IStakingVault _vault,
+        IHubVault _vault,
         uint256 _capShares,
         uint256 _minReserveRatioBP,
         uint256 _treasuryFeeBP
@@ -126,7 +126,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         }
 
         VaultSocket memory vr = VaultSocket(
-            IStakingVault(_vault),
+            IHubVault(_vault),
             uint96(_capShares),
             0, // mintedShares
             uint16(_minReserveRatioBP),
@@ -141,11 +141,11 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice disconnects a vault from the hub
     /// @dev can be called by vaults only
     function disconnectVault() external {
-        uint256 index = vaultIndex[IStakingVault(msg.sender)];
+        uint256 index = vaultIndex[IHubVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
 
         VaultSocket memory socket = sockets[index];
-        IStakingVault vaultToDisconnect = socket.vault;
+        IHubVault vaultToDisconnect = socket.vault;
 
         if (socket.mintedShares > 0) {
             uint256 stethToBurn = STETH.getPooledEthByShares(socket.mintedShares);
@@ -176,7 +176,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
         if (_receiver == address(0)) revert ZeroArgument("receiver");
 
-        IStakingVault vault_ = IStakingVault(msg.sender);
+        IHubVault vault_ = IHubVault(msg.sender);
         uint256 index = vaultIndex[vault_];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
@@ -207,7 +207,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function burnStethBackedByVault(uint256 _amountOfTokens) external {
         if (_amountOfTokens == 0) revert ZeroArgument("amountOfTokens");
 
-        uint256 index = vaultIndex[IStakingVault(msg.sender)];
+        uint256 index = vaultIndex[IHubVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
@@ -224,7 +224,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice force rebalance of the vault
     /// @param _vault vault address
     /// @dev can be used permissionlessly if the vault is underreserved
-    function forceRebalance(IStakingVault _vault) external {
+    function forceRebalance(IHubVault _vault) external {
         uint256 index = vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
@@ -258,7 +258,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function rebalance() external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
-        uint256 index = vaultIndex[IStakingVault(msg.sender)];
+        uint256 index = vaultIndex[IHubVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
@@ -330,7 +330,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 preTotalShares,
         uint256 preTotalPooledEther
     ) internal view returns (uint256 treasuryFeeShares) {
-        IStakingVault vault_ = _socket.vault;
+        IHubVault vault_ = _socket.vault;
 
         uint256 chargeableValue = _min(vault_.valuation(), (_socket.capShares * preTotalPooledEther) / preTotalShares);
 
@@ -377,7 +377,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return _reserveRatio(_socket.vault, _socket.mintedShares);
     }
 
-    function _reserveRatio(IStakingVault _vault, uint256 _mintedShares) internal view returns (uint256) {
+    function _reserveRatio(IHubVault _vault, uint256 _mintedShares) internal view returns (uint256) {
         return (STETH.getPooledEthByShares(_mintedShares) * BPS_BASE) / _vault.valuation();
     }
 
