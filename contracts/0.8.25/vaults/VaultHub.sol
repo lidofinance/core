@@ -385,11 +385,11 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return a < b ? a : b;
     }
 
-    event VaultConnected(address _stakingVault, uint256 capShares, uint256 minReservedRatio, uint256 treasuryFeeBP);
-    event VaultDisconnected(address _stakingVault);
-    event MintedStETHOnVault(address sender, uint256 _amountOfTokens);
-    event BurnedStETHOnVault(address sender, uint256 _amountOfTokens);
-    event VaultRebalanced(address sender, uint256 amountOfShares, uint256 reserveRatio);
+    event VaultConnected(address vault, uint256 capShares, uint256 minReserveRatio, uint256 treasuryFeeBP);
+    event VaultDisconnected(address vault);
+    event MintedStETHOnVault(address sender, uint256 tokens);
+    event BurnedStETHOnVault(address sender, uint256 tokens);
+    event VaultRebalanced(address sender, uint256 shares, uint256 reserveRatio);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 reserveRatio, uint256 minReserveRatio);
