@@ -11,13 +11,17 @@ import {ILiquidity} from "./interfaces/ILiquidity.sol";
 
 interface StETH {
     function mintExternalShares(address, uint256) external;
+
     function burnExternalShares(uint256) external;
 
     function getExternalEther() external view returns (uint256);
+
     function getMaxExternalBalance() external view returns (uint256);
 
     function getPooledEthByShares(uint256) external view returns (uint256);
+
     function getSharesByPooledEth(uint256) external view returns (uint256);
+
     function getTotalShares() external view returns (uint256);
 }
 
@@ -111,7 +115,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
 
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
-        if (_capShares > STETH.getTotalShares() * MAX_VAULT_SIZE_BP / BPS_BASE) {
+        if (_capShares > (STETH.getTotalShares() * MAX_VAULT_SIZE_BP) / BPS_BASE) {
             revert CapTooHigh(address(_vault), _capShares, STETH.getTotalShares() / 10);
         }
 
@@ -192,8 +196,9 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
 
         emit MintedStETHOnVault(msg.sender, _amountOfTokens);
 
-        totalEtherToLock = STETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE
-            / (BPS_BASE - socket.minReserveRatioBP);
+        totalEtherToLock =
+            (STETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
+            (BPS_BASE - socket.minReserveRatioBP);
     }
 
     /// @notice burn steth from the balance of the vault contract
@@ -237,8 +242,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         // (mintedStETH - X) / (vault.value() - X) == (BPS_BASE - minReserveRatioBP)
         //
         // X is amountToRebalance
-        uint256 amountToRebalance =
-            (mintedStETH * BPS_BASE - maxMintedShare * _vault.value()) / socket.minReserveRatioBP;
+        uint256 amountToRebalance = (mintedStETH * BPS_BASE - maxMintedShare * _vault.value()) /
+            socket.minReserveRatioBP;
 
         // TODO: add some gas compensation here
 
@@ -263,7 +268,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         sockets[index].mintedShares = socket.mintedShares - uint96(amountOfShares);
 
         // mint stETH (shares+ TPE+)
-        (bool success,) = address(STETH).call{value: msg.value}("");
+        (bool success, ) = address(STETH).call{value: msg.value}("");
         if (!success) revert StETHMintFailed(msg.sender);
         STETH.burnExternalShares(amountOfShares);
 
@@ -276,10 +281,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         uint256 preTotalShares,
         uint256 preTotalPooledEther,
         uint256 sharesToMintAsFees
-    ) internal view returns (
-        uint256[] memory lockedEther,
-        uint256[] memory treasuryFeeShares
-    ) {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGONS
 
         //                 \||/
@@ -316,8 +318,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
             }
 
             uint256 totalMintedShares = socket.mintedShares + treasuryFeeShares[i];
-            uint256 mintedStETH = totalMintedShares * postTotalPooledEther / postTotalShares; //TODO: check rounding
-            lockedEther[i] = mintedStETH * BPS_BASE / (BPS_BASE - socket.minReserveRatioBP);
+            uint256 mintedStETH = (totalMintedShares * postTotalPooledEther) / postTotalShares; //TODO: check rounding
+            lockedEther[i] = (mintedStETH * BPS_BASE) / (BPS_BASE - socket.minReserveRatioBP);
         }
     }
 
@@ -330,7 +332,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     ) internal view returns (uint256 treasuryFeeShares) {
         ILockable vault_ = _socket.vault;
 
-        uint256 chargeableValue = _min(vault_.value(), _socket.capShares * preTotalPooledEther / preTotalShares);
+        uint256 chargeableValue = _min(vault_.value(), (_socket.capShares * preTotalPooledEther) / preTotalShares);
 
         // treasury fee is calculated as a share of potential rewards that
         // Lido curated validators could earn if vault's ETH was staked in Lido
@@ -341,32 +343,29 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
 
         // TODO: optimize potential rewards calculation
-        uint256 potentialRewards = (chargeableValue * (postTotalPooledEther * preTotalShares)
-            / (postTotalSharesNoFees * preTotalPooledEther) - chargeableValue);
-        uint256 treasuryFee = potentialRewards * _socket.treasuryFeeBP / BPS_BASE;
+        uint256 potentialRewards = ((chargeableValue * (postTotalPooledEther * preTotalShares)) /
+            (postTotalSharesNoFees * preTotalPooledEther) -
+            chargeableValue);
+        uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / BPS_BASE;
 
-        treasuryFeeShares = treasuryFee * preTotalShares / preTotalPooledEther;
+        treasuryFeeShares = (treasuryFee * preTotalShares) / preTotalPooledEther;
     }
 
     function _updateVaults(
         uint256[] memory values,
-         int256[] memory netCashFlows,
+        int256[] memory netCashFlows,
         uint256[] memory lockedEther,
         uint256[] memory treasuryFeeShares
     ) internal {
         uint256 totalTreasuryShares;
-        for(uint256 i = 0; i < values.length; ++i) {
+        for (uint256 i = 0; i < values.length; ++i) {
             VaultSocket memory socket = sockets[i + 1];
             if (treasuryFeeShares[i] > 0) {
                 socket.mintedShares += uint96(treasuryFeeShares[i]);
                 totalTreasuryShares += treasuryFeeShares[i];
             }
 
-            socket.vault.update(
-                values[i],
-                netCashFlows[i],
-                lockedEther[i]
-            );
+            socket.vault.update(values[i], netCashFlows[i], lockedEther[i]);
         }
 
         if (totalTreasuryShares > 0) {
@@ -379,7 +378,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     }
 
     function _reserveRatio(ILockable _vault, uint256 _mintedShares) internal view returns (uint256) {
-        return STETH.getPooledEthByShares(_mintedShares) * BPS_BASE / _vault.value();
+        return (STETH.getPooledEthByShares(_mintedShares) * BPS_BASE) / _vault.value();
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {

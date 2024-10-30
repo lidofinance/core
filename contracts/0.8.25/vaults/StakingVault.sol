@@ -174,6 +174,6 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     function disconnectFromHub() external payable onlyOwner {
-        vaultHub.disconnectVault(IStakingVault(address(this)));
+        vaultHub.disconnectVault();
     }
 }

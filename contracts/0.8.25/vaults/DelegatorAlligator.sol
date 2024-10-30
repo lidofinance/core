@@ -122,7 +122,15 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
     }
 
-    /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
+    function disconnectFromHub() external payable onlyRole(MANAGER_ROLE) {
+        stakingVault.disconnectFromHub();
+    }
+
+    /// * * * * * FUNDER FUNCTIONS * * * * * ///
+
+    function fund() public payable onlyRole(FUNDER_ROLE) {
+        stakingVault.fund();
+    }
 
     function withdrawable() public view returns (uint256) {
         uint256 reserved = _max(stakingVault.locked(), managementDue + performanceDue());
@@ -133,10 +141,6 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
 
         return value - reserved;
-    }
-
-    function fund() public payable onlyRole(FUNDER_ROLE) {
-        stakingVault.fund();
     }
 
     function withdraw(address _recipient, uint256 _ether) external onlyRole(FUNDER_ROLE) {

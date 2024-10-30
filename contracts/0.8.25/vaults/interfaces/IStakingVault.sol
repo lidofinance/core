@@ -42,4 +42,6 @@ interface IStakingVault {
     function rebalance(uint256 _ether) external payable;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+
+    function disconnectFromHub() external payable;
 }
