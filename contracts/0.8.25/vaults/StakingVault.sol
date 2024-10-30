@@ -20,6 +20,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event ValidatorsExited(address indexed sender, uint256 validators);
     event Locked(uint256 locked);
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
+    event OnReportFailed(bytes reason);
 
     error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
@@ -165,7 +166,9 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         latestReport = Report(SafeCast.toUint128(_valuation), SafeCast.toInt128(_inOutDelta));
         locked = _locked;
 
-        IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked);
+        try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
+            emit OnReportFailed(reason);
+        }
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }
