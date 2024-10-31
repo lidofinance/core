@@ -7,7 +7,7 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
-    function hub() external view returns (address);
+    function vaultHub() external view returns (address);
 
     function latestReport() external view returns (Report memory);
 

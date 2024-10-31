@@ -22,6 +22,8 @@ interface StETH {
     function getSharesByPooledEth(uint256) external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
+
+    function transferFrom(address, address, uint256) external;
 }
 
 // TODO: rebalance gas compensation
@@ -174,17 +176,24 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     }
 
     /// @notice mint StETH tokens backed by vault external balance to the receiver address
+    /// @param _vault vault address
     /// @param _recipient address of the receiver
     /// @param _tokens amount of stETH tokens to mint
     /// @return totalEtherLocked total amount of ether that should be locked on the vault
-    /// @dev can be used by vaults only
-    function mintStethBackedByVault(address _recipient, uint256 _tokens) external returns (uint256 totalEtherLocked) {
+    /// @dev can be used by vault owner only
+    function mintStethBackedByVault(
+        address _vault,
+        address _recipient,
+        uint256 _tokens
+    ) external returns (uint256 totalEtherLocked) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
-        IHubVault vault_ = IHubVault(msg.sender);
+        IHubVault vault_ = IHubVault(_vault);
         uint256 index = vaultIndex[vault_];
-        if (index == 0) revert NotConnectedToHub(msg.sender);
+        if (index == 0) revert NotConnectedToHub(_vault);
+        if (msg.sender != vault_.owner()) revert NotAuthorized("mint", msg.sender);
+
         VaultSocket memory socket = sockets[index];
 
         uint256 sharesToMint = stETH.getSharesByPooledEth(_tokens);
@@ -205,17 +214,25 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         totalEtherLocked =
             (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
             (BPS_BASE - socket.minReserveRatioBP);
+
+        vault_.lock(totalEtherLocked);
     }
 
     /// @notice burn steth from the balance of the vault contract
+    /// @param _vault vault address
     /// @param _tokens amount of tokens to burn
-    /// @dev can be used by vaults only
-    function burnStethBackedByVault(uint256 _tokens) external {
+    /// @dev can be used by vault owner only; vaultHub must be approved to transfer stETH
+    function burnStethBackedByVault(address _vault, uint256 _tokens) external {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
-        uint256 index = vaultIndex[IHubVault(msg.sender)];
-        if (index == 0) revert NotConnectedToHub(msg.sender);
+        IHubVault vault_ = IHubVault(_vault);
+        uint256 index = vaultIndex[vault_];
+        if (index == 0) revert NotConnectedToHub(_vault);
+        if (msg.sender != vault_.owner()) revert NotAuthorized("burn", msg.sender);
+
         VaultSocket memory socket = sockets[index];
+
+        stETH.transferFrom(msg.sender, address(this), _tokens);
 
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
         if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(msg.sender, socket.sharesMinted);

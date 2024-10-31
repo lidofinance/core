@@ -123,24 +123,12 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         emit ValidatorsExited(msg.sender, _numberOfValidators);
     }
 
-    function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+    function lock(uint256 _locked) external {
+        if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
 
-        uint256 newlyLocked = vaultHub.mintStethBackedByVault(_recipient, _tokens);
+        locked = _locked;
 
-        if (newlyLocked > locked) {
-            locked = newlyLocked;
-
-            emit Locked(newlyLocked);
-        }
-    }
-
-    function burn(uint256 _tokens) external onlyOwner {
-        if (_tokens == 0) revert ZeroArgument("_tokens");
-
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(_tokens);
+        emit Locked(_locked);
     }
 
     function rebalance(uint256 _ether) external payable {
