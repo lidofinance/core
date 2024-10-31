@@ -8,6 +8,8 @@ import {DelegatorAlligator} from "./DelegatorAlligator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
 
+// TODO: think about the name
+
 contract VaultFacade is DelegatorAlligator {
     constructor(address _stakingVault, address _defaultAdmin) DelegatorAlligator(_stakingVault, _defaultAdmin) {}
 

@@ -9,6 +9,11 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/acces
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
 
+// TODO: allow FUNDER to mint and rebalance using fundAndProceed modifier
+// TODO: rename Keymater to Keymaster
+// TODO: think about how to extract mint and burn to facade;
+//       easy way is to use virtual `mint` here but there may be better options
+
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator (Keymaker)
 //             .-._   _ _ _ _ _ _ _ _

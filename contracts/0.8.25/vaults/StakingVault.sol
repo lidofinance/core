@@ -12,6 +12,11 @@ import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
+// TODO: extract disconnect to delegator
+// TODO: extract interface and implement it
+// TODO: add unstructured storage
+// TODO: move errors and event to the bottom
+
 contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
