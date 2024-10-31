@@ -1,2 +1,4 @@
-contracts/Migrations.sol
+contracts/openzeppelin/
 contracts/0.6.11/deposit_contract.sol
+contracts/0.6.12/WstETH.sol
+contracts/0.8.4/WithdrawalsManagerProxy.sol
