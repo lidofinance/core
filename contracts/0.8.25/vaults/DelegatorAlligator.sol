@@ -7,9 +7,7 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-
-// TODO: add NO reward role -> claims due, assign deposit ROLE
-//  DEPOSIT ROLE -> depost to beacon chain
+import {VaultHub} from "./VaultHub.sol";
 
 // DelegatorAlligator: Vault Delegated Owner
 // 3-Party Role Setup: Manager, Depositor, Operator (Keymaker)
@@ -22,7 +20,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 //                              (((-'\ .' /
 //                            _____..'  .'
 //                           '-._____.-'
-contract DelegatorAlligator is AccessControlEnumerable {
+abstract contract DelegatorAlligator is AccessControlEnumerable {
     error ZeroArgument(string name);
     error NewFeeCannotExceedMaxFee();
     error PerformanceDueUnclaimed();
@@ -41,6 +39,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     bytes32 public constant KEYMAKER_ROLE = keccak256("Vault.DelegatorAlligator.KeymakerRole");
 
     IStakingVault public immutable stakingVault;
+    VaultHub public immutable vaultHub;
 
     IStakingVault.Report public lastClaimedReport;
 
@@ -54,6 +53,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         stakingVault = IStakingVault(_stakingVault);
+        vaultHub = VaultHub(stakingVault.vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _setRoleAdmin(KEYMAKER_ROLE, OPERATOR_ROLE);
     }
@@ -90,18 +90,6 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
     }
 
-    function mintSteth(address _recipient, uint256 _steth) public payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        stakingVault.mint(_recipient, _steth);
-    }
-
-    function burnSteth(uint256 _steth) external onlyRole(MANAGER_ROLE) {
-        stakingVault.burn(_steth);
-    }
-
-    function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        stakingVault.rebalance(_ether);
-    }
-
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -115,11 +103,23 @@ contract DelegatorAlligator is AccessControlEnumerable {
             managementDue = 0;
 
             if (_liquid) {
-                mintSteth(_recipient, due);
+                mint(_recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
         }
+    }
+
+    function mint(address _recipient, uint256 _tokens) public payable onlyRole(MANAGER_ROLE) {
+        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    }
+
+    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
+        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    }
+
+    function rebalanceVault(uint256 _ether) external payable onlyRole(MANAGER_ROLE) {
+        stakingVault.rebalance{value: msg.value}(_ether);
     }
 
     function disconnectFromHub() external payable onlyRole(MANAGER_ROLE) {
@@ -129,7 +129,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     /// * * * * * FUNDER FUNCTIONS * * * * * ///
 
     function fund() public payable onlyRole(FUNDER_ROLE) {
-        stakingVault.fund();
+        stakingVault.fund{value: msg.value}();
     }
 
     function withdrawable() public view returns (uint256) {
@@ -176,7 +176,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                mintSteth(_recipient, due);
+                mint(_recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -192,13 +192,6 @@ contract DelegatorAlligator is AccessControlEnumerable {
     }
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
-
-    modifier fundAndProceed() {
-        if (msg.value > 0) {
-            fund();
-        }
-        _;
-    }
 
     function _withdrawDue(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(stakingVault.valuation()) - int256(stakingVault.locked());

@@ -5,15 +5,11 @@
 pragma solidity 0.8.25;
 
 import {DelegatorAlligator} from "./DelegatorAlligator.sol";
-import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultHub} from "./VaultHub.sol";
 
 contract VaultFacade is DelegatorAlligator {
-    VaultHub public immutable vaultHub;
-
-    constructor(address _stakingVault, address _defaultAdmin) DelegatorAlligator(_stakingVault, _defaultAdmin) {
-        vaultHub = VaultHub(stakingVault.vaultHub());
-    }
+    constructor(address _stakingVault, address _defaultAdmin) DelegatorAlligator(_stakingVault, _defaultAdmin) {}
 
     /// GETTERS ///
 
@@ -39,19 +35,5 @@ contract VaultFacade is DelegatorAlligator {
 
     function treasuryFeeBP() external view returns (uint16) {
         return vaultHub.vaultSocket(address(stakingVault)).treasuryFeeBP;
-    }
-
-    /// LIQUIDITY ///
-
-    function mint(address _recipient, uint256 _tokens) external payable onlyRole(MANAGER_ROLE) {
-        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
-    }
-
-    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
-        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
-    }
-
-    function rebalanceVault(uint256 _ether) external payable onlyRole(MANAGER_ROLE) {
-        stakingVault.rebalance{value: msg.value}(_ether);
     }
 }
