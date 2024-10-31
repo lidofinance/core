@@ -87,12 +87,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return sockets[_index + 1];
     }
 
-    function vaultSocket(IHubVault _vault) public view returns (VaultSocket memory) {
-        return sockets[vaultIndex[_vault]];
+    function vaultSocket(address _vault) external view returns (VaultSocket memory) {
+        return sockets[vaultIndex[IHubVault(_vault)]];
     }
 
-    function reserveRatio(IHubVault _vault) public view returns (int256) {
-        return _reserveRatio(vaultSocket(_vault));
+    function reserveRatio(address _vault) external view returns (int256) {
+        return _reserveRatio(sockets[vaultIndex[IHubVault(_vault)]]);
     }
 
     /// @notice connects a vault to the hub
@@ -115,7 +115,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (_minReserveRatioBP > BPS_BASE) revert ReserveRatioTooHigh(address(_vault), _minReserveRatioBP, BPS_BASE);
 
         if (_thresholdReserveRatioBP == 0) revert ZeroArgument("thresholdReserveRatioBP");
-        if (_thresholdReserveRatioBP > _minReserveRatioBP) revert ReserveRatioTooHigh(address(_vault), _thresholdReserveRatioBP, _minReserveRatioBP);
+        if (_thresholdReserveRatioBP > _minReserveRatioBP)
+            revert ReserveRatioTooHigh(address(_vault), _thresholdReserveRatioBP, _minReserveRatioBP);
 
         if (_treasuryFeeBP == 0) revert ZeroArgument("_treasuryFeeBP");
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
