@@ -67,16 +67,16 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     function setPerformanceFee(uint256 _newPerformanceFee) external onlyRole(MANAGER_ROLE) {
         if (_newPerformanceFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
-        if (getPerformanceDue() > 0) revert PerformanceDueUnclaimed();
+        if (performanceDue() > 0) revert PerformanceDueUnclaimed();
 
         performanceFee = _newPerformanceFee;
     }
 
-    function getPerformanceDue() public view returns (uint256) {
+    function performanceDue() public view returns (uint256) {
         IStakingVault.Report memory latestReport = stakingVault.latestReport();
 
         int128 _performanceDue = int128(latestReport.valuation - lastClaimedReport.valuation) -
-            int128(latestReport.inOutDelta - lastClaimedReport.inOutDelta);
+            (latestReport.inOutDelta - lastClaimedReport.inOutDelta);
 
         if (_performanceDue > 0) {
             return (uint128(_performanceDue) * performanceFee) / BP_BASE;
@@ -120,7 +120,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     /// * * * * * DEPOSITOR FUNCTIONS * * * * * ///
 
     function withdrawable() public view returns (uint256) {
-        uint256 reserved = _max(stakingVault.locked(), managementDue + getPerformanceDue());
+        uint256 reserved = _max(stakingVault.locked(), managementDue + performanceDue());
         uint256 value = stakingVault.valuation();
 
         if (reserved > value) {
@@ -148,7 +148,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * OPERATOR FUNCTIONS * * * * * ///
 
-    function deposit(
+    function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
@@ -159,7 +159,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
-        uint256 due = getPerformanceDue();
+        uint256 due = performanceDue();
 
         if (due > 0) {
             lastClaimedReport = stakingVault.latestReport();

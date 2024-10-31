@@ -44,13 +44,14 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     int256 public inOutDelta;
 
     constructor(
-        address _hub,
+        address _vaultHub,
         address _stETH,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
-        if (_hub == address(0)) revert ZeroArgument("_hub");
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
-        vaultHub = VaultHub(_hub);
+        vaultHub = VaultHub(_vaultHub);
         stETH = IERC20(_stETH);
     }
 
