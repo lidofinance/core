@@ -53,7 +53,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         /// @notice total number of stETH shares minted by the vault
         uint96 sharesMinted;
         /// @notice minimum unmintable (illiquid) portion in basis points
-        uint16 minSolidRatioBP;
+        uint16 minReserveRatioBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
     }
@@ -91,26 +91,26 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return sockets[vaultIndex[_vault]];
     }
 
-    function solidRatio(IHubVault _vault) public view returns (uint256) {
-        return _solidRatio(vaultSocket(_vault));
+    function reserveRatio(IHubVault _vault) public view returns (uint256) {
+        return _reserveRatio(vaultSocket(_vault));
     }
 
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
-    /// @param _minSolidRatioBP minimum Solid ratio in basis points
+    /// @param _minReserveRatioBP minimum Reserve ratio in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
     function connectVault(
         IHubVault _vault,
         uint256 _shareLimit,
-        uint256 _minSolidRatioBP,
+        uint256 _minReserveRatioBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (address(_vault) == address(0)) revert ZeroArgument("_vault");
         if (_shareLimit == 0) revert ZeroArgument("_shareLimit");
 
-        if (_minSolidRatioBP == 0) revert ZeroArgument("_minSolidRatioBP");
-        if (_minSolidRatioBP > BPS_BASE) revert MinSolidRatioTooHigh(address(_vault), _minSolidRatioBP, BPS_BASE);
+        if (_minReserveRatioBP == 0) revert ZeroArgument("_minReserveRatioBP");
+        if (_minReserveRatioBP > BPS_BASE) revert MinReserveRatioTooHigh(address(_vault), _minReserveRatioBP, BPS_BASE);
         if (_treasuryFeeBP == 0) revert ZeroArgument("_treasuryFeeBP");
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
@@ -130,13 +130,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             IHubVault(_vault),
             uint96(_shareLimit),
             0, // sharesMinted
-            uint16(_minSolidRatioBP),
+            uint16(_minReserveRatioBP),
             uint16(_treasuryFeeBP)
         );
         vaultIndex[_vault] = sockets.length;
         sockets.push(vr);
 
-        emit VaultConnected(address(_vault), _shareLimit, _minSolidRatioBP, _treasuryFeeBP);
+        emit VaultConnected(address(_vault), _shareLimit, _minReserveRatioBP, _treasuryFeeBP);
     }
 
     /// @notice disconnects a vault from the hub
@@ -183,9 +183,9 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
         if (vaultSharesAfterMint > socket.shareLimit) revert MintCapReached(msg.sender, socket.shareLimit);
 
-        uint256 solidRatioAfterMint = _solidRatio(vault_, vaultSharesAfterMint);
-        if (solidRatioAfterMint < socket.minSolidRatioBP) {
-            revert MinSolidRatioBroken(msg.sender, _solidRatio(socket), socket.minSolidRatioBP);
+        uint256 reserveRatioAfterMint = _reserveRatio(vault_, vaultSharesAfterMint);
+        if (reserveRatioAfterMint < socket.minReserveRatioBP) {
+            revert MinReserveRatioBroken(msg.sender, _reserveRatio(socket), socket.minReserveRatioBP);
         }
 
         sockets[index].sharesMinted = uint96(vaultSharesAfterMint);
@@ -196,7 +196,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         totalEtherLocked =
             (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
-            (BPS_BASE - socket.minSolidRatioBP);
+            (BPS_BASE - socket.minReserveRatioBP);
     }
 
     /// @notice burn steth from the balance of the vault contract
@@ -221,33 +221,33 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     /// @notice force rebalance of the vault
     /// @param _vault vault address
-    /// @dev can be used permissionlessly if the vault's min solid ratio is broken
+    /// @dev can be used permissionlessly if the vault's min reserve ratio is broken
     function forceRebalance(IHubVault _vault) external {
         uint256 index = vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
-        uint256 solidRatio_ = _solidRatio(socket);
+        uint256 reserveRatio_ = _reserveRatio(socket);
 
-        if (solidRatio_ >= socket.minSolidRatioBP) {
-            revert AlreadyBalanced(address(_vault), solidRatio_, socket.minSolidRatioBP);
+        if (reserveRatio_ >= socket.minReserveRatioBP) {
+            revert AlreadyBalanced(address(_vault), reserveRatio_, socket.minReserveRatioBP);
         }
 
         uint256 mintedStETH = stETH.getPooledEthByShares(socket.sharesMinted);
-        uint256 maxMintedShare = (BPS_BASE - socket.minSolidRatioBP);
+        uint256 maxMintedShare = (BPS_BASE - socket.minReserveRatioBP);
 
         // how much ETH should be moved out of the vault to rebalance it to target bond rate
-        // (mintedStETH - X) / (vault.valuation() - X) == (BPS_BASE - minSolidRatioBP)
+        // (mintedStETH - X) / (vault.valuation() - X) == (BPS_BASE - minReserveRatioBP)
         //
         // X is amountToRebalance
         uint256 amountToRebalance = (mintedStETH * BPS_BASE - maxMintedShare * _vault.valuation()) /
-            socket.minSolidRatioBP;
+            socket.minReserveRatioBP;
 
         // TODO: add some gas compensation here
 
         _vault.rebalance(amountToRebalance);
 
-        if (solidRatio_ >= _solidRatio(socket)) revert RebalanceFailed(address(_vault));
+        if (reserveRatio_ >= _reserveRatio(socket)) revert RebalanceFailed(address(_vault));
     }
 
     /// @notice rebalances the vault, by writing off the amount equal to passed ether
@@ -270,7 +270,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (!success) revert StETHMintFailed(msg.sender);
         stETH.burnExternalShares(amountOfShares);
 
-        emit VaultRebalanced(msg.sender, amountOfShares, _solidRatio(socket));
+        emit VaultRebalanced(msg.sender, amountOfShares, _reserveRatio(socket));
     }
 
     function _calculateVaultsRebase(
@@ -317,7 +317,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
             uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
             uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
-            lockedEther[i] = (mintedStETH * BPS_BASE) / (BPS_BASE - socket.minSolidRatioBP);
+            lockedEther[i] = (mintedStETH * BPS_BASE) / (BPS_BASE - socket.minReserveRatioBP);
         }
     }
 
@@ -374,22 +374,22 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         }
     }
 
-    function _solidRatio(VaultSocket memory _socket) internal view returns (uint256) {
-        return _solidRatio(_socket.vault, _socket.sharesMinted);
+    function _reserveRatio(VaultSocket memory _socket) internal view returns (uint256) {
+        return _reserveRatio(_socket.vault, _socket.sharesMinted);
     }
 
-    function _solidRatio(IHubVault _vault, uint256 _mintedShares) internal view returns (uint256) {
+    function _reserveRatio(IHubVault _vault, uint256 _mintedShares) internal view returns (uint256) {
         return (stETH.getPooledEthByShares(_mintedShares) * BPS_BASE) / _vault.valuation();
     }
 
-    event VaultConnected(address vault, uint256 capShares, uint256 minSolidRatio, uint256 treasuryFeeBP);
+    event VaultConnected(address vault, uint256 capShares, uint256 minReserveRatio, uint256 treasuryFeeBP);
     event VaultDisconnected(address vault);
     event MintedStETHOnVault(address sender, uint256 tokens);
     event BurnedStETHOnVault(address sender, uint256 tokens);
-    event VaultRebalanced(address sender, uint256 shares, uint256 solidRatio);
+    event VaultRebalanced(address sender, uint256 shares, uint256 reserveRatio);
 
     error StETHMintFailed(address vault);
-    error AlreadyBalanced(address vault, uint256 solidRatio, uint256 minSolidRatio);
+    error AlreadyBalanced(address vault, uint256 reserveRatio, uint256 minReserveRatio);
     error NotEnoughShares(address vault, uint256 amount);
     error MintCapReached(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
@@ -400,8 +400,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
     error TooManyVaults();
     error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
-    error MinSolidRatioTooHigh(address vault, uint256 solidRatioBP, uint256 maxSolidRatioBP);
+    error MinReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
-    error MinSolidRatioBroken(address vault, uint256 solidRatio, uint256 minSolidRatio);
+    error MinReserveRatioBroken(address vault, uint256 reserveRatio, uint256 minReserveRatio);
 }
