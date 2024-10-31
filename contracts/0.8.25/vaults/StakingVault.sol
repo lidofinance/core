@@ -17,7 +17,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
     event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
-    event ValidatorsExited(address indexed sender, uint256 validators);
+    event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
     event OnReportFailed(bytes reason);
@@ -117,10 +117,8 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
     }
 
-    function exitValidators(uint256 _numberOfValidators) external virtual onlyOwner {
-        // [here will be triggerable exit]
-
-        emit ValidatorsExited(msg.sender, _numberOfValidators);
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyOwner {
+        emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
     function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
