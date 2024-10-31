@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import { ReportValues } from "contracts/0.8.9/Accounting.sol";
+import { ReportValues } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 import { IReportReceiver } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 contract Accounting__MockForAccountingOracle is IReportReceiver {
