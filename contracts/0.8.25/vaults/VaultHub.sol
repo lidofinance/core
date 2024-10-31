@@ -25,8 +25,6 @@ interface StETH {
 }
 
 // TODO: rebalance gas compensation
-// TODO: optimize storage
-// TODO: add limits for vaults length
 // TODO: unstructured storag and upgradability
 
 /// @notice Vaults registry contract that is an interface to the Lido protocol
@@ -54,6 +52,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint96 sharesMinted;
         /// @notice minimal share of ether that is reserved for each stETH minted
         uint16 minReserveRatioBP;
+        /// @notice reserve ratio that makes possible to force rebalance on the vault
+        uint16 thresholdReserveRatioBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
     }
@@ -69,7 +69,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         stETH = StETH(_stETH);
         treasury = _treasury;
 
-        sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0)); // stone in the elevator
+        sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0)); // stone in the elevator
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -99,18 +99,24 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _minReserveRatioBP minimum Reserve ratio in basis points
+    /// @param _thresholdReserveRatioBP reserve ratio that makes possible to force rebalance on the vault (in basis points)
     /// @param _treasuryFeeBP treasury fee in basis points
     function connectVault(
         IHubVault _vault,
         uint256 _shareLimit,
         uint256 _minReserveRatioBP,
+        uint256 _thresholdReserveRatioBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (address(_vault) == address(0)) revert ZeroArgument("_vault");
         if (_shareLimit == 0) revert ZeroArgument("_shareLimit");
 
         if (_minReserveRatioBP == 0) revert ZeroArgument("_minReserveRatioBP");
-        if (_minReserveRatioBP > BPS_BASE) revert MinReserveRatioTooHigh(address(_vault), _minReserveRatioBP, BPS_BASE);
+        if (_minReserveRatioBP > BPS_BASE) revert ReserveRatioTooHigh(address(_vault), _minReserveRatioBP, BPS_BASE);
+
+        if (_thresholdReserveRatioBP == 0) revert ZeroArgument("thresholdReserveRatioBP");
+        if (_thresholdReserveRatioBP > _minReserveRatioBP) revert ReserveRatioTooHigh(address(_vault), _thresholdReserveRatioBP, _minReserveRatioBP);
+
         if (_treasuryFeeBP == 0) revert ZeroArgument("_treasuryFeeBP");
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
@@ -131,6 +137,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             uint96(_shareLimit),
             0, // sharesMinted
             uint16(_minReserveRatioBP),
+            uint16(_thresholdReserveRatioBP),
             uint16(_treasuryFeeBP)
         );
         vaultIndex[_vault] = sockets.length;
@@ -229,7 +236,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         int256 reserveRatio_ = _reserveRatio(socket);
 
-        if (reserveRatio_ >= int16(socket.minReserveRatioBP)) {
+        if (reserveRatio_ >= int16(socket.thresholdReserveRatioBP)) {
             revert AlreadyBalanced(address(_vault), reserveRatio_, socket.minReserveRatioBP);
         }
 
@@ -402,7 +409,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
     error TooManyVaults();
     error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
-    error MinReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
+    error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
     error MinReserveRatioBroken(address vault, int256 reserveRatio, uint256 minReserveRatio);
