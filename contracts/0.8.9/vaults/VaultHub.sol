@@ -47,7 +47,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         uint96 capShares;
         /// @notice total number of stETH shares minted by the vault
         uint96 mintedShares;
-        /// @notice minimum bond rate in basis points
+        /// @notice minimal share of ether that is reserved for each stETH minted
         uint16 minReserveRatioBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
@@ -86,7 +86,7 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         return sockets[vaultIndex[_vault]];
     }
 
-    function reserveRatio(ILockable _vault) public view returns (uint256) {
+    function reserveRatio(ILockable _vault) public view returns (int256) {
         return _reserveRatio(vaultSocket(_vault));
     }
 
@@ -181,8 +181,8 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         uint256 vaultSharesAfterMint = socket.mintedShares + sharesToMint;
         if (vaultSharesAfterMint > socket.capShares) revert MintCapReached(msg.sender, socket.capShares);
 
-        uint256 reserveRatioAfterMint = _reserveRatio(vault_, vaultSharesAfterMint);
-        if (reserveRatioAfterMint < socket.minReserveRatioBP) {
+        int256 reserveRatioAfterMint = _reserveRatio(vault_, vaultSharesAfterMint);
+        if (reserveRatioAfterMint < int16(socket.minReserveRatioBP)) {
             revert MinReserveRatioReached(msg.sender, _reserveRatio(socket), socket.minReserveRatioBP);
         }
 
@@ -224,16 +224,16 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = sockets[index];
 
-        uint256 reserveRatio_ = _reserveRatio(socket);
+        int256 reserveRatio_ = _reserveRatio(socket);
 
-        if (reserveRatio_ >= socket.minReserveRatioBP) {
+        if (reserveRatio_ >= int16(socket.minReserveRatioBP)) {
             revert AlreadyBalanced(address(_vault), reserveRatio_, socket.minReserveRatioBP);
         }
 
         uint256 mintedStETH = STETH.getPooledEthByShares(socket.mintedShares);
         uint256 maxMintedShare = (BPS_BASE - socket.minReserveRatioBP);
 
-        // how much ETH should be moved out of the vault to rebalance it to target bond rate
+        // how much ETH should be moved out of the vault to rebalance it to minimal reserve ratio
         // (mintedStETH - X) / (vault.value() - X) == (BPS_BASE - minReserveRatioBP)
         //
         // X is amountToRebalance
@@ -374,20 +374,24 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
         }
     }
 
-    function _reserveRatio(VaultSocket memory _socket) internal view returns (uint256) {
+    function _reserveRatio(VaultSocket memory _socket) internal view returns (int256) {
         return _reserveRatio(_socket.vault, _socket.mintedShares);
     }
 
-    function _reserveRatio(ILockable _vault, uint256 _mintedShares) internal view returns (uint256) {
-        return STETH.getPooledEthByShares(_mintedShares) * BPS_BASE / _vault.value();
+    function _reserveRatio(ILockable _vault, uint256 _mintedShares) internal view returns (int256) {
+        return (int256(_vault.value()) - int256(STETH.getPooledEthByShares(_mintedShares))) * int256(BPS_BASE) / int256(_vault.value());
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
     }
 
+    function _abs(int256 a) internal pure returns (uint256) {
+        return a < 0 ? uint256(-a) : uint256(a);
+    }
+
     error StETHMintFailed(address vault);
-    error AlreadyBalanced(address vault, uint256 reserveRatio, uint256 minReserveRatio);
+    error AlreadyBalanced(address vault, int256 reserveRatio, uint256 minReserveRatio);
     error NotEnoughShares(address vault, uint256 amount);
     error MintCapReached(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
@@ -401,5 +405,5 @@ abstract contract VaultHub is AccessControlEnumerable, IHub, ILiquidity {
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
-    error MinReserveRatioReached(address vault, uint256 reserveRatio, uint256 minReserveRatio);
+    error MinReserveRatioReached(address vault, int256 reserveRatio, uint256 minReserveRatio);
 }
