@@ -47,16 +47,13 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
 
     constructor(
         address _vaultHub,
-        address _stETH,
         address _owner,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_owner == address(0)) revert ZeroArgument("_owner");
 
         vaultHub = VaultHub(_vaultHub);
-        stETH = IERC20(_stETH);
         _transferOwnership(_owner);
     }
 
