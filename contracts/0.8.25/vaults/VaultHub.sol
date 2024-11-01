@@ -151,9 +151,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     /// @notice disconnects a vault from the hub
     /// @dev can be called by vaults only
-    function disconnectVault() external {
-        uint256 index = vaultIndex[IHubVault(msg.sender)];
-        if (index == 0) revert NotConnectedToHub(msg.sender);
+    function disconnectVault(address _vault) external {
+        IHubVault vault_ = IHubVault(_vault);
+
+        uint256 index = vaultIndex[vault_];
+        if (index == 0) revert NotConnectedToHub(_vault);
+        if (msg.sender != vault_.owner()) revert NotAuthorized("disconnect", msg.sender);
 
         VaultSocket memory socket = sockets[index];
         IHubVault vaultToDisconnect = socket.vault;

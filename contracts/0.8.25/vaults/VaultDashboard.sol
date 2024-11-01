@@ -4,14 +4,15 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {DelegatorAlligator} from "./DelegatorAlligator.sol";
+import {VaultStaffRoom} from "./VaultStaffRoom.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
 
+// TODO: natspec
 // TODO: think about the name
 
-contract VaultFacade is DelegatorAlligator {
-    constructor(address _stakingVault, address _defaultAdmin) DelegatorAlligator(_stakingVault, _defaultAdmin) {}
+contract VaultDashboard is VaultStaffRoom {
+    constructor(address _stakingVault, address _defaultAdmin) VaultStaffRoom(_stakingVault, _defaultAdmin) {}
 
     /// GETTERS ///
 
@@ -37,5 +38,22 @@ contract VaultFacade is DelegatorAlligator {
 
     function treasuryFeeBP() external view returns (uint16) {
         return vaultHub.vaultSocket(address(stakingVault)).treasuryFeeBP;
+    }
+
+    /// LIQUIDITY FUNCTIONS ///
+
+    function mint(
+        address _recipient,
+        uint256 _tokens
+    ) external payable onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+        _mint(_recipient, _tokens);
+    }
+
+    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
+        _burn(_tokens);
+    }
+
+    function rebalanceVault(uint256 _ether) external payable onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+        stakingVault.rebalance{value: msg.value}(_ether);
     }
 }
