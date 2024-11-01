@@ -32,6 +32,10 @@ contract VaultDashboard is VaultStaffRoom {
         return vaultHub.vaultSocket(address(stakingVault)).minReserveRatioBP;
     }
 
+    function reserveRatio() external view returns (uint16) {
+        return vaultHub.reserveRatio(address(stakingVault));
+    }
+
     function thresholdReserveRatioBP() external view returns (uint16) {
         return vaultHub.vaultSocket(address(stakingVault)).thresholdReserveRatioBP;
     }
