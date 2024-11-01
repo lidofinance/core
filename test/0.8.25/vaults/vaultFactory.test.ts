@@ -188,7 +188,7 @@ describe("VaultFactory.sol", () => {
 
       expect(version1Before).not.to.eq(version1After);
       expect(version2Before).not.to.eq(version2After);
-      expect(2).not.to.eq(version3After);
+      expect(2).to.eq(version3After);
     });
   });
 });
