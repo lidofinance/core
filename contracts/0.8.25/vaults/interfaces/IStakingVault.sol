@@ -33,7 +33,11 @@ interface IStakingVault {
         bytes calldata _signatures
     ) external;
 
-    function exitValidators(uint256 _numberOfValidators) external;
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external;
+
+    function mint(address _recipient, uint256 _tokens) external payable;
+
+    function burn(uint256 _tokens) external;
 
     function rebalance(uint256 _ether) external payable;
 
