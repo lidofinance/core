@@ -25,7 +25,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         int256 inOutDelta;
     }
 
-    uint8 private constant _version = 1;
+    uint256 private constant _version = 1;
     VaultHub public immutable vaultHub;
     IERC20 public immutable stETH;
 
@@ -56,7 +56,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         _transferOwnership(_owner);
     }
 
-    function version() public pure virtual returns(uint8) {
+    function version() public pure virtual returns(uint256) {
         return _version;
     }
 

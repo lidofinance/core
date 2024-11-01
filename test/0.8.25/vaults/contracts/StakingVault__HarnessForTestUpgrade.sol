@@ -25,7 +25,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         int256 inOutDelta;
     }
 
-    uint8 private constant _version = 2;
+    uint256 private constant _version = 2;
     VaultHub public immutable vaultHub;
     IERC20 public immutable stETH;
 
@@ -57,12 +57,12 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
     }
 
     function finalizeUpgrade_v2() external {
-        if (getContractVersion == _version) {
+        if (getContractVersion() == _version) {
             revert AlreadyInitialized();
         }
     }
 
-    function version() public pure virtual returns(uint8) {
+    function version() external pure virtual returns(uint256) {
         return _version;
     }
 

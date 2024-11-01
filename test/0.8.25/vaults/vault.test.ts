@@ -20,7 +20,7 @@ import { createVaultProxy,ether } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe.only("StakingVault.sol", async () => {
+describe("StakingVault.sol", async () => {
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let executionLayerRewardsSender: HardhatEthersSigner;
