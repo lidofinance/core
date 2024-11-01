@@ -151,8 +151,8 @@ contract DelegatorAlligator is AccessControlEnumerable {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function exitValidators(uint256 _numberOfValidators) external onlyRole(FUNDER_ROLE) {
-        stakingVault.exitValidators(_numberOfValidators);
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(MANAGER_ROLE) {
+        stakingVault.requestValidatorExit(_validatorPublicKey);
     }
 
     /// * * * * * KEYMAKER FUNCTIONS * * * * * ///
