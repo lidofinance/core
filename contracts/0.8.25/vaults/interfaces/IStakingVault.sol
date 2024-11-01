@@ -35,13 +35,7 @@ interface IStakingVault {
 
     function exitValidators(uint256 _numberOfValidators) external;
 
-    function mint(address _recipient, uint256 _tokens) external payable;
-
-    function burn(uint256 _tokens) external;
-
     function rebalance(uint256 _ether) external payable;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
-
-    function disconnectFromHub() external payable;
 }
