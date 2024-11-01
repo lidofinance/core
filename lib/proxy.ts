@@ -2,7 +2,10 @@ import { BaseContract, BytesLike } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { OssifiableProxy, OssifiableProxy__factory } from "typechain-types";
+import { BeaconProxy, OssifiableProxy, OssifiableProxy__factory, VaultFactory, StakingVault, DelegatorAlligator } from "typechain-types";
+
+import { findEventsWithInterfaces } from "lib";
+import { ethers } from "hardhat";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -25,4 +28,32 @@ export async function proxify<T extends BaseContract>({
   proxied = proxied.connect(caller) as T;
 
   return [proxied, proxy];
+}
+
+export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<{ proxy: BeaconProxy; vault: StakingVault; delegator: DelegatorAlligator }> {
+  const tx = await vaultFactory.connect(_owner).createVault();
+
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+
+  if (events.length === 0) throw new Error("Vault creation event not found");
+
+  const event = events[0];
+  const { vault } = event.args;
+
+  const delegatorEvents = findEventsWithInterfaces(receipt, "DelegatorCreated", [vaultFactory.interface]);
+  if (delegatorEvents.length === 0) throw new Error("Delegator creation event not found");
+
+  const { delegator } = delegatorEvents[0].args;
+
+  const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
+  const stakingVault = await ethers.getContractAt("contracts/0.8.25/vaults/StakingVault.sol:StakingVault", vault, _owner) as StakingVault;
+  const delegatorAlligator = (await ethers.getContractAt("DelegatorAlligator", delegator, _owner)) as DelegatorAlligator;
+
+  return {
+    proxy,
+    vault: stakingVault,
+    delegator: delegatorAlligator,
+  };
 }

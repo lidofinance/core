@@ -4,6 +4,7 @@
 import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
 import {StakingVault} from "./StakingVault.sol";
+import {DelegatorAlligator} from "./DelegatorAlligator.sol";
 
 pragma solidity 0.8.25;
 
@@ -19,9 +20,19 @@ contract VaultFactory is UpgradeableBeacon {
         address indexed vault
     );
 
+    /**
+    * @notice Event emitted on a DelegatorAlligator creation
+    * @param admin The address of the DelegatorAlligator admin
+    * @param delegator The address of the created DelegatorAlligator
+    */
+    event DelegatorCreated(
+        address indexed admin,
+        address indexed delegator
+    );
+
     constructor(address _implementation, address _owner) UpgradeableBeacon(_implementation, _owner) {}
 
-    function createVault() external returns(address vault) {
+    function createVault() external returns(address vault, address delegator) {
         vault = address(
             new BeaconProxy(
                 address(this),
@@ -29,9 +40,12 @@ contract VaultFactory is UpgradeableBeacon {
             )
         );
 
+        delegator = address (
+            new DelegatorAlligator(vault, msg.sender)
+        );
+
         // emit event
         emit VaultCreated(msg.sender, vault);
-
-        return address(vault);
+        emit DelegatorCreated(msg.sender, delegator);
     }
 }

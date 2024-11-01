@@ -13,35 +13,25 @@ import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
+import {Versioned} from "../utils/Versioned.sol";
 
-contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
-    event Funded(address indexed sender, uint256 amount);
-    event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
-    event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
-    event ValidatorsExited(address indexed sender, uint256 validators);
-    event Locked(uint256 locked);
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
+contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
+    /// @custom:storage-location erc7201:StakingVault.Vault
+    struct VaultStorage {
+        uint128 reportValuation;
+        int128 reportInOutDelta;
 
-    error ZeroArgument(string name);
-    error InsufficientBalance(uint256 balance);
-    error InsufficientUnlocked(uint256 unlocked);
-    error TransferFailed(address recipient, uint256 amount);
-    error NotHealthy();
-    error NotAuthorized(string operation, address sender);
-    error NonProxyCall();
-
-    struct Report {
-        uint128 valuation;
-        int128 inOutDelta;
+        uint256 locked;
+        int256 inOutDelta;
     }
 
     uint8 private constant _version = 1;
     VaultHub public immutable vaultHub;
     IERC20 public immutable stETH;
-    Report public latestReport;
-    uint256 public locked;
-    int256 public inOutDelta;
+
+    /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
+    bytes32 private constant VAULT_STORAGE_LOCATION =
+        0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
     constructor(
         address _vaultHub,
@@ -57,9 +47,11 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    function initialize(address _owner) public {
+    function initialize(address _owner) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (getBeacon() == address(0)) revert NonProxyCall();
+
+        _initializeContractVersionTo(1);
 
         _transferOwnership(_owner);
     }
@@ -79,20 +71,32 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     }
 
     function valuation() public view returns (uint256) {
-        return uint256(int128(latestReport.valuation) + inOutDelta - latestReport.inOutDelta);
+        return uint256(
+            int128(_getVaultStorage().reportValuation)
+            + _getVaultStorage().inOutDelta
+            - _getVaultStorage().reportInOutDelta
+        );
     }
 
     function isHealthy() public view returns (bool) {
-        return valuation() >= locked;
+        return valuation() >= _getVaultStorage().locked;
+    }
+
+    function locked() external view returns(uint256) {
+        return _getVaultStorage().locked;
     }
 
     function unlocked() public view returns (uint256) {
         uint256 _valuation = valuation();
-        uint256 _locked = locked;
+        uint256 _locked = _getVaultStorage().locked;
 
         if (_locked > _valuation) return 0;
 
         return _valuation - _locked;
+    }
+
+    function inOutDelta() external view returns(int256) {
+        return _getVaultStorage().inOutDelta;
     }
 
     function withdrawalCredentials() public view returns (bytes32) {
@@ -102,7 +106,8 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     function fund() external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
-        inOutDelta += int256(msg.value);
+        VaultStorage storage $ = _getVaultStorage();
+        $.inOutDelta += int256(msg.value);
 
         emit Funded(msg.sender, msg.value);
     }
@@ -114,7 +119,9 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        inOutDelta -= int256(_ether);
+        VaultStorage storage $ = _getVaultStorage();
+        $.inOutDelta -= int256(_ether);
+
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
         if (!isHealthy()) revert NotHealthy();
@@ -146,8 +153,9 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
         uint256 newlyLocked = vaultHub.mintStethBackedByVault(_recipient, _tokens);
 
-        if (newlyLocked > locked) {
-            locked = newlyLocked;
+        VaultStorage storage $ = _getVaultStorage();
+        if (newlyLocked > $.locked) {
+            $.locked = newlyLocked;
 
             emit Locked(newlyLocked);
         }
@@ -168,7 +176,9 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
             // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
-            inOutDelta -= int256(_ether);
+            VaultStorage storage $ = _getVaultStorage();
+            $.inOutDelta -= int256(_ether);
+
             emit Withdrawn(msg.sender, msg.sender, _ether);
 
             vaultHub.rebalance{value: _ether}();
@@ -180,15 +190,42 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
 
-        latestReport = Report(SafeCast.toUint128(_valuation), SafeCast.toInt128(_inOutDelta));
-        locked = _locked;
+        VaultStorage storage $ = _getVaultStorage();
+        $.reportValuation = SafeCast.toUint128(_valuation);
+        $.reportInOutDelta = SafeCast.toInt128(_inOutDelta);
+        $.locked = _locked;
 
-        IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked);
+        try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
+            emit OnReportFailed(reason);
+        }
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }
 
     function disconnectFromHub() external payable onlyOwner {
-        vaultHub.disconnectVault(IStakingVault(address(this)));
+        vaultHub.disconnectVault();
     }
+
+    function _getVaultStorage() private pure returns (VaultStorage storage $) {
+        assembly {
+            $.slot := VAULT_STORAGE_LOCATION
+        }
+    }
+
+    event Funded(address indexed sender, uint256 amount);
+    event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
+    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
+    event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
+    event ValidatorsExited(address indexed sender, uint256 validators);
+    event Locked(uint256 locked);
+    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
+    event OnReportFailed(bytes reason);
+
+    error ZeroArgument(string name);
+    error InsufficientBalance(uint256 balance);
+    error InsufficientUnlocked(uint256 unlocked);
+    error TransferFailed(address recipient, uint256 amount);
+    error NotHealthy();
+    error NotAuthorized(string operation, address sender);
+    error NonProxyCall();
 }
