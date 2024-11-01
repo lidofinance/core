@@ -198,7 +198,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         uint256 sharesToMint = stETH.getSharesByPooledEth(_tokens);
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
-        if (vaultSharesAfterMint > socket.shareLimit) revert MintCapReached(msg.sender, socket.shareLimit);
+        if (vaultSharesAfterMint > socket.shareLimit) revert MintCapReached(_vault, socket.shareLimit);
 
         uint256 maxMintableShares = _maxMintableShares(socket.vault, socket.reserveRatio);
 
@@ -210,7 +210,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         stETH.mintExternalShares(_recipient, sharesToMint);
 
-        emit MintedStETHOnVault(msg.sender, _tokens);
+        emit MintedStETHOnVault(_vault, _tokens);
 
         totalEtherLocked =
             (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
@@ -236,13 +236,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         stETH.transferFrom(msg.sender, address(this), _tokens);
 
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
-        if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(msg.sender, socket.sharesMinted);
+        if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(_vault, socket.sharesMinted);
 
         sockets[index].sharesMinted -= uint96(amountOfShares);
 
         stETH.burnExternalShares(amountOfShares);
 
-        emit BurnedStETHOnVault(msg.sender, _tokens);
+        emit BurnedStETHOnVault(_vault, _tokens);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio
