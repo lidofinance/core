@@ -1,11 +1,11 @@
 import { BaseContract, BytesLike } from "ethers";
+import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BeaconProxy, OssifiableProxy, OssifiableProxy__factory, VaultFactory, StakingVault, DelegatorAlligator } from "typechain-types";
+import { BeaconProxy, DelegatorAlligator,OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
-import { ethers } from "hardhat";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -48,7 +48,7 @@ export async function createVaultProxy(vaultFactory: VaultFactory, _owner: Hardh
   const { delegator } = delegatorEvents[0].args;
 
   const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
-  const stakingVault = await ethers.getContractAt("contracts/0.8.25/vaults/StakingVault.sol:StakingVault", vault, _owner) as StakingVault;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
   const delegatorAlligator = (await ethers.getContractAt("DelegatorAlligator", delegator, _owner)) as DelegatorAlligator;
 
   return {

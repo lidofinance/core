@@ -1,20 +1,24 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
-import { JsonRpcProvider, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
-import { advanceChainTime, ether, createVaultProxy } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
-  VaultHub__MockForVault,
-  VaultHub__MockForVault__factory,
   StETH__HarnessForVaultHub,
   StETH__HarnessForVaultHub__factory,
   VaultFactory,
+  VaultHub__MockForVault,
+  VaultHub__MockForVault__factory,
 } from "typechain-types";
 import { StakingVault } from "typechain-types/contracts/0.8.25/vaults";
 import { StakingVault__factory } from "typechain-types/factories/contracts/0.8.25/vaults";
+
+import { createVaultProxy,ether } from "lib";
+
+import { Snapshot } from "test/suite";
 
 describe.only("StakingVault.sol", async () => {
   let deployer: HardhatEthersSigner;

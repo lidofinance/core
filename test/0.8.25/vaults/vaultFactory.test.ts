@@ -7,14 +7,13 @@ import {
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   StakingVault,
-  StakingVault__factory,
-  StakingVault__MockForVault__factory,
+  StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub, VaultHub__factory
+  VaultHub,
 } from "typechain-types";
 
-import { ArrayToUnion, certainAddress, ether, randomAddress, createVaultProxy } from "lib";
+import { ArrayToUnion, certainAddress, createVaultProxy,ether, randomAddress } from "lib";
 
 const services = [
   "accountingOracle",
@@ -44,11 +43,6 @@ function randomConfig(): Config {
   }, {} as Config);
 }
 
-interface Vault {
-  admin: string;
-  vault: string;
-}
-
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -60,7 +54,7 @@ describe("VaultFactory.sol", () => {
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let vaultHub: VaultHub;
   let implOld: StakingVault;
-  let implNew: StakingVault__Harness;
+  let implNew: StakingVault__HarnessForTestUpgrade;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -78,9 +72,9 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     //VaultHub
-    vaultHub = await ethers.deployContract("contracts/0.8.25/Accounting.sol:Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("contracts/0.8.25/vaults/StakingVault.sol:StakingVault", [vaultHub, steth, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__MockForVault", [vaultHub, steth, depositContract], {
+    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, steth, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, steth, depositContract], {
       from: deployer,
     });
     vaultFactory = await ethers.deployContract("VaultFactory", [implOld, admin], { from: deployer });
@@ -98,13 +92,15 @@ describe("VaultFactory.sol", () => {
       expect(vaultsBefore).to.eq(0);
 
       const config1 = {
-        capShares: 10n,
-        minimumBondShareBP: 500n,
+        shareLimit: 10n,
+        minReserveRatioBP: 500n,
+        thresholdReserveRatioBP: 20n,
         treasuryFeeBP: 500n,
       };
       const config2 = {
-        capShares: 20n,
-        minimumBondShareBP: 200n,
+        shareLimit: 20n,
+        minReserveRatioBP: 200n,
+        thresholdReserveRatioBP: 20n,
         treasuryFeeBP: 600n,
       };
 
@@ -116,7 +112,12 @@ describe("VaultFactory.sol", () => {
       await expect(
         vaultHub
           .connect(admin)
-          .connectVault(await vault1.getAddress(), config1.capShares, config1.minimumBondShareBP, config1.treasuryFeeBP),
+          .connectVault(
+            await vault1.getAddress(),
+            config1.shareLimit,
+            config1.minReserveRatioBP,
+            config1.thresholdReserveRatioBP,
+            config1.treasuryFeeBP),
       ).to.revertedWithCustomError(vaultHub, "FactoryNotAllowed");
 
       //add factory to whitelist
@@ -126,7 +127,11 @@ describe("VaultFactory.sol", () => {
       await expect(
         vaultHub
           .connect(admin)
-          .connectVault(await vault1.getAddress(), config1.capShares, config1.minimumBondShareBP, config1.treasuryFeeBP),
+          .connectVault(await vault1.getAddress(),
+            config1.shareLimit,
+            config1.minReserveRatioBP,
+            config1.thresholdReserveRatioBP,
+            config1.treasuryFeeBP),
       ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
 
       //add impl to whitelist
@@ -135,10 +140,18 @@ describe("VaultFactory.sol", () => {
       //connect vaults to VaultHub
       await vaultHub
         .connect(admin)
-        .connectVault(await vault1.getAddress(), config1.capShares, config1.minimumBondShareBP, config1.treasuryFeeBP);
+        .connectVault(await vault1.getAddress(),
+          config1.shareLimit,
+          config1.minReserveRatioBP,
+          config1.thresholdReserveRatioBP,
+          config1.treasuryFeeBP);
       await vaultHub
         .connect(admin)
-        .connectVault(await vault2.getAddress(), config2.capShares, config2.minimumBondShareBP, config2.treasuryFeeBP);
+        .connectVault(await vault2.getAddress(),
+          config2.shareLimit,
+          config2.minReserveRatioBP,
+          config2.thresholdReserveRatioBP,
+          config2.treasuryFeeBP);
 
       const vaultsAfter = await vaultHub.vaultsCount();
       expect(vaultsAfter).to.eq(2);
@@ -162,18 +175,20 @@ describe("VaultFactory.sol", () => {
       await expect(
         vaultHub
           .connect(admin)
-          .connectVault(await vault1.getAddress(), config1.capShares, config1.minimumBondShareBP, config1.treasuryFeeBP),
+          .connectVault(await vault1.getAddress(),
+            config1.shareLimit,
+            config1.minReserveRatioBP,
+            config1.thresholdReserveRatioBP,
+            config1.treasuryFeeBP),
       ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
 
       const version1After = await vault1.version();
       const version2After = await vault2.version();
       const version3After = await vault3.version();
 
-      console.log({ version1Before, version1After });
-      console.log({ version2Before, version2After, version3After });
-
       expect(version1Before).not.to.eq(version1After);
       expect(version2Before).not.to.eq(version2After);
+      expect(2).not.to.eq(version3After);
     });
   });
 });
