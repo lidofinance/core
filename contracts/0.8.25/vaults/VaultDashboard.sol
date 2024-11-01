@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -28,16 +28,12 @@ contract VaultDashboard is VaultStaffRoom {
         return vaultHub.vaultSocket(address(stakingVault)).sharesMinted;
     }
 
-    function minReserveRatioBP() external view returns (uint16) {
-        return vaultHub.vaultSocket(address(stakingVault)).minReserveRatioBP;
-    }
-
-    function reserveRatio() external view returns (int256) {
-        return vaultHub.reserveRatio(address(stakingVault));
+    function reserveRatio() external view returns (uint16) {
+        return vaultHub.vaultSocket(address(stakingVault)).reserveRatio;
     }
 
     function thresholdReserveRatioBP() external view returns (uint16) {
-        return vaultHub.vaultSocket(address(stakingVault)).thresholdReserveRatioBP;
+        return vaultHub.vaultSocket(address(stakingVault)).reserveRatioThreshold;
     }
 
     function treasuryFeeBP() external view returns (uint16) {
