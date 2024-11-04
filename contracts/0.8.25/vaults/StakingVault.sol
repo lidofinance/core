@@ -47,7 +47,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    function initialize(address _owner) external {
+    function initialize(address _owner, bytes calldata params) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (getBeacon() == address(0)) revert NonProxyCall();
 
@@ -141,10 +141,8 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
     }
 
-    function exitValidators(uint256 _numberOfValidators) external virtual onlyOwner {
-        // [here will be triggerable exit]
-
-        emit ValidatorsExited(msg.sender, _numberOfValidators);
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyOwner {
+        emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
     function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
@@ -187,6 +185,14 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         }
     }
 
+    function latestReport() external view returns (IStakingVault.Report memory) {
+        VaultStorage storage $ = _getVaultStorage();
+        return IStakingVault.Report({
+            valuation: $.reportValuation,
+            inOutDelta: $.reportInOutDelta
+        });
+    }
+
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
 
@@ -216,7 +222,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
     event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
-    event ValidatorsExited(address indexed sender, uint256 validators);
+    event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
     event OnReportFailed(bytes reason);

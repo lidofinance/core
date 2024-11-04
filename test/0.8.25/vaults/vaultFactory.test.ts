@@ -4,13 +4,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  DelegatorAlligator,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub,
+  VaultHub
 } from "typechain-types";
 
 import { ArrayToUnion, certainAddress, createVaultProxy,ether, randomAddress } from "lib";
@@ -83,7 +84,7 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger)).to.revertedWithCustomError(implOld, "NonProxyCall");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCall");
   });
 
   context("connect", () => {
@@ -105,8 +106,12 @@ describe("VaultFactory.sol", () => {
       };
 
       //create vault permissionless
-      const { vault: vault1 } = await createVaultProxy(vaultFactory, vaultOwner1);
-      const { vault: vault2  } = await createVaultProxy(vaultFactory, vaultOwner2);
+      const { vault: vault1, delegator: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { vault: vault2, delegator: delegator2  } = await createVaultProxy(vaultFactory, vaultOwner2);
+
+      //owner of vault is delegator
+      expect(await delegator1.getAddress()).to.eq(await vault1.owner());
+      expect(await delegator2.getAddress()).to.eq(await vault2.owner());
 
       //try to connect vault without, factory not allowed
       await expect(
@@ -191,4 +196,12 @@ describe("VaultFactory.sol", () => {
       expect(2).to.eq(version3After);
     });
   });
+
+  context("performanceDue", () => {
+    it("performanceDue ", async () => {
+      const { vault: vault1, delegator: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1);
+
+      await delegator1.performanceDue();
+    })
+  })
 });

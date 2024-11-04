@@ -5,18 +5,19 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  DelegatorAlligator,
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
   StETH__HarnessForVaultHub,
   StETH__HarnessForVaultHub__factory,
   VaultFactory,
   VaultHub__MockForVault,
-  VaultHub__MockForVault__factory,
+  VaultHub__MockForVault__factory
 } from "typechain-types";
 import { StakingVault } from "typechain-types/contracts/0.8.25/vaults";
 import { StakingVault__factory } from "typechain-types/factories/contracts/0.8.25/vaults";
 
-import { createVaultProxy,ether } from "lib";
+import { createVaultProxy, ether, impersonate } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -26,6 +27,7 @@ describe("StakingVault.sol", async () => {
   let executionLayerRewardsSender: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
+  let delegatorSigner: HardhatEthersSigner;
 
   let vaultHub: VaultHub__MockForVault;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
@@ -34,6 +36,7 @@ describe("StakingVault.sol", async () => {
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
   let vaultProxy: StakingVault;
+  let vaultDelegator: DelegatorAlligator;
 
   let originalState: string;
 
@@ -58,8 +61,11 @@ describe("StakingVault.sol", async () => {
 
     vaultFactory = await ethers.deployContract("VaultFactory", [stakingVault, deployer], { from: deployer });
 
-    const {vault} = await createVaultProxy(vaultFactory, owner)
+    const {vault, delegator} = await createVaultProxy(vaultFactory, owner)
     vaultProxy = vault
+    vaultDelegator = delegator
+
+    delegatorSigner = await impersonate(await vaultDelegator.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -92,18 +98,18 @@ describe("StakingVault.sol", async () => {
 
   describe("initialize", () => {
     it("reverts if `_owner` is zero address", async () => {
-      await expect(stakingVault.initialize(ZeroAddress))
+      await expect(stakingVault.initialize(ZeroAddress, "0x"))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_owner");
     });
 
     it("reverts if call from non proxy", async () => {
-      await expect(stakingVault.initialize(await owner.getAddress()))
+      await expect(stakingVault.initialize(await owner.getAddress(), "0x"))
         .to.be.revertedWithCustomError(stakingVault, "NonProxyCall");
     });
 
     it("reverts if already initialized", async () => {
-      await expect(vaultProxy.initialize(await owner.getAddress()))
+      await expect(vaultProxy.initialize(await owner.getAddress(), "0x"))
         .to.be.revertedWithCustomError(vaultProxy, "NonZeroContractVersionOnInit");
     });
   })
@@ -148,7 +154,7 @@ describe("StakingVault.sol", async () => {
     });
 
     it("reverts if `msg.value` is zero", async () => {
-      await expect(vaultProxy.connect(owner).fund({ value: 0 }))
+      await expect(vaultProxy.connect(delegatorSigner).fund({ value: 0 }))
         .to.be.revertedWithCustomError(vaultProxy, "ZeroArgument")
         .withArgs("msg.value");
     });
@@ -157,9 +163,9 @@ describe("StakingVault.sol", async () => {
       const fundAmount = ether("1");
       const inOutDeltaBefore = await stakingVault.inOutDelta();
 
-      await expect(vaultProxy.connect(owner).fund({ value: fundAmount }))
+      await expect(vaultProxy.connect(delegatorSigner).fund({ value: fundAmount }))
         .to.emit(vaultProxy, "Funded")
-        .withArgs(owner, fundAmount);
+        .withArgs(delegatorSigner, fundAmount);
 
       // for some reason, there are race conditions (probably batching or something)
       // so, we have to wait for confirmation

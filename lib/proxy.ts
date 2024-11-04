@@ -31,7 +31,7 @@ export async function proxify<T extends BaseContract>({
 }
 
 export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<{ proxy: BeaconProxy; vault: StakingVault; delegator: DelegatorAlligator }> {
-  const tx = await vaultFactory.connect(_owner).createVault();
+  const tx = await vaultFactory.connect(_owner).createVault("0x");
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;

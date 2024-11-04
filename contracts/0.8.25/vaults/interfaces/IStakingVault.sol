@@ -7,7 +7,7 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
-    function hub() external view returns (address);
+    function initialize(address owner, bytes calldata params) external;
 
     function latestReport() external view returns (Report memory);
 
@@ -33,7 +33,7 @@ interface IStakingVault {
         bytes calldata _signatures
     ) external;
 
-    function exitValidators(uint256 _numberOfValidators) external;
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external;
 
     function mint(address _recipient, uint256 _tokens) external payable;
 
