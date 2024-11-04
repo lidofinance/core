@@ -405,7 +405,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @dev returns total number of stETH shares that is possible to mint on the provided vault with provided reserveRatio
     /// it does not count shares that is already minted
     function _maxMintableShares(IHubVault _vault, uint256 _reserveRatio) internal view returns (uint256) {
-        uint256 maxStETHMinted = _vault.valuation() * (BPS_BASE - _reserveRatio) / BPS_BASE;
+        uint256 maxStETHMinted = (_vault.valuation() * (BPS_BASE - _reserveRatio)) / BPS_BASE;
         return stETH.getSharesByPooledEth(maxStETHMinted);
     }
 

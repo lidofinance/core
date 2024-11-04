@@ -5,10 +5,8 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {VaultHub} from "./VaultHub.sol";
-import {VaultPlumbing} from "./VaultPlumbing.sol";
+import {VaultDashboard} from "./VaultDashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 // TODO: natspec
@@ -18,11 +16,10 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 // - Funder: can fund the vault, withdraw, mint and rebalance the vault
 // - Operator: can claim performance due and assigns Keymaster sub-role
 // - Keymaster: Operator's sub-role for depositing to beacon chain
-contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
+contract VaultStaffRoom is VaultDashboard {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    bytes32 public constant MANAGER_ROLE = keccak256("Vault.VaultStaffRoom.ManagerRole");
     bytes32 public constant FUNDER_ROLE = keccak256("Vault.VaultStaffRoom.FunderRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.VaultStaffRoom.OperatorRole");
     bytes32 public constant KEYMASTER_ROLE = keccak256("Vault.VaultStaffRoom.KeymasterRole");
@@ -33,22 +30,11 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
     uint256 public performanceFee;
     uint256 public managementDue;
 
-    constructor(address _stakingVault, address _defaultAdmin) VaultPlumbing(_stakingVault) {
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+    constructor(address _stakingVault, address _defaultAdmin) VaultDashboard(_stakingVault, _defaultAdmin) {
         _setRoleAdmin(KEYMASTER_ROLE, OPERATOR_ROLE);
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
-
-    function transferStakingVaultOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
-        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
-    }
-
-    function disconnectFromHub() external payable onlyRole(MANAGER_ROLE) {
-        vaultHub.disconnectVault(address(stakingVault));
-    }
 
     function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
         if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
@@ -89,7 +75,7 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
             managementDue = 0;
 
             if (_liquid) {
-                _mint(_recipient, due);
+                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -98,8 +84,8 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
 
     /// * * * * * FUNDER FUNCTIONS * * * * * ///
 
-    function fund() public payable onlyRole(FUNDER_ROLE) {
-        _fund();
+    function fund() external payable override onlyRole(FUNDER_ROLE) {
+        stakingVault.fund{value: msg.value}();
     }
 
     function withdrawable() public view returns (uint256) {
@@ -113,7 +99,7 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
         return value - reserved;
     }
 
-    function withdraw(address _recipient, uint256 _ether) external onlyRole(FUNDER_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external override onlyRole(FUNDER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
@@ -121,7 +107,7 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(MANAGER_ROLE) {
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external override onlyRole(FUNDER_ROLE) {
         stakingVault.requestValidatorExit(_validatorPublicKey);
     }
 
@@ -131,7 +117,7 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
-    ) external onlyRole(KEYMASTER_ROLE) {
+    ) external override onlyRole(KEYMASTER_ROLE) {
         stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
@@ -146,7 +132,7 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                _mint(_recipient, due);
+                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -171,17 +157,6 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
         revert SenderHasNeitherRole(msg.sender, _role1, _role2);
     }
 
-    modifier fundAndProceed() {
-        if (msg.value > 0) {
-            _fund();
-        }
-        _;
-    }
-
-    function _fund() internal {
-        stakingVault.fund{value: msg.value}();
-    }
-
     function _withdrawDue(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(stakingVault.valuation()) - int256(stakingVault.locked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
@@ -193,7 +168,6 @@ contract VaultStaffRoom is AccessControlEnumerable, VaultPlumbing {
     error SenderHasNeitherRole(address account, bytes32 role1, bytes32 role2);
     error NewFeeCannotExceedMaxFee();
     error PerformanceDueUnclaimed();
-    error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
     error VaultNotHealthy();
     error OnlyVaultCanCallOnReportHook();

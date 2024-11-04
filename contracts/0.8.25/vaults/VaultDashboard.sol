@@ -4,15 +4,27 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {VaultStaffRoom} from "./VaultStaffRoom.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 // TODO: natspec
 // TODO: think about the name
 
-contract VaultDashboard is VaultStaffRoom {
-    constructor(address _stakingVault, address _defaultAdmin) VaultStaffRoom(_stakingVault, _defaultAdmin) {}
+contract VaultDashboard is AccessControlEnumerable {
+    bytes32 public constant MANAGER_ROLE = keccak256("Vault.VaultDashboard.ManagerRole");
+
+    IStakingVault public immutable stakingVault;
+    VaultHub public immutable vaultHub;
+
+    constructor(address _stakingVault, address _defaultAdmin) {
+        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+
+        vaultHub = VaultHub(stakingVault.vaultHub());
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+    }
 
     /// GETTERS ///
 
@@ -40,20 +52,66 @@ contract VaultDashboard is VaultStaffRoom {
         return vaultHub.vaultSocket(address(stakingVault)).treasuryFeeBP;
     }
 
-    /// LIQUIDITY FUNCTIONS ///
+    /// VAULT MANAGEMENT ///
+
+    function transferStakingVaultOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
+        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
+    }
+
+    function disconnectFromHub() external payable onlyRole(MANAGER_ROLE) {
+        vaultHub.disconnectVault(address(stakingVault));
+    }
+
+    /// OPERATION ///
+
+    function fund() external payable virtual onlyRole(MANAGER_ROLE) {
+        stakingVault.fund{value: msg.value}();
+    }
+
+    function withdraw(address _recipient, uint256 _ether) external virtual onlyRole(MANAGER_ROLE) {
+        stakingVault.withdraw(_recipient, _ether);
+    }
+
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external virtual onlyRole(MANAGER_ROLE) {
+        stakingVault.requestValidatorExit(_validatorPublicKey);
+    }
+
+    function depositToBeaconChain(
+        uint256 _numberOfDeposits,
+        bytes calldata _pubkeys,
+        bytes calldata _signatures
+    ) external virtual onlyRole(MANAGER_ROLE) {
+        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
+    }
+
+    /// LIQUIDITY ///
 
     function mint(
         address _recipient,
         uint256 _tokens
-    ) external payable onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
-        _mint(_recipient, _tokens);
+    ) external payable virtual onlyRole(MANAGER_ROLE) returns (uint256 locked) {
+        return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
     }
 
-    function burn(uint256 _tokens) external onlyRole(MANAGER_ROLE) {
-        _burn(_tokens);
+    function burn(uint256 _tokens) external virtual onlyRole(MANAGER_ROLE) {
+        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
 
-    function rebalanceVault(uint256 _ether) external payable onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+    function rebalanceVault(uint256 _ether) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed {
         stakingVault.rebalance{value: msg.value}(_ether);
     }
+
+    /// MODIFIERS ///
+
+    modifier fundAndProceed() {
+        if (msg.value > 0) {
+            stakingVault.fund{value: msg.value}();
+        }
+        _;
+    }
+
+    // ERRORS ///
+
+    error ZeroArgument(string);
+    error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
 }
