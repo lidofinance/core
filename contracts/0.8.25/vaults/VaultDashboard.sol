@@ -98,7 +98,7 @@ contract VaultDashboard is AccessControlEnumerable {
     }
 
     function burn(uint256 _tokens) external virtual onlyRole(MANAGER_ROLE) {
-        stETH.transfer(address(vaultHub), _tokens);
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
 
