@@ -4,14 +4,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DelegatorAlligator,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub
+  VaultHub,
+  VaultStaffRoom
 } from "typechain-types";
 
 import { ArrayToUnion, certainAddress, createVaultProxy,ether, randomAddress } from "lib";
@@ -72,13 +72,13 @@ describe("VaultFactory.sol", () => {
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], { value: ether("10.0"), from: deployer });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    //VaultHub
+    // VaultHub
     vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, steth, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, steth, depositContract], {
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
-    vaultFactory = await ethers.deployContract("VaultFactory", [implOld, admin], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [implOld, admin, steth], { from: deployer });
 
     //add role to factory
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -105,9 +105,9 @@ describe("VaultFactory.sol", () => {
         treasuryFeeBP: 600n,
       };
 
-      //create vault permissionless
-      const { vault: vault1, delegator: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1);
-      const { vault: vault2, delegator: delegator2  } = await createVaultProxy(vaultFactory, vaultOwner2);
+      //create vault
+      const { vault: vault1, vaultStaffRoom: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { vault: vault2, vaultStaffRoom: delegator2  } = await createVaultProxy(vaultFactory, vaultOwner2);
 
       //owner of vault is delegator
       expect(await delegator1.getAddress()).to.eq(await vault1.owner());
@@ -199,9 +199,9 @@ describe("VaultFactory.sol", () => {
 
   context("performanceDue", () => {
     it("performanceDue ", async () => {
-      const { vault: vault1, delegator: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { vault: vault1, vaultStaffRoom } = await createVaultProxy(vaultFactory, vaultOwner1);
 
-      await delegator1.performanceDue();
+      await vaultStaffRoom.performanceDue();
     })
   })
 });

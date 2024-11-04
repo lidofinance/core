@@ -15,8 +15,12 @@ import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 import {Versioned} from "../utils/Versioned.sol";
 
+// TODO: extract disconnect to delegator
+// TODO: extract interface and implement it
+// TODO: add unstructured storage
+// TODO: move errors and event to the bottom
+
 contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
-    /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
         int128 reportInOutDelta;
@@ -27,7 +31,6 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     uint256 private constant _version = 1;
     VaultHub public immutable vaultHub;
-    IERC20 public immutable stETH;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -35,14 +38,11 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     constructor(
         address _vaultHub,
-        address _stETH,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
         vaultHub = VaultHub(_vaultHub);
-        stETH = IERC20(_stETH);
     }
 
     /// @notice Initialize the contract storage explicitly.
@@ -145,25 +145,15 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
-    function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
-
-        uint256 newlyLocked = vaultHub.mintStethBackedByVault(_recipient, _tokens);
+    function lock(uint256 _locked) external {
+        if (msg.sender != address(vaultHub)) revert NotAuthorized("lock", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
-        if (newlyLocked > $.locked) {
-            $.locked = newlyLocked;
+        if ($.locked > _locked) revert LockedCannotBeDecreased(_locked);
 
-            emit Locked(newlyLocked);
-        }
-    }
+        $.locked = _locked;
 
-    function burn(uint256 _tokens) external onlyOwner {
-        if (_tokens == 0) revert ZeroArgument("_tokens");
-
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(_tokens);
+        emit Locked(_locked);
     }
 
     function rebalance(uint256 _ether) external payable {
@@ -208,10 +198,6 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         emit Reported(_valuation, _inOutDelta, _locked);
     }
 
-    function disconnectFromHub() external payable onlyOwner {
-        vaultHub.disconnectVault();
-    }
-
     function _getVaultStorage() private pure returns (VaultStorage storage $) {
         assembly {
             $.slot := VAULT_STORAGE_LOCATION
@@ -233,5 +219,6 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     error TransferFailed(address recipient, uint256 amount);
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
+    error LockedCannotBeDecreased(uint256 locked);
     error NonProxyCall();
 }

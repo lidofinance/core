@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BeaconProxy, DelegatorAlligator,OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory } from "typechain-types";
+import { BeaconProxy, VaultStaffRoom,OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 
@@ -30,7 +30,7 @@ export async function proxify<T extends BaseContract>({
   return [proxied, proxy];
 }
 
-export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<{ proxy: BeaconProxy; vault: StakingVault; delegator: DelegatorAlligator }> {
+export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<{ proxy: BeaconProxy; vault: StakingVault; vaultStaffRoom: VaultStaffRoom }> {
   const tx = await vaultFactory.connect(_owner).createVault("0x");
 
   // Get the receipt manually
@@ -42,18 +42,19 @@ export async function createVaultProxy(vaultFactory: VaultFactory, _owner: Hardh
   const event = events[0];
   const { vault } = event.args;
 
-  const delegatorEvents = findEventsWithInterfaces(receipt, "DelegatorCreated", [vaultFactory.interface]);
-  if (delegatorEvents.length === 0) throw new Error("Delegator creation event not found");
 
-  const { delegator } = delegatorEvents[0].args;
+  const vaultStaffRoomEvents = findEventsWithInterfaces(receipt, "VaultStaffRoomCreated", [vaultFactory.interface]);
+  if (vaultStaffRoomEvents.length === 0) throw new Error("VaultStaffRoom creation event not found");
+
+  const { vaultStaffRoom: vaultStaffRoomAddress } = vaultStaffRoomEvents[0].args;
 
   const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
-  const delegatorAlligator = (await ethers.getContractAt("DelegatorAlligator", delegator, _owner)) as DelegatorAlligator;
+  const vaultStaffRoom = (await ethers.getContractAt("VaultStaffRoom", vaultStaffRoomAddress, _owner)) as VaultStaffRoom;
 
   return {
     proxy,
     vault: stakingVault,
-    delegator: delegatorAlligator,
+    vaultStaffRoom: vaultStaffRoom,
   };
 }

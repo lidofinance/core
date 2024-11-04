@@ -27,7 +27,6 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
     uint256 private constant _version = 2;
     VaultHub public immutable vaultHub;
-    IERC20 public immutable stETH;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -35,14 +34,11 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
     constructor(
         address _vaultHub,
-        address _stETH,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
         vaultHub = VaultHub(_vaultHub);
-        stETH = IERC20(_stETH);
     }
 
     /// @notice Initialize the contract storage explicitly.

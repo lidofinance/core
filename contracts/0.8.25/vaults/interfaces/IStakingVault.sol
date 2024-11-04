@@ -9,6 +9,8 @@ interface IStakingVault {
 
     function initialize(address owner, bytes calldata params) external;
 
+    function vaultHub() external returns(address);
+
     function latestReport() external view returns (Report memory);
 
     function locked() external view returns (uint256);
@@ -42,6 +44,4 @@ interface IStakingVault {
     function rebalance(uint256 _ether) external payable;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
-
-    function disconnectFromHub() external payable;
 }
