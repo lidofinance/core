@@ -30,7 +30,11 @@ contract VaultStaffRoom is VaultDashboard {
     uint256 public performanceFee;
     uint256 public managementDue;
 
-    constructor(address _stakingVault, address _defaultAdmin) VaultDashboard(_stakingVault, _defaultAdmin) {
+    constructor(
+        address _stakingVault,
+        address _defaultAdmin,
+        address _stETH
+    ) VaultDashboard(_stakingVault, _defaultAdmin, _stETH) {
         _setRoleAdmin(KEYMASTER_ROLE, OPERATOR_ROLE);
     }
 
