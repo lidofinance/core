@@ -76,7 +76,7 @@ contract VaultDashboard is AccessControlEnumerable {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external virtual onlyRole(MANAGER_ROLE) {
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(MANAGER_ROLE) {
         stakingVault.requestValidatorExit(_validatorPublicKey);
     }
 

@@ -111,10 +111,6 @@ contract VaultStaffRoom is VaultDashboard {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external override onlyRole(FUNDER_ROLE) {
-        stakingVault.requestValidatorExit(_validatorPublicKey);
-    }
-
     /// FUNDER & MANAGER FUNCTIONS ///
 
     function mint(
