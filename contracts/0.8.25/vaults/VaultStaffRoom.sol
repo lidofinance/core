@@ -115,6 +115,21 @@ contract VaultStaffRoom is VaultDashboard {
         stakingVault.requestValidatorExit(_validatorPublicKey);
     }
 
+    /// FUNDER & MANAGER FUNCTIONS ///
+
+    function mint(
+        address _recipient,
+        uint256 _tokens
+    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed returns (uint256 locked) {
+        return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    }
+
+    function rebalanceVault(
+        uint256 _ether
+    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+        stakingVault.rebalance{value: msg.value}(_ether);
+    }
+
     /// * * * * * KEYMAKER FUNCTIONS * * * * * ///
 
     function depositToBeaconChain(
