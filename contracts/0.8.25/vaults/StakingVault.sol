@@ -12,6 +12,11 @@ import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 
+// TODO: extract disconnect to delegator
+// TODO: extract interface and implement it
+// TODO: add unstructured storage
+// TODO: move errors and event to the bottom
+
 contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
@@ -28,6 +33,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     error TransferFailed(address recipient, uint256 amount);
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
+    error LockedCannotBeDecreased(uint256 locked);
 
     struct Report {
         uint128 valuation;
@@ -42,16 +48,13 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
 
     constructor(
         address _vaultHub,
-        address _stETH,
         address _owner,
         address _beaconChainDepositContract
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_owner == address(0)) revert ZeroArgument("_owner");
 
         vaultHub = VaultHub(_vaultHub);
-        stETH = IERC20(_stETH);
         _transferOwnership(_owner);
     }
 
@@ -121,24 +124,13 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
-    function mint(address _recipient, uint256 _tokens) external payable onlyOwner {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+    function lock(uint256 _locked) external {
+        if (msg.sender != address(vaultHub)) revert NotAuthorized("lock", msg.sender);
+        if (locked > _locked) revert LockedCannotBeDecreased(_locked);
 
-        uint256 newlyLocked = vaultHub.mintStethBackedByVault(_recipient, _tokens);
+        locked = _locked;
 
-        if (newlyLocked > locked) {
-            locked = newlyLocked;
-
-            emit Locked(newlyLocked);
-        }
-    }
-
-    function burn(uint256 _tokens) external onlyOwner {
-        if (_tokens == 0) revert ZeroArgument("_tokens");
-
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(_tokens);
+        emit Locked(_locked);
     }
 
     function rebalance(uint256 _ether) external payable {
@@ -169,9 +161,5 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
         }
 
         emit Reported(_valuation, _inOutDelta, _locked);
-    }
-
-    function disconnectFromHub() external payable onlyOwner {
-        vaultHub.disconnectVault();
     }
 }

@@ -7,6 +7,8 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
+    function vaultHub() external view returns (address);
+
     function latestReport() external view returns (Report memory);
 
     function locked() external view returns (uint256);
@@ -40,6 +42,4 @@ interface IStakingVault {
     function rebalance(uint256 _ether) external payable;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
-
-    function disconnectFromHub() external payable;
 }

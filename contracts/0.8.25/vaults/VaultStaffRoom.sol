@@ -1,68 +1,44 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultDashboard} from "./VaultDashboard.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 
-// TODO: add NO reward role -> claims due, assign deposit ROLE
-//  DEPOSIT ROLE -> depost to beacon chain
+// TODO: natspec
 
-// DelegatorAlligator: Vault Delegated Owner
-// 3-Party Role Setup: Manager, Depositor, Operator (Keymaker)
-//             .-._   _ _ _ _ _ _ _ _
-//  .-''-.__.-'00  '-' ' ' ' ' ' ' ' '-.
-// '.___ '    .   .--_'-' '-' '-' _'-' '._
-//  V: V 'vv-'   '_   '.       .'  _..' '.'.
-//    '=.____.=_.--'   :_.__.__:_   '.   : :
-//            (((____.-'        '-.  /   : :
-//                              (((-'\ .' /
-//                            _____..'  .'
-//                           '-._____.-'
-contract DelegatorAlligator is AccessControlEnumerable {
-    error ZeroArgument(string name);
-    error NewFeeCannotExceedMaxFee();
-    error PerformanceDueUnclaimed();
-    error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
-    error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
-    error VaultNotHealthy();
-    error OnlyVaultCanCallOnReportHook();
-    error FeeCannotExceed100();
-
+// VaultStaffRoom: Delegates vault operations to different parties:
+// - Manager: primary owner of the vault, manages ownership, disconnects from hub, sets fees
+// - Funder: can fund the vault, withdraw, mint and rebalance the vault
+// - Operator: can claim performance due and assigns Keymaster sub-role
+// - Keymaster: Operator's sub-role for depositing to beacon chain
+contract VaultStaffRoom is VaultDashboard {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    bytes32 public constant MANAGER_ROLE = keccak256("Vault.DelegatorAlligator.ManagerRole");
-    bytes32 public constant FUNDER_ROLE = keccak256("Vault.DelegatorAlligator.FunderRole");
-    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.DelegatorAlligator.OperatorRole");
-    bytes32 public constant KEYMAKER_ROLE = keccak256("Vault.DelegatorAlligator.KeymakerRole");
-
-    IStakingVault public immutable stakingVault;
+    bytes32 public constant FUNDER_ROLE = keccak256("Vault.VaultStaffRoom.FunderRole");
+    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.VaultStaffRoom.OperatorRole");
+    bytes32 public constant KEYMASTER_ROLE = keccak256("Vault.VaultStaffRoom.KeymasterRole");
 
     IStakingVault.Report public lastClaimedReport;
 
     uint256 public managementFee;
     uint256 public performanceFee;
-
     uint256 public managementDue;
 
-    constructor(address _stakingVault, address _defaultAdmin) {
-        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
-
-        stakingVault = IStakingVault(_stakingVault);
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-        _setRoleAdmin(KEYMAKER_ROLE, OPERATOR_ROLE);
+    constructor(
+        address _stakingVault,
+        address _defaultAdmin,
+        address _stETH
+    ) VaultDashboard(_stakingVault, _defaultAdmin, _stETH) {
+        _setRoleAdmin(KEYMASTER_ROLE, OPERATOR_ROLE);
     }
 
     /// * * * * * MANAGER FUNCTIONS * * * * * ///
-
-    function transferOwnershipOverStakingVault(address _newOwner) external onlyRole(MANAGER_ROLE) {
-        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
-    }
 
     function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
         if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
@@ -90,18 +66,6 @@ contract DelegatorAlligator is AccessControlEnumerable {
         }
     }
 
-    function mintSteth(address _recipient, uint256 _steth) public payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        stakingVault.mint(_recipient, _steth);
-    }
-
-    function burnSteth(uint256 _steth) external onlyRole(MANAGER_ROLE) {
-        stakingVault.burn(_steth);
-    }
-
-    function rebalance(uint256 _ether) external payable onlyRole(MANAGER_ROLE) fundAndProceed {
-        stakingVault.rebalance(_ether);
-    }
-
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -115,25 +79,21 @@ contract DelegatorAlligator is AccessControlEnumerable {
             managementDue = 0;
 
             if (_liquid) {
-                mintSteth(_recipient, due);
+                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
         }
     }
 
-    function disconnectFromHub() external payable onlyRole(MANAGER_ROLE) {
-        stakingVault.disconnectFromHub();
-    }
-
     /// * * * * * FUNDER FUNCTIONS * * * * * ///
 
-    function fund() public payable onlyRole(FUNDER_ROLE) {
-        stakingVault.fund();
+    function fund() external payable override onlyRole(FUNDER_ROLE) {
+        stakingVault.fund{value: msg.value}();
     }
 
     function withdrawable() public view returns (uint256) {
-        uint256 reserved = _max(stakingVault.locked(), managementDue + performanceDue());
+        uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
         uint256 value = stakingVault.valuation();
 
         if (reserved > value) {
@@ -143,7 +103,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         return value - reserved;
     }
 
-    function withdraw(address _recipient, uint256 _ether) external onlyRole(FUNDER_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external override onlyRole(FUNDER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
@@ -151,8 +111,24 @@ contract DelegatorAlligator is AccessControlEnumerable {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(MANAGER_ROLE) {
-        stakingVault.requestValidatorExit(_validatorPublicKey);
+    /// FUNDER & MANAGER FUNCTIONS ///
+
+    function mint(
+        address _recipient,
+        uint256 _tokens
+    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed returns (uint256 locked) {
+        return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    }
+
+    function burn(uint256 _tokens) external override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) {
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
+        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    }
+
+    function rebalanceVault(
+        uint256 _ether
+    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+        stakingVault.rebalance{value: msg.value}(_ether);
     }
 
     /// * * * * * KEYMAKER FUNCTIONS * * * * * ///
@@ -161,7 +137,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
-    ) external onlyRole(KEYMAKER_ROLE) {
+    ) external override onlyRole(KEYMASTER_ROLE) {
         stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
@@ -176,7 +152,7 @@ contract DelegatorAlligator is AccessControlEnumerable {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                mintSteth(_recipient, due);
+                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -193,11 +169,12 @@ contract DelegatorAlligator is AccessControlEnumerable {
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
 
-    modifier fundAndProceed() {
-        if (msg.value > 0) {
-            fund();
+    modifier onlyRoles(bytes32 _role1, bytes32 _role2) {
+        if (hasRole(_role1, msg.sender) || hasRole(_role2, msg.sender)) {
+            _;
         }
-        _;
+
+        revert SenderHasNeitherRole(msg.sender, _role1, _role2);
     }
 
     function _withdrawDue(address _recipient, uint256 _ether) internal {
@@ -208,7 +185,11 @@ contract DelegatorAlligator is AccessControlEnumerable {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a > b ? a : b;
-    }
+    error SenderHasNeitherRole(address account, bytes32 role1, bytes32 role2);
+    error NewFeeCannotExceedMaxFee();
+    error PerformanceDueUnclaimed();
+    error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
+    error VaultNotHealthy();
+    error OnlyVaultCanCallOnReportHook();
+    error FeeCannotExceed100();
 }
