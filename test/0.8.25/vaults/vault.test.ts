@@ -5,14 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DelegatorAlligator,
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
   StETH__HarnessForVaultHub,
   StETH__HarnessForVaultHub__factory,
   VaultFactory,
   VaultHub__MockForVault,
-  VaultHub__MockForVault__factory
+  VaultHub__MockForVault__factory,
+  VaultStaffRoom
 } from "typechain-types";
 import { StakingVault } from "typechain-types/contracts/0.8.25/vaults";
 import { StakingVault__factory } from "typechain-types/factories/contracts/0.8.25/vaults";
@@ -36,7 +36,7 @@ describe("StakingVault.sol", async () => {
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
   let vaultProxy: StakingVault;
-  let vaultDelegator: DelegatorAlligator;
+  let vaultDelegator: VaultStaffRoom;
 
   let originalState: string;
 
@@ -55,15 +55,14 @@ describe("StakingVault.sol", async () => {
     vaultCreateFactory = new StakingVault__factory(owner);
     stakingVault = await vaultCreateFactory.deploy(
       await vaultHub.getAddress(),
-      await steth.getAddress(),
       await depositContract.getAddress(),
     );
 
-    vaultFactory = await ethers.deployContract("VaultFactory", [stakingVault, deployer], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [stakingVault, deployer, steth], { from: deployer });
 
-    const {vault, delegator} = await createVaultProxy(vaultFactory, owner)
+    const {vault, vaultStaffRoom} = await createVaultProxy(vaultFactory, owner)
     vaultProxy = vault
-    vaultDelegator = delegator
+    vaultDelegator = vaultStaffRoom
 
     delegatorSigner = await impersonate(await vaultDelegator.getAddress(), ether("100.0"));
   });
@@ -73,25 +72,18 @@ describe("StakingVault.sol", async () => {
 
   describe("constructor", () => {
     it("reverts if `_vaultHub` is zero address", async () => {
-      await expect(vaultCreateFactory.deploy(ZeroAddress, await steth.getAddress(), await depositContract.getAddress()))
+      await expect(vaultCreateFactory.deploy(ZeroAddress, await depositContract.getAddress()))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
-    it("reverts if `_stETH` is zero address", async () => {
-      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), ZeroAddress, await depositContract.getAddress()))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_stETH");
-    });
-
     it("reverts if `_beaconChainDepositContract` is zero address", async () => {
-      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), await steth.getAddress(), ZeroAddress))
+      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), ZeroAddress))
         .to.be.revertedWithCustomError(stakingVault, "DepositContractZeroAddress");
     });
 
     it("sets `vaultHub` and `_stETH` and `depositContract`", async () => {
       expect(await stakingVault.vaultHub(), "vaultHub").to.equal(await vaultHub.getAddress());
-      expect(await stakingVault.stETH(), "stETH").to.equal(await steth.getAddress());
       expect(await stakingVault.DEPOSIT_CONTRACT(), "DPST").to.equal(await depositContract.getAddress());
     });
   });
