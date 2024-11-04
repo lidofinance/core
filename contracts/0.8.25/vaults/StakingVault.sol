@@ -33,6 +33,7 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     error TransferFailed(address recipient, uint256 amount);
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
+    error LockedCannotBeDecreased(uint256 locked);
 
     struct Report {
         uint128 valuation;
@@ -124,7 +125,8 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     function lock(uint256 _locked) external {
-        if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(vaultHub)) revert NotAuthorized("lock", msg.sender);
+        if (locked > _locked) revert LockedCannotBeDecreased(_locked);
 
         locked = _locked;
 
