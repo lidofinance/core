@@ -124,6 +124,11 @@ contract VaultStaffRoom is VaultDashboard {
         return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
     }
 
+    function burn(uint256 _tokens) external override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) {
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
+        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    }
+
     function rebalanceVault(
         uint256 _ether
     ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
