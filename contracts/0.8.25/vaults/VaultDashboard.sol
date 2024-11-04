@@ -93,7 +93,7 @@ contract VaultDashboard is AccessControlEnumerable {
     function mint(
         address _recipient,
         uint256 _tokens
-    ) external payable virtual onlyRole(MANAGER_ROLE) returns (uint256 locked) {
+    ) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed returns (uint256 locked) {
         return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
     }
 
