@@ -244,7 +244,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     }
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
-    function transferAndBurn(address _vault, uint256 _tokens) external {
+    function transferAndBurnStethBackedByVault(address _vault, uint256 _tokens) external {
         stETH.transferFrom(msg.sender, address(this), _tokens);
 
         burnStethBackedByVault(_vault, _tokens);
