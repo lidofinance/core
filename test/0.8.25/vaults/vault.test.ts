@@ -35,8 +35,8 @@ describe("StakingVault.sol", async () => {
   let stakingVault: StakingVault;
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
+  let vaultStaffRoomImpl: VaultStaffRoom;
   let vaultProxy: StakingVault;
-  let vaultDelegator: VaultStaffRoom;
 
   let originalState: string;
 
@@ -58,13 +58,14 @@ describe("StakingVault.sol", async () => {
       await depositContract.getAddress(),
     );
 
-    vaultFactory = await ethers.deployContract("VaultFactory", [stakingVault, deployer, steth], { from: deployer });
+    vaultStaffRoomImpl = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
+
+    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, vaultStaffRoomImpl], { from: deployer });
 
     const {vault, vaultStaffRoom} = await createVaultProxy(vaultFactory, owner)
     vaultProxy = vault
-    vaultDelegator = vaultStaffRoom
 
-    delegatorSigner = await impersonate(await vaultDelegator.getAddress(), ether("100.0"));
+    delegatorSigner = await impersonate(await vaultStaffRoom.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -97,7 +98,7 @@ describe("StakingVault.sol", async () => {
 
     it("reverts if call from non proxy", async () => {
       await expect(stakingVault.initialize(await owner.getAddress(), "0x"))
-        .to.be.revertedWithCustomError(stakingVault, "NonProxyCall");
+        .to.be.revertedWithCustomError(stakingVault, "NonProxyCallsForbidden");
     });
 
     it("reverts if already initialized", async () => {

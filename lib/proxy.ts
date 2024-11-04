@@ -1,9 +1,9 @@
-import { BaseContract, BytesLike } from "ethers";
+import { BaseContract, BytesLike, ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BeaconProxy, VaultStaffRoom,OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory } from "typechain-types";
+import { BeaconProxy, OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory,VaultStaffRoom } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 
@@ -30,7 +30,14 @@ export async function proxify<T extends BaseContract>({
   return [proxied, proxy];
 }
 
-export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<{ proxy: BeaconProxy; vault: StakingVault; vaultStaffRoom: VaultStaffRoom }> {
+interface CreateVaultResponse {
+  tx: ContractTransactionResponse,
+  proxy: BeaconProxy,
+  vault: StakingVault,
+  vaultStaffRoom: VaultStaffRoom
+}
+
+export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<CreateVaultResponse> {
   const tx = await vaultFactory.connect(_owner).createVault("0x");
 
   // Get the receipt manually
@@ -53,6 +60,7 @@ export async function createVaultProxy(vaultFactory: VaultFactory, _owner: Hardh
   const vaultStaffRoom = (await ethers.getContractAt("VaultStaffRoom", vaultStaffRoomAddress, _owner)) as VaultStaffRoom;
 
   return {
+    tx,
     proxy,
     vault: stakingVault,
     vaultStaffRoom: vaultStaffRoom,

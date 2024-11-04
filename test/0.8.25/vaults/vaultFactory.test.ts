@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -56,6 +57,7 @@ describe("VaultFactory.sol", () => {
   let vaultHub: VaultHub;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
+  let vaultStaffRoom: VaultStaffRoom;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -78,14 +80,66 @@ describe("VaultFactory.sol", () => {
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
-    vaultFactory = await ethers.deployContract("VaultFactory", [implOld, admin, steth], { from: deployer });
+    vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
     //add role to factory
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCall");
+    await expect(implOld.initialize(stranger, "0x"))
+      .to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
   });
+
+  context("constructor", () => {
+    it("reverts if `_owner` is zero address", async () => {
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, implOld, steth], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "OwnableInvalidOwner")
+        .withArgs(ZeroAddress);
+    });
+
+    it("reverts if `_implementation` is zero address", async () => {
+      await expect(ethers.deployContract("VaultFactory", [admin, ZeroAddress, steth], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "BeaconInvalidImplementation")
+        .withArgs(ZeroAddress);
+    });
+
+    it("reverts if `_vaultStaffRoom` is zero address", async () => {
+      await expect(ethers.deployContract("VaultFactory", [admin, implOld, ZeroAddress], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+        .withArgs("_vaultStaffRoom");
+    });
+
+    it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
+      const beacon = await ethers.deployContract("VaultFactory", [
+        await admin.getAddress(),
+        await implOld.getAddress(),
+        await steth.getAddress(),
+      ], { from: deployer })
+
+      const tx = beacon.deploymentTransaction();
+
+      await expect(tx).to.emit(beacon, 'OwnershipTransferred').withArgs(ZeroAddress, await admin.getAddress())
+      await expect(tx).to.emit(beacon, 'Upgraded').withArgs(await implOld.getAddress())
+    })
+  })
+
+  context("createVault", () => {
+    it("works with empty `params`", async () => {
+      const { tx, vault, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
+
+      await expect(tx).to.emit(vaultFactory, "VaultCreated")
+        .withArgs(await vsr.getAddress(), await vault.getAddress());
+
+      await expect(tx).to.emit(vaultFactory, "VaultStaffRoomCreated")
+        .withArgs(await vaultOwner1.getAddress(), await vsr.getAddress());
+
+      expect(await vsr.getAddress()).to.eq(await vault.owner());
+      expect(await vault.getBeacon()).to.eq(await vaultFactory.getAddress());
+    })
+
+    it("works with non-empty `params`", async () => {})
+  })
 
   context("connect", () => {
     it("connect ", async () => {
@@ -197,11 +251,4 @@ describe("VaultFactory.sol", () => {
     });
   });
 
-  context("performanceDue", () => {
-    it("performanceDue ", async () => {
-      const { vault: vault1, vaultStaffRoom } = await createVaultProxy(vaultFactory, vaultOwner1);
-
-      await vaultStaffRoom.performanceDue();
-    })
-  })
 });

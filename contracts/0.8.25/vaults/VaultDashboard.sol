@@ -16,19 +16,41 @@ import {VaultHub} from "./VaultHub.sol";
 contract VaultDashboard is AccessControlEnumerable {
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.VaultDashboard.ManagerRole");
 
-    IStakingVault public immutable stakingVault;
-    VaultHub public immutable vaultHub;
     IERC20 public immutable stETH;
+    address private immutable _SELF;
 
-    constructor(address _stakingVault, address _defaultAdmin, address _stETH) {
-        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+    bool public isInitialized;
+    IStakingVault public stakingVault;
+    VaultHub public vaultHub;
+
+    constructor(address _stETH) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
+
+        _SELF = address(this);
+        stETH = IERC20(_stETH);
+    }
+
+    function initialize(address _defaultAdmin, address _stakingVault) external virtual {
+        _initialize(_defaultAdmin, _stakingVault);
+    }
+
+    function _initialize(address _defaultAdmin, address _stakingVault) internal {
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
+        if (isInitialized) revert AlreadyInitialized();
+
+        if (address(this) == _SELF) {
+            revert NonProxyCallsForbidden();
+        }
+
+        isInitialized = true;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
         stakingVault = IStakingVault(_stakingVault);
         vaultHub = VaultHub(stakingVault.vaultHub());
-        stETH = IERC20(_stETH);
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+
+        emit Initialized();
     }
 
     /// GETTERS ///
@@ -116,8 +138,13 @@ contract VaultDashboard is AccessControlEnumerable {
         _;
     }
 
-    // ERRORS ///
+    /// EVENTS //
+    event Initialized();
+
+    /// ERRORS ///
 
     error ZeroArgument(string);
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
+    error NonProxyCallsForbidden();
+    error AlreadyInitialized();
 }

@@ -3,6 +3,7 @@
 
 import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
+import {Clones} from "@openzeppelin/contracts-v5.0.2/proxy/Clones.sol";
 
 import {StakingVault} from "./StakingVault.sol";
 import {VaultStaffRoom} from "./VaultStaffRoom.sol";
@@ -10,31 +11,34 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 pragma solidity 0.8.25;
 
+interface IVaultStaffRoom {
+    function initialize(address admin, address stakingVault) external;
+}
+
 contract VaultFactory is UpgradeableBeacon {
 
-    address public immutable stETH;
+    address public immutable vaultStaffRoomImpl;
 
-    /// @param _implementation The address of the StakingVault implementation
     /// @param _owner The address of the VaultFactory owner
-    constructor(address _implementation, address _owner, address _stETH) UpgradeableBeacon(_implementation, _owner) {
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
+    /// @param _stakingVaultImpl The address of the StakingVault implementation
+    /// @param _vaultStaffRoomImpl The address of the VaultStaffRoom implementation
+    constructor(address _owner, address _stakingVaultImpl, address _vaultStaffRoomImpl) UpgradeableBeacon(_stakingVaultImpl, _owner) {
+        if (_vaultStaffRoomImpl == address(0)) revert ZeroArgument("_vaultStaffRoom");
 
-        stETH = _stETH;
+        vaultStaffRoomImpl = _vaultStaffRoomImpl;
     }
 
-    function createVault(bytes calldata params) external returns(address vault, address vaultStaffRoom) {
-        vault = address(
-            new BeaconProxy(address(this), "")
-        );
+    /// @notice Creates a new StakingVault and VaultStaffRoom contracts
+    /// @param _params The params of vault initialization
+    function createVault(bytes calldata _params) external returns(address vault, address vaultStaffRoom) {
+        vault = address(new BeaconProxy(address(this), ""));
 
-        vaultStaffRoom = address(
-            new VaultStaffRoom(vault, msg.sender, stETH)
-        );
+        vaultStaffRoom = Clones.clone(vaultStaffRoomImpl);
+        IVaultStaffRoom(vaultStaffRoom).initialize(msg.sender, vault);
 
-        IStakingVault(vault).initialize(vaultStaffRoom, params);
+        IStakingVault(vault).initialize(vaultStaffRoom, _params);
 
-        // emit event
-        emit VaultCreated(msg.sender, vault);
+        emit VaultCreated(vaultStaffRoom, vault);
         emit VaultStaffRoomCreated(msg.sender, vaultStaffRoom);
     }
 

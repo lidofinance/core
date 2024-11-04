@@ -30,6 +30,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     }
 
     uint256 private constant _version = 1;
+    address private immutable _SELF;
     VaultHub public immutable vaultHub;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
@@ -42,6 +43,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
+        _SELF = address(this);
         vaultHub = VaultHub(_vaultHub);
     }
 
@@ -49,7 +51,10 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     /// @param _owner owner address that can TBD
     function initialize(address _owner, bytes calldata params) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
-        if (getBeacon() == address(0)) revert NonProxyCall();
+
+        if (address(this) == _SELF) {
+            revert NonProxyCallsForbidden();
+        }
 
         _initializeContractVersionTo(1);
 
@@ -220,5 +225,5 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
     error LockedCannotBeDecreased(uint256 locked);
-    error NonProxyCall();
+    error NonProxyCallsForbidden();
 }
