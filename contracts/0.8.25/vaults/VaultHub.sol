@@ -223,7 +223,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @param _tokens amount of tokens to burn
     /// @dev can be used by vault owner only; vaultHub must be approved to transfer stETH
-    function burnStethBackedByVault(address _vault, uint256 _tokens) external {
+    function burnStethBackedByVault(address _vault, uint256 _tokens) public {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
         IHubVault vault_ = IHubVault(_vault);
@@ -233,8 +233,6 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         VaultSocket memory socket = sockets[index];
 
-        stETH.transferFrom(msg.sender, address(this), _tokens);
-
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
         if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(_vault, socket.sharesMinted);
 
@@ -243,6 +241,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         stETH.burnExternalShares(amountOfShares);
 
         emit BurnedStETHOnVault(_vault, _tokens);
+    }
+
+    /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
+    function transferAndBurn(address _vault, uint256 _tokens) external {
+        stETH.transferFrom(msg.sender, address(this), _tokens);
+
+        burnStethBackedByVault(_vault, _tokens);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio

@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
 
@@ -17,12 +18,15 @@ contract VaultDashboard is AccessControlEnumerable {
 
     IStakingVault public immutable stakingVault;
     VaultHub public immutable vaultHub;
+    IERC20 public immutable stETH;
 
-    constructor(address _stakingVault, address _defaultAdmin) {
+    constructor(address _stakingVault, address _defaultAdmin, address _stETH) {
         if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
         vaultHub = VaultHub(stakingVault.vaultHub());
+        stETH = IERC20(_stETH);
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
     }
 
@@ -94,6 +98,7 @@ contract VaultDashboard is AccessControlEnumerable {
     }
 
     function burn(uint256 _tokens) external virtual onlyRole(MANAGER_ROLE) {
+        stETH.transfer(address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
 
