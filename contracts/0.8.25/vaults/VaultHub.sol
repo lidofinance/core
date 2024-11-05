@@ -106,7 +106,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
         if (_shareLimit > (stETH.getTotalShares() * MAX_VAULT_SIZE_BP) / BPS_BASE) {
-            revert CapTooHigh(address(_vault), _shareLimit, stETH.getTotalShares() / 10);
+            revert ShareLimitTooHigh(address(_vault), _shareLimit, stETH.getTotalShares() / 10);
         }
 
         uint256 capVaultBalance = stETH.getPooledEthByShares(_shareLimit);
@@ -176,7 +176,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         uint256 sharesToMint = stETH.getSharesByPooledEth(_tokens);
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
-        if (vaultSharesAfterMint > socket.shareLimit) revert MintCapReached(_vault, socket.shareLimit);
+        if (vaultSharesAfterMint > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
 
         uint256 maxMintableShares = _maxMintableShares(socket.vault, socket.reserveRatio);
 
@@ -400,7 +400,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
     error NotEnoughShares(address vault, uint256 amount);
-    error MintCapReached(address vault, uint256 capShares);
+    error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error RebalanceFailed(address vault);
@@ -408,7 +408,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error ZeroArgument(string argument);
     error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
     error TooManyVaults();
-    error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
+    error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
