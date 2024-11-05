@@ -56,11 +56,11 @@ contract VaultStaffRoom is VaultDashboard {
     function performanceDue() public view returns (uint256) {
         IStakingVault.Report memory latestReport = stakingVault.latestReport();
 
-        int128 _performanceDue = int128(latestReport.valuation - lastClaimedReport.valuation) -
+        int128 rewardsAccrued = int128(latestReport.valuation - lastClaimedReport.valuation) -
             (latestReport.inOutDelta - lastClaimedReport.inOutDelta);
 
-        if (_performanceDue > 0) {
-            return (uint128(_performanceDue) * performanceFee) / BP_BASE;
+        if (rewardsAccrued > 0) {
+            return (uint128(rewardsAccrued) * performanceFee) / BP_BASE;
         } else {
             return 0;
         }
