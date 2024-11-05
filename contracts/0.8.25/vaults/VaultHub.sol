@@ -162,13 +162,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @param _recipient address of the receiver
     /// @param _tokens amount of stETH tokens to mint
-    /// @return totalEtherLocked total amount of ether that should be locked on the vault
     /// @dev can be used by vault owner only
-    function mintStethBackedByVault(
-        address _vault,
-        address _recipient,
-        uint256 _tokens
-    ) external returns (uint256 totalEtherLocked) {
+    function mintStethBackedByVault(address _vault, address _recipient, uint256 _tokens) external {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
@@ -195,8 +190,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         emit MintedStETHOnVault(_vault, _tokens);
 
-        totalEtherLocked =
-            (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
+        uint256 totalEtherLocked = (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
             (BPS_BASE - socket.reserveRatio);
 
         vault_.lock(totalEtherLocked);

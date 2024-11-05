@@ -116,8 +116,8 @@ contract VaultStaffRoom is VaultDashboard {
     function mint(
         address _recipient,
         uint256 _tokens
-    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed returns (uint256 locked) {
-        return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
+        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
     }
 
     function burn(uint256 _tokens) external override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) {
