@@ -4,7 +4,7 @@
 pragma solidity >=0.4.24 <0.9.0;
 
 import { AccountingOracle, IReportReceiver } from "contracts/0.8.9/oracle/AccountingOracle.sol";
-import { ReportValues } from "contracts/0.8.9/Accounting.sol";
+import { ReportValues } from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 interface ITimeProvider {
     function getTime() external view returns (uint256);
