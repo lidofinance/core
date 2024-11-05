@@ -48,7 +48,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @dev first socket is always zero. stone in the elevator
     VaultSocket[] private sockets;
     /// @notice mapping from vault address to its socket
-    /// @dev if vault is not connected to the hub, it's index is zero
+    /// @dev if vault is not connected to the hub, its index is zero
     mapping(IHubVault => uint256) private vaultIndex;
 
     constructor(address _admin, address _stETH, address _treasury) {
