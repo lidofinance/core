@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 interface IOracleReportSanityChecker {
-    //
     function smoothenTokenRebase(
         uint256 _preTotalPooledEther,
         uint256 _preTotalShares,

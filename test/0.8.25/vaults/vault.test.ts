@@ -10,12 +10,12 @@ import {
   StETH__HarnessForVaultHub,
   StETH__HarnessForVaultHub__factory,
   VaultFactory,
+  StakingVault,
+  StakingVault__factory,
   VaultHub__MockForVault,
   VaultHub__MockForVault__factory,
   VaultStaffRoom
 } from "typechain-types";
-import { StakingVault } from "typechain-types/contracts/0.8.25/vaults";
-import { StakingVault__factory } from "typechain-types/factories/contracts/0.8.25/vaults";
 
 import { createVaultProxy, ether, impersonate } from "lib";
 

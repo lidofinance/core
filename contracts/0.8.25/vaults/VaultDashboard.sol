@@ -81,7 +81,7 @@ contract VaultDashboard is AccessControlEnumerable {
 
     /// VAULT MANAGEMENT ///
 
-    function transferStakingVaultOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
+    function transferStakingVaultOwnership(address _newOwner) external onlyRole(DEFAULT_ADMIN_ROLE) {
         OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
     }
 
@@ -113,11 +113,8 @@ contract VaultDashboard is AccessControlEnumerable {
 
     /// LIQUIDITY ///
 
-    function mint(
-        address _recipient,
-        uint256 _tokens
-    ) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed returns (uint256 locked) {
-        return vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    function mint(address _recipient, uint256 _tokens) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed {
+        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
     }
 
     function burn(uint256 _tokens) external virtual onlyRole(MANAGER_ROLE) {

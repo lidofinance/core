@@ -7,26 +7,9 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {IHubVault} from "./interfaces/IHubVault.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {ILido as StETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-
-interface StETH {
-    function mintExternalShares(address, uint256) external;
-
-    function burnExternalShares(uint256) external;
-
-    function getExternalEther() external view returns (uint256);
-
-    function getMaxExternalBalance() external view returns (uint256);
-
-    function getPooledEthByShares(uint256) external view returns (uint256);
-
-    function getSharesByPooledEth(uint256) external view returns (uint256);
-
-    function getTotalShares() external view returns (uint256);
-
-    function transferFrom(address, address, uint256) external;
-}
 
 // TODO: rebalance gas compensation
 // TODO: unstructured storag and upgradability
@@ -67,14 +50,14 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @dev first socket is always zero. stone in the elevator
     VaultSocket[] private sockets;
     /// @notice mapping from vault address to its socket
-    /// @dev if vault is not connected to the hub, it's index is zero
+    /// @dev if vault is not connected to the hub, its index is zero
     mapping(IHubVault => uint256) private vaultIndex;
 
     mapping (address => bool) public vaultFactories;
     mapping (address => bool) public vaultImpl;
 
-    constructor(address _admin, address _stETH, address _treasury) {
-        stETH = StETH(_stETH);
+    constructor(address _admin, StETH _stETH, address _treasury) {
+        stETH = _stETH;
         treasury = _treasury;
 
         sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0)); // stone in the elevator
@@ -146,7 +129,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
         if (_shareLimit > (stETH.getTotalShares() * MAX_VAULT_SIZE_BP) / BPS_BASE) {
-            revert CapTooHigh(address(_vault), _shareLimit, stETH.getTotalShares() / 10);
+            revert ShareLimitTooHigh(address(_vault), _shareLimit, stETH.getTotalShares() / 10);
         }
 
         uint256 capVaultBalance = stETH.getPooledEthByShares(_shareLimit);
@@ -202,13 +185,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @param _recipient address of the receiver
     /// @param _tokens amount of stETH tokens to mint
-    /// @return totalEtherLocked total amount of ether that should be locked on the vault
     /// @dev can be used by vault owner only
-    function mintStethBackedByVault(
-        address _vault,
-        address _recipient,
-        uint256 _tokens
-    ) external returns (uint256 totalEtherLocked) {
+    function mintStethBackedByVault(address _vault, address _recipient, uint256 _tokens) external {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
@@ -221,7 +199,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         uint256 sharesToMint = stETH.getSharesByPooledEth(_tokens);
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
-        if (vaultSharesAfterMint > socket.shareLimit) revert MintCapReached(_vault, socket.shareLimit);
+        if (vaultSharesAfterMint > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
 
         uint256 maxMintableShares = _maxMintableShares(socket.vault, socket.reserveRatio);
 
@@ -235,8 +213,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         emit MintedStETHOnVault(_vault, _tokens);
 
-        totalEtherLocked =
-            (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
+        uint256 totalEtherLocked = (stETH.getPooledEthByShares(vaultSharesAfterMint) * BPS_BASE) /
             (BPS_BASE - socket.reserveRatio);
 
         vault_.lock(totalEtherLocked);
@@ -257,9 +234,9 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultSocket memory socket = sockets[index];
 
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
-        if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(_vault, socket.sharesMinted);
+        if (socket.sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, socket.sharesMinted);
 
-        sockets[index].sharesMinted -= uint96(amountOfShares);
+        sockets[index].sharesMinted = socket.sharesMinted - uint96(amountOfShares);
 
         stETH.burnExternalShares(amountOfShares);
 
@@ -317,7 +294,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultSocket memory socket = sockets[index];
 
         uint256 sharesToBurn = stETH.getSharesByPooledEth(msg.value);
-        if (socket.sharesMinted < sharesToBurn) revert NotEnoughShares(msg.sender, socket.sharesMinted);
+        if (socket.sharesMinted < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, socket.sharesMinted);
 
         sockets[index].sharesMinted = socket.sharesMinted - uint96(sharesToBurn);
 
@@ -447,8 +424,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
-    error NotEnoughShares(address vault, uint256 amount);
-    error MintCapReached(address vault, uint256 capShares);
+    error InsufficientSharesToBurn(address vault, uint256 amount);
+    error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error RebalanceFailed(address vault);
@@ -456,7 +433,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error ZeroArgument(string argument);
     error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
     error TooManyVaults();
-    error CapTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
+    error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);

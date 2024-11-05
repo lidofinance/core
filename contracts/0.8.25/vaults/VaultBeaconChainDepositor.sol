@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -54,12 +54,15 @@ contract VaultBeaconChainDepositor {
         bytes memory publicKey = MemUtils.unsafeAllocateBytes(PUBLIC_KEY_LENGTH);
         bytes memory signature = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH);
 
-        for (uint256 i; i < _keysCount;) {
+        for (uint256 i; i < _keysCount; ) {
             MemUtils.copyBytes(_publicKeysBatch, publicKey, i * PUBLIC_KEY_LENGTH, 0, PUBLIC_KEY_LENGTH);
             MemUtils.copyBytes(_signaturesBatch, signature, i * SIGNATURE_LENGTH, 0, SIGNATURE_LENGTH);
 
             DEPOSIT_CONTRACT.deposit{value: DEPOSIT_SIZE}(
-                publicKey, _withdrawalCredentials, signature, _computeDepositDataRoot(_withdrawalCredentials, publicKey, signature)
+                publicKey,
+                _withdrawalCredentials,
+                signature,
+                _computeDepositDataRoot(_withdrawalCredentials, publicKey, signature)
             );
 
             unchecked {
@@ -71,11 +74,11 @@ contract VaultBeaconChainDepositor {
     /// @dev computes the deposit_root_hash required by official Beacon Deposit contract
     /// @param _publicKey A BLS12-381 public key.
     /// @param _signature A BLS12-381 signature
-    function _computeDepositDataRoot(bytes memory _withdrawalCredentials, bytes memory _publicKey, bytes memory _signature)
-        private
-        pure
-        returns (bytes32)
-    {
+    function _computeDepositDataRoot(
+        bytes memory _withdrawalCredentials,
+        bytes memory _publicKey,
+        bytes memory _signature
+    ) private pure returns (bytes32) {
         // Compute deposit data root (`DepositData` hash tree root) according to deposit_contract.sol
         bytes memory sigPart1 = MemUtils.unsafeAllocateBytes(64);
         bytes memory sigPart2 = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH - 64);
@@ -83,9 +86,12 @@ contract VaultBeaconChainDepositor {
         MemUtils.copyBytes(_signature, sigPart2, 64, 0, SIGNATURE_LENGTH - 64);
 
         bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
-        bytes32 signatureRoot = sha256(abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0)))));
+        bytes32 signatureRoot = sha256(
+            abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0))))
+        );
 
-        return sha256(
+        return
+            sha256(
                 abi.encodePacked(
                     sha256(abi.encodePacked(publicKeyRoot, _withdrawalCredentials)),
                     sha256(abi.encodePacked(DEPOSIT_SIZE_IN_GWEI_LE64, bytes24(0), signatureRoot))
