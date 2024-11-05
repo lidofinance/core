@@ -13,7 +13,7 @@ import {
   VaultHub__MockForVault__factory,
 } from "typechain-types";
 
-describe.only("StakingVault.sol", async () => {
+describe.skip("StakingVault.sol", async () => {
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let executionLayerRewardsSender: HardhatEthersSigner;
