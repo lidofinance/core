@@ -20,9 +20,9 @@ interface IVaultStaffRoom {
         address operator;
     }
 
+    function OWNER() external view returns (bytes32);
     function MANAGER_ROLE() external view returns (bytes32);
     function OPERATOR_ROLE() external view returns (bytes32);
-    function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
     function initialize(address admin, address stakingVault) external;
     function setManagementFee(uint256 _newManagementFee) external;
@@ -61,14 +61,14 @@ contract VaultFactory is UpgradeableBeacon {
         vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
         vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), vaultStaffRoomParams.manager);
         vaultStaffRoom.grantRole(vaultStaffRoom.OPERATOR_ROLE(), vaultStaffRoomParams.operator);
-        vaultStaffRoom.grantRole(vaultStaffRoom.DEFAULT_ADMIN_ROLE(), msg.sender);
+        vaultStaffRoom.grantRole(vaultStaffRoom.OWNER(), msg.sender);
 
         vaultStaffRoom.setManagementFee(vaultStaffRoomParams.managementFee);
         vaultStaffRoom.setPerformanceFee(vaultStaffRoomParams.performanceFee);
 
         //revoke roles from factory
         vaultStaffRoom.revokeRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
-        vaultStaffRoom.revokeRole(vaultStaffRoom.DEFAULT_ADMIN_ROLE(), address(this));
+        vaultStaffRoom.revokeRole(vaultStaffRoom.OWNER(), address(this));
 
         IStakingVault(vault).initialize(address(vaultStaffRoom), _stakingVaultParams);
 

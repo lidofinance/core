@@ -113,7 +113,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (_reserveRatio == 0) revert ZeroArgument("_reserveRatio");
         if (_reserveRatio > BPS_BASE) revert ReserveRatioTooHigh(address(_vault), _reserveRatio, BPS_BASE);
 
-        if (_reserveRatioThreshold == 0) revert ZeroArgument("thresholdReserveRatioBP");
+        if (_reserveRatioThreshold == 0) revert ZeroArgument("_reserveRatioThreshold");
         if (_reserveRatioThreshold > _reserveRatio)
             revert ReserveRatioTooHigh(address(_vault), _reserveRatioThreshold, _reserveRatio);
 

@@ -10,19 +10,22 @@ import {VaultDashboard} from "./VaultDashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 // TODO: natspec
+// TODO: events
 
 // VaultStaffRoom: Delegates vault operations to different parties:
-// - Manager: primary owner of the vault, manages ownership, disconnects from hub, sets fees
-// - Funder: can fund the vault, withdraw, mint and rebalance the vault
+// - Manager: manages fees
+// - Staker: can fund the vault and withdraw funds
 // - Operator: can claim performance due and assigns Keymaster sub-role
 // - Keymaster: Operator's sub-role for depositing to beacon chain
+// - Plumber: manages liquidity, i.e. mints and burns stETH
 contract VaultStaffRoom is VaultDashboard {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    bytes32 public constant FUNDER_ROLE = keccak256("Vault.VaultStaffRoom.FunderRole");
+    bytes32 public constant STAKER_ROLE = keccak256("Vault.VaultStaffRoom.StakerRole");
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.VaultStaffRoom.OperatorRole");
     bytes32 public constant KEYMASTER_ROLE = keccak256("Vault.VaultStaffRoom.KeymasterRole");
+    bytes32 public constant PLUMBER_ROLE = keccak256("Vault.VaultStaffRoom.PlumberRole");
 
     IStakingVault.Report public lastClaimedReport;
 
@@ -40,19 +43,17 @@ contract VaultStaffRoom is VaultDashboard {
         _setRoleAdmin(KEYMASTER_ROLE, OPERATOR_ROLE);
     }
 
-    /// * * * * * MANAGER FUNCTIONS * * * * * ///
+    /// * * * * * VIEW FUNCTIONS * * * * * ///
 
-    function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
-        if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
+    function withdrawable() public view returns (uint256) {
+        uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
+        uint256 value = stakingVault.valuation();
 
-        managementFee = _newManagementFee;
-    }
+        if (reserved > value) {
+            return 0;
+        }
 
-    function setPerformanceFee(uint256 _newPerformanceFee) external onlyRole(MANAGER_ROLE) {
-        if (_newPerformanceFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
-        if (performanceDue() > 0) revert PerformanceDueUnclaimed();
-
-        performanceFee = _newPerformanceFee;
+        return value - reserved;
     }
 
     function performanceDue() public view returns (uint256) {
@@ -66,6 +67,21 @@ contract VaultStaffRoom is VaultDashboard {
         } else {
             return 0;
         }
+    }
+
+    /// * * * * * MANAGER FUNCTIONS * * * * * ///
+
+    function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
+        if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
+
+        managementFee = _newManagementFee;
+    }
+
+    function setPerformanceFee(uint256 _newPerformanceFee) external onlyRole(MANAGER_ROLE) {
+        if (_newPerformanceFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
+        if (performanceDue() > 0) revert PerformanceDueUnclaimed();
+
+        performanceFee = _newPerformanceFee;
     }
 
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
@@ -90,22 +106,11 @@ contract VaultStaffRoom is VaultDashboard {
 
     /// * * * * * FUNDER FUNCTIONS * * * * * ///
 
-    function fund() external payable override onlyRole(FUNDER_ROLE) {
+    function fund() external payable override onlyRole(STAKER_ROLE) {
         stakingVault.fund{value: msg.value}();
     }
 
-    function withdrawable() public view returns (uint256) {
-        uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
-        uint256 value = stakingVault.valuation();
-
-        if (reserved > value) {
-            return 0;
-        }
-
-        return value - reserved;
-    }
-
-    function withdraw(address _recipient, uint256 _ether) external override onlyRole(FUNDER_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external override onlyRole(STAKER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
@@ -113,27 +118,7 @@ contract VaultStaffRoom is VaultDashboard {
         stakingVault.withdraw(_recipient, _ether);
     }
 
-    /// FUNDER & MANAGER FUNCTIONS ///
-
-    function mint(
-        address _recipient,
-        uint256 _tokens
-    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
-        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
-    }
-
-    function burn(uint256 _tokens) external override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) {
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
-    }
-
-    function rebalanceVault(
-        uint256 _ether
-    ) external payable override onlyRoles(MANAGER_ROLE, FUNDER_ROLE) fundAndProceed {
-        stakingVault.rebalance{value: msg.value}(_ether);
-    }
-
-    /// * * * * * KEYMAKER FUNCTIONS * * * * * ///
+    /// * * * * * KEYMASTER FUNCTIONS * * * * * ///
 
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
@@ -161,6 +146,17 @@ contract VaultStaffRoom is VaultDashboard {
         }
     }
 
+    /// * * * * * PLUMBER FUNCTIONS * * * * * ///
+
+    function mint(address _recipient, uint256 _tokens) external payable override onlyRole(PLUMBER_ROLE) fundAndProceed {
+        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    }
+
+    function burn(uint256 _tokens) external override onlyRole(PLUMBER_ROLE) {
+        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
+        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    }
+
     /// * * * * * VAULT CALLBACK * * * * * ///
 
     function onReport(uint256 _valuation) external {
@@ -171,14 +167,6 @@ contract VaultStaffRoom is VaultDashboard {
 
     /// * * * * * INTERNAL FUNCTIONS * * * * * ///
 
-    modifier onlyRoles(bytes32 _role1, bytes32 _role2) {
-        if (hasRole(_role1, msg.sender) || hasRole(_role2, msg.sender)) {
-            _;
-        }
-
-        revert SenderHasNeitherRole(msg.sender, _role1, _role2);
-    }
-
     function _withdrawDue(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(stakingVault.valuation()) - int256(stakingVault.locked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
@@ -186,6 +174,8 @@ contract VaultStaffRoom is VaultDashboard {
 
         stakingVault.withdraw(_recipient, _ether);
     }
+
+    /// * * * * * ERRORS * * * * * ///
 
     error SenderHasNeitherRole(address account, bytes32 role1, bytes32 role2);
     error NewFeeCannotExceedMaxFee();
