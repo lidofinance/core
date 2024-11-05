@@ -22,8 +22,8 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         uint128 reportValuation;
         int128 reportInOutDelta;
 
-        uint256 locked;
-        int256 inOutDelta;
+        uint128 locked;
+        int128 inOutDelta;
     }
 
     uint256 private constant _version = 1;
