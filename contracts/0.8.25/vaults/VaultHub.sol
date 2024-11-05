@@ -7,24 +7,7 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {IHubVault} from "./interfaces/IHubVault.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
-
-interface StETH {
-    function mintExternalShares(address, uint256) external;
-
-    function burnExternalShares(uint256) external;
-
-    function getExternalEther() external view returns (uint256);
-
-    function getMaxExternalBalance() external view returns (uint256);
-
-    function getPooledEthByShares(uint256) external view returns (uint256);
-
-    function getSharesByPooledEth(uint256) external view returns (uint256);
-
-    function getTotalShares() external view returns (uint256);
-
-    function transferFrom(address, address, uint256) external;
-}
+import {ILido as StETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
 // TODO: rebalance gas compensation
 // TODO: unstructured storag and upgradability

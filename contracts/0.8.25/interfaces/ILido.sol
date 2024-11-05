@@ -5,9 +5,19 @@
 pragma solidity 0.8.25;
 
 interface ILido {
+    function getPooledEthByShares(uint256) external view returns (uint256);
+
+    function transferFrom(address, address, uint256) external;
+
     function getTotalPooledEther() external view returns (uint256);
 
     function getExternalEther() external view returns (uint256);
+
+    function mintExternalShares(address, uint256) external;
+
+    function burnExternalShares(uint256) external;
+
+    function getMaxExternalBalance() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 
