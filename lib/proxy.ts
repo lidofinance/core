@@ -38,7 +38,25 @@ interface CreateVaultResponse {
 }
 
 export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<CreateVaultResponse> {
-  const tx = await vaultFactory.connect(_owner).createVault("0x");
+  // Define the parameters for the struct
+  const vaultStaffRoomParams = {
+    managementFee: 100n,
+    performanceFee: 200n,
+    manager: await _owner.getAddress(),
+    operator: await _owner.getAddress(),
+  };
+
+  const vaultStaffRoomParamsEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["uint256", "uint256", "address", "address"],
+    [
+      vaultStaffRoomParams.managementFee,
+      vaultStaffRoomParams.performanceFee,
+      vaultStaffRoomParams.manager,
+      vaultStaffRoomParams.operator
+    ]
+  );
+
+  const tx = await vaultFactory.connect(_owner).createVault("0x", vaultStaffRoomParamsEncoded);
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;

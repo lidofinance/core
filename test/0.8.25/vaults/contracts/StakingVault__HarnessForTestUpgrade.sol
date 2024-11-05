@@ -66,6 +66,14 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         return ERC1967Utils.getBeacon();
     }
 
+    function latestReport() external view returns (IStakingVault.Report memory) {
+        VaultStorage storage $ = _getVaultStorage();
+        return IStakingVault.Report({
+            valuation: $.reportValuation,
+            inOutDelta: $.reportInOutDelta
+        });
+    }
+
     function _getVaultStorage() private pure returns (VaultStorage storage $) {
         assembly {
             $.slot := VAULT_STORAGE_LOCATION
