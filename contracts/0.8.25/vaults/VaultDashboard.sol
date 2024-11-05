@@ -58,7 +58,7 @@ contract VaultDashboard is AccessControlEnumerable {
 
     /// VAULT MANAGEMENT ///
 
-    function transferStakingVaultOwnership(address _newOwner) external onlyRole(MANAGER_ROLE) {
+    function transferStakingVaultOwnership(address _newOwner) external onlyRole(DEFAULT_ADMIN_ROLE) {
         OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
     }
 
