@@ -2,70 +2,38 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
-import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
+import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
+import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
-import { BaseOracle, IConsensusContract } from "./BaseOracle.sol";
-
-struct ReportValues {
-    /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
-    uint256 timestamp;
-    /// @notice seconds elapsed since the previous report
-    uint256 timeElapsed;
-    /// @notice total number of Lido validators on Consensus Layers (exited included)
-    uint256 clValidators;
-    /// @notice sum of all Lido validators' balances on Consensus Layer
-    uint256 clBalance;
-    /// @notice withdrawal vault balance
-    uint256 withdrawalVaultBalance;
-    /// @notice elRewards vault balance
-    uint256 elRewardsVaultBalance;
-    /// @notice stETH shares requested to burn through Burner
-    uint256 sharesRequestedToBurn;
-    /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
-    /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
-    uint256[] withdrawalFinalizationBatches;
-    /// @notice array of combined values for each Lido vault
-    ///         (sum of all the balances of Lido validators of the vault
-    ///          plus the balance of the vault itself)
-    uint256[] vaultValues;
-    /// @notice netCashFlow of each Lido vault
-    ///         (difference between deposits to and withdrawals from the vault)
-    int256[] netCashFlows;
-}
-
+import {BaseOracle, IConsensusContract} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
 }
 
-
 interface ILegacyOracle {
     // only called before the migration
 
-    function getBeaconSpec() external view returns (
-        uint64 epochsPerFrame,
-        uint64 slotsPerEpoch,
-        uint64 secondsPerSlot,
-        uint64 genesisTime
-    );
+    function getBeaconSpec()
+        external
+        view
+        returns (uint64 epochsPerFrame, uint64 slotsPerEpoch, uint64 secondsPerSlot, uint64 genesisTime);
 
     function getLastCompletedEpochId() external view returns (uint256);
 
     // only called after the migration
 
-    function handleConsensusLayerReport(
-        uint256 refSlot,
-        uint256 clBalance,
-        uint256 clValidators
-    ) external;
+    function handleConsensusLayerReport(uint256 refSlot, uint256 clBalance, uint256 clValidators) external;
 }
 
 interface IOracleReportSanityChecker {
     function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view;
+
     function checkAccountingExtraDataListItemsCount(uint256 _extraDataListItemsCount) external view;
+
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
 }
 
@@ -90,11 +58,9 @@ interface IStakingRouter {
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
-
 interface IWithdrawalQueue {
     function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
 }
-
 
 contract AccountingOracle is BaseOracle {
     using UnstructuredStorage for bytes32;
@@ -123,11 +89,7 @@ contract AccountingOracle is BaseOracle {
 
     event ExtraDataSubmitted(uint256 indexed refSlot, uint256 itemsProcessed, uint256 itemsCount);
 
-    event WarnExtraDataIncompleteProcessing(
-        uint256 indexed refSlot,
-        uint256 processedItemsCount,
-        uint256 itemsCount
-    );
+    event WarnExtraDataIncompleteProcessing(uint256 indexed refSlot, uint256 processedItemsCount, uint256 itemsCount);
 
     struct ExtraDataProcessingState {
         uint64 refSlot;
@@ -158,20 +120,14 @@ contract AccountingOracle is BaseOracle {
         address legacyOracle,
         uint256 secondsPerSlot,
         uint256 genesisTime
-    )
-        BaseOracle(secondsPerSlot, genesisTime)
-    {
+    ) BaseOracle(secondsPerSlot, genesisTime) {
         if (lidoLocator == address(0)) revert LidoLocatorCannotBeZero();
         if (legacyOracle == address(0)) revert LegacyOracleCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
         LEGACY_ORACLE = ILegacyOracle(legacyOracle);
     }
 
-    function initialize(
-        address admin,
-        address consensusContract,
-        uint256 consensusVersion
-    ) external {
+    function initialize(address admin, address consensusContract, uint256 consensusVersion) external {
         if (admin == address(0)) revert AdminCannotBeZero();
 
         uint256 lastProcessingRefSlot = _checkOracleMigration(LEGACY_ORACLE, consensusContract);
@@ -201,13 +157,11 @@ contract AccountingOracle is BaseOracle {
         /// @dev Version of the oracle consensus rules. Current version expected
         /// by the oracle can be obtained by calling getConsensusVersion().
         uint256 consensusVersion;
-
         /// @dev Reference slot for which the report was calculated. If the slot
         /// contains a block, the state being reported should include all state
         /// changes resulting from that block. The epoch containing the slot
         /// should be finalized prior to calculating the report.
         uint256 refSlot;
-
         ///
         /// CL values
         ///
@@ -215,38 +169,31 @@ contract AccountingOracle is BaseOracle {
         /// @dev The number of validators on consensus layer that were ever deposited
         /// via Lido as observed at the reference slot.
         uint256 numValidators;
-
         /// @dev Cumulative balance of all Lido validators on the consensus layer
         /// as observed at the reference slot.
         uint256 clBalanceGwei;
-
         /// @dev Ids of staking modules that have more exited validators than the number
         /// stored in the respective staking module contract as observed at the reference
         /// slot.
         uint256[] stakingModuleIdsWithNewlyExitedValidators;
-
         /// @dev Number of ever exited validators for each of the staking modules from
         /// the stakingModuleIdsWithNewlyExitedValidators array as observed at the
         /// reference slot.
         uint256[] numExitedValidatorsByStakingModule;
-
         ///
         /// EL values
         ///
 
         /// @dev The ETH balance of the Lido withdrawal vault as observed at the reference slot.
         uint256 withdrawalVaultBalance;
-
         /// @dev The ETH balance of the Lido execution layer rewards vault as observed
         /// at the reference slot.
         uint256 elRewardsVaultBalance;
-
         /// @dev The shares amount requested to burn through Burner as observed
         /// at the reference slot. The value can be obtained in the following way:
         /// `(coverSharesToBurn, nonCoverSharesToBurn) = IBurner(burner).getSharesRequestedToBurn()
         /// sharesRequestedToBurn = coverSharesToBurn + nonCoverSharesToBurn`
         uint256 sharesRequestedToBurn;
-
         ///
         /// Decision
         ///
@@ -255,11 +202,9 @@ contract AccountingOracle is BaseOracle {
         /// WithdrawalQueue.calculateFinalizationBatches. Empty array means that no withdrawal
         /// requests should be finalized.
         uint256[] withdrawalFinalizationBatches;
-
         /// @dev Whether, based on the state observed at the reference slot, the protocol should
         /// be in the bunker mode.
         bool isBunkerMode;
-
         ///
         /// Liquid Staking Vaults
         ///
@@ -267,11 +212,9 @@ contract AccountingOracle is BaseOracle {
         /// @dev The values of the vaults as observed at the reference slot.
         /// Sum of all the balances of Lido validators of the vault plus the balance of the vault itself.
         uint256[] vaultsValues;
-
         /// @dev The net cash flows of the vaults as observed at the reference slot.
         /// Flow of the funds in and out of the vaults (deposit/withdrawal) without the rewards.
         int256[] vaultsNetCashFlows;
-
         ///
         /// Extra data — the oracle information that allows asynchronous processing, potentially in
         /// chunks, after the main data is processed. The oracle doesn't enforce that extra data
@@ -349,14 +292,12 @@ contract AccountingOracle is BaseOracle {
         /// more info.
         ///
         uint256 extraDataFormat;
-
         /// @dev Hash of the extra data. See the constant defining a specific extra data
         /// format for the info on how to calculate the hash.
         ///
         /// Must be set to a zero hash if the oracle report contains no extra data.
         ///
         bytes32 extraDataHash;
-
         /// @dev Number of the extra data items.
         ///
         /// Must be set to zero if the oracle report contains no extra data.
@@ -506,23 +447,22 @@ contract AccountingOracle is BaseOracle {
     function _checkOracleMigration(
         ILegacyOracle legacyOracle,
         address consensusContract
-    )
-        internal view returns (uint256)
-    {
-        (uint256 initialEpoch,
-            uint256 epochsPerFrame) = IConsensusContract(consensusContract).getFrameConfig();
+    ) internal view returns (uint256) {
+        (uint256 initialEpoch, uint256 epochsPerFrame) = IConsensusContract(consensusContract).getFrameConfig();
 
-        (uint256 slotsPerEpoch,
-            uint256 secondsPerSlot,
-            uint256 genesisTime) = IConsensusContract(consensusContract).getChainConfig();
+        (uint256 slotsPerEpoch, uint256 secondsPerSlot, uint256 genesisTime) = IConsensusContract(consensusContract)
+            .getChainConfig();
 
         {
             // check chain spec to match the prev. one (a block is used to reduce stack allocation)
-            (uint256 legacyEpochsPerFrame,
+            (
+                uint256 legacyEpochsPerFrame,
                 uint256 legacySlotsPerEpoch,
                 uint256 legacySecondsPerSlot,
-                uint256 legacyGenesisTime) = legacyOracle.getBeaconSpec();
-            if (slotsPerEpoch != legacySlotsPerEpoch ||
+                uint256 legacyGenesisTime
+            ) = legacyOracle.getBeaconSpec();
+            if (
+                slotsPerEpoch != legacySlotsPerEpoch ||
                 secondsPerSlot != legacySecondsPerSlot ||
                 genesisTime != legacyGenesisTime
             ) {
@@ -560,14 +500,8 @@ contract AccountingOracle is BaseOracle {
         uint256 prevProcessingRefSlot
     ) internal override {
         ExtraDataProcessingState memory state = _storageExtraDataProcessingState().value;
-        if (state.refSlot == prevProcessingRefSlot && (
-            !state.submitted || state.itemsProcessed < state.itemsCount
-        )) {
-            emit WarnExtraDataIncompleteProcessing(
-                prevProcessingRefSlot,
-                state.itemsProcessed,
-                state.itemsCount
-            );
+        if (state.refSlot == prevProcessingRefSlot && (!state.submitted || state.itemsProcessed < state.itemsCount)) {
+            emit WarnExtraDataIncompleteProcessing(prevProcessingRefSlot, state.itemsProcessed, state.itemsCount);
         }
     }
 
@@ -593,19 +527,16 @@ contract AccountingOracle is BaseOracle {
             if (data.extraDataItemsCount == 0) {
                 revert ExtraDataItemsCountCannotBeZeroForNonEmptyData();
             }
-             if (data.extraDataHash == bytes32(0)) {
+            if (data.extraDataHash == bytes32(0)) {
                 revert ExtraDataHashCannotBeZeroForNonEmptyData();
             }
         }
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkAccountingExtraDataListItemsCount(data.extraDataItemsCount);
-
-        LEGACY_ORACLE.handleConsensusLayerReport(
-            data.refSlot,
-            data.clBalanceGwei * 1e9,
-            data.numValidators
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkAccountingExtraDataListItemsCount(
+            data.extraDataItemsCount
         );
+
+        LEGACY_ORACLE.handleConsensusLayerReport(data.refSlot, data.clBalanceGwei * 1e9, data.numValidators);
 
         uint256 slotsElapsed = data.refSlot - prevRefSlot;
 
@@ -625,18 +556,20 @@ contract AccountingOracle is BaseOracle {
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT
         );
 
-        IReportReceiver(LOCATOR.accounting()).handleOracleReport(ReportValues(
-            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
-            slotsElapsed * SECONDS_PER_SLOT,
-            data.numValidators,
-            data.clBalanceGwei * 1e9,
-            data.withdrawalVaultBalance,
-            data.elRewardsVaultBalance,
-            data.sharesRequestedToBurn,
-            data.withdrawalFinalizationBatches,
-            data.vaultsValues,
-            data.vaultsNetCashFlows
-        ));
+        IReportReceiver(LOCATOR.accounting()).handleOracleReport(
+            ReportValues(
+                GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+                slotsElapsed * SECONDS_PER_SLOT,
+                data.numValidators,
+                data.clBalanceGwei * 1e9,
+                data.withdrawalVaultBalance,
+                data.elRewardsVaultBalance,
+                data.sharesRequestedToBurn,
+                data.withdrawalFinalizationBatches,
+                data.vaultsValues,
+                data.vaultsNetCashFlows
+            )
+        );
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({
             refSlot: data.refSlot.toUint64(),
@@ -663,18 +596,22 @@ contract AccountingOracle is BaseOracle {
             return;
         }
 
-        for (uint256 i = 1; i < stakingModuleIds.length;) {
+        for (uint256 i = 1; i < stakingModuleIds.length; ) {
             if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
                 revert InvalidExitedValidatorsData();
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
-        for (uint256 i = 0; i < stakingModuleIds.length;) {
+        for (uint256 i = 0; i < stakingModuleIds.length; ) {
             if (numExitedValidatorsByStakingModule[i] == 0) {
                 revert InvalidExitedValidatorsData();
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         uint256 newlyExitedValidatorsCount = stakingRouter.updateExitedValidatorsCountByStakingModule(
@@ -682,12 +619,12 @@ contract AccountingOracle is BaseOracle {
             numExitedValidatorsByStakingModule
         );
 
-        uint256 exitedValidatorsRatePerDay =
-            newlyExitedValidatorsCount * (1 days) /
+        uint256 exitedValidatorsRatePerDay = (newlyExitedValidatorsCount * (1 days)) /
             (SECONDS_PER_SLOT * slotsElapsed);
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkExitedValidatorsRatePerDay(exitedValidatorsRatePerDay);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitedValidatorsRatePerDay(
+            exitedValidatorsRatePerDay
+        );
     }
 
     function _submitReportExtraDataEmpty() internal {
@@ -699,9 +636,7 @@ contract AccountingOracle is BaseOracle {
         emit ExtraDataSubmitted(procState.refSlot, 0, 0);
     }
 
-    function _checkCanSubmitExtraData(ExtraDataProcessingState memory procState, uint256 format)
-        internal view
-    {
+    function _checkCanSubmitExtraData(ExtraDataProcessingState memory procState, uint256 format) internal view {
         _checkMsgSenderIsAllowedToSubmitData();
 
         ConsensusReport memory report = _storageConsensusReport().value;
@@ -800,9 +735,7 @@ contract AccountingOracle is BaseOracle {
             iter.itemType = itemType;
             iter.dataOffset = dataOffset;
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS ||
-                itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS
-            ) {
+            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS || itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
                 uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
 
                 if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
@@ -818,8 +751,10 @@ contract AccountingOracle is BaseOracle {
         }
 
         assert(maxNodeOperatorsPerItem > 0);
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkNodeOperatorsPerExtraDataItemCount(maxNodeOperatorItemIndex, maxNodeOperatorsPerItem);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkNodeOperatorsPerExtraDataItemCount(
+            maxNodeOperatorItemIndex,
+            maxNodeOperatorsPerItem
+        );
     }
 
     function _processExtraDataItem(bytes calldata data, ExtraDataIterState memory iter) internal returns (uint256) {
@@ -871,11 +806,17 @@ contract AccountingOracle is BaseOracle {
         }
 
         if (iter.itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
-            IStakingRouter(iter.stakingRouter)
-                .reportStakingModuleStuckValidatorsCountByNodeOperator(moduleId, nodeOpIds, valuesCounts);
+            IStakingRouter(iter.stakingRouter).reportStakingModuleStuckValidatorsCountByNodeOperator(
+                moduleId,
+                nodeOpIds,
+                valuesCounts
+            );
         } else {
-            IStakingRouter(iter.stakingRouter)
-                .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, nodeOpIds, valuesCounts);
+            IStakingRouter(iter.stakingRouter).reportStakingModuleExitedValidatorsCountByNodeOperator(
+                moduleId,
+                nodeOpIds,
+                valuesCounts
+            );
         }
 
         iter.dataOffset = dataOffset;
@@ -890,10 +831,10 @@ contract AccountingOracle is BaseOracle {
         ExtraDataProcessingState value;
     }
 
-    function _storageExtraDataProcessingState()
-        internal pure returns (StorageExtraDataProcessingState storage r)
-    {
+    function _storageExtraDataProcessingState() internal pure returns (StorageExtraDataProcessingState storage r) {
         bytes32 position = EXTRA_DATA_PROCESSING_STATE_POSITION;
-        assembly { r.slot := position }
+        assembly {
+            r.slot := position
+        }
     }
 }
