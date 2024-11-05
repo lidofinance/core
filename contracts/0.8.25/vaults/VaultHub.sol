@@ -211,7 +211,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultSocket memory socket = sockets[index];
 
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
-        if (socket.sharesMinted < amountOfShares) revert NotEnoughShares(_vault, socket.sharesMinted);
+        if (socket.sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, socket.sharesMinted);
 
         sockets[index].sharesMinted -= uint96(amountOfShares);
 
@@ -271,7 +271,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultSocket memory socket = sockets[index];
 
         uint256 sharesToBurn = stETH.getSharesByPooledEth(msg.value);
-        if (socket.sharesMinted < sharesToBurn) revert NotEnoughShares(msg.sender, socket.sharesMinted);
+        if (socket.sharesMinted < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, socket.sharesMinted);
 
         sockets[index].sharesMinted = socket.sharesMinted - uint96(sharesToBurn);
 
@@ -399,7 +399,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
-    error NotEnoughShares(address vault, uint256 amount);
+    error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
