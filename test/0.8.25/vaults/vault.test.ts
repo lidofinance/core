@@ -7,11 +7,11 @@ import { Snapshot } from "test/suite";
 import {
   DepositContract__MockForBeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor__factory,
+  StakingVault,
+  StakingVault__factory,
   VaultHub__MockForVault,
   VaultHub__MockForVault__factory,
 } from "typechain-types";
-import { StakingVault } from "typechain-types/contracts/0.8.25/vaults";
-import { StakingVault__factory } from "typechain-types/factories/contracts/0.8.25/vaults";
 
 describe.only("StakingVault.sol", async () => {
   let deployer: HardhatEthersSigner;
