@@ -14,20 +14,21 @@ import {VaultHub} from "./VaultHub.sol";
 // TODO: think about the name
 
 contract VaultDashboard is AccessControlEnumerable {
+    bytes32 public constant OWNER = DEFAULT_ADMIN_ROLE;
     bytes32 public constant MANAGER_ROLE = keccak256("Vault.VaultDashboard.ManagerRole");
 
     IStakingVault public immutable stakingVault;
     VaultHub public immutable vaultHub;
     IERC20 public immutable stETH;
 
-    constructor(address _stakingVault, address _defaultAdmin, address _stETH) {
+    constructor(address _stakingVault, address _owner, address _stETH) {
         if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        if (_owner == address(0)) revert ZeroArgument("_owner");
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
         vaultHub = VaultHub(stakingVault.vaultHub());
         stETH = IERC20(_stETH);
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _grantRole(OWNER, _owner);
     }
 
     /// GETTERS ///
@@ -58,7 +59,7 @@ contract VaultDashboard is AccessControlEnumerable {
 
     /// VAULT MANAGEMENT ///
 
-    function transferStakingVaultOwnership(address _newOwner) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function transferStakingVaultOwnership(address _newOwner) external onlyRole(OWNER) {
         OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
     }
 
@@ -98,6 +99,8 @@ contract VaultDashboard is AccessControlEnumerable {
         stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
+
+    /// REBALANCE ///
 
     function rebalanceVault(uint256 _ether) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed {
         stakingVault.rebalance{value: msg.value}(_ether);
