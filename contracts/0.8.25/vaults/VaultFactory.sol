@@ -48,12 +48,18 @@ contract VaultFactory is UpgradeableBeacon {
     /// @param _stakingVaultParams The params of vault initialization
     /// @param _vaultStaffRoomParams The params of vault initialization
     function createVault(bytes calldata _stakingVaultParams, bytes calldata _vaultStaffRoomParams) external returns(address vault, address vaultStaffRoom) {
-        vault = address(new BeaconProxy(address(this), ""));
-
         IVaultStaffRoom.VaultStaffRoomParams memory vaultStaffRoomParams = abi.decode(
             _vaultStaffRoomParams,
             (IVaultStaffRoom.VaultStaffRoomParams)
         );
+
+        if (vaultStaffRoomParams.manager == address(0)) revert ZeroArgument("manager");
+        if (vaultStaffRoomParams.operator == address(0)) revert ZeroArgument("operator");
+
+        vault = address(new BeaconProxy(address(this), ""));
+
+
+
         IVaultStaffRoom vaultStaffRoom = IVaultStaffRoom(Clones.clone(vaultStaffRoomImpl));
 
         //grant roles for factory to set fees
