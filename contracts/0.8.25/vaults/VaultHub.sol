@@ -213,7 +213,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
         if (socket.sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, socket.sharesMinted);
 
-        sockets[index].sharesMinted -= uint96(amountOfShares);
+        sockets[index].sharesMinted = socket.sharesMinted - uint96(amountOfShares);
 
         stETH.burnExternalShares(amountOfShares);
 
