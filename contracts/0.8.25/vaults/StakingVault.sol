@@ -15,12 +15,10 @@ import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
 import {Versioned} from "../utils/Versioned.sol";
 
-// TODO: extract disconnect to delegator
 // TODO: extract interface and implement it
-// TODO: add unstructured storage
-// TODO: move errors and event to the bottom
 
 contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
+    /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
         int128 reportInOutDelta;

@@ -64,7 +64,7 @@ describe("VaultFactory.sol", () => {
   const treasury = certainAddress("treasury");
 
   beforeEach(async () => {
-    [deployer, admin, holder, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
+    [deployer, admin, holder, stranger, vaultOwner1] = await ethers.getSigners();
 
     locator = await ethers.deployContract("LidoLocator", [config], deployer);
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], { value: ether("10.0"), from: deployer });
@@ -73,9 +73,6 @@ describe("VaultFactory.sol", () => {
     // VaultHub
     vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
     implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
-      from: deployer,
-    });
     vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
@@ -95,17 +92,22 @@ describe("VaultFactory.sol", () => {
   })
 
   context("initialize", async () => {
-    it ("initialize", async () => {
-      const { tx } = await createVaultProxy(vaultFactory, vaultOwner1);
-
-      await expect(tx).to.emit(vaultStaffRoom, "Initialized");
+    it ("reverts if initialize from implementation",  async () => {
+      await expect(vaultStaffRoom.initialize(admin, implOld))
+        .to.revertedWithCustomError(vaultStaffRoom, "NonProxyCallsForbidden");
     });
 
     it ("reverts if already initialized",  async () => {
-      const { vault: vault1 } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { vault: vault1, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
 
-      await expect(vaultStaffRoom.initialize(admin, vault1))
-        .to.revertedWithCustomError(vaultStaffRoom, "AlreadyInitialized");
+      await expect(vsr.initialize(admin, vault1))
+        .to.revertedWithCustomError(vsr, "AlreadyInitialized");
+    });
+
+    it ("initialize", async () => {
+      const { tx, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
+
+      await expect(tx).to.emit(vsr, "Initialized");
     });
   })
 })
