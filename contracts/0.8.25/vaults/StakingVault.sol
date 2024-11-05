@@ -6,7 +6,6 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
-import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -41,7 +40,6 @@ contract StakingVault is VaultBeaconChainDepositor, OwnableUpgradeable {
     }
 
     VaultHub public immutable vaultHub;
-    IERC20 public immutable stETH;
     Report public latestReport;
     uint256 public locked;
     int256 public inOutDelta;
