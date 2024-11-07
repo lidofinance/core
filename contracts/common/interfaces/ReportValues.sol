@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.0;
+// See contracts/COMPILERS.md
+// solhint-disable-next-line
+pragma solidity >=0.4.24 <0.9.0;
 
 struct ReportValues {
     /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
