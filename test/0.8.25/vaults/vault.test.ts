@@ -6,15 +6,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor__factory,
-  StETH__HarnessForVaultHub,
-  StETH__HarnessForVaultHub__factory,
-  VaultFactory,
   StakingVault,
   StakingVault__factory,
+  StETH__HarnessForVaultHub,
+  VaultFactory,
   VaultHub__MockForVault,
-  VaultHub__MockForVault__factory,
-  VaultStaffRoom
+  VaultStaffRoom,
 } from "typechain-types";
 
 import { createVaultProxy, ether, impersonate } from "lib";
@@ -43,32 +40,31 @@ describe("StakingVault.sol", async () => {
   before(async () => {
     [deployer, owner, executionLayerRewardsSender, stranger, holder] = await ethers.getSigners();
 
-    const vaultHubFactory = new VaultHub__MockForVault__factory(deployer);
-    vaultHub = await vaultHubFactory.deploy();
+    vaultHub = await ethers.deployContract("VaultHub__MockForVault", { from: deployer });
+    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
+      value: ether("10.0"),
+      from: deployer,
+    });
 
-    const stethFactory = new StETH__HarnessForVaultHub__factory(deployer);
-    steth = await stethFactory.deploy(holder, { value: ether("10.0")})
-
-    const depositContractFactory = new DepositContract__MockForBeaconChainDepositor__factory(deployer);
-    depositContract = await depositContractFactory.deploy();
+    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", { from: deployer });
 
     vaultCreateFactory = new StakingVault__factory(owner);
-    stakingVault = await vaultCreateFactory.deploy(
-      await vaultHub.getAddress(),
-      await depositContract.getAddress(),
-    );
+    stakingVault = await ethers.getContractFactory("StakingVault").then((f) => f.deploy(vaultHub, depositContract));
 
     vaultStaffRoomImpl = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
 
-    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, vaultStaffRoomImpl], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, vaultStaffRoomImpl], {
+      from: deployer,
+    });
 
-    const {vault, vaultStaffRoom} = await createVaultProxy(vaultFactory, owner)
-    vaultProxy = vault
+    const { vault, vaultStaffRoom } = await createVaultProxy(vaultFactory, owner);
+    vaultProxy = vault;
 
     delegatorSigner = await impersonate(await vaultStaffRoom.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
+
   afterEach(async () => await Snapshot.restore(originalState));
 
   describe("constructor", () => {
@@ -79,8 +75,10 @@ describe("StakingVault.sol", async () => {
     });
 
     it("reverts if `_beaconChainDepositContract` is zero address", async () => {
-      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), ZeroAddress))
-        .to.be.revertedWithCustomError(stakingVault, "DepositContractZeroAddress");
+      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), ZeroAddress)).to.be.revertedWithCustomError(
+        stakingVault,
+        "DepositContractZeroAddress",
+      );
     });
 
     it("sets `vaultHub` and `_stETH` and `depositContract`", async () => {
@@ -97,15 +95,19 @@ describe("StakingVault.sol", async () => {
     });
 
     it("reverts if call from non proxy", async () => {
-      await expect(stakingVault.initialize(await owner.getAddress(), "0x"))
-        .to.be.revertedWithCustomError(stakingVault, "NonProxyCallsForbidden");
+      await expect(stakingVault.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
+        stakingVault,
+        "NonProxyCallsForbidden",
+      );
     });
 
     it("reverts if already initialized", async () => {
-      await expect(vaultProxy.initialize(await owner.getAddress(), "0x"))
-        .to.be.revertedWithCustomError(vaultProxy, "NonZeroContractVersionOnInit");
+      await expect(vaultProxy.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
+        vaultProxy,
+        "NonZeroContractVersionOnInit",
+      );
     });
-  })
+  });
 
   describe("receive", () => {
     it("reverts if `msg.value` is zero", async () => {

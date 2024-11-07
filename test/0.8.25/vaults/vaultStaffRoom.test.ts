@@ -10,40 +10,15 @@ import {
   StETH__HarnessForVaultHub,
   VaultFactory,
   VaultHub,
-  VaultStaffRoom
+  VaultStaffRoom,
 } from "typechain-types";
 
-import { ArrayToUnion, certainAddress, createVaultProxy,ether, randomAddress } from "lib";
+import { certainAddress, createVaultProxy, ether } from "lib";
 
-const services = [
-  "accountingOracle",
-  "depositSecurityModule",
-  "elRewardsVault",
-  "legacyOracle",
-  "lido",
-  "oracleReportSanityChecker",
-  "postTokenRebaseReceiver",
-  "burner",
-  "stakingRouter",
-  "treasury",
-  "validatorsExitBusOracle",
-  "withdrawalQueue",
-  "withdrawalVault",
-  "oracleDaemonConfig",
-  "accounting",
-] as const;
+import { deployLidoLocator } from "test/deploy";
+import { Snapshot } from "test/suite";
 
-type Service = ArrayToUnion<typeof services>;
-type Config = Record<Service, string>;
-
-function randomConfig(): Config {
-  return services.reduce<Config>((config, service) => {
-    config[service] = randomAddress();
-    return config;
-  }, {} as Config);
-}
-
-describe("VaultFactory.sol", () => {
+describe("VaultStaffRoom.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -58,16 +33,20 @@ describe("VaultFactory.sol", () => {
 
   let steth: StETH__HarnessForVaultHub;
 
-  const config = randomConfig();
   let locator: LidoLocator;
+
+  let originalState: string;
 
   const treasury = certainAddress("treasury");
 
-  beforeEach(async () => {
+  before(async () => {
     [deployer, admin, holder, stranger, vaultOwner1] = await ethers.getSigners();
 
-    locator = await ethers.deployContract("LidoLocator", [config], deployer);
-    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], { value: ether("10.0"), from: deployer });
+    locator = await deployLidoLocator();
+    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
+      value: ether("10.0"),
+      from: deployer,
+    });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // VaultHub
@@ -83,31 +62,36 @@ describe("VaultFactory.sol", () => {
     await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
   });
 
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
+
   context("performanceDue", () => {
     it("performanceDue ", async () => {
       const { vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
 
       await vsr.performanceDue();
-    })
-  })
+    });
+  });
 
   context("initialize", async () => {
-    it ("reverts if initialize from implementation",  async () => {
-      await expect(vaultStaffRoom.initialize(admin, implOld))
-        .to.revertedWithCustomError(vaultStaffRoom, "NonProxyCallsForbidden");
+    it("reverts if initialize from implementation", async () => {
+      await expect(vaultStaffRoom.initialize(admin, implOld)).to.revertedWithCustomError(
+        vaultStaffRoom,
+        "NonProxyCallsForbidden",
+      );
     });
 
-    it ("reverts if already initialized",  async () => {
+    it("reverts if already initialized", async () => {
       const { vault: vault1, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
 
-      await expect(vsr.initialize(admin, vault1))
-        .to.revertedWithCustomError(vsr, "AlreadyInitialized");
+      await expect(vsr.initialize(admin, vault1)).to.revertedWithCustomError(vsr, "AlreadyInitialized");
     });
 
-    it ("initialize", async () => {
+    it("initialize", async () => {
       const { tx, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
 
       await expect(tx).to.emit(vsr, "Initialized");
     });
-  })
-})
+  });
+});
