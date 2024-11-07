@@ -16,7 +16,7 @@ import {Versioned} from "../utils/Versioned.sol";
 
 // TODO: extract interface and implement it
 
-contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
+contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
@@ -28,7 +28,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     uint256 private constant _version = 1;
     address private immutable _SELF;
-    VaultHub public immutable vaultHub;
+    VaultHub public immutable VAULT_HUB;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -41,7 +41,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         _SELF = address(this);
-        vaultHub = VaultHub(_vaultHub);
+        VAULT_HUB = VaultHub(_vaultHub);
     }
 
     /// @notice Initialize the contract storage explicitly.
@@ -67,6 +67,10 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     function getBeacon() public view returns (address) {
         return ERC1967Utils.getBeacon();
+    }
+
+    function vaultHub() public view override returns (address) {
+        return address(VAULT_HUB);
     }
 
     receive() external payable {
@@ -152,7 +156,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     }
 
     function lock(uint256 _locked) external {
-        if (msg.sender != address(vaultHub)) revert NotAuthorized("lock", msg.sender);
+        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
         if ($.locked > _locked) revert LockedCannotBeDecreased(_locked);
@@ -166,7 +170,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(vaultHub))) {
+        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(VAULT_HUB))) {
             // force rebalance
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
@@ -175,7 +179,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
             emit Withdrawn(msg.sender, msg.sender, _ether);
 
-            vaultHub.rebalance{value: _ether}();
+            VAULT_HUB.rebalance{value: _ether}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
@@ -190,7 +194,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     }
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(vaultHub)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("update", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
         $.reportValuation = SafeCast.toUint128(_valuation);
