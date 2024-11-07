@@ -47,30 +47,29 @@ contract VaultFactory is UpgradeableBeacon {
     /// @notice Creates a new StakingVault and VaultStaffRoom contracts
     /// @param _stakingVaultParams The params of vault initialization
     /// @param _vaultStaffRoomParams The params of vault initialization
-    function createVault(bytes calldata _stakingVaultParams, bytes calldata _vaultStaffRoomParams) external returns(address vault, address vaultStaffRoom) {
-        IVaultStaffRoom.VaultStaffRoomParams memory vaultStaffRoomParams = abi.decode(
-            _vaultStaffRoomParams,
-            (IVaultStaffRoom.VaultStaffRoomParams)
-        );
-
-        if (vaultStaffRoomParams.manager == address(0)) revert ZeroArgument("manager");
-        if (vaultStaffRoomParams.operator == address(0)) revert ZeroArgument("operator");
+    function createVault(
+        bytes calldata _stakingVaultParams,
+        IVaultStaffRoom.VaultStaffRoomParams calldata _vaultStaffRoomParams
+    )
+      external
+      returns(address vault, address vaultStaffRoom)
+    {
+        if (_vaultStaffRoomParams.manager == address(0)) revert ZeroArgument("manager");
+        if (_vaultStaffRoomParams.operator == address(0)) revert ZeroArgument("operator");
 
         vault = address(new BeaconProxy(address(this), ""));
-
-
 
         IVaultStaffRoom vaultStaffRoom = IVaultStaffRoom(Clones.clone(vaultStaffRoomImpl));
 
         //grant roles for factory to set fees
         vaultStaffRoom.initialize(address(this), vault);
         vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
-        vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), vaultStaffRoomParams.manager);
-        vaultStaffRoom.grantRole(vaultStaffRoom.OPERATOR_ROLE(), vaultStaffRoomParams.operator);
+        vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), _vaultStaffRoomParams.manager);
+        vaultStaffRoom.grantRole(vaultStaffRoom.OPERATOR_ROLE(), _vaultStaffRoomParams.operator);
         vaultStaffRoom.grantRole(vaultStaffRoom.OWNER(), msg.sender);
 
-        vaultStaffRoom.setManagementFee(vaultStaffRoomParams.managementFee);
-        vaultStaffRoom.setPerformanceFee(vaultStaffRoomParams.performanceFee);
+        vaultStaffRoom.setManagementFee(_vaultStaffRoomParams.managementFee);
+        vaultStaffRoom.setPerformanceFee(_vaultStaffRoomParams.performanceFee);
 
         //revoke roles from factory
         vaultStaffRoom.revokeRole(vaultStaffRoom.MANAGER_ROLE(), address(this));

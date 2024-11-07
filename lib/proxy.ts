@@ -6,6 +6,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { BeaconProxy, OssifiableProxy, OssifiableProxy__factory, StakingVault, VaultFactory,VaultStaffRoom } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
+import { IVaultStaffRoom } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
+import VaultStaffRoomParamsStruct = IVaultStaffRoom.VaultStaffRoomParamsStruct;
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -39,24 +41,14 @@ interface CreateVaultResponse {
 
 export async function createVaultProxy(vaultFactory: VaultFactory, _owner: HardhatEthersSigner): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
-  const vaultStaffRoomParams = {
+  const vaultStaffRoomParams: VaultStaffRoomParamsStruct = {
     managementFee: 100n,
     performanceFee: 200n,
     manager: await _owner.getAddress(),
     operator: await _owner.getAddress(),
-  };
+  }
 
-  const vaultStaffRoomParamsEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
-    ["uint256", "uint256", "address", "address"],
-    [
-      vaultStaffRoomParams.managementFee,
-      vaultStaffRoomParams.performanceFee,
-      vaultStaffRoomParams.manager,
-      vaultStaffRoomParams.operator
-    ]
-  );
-
-  const tx = await vaultFactory.connect(_owner).createVault("0x", vaultStaffRoomParamsEncoded);
+  const tx = await vaultFactory.connect(_owner).createVault("0x", vaultStaffRoomParams);
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;
