@@ -3,12 +3,7 @@ import { ethers, run } from "hardhat";
 import { join } from "path";
 import readline from "readline";
 
-import {
-  DepositSecurityModule,
-  DepositSecurityModule__factory,
-  LidoLocator,
-  LidoLocator__factory,
-} from "typechain-types";
+import { DepositSecurityModule, LidoLocator } from "typechain-types";
 
 import {
   cy,
@@ -188,7 +183,7 @@ async function main() {
   const SC_ADMIN = APP_AGENT_ADDRESS;
   const LOCATOR = state[Sk.lidoLocator].proxy.address;
 
-  const locatorImplContract = await loadContract<LidoLocator>('LidoLocator', INTERMEDIATE_LOCATOR_IMPL);
+  const locatorImplContract = await loadContract<LidoLocator>("LidoLocator", INTERMEDIATE_LOCATOR_IMPL);
   // fetch contract addresses that will not changed
   const ACCOUNTING_ORACLE_PROXY = await locatorImplContract.accountingOracle();
   const EL_REWARDS_VAULT = await locatorImplContract.elRewardsVault();
@@ -267,10 +262,7 @@ async function main() {
   log.success(`New DSM address: ${depositSecurityModuleAddress}`);
   log.emptyLine();
 
-  const dsmContract = await loadContract<DepositSecurityModule>(
-    'DepositSecurityModule',
-    depositSecurityModuleAddress,
-  );
+  const dsmContract = await loadContract<DepositSecurityModule>("DepositSecurityModule", depositSecurityModuleAddress);
 
   await dsmContract.addGuardians(GUARDIANS, QUORUM);
   await dsmContract.setOwner(APP_AGENT_ADDRESS);

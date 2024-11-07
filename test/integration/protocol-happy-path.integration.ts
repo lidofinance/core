@@ -14,7 +14,7 @@ import {
   sdvtEnsureOperators,
 } from "lib/protocol/helpers";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 const AMOUNT = ether("100");
 const MAX_DEPOSIT = 150n;
@@ -51,6 +51,8 @@ describe("Protocol Happy Path", () => {
       stETH: lido.balanceOf(wallet),
     });
   };
+
+  beforeEach(bailOnFailure);
 
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
