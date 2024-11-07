@@ -43,7 +43,8 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    function initialize(address _owner, bytes calldata params) external {
+    /// @param _params the calldata for initialize contract after upgrades
+    function initialize(address _owner, bytes calldata _params) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (getBeacon() == address(0)) revert NonProxyCall();
 

@@ -45,8 +45,11 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
     }
 
     /// @notice Initialize the contract storage explicitly.
+    ///         The initialize function selector is not changed. For upgrades use `_params` variable
+    ///
     /// @param _owner owner address that can TBD
-    function initialize(address _owner, bytes calldata params) external {
+    /// @param _params the calldata for initialize contract after upgrades
+    function initialize(address _owner, bytes calldata _params) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
 
         if (address(this) == _SELF) {
