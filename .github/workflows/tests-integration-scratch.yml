@@ -41,4 +41,5 @@ jobs:
       - name: Run integration tests
         run: yarn test:integration:fork:local
         env:
-          LOG_LEVEL: debug
+          LOG_LEVEL: "debug"
+          INTEGRATION_WITH_CSM: "off"
