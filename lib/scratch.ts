@@ -9,6 +9,7 @@ import { resetStateFile } from "./state-file";
 const deployedSteps: string[] = [];
 
 async function applySteps(steps: string[]) {
+
   if (steps.every((step) => deployedSteps.includes(step))) {
     return; // All steps have been deployed
   }

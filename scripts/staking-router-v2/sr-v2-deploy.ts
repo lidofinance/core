@@ -188,7 +188,7 @@ async function main() {
   const SC_ADMIN = APP_AGENT_ADDRESS;
   const LOCATOR = state[Sk.lidoLocator].proxy.address;
 
-  const locatorImplContract = await loadContract<LidoLocator>(LidoLocator__factory, INTERMEDIATE_LOCATOR_IMPL);
+  const locatorImplContract = await loadContract<LidoLocator>('LidoLocator', INTERMEDIATE_LOCATOR_IMPL);
   // fetch contract addresses that will not changed
   const ACCOUNTING_ORACLE_PROXY = await locatorImplContract.accountingOracle();
   const EL_REWARDS_VAULT = await locatorImplContract.elRewardsVault();
@@ -203,7 +203,7 @@ async function main() {
   const WITHDRAWAL_VAULT = await locatorImplContract.withdrawalVault();
   const ORACLE_DAEMON_CONFIG = await locatorImplContract.oracleDaemonConfig();
 
-  log.lineWithArguments(
+  log.withArguments(
     `Fetched addresses from locator impl ${INTERMEDIATE_LOCATOR_IMPL}, result: `,
     getLocatorAddressesToString(
       ACCOUNTING_ORACLE_PROXY,
@@ -268,9 +268,10 @@ async function main() {
   log.emptyLine();
 
   const dsmContract = await loadContract<DepositSecurityModule>(
-    DepositSecurityModule__factory,
+    'DepositSecurityModule',
     depositSecurityModuleAddress,
   );
+
   await dsmContract.addGuardians(GUARDIANS, QUORUM);
   await dsmContract.setOwner(APP_AGENT_ADDRESS);
   log.success(`Guardians list: ${await dsmContract.getGuardians()}`);

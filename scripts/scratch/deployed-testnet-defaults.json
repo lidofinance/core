@@ -137,7 +137,7 @@
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "curated-onchain-v1",
+      "stakingModuleTypeId": "simple-dvt-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },
