@@ -38,7 +38,7 @@ describe("OracleReportSanityChecker.sol:misc", () => {
     maxPositiveTokenRebase: 5_000_000n, // 0.05%
     initialSlashingAmountPWei: 1000n,
     inactivityPenaltiesAmountPWei: 101n,
-    clBalanceOraclesErrorUpperBPLimit: 74n, // 0.74%
+    clBalanceOraclesErrorUpperBPLimit: 50n, // 0.5%
   };
 
   const correctLidoOracleReport = {

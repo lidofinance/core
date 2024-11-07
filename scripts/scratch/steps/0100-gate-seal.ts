@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { getContractAt } from "lib/contract";
+import { loadContract } from "lib";
 import { makeTx } from "lib/deploy";
 import { findEvents } from "lib/event";
 import { cy, log } from "lib/log";
@@ -26,7 +26,7 @@ export async function main() {
 
   // Create new GateSeal instance
   const sealableContracts = [state.withdrawalQueueERC721.proxy.address, state.validatorsExitBusOracle.proxy.address];
-  const gateSealFactory = await getContractAt("IGateSealFactory", state[Sk.gateSeal].factoryAddress);
+  const gateSealFactory = await loadContract("IGateSealFactory", state[Sk.gateSeal].factoryAddress);
 
   const receipt = await makeTx(
     gateSealFactory,

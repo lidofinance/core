@@ -18,17 +18,21 @@ import { HardhatUserConfig, subtask } from "hardhat/config";
 
 import { mochaRootHooks } from "test/hooks";
 
+import "./tasks";
+
 const RPC_URL: string = process.env.RPC_URL || "";
-const MAINNET_FORKING_URL = process.env.MAINNET_FORKING_URL || "";
-const INTEGRATION_SCRATCH_DEPLOY = process.env.INTEGRATION_SCRATCH_DEPLOY || "off";
 const ACCOUNTS_PATH = "./accounts.json";
 
-/**
- * Determines the forking configuration for Hardhat.
- * @returns The forking configuration object or undefined.
- */
+const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
+
+const INTEGRATION_WITH_SCRATCH_DEPLOY = process.env.INTEGRATION_WITH_SCRATCH_DEPLOY || "off";
+
+/* Determines the forking configuration for Hardhat */
 function getHardhatForkingConfig() {
-  return INTEGRATION_SCRATCH_DEPLOY === "on" || !MAINNET_FORKING_URL ? undefined : { url: MAINNET_FORKING_URL };
+  if (INTEGRATION_WITH_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL) {
+    return undefined;
+  }
+  return { url: HARDHAT_FORKING_URL };
 }
 
 function loadAccounts(networkName: string) {
@@ -74,6 +78,9 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [

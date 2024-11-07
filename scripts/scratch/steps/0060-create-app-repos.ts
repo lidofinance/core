@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { getContractAt } from "lib/contract";
+import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, setValueInState, Sk } from "lib/state-file";
 
@@ -11,7 +11,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const template = await getContractAt("LidoTemplate", state[Sk.lidoTemplate].address);
+  const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 
   // Create Lido app repos
   const lidoAppsReceipt = await makeTx(

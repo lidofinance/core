@@ -10,7 +10,7 @@ interface ISecondOpinionOracle {
         returns (bool success, uint256 clBalanceGwei, uint256 withdrawalVaultBalanceWei, uint256 numValidators, uint256 exitedValidators);
 }
 
-contract SecondOpinionOracleMock is ISecondOpinionOracle {
+contract SecondOpinionOracle__Mock is ISecondOpinionOracle {
 
     struct Report {
         bool success;
@@ -24,6 +24,17 @@ contract SecondOpinionOracleMock is ISecondOpinionOracle {
 
     function addReport(uint256 refSlot, Report memory report) external {
         reports[refSlot] = report;
+    }
+
+    function addPlainReport(uint256 refSlot, uint256 clBalanceGwei, uint256 withdrawalVaultBalanceWei) external {
+
+        reports[refSlot] = Report({
+            success: true,
+            clBalanceGwei: clBalanceGwei,
+            withdrawalVaultBalanceWei: withdrawalVaultBalanceWei,
+            numValidators: 0,
+            exitedValidators: 0
+        });
     }
 
     function removeReport(uint256 refSlot) external {

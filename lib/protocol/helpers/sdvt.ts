@@ -6,7 +6,7 @@ import { impersonate, log, streccak, trace } from "lib";
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
 
-import { getOperatorManagerAddress, getOperatorName, getOperatorRewardAddress } from "./nor.helper";
+import { getOperatorManagerAddress, getOperatorName, getOperatorRewardAddress } from "./nor";
 
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;

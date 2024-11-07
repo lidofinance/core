@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { getContractAt } from "lib/contract";
+import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
@@ -26,7 +26,7 @@ export async function main() {
   ];
 
   for (const contract of ozAdminTransfers) {
-    const contractInstance = await getContractAt(contract.name, contract.address);
+    const contractInstance = await loadContract(contract.name, contract.address);
     await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
     await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
   }
@@ -41,13 +41,13 @@ export async function main() {
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {
-    const proxy = await getContractAt("OssifiableProxy", proxyAddress);
+    const proxy = await loadContract("OssifiableProxy", proxyAddress);
     await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
   }
 
   // Change DepositSecurityModule admin if not using predefined address
   if (state[Sk.depositSecurityModule].deployParameters.usePredefinedAddressInstead === null) {
-    const depositSecurityModule = await getContractAt("DepositSecurityModule", state.depositSecurityModule.address);
+    const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
   }
 }

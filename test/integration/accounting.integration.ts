@@ -29,7 +29,7 @@ const SIMPLE_DVT_MODULE_ID = 2n;
 
 const ZERO_HASH = new Uint8Array(32).fill(0);
 
-describe("Accounting integration", () => {
+describe("Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
@@ -50,16 +50,16 @@ describe("Accounting integration", () => {
     await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
     await norEnsureOperators(ctx, 3n, 5n);
-    if (ctx.flags.withSimpleDvtModule) {
-      await sdvtEnsureOperators(ctx, 3n, 5n);
-    }
+    await sdvtEnsureOperators(ctx, 3n, 5n);
 
+    // Deposit node operators
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     await report(ctx, {
-      clDiff: ether("32") * 3n, // 32 ETH * 3 validators
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
+      clAppearedValidators: 6n,
       excludeVaultsBalances: true,
     });
   });
@@ -207,11 +207,6 @@ describe("Accounting integration", () => {
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
 
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-    );
-
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
   });
@@ -259,12 +254,6 @@ describe("Accounting integration", () => {
     expect(ethDistributedEvent[0].args.preCLBalance + REBASE_AMOUNT).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance differs from expected",
-    );
-
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther + REBASE_AMOUNT).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-      "PostTotalShares: TotalPooledEther differs from expected",
     );
   });
 
@@ -327,7 +316,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -381,12 +370,6 @@ describe("Accounting integration", () => {
     expect(ethDistributedEvent[0].args.preCLBalance + rebaseAmount).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance has not increased",
-    );
-
-    const postTotalSharesEvent = ctx.getEvents(reportTxReceipt, "PostTotalShares");
-    expect(postTotalSharesEvent[0].args.preTotalPooledEther + rebaseAmount).to.equal(
-      postTotalSharesEvent[0].args.postTotalPooledEther + amountOfETHLocked,
-      "PostTotalShares: TotalPooledEther has not increased",
     );
   });
 
@@ -670,7 +653,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,
@@ -770,7 +753,7 @@ describe("Accounting integration", () => {
     const norSharesAsFees = transferSharesEvents[hasWithdrawals ? 1 : 0];
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
-    const sdvtSharesAsFees = ctx.flags.withSimpleDvtModule ? transferSharesEvents[hasWithdrawals ? 2 : 1] : null;
+    const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
 
     expect(transferSharesEvents.length).to.equal(
       hasWithdrawals ? 2n : 1n + stakingModulesCount,

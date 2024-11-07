@@ -25,7 +25,7 @@ export async function main() {
     maxPositiveTokenRebase: 750_000, // 0.0075%
     initialSlashingAmountPWei: 1000, // 1 ETH = 1000 PWei
     inactivityPenaltiesAmountPWei: 101, // 0.101 ETH = 101 PWei
-    clBalanceOraclesErrorUpperBPLimit: 74, // 0.74%
+    clBalanceOraclesErrorUpperBPLimit: 50, // 0.5%
   };
 
   // Deploy OracleReportSanityChecker
@@ -60,7 +60,7 @@ export async function main() {
   const proxyLocator = await ethers.getContractAt("OssifiableProxy", locatorAddress);
   const proxyAdmin = await proxyLocator.proxy__getAdmin();
 
-  const proxyAdminSigner = await impersonate(proxyAdmin, ether("1"));
+  const proxyAdminSigner = await impersonate(proxyAdmin, ether("100"));
 
   await updateLidoLocatorImplementation(
     locatorAddress,

@@ -31,6 +31,7 @@ contract AccountingOracle__MockForLegacyOracle {
     }
 
     function submitReportData(AccountingOracle.ReportData calldata data, uint256 /* contractVersion */) external {
+        require(data.refSlot >= _lastRefSlot, "refSlot less than _lastRefSlot");
         uint256 slotsElapsed = data.refSlot - _lastRefSlot;
         _lastRefSlot = data.refSlot;
 

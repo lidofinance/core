@@ -80,8 +80,7 @@ async function getLocalNetworkConfig(network: string, source: string): Promise<P
     locator: config["lidoLocator"].proxy.address,
     agentAddress: config["app:aragon-agent"].proxy.address,
     votingAddress: config["app:aragon-voting"].proxy.address,
-    easyTrackAddress: config["app:aragon-agent"].proxy.address,
-    sdvt: config["app:node-operators-registry"].proxy.address,
+    easyTrackAddress: config["app:aragon-voting"].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

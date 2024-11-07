@@ -113,7 +113,7 @@
       "maxPositiveTokenRebase": 5000000,
       "initialSlashingAmountPWei": 1000,
       "inactivityPenaltiesAmountPWei": 101,
-      "clBalanceOraclesErrorUpperBPLimit": 74
+      "clBalanceOraclesErrorUpperBPLimit": 50
     }
   },
   "oracleDaemonConfig": {
@@ -133,6 +133,12 @@
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 172800
+    }
+  },
+  "simpleDvt": {
+    "deployParameters": {
+      "stakingModuleTypeId": "curated-onchain-v1",
+      "stuckPenaltyDelay": 432000
     }
   },
   "withdrawalQueueERC721": {
