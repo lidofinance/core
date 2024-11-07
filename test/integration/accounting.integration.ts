@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, ONE_GWEI, trace, updateBalance } from "lib";
+import { ether, impersonate, log, ONE_GWEI, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
@@ -15,7 +15,7 @@ import {
   sdvtEnsureOperators,
 } from "lib/protocol/helpers";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { Snapshot } from "test/suite";
 
 const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
 
@@ -63,8 +63,6 @@ describe("Accounting", () => {
       excludeVaultsBalances: true,
     });
   });
-
-  beforeEach(bailOnFailure);
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
@@ -282,6 +280,7 @@ describe("Accounting", () => {
 
     // Report
     const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
+
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -306,6 +305,8 @@ describe("Accounting", () => {
     const stakingModulesCount = await stakingRouter.getStakingModulesCount();
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
+    log.debug("Staking modules count", { stakingModulesCount });
+
     const mintedSharesSum = transferSharesEvents
       .slice(hasWithdrawals ? 1 : 0) // skip burner if withdrawals processed
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
@@ -317,9 +318,11 @@ describe("Accounting", () => {
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
     const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
+    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
 
+    // Magic numbers here: 2 – burner and treasury, 1 – only treasury
     expect(transferSharesEvents.length).to.equal(
-      hasWithdrawals ? 2n : 1n + stakingModulesCount,
+      (hasWithdrawals ? 2n : 1n) + stakingModulesCount + feeDistributionTransfer,
       "Expected transfer of shares to DAO and staking modules",
     );
 
@@ -654,9 +657,10 @@ describe("Accounting", () => {
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
     const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
+    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
 
     expect(transferSharesEvents.length).to.equal(
-      hasWithdrawals ? 2n : 1n + stakingModulesCount,
+      hasWithdrawals ? 2n : 1n + stakingModulesCount + feeDistributionTransfer,
       "Expected transfer of shares to DAO and staking modules",
     );
 
@@ -754,9 +758,10 @@ describe("Accounting", () => {
 
     // if withdrawals processed goes after burner and NOR, if no withdrawals processed goes after NOR
     const sdvtSharesAsFees = transferSharesEvents[hasWithdrawals ? 2 : 1];
+    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
 
     expect(transferSharesEvents.length).to.equal(
-      hasWithdrawals ? 2n : 1n + stakingModulesCount,
+      hasWithdrawals ? 2n : 1n + stakingModulesCount + feeDistributionTransfer,
       "Expected transfer of shares to DAO and staking modules",
     );
 

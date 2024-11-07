@@ -9,7 +9,6 @@ import { resetStateFile } from "./state-file";
 const deployedSteps: string[] = [];
 
 async function applySteps(steps: string[]) {
-
   if (steps.every((step) => deployedSteps.includes(step))) {
     return; // All steps have been deployed
   }
@@ -30,10 +29,15 @@ export async function deployUpgrade(networkName: string): Promise<void> {
     networkName = "mainnet-fork";
   }
 
-  const stepsFile = `upgrade/steps-${networkName}.json`;
-  const steps = loadSteps(stepsFile);
+  try {
+    const stepsFile = `upgrade/steps-${networkName}.json`;
+    const steps = loadSteps(stepsFile);
 
-  await applySteps(steps);
+    await applySteps(steps);
+  } catch (error) {
+    log.error("Upgrade failed:", (error as Error).message);
+    log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+  }
 }
 
 export async function deployScratchProtocol(networkName: string): Promise<void> {

@@ -17,6 +17,9 @@ declare namespace NodeJS {
     /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
     INTEGRATION_ON_SCRATCH?: "on" | "off"; // default: "off"
 
+    /* if "on" the integration tests will assume CSM module is present in the StakingRouter, and adjust accordingly */
+    INTEGRATION_WITH_CSM?: "on" | "off"; // default: "off"
+
     /**
      * Network configuration for the protocol discovery.
      */
