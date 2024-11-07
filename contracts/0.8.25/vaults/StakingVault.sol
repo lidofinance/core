@@ -22,8 +22,8 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         uint128 reportValuation;
         int128 reportInOutDelta;
 
-        uint256 locked;
-        int256 inOutDelta;
+        uint128 locked;
+        int128 inOutDelta;
     }
 
     uint256 private constant _version = 1;
@@ -74,11 +74,11 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
 
     function valuation() public view returns (uint256) {
         VaultStorage storage $ = _getVaultStorage();
-        return uint256(
+        return uint256(int256(
             int128($.reportValuation)
             + $.inOutDelta
             - $.reportInOutDelta
-        );
+        ));
     }
 
     function isHealthy() public view returns (bool) {
@@ -110,7 +110,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         VaultStorage storage $ = _getVaultStorage();
-        $.inOutDelta += int256(msg.value);
+        $.inOutDelta += SafeCast.toInt128(int256(msg.value));
 
         emit Funded(msg.sender, msg.value);
     }
@@ -123,7 +123,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
         VaultStorage storage $ = _getVaultStorage();
-        $.inOutDelta -= int256(_ether);
+        $.inOutDelta -= SafeCast.toInt128(int256(_ether));
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
@@ -154,7 +154,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         VaultStorage storage $ = _getVaultStorage();
         if ($.locked > _locked) revert LockedCannotBeDecreased(_locked);
 
-        $.locked = _locked;
+        $.locked = SafeCast.toUint128(_locked);
 
         emit Locked(_locked);
     }
@@ -168,7 +168,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
             // TODO: check rounding here
             // mint some stETH in Lido v2 and burn it on the vault
             VaultStorage storage $ = _getVaultStorage();
-            $.inOutDelta -= int256(_ether);
+            $.inOutDelta -= SafeCast.toInt128(int256(_ether));
 
             emit Withdrawn(msg.sender, msg.sender, _ether);
 
@@ -192,7 +192,7 @@ contract StakingVault is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgrade
         VaultStorage storage $ = _getVaultStorage();
         $.reportValuation = SafeCast.toUint128(_valuation);
         $.reportInOutDelta = SafeCast.toInt128(_inOutDelta);
-        $.locked = _locked;
+        $.locked = SafeCast.toUint128(_locked);
 
         try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
             emit OnReportFailed(reason);
