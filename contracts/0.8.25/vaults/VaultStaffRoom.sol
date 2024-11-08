@@ -34,10 +34,12 @@ contract VaultStaffRoom is VaultDashboard {
     uint256 public managementDue;
 
     constructor(
-        address _stakingVault,
-        address _defaultAdmin,
         address _stETH
-    ) VaultDashboard(_stakingVault, _defaultAdmin, _stETH) {
+    ) VaultDashboard(_stETH) {
+    }
+
+    function initialize(address _defaultAdmin, address _stakingVault) external override {
+        _initialize(_defaultAdmin, _stakingVault);
         _setRoleAdmin(KEYMASTER_ROLE, OPERATOR_ROLE);
     }
 

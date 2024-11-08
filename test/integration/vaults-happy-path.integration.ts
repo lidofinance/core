@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { LiquidStakingVault } from "typechain-types";
+import { StakingVault } from "typechain-types";
 
 import { impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -21,7 +21,7 @@ import { Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
 type Vault = {
-  vault: LiquidStakingVault;
+  vault: StakingVault;
   address: string;
   beaconBalance: bigint;
 };
@@ -149,7 +149,7 @@ describe("Staking Vaults Happy Path", () => {
 
     for (let i = 0n; i < VAULTS_COUNT; i++) {
       // Alice can create a vault
-      const vault = await ethers.deployContract("LiquidStakingVault", vaultParams, { signer: alice });
+      const vault = await ethers.deployContract("StakingVault", vaultParams, { signer: alice });
 
       await vault.setVaultOwnerFee(VAULT_OWNER_FEE);
       await vault.setNodeOperatorFee(VAULT_NODE_OPERATOR_FEE);

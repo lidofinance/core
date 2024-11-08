@@ -1,79 +1,117 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
-import { JsonRpcProvider, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
-import { advanceChainTime, ether, getNextBlock, getNextBlockNumber } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   DepositContract__MockForBeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor__factory,
   StakingVault,
   StakingVault__factory,
+  StETH__HarnessForVaultHub,
+  VaultFactory,
   VaultHub__MockForVault,
-  VaultHub__MockForVault__factory,
+  VaultStaffRoom,
 } from "typechain-types";
 
-describe.skip("StakingVault.sol", async () => {
+import { createVaultProxy, ether, impersonate } from "lib";
+
+import { Snapshot } from "test/suite";
+
+describe("StakingVault.sol", async () => {
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let executionLayerRewardsSender: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let holder: HardhatEthersSigner;
+  let delegatorSigner: HardhatEthersSigner;
 
   let vaultHub: VaultHub__MockForVault;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let vaultFactory: StakingVault__factory;
+  let vaultCreateFactory: StakingVault__factory;
   let stakingVault: StakingVault;
+  let steth: StETH__HarnessForVaultHub;
+  let vaultFactory: VaultFactory;
+  let vaultStaffRoomImpl: VaultStaffRoom;
+  let vaultProxy: StakingVault;
 
   let originalState: string;
 
   before(async () => {
-    [deployer, owner, executionLayerRewardsSender, stranger] = await ethers.getSigners();
+    [deployer, owner, executionLayerRewardsSender, stranger, holder] = await ethers.getSigners();
 
-    const vaultHubFactory = new VaultHub__MockForVault__factory(deployer);
-    vaultHub = await vaultHubFactory.deploy();
+    vaultHub = await ethers.deployContract("VaultHub__MockForVault", { from: deployer });
+    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
+      value: ether("10.0"),
+      from: deployer,
+    });
 
-    const depositContractFactory = new DepositContract__MockForBeaconChainDepositor__factory(deployer);
-    depositContract = await depositContractFactory.deploy();
+    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", { from: deployer });
 
-    vaultFactory = new StakingVault__factory(owner);
-    stakingVault = await vaultFactory.deploy(
-      await owner.getAddress(),
-      await vaultHub.getAddress(),
-      await depositContract.getAddress(),
-    );
+    vaultCreateFactory = new StakingVault__factory(owner);
+    stakingVault = await ethers.getContractFactory("StakingVault").then((f) => f.deploy(vaultHub, depositContract));
+
+    vaultStaffRoomImpl = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
+
+    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, vaultStaffRoomImpl], {
+      from: deployer,
+    });
+
+    const { vault, vaultStaffRoom } = await createVaultProxy(vaultFactory, owner);
+    vaultProxy = vault;
+
+    delegatorSigner = await impersonate(await vaultStaffRoom.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
+
   afterEach(async () => await Snapshot.restore(originalState));
 
   describe("constructor", () => {
+    it("reverts if `_vaultHub` is zero address", async () => {
+      await expect(vaultCreateFactory.deploy(ZeroAddress, await depositContract.getAddress()))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_vaultHub");
+    });
+
+    it("reverts if `_beaconChainDepositContract` is zero address", async () => {
+      await expect(vaultCreateFactory.deploy(await vaultHub.getAddress(), ZeroAddress)).to.be.revertedWithCustomError(
+        stakingVault,
+        "DepositContractZeroAddress",
+      );
+    });
+
+    it("sets `vaultHub` and `_stETH` and `depositContract`", async () => {
+      expect(await stakingVault.vaultHub(), "vaultHub").to.equal(await vaultHub.getAddress());
+      expect(await stakingVault.DEPOSIT_CONTRACT(), "DPST").to.equal(await depositContract.getAddress());
+    });
+  });
+
+  describe("initialize", () => {
     it("reverts if `_owner` is zero address", async () => {
-      expect(vaultFactory.deploy(ZeroAddress, await vaultHub.getAddress(), await depositContract.getAddress()))
+      await expect(stakingVault.initialize(ZeroAddress, "0x"))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_owner");
     });
 
-    it("reverts if `_hub` is zero address", async () => {
-      expect(vaultFactory.deploy(await owner.getAddress(), ZeroAddress, await depositContract.getAddress()))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_hub");
+    it("reverts if call from non proxy", async () => {
+      await expect(stakingVault.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
+        stakingVault,
+        "NonProxyCallsForbidden",
+      );
     });
 
-    it("sets `vaultHub` and transfers ownership from zero address to `owner`", async () => {
-      expect(
-        vaultFactory.deploy(await owner.getAddress(), await vaultHub.getAddress(), await depositContract.getAddress()),
-      )
-        .to.be.emit(stakingVault, "OwnershipTransferred")
-        .withArgs(ZeroAddress, await owner.getAddress());
-
-      expect(await stakingVault.vaultHub()).to.equal(await vaultHub.getAddress());
-      expect(await stakingVault.owner()).to.equal(await owner.getAddress());
+    it("reverts if already initialized", async () => {
+      await expect(vaultProxy.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
+        vaultProxy,
+        "NonZeroContractVersionOnInit",
+      );
     });
   });
 
   describe("receive", () => {
     it("reverts if `msg.value` is zero", async () => {
-      expect(
+      await expect(
         executionLayerRewardsSender.sendTransaction({
           to: await stakingVault.getAddress(),
           value: 0n,
@@ -96,39 +134,39 @@ describe.skip("StakingVault.sol", async () => {
       // can't chain `emit` and `changeEtherBalance`, so we have two expects
       // https://hardhat.org/hardhat-runner/plugins/nomicfoundation-hardhat-chai-matchers#chaining-async-matchers
       // we could also
-      expect(tx)
+      await expect(tx)
         .to.emit(stakingVault, "ExecutionLayerRewardsReceived")
         .withArgs(await executionLayerRewardsSender.getAddress(), executionLayerRewardsAmount);
-      expect(tx).to.changeEtherBalance(stakingVault, balanceBefore + executionLayerRewardsAmount);
+      await expect(tx).to.changeEtherBalance(stakingVault, balanceBefore + executionLayerRewardsAmount);
     });
   });
 
   describe("fund", () => {
-    it("reverts if `msg.value` is zero", async () => {
-      expect(stakingVault.fund({ value: 0 }))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("msg.value");
+    it("reverts if `msg.sender` is not `owner`", async () => {
+      await expect(vaultProxy.connect(stranger).fund({ value: ether("1") }))
+        .to.be.revertedWithCustomError(vaultProxy, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
     });
 
-    it("reverts if `msg.sender` is not `owner`", async () => {
-      expect(stakingVault.connect(stranger).fund({ value: ether("1") }))
-        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
-        .withArgs(await stranger.getAddress());
+    it("reverts if `msg.value` is zero", async () => {
+      await expect(vaultProxy.connect(delegatorSigner).fund({ value: 0 }))
+        .to.be.revertedWithCustomError(vaultProxy, "ZeroArgument")
+        .withArgs("msg.value");
     });
 
     it("accepts ether, increases `inOutDelta`, and emits `Funded` event", async () => {
       const fundAmount = ether("1");
       const inOutDeltaBefore = await stakingVault.inOutDelta();
 
-      const tx = stakingVault.fund({ value: fundAmount });
-
-      expect(tx).to.emit(stakingVault, "Funded").withArgs(owner, fundAmount);
+      await expect(vaultProxy.connect(delegatorSigner).fund({ value: fundAmount }))
+        .to.emit(vaultProxy, "Funded")
+        .withArgs(delegatorSigner, fundAmount);
 
       // for some reason, there are race conditions (probably batching or something)
       // so, we have to wait for confirmation
       // @TODO: troubleshoot (probably provider batching or smth)
-      (await tx).wait();
-      expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore + fundAmount);
+      // (await tx).wait();
+      expect(await vaultProxy.inOutDelta()).to.equal(inOutDeltaBefore + fundAmount);
     });
   });
 });

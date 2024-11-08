@@ -92,7 +92,7 @@ contract Accounting is VaultHub {
         ILidoLocator _lidoLocator,
         ILido _lido,
         address _treasury
-    ) VaultHub(_admin, address(_lido), _treasury) {
+    ) VaultHub(_admin, _lido, _treasury) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }

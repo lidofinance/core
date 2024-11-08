@@ -8,6 +8,8 @@ import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/u
 import {IHubVault} from "./interfaces/IHubVault.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as StETH} from "contracts/0.8.25/interfaces/ILido.sol";
+import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
+import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 // TODO: rebalance gas compensation
 // TODO: unstructured storag and upgradability
@@ -51,13 +53,28 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @dev if vault is not connected to the hub, its index is zero
     mapping(IHubVault => uint256) private vaultIndex;
 
-    constructor(address _admin, address _stETH, address _treasury) {
-        stETH = StETH(_stETH);
+    mapping (address => bool) public vaultFactories;
+    mapping (address => bool) public vaultImpl;
+
+    constructor(address _admin, StETH _stETH, address _treasury) {
+        stETH = _stETH;
         treasury = _treasury;
 
         sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0)); // stone in the elevator
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    }
+
+    function addFactory(address factory) public onlyRole(VAULT_MASTER_ROLE) {
+        if (vaultFactories[factory]) revert AlreadyExists(factory);
+        vaultFactories[factory] = true;
+        emit VaultFactoryAdded(factory);
+    }
+
+    function addImpl(address impl) public onlyRole(VAULT_MASTER_ROLE) {
+        if (vaultImpl[impl]) revert AlreadyExists(impl);
+        vaultImpl[impl] = true;
+        emit VaultImplAdded(impl);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -102,6 +119,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         if (_treasuryFeeBP == 0) revert ZeroArgument("_treasuryFeeBP");
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
+
+        address factory = IBeaconProxy(address (_vault)).getBeacon();
+        if (!vaultFactories[factory]) revert FactoryNotAllowed(factory);
+
+        address impl = IBeacon(factory).implementation();
+        if (!vaultImpl[impl]) revert ImplNotAllowed(impl);
 
         if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
@@ -396,6 +419,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event MintedStETHOnVault(address sender, uint256 tokens);
     event BurnedStETHOnVault(address sender, uint256 tokens);
     event VaultRebalanced(address sender, uint256 sharesBurned);
+    event VaultImplAdded(address impl);
+    event VaultFactoryAdded(address factory);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -413,4 +438,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
     error InsufficientValuationToMint(address vault, uint256 valuation);
+    error AlreadyExists(address addr);
+    error FactoryNotAllowed(address beacon);
+    error ImplNotAllowed(address impl);
 }
