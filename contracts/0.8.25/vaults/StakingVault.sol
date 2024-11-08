@@ -49,6 +49,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     ///
     /// @param _owner owner address that can TBD
     /// @param _params the calldata for initialize contract after upgrades
+    // solhint-disable-next-line no-unused-vars
     function initialize(address _owner, bytes calldata _params) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
 
