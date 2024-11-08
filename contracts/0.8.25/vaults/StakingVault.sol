@@ -81,11 +81,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
     function valuation() public view returns (uint256) {
         VaultStorage storage $ = _getVaultStorage();
-        Report memory report = $.report;
         return uint256(int256(
-            int128(report.valuation)
+            int128($.report.valuation)
             + $.inOutDelta
-            - report.inOutDelta
+            - $.report.inOutDelta
         ));
     }
 
