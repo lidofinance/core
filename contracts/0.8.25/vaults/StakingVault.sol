@@ -19,8 +19,7 @@ import {Versioned} from "../utils/Versioned.sol";
 contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
-        uint128 reportValuation;
-        int128 reportInOutDelta;
+        IStakingVault.Report report;
 
         uint128 locked;
         int128 inOutDelta;
@@ -82,10 +81,11 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
     function valuation() public view returns (uint256) {
         VaultStorage storage $ = _getVaultStorage();
+        Report memory report = $.report;
         return uint256(int256(
-            int128($.reportValuation)
+            int128(report.valuation)
             + $.inOutDelta
-            - $.reportInOutDelta
+            - report.inOutDelta
         ));
     }
 
@@ -188,18 +188,15 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
-        return IStakingVault.Report({
-            valuation: $.reportValuation,
-            inOutDelta: $.reportInOutDelta
-        });
+        return $.report;
     }
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("update", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
-        $.reportValuation = SafeCast.toUint128(_valuation);
-        $.reportInOutDelta = SafeCast.toInt128(_inOutDelta);
+        $.report.valuation = SafeCast.toUint128(_valuation);
+        $.report.inOutDelta = SafeCast.toInt128(_inOutDelta);
         $.locked = SafeCast.toUint128(_locked);
 
         try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
