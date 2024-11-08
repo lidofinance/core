@@ -84,17 +84,14 @@ contract VaultFactory is UpgradeableBeacon {
     * @param owner The address of the Vault owner
     * @param vault The address of the created Vault
     */
-    event VaultCreated(address indexed owner,address indexed vault);
+    event VaultCreated(address indexed owner, address indexed vault);
 
     /**
     * @notice Event emitted on a VaultStaffRoom creation
     * @param admin The address of the VaultStaffRoom admin
     * @param vaultStaffRoom The address of the created VaultStaffRoom
     */
-    event VaultStaffRoomCreated(
-        address indexed admin,
-        address indexed vaultStaffRoom
-    );
+    event VaultStaffRoomCreated(address indexed admin, address indexed vaultStaffRoom);
 
     error ZeroArgument(string);
 }
