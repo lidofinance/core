@@ -5,9 +5,6 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/Upg
 import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.0.2/proxy/Clones.sol";
 
-import {StakingVault} from "./StakingVault.sol";
-import {VaultStaffRoom} from "./VaultStaffRoom.sol";
-import {VaultDashboard} from "./VaultDashboard.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 pragma solidity 0.8.25;
@@ -52,22 +49,23 @@ contract VaultFactory is UpgradeableBeacon {
         IVaultStaffRoom.VaultStaffRoomParams calldata _vaultStaffRoomParams
     )
       external
-      returns(address vault, address vaultStaffRoom)
+      returns(IStakingVault vault, IVaultStaffRoom vaultStaffRoom)
     {
         if (_vaultStaffRoomParams.manager == address(0)) revert ZeroArgument("manager");
         if (_vaultStaffRoomParams.operator == address(0)) revert ZeroArgument("operator");
 
-        vault = address(new BeaconProxy(address(this), ""));
+        vault = IStakingVault(address(new BeaconProxy(address(this), "")));
 
-        IVaultStaffRoom vaultStaffRoom = IVaultStaffRoom(Clones.clone(vaultStaffRoomImpl));
+        vaultStaffRoom = IVaultStaffRoom(Clones.clone(vaultStaffRoomImpl));
 
-        //grant roles for factory to set fees
-        vaultStaffRoom.initialize(address(this), vault);
-        vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
+        //grant roles for factory to set fees and roles
+        vaultStaffRoom.initialize(address(this), address(vault));
+
         vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), _vaultStaffRoomParams.manager);
         vaultStaffRoom.grantRole(vaultStaffRoom.OPERATOR_ROLE(), _vaultStaffRoomParams.operator);
         vaultStaffRoom.grantRole(vaultStaffRoom.OWNER(), msg.sender);
 
+        vaultStaffRoom.grantRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
         vaultStaffRoom.setManagementFee(_vaultStaffRoomParams.managementFee);
         vaultStaffRoom.setPerformanceFee(_vaultStaffRoomParams.performanceFee);
 
@@ -75,21 +73,18 @@ contract VaultFactory is UpgradeableBeacon {
         vaultStaffRoom.revokeRole(vaultStaffRoom.MANAGER_ROLE(), address(this));
         vaultStaffRoom.revokeRole(vaultStaffRoom.OWNER(), address(this));
 
-        IStakingVault(vault).initialize(address(vaultStaffRoom), _stakingVaultParams);
+        vault.initialize(address(vaultStaffRoom), _stakingVaultParams);
 
-        emit VaultCreated(address(vaultStaffRoom), vault);
+        emit VaultCreated(address(vaultStaffRoom), address(vault));
         emit VaultStaffRoomCreated(msg.sender, address(vaultStaffRoom));
     }
 
     /**
     * @notice Event emitted on a Vault creation
-    * @param admin The address of the Vault admin
+    * @param owner The address of the Vault owner
     * @param vault The address of the created Vault
     */
-    event VaultCreated(
-        address indexed admin,
-        address indexed vault
-    );
+    event VaultCreated(address indexed owner,address indexed vault);
 
     /**
     * @notice Event emitted on a VaultStaffRoom creation
