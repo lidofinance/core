@@ -217,7 +217,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
     event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
-    event Reported(address vault, uint256 valuation, int256 inOutDelta, uint256 locked);
+    event Reported(address indexed vault, uint256 valuation, int256 inOutDelta, uint256 locked);
     event OnReportFailed(address vault, bytes reason);
 
     error ZeroArgument(string name);
