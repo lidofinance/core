@@ -160,6 +160,7 @@ contract VaultStaffRoom is VaultDashboard, IReportReceiver {
 
     /// * * * * * VAULT CALLBACK * * * * * ///
 
+    // solhint-disable-next-line no-unused-vars
     function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(stakingVault)) revert OnlyVaultCanCallOnReportHook();
 
