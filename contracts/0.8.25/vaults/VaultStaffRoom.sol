@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {VaultDashboard} from "./VaultDashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -18,7 +19,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 // - Operator: can claim performance due and assigns Keymaster sub-role
 // - Keymaster: Operator's sub-role for depositing to beacon chain
 // - Plumber: manages liquidity, i.e. mints and burns stETH
-contract VaultStaffRoom is VaultDashboard {
+contract VaultStaffRoom is VaultDashboard, IReportReceiver {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
@@ -159,7 +160,7 @@ contract VaultStaffRoom is VaultDashboard {
 
     /// * * * * * VAULT CALLBACK * * * * * ///
 
-    function onReport(uint256 _valuation) external {
+    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(stakingVault)) revert OnlyVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;

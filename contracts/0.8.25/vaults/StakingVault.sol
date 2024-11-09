@@ -199,10 +199,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         $.locked = SafeCast.toUint128(_locked);
 
         try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
-            emit OnReportFailed(reason);
+            emit OnReportFailed(address(this), reason);
         }
 
-        emit Reported(_valuation, _inOutDelta, _locked);
+        emit Reported(address(this), _valuation, _inOutDelta, _locked);
     }
 
     function _getVaultStorage() private pure returns (VaultStorage storage $) {
@@ -217,8 +217,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
     event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
-    event OnReportFailed(bytes reason);
+    event Reported(address vault, uint256 valuation, int256 inOutDelta, uint256 locked);
+    event OnReportFailed(address vault, bytes reason);
 
     error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
