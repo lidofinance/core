@@ -126,7 +126,7 @@ contract VaultDashboard is AccessControlEnumerable {
     /// REBALANCE ///
 
     function rebalanceVault(uint256 _ether) external payable virtual onlyRole(MANAGER_ROLE) fundAndProceed {
-        stakingVault.rebalance{value: msg.value}(_ether);
+        stakingVault.rebalance(_ether);
     }
 
     /// MODIFIERS ///

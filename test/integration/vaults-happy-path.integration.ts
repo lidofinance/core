@@ -55,6 +55,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   const vault101LTV = MAX_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let vault101: StakingVault;
+  let vault101Address: string;
   let vault101AdminContract: VaultStaffRoom;
   let vault101BeaconBalance = 0n;
   let vault101MintingMaximum = 0n;
@@ -98,7 +99,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   }
 
   async function addRewards(rewards: bigint) {
-    const vault101Address = await vault101.getAddress();
+    if (!vault101Address || !vault101) {
+      throw new Error("Vault 101 is not initialized");
+    }
+
     const vault101Balance = (await ethers.provider.getBalance(vault101Address)) + rewards;
     await updateBalance(vault101Address, vault101Balance);
 
@@ -254,36 +258,37 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await trace("vaultAdminContract.depositToBeaconChain", topUpTx);
 
     vault101BeaconBalance += VAULT_DEPOSIT;
+    vault101Address = await vault101.getAddress();
 
     const vaultBalance = await ethers.provider.getBalance(vault101);
     expect(vaultBalance).to.equal(0n);
     expect(await vault101.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow plumber to mint max stETH", async () => {
+  it("Should allow Mario to mint max stETH", async () => {
     const { accounting } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     vault101MintingMaximum = (VAULT_DEPOSIT * vault101LTV) / MAX_BASIS_POINTS;
 
     log.debug("Vault 101", {
-      "Vault 101 Address": await vault101.getAddress(),
+      "Vault 101 Address": vault101Address,
       "Total ETH": await vault101.valuation(),
       "Max stETH": vault101MintingMaximum,
     });
 
     // Validate minting with the cap
-    const mintOverLimitTx = vault101AdminContract.connect(mario).mint(alice, vault101MintingMaximum + 1n);
+    const mintOverLimitTx = vault101AdminContract.connect(mario).mint(mario, vault101MintingMaximum + 1n);
     await expect(mintOverLimitTx)
       .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
       .withArgs(vault101, vault101.valuation());
 
-    const mintTx = await vault101AdminContract.connect(mario).mint(alice, vault101MintingMaximum);
+    const mintTx = await vault101AdminContract.connect(mario).mint(mario, vault101MintingMaximum);
     const mintTxReceipt = await trace<ContractTransactionReceipt>("vaultAdminContract.mint", mintTx);
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedStETHOnVault");
     expect(mintEvents.length).to.equal(1n);
-    expect(mintEvents[0].args.sender).to.equal(await vault101.getAddress());
+    expect(mintEvents[0].args.sender).to.equal(vault101Address);
     expect(mintEvents[0].args.tokens).to.equal(vault101MintingMaximum);
 
     const lockedEvents = ctx.getEvents(mintTxReceipt, "Locked", [vault101.interface]);
@@ -321,7 +326,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [vault101.interface]);
     expect(vaultReportedEvent.length).to.equal(1n);
 
-    expect(vaultReportedEvent[0].args?.vault).to.equal(await vault101.getAddress());
+    expect(vaultReportedEvent[0].args?.vault).to.equal(vault101Address);
     expect(vaultReportedEvent[0].args?.valuation).to.equal(vaultValue);
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
@@ -358,7 +363,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should stop Alice from claiming management fee is stETH after reserve limit reached", async () => {
     await expect(vault101AdminContract.connect(alice).claimManagementDue(alice, true))
       .to.be.revertedWithCustomError(ctx.contracts.accounting, "InsufficientValuationToMint")
-      .withArgs(await vault101.getAddress(), await vault101.valuation());
+      .withArgs(vault101Address, await vault101.valuation());
   });
 
   it("Should stop Alice from claiming management fee in ETH if not not enough unlocked ETH", async () => {
@@ -374,7 +379,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // simulate validator exit
     const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
     await vault101AdminContract.connect(alice).requestValidatorExit(secondValidatorKey);
-    await updateBalance(await vault101.getAddress(), VALIDATOR_DEPOSIT_SIZE);
+    await updateBalance(vault101Address, VALIDATOR_DEPOSIT_SIZE);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value to simulate the validator exit
@@ -389,84 +394,86 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await report(ctx, params);
   });
 
-  // it.skip("Should allow Alice to claim AUM rewards in ETH after rebase with exited validator", async () => {
-  //   const vault101OwnerFee = await vault101.vault.accumulatedVaultOwnerFee();
-  //
-  //   log.debug("Vault 101 stats after operator exit", {
-  //     "Vault 101 owner fee": ethers.formatEther(vault101OwnerFee),
-  //     "Vault 101 balance": ethers.formatEther(await ethers.provider.getBalance(vault101.address)),
-  //   });
-  //
-  //   const aliceBalanceBefore = await ethers.provider.getBalance(alice.address);
-  //
-  //   const claimEthTx = await vault101.vault.connect(alice).claimVaultOwnerFee(alice, false);
-  //   const { gasUsed, gasPrice } = await trace("vault.claimVaultOwnerFee", claimEthTx);
-  //
-  //   const aliceBalanceAfter = await ethers.provider.getBalance(alice.address);
-  //
-  //   log.debug("Balances after owner fee claim", {
-  //     "Alice's ETH balance before": ethers.formatEther(aliceBalanceBefore),
-  //     "Alice's ETH balance after": ethers.formatEther(aliceBalanceAfter),
-  //     "Alice's ETH balance diff": ethers.formatEther(aliceBalanceAfter - aliceBalanceBefore),
-  //     "Vault 101 owner fee": ethers.formatEther(vault101OwnerFee),
-  //     "Vault 101 balance": ethers.formatEther(await ethers.provider.getBalance(vault101.address)),
-  //   });
-  //
-  //   expect(aliceBalanceAfter).to.equal(aliceBalanceBefore + vault101OwnerFee - gasUsed * gasPrice);
-  // });
-  //
-  // it.skip("Should allow Alice to burn shares to repay debt", async () => {
-  //   const { lido } = ctx.contracts;
-  //
-  //   const approveTx = await lido.connect(alice).approve(vault101.address, vault101MintingMaximum);
-  //   await trace("lido.approve", approveTx);
-  //
-  //   const burnTx = await vault101.vault.connect(alice).burn(vault101MintingMaximum);
-  //   await trace("vault.burn", burnTx);
-  //
-  //   const { vaultRewards, netCashFlows } = await calculateReportParams();
-  //
-  //   // Again half the vault rewards value to simulate operator exit
-  //   vaultRewards[vault101Index] = vaultRewards[vault101Index] / 2n;
-  //   const vaultValues = await addRewards(vaultRewards);
-  //
-  //   const params = {
-  //     clDiff: 0n,
-  //     excludeVaultsBalances: true,
-  //     vaultValues,
-  //     netCashFlows,
-  //   };
-  //
-  //   const { reportTx } = (await report(ctx, params)) as {
-  //     reportTx: TransactionResponse;
-  //     extraDataTx: TransactionResponse;
-  //   };
-  //   await trace("report", reportTx);
-  //
-  //   const lockedOnVault = await vault101.vault.locked();
-  //   expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
-  //
-  //   // TODO: add more checks here
-  // });
-  //
-  // it.skip("Should allow Alice to rebalance the vault to reduce the debt", async () => {
-  //   const { accounting, lido } = ctx.contracts;
-  //
-  //   const socket = await accounting["vaultSocket(address)"](vault101.address);
-  //   const ethToTopUp = await lido.getPooledEthByShares(socket.mintedShares);
-  //
-  //   const rebalanceTx = await vault101.vault.connect(alice).rebalance(ethToTopUp + 1n, { value: ethToTopUp + 1n });
-  //   await trace("vault.rebalance", rebalanceTx);
-  // });
-  //
-  // it.skip("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
-  //   const disconnectTx = await vault101.vault.connect(alice).disconnectFromHub();
-  //   const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.disconnectFromHub", disconnectTx);
-  //
-  //   const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
-  //
-  //   expect(disconnectEvents.length).to.equal(1n);
-  //
-  //   // TODO: add more assertions for values during the disconnection
-  // });
+  it("Should allow Alice to claim manager rewards in ETH after rebase with exited validator", async () => {
+    const feesToClaim = await vault101AdminContract.managementDue();
+
+    log.debug("Vault 101 stats after operator exit", {
+      "Vault 101 owner fee": ethers.formatEther(feesToClaim),
+      "Vault 101 balance": ethers.formatEther(await ethers.provider.getBalance(vault101Address)),
+    });
+
+    const aliceBalanceBefore = await ethers.provider.getBalance(alice.address);
+
+    const claimEthTx = await vault101AdminContract.connect(alice).claimManagementDue(alice, false);
+    const { gasUsed, gasPrice } = await trace("vaultAdmin.claimManagementDue", claimEthTx);
+
+    const aliceBalanceAfter = await ethers.provider.getBalance(alice.address);
+    const vaultBalance = await ethers.provider.getBalance(vault101Address);
+
+    log.debug("Balances after owner fee claim", {
+      "Alice's ETH balance before": ethers.formatEther(aliceBalanceBefore),
+      "Alice's ETH balance after": ethers.formatEther(aliceBalanceAfter),
+      "Alice's ETH balance diff": ethers.formatEther(aliceBalanceAfter - aliceBalanceBefore),
+      "Vault 101 owner fee": ethers.formatEther(feesToClaim),
+      "Vault 101 balance": ethers.formatEther(vaultBalance),
+    });
+
+    expect(aliceBalanceAfter).to.equal(aliceBalanceBefore + feesToClaim - gasUsed * gasPrice);
+  });
+
+  it("Should allow Mario to burn shares to repay debt", async () => {
+    const { lido } = ctx.contracts;
+
+    // Mario can approve the vault to burn the shares
+    const approveVaultTx = await lido.connect(mario).approve(vault101AdminContract, vault101MintingMaximum);
+    await trace("lido.approve", approveVaultTx);
+
+    const burnTx = await vault101AdminContract.connect(mario).burn(vault101MintingMaximum);
+    await trace("vault.burn", burnTx);
+
+    const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
+    const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
+
+    const params = {
+      clDiff: elapsedProtocolReward,
+      excludeVaultsBalances: true,
+      vaultValues: [vaultValue],
+      netCashFlows: [VAULT_DEPOSIT],
+    } as OracleReportParams;
+
+    const { reportTx } = (await report(ctx, params)) as {
+      reportTx: TransactionResponse;
+      extraDataTx: TransactionResponse;
+    };
+    await trace("report", reportTx);
+
+    const lockedOnVault = await vault101.locked();
+    expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
+
+    // TODO: add more checks here
+  });
+
+  it("Should allow Alice to rebalance the vault to reduce the debt", async () => {
+    const { accounting, lido } = ctx.contracts;
+
+    const socket = await accounting["vaultSocket(address)"](vault101Address);
+    const sharesMinted = (await lido.getPooledEthByShares(socket.sharesMinted)) + 1n; // +1 to avoid rounding errors
+
+    const rebalanceTx = await vault101AdminContract
+      .connect(alice)
+      .rebalanceVault(sharesMinted, { value: sharesMinted });
+
+    await trace("vault.rebalance", rebalanceTx);
+  });
+
+  it("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
+    const disconnectTx = await vault101AdminContract.connect(alice).disconnectFromHub();
+    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.disconnectFromHub", disconnectTx);
+
+    const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
+
+    expect(disconnectEvents.length).to.equal(1n);
+
+    // TODO: add more assertions for values during the disconnection
+  });
 });

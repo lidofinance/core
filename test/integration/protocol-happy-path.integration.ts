@@ -19,7 +19,7 @@ import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from 
 
 const AMOUNT = ether("100");
 
-describe("Protocol Happy Path", () => {
+describe("Scenario: Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 

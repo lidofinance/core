@@ -40,7 +40,7 @@ interface IStakingVault {
 
     function requestValidatorExit(bytes calldata _validatorPublicKey) external;
 
-    function rebalance(uint256 _ether) external payable;
+    function rebalance(uint256 _ether) external;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
 }
