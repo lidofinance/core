@@ -166,9 +166,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit Locked(_locked);
     }
 
-    function rebalance(uint256 _ether) external payable {
+    function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
+        // TODO: should we revert on msg.value > _ether
 
         if (owner() == msg.sender || (!isHealthy() && msg.sender == address(VAULT_HUB))) {
             // force rebalance
@@ -199,10 +200,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         $.locked = SafeCast.toUint128(_locked);
 
         try IReportReceiver(owner()).onReport(_valuation, _inOutDelta, _locked) {} catch (bytes memory reason) {
-            emit OnReportFailed(reason);
+            emit OnReportFailed(address(this), reason);
         }
 
-        emit Reported(_valuation, _inOutDelta, _locked);
+        emit Reported(address(this), _valuation, _inOutDelta, _locked);
     }
 
     function _getVaultStorage() private pure returns (VaultStorage storage $) {
@@ -217,8 +218,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
     event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
-    event OnReportFailed(bytes reason);
+    event Reported(address indexed vault, uint256 valuation, int256 inOutDelta, uint256 locked);
+    event OnReportFailed(address vault, bytes reason);
 
     error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
