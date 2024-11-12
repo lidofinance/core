@@ -132,6 +132,7 @@ contract AccountingOracle is BaseOracle {
     bytes32 internal constant EXTRA_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.AccountingOracle.extraDataProcessingState");
 
+    /// @dev will be renamed to ZERO_BYTES32
     bytes32 internal constant ZERO_HASH = bytes32(0);
 
     address public immutable LIDO;
@@ -275,15 +276,7 @@ contract AccountingOracle is BaseOracle {
         /// data for a report is possible after its processing deadline passes or a new data report
         /// arrives.
         ///
-        /// Depending on the size of the extra data, the processing might need to be split into
-        /// multiple transactions. Each transaction contains a chunk of report data (an array of items)
-        /// and the hash of the next transaction. The last transaction will contain ZERO_HASH
-        /// as the next transaction hash.
-        ///
-        /// | 32 bytes |    array of items
-        /// | nextHash |         ...
-        ///
-        /// Each item being encoded as follows:
+        /// Extra data is an array of items, each item being encoded as follows:
         ///
         ///    3 bytes    2 bytes      X bytes
         /// | itemIndex | itemType | itemPayload |
@@ -356,7 +349,7 @@ contract AccountingOracle is BaseOracle {
         /// @dev Hash of the extra data. See the constant defining a specific extra data
         /// format for the info on how to calculate the hash.
         ///
-        /// Must be set to a zero hash if the oracle report contains no extra data.
+        /// Must be set to a `ZERO_BYTES32` if the oracle report contains no extra data.
         ///
         bytes32 extraDataHash;
 
@@ -374,16 +367,25 @@ contract AccountingOracle is BaseOracle {
     ///
     uint256 public constant EXTRA_DATA_FORMAT_EMPTY = 0;
 
-    /// @notice The list format for the extra data array. Used when all extra data processing
-    /// fits into a single or multiple transactions.
+    /// @notice The list format for the extra data array. Used when the oracle reports contains extra data.
     ///
-    /// Depend on the extra data size it passed within a single or multiple transactions.
-    /// Each transaction contains next transaction hash and a bytearray containing data items
-    /// packed tightly.
+    /// Depending on the extra data size, it's passed within a single or multiple transactions.
+    /// Each transaction contains data consisting of 1) the keccak256 hash of the next
+    /// transaction's data or `ZERO_BYTES32` if there are no more data chunks, and 2) a chunk
+    /// of report data (an array of items).
     ///
-    /// Hash is a keccak256 hash calculated over the transaction data (next transaction hash and bytearray items).
-    /// The Solidity equivalent of the hash calculation code would be `keccak256(data)`,
-    /// where `data` has the `bytes` type.
+    /// |                   32 bytes                       |     X bytes      |
+    /// |  Next transaction's data hash or `ZERO_BYTES32`  |  array of items  |
+    ///
+    /// The `extraDataHash` field of the `ReportData` struct is calculated as a keccak256 hash
+    /// over the first transaction's data, i.e. over the first data chunk with the second
+    /// transaction's data hash (or `ZERO_BYTES32`) prepended.
+    ///
+    /// ReportData.extraDataHash := hash0
+    /// hash0 := keccak256(| hash1 | extraData[0], ... extraData[n] |)
+    /// hash1 := keccak256(| hash2 | extraData[n + 1], ... extraData[m] |)
+    /// ...
+    /// hashK := keccak256(| ZERO_BYTES32 | extraData[x + 1], ... extraData[extraDataItemsCount] |)
     ///
     uint256 public constant EXTRA_DATA_FORMAT_LIST = 1;
 
@@ -420,7 +422,7 @@ contract AccountingOracle is BaseOracle {
 
     /// @notice Submits report extra data in the EXTRA_DATA_FORMAT_LIST format for processing.
     ///
-    /// @param data The extra data chunk with items list. See docs for the `EXTRA_DATA_FORMAT_LIST`
+    /// @param data  The extra data chunk. See docs for the `EXTRA_DATA_FORMAT_LIST`
     ///              constant for details.
     ///
     function submitReportExtraDataList(bytes calldata data) external {
