@@ -19,6 +19,7 @@ import {
   OracleReportSanityChecker,
   StakingRouter,
   ValidatorsExitBusOracle,
+  VaultFactory,
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
@@ -53,6 +54,8 @@ export type ProtocolNetworkItems = {
   sdvt: string;
   // hash consensus
   hashConsensus: string;
+  // vaults
+  stakingVaultFactory: string;
 };
 
 export interface ContractTypes {
@@ -75,6 +78,7 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  VaultFactory: VaultFactory;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -123,11 +127,16 @@ export type WstETHContracts = {
   wstETH: LoadedContract<WstETH>;
 };
 
+export type VaultsContracts = {
+  stakingVaultFactory: LoadedContract<VaultFactory>;
+};
+
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
   AragonContracts &
   StakingModuleContracts &
   HashConsensusContracts &
-  WstETHContracts;
+  WstETHContracts &
+  VaultsContracts;
 
 export type ProtocolSigners = {
   agent: string;
