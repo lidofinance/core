@@ -32,6 +32,11 @@ interface IStakingRouter {
 /**
  * @title DepositSecurityModule
  * @dev The contract represents a security module for handling deposits.
+ *
+ * The contract allows pausing deposits in response to potential security incidents and
+ * requires a quorum of guardians to authorize deposit operations. It also provides a mechanism
+ * to unvet signing keys (a vetted key is a validator key approved for receiving ether deposits)
+ * in case of any issues.
  */
 contract DepositSecurityModule {
     /**
