@@ -132,8 +132,7 @@ contract AccountingOracle is BaseOracle {
     bytes32 internal constant EXTRA_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.AccountingOracle.extraDataProcessingState");
 
-    /// @dev will be renamed to ZERO_BYTES32
-    bytes32 internal constant ZERO_HASH = bytes32(0);
+    bytes32 internal constant ZERO_BYTES32 = bytes32(0);
 
     address public immutable LIDO;
     ILidoLocator public immutable LOCATOR;
@@ -463,7 +462,7 @@ contract AccountingOracle is BaseOracle {
         ConsensusReport memory report = _storageConsensusReport().value;
         result.currentFrameRefSlot = _getCurrentRefSlot();
 
-        if (report.hash == ZERO_HASH || result.currentFrameRefSlot != report.refSlot) {
+        if (report.hash == ZERO_BYTES32 || result.currentFrameRefSlot != report.refSlot) {
             return result;
         }
 
@@ -587,8 +586,8 @@ contract AccountingOracle is BaseOracle {
 
     function _handleConsensusReportData(ReportData calldata data, uint256 prevRefSlot) internal {
         if (data.extraDataFormat == EXTRA_DATA_FORMAT_EMPTY) {
-            if (data.extraDataHash != ZERO_HASH) {
-                revert UnexpectedExtraDataHash(ZERO_HASH, data.extraDataHash);
+            if (data.extraDataHash != ZERO_BYTES32) {
+                revert UnexpectedExtraDataHash(ZERO_BYTES32, data.extraDataHash);
             }
             if (data.extraDataItemsCount != 0) {
                 revert UnexpectedExtraDataItemsCount(0, data.extraDataItemsCount);
@@ -600,7 +599,7 @@ contract AccountingOracle is BaseOracle {
             if (data.extraDataItemsCount == 0) {
                 revert ExtraDataItemsCountCannotBeZeroForNonEmptyData();
             }
-            if (data.extraDataHash == ZERO_HASH) {
+            if (data.extraDataHash == ZERO_BYTES32) {
                 revert ExtraDataHashCannotBeZeroForNonEmptyData();
             }
         }
@@ -710,7 +709,7 @@ contract AccountingOracle is BaseOracle {
 
         ConsensusReport memory report = _storageConsensusReport().value;
 
-        if (report.hash == ZERO_HASH || procState.refSlot != report.refSlot) {
+        if (report.hash == ZERO_BYTES32 || procState.refSlot != report.refSlot) {
             revert CannotSubmitExtraDataBeforeMainData();
         }
 
@@ -759,7 +758,7 @@ contract AccountingOracle is BaseOracle {
         _processExtraDataItems(data, iter);
         uint256 itemsProcessed = iter.index + 1;
 
-        if (dataHash == ZERO_HASH) {
+        if (dataHash == ZERO_BYTES32) {
             if (itemsProcessed != procState.itemsCount) {
                 revert UnexpectedExtraDataItemsCount(procState.itemsCount, itemsProcessed);
             }
