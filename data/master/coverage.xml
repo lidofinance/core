@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="2872"  lines-covered="2755"  line-rate="0.9593"  branches-valid="1272"  branches-covered="1194"  branch-rate="0.9387000000000001"  timestamp="1728914249732" complexity="0" version="0.1">
+<coverage lines-valid="2872"  lines-covered="2755"  line-rate="0.9593"  branches-valid="1272"  branches-covered="1194"  branch-rate="0.9387000000000001"  timestamp="1731574097636" complexity="0" version="0.1">
 <sources>
-	<source>/home/runner/work/lido-dao/lido-dao</source>
+	<source>/home/runner/work/core/core</source>
 </sources>
 <packages>
 	<package name="0.4.24"  line-rate="1"  branch-rate="0.9911" >
