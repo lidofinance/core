@@ -15,6 +15,7 @@
     "scratch/steps/0120-initialize-non-aragon-contracts",
     "scratch/steps/0130-grant-roles",
     "scratch/steps/0140-plug-staking-modules",
+    "scratch/steps/0145-deploy-vaults",
     "scratch/steps/0150-transfer-roles"
   ]
 }

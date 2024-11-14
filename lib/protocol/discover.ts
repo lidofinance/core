@@ -1,6 +1,13 @@
 import hre from "hardhat";
 
-import { AccountingOracle, Lido, LidoLocator, StakingRouter, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  AccountingOracle,
+  Lido,
+  LidoLocator,
+  StakingRouter,
+  VaultFactory,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { batch, log } from "lib";
 
@@ -154,6 +161,15 @@ const getWstEthContract = async (
   })) as WstETHContracts;
 };
 
+/**
+ * Load all required vaults contracts.
+ */
+const getVaultsContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+  return (await batch({
+    stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
+  })) as { stakingVaultFactory: LoadedContract<VaultFactory> };
+};
+
 export async function discover() {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
@@ -166,6 +182,7 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
+    ...(await getVaultsContracts(locator, networkConfig)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
@@ -189,6 +206,8 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
+    // Vaults
+    "Staking Vault Factory": contracts.stakingVaultFactory.address,
   });
 
   const signers = {

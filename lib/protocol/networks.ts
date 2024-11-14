@@ -66,6 +66,8 @@ const defaultEnv = {
   sdvt: "SIMPLE_DVT_REGISTRY_ADDRESS",
   // hash consensus
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
+  // vaults
+  stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -82,6 +84,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     agentAddress: config["app:aragon-agent"].proxy.address,
     votingAddress: config["app:aragon-voting"].proxy.address,
     easyTrackAddress: config["app:aragon-voting"].proxy.address,
+    stakingVaultFactory: config["stakingVaultFactory"].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -93,6 +96,7 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
     agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
     votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
+    stakingVaultFactory: "",
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }

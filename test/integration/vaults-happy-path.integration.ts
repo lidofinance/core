@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingVault, VaultFactory, VaultStaffRoom } from "typechain-types";
+import { StakingVault, VaultStaffRoom } from "typechain-types";
 
 import { impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -47,8 +47,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let mario: HardhatEthersSigner;
 
   let depositContract: string;
-
-  let vaultsFactory: VaultFactory;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
   const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
@@ -137,47 +135,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
-    const { accounting } = ctx.contracts;
+    const { stakingVaultFactory } = ctx.contracts;
 
-    const vaultImpl = await ethers
-      .getContractFactory("StakingVault")
-      .then((f) => f.deploy(ctx.contracts.accounting.address, depositContract));
+    const implAddress = await stakingVaultFactory.implementation();
+    const adminContractImplAddress = await stakingVaultFactory.vaultStaffRoomImpl();
+
+    const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
+    const vaultFactoryAdminContract = await ethers.getContractAt("VaultStaffRoom", adminContractImplAddress);
 
     expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
+    expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
 
-    const vaultStaffRoomImpl = await ethers
-      .getContractFactory("VaultStaffRoom")
-      .then((f) => f.deploy(ctx.contracts.lido.address));
-
-    expect(await vaultStaffRoomImpl.stETH()).to.equal(ctx.contracts.lido.address);
-
-    const vaultImplAddress = await vaultImpl.getAddress();
-    const vaultStaffRoomImplAddress = await vaultStaffRoomImpl.getAddress();
-
-    vaultsFactory = await ethers
-      .getContractFactory("VaultFactory")
-      .then((f) => f.deploy(alice, vaultImplAddress, vaultStaffRoomImplAddress));
-
-    const vaultsFactoryAddress = await vaultsFactory.getAddress();
-
-    expect(await vaultsFactory.implementation()).to.equal(vaultImplAddress);
-    expect(await vaultsFactory.vaultStaffRoomImpl()).to.equal(vaultStaffRoomImplAddress);
-
-    const agentSigner = await ctx.getSigner("agent");
-
-    await expect(accounting.connect(agentSigner).addFactory(vaultsFactory))
-      .to.emit(accounting, "VaultFactoryAdded")
-      .withArgs(vaultsFactoryAddress);
-
-    await expect(accounting.connect(agentSigner).addImpl(vaultImpl))
-      .to.emit(accounting, "VaultImplAdded")
-      .withArgs(vaultImplAddress);
+    // TODO: check what else should be validated here
   });
 
   it("Should allow Alice to create vaults and assign Bob as node operator", async () => {
+    const { stakingVaultFactory } = ctx.contracts;
+
     // Alice can create a vault with Bob as a node operator
-    const deployTx = await vaultsFactory.connect(alice).createVault("0x", {
+    const deployTx = await stakingVaultFactory.connect(alice).createVault("0x", {
       managementFee: VAULT_OWNER_FEE,
       performanceFee: VAULT_NODE_OPERATOR_FEE,
       manager: alice,

@@ -105,7 +105,7 @@ export async function main() {
 
   // Accounting
   const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
-  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), agentAddress], {
+  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), deployer], {
     from: deployer,
   });
 }
