@@ -320,7 +320,7 @@ describe("Protocol Happy Path", () => {
     const treasuryBalanceAfterRebase = await lido.sharesOf(treasuryAddress);
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const extraDataTxReceipt = (await extraDataTx.wait()) as ContractTransactionReceipt;
+    // const extraDataTxReceipt = (await extraDataTx.wait()) as ContractTransactionReceipt;
 
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased")[0];
 
@@ -382,7 +382,10 @@ describe("Protocol Happy Path", () => {
       "Stranger stETH balance after rebase increased",
     );
 
-    const transfers = ctx.getEvents(extraDataTxReceipt, "Transfer");
+    const distributeTx = await nor.connect(stranger).distributeReward();
+    const distributeTxReceipt = (await distributeTx.wait()) as ContractTransactionReceipt;
+    const transfers = ctx.getEvents(distributeTxReceipt, "Transfer");
+
     const burnerTransfers = transfers.filter((e) => e?.args[1] == burner.address).length;
 
     expect(burnerTransfers).to.equal(expectedBurnerTransfers, "Burner transfers is correct");
