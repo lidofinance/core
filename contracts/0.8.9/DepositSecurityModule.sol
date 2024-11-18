@@ -584,20 +584,7 @@ contract DepositSecurityModule {
         bytes calldata vettedSigningKeysCounts,
         Signature calldata sig
     ) external {
-        /// @dev The most likely reason for the signature to go stale
-        uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
-        if (nonce != onchainNonce) revert ModuleNonceChanged();
-
-        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
-
-        if (
-            nodeOperatorIds.length % 8 != 0 ||
-            vettedSigningKeysCounts.length % 16 != 0 ||
-            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
-            nodeOperatorsCount > maxOperatorsPerUnvetting
-        ) {
-            revert UnvetPayloadInvalid();
-        }
+        _checkIfUnvetPayloadValid(nodeOperatorIds, vettedSigningKeysCounts);
 
         address guardianAddr = msg.sender;
         int256 guardianIndex = _getGuardianIndex(msg.sender);
@@ -629,5 +616,24 @@ contract DepositSecurityModule {
             nodeOperatorIds,
             vettedSigningKeysCounts
         );
+    }
+
+    function _checkIfUnvetPayloadValid(
+        uint256 stakingModuleId,
+        uint256 nonce,
+        bytes calldata nodeOperatorIds,
+        bytes calldata vettedSigningKeysCounts
+    ) internal view {
+        /// @dev The most likely reason for the signature to go stale
+        uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
+        if (nonce != onchainNonce) revert ModuleNonceChanged();
+
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+
+        if (
+            nodeOperatorIds.length % 8 != 0 ||
+            vettedSigningKeysCounts.length != nodeOperatorsCount * 16 ||
+            nodeOperatorsCount > maxOperatorsPerUnvetting
+        ) revert UnvetPayloadInvalid();
     }
 }
