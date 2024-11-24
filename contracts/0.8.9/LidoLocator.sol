@@ -69,6 +69,11 @@ contract LidoLocator is ILidoLocator {
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
     }
 
+    /**
+     * @notice Retrieves core components of the Lido system
+     * @return Six core component addresses: elRewardsVault, oracleReportSanityChecker,
+     * stakingRouter, treasury, withdrawalQueue, and withdrawalVault
+     */
     function coreComponents() external view returns(
         address,
         address,
@@ -87,6 +92,12 @@ contract LidoLocator is ILidoLocator {
         );
     }
 
+    /**
+     * @notice Retrieves oracle-related components used by Lido
+     * @return Seven oracle-related component addresses: accountingOracle, elRewardsVault,
+     * oracleReportSanityChecker, burner, withdrawalQueue, withdrawalVault,
+     * and postTokenRebaseReceiver
+     */
     function oracleReportComponentsForLido() external view returns(
         address,
         address,
@@ -107,6 +118,12 @@ contract LidoLocator is ILidoLocator {
         );
     }
 
+    /**
+     * @notice Ensures that an address is not zero
+     * @dev Reverts with a `ZeroAddress` error if the address is zero
+     * @param _address The address to validate
+     * @return The validated non-zero address
+     */
     function _assertNonZero(address _address) internal pure returns (address) {
         if (_address == address(0)) revert ZeroAddress();
         return _address;
