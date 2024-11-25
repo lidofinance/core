@@ -340,7 +340,7 @@ describe("StakingRouter:module-sync", () => {
 
   context("updateTargetValidatorsLimits", () => {
     const NODE_OPERATOR_ID = 0n;
-    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - forced
+    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - boosted
     const TARGET_LIMIT = 100n;
 
     it("Reverts if the caller does not have the role", async () => {
