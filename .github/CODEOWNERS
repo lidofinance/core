@@ -4,4 +4,4 @@
 /contracts/ @lidofinance/lido-eth-protocol
 
 # Any PR to `master` branch with changes to GitHub workflows notifies the workflow review team
-/.github/workflows/ @lidofinance/review-gh-workflows
+/.github/ @lidofinance/review-gh-workflows
