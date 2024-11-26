@@ -6,10 +6,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  ERC721Receiver__MockWithdrawalQueueERC721,
+  ERC721Receiver__Mock,
   NFTDescriptor__MockForWithdrawalQueue,
   Receiver__MockForWithdrawalQueueBase,
-  StETH__MockForWithdrawalQueue,
+  StETH__HarnessForWithdrawalQueue,
   WithdrawalQueueERC721,
   WstETH__MockForWithdrawalQueue,
 } from "typechain-types";
@@ -47,7 +47,7 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   let nftDescriptor: NFTDescriptor__MockForWithdrawalQueue;
   let nftDescriptorAddress: string;
-  let stEth: StETH__MockForWithdrawalQueue;
+  let stEth: StETH__HarnessForWithdrawalQueue;
   let stEthAddress: string;
   let wstEth: WstETH__MockForWithdrawalQueue;
   let wstEthAddress: string;
@@ -66,7 +66,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     ]);
     nftDescriptorAddress = await nftDescriptor.getAddress();
 
-    stEth = await ethers.deployContract("StETH__MockForWithdrawalQueue", []);
+    stEth = await ethers.deployContract("StETH__HarnessForWithdrawalQueue", []);
     stEthAddress = await stEth.getAddress();
 
     wstEth = await ethers.deployContract("WstETH__MockForWithdrawalQueue", [stEthAddress]);
@@ -177,8 +177,8 @@ describe("WithdrawalQueueERC721.sol", () => {
     const requestId = 1;
 
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
 
       await queue.resume();
@@ -190,7 +190,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Returns tokenURI without nftDescriptor and baseUri", async () => {
-      expect(await queue.tokenURI(requestId)).to.be.equal("");
+      expect(await queue.tokenURI(requestId)).to.equal("");
     });
 
     it("Returns correct tokenURI without nftDescriptor", async () => {
@@ -327,8 +327,8 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   context("finalize", () => {
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
     });
 
@@ -379,8 +379,8 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Returns correct balance for token holder", async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
       await queue.resume();
       await queue.connect(user).requestWithdrawals([ether("25.00"), ether("25.00")], user);
@@ -391,8 +391,8 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   context("ownerOf", () => {
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
 
       await queue.resume();
@@ -425,8 +425,8 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   context("approve", () => {
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
 
       await queue.resume();
@@ -452,8 +452,8 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   context("getApproved", () => {
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
 
       await queue.resume();
@@ -506,8 +506,8 @@ describe("WithdrawalQueueERC721.sol", () => {
   context("safeTransferFrom", () => {
     context("safeTransferFrom(address,address,uint256)", () => {
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("600.00"));
-        await stEth.exposedMintShares(user, shares(300n));
+        await stEth.mock__setTotalPooledEther(ether("600.00"));
+        await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queue, shares(300n));
 
         await queue.resume();
@@ -522,20 +522,20 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     context("safeTransferFrom(address,address,uint256,bytes)", () => {
-      let erc721ReceiverContract: ERC721Receiver__MockWithdrawalQueueERC721;
+      let erc721ReceiverContract: ERC721Receiver__Mock;
       let erc721ReceiverContractAddress: string;
       let receiverContract: Receiver__MockForWithdrawalQueueBase;
       let receiverContractAddress: string;
 
       beforeEach(async () => {
-        await stEth.mockSetTotalPooledEther(ether("600.00"));
-        await stEth.exposedMintShares(user, shares(300n));
+        await stEth.mock__setTotalPooledEther(ether("600.00"));
+        await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queue, shares(300n));
 
         await queue.resume();
         await queue.connect(user).requestWithdrawals([ether("25.00"), ether("25.00")], user);
 
-        erc721ReceiverContract = await ethers.deployContract("ERC721Receiver__MockWithdrawalQueueERC721", []);
+        erc721ReceiverContract = await ethers.deployContract("ERC721Receiver__Mock", []);
         erc721ReceiverContractAddress = await erc721ReceiverContract.getAddress();
 
         receiverContract = await ethers.deployContract("Receiver__MockForWithdrawalQueueBase");
@@ -561,26 +561,26 @@ describe("WithdrawalQueueERC721.sol", () => {
       });
 
       it("Reverts when transfer to IERC721 receiver that does not accept tokens", async () => {
-        await erc721ReceiverContract.setDoesAcceptTokens(false);
+        await erc721ReceiverContract.mock__setDoesAcceptTokens(false);
 
         await expect(
           queue
             .connect(user)
             [
-            "safeTransferFrom(address,address,uint256,bytes)"
+              "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         ).revertedWith("ERC721_NOT_ACCEPT_TOKENS");
       });
 
       it("Reverts when transfer to IERC721 receiver that returns not selector", async () => {
-        await erc721ReceiverContract.setDoesAcceptTokens(true);
-        await erc721ReceiverContract.setReturnValid(false);
+        await erc721ReceiverContract.mock__setDoesAcceptTokens(true);
+        await erc721ReceiverContract.mock__setReturnValid(false);
 
         await expect(
           queue
             .connect(user)
             [
-            "safeTransferFrom(address,address,uint256,bytes)"
+              "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         )
           .revertedWithCustomError(queue, "TransferToNonIERC721Receiver")
@@ -588,14 +588,14 @@ describe("WithdrawalQueueERC721.sol", () => {
       });
 
       it("Transfers token to IERC721 receiver", async () => {
-        await erc721ReceiverContract.setDoesAcceptTokens(true);
-        await erc721ReceiverContract.setReturnValid(true);
+        await erc721ReceiverContract.mock__setDoesAcceptTokens(true);
+        await erc721ReceiverContract.mock__setReturnValid(true);
 
         await expect(
           queue
             .connect(user)
             [
-            "safeTransferFrom(address,address,uint256,bytes)"
+              "safeTransferFrom(address,address,uint256,bytes)"
             ](user, erc721ReceiverContractAddress, 1, new Uint8Array()),
         )
           .to.emit(queue, "Transfer")
@@ -606,8 +606,8 @@ describe("WithdrawalQueueERC721.sol", () => {
 
   context("transferFrom", () => {
     beforeEach(async () => {
-      await stEth.mockSetTotalPooledEther(ether("600.00"));
-      await stEth.exposedMintShares(user, shares(300n));
+      await stEth.mock__setTotalPooledEther(ether("600.00"));
+      await stEth.harness__mintShares(user, shares(300n));
       await stEth.connect(user).approve(queue, shares(300n));
 
       await queue.resume();

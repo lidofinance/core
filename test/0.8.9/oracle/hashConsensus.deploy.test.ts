@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { Signer, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensus, MockReportProcessor, MockReportProcessor__factory } from "typechain-types";
+import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -15,14 +15,14 @@ import {
 
 import { deployHashConsensus } from "test/deploy";
 
-describe("HashConsensus:deploy", function () {
+describe("HashConsensus.sol:deploy", function () {
   let admin: Signer;
   let consensus: HashConsensus;
-  let mockReportProcessor: MockReportProcessor;
+  let mockReportProcessor: ReportProcessor__Mock;
 
   before(async () => {
     [admin] = await ethers.getSigners();
-    mockReportProcessor = await new MockReportProcessor__factory(admin).deploy(CONSENSUS_VERSION);
+    mockReportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
   });
 
   context("Deployment and initial configuration", () => {
@@ -48,7 +48,7 @@ describe("HashConsensus:deploy", function () {
 
     it("reverts if report processor address is zero", async () => {
       await expect(
-        ethers.deployContract("HashConsensusTimeTravellable", [
+        ethers.deployContract("HashConsensus__Harness", [
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -62,7 +62,7 @@ describe("HashConsensus:deploy", function () {
 
     it("reverts if admin address is zero", async () => {
       await expect(
-        ethers.deployContract("HashConsensusTimeTravellable", [
+        ethers.deployContract("HashConsensus__Harness", [
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,

@@ -4,12 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { MinFirstAllocationStrategy__factory, StakingRouter, StakingRouter__factory } from "typechain-types";
-import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
+import { StakingRouter } from "typechain-types";
 
 import { MAX_UINT256, proxify, randomAddress } from "lib";
 
-describe("StakingRouter:Versioned", () => {
+describe("StakingRouter.sol:Versioned", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
@@ -23,12 +22,15 @@ describe("StakingRouter:Versioned", () => {
 
     // deploy staking router
     const depositContract = randomAddress();
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: StakingRouterLibraryAddresses = {
-      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-    };
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
+    impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+
     [versioned] = await proxify({ impl, admin });
   });
 

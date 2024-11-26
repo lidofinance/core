@@ -8,32 +8,24 @@ import { getStorageAt, setBalance } from "@nomicfoundation/hardhat-network-helpe
 import {
   ACL,
   Burner__MockForLidoHandleOracleReport,
-  Burner__MockForLidoHandleOracleReport__factory,
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport,
-  LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport__factory,
   LidoLocator,
-  LidoLocator__factory,
   OracleReportSanityChecker__MockForLidoHandleOracleReport,
-  OracleReportSanityChecker__MockForLidoHandleOracleReport__factory,
   PostTokenRebaseReceiver__MockForLidoHandleOracleReport,
-  PostTokenRebaseReceiver__MockForLidoHandleOracleReport__factory,
   StakingRouter__MockForLidoHandleOracleReport,
-  StakingRouter__MockForLidoHandleOracleReport__factory,
   WithdrawalQueue__MockForLidoHandleOracleReport,
-  WithdrawalQueue__MockForLidoHandleOracleReport__factory,
   WithdrawalVault__MockForLidoHandleOracleReport,
-  WithdrawalVault__MockForLidoHandleOracleReport__factory,
 } from "typechain-types";
 
 import { certainAddress, ether, getNextBlockTimestamp, impersonate, streccak } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
+import { Snapshot } from "test/suite";
 
 // TODO: improve coverage
-// TODO: probably needs some refactoring and optimization
 // TODO: more math-focused tests
-describe("Lido:report", () => {
+describe("Lido.sol:report", () => {
   let deployer: HardhatEthersSigner;
   let accountingOracle: HardhatEthersSigner;
   let stethWhale: HardhatEthersSigner;
@@ -50,7 +42,9 @@ describe("Lido:report", () => {
   let stakingRouter: StakingRouter__MockForLidoHandleOracleReport;
   let postTokenRebaseReceiver: PostTokenRebaseReceiver__MockForLidoHandleOracleReport;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, accountingOracle, stethWhale, stranger] = await ethers.getSigners();
 
     [
@@ -62,13 +56,13 @@ describe("Lido:report", () => {
       withdrawalQueue,
       withdrawalVault,
     ] = await Promise.all([
-      new Burner__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new PostTokenRebaseReceiver__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new StakingRouter__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new WithdrawalQueue__MockForLidoHandleOracleReport__factory(deployer).deploy(),
-      new WithdrawalVault__MockForLidoHandleOracleReport__factory(deployer).deploy(),
+      ethers.deployContract("Burner__MockForLidoHandleOracleReport"),
+      ethers.deployContract("LidoExecutionLayerRewardsVault__MockForLidoHandleOracleReport"),
+      ethers.deployContract("OracleReportSanityChecker__MockForLidoHandleOracleReport"),
+      ethers.deployContract("PostTokenRebaseReceiver__MockForLidoHandleOracleReport"),
+      ethers.deployContract("StakingRouter__MockForLidoHandleOracleReport"),
+      ethers.deployContract("WithdrawalQueue__MockForLidoHandleOracleReport"),
+      ethers.deployContract("WithdrawalVault__MockForLidoHandleOracleReport"),
     ]);
 
     ({ lido, acl } = await deployLidoDao({
@@ -86,7 +80,7 @@ describe("Lido:report", () => {
       },
     }));
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
 
     await acl.createPermission(deployer, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(deployer, lido, await lido.PAUSE_ROLE(), deployer);
@@ -95,6 +89,10 @@ describe("Lido:report", () => {
 
     lido = lido.connect(accountingOracle);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("handleOracleReport", () => {
     it("Reverts when the contract is stopped", async () => {
@@ -572,16 +570,16 @@ describe("Lido:report", () => {
       const lidoLocatorAddress = await lido.getLidoLocator();
 
       // Change the locator implementation to support zero address
-      await updateLidoLocatorImplementation(lidoLocatorAddress, {}, "LidoLocator__MutableMock", deployer);
-      const locatorMutable = await ethers.getContractAt("LidoLocator__MutableMock", lidoLocatorAddress, deployer);
+      await updateLidoLocatorImplementation(lidoLocatorAddress, {}, "LidoLocator__MockMutable", deployer);
+      const locatorMutable = await ethers.getContractAt("LidoLocator__MockMutable", lidoLocatorAddress, deployer);
       await locatorMutable.mock___updatePostTokenRebaseReceiver(ZeroAddress);
 
       expect(await locator.postTokenRebaseReceiver()).to.equal(ZeroAddress);
 
       const accountingOracleAddress = await locator.accountingOracle();
-      const accountingOracle = await impersonate(accountingOracleAddress, ether("1000.0"));
+      const accountingOracleSigner = await impersonate(accountingOracleAddress, ether("1000.0"));
 
-      await expect(lido.connect(accountingOracle).handleOracleReport(...report())).not.to.emit(
+      await expect(lido.connect(accountingOracleSigner).handleOracleReport(...report())).not.to.emit(
         postTokenRebaseReceiver,
         "Mock__PostTokenRebaseHandled",
       );

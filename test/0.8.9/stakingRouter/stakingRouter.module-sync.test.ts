@@ -7,25 +7,22 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor__factory,
-  MinFirstAllocationStrategy__factory,
-  StakingModule__Mock,
-  StakingModule__Mock__factory,
+  StakingModule__MockForStakingRouter,
   StakingRouter,
-  StakingRouter__factory,
 } from "typechain-types";
-import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
 
 import { ether, getNextBlock, proxify } from "lib";
 
-describe("StakingRouter:module-sync", () => {
+import { Snapshot } from "test/suite";
+
+describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let lido: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
-  let stakingModule: StakingModule__Mock;
+  let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
 
   let moduleId: bigint;
@@ -42,17 +39,20 @@ describe("StakingRouter:module-sync", () => {
   const maxDepositsPerBlock = 150n;
   const minDepositBlockDistance = 25n;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
-    depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
+    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: StakingRouterLibraryAddresses = {
-      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-    };
-
-    const impl = await new StakingRouter__factory(allocLibAddr, deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -75,7 +75,7 @@ describe("StakingRouter:module-sync", () => {
     ]);
 
     // add staking module
-    stakingModule = await new StakingModule__Mock__factory(deployer).deploy();
+    stakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
     stakingModuleAddress = await stakingModule.getAddress();
     const { timestamp, number } = await getNextBlock();
     lastDepositAt = timestamp;
@@ -95,6 +95,10 @@ describe("StakingRouter:module-sync", () => {
     moduleId = await stakingRouter.getStakingModulesCount();
   });
 
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
+
   context("Getters", () => {
     let stakingModuleInfo: [
       bigint,
@@ -113,13 +117,13 @@ describe("StakingRouter:module-sync", () => {
     ];
 
     // module mock state
-    const stakingModuleSummary: Parameters<StakingModule__Mock["mock__getStakingModuleSummary"]> = [
+    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__getStakingModuleSummary"]> = [
       100n, // exitedValidators
       1000, // depositedValidators
       200, // depositableValidators
     ];
 
-    const nodeOperatorSummary: Parameters<StakingModule__Mock["mock__getNodeOperatorSummary"]> = [
+    const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
       1, // targetLimitMode
       100n, // targetValidatorsCount
       1n, // stuckValidatorsCount
@@ -130,7 +134,7 @@ describe("StakingRouter:module-sync", () => {
       200n, // depositableValidatorsCount
     ];
 
-    const nodeOperatorsCounts: Parameters<StakingModule__Mock["mock__nodeOperatorsCount"]> = [
+    const nodeOperatorsCounts: Parameters<StakingModule__MockForStakingRouter["mock__nodeOperatorsCount"]> = [
       100n, // nodeOperatorsCount
       95n, // activeNodeOperatorsCount
     ];
@@ -660,7 +664,7 @@ describe("StakingRouter:module-sync", () => {
         moduleSummary.depositableValidatorsCount,
       );
 
-      const nodeOperatorSummary: Parameters<StakingModule__Mock["mock__getNodeOperatorSummary"]> = [
+      const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
         operatorSummary.targetLimitMode,
         operatorSummary.targetValidatorsCount,
         operatorSummary.stuckValidatorsCount,

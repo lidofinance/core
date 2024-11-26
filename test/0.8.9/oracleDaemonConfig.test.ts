@@ -7,7 +7,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { OracleDaemonConfig, OracleDaemonConfig__factory } from "typechain-types";
 
-describe("OracleDaemonConfig", () => {
+import { Snapshot } from "test/suite";
+
+describe("OracleDaemonConfig.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -16,10 +18,12 @@ describe("OracleDaemonConfig", () => {
 
   let oracleDaemonConfig: OracleDaemonConfig;
 
+  let originalState: string;
+
   const defaultKey: string = "key1";
   const defaultValue: HexString = "0xbec001";
 
-  beforeEach(async () => {
+  before(async () => {
     [deployer, admin, stranger, configPrimaryManager, configSecondaryManager] = await ethers.getSigners();
 
     oracleDaemonConfig = await new OracleDaemonConfig__factory(deployer).deploy(admin, [
@@ -28,6 +32,10 @@ describe("OracleDaemonConfig", () => {
     ]);
     oracleDaemonConfig = oracleDaemonConfig.connect(stranger);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
     context("Reverts", () => {

@@ -29,7 +29,7 @@ enum UpdateTargetLimitsMethods {
   UpdateTargetValidatorsLimitsDeprecated = "updateTargetValidatorsLimits(uint256,bool,uint256)",
 }
 
-describe("NodeOperatorsRegistry:validatorsLimits", () => {
+describe("NodeOperatorsRegistry.sol:validatorsLimits", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;

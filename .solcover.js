@@ -7,7 +7,6 @@ module.exports = {
     "0.4.24/template",
     "0.6.11/deposit_contract.sol",
     "0.6.12/interfaces",
-    "0.6.12/mocks",
     "0.8.9/interfaces",
     // Skip contracts that are tested by Foundry tests
     "common/lib", // 100% covered by test/common/*.t.sol

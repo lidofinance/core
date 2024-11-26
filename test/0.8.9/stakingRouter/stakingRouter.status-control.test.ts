@@ -5,15 +5,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor__factory,
-  MinFirstAllocationStrategy__factory,
-  StakingRouterMock,
-  StakingRouterMock__factory,
-} from "typechain-types";
-import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
+import { StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, proxify } from "lib";
+
+import { Snapshot } from "test/suite";
 
 enum Status {
   Active,
@@ -21,25 +17,29 @@ enum Status {
   Stopped,
 }
 
-context("StakingRouter:status-control", () => {
+context("StakingRouter.sol:status-control", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  let stakingRouter: StakingRouterMock;
+  let stakingRouter: StakingRouter__Harness;
   let moduleId: bigint;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    const depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: StakingRouterLibraryAddresses = {
-      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-    };
+    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    const impl = await new StakingRouterMock__factory(allocLibAddr, deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -66,6 +66,10 @@ context("StakingRouter:status-control", () => {
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("setStakingModuleStatus", () => {
     it("Reverts if the caller does not have the role", async () => {

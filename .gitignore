@@ -17,9 +17,13 @@ artifacts/
 foundry/cache/
 foundry/out/
 
+# Extracted ABI files
+lib/abi/*.json
+
 .env
 accounts.json
 deployed-local.json
+deployed-hardhat.json
 
 # MacOS
 .DS_Store

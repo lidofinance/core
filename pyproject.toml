@@ -5,14 +5,15 @@ description = "Lido core protocol"
 authors = ["Lido"]
 license = "GPL-3.0"
 readme = "README.md"
-packages = [{include = "core_protocol", from = "contracts"}]
+packages = [{ include = "core_protocol", from = "contracts" }]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.12.1"
 setuptools = "^70.0.0"
 
 [tool.poetry.group.dev.dependencies]
-slither-analyzer = "^0.10.0"
+slither-analyzer = "^0.10.4"
+slitherin = "^0.7.2"
 
 [build-system]
 requires = ["poetry-core"]

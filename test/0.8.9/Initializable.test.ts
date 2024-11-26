@@ -3,14 +3,22 @@ import { ethers } from "hardhat";
 
 import { Initializable__Mock } from "typechain-types";
 
-describe("Initializable", function () {
+import { Snapshot } from "test/suite";
+
+describe("Initializable.sol", function () {
   let initializable: Initializable__Mock;
 
-  beforeEach(async function () {
+  let originalState: string;
+
+  before(async function () {
     initializable = await ethers.deployContract("Initializable__Mock");
   });
 
-  describe("Initialization", function () {
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
+
+  context("Initialization", function () {
     it("Should emit Initialized event", async function () {
       await expect(initializable.initialize(1)).to.emit(initializable, "Initialized").withArgs(1);
     });

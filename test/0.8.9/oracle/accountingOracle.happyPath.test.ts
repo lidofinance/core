@@ -6,12 +6,12 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle__MockForAccountingOracle,
-  MockLidoForAccountingOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  Lido__MockForAccountingOracle,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -45,12 +45,12 @@ import {
 
 describe("AccountingOracle.sol:happyPath", () => {
   context("Happy path", () => {
-    let consensus: HashConsensusTimeTravellable;
-    let oracle: AccountingOracleTimeTravellable;
+    let consensus: HashConsensus__Harness;
+    let oracle: AccountingOracle__Harness;
     let oracleVersion: number;
-    let mockLido: MockLidoForAccountingOracle;
-    let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
-    let mockStakingRouter: MockStakingRouterForAccountingOracle;
+    let mockLido: Lido__MockForAccountingOracle;
+    let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
+    let mockStakingRouter: StakingRouter__MockForAccountingOracle;
     let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
 
     let extraData: ExtraDataType;
@@ -254,8 +254,8 @@ describe("AccountingOracle.sol:happyPath", () => {
     it(`withdrawal queue got bunker mode report`, async () => {
       const onOracleReportLastCall = await mockWithdrawalQueue.lastCall__onOracleReport();
       expect(onOracleReportLastCall.callCount).to.equal(1);
-      expect(onOracleReportLastCall.isBunkerMode).to.be.equal(reportFields.isBunkerMode);
-      expect(onOracleReportLastCall.prevReportTimestamp).to.be.equal(
+      expect(onOracleReportLastCall.isBunkerMode).to.equal(reportFields.isBunkerMode);
+      expect(onOracleReportLastCall.prevReportTimestamp).to.equal(
         GENESIS_TIME + prevProcessingRefSlot * SECONDS_PER_SLOT,
       );
     });

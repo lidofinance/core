@@ -4,26 +4,34 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Steth__MockForWsteth, Steth__MockForWsteth__factory, WstETH, WstETH__factory } from "typechain-types";
+import { StETH__HarnessForWstETH, WstETH } from "typechain-types";
 
 import { batch, ether, ONE_ETHER } from "lib";
 
-describe("WstETH", () => {
-  let steth: Steth__MockForWsteth;
+import { Snapshot } from "test/suite";
+
+describe("WstETH.sol", () => {
+  let steth: StETH__HarnessForWstETH;
   let wsteth: WstETH;
 
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  beforeEach(async () => {
+  let originalState: string;
+
+  before(async () => {
     [deployer, user] = await ethers.getSigners();
 
-    steth = await new Steth__MockForWsteth__factory(deployer).deploy(user, { value: ether("1.0") });
-    wsteth = await new WstETH__factory(deployer).deploy(steth);
+    steth = await ethers.deployContract("StETH__HarnessForWstETH", [user], { value: ether("1.0"), from: deployer });
+    wsteth = await ethers.deployContract("WstETH", [steth], deployer);
 
     steth = steth.connect(user);
     wsteth = wsteth.connect(user);
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("wrap", () => {
     beforeEach(async () => {

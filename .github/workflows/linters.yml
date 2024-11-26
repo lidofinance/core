@@ -1,54 +1,46 @@
 name: Linters
 
-on: [ push ]
+on: [push]
 
 jobs:
-  lint:
-    name: Solidity and TypeScript linters
+  solhint:
+    name: Solhint
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - run: corepack enable
+      - name: Common setup
+        uses: ./.github/workflows/setup
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: "yarn"
-
-      - name: Install dependencies
-        run: yarn install
-
-      - name: Run Solidity linters
+      - name: Run solhint
         run: yarn lint:sol
 
-      - name: Run TS linters
-        run: yarn lint:ts
-
-  types:
-    name: TypeScript types check
+  eslint:
+    name: ESLint
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
-      - run: corepack enable
+      - name: Common setup
+        uses: ./.github/workflows/setup
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: "yarn"
+      - name: Run eslint
+        run: yarn lint:ts
 
-      - name: Install dependencies
-        run: yarn install
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
 
       - name: Generate typechain types
         run: yarn hardhat compile
 
-      - name: Run TypeScript types check
+      - name: Run typescript types check
         run: yarn typecheck

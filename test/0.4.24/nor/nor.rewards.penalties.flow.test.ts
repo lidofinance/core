@@ -5,18 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  ACL,
-  Burner__MockForLidoHandleOracleReport__factory,
-  Kernel,
-  Lido,
-  LidoLocator,
-  LidoLocator__factory,
-  MinFirstAllocationStrategy__factory,
-  NodeOperatorsRegistry__Harness,
-  NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import {
   addNodeOperator,
@@ -31,7 +20,7 @@ import {
 import { addAragonApp, deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:rewards-penalties", () => {
+describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -99,7 +88,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, stranger] =
       await ethers.getSigners();
 
-    const burner = await new Burner__MockForLidoHandleOracleReport__factory(deployer).deploy();
+    const burner = await ethers.deployContract("Burner__MockForLidoHandleOracleReport");
 
     ({ lido, dao, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -110,12 +99,15 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       },
     }));
 
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: NodeOperatorsRegistryLibraryAddresses = {
-      ["__contracts/common/lib/MinFirstAllocat__"]: await allocLib.getAddress(),
-    };
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await new NodeOperatorsRegistry__Harness__factory(allocLibAddr, deployer).deploy();
+    impl = await norHarnessFactory.connect(deployer).deploy();
+
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -123,7 +115,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       rootAccount: deployer,
     });
 
-    nor = NodeOperatorsRegistry__Harness__factory.connect(appProxy, deployer);
+    nor = await ethers.getContractAt("NodeOperatorsRegistry__Harness", appProxy, deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
@@ -136,7 +128,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
     // inside the testing_requestValidatorsKeysForDeposits() method
     await acl.grantPermission(nor, nor, await nor.STAKING_ROUTER_ROLE());
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
     await expect(nor.initialize(locator, moduleType, penaltyDelay))
@@ -171,13 +163,13 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("updateStuckValidatorsCount", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
@@ -304,13 +296,13 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("updateExitedValidatorsCount", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
@@ -414,13 +406,13 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("updateRefundedValidatorsCount", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
@@ -486,10 +478,10 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("onExitedAndStuckValidatorsCountsUpdated", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
       expect(await acl["hasPermission(address,address,bytes32)"](stakingRouter, nor, await nor.STAKING_ROUTER_ROLE()))
@@ -514,10 +506,10 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("isOperatorPenalized", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
@@ -587,10 +579,10 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("isOperatorPenaltyCleared", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
@@ -657,7 +649,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.false;
       expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
 
-      await advanceChainTime(Number(await nor.getStuckPenaltyDelay()) + 1);
+      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
 
       await nor.clearNodeOperatorPenalty(firstNodeOperatorId);
 
@@ -673,10 +665,10 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
 
   context("clearNodeOperatorPenalty", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
@@ -740,7 +732,7 @@ describe("NodeOperatorsRegistry:rewards-penalties", () => {
       await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 5n);
       await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 5n);
 
-      await advanceChainTime(Number(await nor.getStuckPenaltyDelay()) + 1);
+      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
 
       expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
       expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.false;

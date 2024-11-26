@@ -4,17 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  ACL,
-  Kernel,
-  Lido,
-  LidoLocator,
-  LidoLocator__factory,
-  MinFirstAllocationStrategy__factory,
-  NodeOperatorsRegistry__Harness,
-  NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import {
   addNodeOperator,
@@ -32,7 +22,7 @@ import {
 import { addAragonApp, deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:signing-keys", () => {
+describe("NodeOperatorsRegistry.sol:signing-keys", () => {
   const UINT64_MAX = 2n ** 64n - 1n;
 
   let deployer: HardhatEthersSigner;
@@ -127,12 +117,15 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       },
     }));
 
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: NodeOperatorsRegistryLibraryAddresses = {
-      ["__contracts/common/lib/MinFirstAllocat__"]: await allocLib.getAddress(),
-    };
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await new NodeOperatorsRegistry__Harness__factory(allocLibAddr, deployer).deploy();
+    impl = await norHarnessFactory.connect(deployer).deploy();
+
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -140,7 +133,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       rootAccount: deployer,
     });
 
-    nor = NodeOperatorsRegistry__Harness__factory.connect(appProxy, deployer);
+    nor = await ethers.getContractAt("NodeOperatorsRegistry__Harness", appProxy, deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
@@ -153,7 +146,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     // inside the testing_requestValidatorsKeysForDeposits() method
     await acl.grantPermission(nor, nor, await nor.STAKING_ROUTER_ROLE());
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
 
     // Initialize the nor's proxy.
     await expect(nor.initialize(locator, moduleType, penaltyDelay))
@@ -169,10 +162,10 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     firstNOManager = await impersonate(NODE_OPERATORS[firstNodeOperatorId].rewardAddress, ether("100.0"));
     secondNOManager = await impersonate(NODE_OPERATORS[secondNodeOperatorId].rewardAddress, ether("100.0"));
 
-    expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+    expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
       firstNodeOperatorId,
     );
-    expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+    expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
       secondNodeOperatorId,
     );
   });
@@ -189,13 +182,13 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     it("returns empty data if zero available keys", async () => {
       await nor.connect(nodeOperatorsManager).deactivateNodeOperator(firstNodeOperatorId);
       await nor.connect(nodeOperatorsManager).deactivateNodeOperator(secondNodeOperatorId);
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
       const [allocatedKeys, noIds, activeKeys] = await nor.harness__getSigningKeysAllocationData(1n);
 
-      expect(allocatedKeys).to.be.equal(0n);
+      expect(allocatedKeys).to.equal(0n);
       expect(noIds).to.be.empty;
       expect(activeKeys).to.be.empty;
 
@@ -206,18 +199,18 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
     it("Shrinks the length of signing keys", async () => {
       await nor.connect(nodeOperatorsManager).deactivateNodeOperator(firstNodeOperatorId);
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
       const [allocatedKeys, noIds, activeKeys] = await nor.harness__getSigningKeysAllocationData(1n);
 
-      expect(allocatedKeys).to.be.equal(1n);
-      expect(noIds.length).to.be.equal(1n);
-      expect(activeKeys.length).to.be.equal(1n);
+      expect(allocatedKeys).to.equal(1n);
+      expect(noIds.length).to.equal(1n);
+      expect(activeKeys.length).to.equal(1n);
 
-      expect(noIds[0]).to.be.equal(secondNodeOperatorId);
-      expect(activeKeys[0]).to.be.equal(7n + 1n);
+      expect(noIds[0]).to.equal(secondNodeOperatorId);
+      expect(activeKeys[0]).to.equal(7n + 1n);
 
       const nonce = await nor.getNonce();
       await expect(nor.connect(stakingRouter).harness__obtainDepositData(1n))
@@ -236,14 +229,14 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
       const depositedAfter = (await nor.getStakingModuleSummary()).totalDepositedValidators;
 
-      expect(depositedAfter).to.be.equal(depositedBefore + 1n);
+      expect(depositedAfter).to.equal(depositedBefore + 1n);
     });
 
     it("Returns empty data if zero deposits requested", async () => {
       await nor.connect(stakingRouter).harness__obtainDepositData(0n);
 
-      expect(await nor.obtainedPublicKeys()).to.be.equal("0x");
-      expect(await nor.obtainedSignatures()).to.be.equal("0x");
+      expect(await nor.obtainedPublicKeys()).to.equal("0x");
+      expect(await nor.obtainedSignatures()).to.equal("0x");
     });
 
     it("Reverts if allocated keys count != requested", async () => {
@@ -255,14 +248,14 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     });
 
     it("Returns allocated keys and updates nonce", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[fourthNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
       const nonce = await nor.getNonce();
 
       const summaryBefore = await nor.getStakingModuleSummary();
-      expect(summaryBefore.depositableValidatorsCount).to.be.equal(
+      expect(summaryBefore.depositableValidatorsCount).to.equal(
         NODE_OPERATORS[firstNodeOperatorId].vettedSigningKeysCount -
           NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount +
           NODE_OPERATORS[secondNodeOperatorId].vettedSigningKeysCount -
@@ -281,7 +274,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         .withArgs(nonce + 1n);
 
       const summaryAfter = await nor.getStakingModuleSummary();
-      expect(summaryAfter.depositableValidatorsCount).to.be.equal(0);
+      expect(summaryAfter.depositableValidatorsCount).to.equal(0);
     });
   });
 
@@ -352,7 +345,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     });
 
     it("Reverts if too many keys passed for a single node operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
 
@@ -405,23 +398,23 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postFirstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(preFirstNOInfo.length).to.be.equal(postFirstNOInfo.length);
-      expect(preFirstNOSummary.length).to.be.equal(postFirstNOSummary.length);
+      expect(preFirstNOInfo.length).to.equal(postFirstNOInfo.length);
+      expect(preFirstNOSummary.length).to.equal(postFirstNOSummary.length);
 
       const totalAddedValidatorsIndex = 5;
 
       for (let i = 0; i < preFirstNOInfo.length; ++i) {
         if (i == totalAddedValidatorsIndex) continue;
 
-        expect(preFirstNOInfo[i]).to.be.equal(postFirstNOInfo[i]);
-        expect(preSecondNOInfo[i]).to.be.equal(postSecondNOInfo[i]);
+        expect(preFirstNOInfo[i]).to.equal(postFirstNOInfo[i]);
+        expect(preSecondNOInfo[i]).to.equal(postSecondNOInfo[i]);
       }
 
-      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.be.equal(postFirstNOInfo[totalAddedValidatorsIndex] - 5n);
-      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.be.equal(postSecondNOInfo[totalAddedValidatorsIndex] - 3n);
+      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.equal(postFirstNOInfo[totalAddedValidatorsIndex] - 5n);
+      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.equal(postSecondNOInfo[totalAddedValidatorsIndex] - 3n);
 
-      expect(preFirstNOSummary.join()).to.be.equal(postFirstNOSummary.join());
-      expect(preSecondNOSummary.join()).to.be.equal(postSecondNOSummary.join());
+      expect(preFirstNOSummary.join()).to.equal(postFirstNOSummary.join());
+      expect(preSecondNOSummary.join()).to.equal(postSecondNOSummary.join());
     });
   }
 
@@ -505,9 +498,9 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
       const postNonce = await nor.getNonce();
 
-      expect(preFirstNOInfo.join()).to.be.equal(postFirstNOInfo.join());
-      expect(preSecondNOInfo.join()).to.be.equal(postSecondNOInfo.join());
-      expect(preNonce).to.be.equal(postNonce);
+      expect(preFirstNOInfo.join()).to.equal(postFirstNOInfo.join());
+      expect(preSecondNOInfo.join()).to.equal(postSecondNOInfo.join());
+      expect(preNonce).to.equal(postNonce);
     });
 
     it("Reverts if invalid index passed", async () => {
@@ -552,22 +545,22 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postFirstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(preFirstNOInfo.length).to.be.equal(postFirstNOInfo.length);
-      expect(preFirstNOSummary.length).to.be.equal(postFirstNOSummary.length);
+      expect(preFirstNOInfo.length).to.equal(postFirstNOInfo.length);
+      expect(preFirstNOSummary.length).to.equal(postFirstNOSummary.length);
 
       for (let i = 0; i < preFirstNOInfo.length; ++i) {
         if (i == 5) continue; // i==5 for totalAddedValidators
 
-        expect(preFirstNOInfo[i]).to.be.equal(postFirstNOInfo[i]);
-        expect(preSecondNOInfo[i]).to.be.equal(postSecondNOInfo[i]);
+        expect(preFirstNOInfo[i]).to.equal(postFirstNOInfo[i]);
+        expect(preSecondNOInfo[i]).to.equal(postSecondNOInfo[i]);
       }
       // i==5 for totalAddedValidators
-      expect(preFirstNOInfo[5]).to.be.equal(postFirstNOInfo[5] + 2n);
-      expect(preSecondNOInfo[5]).to.be.equal(postSecondNOInfo[5] + 1n);
+      expect(preFirstNOInfo[5]).to.equal(postFirstNOInfo[5] + 2n);
+      expect(preSecondNOInfo[5]).to.equal(postSecondNOInfo[5] + 1n);
 
       for (let i = 0; i < preFirstNOSummary.length; ++i) {
-        expect(preFirstNOSummary[i]).to.be.equal(postFirstNOSummary[i]);
-        expect(preSecondNOSummary[i]).to.be.equal(postSecondNOSummary[i]);
+        expect(preFirstNOSummary[i]).to.equal(postFirstNOSummary[i]);
+        expect(preSecondNOSummary[i]).to.equal(postSecondNOSummary[i]);
       }
     });
 
@@ -607,8 +600,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postFirstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(preFirstNOInfo.length).to.be.equal(postFirstNOInfo.length);
-      expect(preFirstNOSummary.length).to.be.equal(postFirstNOSummary.length);
+      expect(preFirstNOInfo.length).to.equal(postFirstNOInfo.length);
+      expect(preFirstNOSummary.length).to.equal(postFirstNOSummary.length);
 
       const totalVettedValidatorsIndex = 3;
       const totalAddedValidatorsIndex = 5;
@@ -617,31 +610,29 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         if (i == totalVettedValidatorsIndex) continue;
         if (i == totalAddedValidatorsIndex) continue;
 
-        expect(preFirstNOInfo[i]).to.be.equal(postFirstNOInfo[i]);
-        expect(preSecondNOInfo[i]).to.be.equal(postSecondNOInfo[i]);
+        expect(preFirstNOInfo[i]).to.equal(postFirstNOInfo[i]);
+        expect(preSecondNOInfo[i]).to.equal(postSecondNOInfo[i]);
       }
 
-      expect(preFirstNOInfo[totalVettedValidatorsIndex]).to.be.equal(postFirstNOInfo[totalVettedValidatorsIndex] + 1n);
-      expect(preSecondNOInfo[totalVettedValidatorsIndex]).to.be.equal(
-        postSecondNOInfo[totalVettedValidatorsIndex] + 3n,
-      );
+      expect(preFirstNOInfo[totalVettedValidatorsIndex]).to.equal(postFirstNOInfo[totalVettedValidatorsIndex] + 1n);
+      expect(preSecondNOInfo[totalVettedValidatorsIndex]).to.equal(postSecondNOInfo[totalVettedValidatorsIndex] + 3n);
 
-      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.be.equal(postFirstNOInfo[totalAddedValidatorsIndex] + 3n);
-      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.be.equal(postSecondNOInfo[totalAddedValidatorsIndex] + 5n);
+      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.equal(postFirstNOInfo[totalAddedValidatorsIndex] + 3n);
+      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.equal(postSecondNOInfo[totalAddedValidatorsIndex] + 5n);
 
       const depositableValidatorsCountIndex = 7;
 
       for (let i = 0; i < preFirstNOSummary.length; ++i) {
         if (i == depositableValidatorsCountIndex) continue;
 
-        expect(preFirstNOSummary[i]).to.be.equal(postFirstNOSummary[i]);
-        expect(preSecondNOSummary[i]).to.be.equal(postSecondNOSummary[i]);
+        expect(preFirstNOSummary[i]).to.equal(postFirstNOSummary[i]);
+        expect(preSecondNOSummary[i]).to.equal(postSecondNOSummary[i]);
       }
 
-      expect(preFirstNOSummary[depositableValidatorsCountIndex]).to.be.equal(
+      expect(preFirstNOSummary[depositableValidatorsCountIndex]).to.equal(
         postFirstNOSummary[depositableValidatorsCountIndex] + 1n,
       );
-      expect(preSecondNOSummary[depositableValidatorsCountIndex]).to.be.equal(
+      expect(preSecondNOSummary[depositableValidatorsCountIndex]).to.equal(
         postSecondNOSummary[depositableValidatorsCountIndex] + 3n,
       );
     });
@@ -709,22 +700,22 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postFirstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(preFirstNOInfo.length).to.be.equal(postFirstNOInfo.length);
-      expect(preFirstNOSummary.length).to.be.equal(postFirstNOSummary.length);
+      expect(preFirstNOInfo.length).to.equal(postFirstNOInfo.length);
+      expect(preFirstNOSummary.length).to.equal(postFirstNOSummary.length);
 
       for (let i = 0; i < preFirstNOInfo.length; ++i) {
         if (i == 5) continue; // i==5 for totalAddedValidators
 
-        expect(preFirstNOInfo[i]).to.be.equal(postFirstNOInfo[i]);
-        expect(preSecondNOInfo[i]).to.be.equal(postSecondNOInfo[i]);
+        expect(preFirstNOInfo[i]).to.equal(postFirstNOInfo[i]);
+        expect(preSecondNOInfo[i]).to.equal(postSecondNOInfo[i]);
       }
       // i==5 for totalAddedValidators
-      expect(preFirstNOInfo[5]).to.be.equal(postFirstNOInfo[5] + 1n);
-      expect(preSecondNOInfo[5]).to.be.equal(postSecondNOInfo[5] + 1n);
+      expect(preFirstNOInfo[5]).to.equal(postFirstNOInfo[5] + 1n);
+      expect(preSecondNOInfo[5]).to.equal(postSecondNOInfo[5] + 1n);
 
       for (let i = 0; i < preFirstNOSummary.length; ++i) {
-        expect(preFirstNOSummary[i]).to.be.equal(postFirstNOSummary[i]);
-        expect(preSecondNOSummary[i]).to.be.equal(postSecondNOSummary[i]);
+        expect(preFirstNOSummary[i]).to.equal(postFirstNOSummary[i]);
+        expect(preSecondNOSummary[i]).to.equal(postSecondNOSummary[i]);
       }
     });
 
@@ -761,8 +752,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const postFirstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const postSecondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(preFirstNOInfo.length).to.be.equal(postFirstNOInfo.length);
-      expect(preFirstNOSummary.length).to.be.equal(postFirstNOSummary.length);
+      expect(preFirstNOInfo.length).to.equal(postFirstNOInfo.length);
+      expect(preFirstNOSummary.length).to.equal(postFirstNOSummary.length);
 
       const totalVettedValidatorsIndex = 3;
       const totalAddedValidatorsIndex = 5;
@@ -771,31 +762,29 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         if (i == totalVettedValidatorsIndex) continue;
         if (i == totalAddedValidatorsIndex) continue;
 
-        expect(preFirstNOInfo[i]).to.be.equal(postFirstNOInfo[i]);
-        expect(preSecondNOInfo[i]).to.be.equal(postSecondNOInfo[i]);
+        expect(preFirstNOInfo[i]).to.equal(postFirstNOInfo[i]);
+        expect(preSecondNOInfo[i]).to.equal(postSecondNOInfo[i]);
       }
 
-      expect(preFirstNOInfo[totalVettedValidatorsIndex]).to.be.equal(postFirstNOInfo[totalVettedValidatorsIndex] + 1n);
-      expect(preSecondNOInfo[totalVettedValidatorsIndex]).to.be.equal(
-        postSecondNOInfo[totalVettedValidatorsIndex] + 3n,
-      );
+      expect(preFirstNOInfo[totalVettedValidatorsIndex]).to.equal(postFirstNOInfo[totalVettedValidatorsIndex] + 1n);
+      expect(preSecondNOInfo[totalVettedValidatorsIndex]).to.equal(postSecondNOInfo[totalVettedValidatorsIndex] + 3n);
 
-      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.be.equal(postFirstNOInfo[totalAddedValidatorsIndex] + 1n);
-      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.be.equal(postSecondNOInfo[totalAddedValidatorsIndex] + 1n);
+      expect(preFirstNOInfo[totalAddedValidatorsIndex]).to.equal(postFirstNOInfo[totalAddedValidatorsIndex] + 1n);
+      expect(preSecondNOInfo[totalAddedValidatorsIndex]).to.equal(postSecondNOInfo[totalAddedValidatorsIndex] + 1n);
 
       const depositableValidatorsCountIndex = 7;
 
       for (let i = 0; i < preFirstNOSummary.length; ++i) {
         if (i == depositableValidatorsCountIndex) continue;
 
-        expect(preFirstNOSummary[i]).to.be.equal(postFirstNOSummary[i]);
-        expect(preSecondNOSummary[i]).to.be.equal(postSecondNOSummary[i]);
+        expect(preFirstNOSummary[i]).to.equal(postFirstNOSummary[i]);
+        expect(preSecondNOSummary[i]).to.equal(postSecondNOSummary[i]);
       }
 
-      expect(preFirstNOSummary[depositableValidatorsCountIndex]).to.be.equal(
+      expect(preFirstNOSummary[depositableValidatorsCountIndex]).to.equal(
         postFirstNOSummary[depositableValidatorsCountIndex] + 1n,
       );
-      expect(preSecondNOSummary[depositableValidatorsCountIndex]).to.be.equal(
+      expect(preSecondNOSummary[depositableValidatorsCountIndex]).to.equal(
         postSecondNOSummary[depositableValidatorsCountIndex] + 3n,
       );
     });
@@ -863,8 +852,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const firstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const secondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(firstNOCount).to.be.equal(firstNOInfo.totalAddedValidators);
-      expect(secondNOCount).to.be.equal(secondNOInfo.totalAddedValidators);
+      expect(firstNOCount).to.equal(firstNOInfo.totalAddedValidators);
+      expect(secondNOCount).to.equal(secondNOInfo.totalAddedValidators);
 
       const keysCountToAdd = 2n;
       let [publicKeys, signatures] = firstNOKeys.slice(0, Number(keysCountToAdd));
@@ -874,8 +863,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         .connect(signingKeysManager)
         .addSigningKeys(secondNodeOperatorId, keysCountToAdd, publicKeys, signatures);
 
-      expect(await nor.getTotalSigningKeyCount(firstNodeOperatorId)).to.be.equal(firstNOCount + keysCountToAdd);
-      expect(await nor.getTotalSigningKeyCount(secondNodeOperatorId)).to.be.equal(secondNOCount + keysCountToAdd);
+      expect(await nor.getTotalSigningKeyCount(firstNodeOperatorId)).to.equal(firstNOCount + keysCountToAdd);
+      expect(await nor.getTotalSigningKeyCount(secondNodeOperatorId)).to.equal(secondNOCount + keysCountToAdd);
 
       const keysCountToRemove = 3n;
       await nor
@@ -884,10 +873,10 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       await nor
         .connect(signingKeysManager)
         .removeSigningKeys(secondNodeOperatorId, secondNOCount - 1n, keysCountToRemove);
-      expect(await nor.getTotalSigningKeyCount(firstNodeOperatorId)).to.be.equal(
+      expect(await nor.getTotalSigningKeyCount(firstNodeOperatorId)).to.equal(
         firstNOCount + keysCountToAdd - keysCountToRemove,
       );
-      expect(await nor.getTotalSigningKeyCount(secondNodeOperatorId)).to.be.equal(
+      expect(await nor.getTotalSigningKeyCount(secondNodeOperatorId)).to.equal(
         secondNOCount + keysCountToAdd - keysCountToRemove,
       );
     });
@@ -905,8 +894,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const firstNOInfo = await nor.getNodeOperator(firstNodeOperatorId, true);
       const secondNOInfo = await nor.getNodeOperator(secondNodeOperatorId, true);
 
-      expect(firstNOCount).to.be.equal(firstNOInfo.totalAddedValidators - firstNOInfo.totalDepositedValidators);
-      expect(secondNOCount).to.be.equal(secondNOInfo.totalAddedValidators - secondNOInfo.totalDepositedValidators);
+      expect(firstNOCount).to.equal(firstNOInfo.totalAddedValidators - firstNOInfo.totalDepositedValidators);
+      expect(secondNOCount).to.equal(secondNOInfo.totalAddedValidators - secondNOInfo.totalDepositedValidators);
 
       const keysCountToAdd = 2n;
       let [publicKeys, signatures] = firstNOKeys.slice(0, Number(keysCountToAdd));
@@ -916,8 +905,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         .connect(signingKeysManager)
         .addSigningKeys(secondNodeOperatorId, keysCountToAdd, publicKeys, signatures);
 
-      expect(await nor.getUnusedSigningKeyCount(firstNodeOperatorId)).to.be.equal(firstNOCount + keysCountToAdd);
-      expect(await nor.getUnusedSigningKeyCount(secondNodeOperatorId)).to.be.equal(secondNOCount + keysCountToAdd);
+      expect(await nor.getUnusedSigningKeyCount(firstNodeOperatorId)).to.equal(firstNOCount + keysCountToAdd);
+      expect(await nor.getUnusedSigningKeyCount(secondNodeOperatorId)).to.equal(secondNOCount + keysCountToAdd);
 
       const keysCountToRemove = 3n;
       await nor
@@ -926,10 +915,10 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       await nor
         .connect(signingKeysManager)
         .removeSigningKeys(secondNodeOperatorId, secondNOInfo.totalAddedValidators - 1n, keysCountToRemove);
-      expect(await nor.getUnusedSigningKeyCount(firstNodeOperatorId)).to.be.equal(
+      expect(await nor.getUnusedSigningKeyCount(firstNodeOperatorId)).to.equal(
         firstNOCount + keysCountToAdd - keysCountToRemove,
       );
-      expect(await nor.getUnusedSigningKeyCount(secondNodeOperatorId)).to.be.equal(
+      expect(await nor.getUnusedSigningKeyCount(secondNodeOperatorId)).to.equal(
         secondNOCount + keysCountToAdd - keysCountToRemove,
       );
     });
@@ -942,7 +931,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
     beforeEach(async () => {
       await nor.connect(nodeOperatorsManager).addNodeOperator("node-operator-3", randomAddress());
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(3n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(3n);
 
       await nor
         .connect(signingKeysManager)
@@ -957,7 +946,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
     it("Reverts if no keys added yet for the node operator", async () => {
       await nor.connect(nodeOperatorsManager).addNodeOperator("node-operator-4", randomAddress());
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(4n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(4n);
 
       await expect(nor.getSigningKey(3n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
     });
@@ -976,23 +965,23 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
     it("Can retrieve a deposited key (in use)", async () => {
       for (let i = 0n; i < NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount; ++i) {
         const [key, signature, used] = await nor.getSigningKey(firstNodeOperatorId, i);
-        expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-        expect(signature).to.be.equal(EMPTY_SIGNATURE);
+        expect(key).to.equal(EMPTY_PUBLIC_KEY);
+        expect(signature).to.equal(EMPTY_SIGNATURE);
         expect(used).to.be.true;
       }
 
       for (let i = 0n; i < NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount; ++i) {
         const [key, signature, used] = await nor.getSigningKey(secondNodeOperatorId, i);
-        expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-        expect(signature).to.be.equal(EMPTY_SIGNATURE);
+        expect(key).to.equal(EMPTY_PUBLIC_KEY);
+        expect(signature).to.equal(EMPTY_SIGNATURE);
         expect(used).to.be.true;
       }
 
       for (let i = 0n; i < thirdNOKeysDeposited; ++i) {
         const [key, signature, used] = await nor.getSigningKey(thirdNodeOperatorId, i);
         const [expectedPublicKey, expectedSignature] = thirdNOKeys.get(Number(i));
-        expect(key).to.be.equal(expectedPublicKey);
-        expect(signature).to.be.equal(expectedSignature);
+        expect(key).to.equal(expectedPublicKey);
+        expect(signature).to.equal(expectedSignature);
         expect(used).to.be.true;
       }
     });
@@ -1004,8 +993,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         ++i
       ) {
         const [key, signature, used] = await nor.getSigningKey(firstNodeOperatorId, i);
-        expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-        expect(signature).to.be.equal(EMPTY_SIGNATURE);
+        expect(key).to.equal(EMPTY_PUBLIC_KEY);
+        expect(signature).to.equal(EMPTY_SIGNATURE);
         expect(used).to.be.false;
       }
 
@@ -1015,8 +1004,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         ++i
       ) {
         const [key, signature, used] = await nor.getSigningKey(secondNodeOperatorId, i);
-        expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-        expect(signature).to.be.equal(EMPTY_SIGNATURE);
+        expect(key).to.equal(EMPTY_PUBLIC_KEY);
+        expect(signature).to.equal(EMPTY_SIGNATURE);
         expect(used).to.be.false;
       }
 
@@ -1024,8 +1013,8 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         const [keys, signatures, used] = await nor.getSigningKey(thirdNodeOperatorId, i);
         expect(used).to.be.false;
         const [expectedPublicKey, expectedSignature] = thirdNOKeys.get(Number(i));
-        expect(keys).to.be.equal(expectedPublicKey);
-        expect(signatures).to.be.equal(expectedSignature);
+        expect(keys).to.equal(expectedPublicKey);
+        expect(signatures).to.equal(expectedSignature);
       }
     });
   });
@@ -1037,7 +1026,7 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
     beforeEach(async () => {
       await nor.connect(nodeOperatorsManager).addNodeOperator("node-operator-3", randomAddress());
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(3n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(3n);
 
       await nor
         .connect(signingKeysManager)
@@ -1052,18 +1041,18 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
 
     it("Returns empty data is zero limit passed", async () => {
       await nor.connect(nodeOperatorsManager).addNodeOperator("node-operator-4", randomAddress());
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(4n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(4n);
 
       const [keys, signatures, used] = await nor.getSigningKeys(3n, 0n, 0n);
 
-      expect(keys).to.be.equal("0x");
-      expect(signatures).to.be.equal("0x");
+      expect(keys).to.equal("0x");
+      expect(signatures).to.equal("0x");
       expect(used).to.be.empty;
     });
 
     it("Reverts if no keys added yet for the node operator", async () => {
       await nor.connect(nodeOperatorsManager).addNodeOperator("node-operator-4", randomAddress());
-      expect(await nor.getNodeOperatorsCount()).to.be.equal(4n);
+      expect(await nor.getNodeOperatorsCount()).to.equal(4n);
 
       await expect(nor.getSigningKeys(3n, 0n, 1n)).to.be.revertedWith("OUT_OF_RANGE");
     });
@@ -1095,10 +1084,10 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         );
 
         for (let i = 0; i < NODE_OPERATORS[firstNodeOperatorId].totalSigningKeysCount; ++i) {
-          expect(used[i]).to.be.equal(i < NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount);
+          expect(used[i]).to.equal(i < NODE_OPERATORS[firstNodeOperatorId].depositedSigningKeysCount);
           const [key, sig] = unpackKeySig(keys, signatures, i);
-          expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-          expect(sig).to.be.equal(EMPTY_SIGNATURE);
+          expect(key).to.equal(EMPTY_PUBLIC_KEY);
+          expect(sig).to.equal(EMPTY_SIGNATURE);
         }
       }
 
@@ -1110,10 +1099,10 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         );
 
         for (let i = 0; i < NODE_OPERATORS[secondNodeOperatorId].totalSigningKeysCount; ++i) {
-          expect(used[i]).to.be.equal(i < NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount);
+          expect(used[i]).to.equal(i < NODE_OPERATORS[secondNodeOperatorId].depositedSigningKeysCount);
           const [key, sig] = unpackKeySig(keys, signatures, i);
-          expect(key).to.be.equal(EMPTY_PUBLIC_KEY);
-          expect(sig).to.be.equal(EMPTY_SIGNATURE);
+          expect(key).to.equal(EMPTY_PUBLIC_KEY);
+          expect(sig).to.equal(EMPTY_SIGNATURE);
         }
       }
 
@@ -1121,11 +1110,11 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
         const [keys, signatures, used] = await nor.getSigningKeys(thirdNodeOperatorId, 0n, thirdNOKeysCount);
 
         for (let i = 0; i < thirdNOKeysCount; ++i) {
-          expect(used[i]).to.be.equal(i < thirdNOKeysDeposited);
+          expect(used[i]).to.equal(i < thirdNOKeysDeposited);
           const [key, sig] = unpackKeySig(keys, signatures, i);
           const [expectedKey, expectedSig] = thirdNOKeys.get(i);
-          expect(key).to.be.equal(expectedKey);
-          expect(sig).to.be.equal(expectedSig);
+          expect(key).to.equal(expectedKey);
+          expect(sig).to.equal(expectedSig);
         }
       }
     });
@@ -1134,11 +1123,11 @@ describe("NodeOperatorsRegistry:signing-keys", () => {
       const [keys, signatures, used] = await nor.getSigningKeys(thirdNodeOperatorId, 5n, thirdNOKeysCount - 8);
 
       for (let i = 5; i < thirdNOKeysCount - 8; ++i) {
-        expect(used[i - 5]).to.be.equal(i < thirdNOKeysDeposited);
+        expect(used[i - 5]).to.equal(i < thirdNOKeysDeposited);
         const [key, sig] = unpackKeySig(keys, signatures, i - 5);
         const [expectedKey, expectedSig] = thirdNOKeys.get(i);
-        expect(key).to.be.equal(expectedKey);
-        expect(sig).to.be.equal(expectedSig);
+        expect(key).to.equal(expectedKey);
+        expect(sig).to.equal(expectedSig);
       }
     });
   });

@@ -2,13 +2,14 @@ import { expect } from "chai";
 import { Signer, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HashConsensusTimeTravellable } from "typechain-types";
+import { HashConsensus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION } from "lib";
 
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
 
-describe("HashConsensus:members", function () {
+// TODO: This is a very heavy test, need to speed it up using proper Snapshot strategy
+describe("HashConsensus.sol:members", function () {
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -18,7 +19,7 @@ describe("HashConsensus:members", function () {
   let member6: Signer;
   let stranger: Signer;
 
-  let consensus: HashConsensusTimeTravellable;
+  let consensus: HashConsensus__Harness;
 
   const deploy = async () => {
     const deployed = await deployHashConsensus(await admin.getAddress());
@@ -29,7 +30,7 @@ describe("HashConsensus:members", function () {
     [admin, member1, member2, member3, member4, member5, member6, stranger] = await ethers.getSigners();
   });
 
-  describe("initial state", () => {
+  context("initial state", () => {
     before(deploy);
 
     it("members list is empty", async () => {
@@ -51,7 +52,7 @@ describe("HashConsensus:members", function () {
     });
   });
 
-  describe("addMember", () => {
+  context("addMember", () => {
     before(deploy);
 
     it("reverts if member address equals zero", async () => {
@@ -130,7 +131,7 @@ describe("HashConsensus:members", function () {
     });
   });
 
-  describe("removeMember", () => {
+  context("removeMember", () => {
     beforeEach(async () => {
       await deploy();
       await consensus.connect(admin).addMember(await member1.getAddress(), 4);
@@ -272,7 +273,7 @@ describe("HashConsensus:members", function () {
 
       let tx = await consensus.connect(member5).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
       await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_2, 4);
-      expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_2);
+      expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_2);
 
       let reportVariants = await consensus.getReportVariants();
       expect([...reportVariants.variants]).to.have.members([HASH_2]);
@@ -280,7 +281,7 @@ describe("HashConsensus:members", function () {
 
       tx = await consensus.connect(admin).removeMember(await member2.getAddress(), 4);
       await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(refSlot);
-      expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+      expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
       reportVariants = await consensus.getReportVariants();
       expect([...reportVariants.variants]).to.have.members([HASH_2]);
@@ -314,17 +315,17 @@ describe("HashConsensus:members", function () {
         tx = await consensus.connect(member1).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).addMember(await member3.getAddress(), 3);
         await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(refSlot);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(admin).removeMember(await member3.getAddress(), 2);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
       });
 
       it("adding an extra member and its deletion", async () => {
@@ -340,17 +341,17 @@ describe("HashConsensus:members", function () {
         tx = await consensus.connect(member1).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).addMember(await member3.getAddress(), 2);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).removeMember(await member3.getAddress(), 2);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
       });
 
       it("adding an extra member and its deletion with report", async () => {
@@ -366,21 +367,21 @@ describe("HashConsensus:members", function () {
         tx = await consensus.connect(member1).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).addMember(await member3.getAddress(), 3);
         await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(refSlot);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(member3).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 3);
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).removeMember(await member3.getAddress(), 2);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
       });
 
       it("adding an extra 2 members", async () => {
@@ -397,31 +398,31 @@ describe("HashConsensus:members", function () {
         tx = await consensus.connect(member2).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(member3).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).addMember(await member4.getAddress(), 3);
         await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(refSlot);
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(admin).addMember(await member5.getAddress(), 3);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(member4).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(member5).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_2, 3);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_2);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_2);
       });
 
       it("adding an extra 2 members and deleting one of the members", async () => {
@@ -438,37 +439,37 @@ describe("HashConsensus:members", function () {
         tx = await consensus.connect(member2).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_1, 2);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(member3).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_1);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
 
         tx = await consensus.connect(admin).addMember(await member4.getAddress(), 3);
         await expect(tx).to.emit(consensus, "ConsensusLost").withArgs(refSlot);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(admin).addMember(await member5.getAddress(), 4);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(member4).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(member5).submitReport(refSlot, HASH_2, CONSENSUS_VERSION);
         await expect(tx).not.to.emit(consensus, "ConsensusReached");
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(ZERO_HASH);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(ZERO_HASH);
 
         tx = await consensus.connect(admin).removeMember(await member2.getAddress(), 3);
         await expect(tx).to.emit(consensus, "ConsensusReached").withArgs(refSlot, HASH_2, 3);
         await expect(tx).not.to.emit(consensus, "ConsensusLost");
-        expect((await consensus.getConsensusState()).consensusReport).to.be.equal(HASH_2);
+        expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_2);
       });
     });
   });

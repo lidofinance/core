@@ -1,6 +1,6 @@
 import { ethers, run } from "hardhat";
 
-import { DepositSecurityModule, DepositSecurityModule__factory } from "typechain-types";
+import { DepositSecurityModule } from "typechain-types";
 
 import {
   deployImplementation,
@@ -114,10 +114,7 @@ async function main() {
 
   log(`New DSM address: ${depositSecurityModuleAddress}`);
 
-  const dsmContract = await loadContract<DepositSecurityModule>(
-    DepositSecurityModule__factory,
-    depositSecurityModuleAddress,
-  );
+  const dsmContract = await loadContract<DepositSecurityModule>("DepositSecurityModule", depositSecurityModuleAddress);
   await dsmContract.addGuardians(guardians, quorum);
 
   await dsmContract.setOwner(APP_AGENT_ADDRESS);

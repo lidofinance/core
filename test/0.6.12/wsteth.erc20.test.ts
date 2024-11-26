@@ -1,8 +1,5 @@
 import { ethers } from "hardhat";
 
-import { WstETH__factory } from "typechain-types";
-import { Steth__MinimalMock__factory } from "typechain-types";
-
 import { ether } from "lib/units";
 
 import { testERC20Compliance } from "../common/erc20.test";
@@ -10,17 +7,13 @@ import { testERC20Compliance } from "../common/erc20.test";
 testERC20Compliance({
   tokenName: "wstETH",
   deploy: async () => {
-    const signers = await ethers.getSigners();
-    const [deployer, holder, recipient, spender] = signers;
+    const [deployer, holder, recipient, spender] = await ethers.getSigners();
     const totalSupply = ether("10.0");
 
-    const stethFactory = new Steth__MinimalMock__factory(deployer);
-    const steth = await stethFactory.deploy(holder, { value: totalSupply });
+    const steth = await ethers.deployContract("StETH__Harness", [holder], { value: totalSupply, from: deployer });
+    const wsteth = await ethers.deployContract("WstETH", [steth], deployer);
 
-    const wstethFactory = new WstETH__factory(deployer);
-    const wsteth = await wstethFactory.deploy(await steth.getAddress());
-
-    await steth.connect(holder).approve(await wsteth.getAddress(), totalSupply);
+    await steth.connect(holder).approve(wsteth, totalSupply);
     await wsteth.connect(holder).wrap(totalSupply);
 
     return {

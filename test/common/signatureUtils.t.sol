@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity >=0.4.24 <0.9.0;
 
@@ -48,11 +48,12 @@ contract SignatureUtilsTest is Test {
     }
 
     function test_isValidSignature_WrongSigner(uint256 rogueSigner) public view {
-        // Ignore the 0 case for rogue signer
-        vm.assume(rogueSigner != 0);
-
         // Ignore signers above secp256k1 curve order
-        vm.assume(rogueSigner < 115792089237316195423570985008687907852837564279074904382605163141518161494337);
+        rogueSigner = bound(
+            rogueSigner,
+            1,
+            115792089237316195423570985008687907852837564279074904382605163141518161494336
+        );
 
         uint256 eoaPk = 1;
         address eoa = vm.addr(eoaPk);
@@ -74,11 +75,8 @@ contract SignatureUtilsTest is Test {
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaNum(uint256 eoa_num) public view {
-        // Private key must be less than the secp256k1 curve order
-        vm.assume(eoa_num < 115792089237316195423570985008687907852837564279074904382605163141518161494337);
-
-        //Private key cannot be zero
-        vm.assume(eoa_num > 0);
+        // Private key must be less than the secp256k1 curve order and greater than 0
+        eoa_num = bound(eoa_num, 1, 115792089237316195423570985008687907852837564279074904382605163141518161494336);
 
         bytes32 hash = keccak256("TEST");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(eoa_num, hash);
@@ -172,11 +170,13 @@ contract SignatureUtilsTest is Test {
 }
 
 contract SignatureUtils__Harness {
-    function isValidSignature(address signer, bytes32 msgHash, uint8 v, bytes32 r, bytes32 s)
-        public
-        view
-        returns (bool)
-    {
+    function isValidSignature(
+        address signer,
+        bytes32 msgHash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public view returns (bool) {
         return SignatureUtils.isValidSignature(signer, msgHash, v, r, s);
     }
 

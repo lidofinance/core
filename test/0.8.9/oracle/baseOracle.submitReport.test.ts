@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BaseOracle__Harness, MockConsensusContract } from "typechain-types";
+import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import { SECONDS_PER_SLOT } from "lib";
 
@@ -19,13 +19,13 @@ import {
 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("BaseOracle:submitReport", () => {
+describe("BaseOracle.sol:submitReport", () => {
   let admin: HardhatEthersSigner;
 
   let originalState: string;
   let baseOracle: BaseOracle__Harness;
   let initialRefSlot: bigint;
-  let consensus: MockConsensusContract;
+  let consensus: ConsensusContract__Mock;
 
   before(async () => {
     [admin] = await ethers.getSigners();
@@ -54,9 +54,9 @@ describe("BaseOracle:submitReport", () => {
     it("Returns empty state", async () => {
       const report = await baseOracle.getConsensusReport();
 
-      expect(report.hash).to.be.equal(ZERO_HASH);
-      expect(report.refSlot).to.be.equal(0);
-      expect(report.processingDeadlineTime).to.be.equal(0);
+      expect(report.hash).to.equal(ZERO_HASH);
+      expect(report.refSlot).to.equal(0);
+      expect(report.processingDeadlineTime).to.equal(0);
       expect(report.processingStarted).to.be.false;
     });
 
@@ -64,9 +64,9 @@ describe("BaseOracle:submitReport", () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, deadlineFromRefSlot(initialRefSlot));
       const report = await baseOracle.getConsensusReport();
 
-      expect(report.hash).to.be.equal(HASH_1);
-      expect(report.refSlot).to.be.equal(initialRefSlot);
-      expect(report.processingDeadlineTime).to.be.equal(deadlineFromRefSlot(initialRefSlot));
+      expect(report.hash).to.equal(HASH_1);
+      expect(report.refSlot).to.equal(initialRefSlot);
+      expect(report.processingDeadlineTime).to.equal(deadlineFromRefSlot(initialRefSlot));
       expect(report.processingStarted).to.be.false;
     });
 
@@ -80,9 +80,9 @@ describe("BaseOracle:submitReport", () => {
 
       const report1 = await baseOracle.getConsensusReport();
 
-      expect(report1.hash).to.be.equal(HASH_2);
-      expect(report1.refSlot).to.be.equal(nextRefSlot);
-      expect(report1.processingDeadlineTime).to.be.equal(nextRefSlotDeadline);
+      expect(report1.hash).to.equal(HASH_2);
+      expect(report1.refSlot).to.equal(nextRefSlot);
+      expect(report1.processingDeadlineTime).to.equal(nextRefSlotDeadline);
       expect(report1.processingStarted).to.be.false;
 
       // next report is re-agreed, no missed warnings
@@ -92,9 +92,9 @@ describe("BaseOracle:submitReport", () => {
       );
 
       const report2 = await baseOracle.getConsensusReport();
-      expect(report2.hash).to.be.equal(HASH_3);
-      expect(report2.refSlot).to.be.equal(nextRefSlot);
-      expect(report2.processingDeadlineTime).to.be.equal(nextRefSlotDeadline);
+      expect(report2.hash).to.equal(HASH_3);
+      expect(report2.refSlot).to.equal(nextRefSlot);
+      expect(report2.processingDeadlineTime).to.equal(nextRefSlotDeadline);
       expect(report2.processingStarted).to.be.false;
     });
 
@@ -107,9 +107,9 @@ describe("BaseOracle:submitReport", () => {
       await baseOracle.startProcessing();
       const report = await baseOracle.getConsensusReport();
 
-      expect(report.hash).to.be.equal(HASH_3);
-      expect(report.refSlot).to.be.equal(nextRefSlot);
-      expect(report.processingDeadlineTime).to.be.equal(nextRefSlotDeadline);
+      expect(report.hash).to.equal(HASH_3);
+      expect(report.refSlot).to.equal(nextRefSlot);
+      expect(report.processingDeadlineTime).to.equal(nextRefSlotDeadline);
       expect(report.processingStarted).to.be.true;
     });
   });
@@ -196,7 +196,7 @@ describe("BaseOracle:submitReport", () => {
         .withArgs(String(initialRefSlot));
 
       const processingSlot = await baseOracle.getLastProcessingRefSlot();
-      expect(processingSlot).to.be.equal(refSlot1);
+      expect(processingSlot).to.equal(refSlot1);
     });
   });
 
@@ -246,7 +246,7 @@ describe("BaseOracle:submitReport", () => {
 
     it("Submits initial report and calls _handleConsensusReport", async () => {
       const before = await baseOracle.getConsensusReportLastCall();
-      expect(before.callCount).to.be.equal(0);
+      expect(before.callCount).to.equal(0);
 
       await expect(consensus.submitReportAsConsensus(HASH_1, initialRefSlot, deadlineFromRefSlot(initialRefSlot)))
         .to.emit(baseOracle, "ReportSubmitted")
@@ -254,10 +254,10 @@ describe("BaseOracle:submitReport", () => {
 
       const after = await baseOracle.getConsensusReportLastCall();
 
-      expect(after.callCount).to.be.equal(1);
-      expect(after.report.hash).to.be.equal(HASH_1);
-      expect(after.report.refSlot).to.be.equal(initialRefSlot);
-      expect(after.report.processingDeadlineTime).to.be.equal(deadlineFromRefSlot(initialRefSlot));
+      expect(after.callCount).to.equal(1);
+      expect(after.report.hash).to.equal(HASH_1);
+      expect(after.report.refSlot).to.equal(initialRefSlot);
+      expect(after.report.processingDeadlineTime).to.equal(deadlineFromRefSlot(initialRefSlot));
     });
 
     it("Emits warning event when newer report is submitted and previous has not started processing yet", async () => {
@@ -265,7 +265,7 @@ describe("BaseOracle:submitReport", () => {
       const thirdRefSlot = nextRefSlotFromRefSlot(secondRefSlot);
 
       const before = await baseOracle.getConsensusReportLastCall();
-      expect(before.callCount).to.be.equal(0);
+      expect(before.callCount).to.equal(0);
 
       await expect(
         consensus.submitReportAsConsensus(HASH_1, secondRefSlot, deadlineFromRefSlot(secondRefSlot)),
@@ -277,7 +277,7 @@ describe("BaseOracle:submitReport", () => {
         .withArgs(secondRefSlot);
 
       const after = await baseOracle.getConsensusReportLastCall();
-      expect(after.callCount).to.be.equal(2);
+      expect(after.callCount).to.equal(2);
     });
   });
 
@@ -323,7 +323,7 @@ describe("BaseOracle:submitReport", () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, deadlineFromRefSlot(initialRefSlot));
 
       const report = await baseOracle.getConsensusReport();
-      expect(report.hash).to.be.equal(HASH_1);
+      expect(report.hash).to.equal(HASH_1);
     });
 
     it("Discards report", async () => {
@@ -335,9 +335,9 @@ describe("BaseOracle:submitReport", () => {
 
       const currentReport = await baseOracle.getConsensusReport();
 
-      expect(currentReport.hash).to.be.equal(ZERO_HASH);
-      expect(currentReport.refSlot).to.be.equal(initialRefSlot);
-      expect(currentReport.processingDeadlineTime).to.be.equal(deadlineFromRefSlot(initialRefSlot));
+      expect(currentReport.hash).to.equal(ZERO_HASH);
+      expect(currentReport.refSlot).to.equal(initialRefSlot);
+      expect(currentReport.processingDeadlineTime).to.equal(deadlineFromRefSlot(initialRefSlot));
       expect(currentReport.processingStarted).to.be.false;
     });
 
@@ -347,18 +347,18 @@ describe("BaseOracle:submitReport", () => {
 
       const discardedReport = await baseOracle.lastDiscardedReport();
 
-      expect(discardedReport.hash).to.be.equal(HASH_1);
-      expect(discardedReport.refSlot).to.be.equal(initialRefSlot);
-      expect(discardedReport.processingDeadlineTime).to.be.equal(deadlineFromRefSlot(initialRefSlot));
+      expect(discardedReport.hash).to.equal(HASH_1);
+      expect(discardedReport.refSlot).to.equal(initialRefSlot);
+      expect(discardedReport.processingDeadlineTime).to.equal(deadlineFromRefSlot(initialRefSlot));
     });
 
     it("Allows re-submitting report after it was discarded", async () => {
       await consensus.submitReportAsConsensus(HASH_2, initialRefSlot, deadlineFromRefSlot(initialRefSlot));
       const currentReport = await baseOracle.getConsensusReport();
 
-      expect(currentReport.hash).to.be.equal(HASH_2);
-      expect(currentReport.refSlot).to.be.equal(initialRefSlot);
-      expect(currentReport.processingDeadlineTime).to.be.equal(deadlineFromRefSlot(initialRefSlot));
+      expect(currentReport.hash).to.equal(HASH_2);
+      expect(currentReport.refSlot).to.equal(initialRefSlot);
+      expect(currentReport.processingDeadlineTime).to.equal(deadlineFromRefSlot(initialRefSlot));
       expect(currentReport.processingStarted).to.be.false;
     });
   });

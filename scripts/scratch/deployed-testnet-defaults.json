@@ -103,7 +103,7 @@
     "deployParameters": {
       "exitedValidatorsPerDayLimit": 1500,
       "appearedValidatorsPerDayLimit": 1500,
-      "oneOffCLBalanceDecreaseBPLimit": 500,
+      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,
       "maxValidatorExitRequestsPerReport": 2000,
@@ -113,7 +113,7 @@
       "maxPositiveTokenRebase": 5000000,
       "initialSlashingAmountPWei": 1000,
       "inactivityPenaltiesAmountPWei": 101,
-      "clBalanceOraclesErrorUpperBPLimit": 74
+      "clBalanceOraclesErrorUpperBPLimit": 50
     }
   },
   "oracleDaemonConfig": {
@@ -133,6 +133,12 @@
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 172800
+    }
+  },
+  "simpleDvt": {
+    "deployParameters": {
+      "stakingModuleTypeId": "simple-dvt-onchain-v1",
+      "stuckPenaltyDelay": 432000
     }
   },
   "withdrawalQueueERC721": {

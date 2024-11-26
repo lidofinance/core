@@ -5,11 +5,7 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
-  MockLidoForAccountingOracle,
-} from "typechain-types";
+import { AccountingOracle__Harness, HashConsensus__Harness, Lido__MockForAccountingOracle } from "typechain-types";
 
 import {
   calcExtraDataListHash,
@@ -28,11 +24,12 @@ import {
 } from "lib";
 
 import { deployAndConfigureAccountingOracle } from "test/deploy";
+import { Snapshot } from "test/suite";
 
 describe("AccountingOracle.sol:accessControl", () => {
-  let consensus: HashConsensusTimeTravellable;
-  let oracle: AccountingOracleTimeTravellable;
-  let mockLido: MockLidoForAccountingOracle;
+  let consensus: HashConsensus__Harness;
+  let oracle: AccountingOracle__Harness;
+  let mockLido: Lido__MockForAccountingOracle;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport;
   let extraDataList: string;
@@ -42,9 +39,7 @@ describe("AccountingOracle.sol:accessControl", () => {
   let member: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  before(async () => {
-    [admin, account, member, stranger] = await ethers.getSigners();
-  });
+  let originalState: string;
 
   const deploy = async ({ emptyExtraData = false } = {}) => {
     const deployed = await deployAndConfigureAccountingOracle(admin.address);
@@ -92,7 +87,15 @@ describe("AccountingOracle.sol:accessControl", () => {
     mockLido = deployed.lido;
   };
 
-  beforeEach(deploy);
+  before(async () => {
+    [admin, account, member, stranger] = await ethers.getSigners();
+
+    await deploy();
+  });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("deploying", () => {
     it("deploying accounting oracle", async () => {
@@ -160,7 +163,7 @@ describe("AccountingOracle.sol:accessControl", () => {
     });
 
     context("submitReportExtraDataEmpty", () => {
-      beforeEach(() => deploy({ emptyExtraData: true }));
+      before(async () => await deploy({ emptyExtraData: true }));
 
       it("reverts when sender is not allowed", async () => {
         await expect(oracle.connect(account).submitReportExtraDataEmpty()).to.be.revertedWithCustomError(

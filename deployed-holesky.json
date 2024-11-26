@@ -458,7 +458,7 @@
     ]
   },
   "dummyEmptyContract": {
-    "contract": "contracts/0.8.9/test_helpers/DummyEmptyContract.sol",
+    "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "address": "0x5F4FEf09Cbd5ad743632Fb869E80294933473f0B",
     "constructorArgs": []
   },

@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   AccountingOracle__MockForLegacyOracle,
-  HashConsensus__MockForLegacyOracle,
+  HashConsensus__HarnessForLegacyOracle,
   LegacyOracle__Harness,
   LidoLocator,
 } from "typechain-types";
@@ -35,7 +35,7 @@ describe("LegacyOracle.sol", () => {
   let legacyOracle: LegacyOracle__Harness;
 
   let locator: LidoLocator;
-  let consensusContract: HashConsensus__MockForLegacyOracle;
+  let consensusContract: HashConsensus__HarnessForLegacyOracle;
   let accountingOracle: AccountingOracle__MockForLegacyOracle;
 
   let lido: string;
@@ -50,7 +50,7 @@ describe("LegacyOracle.sol", () => {
 
     lido = certainAddress("legacy-oracle:lido");
 
-    consensusContract = await ethers.deployContract("HashConsensus__MockForLegacyOracle", [
+    consensusContract = await ethers.deployContract("HashConsensus__HarnessForLegacyOracle", [
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
       GENESIS_TIME,
@@ -121,7 +121,7 @@ describe("LegacyOracle.sol", () => {
 
         const consensusEpochId = (consensusTime - GENESIS_TIME) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT);
 
-        expect(oracleEpochId).to.be.equal(consensusEpochId);
+        expect(oracleEpochId).to.equal(consensusEpochId);
 
         await consensusContract.advanceTimeByEpochs(1);
       }
@@ -135,7 +135,7 @@ describe("LegacyOracle.sol", () => {
 
       const oracleEpochId = await legacyOracle.getCurrentEpochId();
 
-      expect(oracleEpochId).to.be.equal(1);
+      expect(oracleEpochId).to.equal(1);
     });
   });
 
@@ -149,12 +149,9 @@ describe("LegacyOracle.sol", () => {
 
       const frame = await legacyOracle.getCurrentFrame();
 
-      expect(frame.frameEpochId).to.be.equal((consensusFrame.refSlot + 1n) / SLOTS_PER_EPOCH, "frameEpochId");
-      expect(frame.frameStartTime).to.be.equal(timestampAtSlot(consensusFrame.refSlot + 1n), "frameStartTime");
-      expect(frame.frameEndTime).to.be.equal(
-        timestampAtEpoch(frame.frameEpochId + EPOCHS_PER_FRAME) - 1n,
-        "frameEndTime",
-      );
+      expect(frame.frameEpochId).to.equal((consensusFrame.refSlot + 1n) / SLOTS_PER_EPOCH, "frameEpochId");
+      expect(frame.frameStartTime).to.equal(timestampAtSlot(consensusFrame.refSlot + 1n), "frameStartTime");
+      expect(frame.frameEndTime).to.equal(timestampAtEpoch(frame.frameEpochId + EPOCHS_PER_FRAME) - 1n, "frameEndTime");
     });
 
     it("Returns frame synced with consensus contract on the edge", async () => {
@@ -169,9 +166,9 @@ describe("LegacyOracle.sol", () => {
       const expectedFrameStartTime = timestampAtEpoch(expectedFrameEpochId);
       const expectedFrameEndTime = timestampAtEpoch(expectedFrameEpochId + EPOCHS_PER_FRAME) - 1n;
 
-      expect(frame.frameEpochId).to.be.equal(expectedFrameEpochId, "frameEpochId");
-      expect(frame.frameStartTime).to.be.equal(expectedFrameStartTime, "frameStartTime");
-      expect(frame.frameEndTime).to.be.equal(expectedFrameEndTime, "frameEndTime");
+      expect(frame.frameEpochId).to.equal(expectedFrameEpochId, "frameEpochId");
+      expect(frame.frameStartTime).to.equal(expectedFrameStartTime, "frameStartTime");
+      expect(frame.frameEndTime).to.equal(expectedFrameEndTime, "frameEndTime");
     });
   });
 
@@ -264,10 +261,10 @@ describe("LegacyOracle.sol", () => {
       const accountingOracleAddress = await accountingOracle.getAddress();
       const accountingOracleActor = await impersonate(accountingOracleAddress, ether("1000"));
 
-      const refSlot = 0n;
-      const expectedEpochId = (refSlot + 1n) / SLOTS_PER_EPOCH;
+      const baseRefSlot = 0n;
+      const expectedEpochId = (baseRefSlot + 1n) / SLOTS_PER_EPOCH;
 
-      await expect(legacyOracle.connect(accountingOracleActor).handleConsensusLayerReport(refSlot, 0, 0))
+      await expect(legacyOracle.connect(accountingOracleActor).handleConsensusLayerReport(baseRefSlot, 0, 0))
         .to.emit(legacyOracle, "Completed")
         .withArgs(expectedEpochId, 0, 0);
 
@@ -289,11 +286,11 @@ describe("LegacyOracle.sol", () => {
         await updateLidoLocatorImplementation(
           brokenLocatorAddress,
           { accountingOracle },
-          "LidoLocator__MutableMock",
+          "LidoLocator__MockMutable",
           admin,
         );
 
-        const locatorMutable = await ethers.getContractAt("LidoLocator__MutableMock", brokenLocatorAddress);
+        const locatorMutable = await ethers.getContractAt("LidoLocator__MockMutable", brokenLocatorAddress);
         await locatorMutable.mock___updateAccountingOracle(ZeroAddress);
 
         await expect(legacyOracle.initialize(locatorMutable, ZeroAddress)).to.revertedWith(
@@ -317,7 +314,7 @@ describe("LegacyOracle.sol", () => {
         epochsPerFrame = EPOCHS_PER_FRAME,
         initialFastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
       }) {
-        const invalidConsensusContract = await ethers.deployContract("HashConsensus__MockForLegacyOracle", [
+        const invalidConsensusContract = await ethers.deployContract("HashConsensus__HarnessForLegacyOracle", [
           slotsPerEpoch,
           secondsPerSlot,
           genesisTime,
@@ -326,13 +323,17 @@ describe("LegacyOracle.sol", () => {
           initialFastLaneLengthSlots,
         ]);
 
-        const accountingOracle = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
+        const accountingOracleMock = await ethers.deployContract("AccountingOracle__MockForLegacyOracle", [
           lido,
           invalidConsensusContract,
           secondsPerSlot,
         ]);
 
-        const locatorConfig = { legacyOracle, accountingOracle, lido };
+        const locatorConfig = {
+          lido,
+          legacyOracle,
+          accountingOracle: accountingOracleMock,
+        };
         const invalidLocator = await deployLidoLocator(locatorConfig, admin);
 
         return { invalidLocator, invalidConsensusContract };
@@ -436,7 +437,7 @@ describe("LegacyOracle.sol", () => {
       const time = await legacyOracle.harness__getTime();
       const blockTimestamp = await getCurrentBlockTimestamp();
 
-      expect(time).to.be.equal(blockTimestamp);
+      expect(time).to.equal(blockTimestamp);
     });
   });
 });

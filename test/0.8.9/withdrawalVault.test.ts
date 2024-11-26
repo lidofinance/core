@@ -5,12 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  ERC20Token__MockForWithdrawalVault,
-  ERC721Token_MockForWithdrawalVault,
-  Lido__MockForWithdrawalVault,
-  WithdrawalVault,
-} from "typechain-types";
+import { ERC20__Harness, ERC721__Harness, Lido__MockForWithdrawalVault, WithdrawalVault } from "typechain-types";
 
 import { MAX_UINT256, proxify } from "lib";
 
@@ -114,11 +109,11 @@ describe("WithdrawalVault.sol", () => {
   });
 
   context("recoverERC20", () => {
-    let token: ERC20Token__MockForWithdrawalVault;
+    let token: ERC20__Harness;
     let tokenAddress: string;
 
     before(async () => {
-      token = await ethers.deployContract("ERC20Token__MockForWithdrawalVault", ["Test Token", "TT"]);
+      token = await ethers.deployContract("ERC20__Harness", ["Test Token", "TT"]);
 
       tokenAddress = await token.getAddress();
     });
@@ -147,11 +142,11 @@ describe("WithdrawalVault.sol", () => {
   });
 
   context("recoverERC721", () => {
-    let token: ERC721Token_MockForWithdrawalVault;
+    let token: ERC721__Harness;
     let tokenAddress: string;
 
     before(async () => {
-      token = await ethers.deployContract("ERC721Token_MockForWithdrawalVault", ["Test NFT", "tNFT"]);
+      token = await ethers.deployContract("ERC721__Harness", ["Test NFT", "tNFT"]);
 
       tokenAddress = await token.getAddress();
     });

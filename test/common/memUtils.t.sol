@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
 pragma solidity >=0.4.24 <0.9.0;
 
@@ -386,9 +386,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_memcpy_CopiesMemChunksShorterThan32Bytes() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.memcpy(getDataPtr(src), getDataPtr(dst), 5);
 
@@ -396,9 +400,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_memcpy_CopiesMemChunksShorterThan32BytesFromANon32BytesOffset() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0xcccccccccccccccccccccccccccccccccc8badf00d1234eeeeeeeeeeeeeeeeee));
+        bytes memory src = abi.encodePacked(
+            bytes32(0xcccccccccccccccccccccccccccccccccc8badf00d1234eeeeeeeeeeeeeeeeee)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.memcpy(getDataPtr(src) + 17, getDataPtr(dst), 4);
 
@@ -406,9 +414,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_memcpy_CopiesMemChunksShorterThan32BytesToANon32BytesOffset() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.memcpy(getDataPtr(src), getDataPtr(dst) + 5, 5);
 
@@ -416,9 +428,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_memcpy_CopiesMemChunksShorterThan32BytesFromAndToANon32BytesOffset() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0xcccccccccccccccccccccccccccccccccc8badf00d1234eeeeeeeeeeeeeeeeee));
+        bytes memory src = abi.encodePacked(
+            bytes32(0xcccccccccccccccccccccccccccccccccc8badf00d1234eeeeeeeeeeeeeeeeee)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.memcpy(getDataPtr(src) + 17, getDataPtr(dst) + 3, 4);
 
@@ -426,9 +442,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_memcpy_HandlesZeroLength() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.memcpy(getDataPtr(src) + 11, getDataPtr(dst) + 13, 0);
 
@@ -436,9 +456,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_copyBytes_CopiesMemChunksThatAreMultiplesOf32Bytes() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.copyBytes(src, dst, 0);
 
@@ -446,9 +470,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_copyBytes_CopiesMemChunksThatAreMultiplesOf32BytesFromANon32BytesOffset() external pure {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         MemUtils.copyBytes(src, dst, 1, 1, 31);
 
@@ -456,9 +484,13 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
     }
 
     function test_copyBytes_RevertsWhenSrcArrayIsOutOfBounds() external {
-        bytes memory src = abi.encodePacked(bytes32(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes memory src = abi.encodePacked(
+            bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)
+        );
 
-        bytes memory dst = abi.encodePacked(bytes32(0x2222222222222222222222222222222222222222222222222222222222222222));
+        bytes memory dst = abi.encodePacked(
+            bytes32(0x2222222222222222222222222222222222222222222222222222222222222222)
+        );
 
         vm.expectRevert(bytes("BYTES_ARRAY_OUT_OF_BOUNDS"));
         MemUtils.copyBytes(src, dst, 1, 1, 32);

@@ -7,13 +7,13 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracleTimeTravellable,
-  HashConsensusTimeTravellable,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
   LegacyOracle__MockForAccountingOracle,
-  MockLidoForAccountingOracle,
-  MockStakingRouterForAccountingOracle,
-  MockWithdrawalQueueForAccountingOracle,
+  Lido__MockForAccountingOracle,
   OracleReportSanityChecker,
+  StakingRouter__MockForAccountingOracle,
+  WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
@@ -39,8 +39,8 @@ import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "tes
 import { Snapshot } from "test/suite";
 
 describe("AccountingOracle.sol:submitReport", () => {
-  let consensus: HashConsensusTimeTravellable;
-  let oracle: AccountingOracleTimeTravellable;
+  let consensus: HashConsensus__Harness;
+  let oracle: AccountingOracle__Harness;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport & { refSlot: bigint };
   let reportHash: string;
@@ -49,12 +49,12 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraDataItems: string[];
   let oracleVersion: bigint;
   let deadline: BigNumberish;
-  let mockStakingRouter: MockStakingRouterForAccountingOracle;
+  let mockStakingRouter: StakingRouter__MockForAccountingOracle;
   let extraData: ExtraDataType;
-  let mockLido: MockLidoForAccountingOracle;
+  let mockLido: Lido__MockForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
   let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
-  let mockWithdrawalQueue: MockWithdrawalQueueForAccountingOracle;
+  let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
   let snapshot: string;
 
   let admin: HardhatEthersSigner;
@@ -130,25 +130,25 @@ describe("AccountingOracle.sol:submitReport", () => {
     await consensus.setTime(deadline);
 
     const newReportItems = getReportDataItems(newReportFields);
-    const reportHash = calcReportDataHash(newReportItems);
+    const nextReportHash = calcReportDataHash(newReportItems);
 
     await consensus.advanceTimeToNextFrameStart();
-    await consensus.connect(member1).submitReport(newReportFields.refSlot, reportHash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(newReportFields.refSlot, nextReportHash, CONSENSUS_VERSION);
 
     return {
       newReportFields,
       newReportItems,
-      reportHash,
+      reportHash: nextReportHash,
     };
   }
 
   async function prepareNextReportInNextFrame(newReportFields: OracleReport) {
     const { refSlot } = await consensus.getCurrentFrame();
-    const next = await prepareNextReport({
+
+    return await prepareNextReport({
       ...newReportFields,
       refSlot: refSlot + SLOTS_PER_FRAME,
     });
-    return next;
   }
 
   before(deploy);
@@ -184,13 +184,13 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     it("processing state reverts to pre-report state ", async () => {
       const state = await oracle.getProcessingState();
-      expect(state.mainDataHash).to.be.equal(ZeroHash);
-      expect(state.extraDataHash).to.be.equal(ZeroHash);
-      expect(state.extraDataFormat).to.be.equal(0);
+      expect(state.mainDataHash).to.equal(ZeroHash);
+      expect(state.extraDataHash).to.equal(ZeroHash);
+      expect(state.extraDataFormat).to.equal(0);
       expect(state.mainDataSubmitted).to.be.false;
-      expect(state.extraDataFormat).to.be.equal(0);
-      expect(state.extraDataItemsCount).to.be.equal(0);
-      expect(state.extraDataItemsSubmitted).to.be.equal(0);
+      expect(state.extraDataFormat).to.equal(0);
+      expect(state.extraDataItemsCount).to.equal(0);
+      expect(state.extraDataItemsSubmitted).to.equal(0);
     });
 
     it("reverts on trying to submit the discarded report", async () => {
@@ -383,7 +383,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           .grantRole(await sanityChecker.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE(), admin.address);
         await sanityChecker.connect(admin).setMaxItemsPerExtraDataTransaction(MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION);
 
-        expect((await sanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction).to.be.equal(
+        expect((await sanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction).to.equal(
           MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION,
         );
 
@@ -398,7 +398,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           .grantRole(await sanityChecker.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE(), admin.address);
         await sanityChecker.connect(admin).setMaxItemsPerExtraDataTransaction(MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION);
 
-        expect((await sanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction).to.be.equal(
+        expect((await sanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction).to.equal(
           MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION,
         );
 
@@ -441,7 +441,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           admin.address,
         );
         await sanityChecker.setExitedValidatorsPerDayLimit(exitingRateLimit);
-        expect((await sanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.be.equal(exitingRateLimit);
+        expect((await sanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.equal(exitingRateLimit);
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
           .to.be.revertedWithCustomError(sanityChecker, "ExitedValidatorsLimitExceeded")
           .withArgs(exitingRateLimit, totalExitedValidators);
@@ -450,40 +450,40 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     context("delivers the data to corresponded contracts", () => {
       it("should call handleOracleReport on Lido", async () => {
-        expect((await mockLido.getLastCall_handleOracleReport()).callCount).to.be.equal(0);
+        expect((await mockLido.getLastCall_handleOracleReport()).callCount).to.equal(0);
         await consensus.setTime(deadline);
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
 
         const lastOracleReportToLido = await mockLido.getLastCall_handleOracleReport();
 
-        expect(lastOracleReportToLido.callCount).to.be.equal(1);
-        expect(lastOracleReportToLido.currentReportTimestamp).to.be.equal(
+        expect(lastOracleReportToLido.callCount).to.equal(1);
+        expect(lastOracleReportToLido.currentReportTimestamp).to.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
-        expect(lastOracleReportToLido.callCount).to.be.equal(1);
-        expect(lastOracleReportToLido.currentReportTimestamp).to.be.equal(
+        expect(lastOracleReportToLido.callCount).to.equal(1);
+        expect(lastOracleReportToLido.currentReportTimestamp).to.equal(
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToLido.clBalance).to.be.equal(reportFields.clBalanceGwei + "000000000");
-        expect(lastOracleReportToLido.withdrawalVaultBalance).to.be.equal(reportFields.withdrawalVaultBalance);
-        expect(lastOracleReportToLido.elRewardsVaultBalance).to.be.equal(reportFields.elRewardsVaultBalance);
+        expect(lastOracleReportToLido.clBalance).to.equal(reportFields.clBalanceGwei + "000000000");
+        expect(lastOracleReportToLido.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
+        expect(lastOracleReportToLido.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
         expect(lastOracleReportToLido.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
           reportFields.withdrawalFinalizationBatches.map(Number),
         );
-        expect(lastOracleReportToLido.simulatedShareRate).to.be.equal(reportFields.simulatedShareRate);
+        expect(lastOracleReportToLido.simulatedShareRate).to.equal(reportFields.simulatedShareRate);
       });
 
       it("should call updateExitedValidatorsCountByStakingModule on StakingRouter", async () => {
-        expect((await mockStakingRouter.lastCall_updateExitedKeysByModule()).callCount).to.be.equal(0);
+        expect((await mockStakingRouter.lastCall_updateExitedKeysByModule()).callCount).to.equal(0);
         await consensus.setTime(deadline);
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
 
         const lastOracleReportToStakingRouter = await mockStakingRouter.lastCall_updateExitedKeysByModule();
 
-        expect(lastOracleReportToStakingRouter.callCount).to.be.equal(1);
+        expect(lastOracleReportToStakingRouter.callCount).to.equal(1);
         expect(lastOracleReportToStakingRouter.moduleIds.map(Number)).to.have.ordered.members(
           reportFields.stakingModuleIdsWithNewlyExitedValidators.map(Number),
         );
@@ -501,16 +501,16 @@ describe("AccountingOracle.sol:submitReport", () => {
         const tx = await oracle.connect(member1).submitReportData(newReportFields, oracleVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(newReportFields.refSlot, anyValue);
         const lastOracleReportToStakingRouter = await mockStakingRouter.lastCall_updateExitedKeysByModule();
-        expect(lastOracleReportToStakingRouter.callCount).to.be.equal(0);
+        expect(lastOracleReportToStakingRouter.callCount).to.equal(0);
       });
 
       it("should call handleConsensusLayerReport on legacyOracle", async () => {
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         const lastCall = await mockLegacyOracle.lastCall__handleConsensusLayerReport();
-        expect(lastCall.totalCalls).to.be.equal(1);
-        expect(lastCall.refSlot).to.be.equal(reportFields.refSlot);
-        expect(lastCall.clBalance).to.be.equal(getBigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-        expect(lastCall.clValidators).to.be.equal(reportFields.numValidators);
+        expect(lastCall.totalCalls).to.equal(1);
+        expect(lastCall.refSlot).to.equal(reportFields.refSlot);
+        expect(lastCall.clBalance).to.equal(getBigInt(reportFields.clBalanceGwei) * ONE_GWEI);
+        expect(lastCall.clValidators).to.equal(reportFields.numValidators);
       });
 
       it("should call onOracleReport on WithdrawalQueue", async () => {
@@ -518,10 +518,10 @@ describe("AccountingOracle.sol:submitReport", () => {
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         const currentProcessingRefSlot = await oracle.getLastProcessingRefSlot();
         const lastCall = await mockWithdrawalQueue.lastCall__onOracleReport();
-        expect(lastCall.callCount).to.be.equal(1);
-        expect(lastCall.isBunkerMode).to.be.equal(reportFields.isBunkerMode);
-        expect(lastCall.prevReportTimestamp).to.be.equal(GENESIS_TIME + prevProcessingRefSlot * SECONDS_PER_SLOT);
-        expect(lastCall.currentReportTimestamp).to.be.equal(GENESIS_TIME + currentProcessingRefSlot * SECONDS_PER_SLOT);
+        expect(lastCall.callCount).to.equal(1);
+        expect(lastCall.isBunkerMode).to.equal(reportFields.isBunkerMode);
+        expect(lastCall.prevReportTimestamp).to.equal(GENESIS_TIME + prevProcessingRefSlot * SECONDS_PER_SLOT);
+        expect(lastCall.currentReportTimestamp).to.equal(GENESIS_TIME + currentProcessingRefSlot * SECONDS_PER_SLOT);
       });
     });
 
@@ -564,30 +564,30 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should revert on non-empty format but zero length", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           extraDataItemsCount: 0,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
         await expect(
-          oracle.connect(member1).submitReportData(reportFields, oracleVersion),
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
         ).to.be.revertedWithCustomError(oracle, "ExtraDataItemsCountCannotBeZeroForNonEmptyData");
       });
 
       it("should revert on non-empty format but zero hash", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           extraDataHash: ZeroHash,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
         await expect(
-          oracle.connect(member1).submitReportData(reportFields, oracleVersion),
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
         ).to.be.revertedWithCustomError(oracle, "ExtraDataHashCannotBeZeroForNonEmptyData");
       });
     });
@@ -597,17 +597,17 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
         const nonZeroHash = keccakFromString("nonZeroHash");
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           isBunkerMode: false,
           extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
           extraDataHash: nonZeroHash,
           extraDataItemsCount: 0,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
+        await expect(oracle.connect(member1).submitReportData(newReportFields, oracleVersion))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataHash")
           .withArgs(ZeroHash, nonZeroHash);
       });
@@ -615,17 +615,17 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should revert for non zero ExtraDataLength", async () => {
         await consensus.setTime(deadline);
         const { refSlot } = await consensus.getCurrentFrame();
-        const reportFields = getReportFields({
+        const newReportFields = getReportFields({
           refSlot: refSlot,
           isBunkerMode: false,
           extraDataFormat: EXTRA_DATA_FORMAT_EMPTY,
           extraDataHash: ZeroHash,
           extraDataItemsCount: 10,
         });
-        const reportItems = getReportDataItems(reportFields);
-        const reportHash = calcReportDataHash(reportItems);
-        await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
+        const newReportItems = getReportDataItems(newReportFields);
+        const newReportHash = calcReportDataHash(newReportItems);
+        await consensus.connect(member1).submitReport(refSlot, newReportHash, CONSENSUS_VERSION);
+        await expect(oracle.connect(member1).submitReportData(newReportFields, oracleVersion))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataItemsCount")
           .withArgs(0, 10);
       });
@@ -634,23 +634,23 @@ describe("AccountingOracle.sol:submitReport", () => {
     context("ExtraDataProcessingState", () => {
       it("should be empty from start", async () => {
         const data = await oracle.getExtraDataProcessingState();
-        expect(data.refSlot).to.be.equal(0);
-        expect(data.dataFormat).to.be.equal(0);
-        expect(data.itemsCount).to.be.equal(0);
-        expect(data.itemsProcessed).to.be.equal(0);
-        expect(data.lastSortingKey).to.be.equal(0);
-        expect(data.dataHash).to.be.equal(ZeroHash);
+        expect(data.refSlot).to.equal(0);
+        expect(data.dataFormat).to.equal(0);
+        expect(data.itemsCount).to.equal(0);
+        expect(data.itemsProcessed).to.equal(0);
+        expect(data.lastSortingKey).to.equal(0);
+        expect(data.dataHash).to.equal(ZeroHash);
       });
 
       it("should be filled with report data after submitting", async () => {
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         const data = await oracle.getExtraDataProcessingState();
-        expect(data.refSlot).to.be.equal(reportFields.refSlot);
-        expect(data.dataFormat).to.be.equal(reportFields.extraDataFormat);
-        expect(data.itemsCount).to.be.equal(reportFields.extraDataItemsCount);
-        expect(data.itemsProcessed).to.be.equal(0);
-        expect(data.lastSortingKey).to.be.equal(0);
-        expect(data.dataHash).to.be.equal(reportFields.extraDataHash);
+        expect(data.refSlot).to.equal(reportFields.refSlot);
+        expect(data.dataFormat).to.equal(reportFields.extraDataFormat);
+        expect(data.itemsCount).to.equal(reportFields.extraDataItemsCount);
+        expect(data.itemsProcessed).to.equal(0);
+        expect(data.lastSortingKey).to.equal(0);
+        expect(data.dataHash).to.equal(reportFields.extraDataHash);
       });
     });
   });

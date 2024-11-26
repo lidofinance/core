@@ -4,28 +4,25 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BaseOracle__Harness, MockConsensusContract } from "typechain-types";
+import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
 
 import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("BaseOracle:consensus", () => {
+describe("BaseOracle.sol:consensus", () => {
   let admin: HardhatEthersSigner;
   let member: HardhatEthersSigner;
   let notMember: HardhatEthersSigner;
-  let consensus: MockConsensusContract;
+  let consensus: ConsensusContract__Mock;
   let originalState: string;
   let baseOracle: BaseOracle__Harness;
   let initialRefSlot: bigint;
 
   before(async () => {
     [admin, member, notMember] = await ethers.getSigners();
-    await deployContract();
-  });
 
-  const deployContract = async () => {
     const deployed = await deployBaseOracle(admin, {
       initialEpoch: 1n,
       mockMember: member,
@@ -39,7 +36,7 @@ describe("BaseOracle:consensus", () => {
 
     const time = await baseOracle.getTime();
     initialRefSlot = epochFirstSlotAt(time);
-  };
+  });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
@@ -66,7 +63,7 @@ describe("BaseOracle:consensus", () => {
       });
 
       it("on mismatched config", async () => {
-        const wrongConsensusContract = await ethers.deployContract("MockConsensusContract", [
+        const wrongConsensusContract = await ethers.deployContract("ConsensusContract__Mock", [
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT + 1n,
           GENESIS_TIME + 1n,
@@ -90,7 +87,7 @@ describe("BaseOracle:consensus", () => {
         await consensus.submitReportAsConsensus(HASH_1, processingRefSlot, Number(await baseOracle.getTime()) + 1);
         await baseOracle.startProcessing();
 
-        const wrongConsensusContract = await ethers.deployContract("MockConsensusContract", [
+        const wrongConsensusContract = await ethers.deployContract("ConsensusContract__Mock", [
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -109,7 +106,7 @@ describe("BaseOracle:consensus", () => {
     });
 
     it("Updates consensus contract", async () => {
-      const newConsensusContract = await ethers.deployContract("MockConsensusContract", [
+      const newConsensusContract = await ethers.deployContract("ConsensusContract__Mock", [
         SLOTS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,
@@ -127,7 +124,7 @@ describe("BaseOracle:consensus", () => {
         .to.emit(baseOracle, "ConsensusHashContractSet")
         .withArgs(await newConsensusContract.getAddress(), await consensus.getAddress());
 
-      expect(await baseOracle.getConsensusContract()).to.be.equal(await newConsensusContract.getAddress());
+      expect(await baseOracle.getConsensusContract()).to.equal(await newConsensusContract.getAddress());
     });
   });
 
@@ -221,7 +218,7 @@ describe("BaseOracle:consensus", () => {
       const oracleSlot = await baseOracle.getCurrentRefSlot();
       const { refSlot } = await consensus.getCurrentFrame();
 
-      expect(oracleSlot).to.be.equal(refSlot);
+      expect(oracleSlot).to.equal(refSlot);
     });
   });
 });

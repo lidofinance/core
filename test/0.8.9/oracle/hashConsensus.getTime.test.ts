@@ -25,7 +25,7 @@ async function deployOriginalHashConsensus(
     fastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
   }: DeployHashConsensusParams = {},
 ) {
-  const reportProcessor = await ethers.deployContract("MockReportProcessor", [CONSENSUS_VERSION]);
+  const reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION]);
 
   const consensus = await ethers.deployContract("HashConsensus", [
     slotsPerEpoch,
@@ -46,17 +46,15 @@ async function deployOriginalHashConsensus(
   return { reportProcessor, consensus };
 }
 
-describe("HashConsensus:getTime", function () {
+describe("HashConsensus.sol:getTime", function () {
   let admin: Signer;
   let consensus: HashConsensus;
 
-  const deploy = async () => {
+  before(async () => {
     [admin] = await ethers.getSigners();
     const deployed = await deployOriginalHashConsensus(await admin.getAddress());
     consensus = deployed.consensus;
-  };
-
-  before(deploy);
+  });
 
   it("call original _getTime by updateInitialEpoch method", async () => {
     await consensus.updateInitialEpoch(10);

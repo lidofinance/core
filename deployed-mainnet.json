@@ -264,7 +264,7 @@
   },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",
-    "contract": "contracts/0.8.9/test_helpers/DummyEmptyContract.sol",
+    "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "deployTx": "0x9d76786f639bd18365f10c087444761db5dafd0edc85c5c1a3e90219f2d1331d",
     "constructorArgs": []
   },

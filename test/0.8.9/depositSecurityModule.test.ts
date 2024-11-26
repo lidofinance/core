@@ -17,10 +17,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  DepositContractMockForDepositSecurityModule,
+  DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
-  LidoMockForDepositSecurityModule,
-  StakingRouterMockForDepositSecurityModule,
+  Lido__MockForDepositSecurityModule,
+  StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types";
 
 import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, ether, streccak } from "lib";
@@ -71,9 +71,9 @@ describe("DepositSecurityModule.sol", () => {
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
-  let lido: LidoMockForDepositSecurityModule;
-  let stakingRouter: StakingRouterMockForDepositSecurityModule;
-  let depositContract: DepositContractMockForDepositSecurityModule;
+  let lido: Lido__MockForDepositSecurityModule;
+  let stakingRouter: StakingRouter__MockForDepositSecurityModule;
+  let depositContract: DepositContract__MockForDepositSecurityModule;
 
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -150,9 +150,9 @@ describe("DepositSecurityModule.sol", () => {
     await setBalance(unrelatedGuardian1.address, ether("100"));
     await setBalance(unrelatedGuardian2.address, ether("100"));
 
-    lido = await ethers.deployContract("LidoMockForDepositSecurityModule");
-    stakingRouter = await ethers.deployContract("StakingRouterMockForDepositSecurityModule", [STAKING_MODULE_ID]);
-    depositContract = await ethers.deployContract("DepositContractMockForDepositSecurityModule");
+    lido = await ethers.deployContract("Lido__MockForDepositSecurityModule");
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
+    depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
 
     config.lido = await lido.getAddress();
     config.stakingRouter = await stakingRouter.getAddress();
@@ -179,21 +179,11 @@ describe("DepositSecurityModule.sol", () => {
     originalState = await Snapshot.take();
   });
 
-  after(async () => {
-    await Snapshot.restore(originalState);
-  });
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    let originalState: string;
-
-    beforeEach(async () => {
-      originalState = await Snapshot.take();
-    });
-
-    afterEach(async () => {
-      await Snapshot.restore(originalState);
-    });
-
     it("Reverts if the `lido` is zero address", async () => {
       const cfg = { ...config };
       cfg.lido = ZeroAddress;
@@ -299,16 +289,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setOwner`", () => {
-      let originalState: string;
-
-      before(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `newValue` is zero address", async () => {
         await expect(dsm.setOwner(ZeroAddress)).to.be.revertedWithCustomError(dsm, "ZeroAddress");
       });
@@ -340,16 +320,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setPauseIntentValidityPeriodBlocks`", () => {
-      let originalState: string;
-
-      before(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `newValue` is zero parameter", async () => {
         await expect(dsm.setPauseIntentValidityPeriodBlocks(0)).to.be.revertedWithCustomError(dsm, "ZeroParameter");
       });
@@ -380,16 +350,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setMaxOperatorsPerUnvetting`", () => {
-      let originalState: string;
-
-      before(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      after(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `newValue` is zero parameter", async () => {
         await expect(dsm.setMaxOperatorsPerUnvetting(0)).to.be.revertedWithCustomError(dsm, "ZeroParameter");
       });
@@ -422,16 +382,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `setGuardianQuorum`", () => {
-      let originalState: string;
       const guardianQuorum = 1;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
 
       it("Reverts if the `setGuardianQuorum` called by not an owner", async () => {
         await expect(dsm.connect(stranger).setGuardianQuorum(guardianQuorum)).to.be.revertedWithCustomError(
@@ -475,16 +426,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `isGuardian`", () => {
-      let originalState: string;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Returns false if list of guardians is empty", async () => {
         expect(await dsm.isGuardian(guardian1)).to.equal(false);
       });
@@ -508,16 +449,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `getGuardianIndex`", () => {
-      let originalState: string;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Returns -1 if list of guardians is empty", async () => {
         expect(await dsm.getGuardianIndex(guardian1)).to.equal(-1);
       });
@@ -540,16 +471,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardian`", () => {
-      let originalState: string;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `addGuardian` called by not an owner", async () => {
         await expect(dsm.connect(stranger).addGuardian(guardian1, 0)).to.be.revertedWithCustomError(dsm, "NotAnOwner");
       });
@@ -603,16 +524,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `addGuardians`", () => {
-      let originalState: string;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `addGuardians` called by not an owner", async () => {
         await expect(dsm.connect(stranger).addGuardians([guardian1, guardian2], 0)).to.be.revertedWithCustomError(
           dsm,
@@ -652,16 +563,6 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     context("Function `removeGuardian`", () => {
-      let originalState: string;
-
-      beforeEach(async () => {
-        originalState = await Snapshot.take();
-      });
-
-      afterEach(async () => {
-        await Snapshot.restore(originalState);
-      });
-
       it("Reverts if the `removeGuardian` called by not an owner", async () => {
         await expect(dsm.connect(stranger).removeGuardian(guardian1, 0)).to.be.revertedWithCustomError(
           dsm,
@@ -743,16 +644,16 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `pauseDeposits`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await dsm.addGuardians([guardian1, guardian2], 0);
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Reverts if signature is invalid", async () => {
@@ -875,10 +776,10 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `unpauseDeposits`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await dsm.addGuardians([guardian1, guardian2], 0);
 
@@ -892,7 +793,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Reverts if called by not an owner", async () => {
@@ -912,10 +813,10 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `canDeposit`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await dsm.addGuardian(guardian1, 1);
       const lastDepositBlockNumber = await time.latestBlock();
@@ -924,7 +825,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     it("Returns `false` if staking module is unregistered in StakingRouter", async () => {
@@ -1019,16 +920,6 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `getLastDepositBlock`", () => {
-    let originalState: string;
-
-    beforeEach(async () => {
-      originalState = await Snapshot.take();
-    });
-
-    afterEach(async () => {
-      await Snapshot.restore(originalState);
-    });
-
     it("Returns deployment block before any deposits", async () => {
       const tx = await dsm.deploymentTransaction();
       const deploymentBlock = tx?.blockNumber;
@@ -1040,7 +931,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Returns last deposit block", async () => {
       await dsm.addGuardian(guardian1, 1);
-      const tx = await await deposit([guardian1]);
+      const tx = await deposit([guardian1]);
       const depositBlock = tx.blockNumber;
 
       expect(await dsm.getLastDepositBlock()).to.equal(depositBlock);
@@ -1049,16 +940,9 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `isMinDepositDistancePassed`", () => {
-    let originalState: string;
-
     beforeEach(async () => {
-      originalState = await Snapshot.take();
       await dsm.addGuardian(guardian1, 1);
       await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
-    });
-
-    afterEach(async () => {
-      await Snapshot.restore(originalState);
     });
 
     it("Returns true if min deposit distance is passed", async () => {
@@ -1098,17 +982,17 @@ describe("DepositSecurityModule.sol", () => {
   });
 
   context("Function `depositBufferedEther`", () => {
-    let originalState: string;
+    let originalContextState: string;
 
     beforeEach(async () => {
-      originalState = await Snapshot.take();
+      originalContextState = await Snapshot.take();
 
       await stakingRouter.setStakingModuleNonce(MODULE_NONCE);
       expect(await stakingRouter.getStakingModuleNonce(STAKING_MODULE_ID)).to.equal(MODULE_NONCE);
     });
 
     afterEach(async () => {
-      await Snapshot.restore(originalState);
+      await Snapshot.restore(originalContextState);
     });
 
     context("Total guardians: 0, quorum: 0", () => {
@@ -1455,20 +1339,12 @@ describe("DepositSecurityModule.sol", () => {
       return await dsm.connect(from).unvetSigningKeys(...unvetArgs, sig);
     }
 
-    let originalState: string;
-
     beforeEach(async () => {
-      originalState = await Snapshot.take();
-
       await dsm.addGuardians([guardian1, guardian2], 0);
       expect(await dsm.getGuardians()).to.have.length(2);
 
       await stakingRouter.setStakingModuleNonce(MODULE_NONCE);
       expect(await stakingRouter.getStakingModuleNonce(STAKING_MODULE_ID)).to.equal(MODULE_NONCE);
-    });
-
-    afterEach(async () => {
-      await Snapshot.restore(originalState);
     });
 
     it("Reverts if module nonce changed", async () => {

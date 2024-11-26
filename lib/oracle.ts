@@ -197,19 +197,20 @@ export function calcExtraDataListHash(packedExtraDataList: string) {
   return keccak256(packedExtraDataList);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isItemTypeArray(items: any[]): items is ItemType[] {
-  return items.every((item) => item.hasOwnProperty("moduleId") && item.hasOwnProperty("type"));
+function isObjectType(item: unknown): item is Record<string, unknown> {
+  return typeof item === "object" && item !== null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isExtraDataType(data: any): data is ExtraDataType {
-  return data.hasOwnProperty("stuckKeys") && data.hasOwnProperty("exitedKeys");
+function isItemTypeArray(items: unknown[]): items is ItemType[] {
+  return items.every((item): item is ItemType => isObjectType(item) && "moduleId" in item && "type" in item);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isStringArray(items: any[]): items is string[] {
-  return items.every((item) => typeof item === "string");
+function isExtraDataType(data: unknown): data is ExtraDataType {
+  return isObjectType(data) && "stuckKeys" in data && "exitedKeys" in data;
+}
+
+function isStringArray(items: unknown[]): items is string[] {
+  return items.every((item): item is string => typeof item === "string");
 }
 
 type ExtraDataConfig = {

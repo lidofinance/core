@@ -4,44 +4,41 @@ import { ethers } from "hardhat";
 
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  EIP712StETH__factory,
-  StethPermitMockWithEip712Initialization,
-  StethPermitMockWithEip712Initialization__factory,
-} from "typechain-types";
+import { StETHPermit__HarnessWithEip712Initialization } from "typechain-types";
 
 import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe("Permit", () => {
+describe("StETHPermit.sol", () => {
   let deployer: Signer;
-  let owner: Signer;
+  let signer: Signer;
 
   let originalState: string;
   let permit: Permit;
   let signature: Signature;
 
-  let steth: StethPermitMockWithEip712Initialization;
+  let steth: StETHPermit__HarnessWithEip712Initialization;
 
   before(async () => {
-    [deployer, owner] = await ethers.getSigners();
+    [deployer, signer] = await ethers.getSigners();
 
-    steth = await new StethPermitMockWithEip712Initialization__factory(deployer).deploy(owner, {
+    steth = await ethers.deployContract("StETHPermit__HarnessWithEip712Initialization", [signer], {
       value: ether("10.0"),
+      from: deployer,
     });
 
-    const holderBalance = await steth.balanceOf(owner);
+    const holderBalance = await steth.balanceOf(signer);
 
     permit = {
-      owner: await owner.getAddress(),
+      owner: await signer.getAddress(),
       spender: certainAddress("spender"),
       value: holderBalance,
-      nonce: await steth.nonces(owner),
+      nonce: await steth.nonces(signer),
       deadline: BigInt(await time.latest()) + days(7n),
     };
 
-    signature = await signPermit(await stethDomain(steth), permit, owner);
+    signature = await signPermit(await stethDomain(steth), permit, signer);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -88,7 +85,7 @@ describe("Permit", () => {
 
   context("Initialized", () => {
     beforeEach(async () => {
-      const eip712helper = await new EIP712StETH__factory(deployer).deploy(steth);
+      const eip712helper = await ethers.deployContract("EIP712StETH", [steth], deployer);
       await steth.initializeEIP712StETH(eip712helper);
     });
 

@@ -4,24 +4,14 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  ACL,
-  Kernel,
-  Lido,
-  LidoLocator,
-  LidoLocator__factory,
-  MinFirstAllocationStrategy__factory,
-  NodeOperatorsRegistry__Harness,
-  NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import { addNodeOperator, certainAddress, NodeOperatorConfig, RewardDistributionState } from "lib";
 
 import { addAragonApp, deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:auxiliary", () => {
+describe("NodeOperatorsRegistry.sol:auxiliary", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
@@ -97,12 +87,15 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       },
     }));
 
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: NodeOperatorsRegistryLibraryAddresses = {
-      ["__contracts/common/lib/MinFirstAllocat__"]: await allocLib.getAddress(),
-    };
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await new NodeOperatorsRegistry__Harness__factory(allocLibAddr, deployer).deploy();
+    impl = await norHarnessFactory.connect(deployer).deploy();
+
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -110,7 +103,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       rootAccount: deployer,
     });
 
-    nor = NodeOperatorsRegistry__Harness__factory.connect(appProxy, deployer);
+    nor = await ethers.getContractAt("NodeOperatorsRegistry__Harness", appProxy, deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
@@ -123,7 +116,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     // inside the harness__requestValidatorsKeysForDeposits() method
     await acl.grantPermission(nor, nor, await nor.STAKING_ROUTER_ROLE());
 
-    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
+    locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
     await expect(nor.initialize(locator, moduleType, penaltyDelay))
@@ -147,10 +140,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
 
   context("unsafeUpdateValidatorsCount", () => {
     beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
     });
@@ -169,8 +162,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
       const nonce = await nor.getNonce();
 
       const beforeNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(beforeNOSummary.stuckValidatorsCount).to.be.equal(0n);
-      expect(beforeNOSummary.totalExitedValidators).to.be.equal(1n);
+      expect(beforeNOSummary.stuckValidatorsCount).to.equal(0n);
+      expect(beforeNOSummary.totalExitedValidators).to.equal(1n);
 
       await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 3n, 2n))
         .to.emit(nor, "StuckPenaltyStateChanged")
@@ -183,8 +176,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .withArgs(nonce + 1n);
 
       const middleNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(middleNOSummary.stuckValidatorsCount).to.be.equal(2n);
-      expect(middleNOSummary.totalExitedValidators).to.be.equal(3n);
+      expect(middleNOSummary.stuckValidatorsCount).to.equal(2n);
+      expect(middleNOSummary.totalExitedValidators).to.equal(3n);
 
       await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 1n, 2n))
         .to.emit(nor, "ExitedSigningKeysCountChanged")
@@ -196,8 +189,8 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
         .to.not.emit(nor, "StuckPenaltyStateChanged");
 
       const lastNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(lastNOSummary.stuckValidatorsCount).to.be.equal(2n);
-      expect(lastNOSummary.totalExitedValidators).to.be.equal(1n);
+      expect(lastNOSummary.stuckValidatorsCount).to.equal(2n);
+      expect(lastNOSummary.totalExitedValidators).to.equal(1n);
     });
   });
 
@@ -213,10 +206,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates all deposit data for every operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
 
@@ -262,7 +255,7 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates the deposit data even if no trimming needed", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
 
@@ -277,10 +270,10 @@ describe("NodeOperatorsRegistry:auxiliary", () => {
     });
 
     it("Invalidates all deposit data for every operator", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
         firstNodeOperatorId,
       );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.be.equal(
+      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
         secondNodeOperatorId,
       );
 

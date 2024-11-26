@@ -21,7 +21,7 @@ import { addNodeOperator, certainAddress, NodeOperatorConfig, prepIdsCountsPaylo
 import { addAragonApp, deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("NodeOperatorsRegistry:stakingLimit", () => {
+describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 

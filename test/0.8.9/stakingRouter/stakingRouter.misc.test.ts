@@ -4,44 +4,46 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor__factory,
-  MinFirstAllocationStrategy__factory,
-  StakingRouterMock,
-  StakingRouterMock__factory,
-} from "typechain-types";
-import { StakingRouterLibraryAddresses } from "typechain-types/factories/contracts/0.8.9/StakingRouter__factory";
+import { DepositContract__MockForBeaconChainDepositor, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether, MAX_UINT256, proxify, randomString } from "lib";
 
-describe("StakingRouter", () => {
+import { Snapshot } from "test/suite";
+
+describe("StakingRouter.sol:misc", () => {
   let deployer: HardhatEthersSigner;
   let proxyAdmin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let stakingRouter: StakingRouterMock;
-  let impl: StakingRouterMock;
+  let stakingRouter: StakingRouter__Harness;
+  let impl: StakingRouter__Harness;
+
+  let originalState: string;
 
   const lido = certainAddress("test:staking-router:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
 
-  beforeEach(async () => {
+  before(async () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
 
-    depositContract = await new DepositContract__MockForBeaconChainDepositor__factory(deployer).deploy();
+    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
-    const allocLibAddr: StakingRouterLibraryAddresses = {
-      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-    };
-
-    impl = await new StakingRouterMock__factory(allocLibAddr, deployer).deploy(depositContract);
+    impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
   });
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {

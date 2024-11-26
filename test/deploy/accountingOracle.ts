@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensusTimeTravellable, LegacyOracle, MockReportProcessor } from "typechain-types";
+import { AccountingOracle, HashConsensus__Harness, LegacyOracle, ReportProcessor__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -34,9 +34,9 @@ export async function deployMockLegacyOracle({
 }
 
 async function deployMockLidoAndStakingRouter() {
-  const stakingRouter = await ethers.deployContract("MockStakingRouterForAccountingOracle");
-  const withdrawalQueue = await ethers.deployContract("MockWithdrawalQueueForAccountingOracle");
-  const lido = await ethers.deployContract("MockLidoForAccountingOracle");
+  const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
+  const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
   return { lido, stakingRouter, withdrawalQueue };
 }
 
@@ -65,7 +65,7 @@ export async function deployAccountingOracleSetup(
     initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + epochsPerFrame;
   }
 
-  const oracle = await ethers.deployContract("AccountingOracleTimeTravellable", [
+  const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
     lidoAddr || (await lido.getAddress()),
     legacyOracleAddr || (await legacyOracle.getAddress()),
@@ -74,7 +74,7 @@ export async function deployAccountingOracleSetup(
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {
-    reportProcessor: oracle as unknown as MockReportProcessor,
+    reportProcessor: oracle as unknown as ReportProcessor__Mock,
     epochsPerFrame,
     slotsPerEpoch,
     secondsPerSlot,
@@ -113,7 +113,7 @@ export async function deployAccountingOracleSetup(
 interface AccountingOracleConfig {
   admin: string;
   oracle: AccountingOracle;
-  consensus: HashConsensusTimeTravellable;
+  consensus: HashConsensus__Harness;
   dataSubmitter?: string;
   consensusVersion?: bigint;
   shouldMigrateLegacyOracle?: boolean;
@@ -147,10 +147,10 @@ export async function initAccountingOracle({
     await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), dataSubmitter);
   }
 
-  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.be.equal(EXTRA_DATA_FORMAT_EMPTY);
-  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.be.equal(EXTRA_DATA_FORMAT_LIST);
-  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
-  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.be.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_FORMAT_EMPTY()).to.equal(EXTRA_DATA_FORMAT_EMPTY);
+  expect(await oracle.EXTRA_DATA_FORMAT_LIST()).to.equal(EXTRA_DATA_FORMAT_LIST);
+  expect(await oracle.EXTRA_DATA_TYPE_STUCK_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_STUCK_VALIDATORS);
+  expect(await oracle.EXTRA_DATA_TYPE_EXITED_VALIDATORS()).to.equal(EXTRA_DATA_TYPE_EXITED_VALIDATORS);
 
   return initTx;
 }
@@ -165,7 +165,7 @@ async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string,
 
 interface AccountingOracleSetup {
   admin: string;
-  consensus: HashConsensusTimeTravellable;
+  consensus: HashConsensus__Harness;
   oracle: AccountingOracle;
   legacyOracle: LegacyOracle;
   dataSubmitter?: string;

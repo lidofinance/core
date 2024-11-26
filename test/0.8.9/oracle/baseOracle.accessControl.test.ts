@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { BaseOracle__Harness, MockConsensusContract } from "typechain-types";
+import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -17,12 +17,12 @@ import {
 import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("BaseOracle:accessControl", () => {
+describe("BaseOracle.sol:accessControl", () => {
   let admin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let oracle: BaseOracle__Harness;
-  let consensus: MockConsensusContract;
+  let consensus: ConsensusContract__Mock;
   let originalState: string;
 
   before(async () => {
@@ -52,11 +52,11 @@ describe("BaseOracle:accessControl", () => {
       const role = await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE();
       await expect(oracle.setConsensusContract(stranger)).to.be.revertedWithOZAccessControlError(admin.address, role);
 
-      expect(await oracle.getConsensusContract()).to.be.equal(await consensus.getAddress());
+      expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
     });
 
     it("Updates consensus contract with MANAGE_CONSENSUS_CONTRACT_ROLE", async () => {
-      const newConsensusContract = await ethers.deployContract("MockConsensusContract", [
+      const newConsensusContract = await ethers.deployContract("ConsensusContract__Mock", [
         SECONDS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,
@@ -71,7 +71,7 @@ describe("BaseOracle:accessControl", () => {
       await oracle.grantRole(role, manager);
       await oracle.connect(manager).setConsensusContract(await newConsensusContract.getAddress());
 
-      expect(await oracle.getConsensusContract()).to.be.equal(await newConsensusContract.getAddress());
+      expect(await oracle.getConsensusContract()).to.equal(await newConsensusContract.getAddress());
     });
   });
 
@@ -84,7 +84,7 @@ describe("BaseOracle:accessControl", () => {
         role,
       );
 
-      expect(await oracle.getConsensusVersion()).to.be.equal(CONSENSUS_VERSION);
+      expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
     });
 
     it("Updates consensus version with MANAGE_CONSENSUS_VERSION_ROLE", async () => {
@@ -93,7 +93,7 @@ describe("BaseOracle:accessControl", () => {
       await oracle.grantRole(role, manager);
       await oracle.connect(manager).setConsensusVersion(3);
 
-      expect(await oracle.getConsensusVersion()).to.be.equal(3);
+      expect(await oracle.getConsensusVersion()).to.equal(3);
     });
   });
 
@@ -109,13 +109,13 @@ describe("BaseOracle:accessControl", () => {
         oracle.connect(stranger).submitConsensusReport(HASH_1, initialRefSlot, initialRefSlot),
       ).to.be.revertedWithCustomError(oracle, "SenderIsNotTheConsensusContract");
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(0);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(0);
     });
 
     it("Submits report from a consensus contract", async () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, initialRefSlot + SLOTS_PER_FRAME);
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(1);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(1);
     });
   });
 
@@ -136,7 +136,7 @@ describe("BaseOracle:accessControl", () => {
     it("Discards report from a consensus contract", async () => {
       await consensus.submitReportAsConsensus(HASH_1, initialRefSlot, initialRefSlot + SLOTS_PER_FRAME);
 
-      expect((await oracle.getConsensusReportLastCall()).callCount).to.be.equal(1);
+      expect((await oracle.getConsensusReportLastCall()).callCount).to.equal(1);
 
       await consensus.discardReportAsConsensus(initialRefSlot);
     });
