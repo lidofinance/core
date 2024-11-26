@@ -43,8 +43,8 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, bytes calldata _params) external {
+    /// solhint-disable-next-line unused-function-parameter
+    function initialize(address _owner, bytes calldata) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
         if (getBeacon() == address(0)) revert NonProxyCall();
 
@@ -53,7 +53,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         _transferOwnership(_owner);
     }
 
-    function finalizeUpgrade_v2() external {
+    function finalizeUpgrade_v2() external view {
         if (getContractVersion() == _version) {
             revert AlreadyInitialized();
         }

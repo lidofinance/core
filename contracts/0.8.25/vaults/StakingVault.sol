@@ -44,12 +44,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     /// @notice Initialize the contract storage explicitly.
-    ///         The initialize function selector is not changed. For upgrades use `_params` variable
-    ///
+    ///         The initialize function selector is not changed. For upgrades use `bytes calldata` variable
     /// @param _owner owner address that can TBD
-    /// @param _params the calldata for initialize contract after upgrades
-    // solhint-disable-next-line no-unused-vars
-    function initialize(address _owner, bytes calldata _params) external {
+    function initialize(address _owner, bytes calldata) external {
         if (_owner == address(0)) revert ZeroArgument("_owner");
 
         if (address(this) == _SELF) {

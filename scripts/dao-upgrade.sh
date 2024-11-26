@@ -22,6 +22,3 @@ yarn compile
 export STEPS_FILE=upgrade/steps.json
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
-
-# TODO
-# yarn hardhat --network $NETWORK run --no-compile scripts/scratch/steps/90-check-dao.ts

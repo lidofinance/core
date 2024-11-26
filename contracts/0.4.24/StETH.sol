@@ -375,10 +375,12 @@ contract StETH is IERC20, Pausable {
         // TODO: do something with Transfer event
     }
 
+    // solhint-disable-next-line
     function _isMinter(address) internal view returns (bool) {
         return false;
     }
 
+    // solhint-disable-next-line
     function _isBurner(address) internal view returns (bool) {
         return false;
     }

@@ -57,7 +57,6 @@ export async function deployAccountingOracleSetup(
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
   const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
 
   const legacyOracle = await getLegacyOracle();
 
@@ -84,9 +83,14 @@ export async function deployAccountingOracleSetup(
   await updateLidoLocatorImplementation(locatorAddr, {
     stakingRouter: await stakingRouter.getAddress(),
     withdrawalQueue: await withdrawalQueue.getAddress(),
-    oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
     accountingOracle: await oracle.getAddress(),
     accounting: await accounting.getAddress(),
+  });
+
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
+
+  await updateLidoLocatorImplementation(locatorAddr, {
+    oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
   });
 
   // pretend we're at the first slot of the initial frame's epoch
@@ -150,34 +154,22 @@ export async function initAccountingOracle({
 }
 
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
-  const churnValidatorsPerDayLimit = 100;
+  const exitedValidatorsPerDayLimit = 55;
+  const appearedValidatorsPerDayLimit = 100;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(
-      lidoLocator,
-      admin,
-      {
-        churnValidatorsPerDayLimit,
-        oneOffCLBalanceDecreaseBPLimit: 0n,
-        annualBalanceIncreaseBPLimit: 0n,
-        maxValidatorExitRequestsPerReport: 32n * 12n,
-        maxAccountingExtraDataListItemsCount: 15n,
-        maxNodeOperatorsPerExtraDataItemCount: 16n,
-        requestTimestampMargin: 0n,
-        maxPositiveTokenRebase: 0n,
-      },
-      {
-        allLimitsManagers: [admin],
-        churnValidatorsPerDayLimitManagers: [admin],
-        oneOffCLBalanceDecreaseLimitManagers: [admin],
-        annualBalanceIncreaseLimitManagers: [admin],
-        shareRateDeviationLimitManagers: [admin],
-        maxValidatorExitRequestsPerReportManagers: [admin],
-        maxAccountingExtraDataListItemsCountManagers: [admin],
-        maxNodeOperatorsPerExtraDataItemCountManagers: [admin],
-        requestTimestampMarginManagers: [admin],
-        maxPositiveTokenRebaseManagers: [admin],
-      },
-    ),
+    f.deploy(lidoLocator, admin, {
+      exitedValidatorsPerDayLimit,
+      appearedValidatorsPerDayLimit,
+      annualBalanceIncreaseBPLimit: 0n,
+      maxValidatorExitRequestsPerReport: 32n * 12n,
+      maxItemsPerExtraDataTransaction: 15n,
+      maxNodeOperatorsPerExtraDataItem: 16n,
+      requestTimestampMargin: 0n,
+      maxPositiveTokenRebase: 0n,
+      initialSlashingAmountPWei: 0n,
+      inactivityPenaltiesAmountPWei: 0n,
+      clBalanceOraclesErrorUpperBPLimit: 0n,
+    }),
   );
 }
 

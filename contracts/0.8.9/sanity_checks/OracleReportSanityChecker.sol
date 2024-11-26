@@ -11,6 +11,8 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../../common/interfaces/IBurner.sol";
+import {StakingRouter} from "../../0.8.9/StakingRouter.sol";
+import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
 
 interface IWithdrawalQueue {
     struct WithdrawalRequestStatus {
@@ -34,20 +36,25 @@ interface IWithdrawalQueue {
         returns (WithdrawalRequestStatus[] memory statuses);
 }
 
+interface IBaseOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+    function GENESIS_TIME() external view returns (uint256);
+    function getLastProcessingRefSlot() external view returns (uint256);
+}
+
 /// @notice The set of restrictions used in the sanity checks of the oracle report
 /// @dev struct is loaded from the storage and stored in memory during the tx running
 struct LimitsList {
-    /// @notice The max possible number of validators that might been reported as `appeared` or `exited`
-    ///     during a single day
-    /// NB: `appeared` means `pending` (maybe not `activated` yet), see further explanations
-    //      in docs for the `setChurnValidatorsPerDayLimit` func below.
+    /// @notice The max possible number of validators that might be reported as `exited`
+    ///     per single day, depends on the Consensus Layer churn limit
     /// @dev Must fit into uint16 (<= 65_535)
-    uint256 churnValidatorsPerDayLimit;
+    uint256 exitedValidatorsPerDayLimit;
 
-    /// @notice The max decrease of the total validators' balances on the Consensus Layer since
-    ///     the previous oracle report
-    /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 oneOffCLBalanceDecreaseBPLimit;
+    /// @notice The max possible number of validators that might be reported as `appeared`
+    ///     per single day, limited by the max daily deposits via DepositSecurityModule in practice
+    ///     isn't limited by a consensus layer (because `appeared` includes `pending`, i.e., not `activated` yet)
+    /// @dev Must fit into uint16 (<= 65_535)
+    uint256 appearedValidatorsPerDayLimit;
 
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
@@ -57,13 +64,13 @@ struct LimitsList {
     /// @notice The max number of exit requests allowed in report to ValidatorsExitBusOracle
     uint256 maxValidatorExitRequestsPerReport;
 
-    /// @notice The max number of data list items reported to accounting oracle in extra data
+    /// @notice The max number of data list items reported to accounting oracle in extra data per single transaction
     /// @dev Must fit into uint16 (<= 65_535)
-    uint256 maxAccountingExtraDataListItemsCount;
+    uint256 maxItemsPerExtraDataTransaction;
 
     /// @notice The max number of node operators reported per extra data list item
     /// @dev Must fit into uint16 (<= 65_535)
-    uint256 maxNodeOperatorsPerExtraDataItemCount;
+    uint256 maxNodeOperatorsPerExtraDataItem;
 
     /// @notice The min time required to be passed from the creation of the request to be
     ///     finalized till the time of the oracle report
@@ -72,25 +79,50 @@ struct LimitsList {
     /// @notice The positive token rebase allowed per single LidoOracle report
     /// @dev uses 1e9 precision, e.g.: 1e6 - 0.1%; 1e9 - 100%, see `setMaxPositiveTokenRebase()`
     uint256 maxPositiveTokenRebase;
+
+    /// @notice Initial slashing amount per one validator to calculate initial slashing of the validators' balances on the Consensus Layer
+    /// @dev Represented in the PWei (1^15 Wei). Must fit into uint16 (<= 65_535)
+    uint256 initialSlashingAmountPWei;
+
+    /// @notice Inactivity penalties amount per one validator to calculate penalties of the validators' balances on the Consensus Layer
+    /// @dev Represented in the PWei (1^15 Wei). Must fit into uint16 (<= 65_535)
+    uint256 inactivityPenaltiesAmountPWei;
+
+    /// @notice The maximum percent on how Second Opinion Oracle reported value could be greater
+    ///     than reported by the AccountingOracle. There is an assumption that second opinion oracle CL balance
+    ///     can be greater as calculated for the withdrawal credentials.
+    /// @dev Represented in the Basis Points (100% == 10_000)
+    uint256 clBalanceOraclesErrorUpperBPLimit;
 }
 
 /// @dev The packed version of the LimitsList struct to be effectively persisted in storage
 struct LimitsListPacked {
-    uint16 churnValidatorsPerDayLimit;
-    uint16 oneOffCLBalanceDecreaseBPLimit;
+    uint16 exitedValidatorsPerDayLimit;
+    uint16 appearedValidatorsPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit_deprecated;
     uint16 maxValidatorExitRequestsPerReport;
-    uint16 maxAccountingExtraDataListItemsCount;
-    uint16 maxNodeOperatorsPerExtraDataItemCount;
-    uint64 requestTimestampMargin;
+    uint16 maxItemsPerExtraDataTransaction;
+    uint16 maxNodeOperatorsPerExtraDataItem;
+    uint32 requestTimestampMargin;
     uint64 maxPositiveTokenRebase;
+    uint16 initialSlashingAmountPWei;
+    uint16 inactivityPenaltiesAmountPWei;
+    uint16 clBalanceOraclesErrorUpperBPLimit;
+}
+
+struct ReportData {
+    uint64 timestamp;
+    uint64 totalExitedValidators;
+    uint128 negativeCLRebaseWei;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
+uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
+uint256 constant ONE_PWEI = 1e15;
 
 /// @title Sanity checks for the Lido's oracle report
-/// @notice The contracts contain view methods to perform sanity checks of the Lido's oracle report
+/// @notice The contracts contain methods to perform sanity checks of the Lido's oracle report
 ///     and lever methods for granular tuning of the params of the checks
 contract OracleReportSanityChecker is AccessControlEnumerable {
     using LimitsListPacker for LimitsList;
@@ -98,75 +130,69 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
 
     bytes32 public constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
-    bytes32 public constant CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
-    bytes32 public constant ONE_OFF_CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE =
-        keccak256("ONE_OFF_CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE");
+    bytes32 public constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 public constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
     bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
     bytes32 public constant MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE =
         keccak256("MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE");
-    bytes32 public constant MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE =
-        keccak256("MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE");
-    bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE =
-        keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE");
+    bytes32 public constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
+        keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
+    bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
+        keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE");
     bytes32 public constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
     bytes32 public constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
         keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
+    bytes32 public constant SECOND_OPINION_MANAGER_ROLE =
+        keccak256("SECOND_OPINION_MANAGER_ROLE");
+    bytes32 public constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
+        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
 
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
 
     ILidoLocator private immutable LIDO_LOCATOR;
+    uint256 private immutable GENESIS_TIME;
+    uint256 private immutable SECONDS_PER_SLOT;
+    address private immutable LIDO_ADDRESS;
 
     LimitsListPacked private _limits;
 
-    struct ManagersRoster {
-        address[] allLimitsManagers;
-        address[] churnValidatorsPerDayLimitManagers;
-        address[] oneOffCLBalanceDecreaseLimitManagers;
-        address[] annualBalanceIncreaseLimitManagers;
-        address[] shareRateDeviationLimitManagers;
-        address[] maxValidatorExitRequestsPerReportManagers;
-        address[] maxAccountingExtraDataListItemsCountManagers;
-        address[] maxNodeOperatorsPerExtraDataItemCountManagers;
-        address[] requestTimestampMarginManagers;
-        address[] maxPositiveTokenRebaseManagers;
-    }
+    /// @dev Historical reports data
+    ReportData[] public reportData;
+
+    /// @dev The address of the second opinion oracle
+    ISecondOpinionOracle public secondOpinionOracle;
 
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
-    /// @param _managersRoster list of the address to grant permissions for granular limits management
     constructor(
         address _lidoLocator,
         address _admin,
-        LimitsList memory _limitsList,
-        ManagersRoster memory _managersRoster
+        LimitsList memory _limitsList
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
 
+        address accountingOracle = LIDO_LOCATOR.accountingOracle();
+        GENESIS_TIME = IBaseOracle(accountingOracle).GENESIS_TIME();
+        SECONDS_PER_SLOT = IBaseOracle(accountingOracle).SECONDS_PER_SLOT();
+        LIDO_ADDRESS = LIDO_LOCATOR.lido();
+
         _updateLimits(_limitsList);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(ALL_LIMITS_MANAGER_ROLE, _managersRoster.allLimitsManagers);
-        _grantRole(CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE, _managersRoster.churnValidatorsPerDayLimitManagers);
-        _grantRole(ONE_OFF_CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE,
-                   _managersRoster.oneOffCLBalanceDecreaseLimitManagers);
-        _grantRole(ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE, _managersRoster.annualBalanceIncreaseLimitManagers);
-        _grantRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE, _managersRoster.maxPositiveTokenRebaseManagers);
-        _grantRole(MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
-                   _managersRoster.maxValidatorExitRequestsPerReportManagers);
-        _grantRole(MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE,
-                   _managersRoster.maxAccountingExtraDataListItemsCountManagers);
-        _grantRole(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE,
-                   _managersRoster.maxNodeOperatorsPerExtraDataItemCountManagers);
-        _grantRole(SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE, _managersRoster.shareRateDeviationLimitManagers);
-        _grantRole(REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE, _managersRoster.requestTimestampMarginManagers);
+    }
+
+    /// @notice Return number of report data elements available on the public reportData array.
+    function getReportDataCount() external view returns (uint256) {
+        return reportData.length;
     }
 
     /// @notice returns the address of the LidoLocator
@@ -206,40 +232,46 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return _limits.maxPositiveTokenRebase;
     }
 
-    /// @notice Sets the new values for the limits list
+    /// @notice Sets the new values for the limits list and second opinion oracle
     /// @param _limitsList new limits list
-    function setOracleReportLimits(LimitsList memory _limitsList) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
+    /// @param _secondOpinionOracle negative rebase oracle.
+    function setOracleReportLimits(LimitsList calldata _limitsList, ISecondOpinionOracle _secondOpinionOracle) external onlyRole(ALL_LIMITS_MANAGER_ROLE) {
         _updateLimits(_limitsList);
+        if (_secondOpinionOracle != secondOpinionOracle) {
+            secondOpinionOracle = _secondOpinionOracle;
+            emit SecondOpinionOracleChanged(_secondOpinionOracle);
+        }
     }
 
-    /// @notice Sets the new value for the churnValidatorsPerDayLimit
-    ///     The limit is applicable for `appeared` and `exited` validators
+    /// @notice Sets the new value for the exitedValidatorsPerDayLimit
     ///
-    /// NB: AccountingOracle reports validators as `appeared` once them become `pending`
-    ///     (might be not `activated` yet). Thus, this limit should be high enough for such cases
-    ///     because Consensus Layer has no intrinsic churn limit for the amount of `pending` validators
-    ///     (only for `activated` instead). For Lido it's limited by the max daily deposits via DepositSecurityModule
+    /// NB: AccountingOracle reports validators as exited once they passed the `EXIT_EPOCH` on Consensus Layer
+    ///     therefore, the value should be set in accordance to the consensus layer churn limit
     ///
-    ///     In contrast, `exited` are reported according to the Consensus Layer churn limit.
-    ///
-    /// @param _churnValidatorsPerDayLimit new churnValidatorsPerDayLimit value
-    function setChurnValidatorsPerDayLimit(uint256 _churnValidatorsPerDayLimit)
+    /// @param _exitedValidatorsPerDayLimit new exitedValidatorsPerDayLimit value
+    function setExitedValidatorsPerDayLimit(uint256 _exitedValidatorsPerDayLimit)
         external
-        onlyRole(CHURN_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
+        onlyRole(EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.churnValidatorsPerDayLimit = _churnValidatorsPerDayLimit;
+        limitsList.exitedValidatorsPerDayLimit = _exitedValidatorsPerDayLimit;
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the oneOffCLBalanceDecreaseBPLimit
-    /// @param _oneOffCLBalanceDecreaseBPLimit new oneOffCLBalanceDecreaseBPLimit value
-    function setOneOffCLBalanceDecreaseBPLimit(uint256 _oneOffCLBalanceDecreaseBPLimit)
+    /// @notice Sets the new value for the appearedValidatorsPerDayLimit
+    ///
+    /// NB: AccountingOracle reports validators as appeared once they become `pending`
+    ///     (might be not `activated` yet). Thus, this limit should be high enough because consensus layer
+    ///     has no intrinsic churn limit for the amount of `pending` validators (only for `activated` instead).
+    ///     For Lido it depends on the amount of deposits that can be made via DepositSecurityModule daily.
+    ///
+    /// @param _appearedValidatorsPerDayLimit new appearedValidatorsPerDayLimit value
+    function setAppearedValidatorsPerDayLimit(uint256 _appearedValidatorsPerDayLimit)
         external
-        onlyRole(ONE_OFF_CL_BALANCE_DECREASE_LIMIT_MANAGER_ROLE)
+        onlyRole(APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.oneOffCLBalanceDecreaseBPLimit = _oneOffCLBalanceDecreaseBPLimit;
+        limitsList.appearedValidatorsPerDayLimit = _appearedValidatorsPerDayLimit;
         _updateLimits(limitsList);
     }
 
@@ -292,25 +324,56 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the maxAccountingExtraDataListItemsCount
-    /// @param _maxAccountingExtraDataListItemsCount new maxAccountingExtraDataListItemsCount value
-    function setMaxAccountingExtraDataListItemsCount(uint256 _maxAccountingExtraDataListItemsCount)
+    /// @notice Sets the new value for the maxItemsPerExtraDataTransaction
+    /// @param _maxItemsPerExtraDataTransaction new maxItemsPerExtraDataTransaction value
+    function setMaxItemsPerExtraDataTransaction(uint256 _maxItemsPerExtraDataTransaction)
         external
-        onlyRole(MAX_ACCOUNTING_EXTRA_DATA_LIST_ITEMS_COUNT_ROLE)
+        onlyRole(MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.maxAccountingExtraDataListItemsCount = _maxAccountingExtraDataListItemsCount;
+        limitsList.maxItemsPerExtraDataTransaction = _maxItemsPerExtraDataTransaction;
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the max maxNodeOperatorsPerExtraDataItemCount
-    /// @param _maxNodeOperatorsPerExtraDataItemCount new maxNodeOperatorsPerExtraDataItemCount value
-    function setMaxNodeOperatorsPerExtraDataItemCount(uint256 _maxNodeOperatorsPerExtraDataItemCount)
+    /// @notice Sets the new value for the max maxNodeOperatorsPerExtraDataItem
+    /// @param _maxNodeOperatorsPerExtraDataItem new maxNodeOperatorsPerExtraDataItem value
+    function setMaxNodeOperatorsPerExtraDataItem(uint256 _maxNodeOperatorsPerExtraDataItem)
         external
-        onlyRole(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_COUNT_ROLE)
+        onlyRole(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.maxNodeOperatorsPerExtraDataItemCount = _maxNodeOperatorsPerExtraDataItemCount;
+        limitsList.maxNodeOperatorsPerExtraDataItem = _maxNodeOperatorsPerExtraDataItem;
+        _updateLimits(limitsList);
+    }
+
+    /// @notice Sets the address of the second opinion oracle and clBalanceOraclesErrorUpperBPLimit value
+    /// @param _secondOpinionOracle second opinion oracle.
+    ///     If it's zero address — oracle is disabled.
+    ///     Default value is zero address.
+    /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
+    function setSecondOpinionOracleAndCLBalanceUpperMargin(ISecondOpinionOracle _secondOpinionOracle, uint256 _clBalanceOraclesErrorUpperBPLimit)
+        external
+        onlyRole(SECOND_OPINION_MANAGER_ROLE)
+    {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.clBalanceOraclesErrorUpperBPLimit = _clBalanceOraclesErrorUpperBPLimit;
+        _updateLimits(limitsList);
+        if (_secondOpinionOracle != secondOpinionOracle) {
+            secondOpinionOracle = ISecondOpinionOracle(_secondOpinionOracle);
+            emit SecondOpinionOracleChanged(_secondOpinionOracle);
+        }
+    }
+
+    /// @notice Sets the initial slashing and penalties Amountficients
+    /// @param _initialSlashingAmountPWei - initial slashing Amountficient (in PWei)
+    /// @param _inactivityPenaltiesAmountPWei - penalties Amountficient (in PWei)
+    function setInitialSlashingAndPenaltiesAmount(uint256 _initialSlashingAmountPWei, uint256 _inactivityPenaltiesAmountPWei)
+        external
+        onlyRole(INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE)
+    {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.initialSlashingAmountPWei = _initialSlashingAmountPWei;
+        limitsList.inactivityPenaltiesAmountPWei = _inactivityPenaltiesAmountPWei;
         _updateLimits(limitsList);
     }
 
@@ -379,6 +442,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report
+    /// WARNING. The function has side effects and modifies the state of the contract.
+    ///          It's needed to keep information about exited validators counts and negative rebase values over time.
+    ///          The function called from Lido contract that uses the 'old' Solidity version (0.4.24) and will do a correct
+    ///          call to this method even it's declared as "view" in interface there.
     /// @param _timeElapsed time elapsed since the previous oracle report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
     ///     current oracle report (NB: also include the initial balance of newly appeared validators)
@@ -398,8 +465,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _sharesRequestedToBurn,
         uint256 _preCLValidators,
         uint256 _postCLValidators
-    ) external view {
+    ) external {
+        if (msg.sender != LIDO_ADDRESS) {
+            revert CalledNotFromLido();
+        }
         LimitsList memory limitsList = _limits.unpack();
+        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
         // 1. Withdrawals vault reported balance
@@ -412,8 +483,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // 3. Burn requests
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
-        // 4. Consensus Layer one-off balance decrease
-        _checkOneOffCLBalanceDecrease(limitsList, _preCLBalance, _postCLBalance + _withdrawalVaultBalance);
+        // 4. Consensus Layer balance decrease
+        _checkCLBalanceDecrease(limitsList, _preCLBalance,
+            _postCLBalance, _withdrawalVaultBalance, _postCLValidators, refSlot);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -437,40 +509,39 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Check rate of exited validators per day
-    /// @param _exitedValidatorsCount Number of validator exit requests supplied per oracle report
+    /// @param _exitedValidatorsCount Number of validator exited per oracle report
     function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount)
         external
         view
     {
-        uint256 limit = _limits.unpack().churnValidatorsPerDayLimit;
-        if (_exitedValidatorsCount > limit) {
-            revert ExitedValidatorsLimitExceeded(limit, _exitedValidatorsCount);
+        uint256 exitedValidatorsLimit = _limits.unpack().exitedValidatorsPerDayLimit;
+        if (_exitedValidatorsCount > exitedValidatorsLimit) {
+            revert ExitedValidatorsLimitExceeded(exitedValidatorsLimit, _exitedValidatorsCount);
         }
     }
 
-    /// @notice Check number of node operators reported per extra data item in accounting oracle
+    /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
     /// @param _itemIndex Index of item in extra data
     /// @param _nodeOperatorsCount Number of validator exit requests supplied per oracle report
-    /// @dev Checks against the same limit as used in checkAccountingExtraDataListItemsCount
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount)
         external
         view
     {
-        uint256 limit = _limits.unpack().maxNodeOperatorsPerExtraDataItemCount;
+        uint256 limit = _limits.unpack().maxNodeOperatorsPerExtraDataItem;
         if (_nodeOperatorsCount > limit) {
             revert TooManyNodeOpsPerExtraDataItem(_itemIndex, _nodeOperatorsCount);
         }
     }
 
-    /// @notice Check max accounting extra data list items count
-    /// @param _extraDataListItemsCount Number of validator exit requests supplied per oracle report
-    function checkAccountingExtraDataListItemsCount(uint256 _extraDataListItemsCount)
+    /// @notice Check the number of extra data list items per transaction in the accounting oracle report.
+    /// @param _extraDataListItemsCount Number of items per single transaction in the accounting oracle report
+    function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount)
         external
         view
     {
-        uint256 limit = _limits.unpack().maxAccountingExtraDataListItemsCount;
+        uint256 limit = _limits.unpack().maxItemsPerExtraDataTransaction;
         if (_extraDataListItemsCount > limit) {
-            revert MaxAccountingExtraDataItemsCountExceeded(limit, _extraDataListItemsCount);
+            revert TooManyItemsPerExtraDataTransaction(limit, _extraDataListItemsCount);
         }
     }
 
@@ -516,16 +587,101 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkOneOffCLBalanceDecrease(
+    function _addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) internal {
+        reportData.push(ReportData(
+            SafeCast.toUint64(_timestamp),
+            SafeCast.toUint64(_exitedValidatorsCount),
+            SafeCast.toUint128(_negativeCLRebase)
+        ));
+    }
+
+    function _sumNegativeRebasesNotOlderThan(uint256 _timestamp) internal view returns (uint256) {
+        uint256 sum;
+        for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
+            if (reportData[uint256(index)].timestamp > SafeCast.toUint64(_timestamp)) {
+                sum += reportData[uint256(index)].negativeCLRebaseWei;
+            } else {
+                break;
+            }
+        }
+        return sum;
+    }
+
+    function _exitedValidatorsAtTimestamp(uint256 _timestamp) internal view returns (uint256) {
+        for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
+            if (reportData[uint256(index)].timestamp <= SafeCast.toUint64(_timestamp)) {
+                return reportData[uint256(index)].totalExitedValidators;
+            }
+        }
+        return 0;
+    }
+
+    function _checkCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
-        uint256 _unifiedPostCLBalance
-    ) internal pure {
-        if (_preCLBalance <= _unifiedPostCLBalance) return;
-        uint256 oneOffCLBalanceDecreaseBP = (MAX_BASIS_POINTS * (_preCLBalance - _unifiedPostCLBalance)) /
-            _preCLBalance;
-        if (oneOffCLBalanceDecreaseBP > _limitsList.oneOffCLBalanceDecreaseBPLimit) {
-            revert IncorrectCLBalanceDecrease(oneOffCLBalanceDecreaseBP);
+        uint256 _postCLBalance,
+        uint256 _withdrawalVaultBalance,
+        uint256 _postCLValidators,
+        uint256 _refSlot
+    ) internal {
+        uint256 reportTimestamp = GENESIS_TIME + _refSlot * SECONDS_PER_SLOT;
+
+        // Checking exitedValidators against StakingRouter
+        StakingRouter stakingRouter = StakingRouter(payable(LIDO_LOCATOR.stakingRouter()));
+        uint256[] memory ids = stakingRouter.getStakingModuleIds();
+
+        uint256 stakingRouterExitedValidators;
+        for (uint256 i = 0; i < ids.length; i++) {
+            StakingRouter.StakingModule memory module = stakingRouter.getStakingModule(ids[i]);
+            stakingRouterExitedValidators += module.exitedValidatorsCount;
+        }
+
+        if (_preCLBalance <= _postCLBalance + _withdrawalVaultBalance) {
+            _addReportData(reportTimestamp, stakingRouterExitedValidators, 0);
+            // If the CL balance is not decreased, we don't need to check anything here
+            return;
+        }
+        _addReportData(reportTimestamp, stakingRouterExitedValidators, _preCLBalance - (_postCLBalance + _withdrawalVaultBalance));
+
+        // NOTE. Values of 18 and 54 days are taken from spec. Check the details here
+        // https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-23.md
+        uint256 negativeCLRebaseSum = _sumNegativeRebasesNotOlderThan(reportTimestamp - 18 days);
+        uint256 maxAllowedCLRebaseNegativeSum =
+            _limitsList.initialSlashingAmountPWei * ONE_PWEI * (_postCLValidators - _exitedValidatorsAtTimestamp(reportTimestamp - 18 days)) +
+            _limitsList.inactivityPenaltiesAmountPWei * ONE_PWEI * (_postCLValidators - _exitedValidatorsAtTimestamp(reportTimestamp - 54 days));
+
+        if (negativeCLRebaseSum <= maxAllowedCLRebaseNegativeSum) {
+            // If the rebase diff is less or equal max allowed sum, we accept the report
+            emit NegativeCLRebaseAccepted(_refSlot, _postCLBalance + _withdrawalVaultBalance, negativeCLRebaseSum, maxAllowedCLRebaseNegativeSum);
+            return;
+        }
+
+        // If there is no negative rebase oracle, then we don't need to check it's report
+        if (address(secondOpinionOracle) == address(0)) {
+            // If there is no oracle and the diff is more than limit, we revert
+            revert IncorrectCLBalanceDecrease(negativeCLRebaseSum, maxAllowedCLRebaseNegativeSum);
+        }
+        _askSecondOpinion(_refSlot, _postCLBalance, _withdrawalVaultBalance, _limitsList);
+    }
+
+    function _askSecondOpinion(uint256 _refSlot, uint256 _postCLBalance, uint256 _withdrawalVaultBalance, LimitsList memory _limitsList) internal {
+        (bool success, uint256 clOracleBalanceGwei, uint256 oracleWithdrawalVaultBalanceWei,,) = secondOpinionOracle.getReport(_refSlot);
+
+        if (success) {
+            uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
+            if (clBalanceWei < _postCLBalance) {
+                revert NegativeRebaseFailedCLBalanceMismatch(_postCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
+            }
+            if (MAX_BASIS_POINTS * (clBalanceWei - _postCLBalance) >
+                _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei) {
+                revert NegativeRebaseFailedCLBalanceMismatch(_postCLBalance, clBalanceWei, _limitsList.clBalanceOraclesErrorUpperBPLimit);
+            }
+            if (oracleWithdrawalVaultBalanceWei != _withdrawalVaultBalance) {
+                revert NegativeRebaseFailedWithdrawalVaultBalanceMismatch(_withdrawalVaultBalance, oracleWithdrawalVaultBalanceWei);
+            }
+            emit NegativeCLRebaseConfirmed(_refSlot, _postCLBalance, _withdrawalVaultBalance);
+        } else {
+            revert NegativeRebaseFailedSecondOpinionReportIsNotReady();
         }
     }
 
@@ -566,9 +722,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _timeElapsed = DEFAULT_TIME_ELAPSED;
         }
 
-        uint256 churnLimit = (_limitsList.churnValidatorsPerDayLimit * _timeElapsed) / SECONDS_PER_DAY;
+        uint256 appearedLimit = (_limitsList.appearedValidatorsPerDayLimit * _timeElapsed) / SECONDS_PER_DAY;
 
-        if (_appearedValidators > churnLimit) revert IncorrectAppearedValidators(_appearedValidators);
+        if (_appearedValidators > appearedLimit) revert IncorrectAppearedValidators(_appearedValidators);
     }
 
     function _checkLastFinalizableId(
@@ -594,13 +750,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _updateLimits(LimitsList memory _newLimitsList) internal {
         LimitsList memory _oldLimitsList = _limits.unpack();
-        if (_oldLimitsList.churnValidatorsPerDayLimit != _newLimitsList.churnValidatorsPerDayLimit) {
-            _checkLimitValue(_newLimitsList.churnValidatorsPerDayLimit, 0, type(uint16).max);
-            emit ChurnValidatorsPerDayLimitSet(_newLimitsList.churnValidatorsPerDayLimit);
+        if (_oldLimitsList.exitedValidatorsPerDayLimit != _newLimitsList.exitedValidatorsPerDayLimit) {
+            _checkLimitValue(_newLimitsList.exitedValidatorsPerDayLimit, 0, type(uint16).max);
+            emit ExitedValidatorsPerDayLimitSet(_newLimitsList.exitedValidatorsPerDayLimit);
         }
-        if (_oldLimitsList.oneOffCLBalanceDecreaseBPLimit != _newLimitsList.oneOffCLBalanceDecreaseBPLimit) {
-            _checkLimitValue(_newLimitsList.oneOffCLBalanceDecreaseBPLimit, 0, MAX_BASIS_POINTS);
-            emit OneOffCLBalanceDecreaseBPLimitSet(_newLimitsList.oneOffCLBalanceDecreaseBPLimit);
+        if (_oldLimitsList.appearedValidatorsPerDayLimit != _newLimitsList.appearedValidatorsPerDayLimit) {
+            _checkLimitValue(_newLimitsList.appearedValidatorsPerDayLimit, 0, type(uint16).max);
+            emit AppearedValidatorsPerDayLimitSet(_newLimitsList.appearedValidatorsPerDayLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
@@ -610,21 +766,33 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _checkLimitValue(_newLimitsList.maxValidatorExitRequestsPerReport, 0, type(uint16).max);
             emit MaxValidatorExitRequestsPerReportSet(_newLimitsList.maxValidatorExitRequestsPerReport);
         }
-        if (_oldLimitsList.maxAccountingExtraDataListItemsCount != _newLimitsList.maxAccountingExtraDataListItemsCount) {
-            _checkLimitValue(_newLimitsList.maxAccountingExtraDataListItemsCount, 0, type(uint16).max);
-            emit MaxAccountingExtraDataListItemsCountSet(_newLimitsList.maxAccountingExtraDataListItemsCount);
+        if (_oldLimitsList.maxItemsPerExtraDataTransaction != _newLimitsList.maxItemsPerExtraDataTransaction) {
+            _checkLimitValue(_newLimitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
+            emit MaxItemsPerExtraDataTransactionSet(_newLimitsList.maxItemsPerExtraDataTransaction);
         }
-        if (_oldLimitsList.maxNodeOperatorsPerExtraDataItemCount != _newLimitsList.maxNodeOperatorsPerExtraDataItemCount) {
-            _checkLimitValue(_newLimitsList.maxNodeOperatorsPerExtraDataItemCount, 0, type(uint16).max);
-            emit MaxNodeOperatorsPerExtraDataItemCountSet(_newLimitsList.maxNodeOperatorsPerExtraDataItemCount);
+        if (_oldLimitsList.maxNodeOperatorsPerExtraDataItem != _newLimitsList.maxNodeOperatorsPerExtraDataItem) {
+            _checkLimitValue(_newLimitsList.maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
+            emit MaxNodeOperatorsPerExtraDataItemSet(_newLimitsList.maxNodeOperatorsPerExtraDataItem);
         }
         if (_oldLimitsList.requestTimestampMargin != _newLimitsList.requestTimestampMargin) {
-            _checkLimitValue(_newLimitsList.requestTimestampMargin, 0, type(uint64).max);
+            _checkLimitValue(_newLimitsList.requestTimestampMargin, 0, type(uint32).max);
             emit RequestTimestampMarginSet(_newLimitsList.requestTimestampMargin);
         }
         if (_oldLimitsList.maxPositiveTokenRebase != _newLimitsList.maxPositiveTokenRebase) {
             _checkLimitValue(_newLimitsList.maxPositiveTokenRebase, 1, type(uint64).max);
             emit MaxPositiveTokenRebaseSet(_newLimitsList.maxPositiveTokenRebase);
+        }
+        if (_oldLimitsList.initialSlashingAmountPWei != _newLimitsList.initialSlashingAmountPWei) {
+            _checkLimitValue(_newLimitsList.initialSlashingAmountPWei, 0, type(uint16).max);
+            emit InitialSlashingAmountSet(_newLimitsList.initialSlashingAmountPWei);
+        }
+        if (_oldLimitsList.inactivityPenaltiesAmountPWei != _newLimitsList.inactivityPenaltiesAmountPWei) {
+            _checkLimitValue(_newLimitsList.inactivityPenaltiesAmountPWei, 0, type(uint16).max);
+            emit InactivityPenaltiesAmountSet(_newLimitsList.inactivityPenaltiesAmountPWei);
+        }
+        if (_oldLimitsList.clBalanceOraclesErrorUpperBPLimit != _newLimitsList.clBalanceOraclesErrorUpperBPLimit) {
+            _checkLimitValue(_newLimitsList.clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
+            emit CLBalanceOraclesErrorUpperBPLimitSet(_newLimitsList.clBalanceOraclesErrorUpperBPLimit);
         }
         _limits = _newLimitsList.pack();
     }
@@ -635,42 +803,56 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    event ChurnValidatorsPerDayLimitSet(uint256 churnValidatorsPerDayLimit);
-    event OneOffCLBalanceDecreaseBPLimitSet(uint256 oneOffCLBalanceDecreaseBPLimit);
+    event ExitedValidatorsPerDayLimitSet(uint256 exitedValidatorsPerDayLimit);
+    event AppearedValidatorsPerDayLimitSet(uint256 appearedValidatorsPerDayLimit);
+    event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
     event MaxValidatorExitRequestsPerReportSet(uint256 maxValidatorExitRequestsPerReport);
-    event MaxAccountingExtraDataListItemsCountSet(uint256 maxAccountingExtraDataListItemsCount);
-    event MaxNodeOperatorsPerExtraDataItemCountSet(uint256 maxNodeOperatorsPerExtraDataItemCount);
+    event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
+    event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
+    event InitialSlashingAmountSet(uint256 initialSlashingAmountPWei);
+    event InactivityPenaltiesAmountSet(uint256 inactivityPenaltiesAmountPWei);
+    event CLBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
+    event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceWei, uint256 withdrawalVaultBalance);
+    event NegativeCLRebaseAccepted(uint256 refSlot, uint256 clTotalBalance, uint256 clBalanceDecrease, uint256 maxAllowedCLRebaseNegativeSum);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
     error IncorrectELRewardsVaultBalance(uint256 actualELRewardsVaultBalance);
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
-    error IncorrectCLBalanceDecrease(uint256 oneOffCLBalanceDecreaseBP);
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
-    error IncorrectAppearedValidators(uint256 churnLimit);
+    error IncorrectAppearedValidators(uint256 appearedValidatorsLimit);
     error IncorrectNumberOfExitRequestsPerReport(uint256 maxRequestsCount);
-    error IncorrectExitedValidators(uint256 churnLimit);
+    error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error ActualShareRateIsZero();
-    error MaxAccountingExtraDataItemsCountExceeded(uint256 maxItemsCount, uint256 receivedItemsCount);
+    error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
+
+    error IncorrectCLBalanceDecrease(uint256 negativeCLRebaseSum, uint256 maxNegativeCLRebaseSum);
+    error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
+    error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
+    error NegativeRebaseFailedSecondOpinionReportIsNotReady();
+    error CalledNotFromLido();
 }
 
 library LimitsListPacker {
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
-        res.churnValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.churnValidatorsPerDayLimit);
-        res.oneOffCLBalanceDecreaseBPLimit = _toBasisPoints(_limitsList.oneOffCLBalanceDecreaseBPLimit);
+        res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
+        res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
-        res.requestTimestampMargin = SafeCast.toUint64(_limitsList.requestTimestampMargin);
+        res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
         res.maxValidatorExitRequestsPerReport = SafeCast.toUint16(_limitsList.maxValidatorExitRequestsPerReport);
-        res.maxAccountingExtraDataListItemsCount = SafeCast.toUint16(_limitsList.maxAccountingExtraDataListItemsCount);
-        res.maxNodeOperatorsPerExtraDataItemCount = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItemCount);
+        res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
+        res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
+        res.initialSlashingAmountPWei = SafeCast.toUint16(_limitsList.initialSlashingAmountPWei);
+        res.inactivityPenaltiesAmountPWei = SafeCast.toUint16(_limitsList.inactivityPenaltiesAmountPWei);
+        res.clBalanceOraclesErrorUpperBPLimit = _toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {
@@ -681,13 +863,16 @@ library LimitsListPacker {
 
 library LimitsListUnpacker {
     function unpack(LimitsListPacked memory _limitsList) internal pure returns (LimitsList memory res) {
-        res.churnValidatorsPerDayLimit = _limitsList.churnValidatorsPerDayLimit;
-        res.oneOffCLBalanceDecreaseBPLimit = _limitsList.oneOffCLBalanceDecreaseBPLimit;
+        res.exitedValidatorsPerDayLimit = _limitsList.exitedValidatorsPerDayLimit;
+        res.appearedValidatorsPerDayLimit = _limitsList.appearedValidatorsPerDayLimit;
         res.annualBalanceIncreaseBPLimit = _limitsList.annualBalanceIncreaseBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
         res.maxPositiveTokenRebase = _limitsList.maxPositiveTokenRebase;
         res.maxValidatorExitRequestsPerReport = _limitsList.maxValidatorExitRequestsPerReport;
-        res.maxAccountingExtraDataListItemsCount = _limitsList.maxAccountingExtraDataListItemsCount;
-        res.maxNodeOperatorsPerExtraDataItemCount = _limitsList.maxNodeOperatorsPerExtraDataItemCount;
+        res.maxItemsPerExtraDataTransaction = _limitsList.maxItemsPerExtraDataTransaction;
+        res.maxNodeOperatorsPerExtraDataItem = _limitsList.maxNodeOperatorsPerExtraDataItem;
+        res.initialSlashingAmountPWei = _limitsList.initialSlashingAmountPWei;
+        res.inactivityPenaltiesAmountPWei = _limitsList.inactivityPenaltiesAmountPWei;
+        res.clBalanceOraclesErrorUpperBPLimit = _limitsList.clBalanceOraclesErrorUpperBPLimit;
     }
 }

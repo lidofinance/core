@@ -30,7 +30,7 @@ describe("HashConsensus.sol:members", function () {
     [admin, member1, member2, member3, member4, member5, member6, stranger] = await ethers.getSigners();
   });
 
-  describe("initial state", () => {
+  context("initial state", () => {
     before(deploy);
 
     it("members list is empty", async () => {
@@ -52,7 +52,7 @@ describe("HashConsensus.sol:members", function () {
     });
   });
 
-  describe("addMember", () => {
+  context("addMember", () => {
     before(deploy);
 
     it("reverts if member address equals zero", async () => {
@@ -131,7 +131,7 @@ describe("HashConsensus.sol:members", function () {
     });
   });
 
-  describe("removeMember", () => {
+  context("removeMember", () => {
     beforeEach(async () => {
       await deploy();
       await consensus.connect(admin).addMember(await member1.getAddress(), 4);
