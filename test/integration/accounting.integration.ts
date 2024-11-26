@@ -29,7 +29,7 @@ import {
 
 const AMOUNT = ether("100");
 
-describe("Accounting", () => {
+describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
