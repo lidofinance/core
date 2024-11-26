@@ -162,8 +162,6 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         }
     }
 
-    /// * * * * * PLUMBER FUNCTIONS * * * * * ///
-
     function mint(
         address _recipient,
         uint256 _tokens
@@ -176,16 +174,12 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
 
-    /// * * * * * VAULT CALLBACK * * * * * ///
-
     // solhint-disable-next-line no-unused-vars
     function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(stakingVault)) revert OnlyVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
     }
-
-    /// * * * * * QUORUM FUNCTIONS * * * * * ///
 
     function transferStakingVaultOwnership(
         address _newOwner
