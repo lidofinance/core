@@ -82,7 +82,7 @@ contract VaultDashboard is AccessControlEnumerable {
 
     /// VAULT MANAGEMENT ///
 
-    function transferStakingVaultOwnership(address _newOwner) external onlyRole(OWNER) {
+    function transferStakingVaultOwnership(address _newOwner) public virtual onlyRole(OWNER) {
         OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
     }
 
@@ -138,7 +138,7 @@ contract VaultDashboard is AccessControlEnumerable {
         _;
     }
 
-    /// EVENTS //
+    /// EVENTS ///
     event Initialized();
 
     /// ERRORS ///
