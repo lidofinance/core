@@ -1,5 +1,6 @@
-import { ContractFactory, ContractTransactionReceipt } from "ethers";
+import { ContractFactory, ContractTransactionReceipt, Signer } from "ethers";
 import { ethers } from "hardhat";
+import { FactoryOptions } from "hardhat/types";
 
 import { LidoLocator } from "typechain-types";
 
@@ -69,9 +70,10 @@ async function deployContractType2(
   constructorArgs: unknown[],
   deployer: string,
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
-  const factory = (await ethers.getContractFactory(artifactName)) as ContractFactory;
+  const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
@@ -103,13 +105,14 @@ export async function deployContract(
   constructorArgs: unknown[],
   deployer: string,
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
   if (txParams.type !== 2) {
     throw new Error("Only EIP-1559 transactions (type 2) are supported");
   }
 
-  return await deployContractType2(artifactName, constructorArgs, deployer, withStateFile);
+  return await deployContractType2(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 }
 
 export async function deployWithoutProxy(
@@ -141,11 +144,12 @@ export async function deployImplementation(
   artifactName: string,
   deployer: string,
   constructorArgs: ConvertibleToString[] = [],
+  signerOrOptions?: Signer | FactoryOptions,
   withStateFile = true,
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)}`, constructorArgs);
 
-  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile);
+  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 
   if (withStateFile) {
     updateObjectInState(nameInState, {
@@ -168,12 +172,13 @@ export async function deployBehindOssifiableProxy(
   constructorArgs: ConvertibleToString[] = [],
   implementation: null | string = null,
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
 ) {
   if (implementation !== null) {
     log(`Using pre-deployed implementation of ${yl(artifactName)}: ${cy(implementation)}`);
   } else {
     logWithConstructorArgs(`Deploying implementation: ${yl(artifactName)} (with proxy)`, constructorArgs);
-    const contract = await deployContract(artifactName, constructorArgs, deployer);
+    const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
     implementation = contract.address;
   }
 

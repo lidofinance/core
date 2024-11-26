@@ -27,6 +27,7 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
+  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -110,6 +111,11 @@ export async function main() {
     proxyContractsOwner,
     deployer,
     [depositContract],
+    null,
+    true,
+    {
+      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+    },
   );
 
   // Deploy or use predefined DepositSecurityModule
@@ -120,9 +126,8 @@ export async function main() {
         lidoAddress,
         depositContract,
         stakingRouter.address,
-        depositSecurityModuleParams.maxDepositsPerBlock,
-        depositSecurityModuleParams.minDepositBlockDistance,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
+        depositSecurityModuleParams.maxOperatorsPerUnvetting,
       ])
     ).address;
   } else {
@@ -193,7 +198,7 @@ export async function main() {
     elRewardsVault.address,
     legacyOracleAddress,
     lidoAddress,
-    certainAddress("dummy-locator:oracleReportSanityChecker"),
+    certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
     legacyOracleAddress, // postTokenRebaseReceiver
     burner.address,
     stakingRouter.address,

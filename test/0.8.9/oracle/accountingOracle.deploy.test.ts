@@ -127,7 +127,7 @@ describe("AccountingOracle.sol:deploy", () => {
       expect(refSlot).to.equal(epoch * BigInt(SLOTS_PER_EPOCH));
     });
 
-    describe("deployment and init finishes successfully (default setup)", async () => {
+    context("deployment and init finishes successfully (default setup)", async () => {
       let consensus: HashConsensus__Harness;
       let oracle: AccountingOracle__Harness;
       let mockLido: Lido__MockForAccountingOracle;

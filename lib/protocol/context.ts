@@ -26,6 +26,7 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
   // By default, all flags are "on"
   const flags = {
     onScratch: process.env.INTEGRATION_ON_SCRATCH === "on",
+    withCSM: process.env.INTEGRATION_WITH_CSM !== "off",
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {

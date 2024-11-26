@@ -85,6 +85,7 @@ export enum Sk {
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
+  minFirstAllocationStrategy = "minFirstAllocationStrategy",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

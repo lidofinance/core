@@ -26,13 +26,13 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let deployer: HardhatEthersSigner;
 
   const defaultLimitsList = {
-    churnValidatorsPerDayLimit: 55n,
-    deprecatedOneOffCLBalanceDecreaseBPLimit: 0n,
+    exitedValidatorsPerDayLimit: 50n,
+    appearedValidatorsPerDayLimit: 75n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
     maxValidatorExitRequestsPerReport: 2000n,
-    maxAccountingExtraDataListItemsCount: 15n,
-    maxNodeOperatorsPerExtraDataItemCount: 16n,
+    maxItemsPerExtraDataTransaction: 15n,
+    maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
     maxPositiveTokenRebase: 5_000_000n, // 0.05%
     initialSlashingAmountPWei: 1000n, // 1 ETH = 1000 PWei
@@ -122,8 +122,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
             return 256;
           case "uint64":
             return 64;
-          case "uint48":
-            return 48;
+          case "uint32":
+            return 32;
           case "uint16":
             return 16;
           default:

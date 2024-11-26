@@ -7,13 +7,19 @@ import { readNetworkState, Sk } from "lib/state-file";
 
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
 
-const NOR_STAKING_MODULE_TARGET_SHARE_BP = 10000; // 100%
+const NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP = 10000; // 100%
+const NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
 const NOR_STAKING_MODULE_MODULE_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_TREASURY_FEE_BP = 500; // 5%
+const NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
+const NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 
 const SDVT_STAKING_MODULE_TARGET_SHARE_BP = 400; // 4%
+const SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
 const SDVT_STAKING_MODULE_MODULE_FEE_BP = 800; // 8%
 const SDVT_STAKING_MODULE_TREASURY_FEE_BP = 200; // 2%
+const SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
+const SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -32,13 +38,17 @@ export async function main() {
     [
       state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
       state[Sk.appNodeOperatorsRegistry].proxy.address,
-      NOR_STAKING_MODULE_TARGET_SHARE_BP,
+      NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+      NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
       NOR_STAKING_MODULE_MODULE_FEE_BP,
       NOR_STAKING_MODULE_TREASURY_FEE_BP,
+      NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+      NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
     ],
     { from: deployer },
   );
 
+  // Add simple DVT module to StakingRouter
   await makeTx(
     stakingRouter,
     "addStakingModule",
@@ -46,8 +56,11 @@ export async function main() {
       state.simpleDvt.deployParameters.stakingModuleTypeId,
       state[Sk.appSimpleDvt].proxy.address,
       SDVT_STAKING_MODULE_TARGET_SHARE_BP,
+      SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
       SDVT_STAKING_MODULE_MODULE_FEE_BP,
       SDVT_STAKING_MODULE_TREASURY_FEE_BP,
+      SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+      SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
     ],
     { from: deployer },
   );
