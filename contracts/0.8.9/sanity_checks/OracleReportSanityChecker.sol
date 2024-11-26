@@ -159,7 +159,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ILidoLocator private immutable LIDO_LOCATOR;
     uint256 private immutable GENESIS_TIME;
     uint256 private immutable SECONDS_PER_SLOT;
-    address private immutable LIDO_ADDRESS;
+    address private immutable ACCOUNTING_ADDRESS;
 
     LimitsListPacked private _limits;
 
@@ -183,7 +183,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         address accountingOracle = LIDO_LOCATOR.accountingOracle();
         GENESIS_TIME = IBaseOracle(accountingOracle).GENESIS_TIME();
         SECONDS_PER_SLOT = IBaseOracle(accountingOracle).SECONDS_PER_SLOT();
-        LIDO_ADDRESS = LIDO_LOCATOR.lido();
+        ACCOUNTING_ADDRESS = LIDO_LOCATOR.accounting();
 
         _updateLimits(_limitsList);
 
@@ -466,8 +466,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _preCLValidators,
         uint256 _postCLValidators
     ) external {
-        if (msg.sender != LIDO_ADDRESS) {
-            revert CalledNotFromLido();
+        if (msg.sender != ACCOUNTING_ADDRESS) {
+            revert CalledNotFromAccounting();
         }
         LimitsList memory limitsList = _limits.unpack();
         uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
@@ -837,7 +837,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
     error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error NegativeRebaseFailedSecondOpinionReportIsNotReady();
-    error CalledNotFromLido();
+    error CalledNotFromAccounting();
 }
 
 library LimitsListPacker {
