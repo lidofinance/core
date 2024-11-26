@@ -320,14 +320,14 @@ describe("Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    let stakingModulesSharesAsFees = 0n;
-    for (let i = 1; i <= stakingModulesCount; i++) {
-      const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-      const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-      stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    }
-
     // TODO: check math, why it's not equal?
+    // let stakingModulesSharesAsFees = 0n;
+    // for (let i = 1; i <= stakingModulesCount; i++) {
+    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
+    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
+    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
+    // }
+
     // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
     // expect(stakingModulesSharesAsFees).to.approximately(
     //   treasurySharesAsFees.args.sharesValue,
@@ -642,14 +642,14 @@ describe("Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    let stakingModulesSharesAsFees = 0n;
-    for (let i = 1; i <= stakingModulesCount; i++) {
-      const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-      const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-      stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    }
-
     // TODO: check math, why it's not equal?
+    // let stakingModulesSharesAsFees = 0n;
+    // for (let i = 1; i <= stakingModulesCount; i++) {
+    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
+    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
+    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
+    // }
+
     // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
     // expect(stakingModulesSharesAsFees).to.approximately(
     //   treasurySharesAsFees.args.sharesValue,
@@ -726,14 +726,14 @@ describe("Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    let stakingModulesSharesAsFees = 0n;
-    for (let i = 1; i <= stakingModulesCount; i++) {
-      const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-      const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-      stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    }
-
     // TODO: check math, why it's not equal?
+    // let stakingModulesSharesAsFees = 0n;
+    // for (let i = 1; i <= stakingModulesCount; i++) {
+    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
+    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
+    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
+    // }
+
     // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
     // expect(stakingModulesSharesAsFees).to.approximately(
     //   treasurySharesAsFees.args.sharesValue,
