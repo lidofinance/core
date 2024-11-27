@@ -210,6 +210,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     {
         _bootstrapInitialHolder();
         _initialize_v2(_lidoLocator, _eip712StETH);
+        _initialize_v3();
         initialized();
     }
 
@@ -234,23 +235,22 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice A function to finalize upgrade to v2 (from v1). Can be called only once
-     * @dev Value "1" in CONTRACT_VERSION_POSITION is skipped due to change in numbering
-     *
-     * The initial protocol token holder must exist.
+     * initializer for the Lido version "3"
+     */
+    function _initialize_v3() internal {
+        _setContractVersion(3);
+    }
+
+    /**
+     * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
-    function finalizeUpgrade_v2(address _lidoLocator, address _eip712StETH) external {
-        _checkContractVersion(0);
+    function finalizeUpgrade_v3() external {
         require(hasInitialized(), "NOT_INITIALIZED");
+        _checkContractVersion(2);
 
-        require(_lidoLocator != address(0), "LIDO_LOCATOR_ZERO_ADDRESS");
-        require(_eip712StETH != address(0), "EIP712_STETH_ZERO_ADDRESS");
-
-        require(_sharesOf(INITIAL_TOKEN_HOLDER) != 0, "INITIAL_HOLDER_EXISTS");
-
-        _initialize_v2(_lidoLocator, _eip712StETH);
+        _initialize_v3();
     }
 
     /**
