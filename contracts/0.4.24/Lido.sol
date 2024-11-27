@@ -191,7 +191,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // External shares burned for account
     event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
 
-    // Maximum external balance percent from the total pooled ether set
+    // Maximum external balance basis points from the total pooled ether set
     event MaxExternalBalanceBPSet(uint256 maxExternalBalanceBP);
 
     /**
@@ -383,13 +383,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Sets the maximum allowed external balance as a percentage of total pooled ether
-     * @param _maxExternalBalanceBP The maximum percentage in basis points (0-10000)
+     * @notice Sets the maximum allowed external balance as basis points of total pooled ether
+     * @param _maxExternalBalanceBP The maximum basis points [0-10000]
      */
     function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
         _auth(STAKING_CONTROL_ROLE);
 
-        require(_maxExternalBalanceBP > 0 && _maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
+        require(_maxExternalBalanceBP >= 0 && _maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
 
         MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
 
@@ -645,7 +645,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @param _preClValidators number of validators in the previous CL state (for event compatibility)
     /// @param _reportClValidators number of validators in the current CL state
     /// @param _reportClBalance total balance of the current CL state
-    /// @param _postExternalBalance total balance of the external balance
+    /// @param _postExternalBalance total external ether balance
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
@@ -658,7 +658,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(getLidoLocator().accounting());
 
         // Save the current CL balance and validators to
-        // calculate rewards on the next push
+        // calculate rewards on the next rebase
         CL_VALIDATORS_POSITION.setStorageUint256(_reportClValidators);
         CL_BALANCE_POSITION.setStorageUint256(_reportClBalance);
         EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
