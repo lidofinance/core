@@ -45,7 +45,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/en) version 20 (LTS) with `corepack` enabled
+- [Node.js](https://nodejs.org/en) version 22 (LTS) with `corepack` enabled
 - [Yarn](https://yarnpkg.com/) installed via corepack (see below)
 - [Foundry](https://book.getfoundry.sh/) latest available version
 

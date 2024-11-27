@@ -1,40 +1,41 @@
 name: Coverage
-#on:
-#  pull_request:
-#  push:
-#    branches: [ master ]
-#
-#jobs:
-#  coverage:
-#    name: Hardhat
-#    runs-on: ubuntu-latest
-#
-#    permissions:
-#      contents: write
-#      issues: write
-#      pull-requests: write
-#
-#    steps:
-#      - uses: actions/checkout@v4
-#
-#      - name: Common setup
-#        uses: ./.github/workflows/setup
-#
-#      # Remove the integration tests from the test suite, as they require a mainnet fork to run properly
-#      - name: Remove integration tests
-#        run: rm -rf test/integration
-#
-#      - name: Collect coverage
-#        run: yarn test:coverage
-#
-#      - name: Produce the coverage report
-#        uses: insightsengineering/coverage-action@v2
-#        with:
-#          path: ./coverage/cobertura-coverage.xml
-#          publish: true
-#          threshold: 95
-#          diff: true
-#          diff-branch: master
-#          diff-storage: _core_coverage_reports
-#          coverage-summary-title: "Hardhat Unit Tests Coverage Summary"
-#          togglable-report: true
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  coverage:
+    name: Hardhat
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      # Remove the integration tests from the test suite, as they require a mainnet fork to run properly
+      - name: Remove integration tests
+        run: rm -rf test/integration
+
+      - name: Collect coverage
+        run: yarn test:coverage
+
+      - name: Produce the coverage report
+        uses: insightsengineering/coverage-action@v2
+        with:
+          path: ./coverage/cobertura-coverage.xml
+          publish: true
+          threshold: 95
+          diff: true
+          diff-branch: master
+          diff-storage: _core_coverage_reports
+          coverage-summary-title: "Hardhat Unit Tests Coverage Summary"
+          togglable-report: true

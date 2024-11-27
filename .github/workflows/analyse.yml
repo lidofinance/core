@@ -1,58 +1,59 @@
 name: Analysis
-#on: [pull_request]
-#
-#jobs:
-#  slither:
-#    name: Slither
-#    runs-on: ubuntu-latest
-#
-#    permissions:
-#      contents: read
-#      security-events: write
-#
-#    steps:
-#      - uses: actions/checkout@v4
-#
-#      - name: Common setup
-#        uses: ./.github/workflows/setup
-#
-#      - name: Install poetry
-#        run: pipx install poetry
-#
-#      - uses: actions/setup-python@v5
-#        with:
-#          python-version: "3.12"
-#          cache: "poetry"
-#
-#      - name: Install dependencies
-#        run: poetry install --no-root
-#
-#      - name: Versions
-#        run: >
-#          poetry --version &&
-#          python --version &&
-#          echo "slither $(poetry run slither --version)" &&
-#          poetry run slitherin --version
-#
-#      - name: Run slither
-#        run: >
-#          poetry run slither . \
-#            --no-fail-pedantic \
-#            --compile-force-framework hardhat \
-#            --sarif results.sarif \
-#            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted
-#
-#      - name: Check results.sarif presence
-#        id: results
-#        if: always()
-#        shell: bash
-#        run: >
-#          test -f results.sarif &&
-#          echo 'value=present' >> $GITHUB_OUTPUT ||
-#          echo 'value=not' >> $GITHUB_OUTPUT
-#
-#      - name: Upload results.sarif file
-#        uses: github/codeql-action/upload-sarif@v3
-#        if: ${{ always() && steps.results.outputs.value == 'present' }}
-#        with:
-#          sarif_file: results.sarif
+
+on: [pull_request]
+
+jobs:
+  slither:
+    name: Slither
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "poetry"
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Versions
+        run: >
+          poetry --version &&
+          python --version &&
+          echo "slither $(poetry run slither --version)" &&
+          poetry run slitherin --version
+
+      - name: Run slither
+        run: >
+          poetry run slither . \
+            --no-fail-pedantic \
+            --compile-force-framework hardhat \
+            --sarif results.sarif \
+            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted
+
+      - name: Check results.sarif presence
+        id: results
+        if: always()
+        shell: bash
+        run: >
+          test -f results.sarif &&
+          echo 'value=present' >> $GITHUB_OUTPUT ||
+          echo 'value=not' >> $GITHUB_OUTPUT
+
+      - name: Upload results.sarif file
+        uses: github/codeql-action/upload-sarif@v3
+        if: ${{ always() && steps.results.outputs.value == 'present' }}
+        with:
+          sarif_file: results.sarif
