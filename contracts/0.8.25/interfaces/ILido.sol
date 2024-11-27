@@ -17,7 +17,7 @@ interface ILido {
 
     function burnExternalShares(uint256) external;
 
-    function getMaxExternalBalance() external view returns (uint256);
+    function getMaxExternalEther() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 

@@ -124,7 +124,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev amount of external balance that is counted into total pooled eth
     bytes32 internal constant EXTERNAL_BALANCE_POSITION =
         0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
-    /// @dev maximum allowed external balance as a percentage of total pooled ether
+    /// @dev maximum allowed external balance as basis points of total pooled ether
+    ///      this is a soft limit (can eventually hit the limit as a part of rebase)
     bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
         0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalBalanceBP")
 
@@ -348,7 +349,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Returns full info about current stake limit params and state
      * @dev Might be used for the advanced integration requests.
-     * @return isStakingPaused staking pause state (equivalent to return of isStakingPaused())
+     * @return isStakingPaused_ staking pause state (equivalent to return of isStakingPaused())
      * @return isStakingLimitSet whether the stake limit is set
      * @return currentStakeLimit current stake limit (equivalent to return of getCurrentStakeLimit())
      * @return maxStakeLimit max stake limit
@@ -491,12 +492,20 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _getBufferedEther();
     }
 
+    /**
+     * @notice Get the amount of Ether held by external contracts
+     * @return amount of external ether in wei
+     */
     function getExternalEther() external view returns (uint256) {
         return EXTERNAL_BALANCE_POSITION.getStorageUint256();
     }
 
-    function getMaxExternalBalance() external view returns (uint256) {
-        return _getMaxExternalBalance();
+    /**
+     * @notice Get the maximum allowed external ether balance
+     * @return max external balance in wei
+     */
+    function getMaxExternalEther() external view returns (uint256) {
+        return _getMaxExternalEther();
     }
 
     /**
@@ -594,7 +603,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///
     /// @param _receiver Address to receive the minted shares
     /// @param _amountOfShares Amount of shares to mint
-    /// @return stethAmount The amount of stETH minted
     ///
     /// @dev authentication goes through isMinter in StETH
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
@@ -606,7 +614,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
 
         uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(stethAmount);
-        uint256 maxExternalBalance = _getMaxExternalBalance();
+        uint256 maxExternalBalance = _getMaxExternalEther();
 
         require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
@@ -889,22 +897,31 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @dev Gets the maximum allowed external balance as a percentage of total pooled ether
+     * @dev Gets the maximum allowed external balance as basis points of total pooled ether
      * @return max external balance in wei
      */
-    function _getMaxExternalBalance() internal view returns (uint256) {
-        return _getTotalPooledEther().mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256()).div(TOTAL_BASIS_POINTS);
+    function _getMaxExternalEther() internal view returns (uint256) {
+        return _getPooledEther()
+            .mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256())
+            .div(TOTAL_BASIS_POINTS);
     }
 
     /**
-     * @dev Gets the total amount of Ether controlled by the system
+     * @dev Gets the total amount of Ether controlled by the protocol
+     * @return total balance in wei
+     */
+    function _getPooledEther() internal view returns (uint256) {
+        return _getBufferedEther()
+            .add(CL_BALANCE_POSITION.getStorageUint256())
+            .add(_getTransientBalance());
+    }
+
+    /**
+     * @dev Gets the total amount of Ether controlled by the protocol and external entities
      * @return total balance in wei
      */
     function _getTotalPooledEther() internal view returns (uint256) {
-        return _getBufferedEther()
-            .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(EXTERNAL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientBalance());
+        return _getPooledEther().add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
     }
 
     /// @dev override isMinter from StETH to allow accounting to mint
