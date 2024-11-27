@@ -109,9 +109,9 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://explorer.mekong.ethpandaops.io/api",
           browserURL: "https://explorer.mekong.ethpandaops.io",
-        }
-      }
-    ]
+        },
+      },
+    ],
   },
   solidity: {
     compilers: [
