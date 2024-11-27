@@ -4,30 +4,34 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { OssifiableProxy, StakingRouter } from "typechain-types";
+import { StakingRouter } from "typechain-types";
 
-import { MAX_UINT256, randomAddress } from "lib";
+import { MAX_UINT256, proxify, randomAddress } from "lib";
 
-describe("StakingRouter:Versioned", () => {
+describe("StakingRouter.sol:Versioned", () => {
+  let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
-  let user: HardhatEthersSigner;
 
   let impl: StakingRouter;
-  let proxy: OssifiableProxy;
   let versioned: StakingRouter;
 
   const petrifiedVersion = MAX_UINT256;
 
   before(async () => {
-    [admin, user] = await ethers.getSigners();
+    [deployer, admin] = await ethers.getSigners();
 
+    // deploy staking router
     const depositContract = randomAddress();
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await ethers.deployContract("StakingRouter", [depositContract]);
+    impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
 
-    proxy = await ethers.deployContract("OssifiableProxy", [impl, admin, new Uint8Array()], admin);
-
-    versioned = await ethers.getContractAt("StakingRouter", proxy, user);
+    [versioned] = await proxify({ impl, admin });
   });
 
   context("constructor", () => {
@@ -46,7 +50,7 @@ describe("StakingRouter:Versioned", () => {
     it("Increments version", async () => {
       await versioned.initialize(randomAddress(), randomAddress(), randomBytes(32));
 
-      expect(await versioned.getContractVersion()).to.equal(1n);
+      expect(await versioned.getContractVersion()).to.equal(2n);
     });
   });
 });

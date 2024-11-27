@@ -245,10 +245,11 @@ contract MinFirstAllocationStrategyAllocateHandler is MinFirstAllocationStrategy
         uint256[] memory capacities = _input.capacities;
         uint256 allocationSize = _input.allocationSize;
 
-        uint256 allocated = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
+        // uint256 allocated = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
+        (_actual.allocated, _actual.buckets) = MinFirstAllocationStrategy.allocate(buckets, capacities, allocationSize);
 
-        _actual.allocated = allocated;
-        _actual.buckets = buckets;
+        // _actual.allocated = allocated;
+        // _actual.buckets = buckets;
         _actual.capacities = capacities;
     }
 }
@@ -259,8 +260,8 @@ contract MinFirstAllocationStrategy__Harness {
         uint256[] memory _capacities,
         uint256 _allocationSize
     ) public pure returns (uint256 allocated, uint256[] memory newBuckets, uint256[] memory newCapacities) {
-        allocated = MinFirstAllocationStrategy.allocate(_buckets, _capacities, _allocationSize);
-        newBuckets = _buckets;
+        (allocated, newBuckets) = MinFirstAllocationStrategy.allocate(_buckets, _capacities, _allocationSize);
+        // newBuckets = _buckets;
         newCapacities = _capacities;
     }
 

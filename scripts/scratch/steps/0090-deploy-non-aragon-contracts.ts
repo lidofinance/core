@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 
+import { certainAddress } from "lib";
 import { getContractPath } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -26,11 +27,10 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
+  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
-
-  const sanityChecks = state["oracleReportSanityChecker"].deployParameters;
 
   if (!chainSpec.depositContract) {
     throw new Error(`please specify deposit contract address in state file at /chainSpec/depositContract`);
@@ -55,31 +55,6 @@ export async function main() {
     deployer,
     [],
     dummyContract.address,
-  );
-
-  // Deploy OracleReportSanityChecker
-  const oracleReportSanityCheckerArgs = [
-    locator.address,
-    admin,
-    [
-      sanityChecks.churnValidatorsPerDayLimit,
-      sanityChecks.oneOffCLBalanceDecreaseBPLimit,
-      sanityChecks.annualBalanceIncreaseBPLimit,
-      sanityChecks.simulatedShareRateDeviationBPLimit,
-      sanityChecks.maxValidatorExitRequestsPerReport,
-      sanityChecks.maxAccountingExtraDataListItemsCount,
-      sanityChecks.maxNodeOperatorsPerExtraDataItemCount,
-      sanityChecks.requestTimestampMargin,
-      sanityChecks.maxPositiveTokenRebase,
-    ],
-    [[], [], [], [], [], [], [], [], [], []],
-  ];
-
-  const oracleReportSanityChecker = await deployWithoutProxy(
-    Sk.oracleReportSanityChecker,
-    "OracleReportSanityChecker",
-    deployer,
-    oracleReportSanityCheckerArgs,
   );
 
   // Deploy EIP712StETH
@@ -136,6 +111,11 @@ export async function main() {
     proxyContractsOwner,
     deployer,
     [depositContract],
+    null,
+    true,
+    {
+      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+    },
   );
 
   // Deploy or use predefined DepositSecurityModule
@@ -146,9 +126,8 @@ export async function main() {
         lidoAddress,
         depositContract,
         stakingRouter.address,
-        depositSecurityModuleParams.maxDepositsPerBlock,
-        depositSecurityModuleParams.minDepositBlockDistance,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
+        depositSecurityModuleParams.maxOperatorsPerUnvetting,
       ])
     ).address;
   } else {
@@ -219,7 +198,7 @@ export async function main() {
     elRewardsVault.address,
     legacyOracleAddress,
     lidoAddress,
-    oracleReportSanityChecker.address,
+    certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
     legacyOracleAddress, // postTokenRebaseReceiver
     burner.address,
     stakingRouter.address,

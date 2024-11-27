@@ -133,3 +133,9 @@ export function prepIdsCountsPayload(ids: bigint[], counts: bigint[]): IdsCounts
     keysCounts: "0x" + counts.map((count) => numberToHex(count, 16)).join(""),
   };
 }
+
+export enum RewardDistributionState {
+  TransferredToModule, // New reward portion minted and transferred to the module
+  ReadyForDistribution, // Operators' statistics updated, reward ready for distribution
+  Distributed, // Reward distributed among operators
+}

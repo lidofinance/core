@@ -7,7 +7,7 @@ import { PausableUntil__Harness } from "typechain-types";
 
 import { MAX_UINT256 } from "lib";
 
-describe("PausableUtils", () => {
+describe("PausableUtils.sol", () => {
   let pausable: PausableUntil__Harness;
 
   beforeEach(async () => {

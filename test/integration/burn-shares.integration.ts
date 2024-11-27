@@ -8,7 +8,7 @@ import { ether, impersonate, log, trace } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { finalizeWithdrawalQueue, handleOracleReport } from "lib/protocol/helpers";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 describe("Burn Shares", () => {
   let ctx: ProtocolContext;
@@ -30,6 +30,8 @@ describe("Burn Shares", () => {
 
     snapshot = await Snapshot.take();
   });
+
+  beforeEach(bailOnFailure);
 
   after(async () => await Snapshot.restore(snapshot));
 

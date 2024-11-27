@@ -40,7 +40,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
 
   before(deploy);
 
-  describe("initial setup", () => {
+  context("initial setup", () => {
     afterEach(rollback);
 
     it("properly set initial report processor", async () => {
@@ -51,7 +51,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
     });
   });
 
-  describe("method setReportProcessor", () => {
+  context("setReportProcessor", () => {
     afterEach(rollback);
 
     it("checks next processor is not zero", async () => {

@@ -19,7 +19,7 @@ describe("HashConsensus.sol:setQuorum", function () {
     [admin, member1, member2, member3] = await ethers.getSigners();
   });
 
-  describe("setQuorum and addMember changes getQuorum", () => {
+  context("setQuorum and addMember changes getQuorum", () => {
     let consensus: HashConsensus;
     let snapshot: string;
 
@@ -36,7 +36,7 @@ describe("HashConsensus.sol:setQuorum", function () {
 
     before(() => deployContract({}));
 
-    describe("at deploy quorum is zero and can be set to any number while event is fired on every change", () => {
+    context("at deploy quorum is zero and can be set to any number while event is fired on every change", () => {
       it("quorum is zero at deploy", async () => {
         expect(await consensus.getQuorum()).to.equal(0);
       });
@@ -64,7 +64,7 @@ describe("HashConsensus.sol:setQuorum", function () {
       });
     });
 
-    describe("as new members are added quorum is updated and cannot be set lower than members/2", () => {
+    context("as new members are added quorum is updated and cannot be set lower than members/2", () => {
       before(rollback);
 
       it("addMember adds member and updates quorum", async () => {
@@ -98,7 +98,7 @@ describe("HashConsensus.sol:setQuorum", function () {
       });
     });
 
-    describe("disableConsensus sets unreachable quorum value", () => {
+    context("disableConsensus sets unreachable quorum value", () => {
       before(rollback);
 
       it("disableConsensus updated quorum value and emits events", async () => {
@@ -110,7 +110,7 @@ describe("HashConsensus.sol:setQuorum", function () {
     });
   });
 
-  describe("setQuorum changes the effective quorum", () => {
+  context("setQuorum changes the effective quorum", () => {
     let consensus: HashConsensus;
     let snapshot: string;
     let reportProcessor: ReportProcessor__Mock;
@@ -135,7 +135,7 @@ describe("HashConsensus.sol:setQuorum", function () {
 
     before(deployContractWithMembers);
 
-    describe("quorum increases and changes effective consensus", () => {
+    context("quorum increases and changes effective consensus", () => {
       after(rollback);
 
       it("consensus is reached at 2/3 for quorum of 2", async () => {
@@ -170,7 +170,7 @@ describe("HashConsensus.sol:setQuorum", function () {
       });
     });
 
-    describe("setQuorum triggers consensus on decrease", () => {
+    context("setQuorum triggers consensus on decrease", () => {
       after(rollback);
 
       it("2/3 reports come in", async () => {
@@ -200,7 +200,7 @@ describe("HashConsensus.sol:setQuorum", function () {
       });
     });
 
-    describe("setQuorum can lead to consensus loss on quorum increase", () => {
+    context("setQuorum can lead to consensus loss on quorum increase", () => {
       after(rollback);
 
       it("2/3 members reach consensus with quorum of 2", async () => {
@@ -245,7 +245,7 @@ describe("HashConsensus.sol:setQuorum", function () {
       });
     });
 
-    describe("setQuorum does not re-trigger consensus if hash is already being processed", () => {
+    context("setQuorum does not re-trigger consensus if hash is already being processed", () => {
       after(rollback);
 
       it("2/3 members reach consensus with Quorum of 2", async () => {

@@ -17,6 +17,7 @@ import {
   impersonate,
   log,
   ONE_GWEI,
+  streccak,
   trace,
 } from "lib";
 
@@ -352,19 +353,61 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = await lido
-    .connect(accountingOracleAccount)
-    .handleOracleReport.staticCall(
-      reportTimestamp,
-      1n * 24n * 60n * 60n, // 1 day
-      beaconValidators,
-      clBalance,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      0n,
-      [],
-      0n,
-    );
+  // NOTE: To enable negative rebase sanity checker, the static call below
+  //    replaced with advanced eth_call with stateDiff.
+  // const [postTotalPooledEther1, postTotalShares1, withdrawals1, elRewards1] = await lido
+  //   .connect(accountingOracleAccount)
+  //   .handleOracleReport.staticCall(
+  //     reportTimestamp,
+  //     1n * 24n * 60n * 60n, // 1 day
+  //     beaconValidators,
+  //     clBalance,
+  //     withdrawalVaultBalance,
+  //     elRewardsVaultBalance,
+  //     0n,
+  //     [],
+  //     0n,
+  //   );
+
+  // Step 1: Encode the function call data
+  const data = lido.interface.encodeFunctionData("handleOracleReport", [
+    reportTimestamp,
+    BigInt(24 * 60 * 60), // 1 day in seconds
+    beaconValidators,
+    clBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    BigInt(0),
+    [],
+    BigInt(0),
+  ]);
+
+  // Step 2: Prepare the transaction object
+  const transactionObject = {
+    to: lido.address,
+    from: accountingOracleAccount.address,
+    data: data,
+  };
+
+  // Step 3: Prepare call parameters, state diff and perform eth_call
+  const accountingOracleAddr = await accountingOracle.getAddress();
+  const callParams = [transactionObject, "latest"];
+  const LAST_PROCESSING_REF_SLOT_POSITION = streccak("lido.BaseOracle.lastProcessingRefSlot");
+  const stateDiff = {
+    [accountingOracleAddr]: {
+      stateDiff: {
+        [LAST_PROCESSING_REF_SLOT_POSITION]: refSlot, // setting the processing refslot for the sanity checker
+      },
+    },
+  };
+
+  const returnData = await ethers.provider.send("eth_call", [...callParams, stateDiff]);
+
+  // Step 4: Decode the returned data
+  const [[postTotalPooledEther, postTotalShares, withdrawals, elRewards]] = lido.interface.decodeFunctionResult(
+    "handleOracleReport",
+    returnData,
+  );
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),

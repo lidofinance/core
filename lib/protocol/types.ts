@@ -135,6 +135,7 @@ export type Signer = keyof ProtocolSigners;
 
 export type ProtocolContextFlags = {
   onScratch: boolean;
+  withCSM: boolean;
 };
 
 export type ProtocolContext = {

@@ -162,9 +162,6 @@ const config: HardhatUserConfig = {
     "@aragon/**/*": {
       default: "off",
     },
-    "contracts/*/test_helpers/**/*": {
-      default: "off",
-    },
     "contracts/*/mocks/**/*": {
       default: "off",
     },
@@ -180,7 +177,7 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: true,
     strict: true,
-    except: ["test_helpers", "template", "mocks", "@aragon", "openzeppelin", "test"],
+    except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };
 

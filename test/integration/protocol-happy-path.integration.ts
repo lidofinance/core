@@ -14,7 +14,7 @@ import {
   sdvtEnsureOperators,
 } from "lib/protocol/helpers";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 const AMOUNT = ether("100");
 const MAX_DEPOSIT = 150n;
@@ -51,6 +51,8 @@ describe("Protocol Happy Path", () => {
       stETH: lido.balanceOf(wallet),
     });
   };
+
+  beforeEach(bailOnFailure);
 
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
@@ -279,14 +281,10 @@ describe("Protocol Happy Path", () => {
     };
 
     const norStatus = await getNodeOperatorsStatus(nor);
-
-    let expectedBurnerTransfers = norStatus.hasPenalizedOperators ? 1n : 0n;
-    let expectedTransfers = norStatus.activeOperators;
-
     const sdvtStatus = await getNodeOperatorsStatus(sdvt);
 
-    expectedBurnerTransfers += sdvtStatus.hasPenalizedOperators ? 1n : 0n;
-    expectedTransfers += sdvtStatus.activeOperators;
+    const expectedBurnerTransfers =
+      (norStatus.hasPenalizedOperators ? 1n : 0n) + (sdvtStatus.hasPenalizedOperators ? 1n : 0n);
 
     log.debug("Expected distributions", {
       "NOR active operators": norStatus.activeOperators,
@@ -318,7 +316,6 @@ describe("Protocol Happy Path", () => {
     const treasuryBalanceAfterRebase = await lido.sharesOf(treasuryAddress);
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const extraDataTxReceipt = (await extraDataTx.wait()) as ContractTransactionReceipt;
 
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased")[0];
 
@@ -329,8 +326,8 @@ describe("Protocol Happy Path", () => {
     const toBurnerTransfer = transferEvents[0];
     const toNorTransfer = transferEvents[1];
     const toSdvtTransfer = transferEvents[2];
-    const toTreasuryTransfer = transferEvents[3];
-    const expectedTransferEvents = 4;
+    const toTreasuryTransfer = transferEvents[ctx.flags.withCSM ? 4 : 3];
+    const expectedTransferEvents = ctx.flags.withCSM ? 6 : 4; // +2 events for CSM: 1 extra event to CSM, 1 for extra transfer inside CSM
 
     expect(transferEvents.length).to.equal(expectedTransferEvents, "Transfer events count");
 
@@ -380,18 +377,21 @@ describe("Protocol Happy Path", () => {
       "Stranger stETH balance after rebase increased",
     );
 
-    const transfers = ctx.getEvents(extraDataTxReceipt, "Transfer");
+    const distributeTx = await nor.connect(stranger).distributeReward();
+    const distributeTxReceipt = (await distributeTx.wait()) as ContractTransactionReceipt;
+    const transfers = ctx.getEvents(distributeTxReceipt, "Transfer");
+
     const burnerTransfers = transfers.filter((e) => e?.args[1] == burner.address).length;
 
     expect(burnerTransfers).to.equal(expectedBurnerTransfers, "Burner transfers is correct");
 
     expect(transfers.length).to.equal(
-      expectedTransfers + expectedBurnerTransfers,
+      norStatus.activeOperators + expectedBurnerTransfers,
       "All active operators received transfers",
     );
 
     log.debug("Transfers", {
-      "Transfers to operators": expectedTransfers,
+      "Transfers to NOR operators": norStatus.activeOperators,
       "Burner transfers": burnerTransfers,
     });
 
