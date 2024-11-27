@@ -62,8 +62,10 @@ describe("VaultFactory.sol", () => {
     vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
-    //add role to factory
+    //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
