@@ -567,7 +567,8 @@ contract AccountingOracle is BaseOracle {
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
                 data.vaultsValues,
-                data.vaultsNetCashFlows
+                data.vaultsNetCashFlows,
+                data.isBunkerMode
             )
         );
 

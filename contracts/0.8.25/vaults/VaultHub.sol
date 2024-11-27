@@ -311,7 +311,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 _postTotalPooledEther,
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
-        uint256 _sharesToMintAsFees
+        uint256 _sharesToMintAsFees,
+        bool _isBunkerMode
     ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGONS
 
@@ -348,9 +349,16 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
                 );
             }
 
-            uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
-            uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
-            lockedEther[i] = (mintedStETH * BPS_BASE) / (BPS_BASE - socket.reserveRatio);
+            if (!_isBunkerMode) {
+                uint256 postSharesMinted = socket.sharesMinted + treasuryFeeShares[i];
+                uint256 inStETH = (postSharesMinted * _postTotalPooledEther) / _postTotalShares;
+                lockedEther[i] = (inStETH * BPS_BASE) / (BPS_BASE - socket.reserveRatio);
+            } else {
+                // if bunker mode is enabled, the ether does not unlock, but fees accrues
+                uint256 treasuryFee = (treasuryFeeShares[i] * _postTotalPooledEther) / _postTotalShares;
+                uint256 treasuryFeePlusReserve = (treasuryFee * BPS_BASE) / (BPS_BASE - socket.reserveRatio);
+                lockedEther[i] = socket.vault.locked() + treasuryFeePlusReserve;
+            }
         }
     }
 
@@ -372,17 +380,16 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         // Lido curated validators could earn if vault's ETH was staked in Lido
         // itself and minted as stETH shares
         //
-        // treasuryFeeShares = value * lidoGrossAPR * treasuryFeeRate / preShareRate
+        // treasuryFeeShares = chargeableValue * lidoGrossAPR * treasuryFeeRate / preShareRate
         // lidoGrossAPR = postShareRateWithoutFees / preShareRate - 1
-        // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
+        // = chargeableValue  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
 
         // TODO: optimize potential rewards calculation
-        uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) -
-            chargeableValue);
-        uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / BPS_BASE;
+        uint256 potentialRewards = chargeableValue *
+            ((_postTotalPooledEther * _preTotalShares) / (_postTotalSharesNoFees * _preTotalPooledEther) - 1);
 
-        treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
+        treasuryFeeShares = (potentialRewards * _socket.treasuryFeeBP * _preTotalShares)
+            / (_preTotalPooledEther * BPS_BASE);
     }
 
     function _updateVaults(

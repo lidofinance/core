@@ -222,7 +222,8 @@ contract Accounting is VaultHub {
             update.postTotalPooledEther,
             _pre.totalShares,
             _pre.totalPooledEther,
-            update.sharesToMintAsFees
+            update.sharesToMintAsFees,
+            _report.isBunkerMode
         );
     }
 

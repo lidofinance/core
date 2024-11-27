@@ -9,6 +9,8 @@ interface IHubVault {
 
     function inOutDelta() external view returns (int256);
 
+    function locked() external view returns (uint256);
+
     function rebalance(uint256 _ether) external payable;
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;

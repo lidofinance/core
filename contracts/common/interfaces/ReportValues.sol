@@ -30,4 +30,6 @@ struct ReportValues {
     /// @notice netCashFlow of each Lido vault
     ///         (difference between deposits to and withdrawals from the vault)
     int256[] netCashFlows;
+    /// @notice indicates whether the protocol is in bunker mode
+    bool isBunkerMode;
 }
