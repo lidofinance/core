@@ -6,10 +6,6 @@ pragma solidity 0.4.24;
 import {StETH} from "contracts/0.4.24/StETH.sol";
 
 contract StETH__Harness is StETH {
-    address private mock__minter;
-    address private mock__burner;
-    bool private mock__shouldUseSuperGuards;
-
     uint256 private totalPooledEther;
 
     constructor(address _holder) public payable {
@@ -29,35 +25,15 @@ contract StETH__Harness is StETH {
         totalPooledEther = _totalPooledEther;
     }
 
-    function mock__setMinter(address _minter) public {
-        mock__minter = _minter;
-    }
-
-    function mock__setBurner(address _burner) public {
-        mock__burner = _burner;
-    }
-
-    function mock__useSuperGuards(bool _shouldUseSuperGuards) public {
-        mock__shouldUseSuperGuards = _shouldUseSuperGuards;
-    }
-
-    function _isMinter(address _address) internal view returns (bool) {
-        if (mock__shouldUseSuperGuards) {
-            return super._isMinter(_address);
-        }
-
-        return _address == mock__minter;
-    }
-
-    function _isBurner(address _address) internal view returns (bool) {
-        if (mock__shouldUseSuperGuards) {
-            return super._isBurner(_address);
-        }
-
-        return _address == mock__burner;
-    }
-
     function harness__mintInitialShares(uint256 _sharesAmount) public {
         _mintInitialShares(_sharesAmount);
+    }
+
+    function harness__mintShares(address _recipient, uint256 _sharesAmount) public {
+        _mintShares(_recipient, _sharesAmount);
+    }
+
+    function burnShares(uint256 _amount) external {
+        _burnShares(msg.sender, _amount);
     }
 }

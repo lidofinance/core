@@ -21,8 +21,6 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
   let holder: HardhatEthersSigner;
   let recipient: HardhatEthersSigner;
   let spender: HardhatEthersSigner;
-  let minter: HardhatEthersSigner;
-  let burner: HardhatEthersSigner;
   // required for some strictly theoretical branch checks
   let zeroAddressSigner: HardhatEthersSigner;
 
@@ -36,7 +34,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
   before(async () => {
     zeroAddressSigner = await impersonate(ZeroAddress, ONE_ETHER);
 
-    [deployer, holder, recipient, spender, minter, burner] = await ethers.getSigners();
+    [deployer, holder, recipient, spender] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: holderBalance, from: deployer });
     steth = steth.connect(holder);
@@ -462,64 +460,6 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
         expect(await steth.getPooledEthByShares(ONE_SHARE)).to.equal(oneShareInSteth);
       });
     }
-  });
-
-  context("mintShares", () => {
-    it("Reverts when minter is not authorized", async () => {
-      await steth.mock__useSuperGuards(true);
-
-      await expect(steth.mintShares(holder, 1n)).to.be.revertedWith("AUTH_FAILED");
-    });
-
-    it("Reverts when minting to zero address", async () => {
-      await steth.mock__setMinter(minter);
-
-      await expect(steth.connect(minter).mintShares(ZeroAddress, 1n)).to.be.revertedWith("MINT_TO_ZERO_ADDR");
-    });
-
-    it("Mints shares to the recipient and fires the transfer events", async () => {
-      const sharesBeforeMint = await steth.sharesOf(holder);
-      await steth.mock__setMinter(minter);
-
-      await expect(steth.connect(minter).mintShares(holder, 1000n))
-        .to.emit(steth, "TransferShares")
-        .withArgs(ZeroAddress, holder.address, 1000n);
-
-      expect(await steth.sharesOf(holder)).to.equal(sharesBeforeMint + 1000n);
-    });
-  });
-
-  context("burnShares", () => {
-    it("Reverts when burner is not authorized", async () => {
-      await steth.mock__useSuperGuards(true);
-      await expect(steth.burnShares(holder, 1n)).to.be.revertedWith("AUTH_FAILED");
-    });
-
-    it("Reverts when burning on zero address", async () => {
-      await steth.mock__setBurner(burner);
-
-      await expect(steth.connect(burner).burnShares(ZeroAddress, 1n)).to.be.revertedWith("BURN_FROM_ZERO_ADDR");
-    });
-
-    it("Reverts when burning more than the owner owns", async () => {
-      const sharesOfHolder = await steth.sharesOf(holder);
-      await steth.mock__setBurner(burner);
-
-      await expect(steth.connect(burner).burnShares(holder, sharesOfHolder + 1n)).to.be.revertedWith(
-        "BALANCE_EXCEEDED",
-      );
-    });
-
-    it("Burns shares from the owner and fires the transfer events", async () => {
-      const sharesOfHolder = await steth.sharesOf(holder);
-      await steth.mock__setBurner(burner);
-
-      await expect(steth.connect(burner).burnShares(holder, 1000n))
-        .to.emit(steth, "SharesBurnt")
-        .withArgs(holder.address, 1000n, 1000n, 1000n);
-
-      expect(await steth.sharesOf(holder)).to.equal(sharesOfHolder - 1000n);
-    });
   });
 
   context("_mintInitialShares", () => {
