@@ -77,6 +77,10 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
     },
+    "mekong-vaults-devnet-1": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
@@ -91,9 +95,27 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "mekong": {
+      url: process.env.MEKONG_RPC_URL || RPC_URL,
+      chainId: 7078815900,
+      accounts: loadAccounts("mekong"),
+    },
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    apiKey: {
+      default: process.env.ETHERSCAN_API_KEY || "",
+      mekong: process.env.BLOCKSCOUT_API_KEY || "",
+    },
+    customChains: [
+      {
+        network: "mekong",
+        chainId: 7078815900,
+        urls: {
+          apiURL: "https://explorer.mekong.ethpandaops.io/api",
+          browserURL: "https://explorer.mekong.ethpandaops.io",
+        },
+      },
+    ],
   },
   solidity: {
     compilers: [

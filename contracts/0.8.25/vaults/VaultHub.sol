@@ -133,7 +133,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         }
 
         uint256 capVaultBalance = stETH.getPooledEthByShares(_shareLimit);
-        uint256 maxExternalBalance = stETH.getMaxExternalBalance();
+        uint256 maxExternalBalance = stETH.getMaxExternalEther();
         if (capVaultBalance + stETH.getExternalEther() > maxExternalBalance) {
             revert ExternalBalanceCapReached(address(_vault), capVaultBalance, maxExternalBalance);
         }

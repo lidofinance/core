@@ -1,6 +1,6 @@
 name: Integration Tests
 
-on: [ push ]
+on: [push]
 
 jobs:
   test_hardhat_integration_scratch:
@@ -10,7 +10,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.22.12-scratch
+        image: ghcr.io/lidofinance/hardhat-node:2.22.16-scratch
         ports:
           - 8555:8545
 
@@ -41,4 +41,4 @@ jobs:
       - name: Run integration tests
         run: yarn test:integration:fork:local
         env:
-          LOG_LEVEL: debug
+          LOG_LEVEL: "debug"
