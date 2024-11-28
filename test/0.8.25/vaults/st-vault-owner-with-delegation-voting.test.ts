@@ -5,7 +5,7 @@ import { advanceChainTime, certainAddress, days, proxify } from "lib";
 import { Snapshot } from "test/suite";
 import { StakingVault__MockForVaultDelegationLayer, StVaultOwnerWithDelegation } from "typechain-types";
 
-describe("VaultDelegationLayer:Voting", () => {
+describe("StVaultOwnerWithDelegation:Voting", () => {
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
