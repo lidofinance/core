@@ -20,7 +20,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         IStakingVault.Report report;
-
         uint128 locked;
         int128 inOutDelta;
     }
@@ -61,7 +60,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         _transferOwnership(_owner);
     }
 
-    function version() public pure virtual returns(uint256) {
+    function version() public pure virtual returns (uint256) {
         return _version;
     }
 
@@ -81,18 +80,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
     function valuation() public view returns (uint256) {
         VaultStorage storage $ = _getVaultStorage();
-        return uint256(int256(
-            int128($.report.valuation)
-            + $.inOutDelta
-            - $.report.inOutDelta
-        ));
+        return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
     }
 
     function isHealthy() public view returns (bool) {
         return valuation() >= _getVaultStorage().locked;
     }
 
-    function locked() external view returns(uint256) {
+    function locked() external view returns (uint256) {
         return _getVaultStorage().locked;
     }
 
@@ -105,7 +100,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         return _valuation - _locked;
     }
 
-    function inOutDelta() external view returns(int256) {
+    function inOutDelta() external view returns (int256) {
         return _getVaultStorage().inOutDelta;
     }
 
@@ -166,6 +161,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit Locked(_locked);
     }
 
+    // TODO: SHOULD THIS BE PAYABLE?
     function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
