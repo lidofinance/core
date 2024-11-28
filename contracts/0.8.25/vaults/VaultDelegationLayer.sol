@@ -8,28 +8,26 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/ext
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
-import {VaultDashboard} from "./VaultDashboard.sol";
+import {StVaultOwnerWithDashboard} from "./StVaultOwnerWithDashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-// TODO: natspec
-// TODO: events
+// kinda out of ideas what to name this contract
+contract StVaultOwnerWithDelegation is StVaultOwnerWithDashboard, IReportReceiver {
+    /// CONSTANTS ///
 
-// VaultDelegationLayer: Delegates vault operations to different parties:
-// - Manager: manages fees
-// - Staker: can fund the vault and withdraw funds
-// - Operator: can claim performance due and assigns Keymaster sub-role
-// - Keymaster: Operator's sub-role for depositing to beacon chain
-// - Plumber: manages liquidity, i.e. mints and burns stETH
-// - Lido DAO: acts on behalf of Lido DAO (Lido Agent, EasyTrack, etc.)
-contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
     uint256 private constant BP_BASE = 100_00;
     uint256 private constant MAX_FEE = BP_BASE;
 
-    bytes32 public constant STAKER_ROLE = keccak256("Vault.VaultDelegationLayer.StakerRole");
-    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.VaultDelegationLayer.OperatorRole");
-    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.VaultDelegationLayer.KeyMasterRole");
-    bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.VaultDelegationLayer.TokenMasterRole");
-    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.VaultDelegationLayer.LidoDAORole");
+    /// ROLES ///
+
+    bytes32 public constant MANAGER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.ManagerRole");
+    bytes32 public constant STAKER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.StakerRole");
+    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.OperatorRole");
+    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.KeyMasterRole");
+    bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.TokenMasterRole");
+    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.LidoDAORole");
+
+    /// STATE ///
 
     IStakingVault.Report public lastClaimedReport;
 
@@ -37,18 +35,24 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
     uint256 public performanceFee;
     uint256 public managementDue;
 
+    /// VOTING ///
+
     mapping(bytes32 callId => mapping(bytes32 role => uint256 timestamp)) public votings;
 
-    constructor(address _stETH) VaultDashboard(_stETH) {}
+    constructor(address _stETH) StVaultOwnerWithDashboard(_stETH) {}
 
-    // TODO: adding fix LIDO DAO role
+    /// INITIALIZATION ///
+
     function initialize(address _defaultAdmin, address _stakingVault) external override {
         _initialize(_defaultAdmin, _stakingVault);
-        _setRoleAdmin(KEY_MASTER_ROLE, OPERATOR_ROLE);
+
+        _grantRole(LIDO_DAO_ROLE, _defaultAdmin);
         _setRoleAdmin(OPERATOR_ROLE, LIDO_DAO_ROLE);
+        _setRoleAdmin(LIDO_DAO_ROLE, LIDO_DAO_ROLE);
+        _setRoleAdmin(KEY_MASTER_ROLE, OPERATOR_ROLE);
     }
 
-    /// * * * * * VIEW FUNCTIONS * * * * * ///
+    /// VIEW FUNCTIONS ///
 
     function withdrawable() public view returns (uint256) {
         uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
@@ -93,6 +97,8 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         return roles;
     }
 
+    /// FEE MANAGEMENT ///
+
     function setManagementFee(uint256 _newManagementFee) external onlyRole(MANAGER_ROLE) {
         if (_newManagementFee > MAX_FEE) revert NewFeeCannotExceedMaxFee();
 
@@ -126,8 +132,22 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         }
     }
 
+    /// VAULT MANAGEMENT ///
+
+    function transferStVaultOwnership(
+        address _newOwner
+    ) public override onlyIfVotedBy(ownershipTransferCommittee(), 7 days) {
+        _transferStVaultOwnership(_newOwner);
+    }
+
+    function disconnectFromVaultHub() external payable override onlyRole(MANAGER_ROLE) {
+        _disconnectFromVaultHub();
+    }
+
+    /// VAULT OPERATIONS ///
+
     function fund() external payable override onlyRole(STAKER_ROLE) {
-        stakingVault.fund{value: msg.value}();
+        _fund();
     }
 
     function withdraw(address _recipient, uint256 _ether) external override onlyRole(STAKER_ROLE) {
@@ -135,7 +155,7 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (withdrawable() < _ether) revert InsufficientWithdrawableAmount(withdrawable(), _ether);
 
-        stakingVault.withdraw(_recipient, _ether);
+        _withdraw(_recipient, _ether);
     }
 
     function depositToBeaconChain(
@@ -143,7 +163,7 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         bytes calldata _pubkeys,
         bytes calldata _signatures
     ) external override onlyRole(KEY_MASTER_ROLE) {
-        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
+        _depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
     function claimPerformanceDue(address _recipient, bool _liquid) external onlyRole(OPERATOR_ROLE) {
@@ -155,7 +175,7 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
+                _mint(_recipient, due);
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -166,35 +186,34 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
         address _recipient,
         uint256 _tokens
     ) external payable override onlyRole(TOKEN_MASTER_ROLE) fundAndProceed {
-        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+        _mint(_recipient, _tokens);
     }
 
     function burn(uint256 _tokens) external override onlyRole(TOKEN_MASTER_ROLE) {
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+        _burn(_tokens);
     }
+
+    function rebalanceVault(uint256 _ether) external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
+        _rebalanceVault(_ether);
+    }
+
+    /// REPORT HANDLING ///
 
     // solhint-disable-next-line no-unused-vars
     function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(stakingVault)) revert OnlyVaultCanCallOnReportHook();
+        if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
     }
 
-    function transferStakingVaultOwnership(
-        address _newOwner
-    ) public override onlyIfVotedBy(ownershipTransferCommittee(), 7 days) {
-        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
-    }
-
-    /// * * * * * INTERNAL FUNCTIONS * * * * * ///
+    /// INTERNAL ///
 
     function _withdrawDue(address _recipient, uint256 _ether) internal {
         int256 unlocked = int256(stakingVault.valuation()) - int256(stakingVault.locked());
         uint256 unreserved = unlocked >= 0 ? uint256(unlocked) : 0;
         if (unreserved < _ether) revert InsufficientUnlockedAmount(unreserved, _ether);
 
-        stakingVault.withdraw(_recipient, _ether);
+        _withdraw(_recipient, _ether);
     }
 
     /// @notice Requires approval from all committee members within a voting period
@@ -254,6 +273,6 @@ contract VaultDelegationLayer is VaultDashboard, IReportReceiver {
     error PerformanceDueUnclaimed();
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
     error VaultNotHealthy();
-    error OnlyVaultCanCallOnReportHook();
+    error OnlyStVaultCanCallOnReportHook();
     error FeeCannotExceed100();
 }
