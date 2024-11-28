@@ -138,15 +138,15 @@ contract StVaultOwnerWithDelegation is StVaultOwnerWithDashboard, IReportReceive
         _grantRole(LIDO_DAO_ROLE, _defaultAdmin);
 
         /**
+         * Only Lido DAO can assign the Lido DAO role.
+         */
+        _setRoleAdmin(LIDO_DAO_ROLE, LIDO_DAO_ROLE);
+
+        /**
          * The node operator in the vault must be approved by Lido DAO.
          * The vault owner (`DEFAULT_ADMIN_ROLE`) cannot change the node operator.
          */
         _setRoleAdmin(OPERATOR_ROLE, LIDO_DAO_ROLE);
-
-        /**
-         * Only Lido DAO can assign the Lido DAO role.
-         */
-        _setRoleAdmin(LIDO_DAO_ROLE, LIDO_DAO_ROLE);
 
         /**
          * The operator role can change the key master role.
@@ -358,7 +358,7 @@ contract StVaultOwnerWithDelegation is StVaultOwnerWithDashboard, IReportReceive
      * @notice Rebalances the vault by transferring ether.
      * @param _ether Amount of ether to rebalance.
      */
-    function rebalanceVault(uint256 _ether) external override onlyRole(MANAGER_ROLE) {
+    function rebalanceVault(uint256 _ether) external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
     }
 

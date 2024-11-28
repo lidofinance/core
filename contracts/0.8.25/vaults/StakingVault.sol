@@ -162,7 +162,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     // TODO: SHOULD THIS BE PAYABLE?
-    function rebalance(uint256 _ether) external {
+    function rebalance(uint256 _ether) external payable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
         // TODO: should we revert on msg.value > _ether

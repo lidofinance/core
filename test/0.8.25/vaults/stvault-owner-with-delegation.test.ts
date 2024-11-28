@@ -8,9 +8,9 @@ import {
   LidoLocator,
   StakingVault,
   StETH__HarnessForVaultHub,
+  StVaultOwnerWithDelegation,
   VaultFactory,
   VaultHub,
-  VaultStaffRoom,
 } from "typechain-types";
 
 import { certainAddress, createVaultProxy, ether } from "lib";
@@ -18,17 +18,18 @@ import { certainAddress, createVaultProxy, ether } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("VaultStaffRoom.sol", () => {
+describe("StVaultOwnerWithDelegation.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let lidoAgent: HardhatEthersSigner;
   let vaultOwner1: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let vaultHub: VaultHub;
   let implOld: StakingVault;
-  let vaultStaffRoom: VaultStaffRoom;
+  let stVaultOwnerWithDelegation: StVaultOwnerWithDelegation;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -40,7 +41,7 @@ describe("VaultStaffRoom.sol", () => {
   const treasury = certainAddress("treasury");
 
   before(async () => {
-    [deployer, admin, holder, stranger, vaultOwner1] = await ethers.getSigners();
+    [deployer, admin, holder, stranger, vaultOwner1, lidoAgent] = await ethers.getSigners();
 
     locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
@@ -52,8 +53,8 @@ describe("VaultStaffRoom.sol", () => {
     // VaultHub
     vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
     implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
-    vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
+    stVaultOwnerWithDelegation = await ethers.deployContract("StVaultOwnerWithDelegation", [steth], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, stVaultOwnerWithDelegation], { from: deployer });
 
     //add role to factory
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -68,30 +69,33 @@ describe("VaultStaffRoom.sol", () => {
 
   context("performanceDue", () => {
     it("performanceDue ", async () => {
-      const { vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await vsr.performanceDue();
+      await stVaultOwnerWithDelegation.performanceDue();
     });
   });
 
   context("initialize", async () => {
     it("reverts if initialize from implementation", async () => {
-      await expect(vaultStaffRoom.initialize(admin, implOld)).to.revertedWithCustomError(
-        vaultStaffRoom,
+      await expect(stVaultOwnerWithDelegation.initialize(admin, implOld)).to.revertedWithCustomError(
+        stVaultOwnerWithDelegation,
         "NonProxyCallsForbidden",
       );
     });
 
     it("reverts if already initialized", async () => {
-      const { vault: vault1, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { vault: vault1, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(vsr.initialize(admin, vault1)).to.revertedWithCustomError(vsr, "AlreadyInitialized");
+      await expect(stVaultOwnerWithDelegation.initialize(admin, vault1)).to.revertedWithCustomError(
+        stVaultOwnerWithDelegation,
+        "AlreadyInitialized",
+      );
     });
 
     it("initialize", async () => {
-      const { tx, vaultStaffRoom: vsr } = await createVaultProxy(vaultFactory, vaultOwner1);
+      const { tx, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(tx).to.emit(vsr, "Initialized");
+      await expect(tx).to.emit(stVaultOwnerWithDelegation, "Initialized");
     });
   });
 });

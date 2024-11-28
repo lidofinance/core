@@ -205,7 +205,7 @@ contract StVaultOwnerWithDashboard is AccessControlEnumerable {
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
-    function rebalanceVault(uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function rebalanceVault(uint256 _ether) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
     }
 
@@ -297,7 +297,7 @@ contract StVaultOwnerWithDashboard is AccessControlEnumerable {
      * @param _ether Amount of ether to rebalance
      */
     function _rebalanceVault(uint256 _ether) internal {
-        stakingVault.rebalance(_ether);
+        stakingVault.rebalance{value: msg.value}(_ether);
     }
 
     // ==================== Events ====================

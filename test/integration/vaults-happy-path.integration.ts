@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingVault, VaultStaffRoom } from "typechain-types";
+import { StakingVault, StVaultOwnerWithDelegation } from "typechain-types";
 
 import { impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -45,6 +45,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let alice: HardhatEthersSigner;
   let bob: HardhatEthersSigner;
   let mario: HardhatEthersSigner;
+  let lidoAgent: HardhatEthersSigner;
 
   let depositContract: string;
 
@@ -54,7 +55,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   let vault101: StakingVault;
   let vault101Address: string;
-  let vault101AdminContract: VaultStaffRoom;
+  let vault101AdminContract: StVaultOwnerWithDelegation;
   let vault101BeaconBalance = 0n;
   let vault101MintingMaximum = 0n;
 
@@ -68,7 +69,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, alice, bob, mario] = await ethers.getSigners();
+    [ethHolder, alice, bob, mario, lidoAgent] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -138,10 +139,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     const implAddress = await stakingVaultFactory.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.vaultStaffRoomImpl();
+    const adminContractImplAddress = await stakingVaultFactory.stVaultOwnerWithDelegationImpl();
 
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
-    const vaultFactoryAdminContract = await ethers.getContractAt("VaultStaffRoom", adminContractImplAddress);
+    const vaultFactoryAdminContract = await ethers.getContractAt("StVaultOwnerWithDelegation", adminContractImplAddress);
 
     expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
@@ -159,7 +160,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       performanceFee: VAULT_NODE_OPERATOR_FEE,
       manager: alice,
       operator: bob,
-    });
+    }, lidoAgent);
 
     const createVaultTxReceipt = await trace<ContractTransactionReceipt>("vaultsFactory.createVault", deployTx);
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -167,31 +168,31 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(createVaultEvents.length).to.equal(1n);
 
     vault101 = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
-    vault101AdminContract = await ethers.getContractAt("VaultStaffRoom", createVaultEvents[0].args?.owner);
+    vault101AdminContract = await ethers.getContractAt("StVaultOwnerWithDelegation", createVaultEvents[0].args?.owner);
 
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.OWNER(), alice)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.DEFAULT_ADMIN_ROLE(), alice)).to.be.true;
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.MANAGER_ROLE(), alice)).to.be.true;
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.OPERATOR_ROLE(), bob)).to.be.true;
 
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEYMASTER_ROLE(), alice)).to.be.false;
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEYMASTER_ROLE(), bob)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), alice)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob)).to.be.false;
 
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.PLUMBER_ROLE(), alice)).to.be.false;
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.PLUMBER_ROLE(), bob)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), alice)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), bob)).to.be.false;
   });
 
   it("Should allow Alice to assign staker and plumber roles", async () => {
     await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.STAKER_ROLE(), alice);
-    await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.PLUMBER_ROLE(), mario);
+    await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario);
 
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.PLUMBER_ROLE(), mario)).to.be.true;
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.PLUMBER_ROLE(), mario)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario)).to.be.true;
   });
 
   it("Should allow Bob to assign the keymaster role", async () => {
-    await vault101AdminContract.connect(bob).grantRole(await vault101AdminContract.KEYMASTER_ROLE(), bob);
+    await vault101AdminContract.connect(bob).grantRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob);
 
-    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEYMASTER_ROLE(), bob)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob)).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -444,7 +445,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
-    const disconnectTx = await vault101AdminContract.connect(alice).disconnectFromHub();
+    const disconnectTx = await vault101AdminContract.connect(alice).disconnectFromVaultHub();
     const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.disconnectFromHub", disconnectTx);
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
