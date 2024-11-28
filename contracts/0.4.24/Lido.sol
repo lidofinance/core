@@ -209,18 +209,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         onlyInit
     {
         _bootstrapInitialHolder();
-        _initialize_v2(_lidoLocator, _eip712StETH);
-        _initialize_v3();
-        initialized();
-    }
-
-    /**
-     * initializer for the Lido version "2"
-     */
-    function _initialize_v2(address _lidoLocator, address _eip712StETH) internal {
-        _setContractVersion(2);
 
         LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
+        emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
         // set infinite allowance for burner from withdrawal queue
@@ -231,14 +222,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             INFINITE_ALLOWANCE
         );
 
-        emit LidoLocatorSet(_lidoLocator);
-    }
-
-    /**
-     * initializer for the Lido version "3"
-     */
-    function _initialize_v3() internal {
-        _setContractVersion(3);
+        _initialize_v3();
+        initialized();
     }
 
     /**
@@ -251,6 +236,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _checkContractVersion(2);
 
         _initialize_v3();
+    }
+
+    /**
+     * initializer for the Lido version "3"
+     */
+    function _initialize_v3() internal {
+        _setContractVersion(3);
     }
 
     /**
