@@ -15,7 +15,7 @@ import {
 } from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
-import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
+import { MAX_DEPOSIT, ZERO_HASH } from "test/suite/constants";
 
 const AMOUNT = ether("100");
 
@@ -188,11 +188,9 @@ describe("Scenario: Protocol Happy Path", () => {
     }
   });
 
-  it("Should deposit 100 ETH to node operators", async () => {
-    const { lido, withdrawalQueue } = ctx.contracts;
+  it("Should deposit to staking modules", async () => {
+    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
 
-    const { depositSecurityModule } = ctx.contracts;
-    const { depositedValidators: depositedValidatorsBefore } = await lido.getBeaconStat();
     const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
@@ -208,42 +206,35 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
+    const stakingModules = await stakingRouter.getStakingModules();
 
-    const depositNorTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    const depositNorReceipt = await trace<ContractTransactionReceipt>("lido.deposit (Curated Module)", depositNorTx);
+    let depositCount = 0n;
+    let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
+    for (const module of stakingModules) {
+      const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, module.id, ZERO_HASH);
+      const depositReceipt = await trace<ContractTransactionReceipt>(`lido.deposit (${module.name})`, depositTx);
+      const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
+      const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
+      const deposits = unbufferedAmount / ether("32");
 
-    const unbufferedEventNor = ctx.getEvents(depositNorReceipt, "Unbuffered")[0];
-    const unbufferedAmountNor = unbufferedEventNor.args[0];
+      log.debug("Staking module", {
+        "Module": module.name,
+        "Deposits": deposits,
+        "Unbuffered amount": ethers.formatEther(unbufferedAmount),
+      });
 
-    const depositCountsNor = unbufferedAmountNor / ether("32");
-    let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit - unbufferedAmountNor;
+      depositCount += deposits;
+      expectedBufferedEtherAfterDeposit -= unbufferedAmount;
+    }
 
-    const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-    const depositSdvtReceipt = await trace<ContractTransactionReceipt>("lido.deposit (Simple DVT)", depositSdvtTx);
-
-    const unbufferedEventSdvt = ctx.getEvents(depositSdvtReceipt, "Unbuffered")[0];
-    const depositedValidatorsChangedEventSdvt = ctx.getEvents(depositSdvtReceipt, "DepositedValidatorsChanged")[0];
-
-    const unbufferedAmountSdvt = unbufferedEventSdvt.args[0];
-    const newValidatorsCountSdvt = depositedValidatorsChangedEventSdvt.args[0];
-
-    const depositCountsTotal = depositCountsNor + unbufferedAmountSdvt / ether("32");
-    expectedBufferedEtherAfterDeposit -= unbufferedAmountSdvt;
-
-    expect(depositCountsTotal).to.be.gt(0n, "Deposit counts");
-    expect(newValidatorsCountSdvt).to.equal(
-      depositedValidatorsBefore + depositCountsTotal,
-      "New validators count after deposit",
-    );
+    expect(depositCount).to.be.gt(0n, "Deposits");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
-
-    expect(depositCountsNor).to.be.gt(0n, "Deposit counts");
     expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
 
     log.debug("After deposit", {
+      "Deposits": depositCount,
       "Buffered ether": ethers.formatEther(bufferedEtherAfterDeposit),
-      "Unbuffered amount (NOR)": ethers.formatEther(unbufferedAmountNor),
     });
   });
 

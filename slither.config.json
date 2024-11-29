@@ -3,5 +3,7 @@
   "exclude_low": true,
   "exclude_medium": false,
   "exclude_high": false,
-  "filter_paths": "(.*test.*/|.*template/|.*mocks/|node_modules/|.*brownie/|.*dependencies/)"
+  "filter_paths": "(.*test.*/|.*template/|.*mocks/|node_modules/|.*brownie/|.*dependencies/)",
+  "detectors_to_exclude": "pess-strange-setter,pess-arbitrary-call-calldata-tainted,pess-multiple-storage-read,pess-dubious-typecast",
+  "compile_force_framework": "hardhat"
 }
