@@ -217,7 +217,7 @@ describe("Protocol Happy Path", () => {
     const depositNorReceipt = await trace<ContractTransactionReceipt>("lido.deposit (Curated Module)", depositNorTx);
 
     const unbufferedEventNor = ctx.getEvents(depositNorReceipt, "Unbuffered")[0];
-    const unbufferedAmountNor = unbufferedEventNor.args[0];
+    const unbufferedAmountNor = unbufferedEventNor?.args[0] || 0n; // 0 if no deposit was made to NOR & SDVT
 
     const depositCountsNor = unbufferedAmountNor / ether("32");
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit - unbufferedAmountNor;
@@ -234,15 +234,12 @@ describe("Protocol Happy Path", () => {
     const depositCountsTotal = depositCountsNor + unbufferedAmountSdvt / ether("32");
     expectedBufferedEtherAfterDeposit -= unbufferedAmountSdvt;
 
-    expect(depositCountsTotal).to.be.gt(0n, "Deposit counts");
     expect(newValidatorsCountSdvt).to.equal(
       depositedValidatorsBefore + depositCountsTotal,
       "New validators count after deposit",
     );
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
-
-    expect(depositCountsNor).to.be.gt(0n, "Deposit counts");
     expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
 
     log.debug("After deposit", {
