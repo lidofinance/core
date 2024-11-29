@@ -10,8 +10,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const agentAddress = state[Sk.appAgent].proxy.address;
-  const accountingAddress = state[Sk.accounting].address;
+  const accountingAddress = state[Sk.accounting].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
@@ -37,11 +36,17 @@ export async function main() {
 
   // Add VaultFactory and Vault implementation to the Accounting contract
   const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
+
+  // Grant roles for the Accounting contract
+  const vaultMasterRole = await accounting.VAULT_MASTER_ROLE();
+  const vaultRegistryRole = await accounting.VAULT_REGISTRY_ROLE();
+
+  await makeTx(accounting, "grantRole", [vaultMasterRole, deployer], { from: deployer });
+  await makeTx(accounting, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
+
   await makeTx(accounting, "addFactory", [factoryAddress], { from: deployer });
   await makeTx(accounting, "addImpl", [impAddress], { from: deployer });
 
-  // Grant roles for the Accounting contract
-  const role = await accounting.VAULT_MASTER_ROLE();
-  await makeTx(accounting, "grantRole", [role, agentAddress], { from: deployer });
-  await makeTx(accounting, "renounceRole", [role, deployer], { from: deployer });
+  await makeTx(accounting, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
+  await makeTx(accounting, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
 }

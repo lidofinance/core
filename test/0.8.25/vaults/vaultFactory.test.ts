@@ -5,13 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OssifiableProxy,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub,
   VaultStaffRoom,
 } from "typechain-types";
 
@@ -29,7 +30,9 @@ describe("VaultFactory.sol", () => {
   let vaultOwner2: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let vaultHub: VaultHub;
+  let proxy: OssifiableProxy;
+  let accountingImpl: Accounting;
+  let accounting: Accounting;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
   let vaultStaffRoom: VaultStaffRoom;
@@ -53,20 +56,26 @@ describe("VaultFactory.sol", () => {
     });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    // VaultHub
-    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
+    // Accounting
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
+    accounting = await ethers.getContractAt("Accounting", proxy, deployer);
+    await accounting.initialize(admin);
+
+    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
     vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
-    //add role to factory
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
+    await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
+    //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
+    await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderShouldBeBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -126,12 +135,17 @@ describe("VaultFactory.sol", () => {
       expect(await vault.getBeacon()).to.eq(await vaultFactory.getAddress());
     });
 
-    it("works with non-empty `params`", async () => {});
+    it("check `version()`", async () => {
+      const { vault } = await createVaultProxy(vaultFactory, vaultOwner1);
+      expect(await vault.version()).to.eq(1);
+    });
+
+    it.skip("works with non-empty `params`", async () => {});
   });
 
   context("connect", () => {
     it("connect ", async () => {
-      const vaultsBefore = await vaultHub.vaultsCount();
+      const vaultsBefore = await accounting.vaultsCount();
       expect(vaultsBefore).to.eq(0);
 
       const config1 = {
@@ -157,7 +171,7 @@ describe("VaultFactory.sol", () => {
 
       //try to connect vault without, factory not allowed
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -166,14 +180,14 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "FactoryNotAllowed");
+      ).to.revertedWithCustomError(accounting, "FactoryNotAllowed");
 
       //add factory to whitelist
-      await vaultHub.connect(admin).addFactory(vaultFactory);
+      await accounting.connect(admin).addFactory(vaultFactory);
 
       //try to connect vault without, impl not allowed
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -182,13 +196,13 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
+      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 
       //add impl to whitelist
-      await vaultHub.connect(admin).addImpl(implOld);
+      await accounting.connect(admin).addImpl(implOld);
 
       //connect vaults to VaultHub
-      await vaultHub
+      await accounting
         .connect(admin)
         .connectVault(
           await vault1.getAddress(),
@@ -197,7 +211,7 @@ describe("VaultFactory.sol", () => {
           config1.thresholdReserveRatioBP,
           config1.treasuryFeeBP,
         );
-      await vaultHub
+      await accounting
         .connect(admin)
         .connectVault(
           await vault2.getAddress(),
@@ -207,7 +221,7 @@ describe("VaultFactory.sol", () => {
           config2.treasuryFeeBP,
         );
 
-      const vaultsAfter = await vaultHub.vaultsCount();
+      const vaultsAfter = await accounting.vaultsCount();
       expect(vaultsAfter).to.eq(2);
 
       const version1Before = await vault1.version();
@@ -227,7 +241,7 @@ describe("VaultFactory.sol", () => {
 
       //we upgrade implementation and do not add it to whitelist
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -236,15 +250,40 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
+      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 
-      const version1After = await vault1.version();
-      const version2After = await vault2.version();
-      const version3After = await vault3.version();
+      const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
+      const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
+      const vault3WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault3, deployer);
 
-      expect(version1Before).not.to.eq(version1After);
-      expect(version2Before).not.to.eq(version2After);
-      expect(2).to.eq(version3After);
+      //finalize first vault
+      await vault1WithNewImpl.finalizeUpgrade_v2();
+
+      const version1After = await vault1WithNewImpl.version();
+      const version2After = await vault2WithNewImpl.version();
+      const version3After = await vault3WithNewImpl.version();
+
+      const version1AfterV2 = await vault1WithNewImpl.getInitializedVersion();
+      const version2AfterV2 = await vault2WithNewImpl.getInitializedVersion();
+      const version3AfterV2 = await vault3WithNewImpl.getInitializedVersion();
+
+      expect(version1Before).to.eq(1);
+      expect(version1AfterV2).to.eq(2);
+
+      expect(version2Before).to.eq(1);
+      expect(version2AfterV2).to.eq(1);
+
+      expect(version3After).to.eq(2);
+
+      const v1 = { version: version1After, getInitializedVersion: version1AfterV2 };
+      const v2 = { version: version2After, getInitializedVersion: version2AfterV2 };
+      const v3 = { version: version3After, getInitializedVersion: version3AfterV2 };
+
+      console.table([v1, v2, v3]);
+
+      // await vault1.initialize(stranger, "0x")
+      // await vault2.initialize(stranger, "0x")
+      // await vault3.initialize(stranger, "0x")
     });
   });
 });

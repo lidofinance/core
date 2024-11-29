@@ -158,8 +158,7 @@ export async function main() {
   }
 
   // Deploy Accounting
-  const accounting = await deployWithoutProxy(Sk.accounting, "Accounting", deployer, [
-    admin,
+  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
     treasuryAddress,
