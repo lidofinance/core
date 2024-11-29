@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3286"  lines-covered="2814"  line-rate="0.8564"  branches-valid="1534"  branches-covered="1214"  branch-rate="0.7914"  timestamp="1732878365584" complexity="0" version="0.1">
+<coverage lines-valid="3286"  lines-covered="2814"  line-rate="0.8564"  branches-valid="1534"  branches-covered="1214"  branch-rate="0.7914"  timestamp="1732878575161" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2071,7 +2071,7 @@
 			<line number="300"  hits="0"  branch="false" />
 		</lines>
 		</class>
-		<class name="StVaultOwnerWithDelegation.sol"  filename="contracts/0.8.25/vaults/StVaultOwnerWithDelegation.sol"  line-rate="0.5595"  branch-rate="0.2703" >
+		<class name="Delegation.sol"  filename="contracts/0.8.25/vaults/Delegation.sol"  line-rate="0.5595"  branch-rate="0.2703" >
 		<methods>
 			<method name="constructor"  hits="4"  signature="()V" >
 				<lines><line number="120"  hits="4" /></lines>
@@ -2413,16 +2413,16 @@
 			<line number="72"  hits="8"  branch="false" />
 			<line number="73"  hits="8"  branch="false" />
 			<line number="74"  hits="8"  branch="false" />
+			<line number="75"  hits="8"  branch="false" />
+			<line number="77"  hits="8"  branch="false" />
 			<line number="78"  hits="8"  branch="false" />
-			<line number="80"  hits="8"  branch="false" />
-			<line number="81"  hits="8"  branch="false" />
+			<line number="79"  hits="8"  branch="false" />
 			<line number="82"  hits="8"  branch="false" />
-			<line number="85"  hits="8"  branch="false" />
+			<line number="83"  hits="8"  branch="false" />
+			<line number="84"  hits="8"  branch="false" />
 			<line number="86"  hits="8"  branch="false" />
-			<line number="87"  hits="8"  branch="false" />
+			<line number="88"  hits="8"  branch="false" />
 			<line number="89"  hits="8"  branch="false" />
-			<line number="91"  hits="8"  branch="false" />
-			<line number="92"  hits="8"  branch="false" />
 		</lines>
 		</class>
 		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.2481"  branch-rate="0.2561" >
