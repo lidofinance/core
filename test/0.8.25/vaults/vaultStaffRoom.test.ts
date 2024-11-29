@@ -66,7 +66,7 @@ describe("VaultStaffRoom.sol", () => {
     await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "UnauthorizedSender");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
