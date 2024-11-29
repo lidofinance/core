@@ -4,13 +4,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OssifiableProxy,
   StakingVault,
   StETH__HarnessForVaultHub,
   Delegation,
   VaultFactory,
-  VaultHub,
 } from "typechain-types";
 
 import { certainAddress, createVaultProxy, ether } from "lib";
@@ -27,7 +28,9 @@ describe("Delegation.sol", () => {
   let vaultOwner1: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let vaultHub: VaultHub;
+  let proxy: OssifiableProxy;
+  let accountingImpl: Accounting;
+  let accounting: Accounting;
   let implOld: StakingVault;
   let delegation: Delegation;
   let vaultFactory: VaultFactory;
@@ -50,17 +53,21 @@ describe("Delegation.sol", () => {
     });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    // VaultHub
-    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    // Accounting
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
+    accounting = await ethers.getContractAt("Accounting", proxy, deployer);
+    await accounting.initialize(admin);
+
+    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
     delegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
 
     //add role to factory
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderShouldBeBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

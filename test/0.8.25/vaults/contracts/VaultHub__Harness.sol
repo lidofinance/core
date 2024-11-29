@@ -14,8 +14,8 @@ contract VaultHub__Harness is VaultHub {
     /// @notice Lido contract
     StETH public immutable LIDO;
 
-    constructor(address _admin, ILidoLocator _lidoLocator, StETH _lido, address _treasury)
-    VaultHub(_admin, _lido, _treasury){
+    constructor(ILidoLocator _lidoLocator, StETH _lido, address _treasury)
+    VaultHub(_lido, _treasury){
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }

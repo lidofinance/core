@@ -16,7 +16,7 @@ import {Versioned} from "../utils/Versioned.sol";
 
 // TODO: extract interface and implement it
 
-contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
+contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         IStakingVault.Report report;
@@ -24,8 +24,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         int128 inOutDelta;
     }
 
-    uint256 private constant _version = 1;
-    address private immutable _SELF;
+    uint64 private constant _version = 1;
     VaultHub public immutable VAULT_HUB;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
@@ -38,30 +37,32 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
-        _SELF = address(this);
         VAULT_HUB = VaultHub(_vaultHub);
+
+        _disableInitializers();
+    }
+
+    modifier onlyBeacon() {
+        if (msg.sender != getBeacon()) revert SenderShouldBeBeacon(msg.sender, getBeacon());
+        _;
     }
 
     /// @notice Initialize the contract storage explicitly.
     ///         The initialize function selector is not changed. For upgrades use `_params` variable
     ///
-    /// @param _owner owner address that can TBD
+    /// @param _owner vault owner address
     /// @param _params the calldata for initialize contract after upgrades
     // solhint-disable-next-line no-unused-vars
-    function initialize(address _owner, bytes calldata _params) external {
-        if (_owner == address(0)) revert ZeroArgument("_owner");
-
-        if (address(this) == _SELF) {
-            revert NonProxyCallsForbidden();
-        }
-
-        _initializeContractVersionTo(1);
-
-        _transferOwnership(_owner);
+    function initialize(address _owner, bytes calldata _params) external onlyBeacon initializer {
+        __Ownable_init(_owner);
     }
 
-    function version() public pure virtual returns (uint256) {
+    function version() public pure virtual returns (uint64) {
         return _version;
+    }
+
+    function getInitializedVersion() public view returns (uint64) {
+        return _getInitializedVersion();
     }
 
     function getBeacon() public view returns (address) {
@@ -224,5 +225,5 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
     error LockedCannotBeDecreased(uint256 locked);
-    error NonProxyCallsForbidden();
+    error SenderShouldBeBeacon(address sender, address beacon);
 }

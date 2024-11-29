@@ -13,9 +13,8 @@ import {IReportReceiver} from "contracts/0.8.25/vaults/interfaces/IReportReceive
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "contracts/0.8.25/vaults/interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "contracts/0.8.25/vaults/VaultBeaconChainDepositor.sol";
-import {Versioned} from "contracts/0.8.25/utils/Versioned.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable, Versioned {
+contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
@@ -25,7 +24,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         int256 inOutDelta;
     }
 
-    uint256 private constant _version = 2;
+    uint64 private constant _version = 2;
     VaultHub public immutable vaultHub;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
@@ -41,25 +40,33 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         vaultHub = VaultHub(_vaultHub);
     }
 
+    modifier onlyBeacon() {
+        if (msg.sender != getBeacon()) revert UnauthorizedSender(msg.sender);
+        _;
+    }
+
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
     /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, bytes calldata _params) external {
-        if (_owner == address(0)) revert ZeroArgument("_owner");
-        if (getBeacon() == address(0)) revert NonProxyCall();
-
-        _initializeContractVersionTo(2);
-
-        _transferOwnership(_owner);
+    function initialize(address _owner, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+        __StakingVault_init_v2();
+        __Ownable_init(_owner);
     }
 
-    function finalizeUpgrade_v2() external {
-        if (getContractVersion() == _version) {
-            revert AlreadyInitialized();
-        }
+    function finalizeUpgrade_v2() public reinitializer(_version) {
+        __StakingVault_init_v2();
     }
 
-    function version() external pure virtual returns(uint256) {
+    event InitializedV2();
+    function __StakingVault_init_v2() internal  {
+        emit InitializedV2();
+    }
+
+    function getInitializedVersion() public view returns (uint64) {
+        return _getInitializedVersion();
+    }
+
+    function version() external pure virtual returns(uint64) {
         return _version;
     }
 
@@ -82,6 +89,5 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
     }
 
     error ZeroArgument(string name);
-    error NonProxyCall();
-    error AlreadyInitialized();
+    error UnauthorizedSender(address sender);
 }
