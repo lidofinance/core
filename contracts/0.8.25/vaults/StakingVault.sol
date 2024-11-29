@@ -44,14 +44,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     modifier onlyBeacon() {
-        if (msg.sender != getBeacon()) revert UnauthorizedSender(msg.sender);
+        if (msg.sender != getBeacon()) revert SenderShouldBeBeacon(msg.sender, getBeacon());
         _;
     }
 
     /// @notice Initialize the contract storage explicitly.
     ///         The initialize function selector is not changed. For upgrades use `_params` variable
     ///
-    /// @param _owner vaultStaffRoom address
+    /// @param _owner vault owner address
     /// @param _params the calldata for initialize contract after upgrades
     // solhint-disable-next-line no-unused-vars
     function initialize(address _owner, bytes calldata _params) external onlyBeacon initializer {
@@ -229,5 +229,5 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
     error LockedCannotBeDecreased(uint256 locked);
-    error UnauthorizedSender(address sender);
+    error SenderShouldBeBeacon(address sender, address beacon);
 }

@@ -99,10 +99,7 @@ contract Accounting is VaultHub {
     function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
-        __AccessControlEnumerable_init();
-        __VaultHub_init();
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        __VaultHub_init(_admin);
     }
 
     /// @notice calculates all the state changes that is required to apply the report

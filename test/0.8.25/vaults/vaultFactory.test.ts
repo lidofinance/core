@@ -75,7 +75,7 @@ describe("VaultFactory.sol", () => {
     await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "UnauthorizedSender");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderShouldBeBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

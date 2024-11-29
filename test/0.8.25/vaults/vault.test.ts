@@ -91,14 +91,14 @@ describe("StakingVault.sol", async () => {
     it("reverts on impl initialization", async () => {
       await expect(stakingVault.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
         vaultProxy,
-        "UnauthorizedSender",
+        "SenderShouldBeBeacon",
       );
     });
 
     it("reverts if already initialized", async () => {
       await expect(vaultProxy.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
         vaultProxy,
-        "UnauthorizedSender",
+        "SenderShouldBeBeacon",
       );
     });
   });

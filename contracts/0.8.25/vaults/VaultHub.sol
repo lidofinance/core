@@ -75,9 +75,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         _disableInitializers();
     }
 
-    function __VaultHub_init() internal onlyInitializing {
+    function __VaultHub_init(address _admin) internal onlyInitializing {
+        __AccessControlEnumerable_init();
         // stone in the elevator
         _getVaultHubStorage().sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0));
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
     /// @notice added factory address to allowed list
