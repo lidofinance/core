@@ -18,17 +18,21 @@ import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 /// in the same time
 /// @author folkyatina
 abstract contract VaultHub is AccessControlEnumerableUpgradeable {
-    /// @notice role that allows to connect vaults to the hub
-    bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
-    /// @dev basis points base
-    uint256 internal constant BPS_BASE = 100_00;
-    /// @dev maximum number of vaults that can be connected to the hub
-    uint256 internal constant MAX_VAULTS_COUNT = 500;
-    /// @dev maximum size of the single vault relative to Lido TVL in basis points
-    uint256 internal constant MAX_VAULT_SIZE_BP = 10_00;
+    /// @custom:storage-location erc7201:VaultHub
+    struct VaultHubStorage {
+        /// @notice vault sockets with vaults connected to the hub
+        /// @dev first socket is always zero. stone in the elevator
+        VaultSocket[] sockets;
 
-    StETH public immutable stETH;
-    address public immutable treasury;
+        /// @notice mapping from vault address to its socket
+        /// @dev if vault is not connected to the hub, its index is zero
+        mapping(IHubVault => uint256) vaultIndex;
+
+        /// @notice allowed factory addresses
+        mapping (address => bool) vaultFactories;
+        /// @notice allowed vault implementation addresses
+        mapping (address => bool) vaultImpl;
+    }
 
     struct VaultSocket {
         /// @notice vault address
@@ -46,52 +50,71 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint16 treasuryFeeBP;
     }
 
-    /// @notice vault sockets with vaults connected to the hub
-    /// @dev first socket is always zero. stone in the elevator
-    VaultSocket[] private sockets;
-    /// @notice mapping from vault address to its socket
-    /// @dev if vault is not connected to the hub, its index is zero
-    mapping(IHubVault => uint256) private vaultIndex;
+    // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
+        0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
-    mapping (address => bool) public vaultFactories;
-    mapping (address => bool) public vaultImpl;
+    /// @notice role that allows to connect vaults to the hub
+    bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
+    /// @notice role that allows to add factories and vault implementations to hub
+    bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
+    /// @dev basis points base
+    uint256 internal constant BPS_BASE = 100_00;
+    /// @dev maximum number of vaults that can be connected to the hub
+    uint256 internal constant MAX_VAULTS_COUNT = 500;
+    /// @dev maximum size of the single vault relative to Lido TVL in basis points
+    uint256 internal constant MAX_VAULT_SIZE_BP = 10_00;
 
-    constructor(address _admin, StETH _stETH, address _treasury) {
+    StETH public immutable stETH;
+    address public immutable treasury;
+
+    constructor(StETH _stETH, address _treasury) {
         stETH = _stETH;
         treasury = _treasury;
 
-        sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0)); // stone in the elevator
+        _disableInitializers();
+    }
+
+    function __VaultHub_init(address _admin) internal onlyInitializing {
+        __AccessControlEnumerable_init();
+        // stone in the elevator
+        _getVaultHubStorage().sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    function addFactory(address factory) public onlyRole(VAULT_MASTER_ROLE) {
-        if (vaultFactories[factory]) revert AlreadyExists(factory);
-        vaultFactories[factory] = true;
+    /// @notice added factory address to allowed list
+    function addFactory(address factory) public onlyRole(VAULT_REGISTRY_ROLE) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        if ($.vaultFactories[factory]) revert AlreadyExists(factory);
+        $.vaultFactories[factory] = true;
         emit VaultFactoryAdded(factory);
     }
 
-    function addImpl(address impl) public onlyRole(VAULT_MASTER_ROLE) {
-        if (vaultImpl[impl]) revert AlreadyExists(impl);
-        vaultImpl[impl] = true;
+    /// @notice added vault implementation address to allowed list
+    function addImpl(address impl) public onlyRole(VAULT_REGISTRY_ROLE) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        if ($.vaultImpl[impl]) revert AlreadyExists(impl);
+        $.vaultImpl[impl] = true;
         emit VaultImplAdded(impl);
     }
 
     /// @notice returns the number of vaults connected to the hub
     function vaultsCount() public view returns (uint256) {
-        return sockets.length - 1;
+        return _getVaultHubStorage().sockets.length - 1;
     }
 
     function vault(uint256 _index) public view returns (IHubVault) {
-        return sockets[_index + 1].vault;
+        return _getVaultHubStorage().sockets[_index + 1].vault;
     }
 
     function vaultSocket(uint256 _index) external view returns (VaultSocket memory) {
-        return sockets[_index + 1];
+        return _getVaultHubStorage().sockets[_index + 1];
     }
 
     function vaultSocket(address _vault) external view returns (VaultSocket memory) {
-        return sockets[vaultIndex[IHubVault(_vault)]];
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        return $.sockets[$.vaultIndex[IHubVault(_vault)]];
     }
 
     /// @notice connects a vault to the hub
@@ -120,13 +143,15 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (_treasuryFeeBP == 0) revert ZeroArgument("_treasuryFeeBP");
         if (_treasuryFeeBP > BPS_BASE) revert TreasuryFeeTooHigh(address(_vault), _treasuryFeeBP, BPS_BASE);
 
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
         address factory = IBeaconProxy(address (_vault)).getBeacon();
-        if (!vaultFactories[factory]) revert FactoryNotAllowed(factory);
+        if (!$.vaultFactories[factory]) revert FactoryNotAllowed(factory);
 
         address impl = IBeacon(factory).implementation();
-        if (!vaultImpl[impl]) revert ImplNotAllowed(impl);
+        if (!$.vaultImpl[impl]) revert ImplNotAllowed(impl);
 
-        if (vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), vaultIndex[_vault]);
+        if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), $.vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
         if (_shareLimit > (stETH.getTotalShares() * MAX_VAULT_SIZE_BP) / BPS_BASE) {
             revert ShareLimitTooHigh(address(_vault), _shareLimit, stETH.getTotalShares() / 10);
@@ -146,8 +171,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             uint16(_reserveRatioThreshold),
             uint16(_treasuryFeeBP)
         );
-        vaultIndex[_vault] = sockets.length;
-        sockets.push(vr);
+        $.vaultIndex[_vault] = $.sockets.length;
+        $.sockets.push(vr);
 
         emit VaultConnected(address(_vault), _shareLimit, _reserveRatio, _treasuryFeeBP);
     }
@@ -155,13 +180,14 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice disconnects a vault from the hub
     /// @dev can be called by vaults only
     function disconnectVault(address _vault) external {
-        IHubVault vault_ = IHubVault(_vault);
+        VaultHubStorage storage $ = _getVaultHubStorage();
 
-        uint256 index = vaultIndex[vault_];
+        IHubVault vault_ = IHubVault(_vault);
+        uint256 index = $.vaultIndex[vault_];
         if (index == 0) revert NotConnectedToHub(_vault);
         if (msg.sender != vault_.owner()) revert NotAuthorized("disconnect", msg.sender);
 
-        VaultSocket memory socket = sockets[index];
+        VaultSocket memory socket = $.sockets[index];
         IHubVault vaultToDisconnect = socket.vault;
 
         if (socket.sharesMinted > 0) {
@@ -171,12 +197,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         vaultToDisconnect.report(vaultToDisconnect.valuation(), vaultToDisconnect.inOutDelta(), 0);
 
-        VaultSocket memory lastSocket = sockets[sockets.length - 1];
-        sockets[index] = lastSocket;
-        vaultIndex[lastSocket.vault] = index;
-        sockets.pop();
+        VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
+        $.sockets[index] = lastSocket;
+        $.vaultIndex[lastSocket.vault] = index;
+        $.sockets.pop();
 
-        delete vaultIndex[vaultToDisconnect];
+        delete $.vaultIndex[vaultToDisconnect];
 
         emit VaultDisconnected(address(vaultToDisconnect));
     }
@@ -190,12 +216,14 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
         IHubVault vault_ = IHubVault(_vault);
-        uint256 index = vaultIndex[vault_];
+        uint256 index = $.vaultIndex[vault_];
         if (index == 0) revert NotConnectedToHub(_vault);
         if (msg.sender != vault_.owner()) revert NotAuthorized("mint", msg.sender);
 
-        VaultSocket memory socket = sockets[index];
+        VaultSocket memory socket = $.sockets[index];
 
         uint256 sharesToMint = stETH.getSharesByPooledEth(_tokens);
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
@@ -207,7 +235,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             revert InsufficientValuationToMint(address(vault_), vault_.valuation());
         }
 
-        sockets[index].sharesMinted = uint96(vaultSharesAfterMint);
+        $.sockets[index].sharesMinted = uint96(vaultSharesAfterMint);
 
         stETH.mintExternalShares(_recipient, sharesToMint);
 
@@ -226,17 +254,19 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function burnStethBackedByVault(address _vault, uint256 _tokens) public {
         if (_tokens == 0) revert ZeroArgument("_tokens");
 
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
         IHubVault vault_ = IHubVault(_vault);
-        uint256 index = vaultIndex[vault_];
+        uint256 index = $.vaultIndex[vault_];
         if (index == 0) revert NotConnectedToHub(_vault);
         if (msg.sender != vault_.owner()) revert NotAuthorized("burn", msg.sender);
 
-        VaultSocket memory socket = sockets[index];
+        VaultSocket memory socket = $.sockets[index];
 
         uint256 amountOfShares = stETH.getSharesByPooledEth(_tokens);
         if (socket.sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, socket.sharesMinted);
 
-        sockets[index].sharesMinted = socket.sharesMinted - uint96(amountOfShares);
+        $.sockets[index].sharesMinted = socket.sharesMinted - uint96(amountOfShares);
 
         stETH.burnExternalShares(amountOfShares);
 
@@ -254,9 +284,11 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @dev can be used permissionlessly if the vault's min reserve ratio is broken
     function forceRebalance(IHubVault _vault) external {
-        uint256 index = vaultIndex[_vault];
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
+        uint256 index = $.vaultIndex[_vault];
         if (index == 0) revert NotConnectedToHub(msg.sender);
-        VaultSocket memory socket = sockets[index];
+        VaultSocket memory socket = $.sockets[index];
 
         uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThreshold);
         if (socket.sharesMinted <= threshold) {
@@ -289,14 +321,16 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function rebalance() external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
-        uint256 index = vaultIndex[IHubVault(msg.sender)];
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
+        uint256 index = $.vaultIndex[IHubVault(msg.sender)];
         if (index == 0) revert NotConnectedToHub(msg.sender);
-        VaultSocket memory socket = sockets[index];
+        VaultSocket memory socket = $.sockets[index];
 
         uint256 sharesToBurn = stETH.getSharesByPooledEth(msg.value);
         if (socket.sharesMinted < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, socket.sharesMinted);
 
-        sockets[index].sharesMinted = socket.sharesMinted - uint96(sharesToBurn);
+        $.sockets[index].sharesMinted = socket.sharesMinted - uint96(sharesToBurn);
 
         // mint stETH (shares+ TPE+)
         (bool success, ) = address(stETH).call{value: msg.value}("");
@@ -327,6 +361,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         // | \____(      )___) )___
         //  \______(_______;;; __;;;
 
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
         uint256 length = vaultsCount();
         // for each vault
         treasuryFeeShares = new uint256[](length);
@@ -334,7 +370,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         lockedEther = new uint256[](length);
 
         for (uint256 i = 0; i < length; ++i) {
-            VaultSocket memory socket = sockets[i + 1];
+            VaultSocket memory socket = $.sockets[i + 1];
 
             // if there is no fee in Lido, then no fee in vaults
             // see LIP-12 for details
@@ -391,9 +427,11 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
     ) internal {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+
         uint256 totalTreasuryShares;
         for (uint256 i = 0; i < _valuations.length; ++i) {
-            VaultSocket memory socket = sockets[i + 1];
+            VaultSocket memory socket = $.sockets[i + 1];
             if (_treasureFeeShares[i] > 0) {
                 socket.sharesMinted += uint96(_treasureFeeShares[i]);
                 totalTreasuryShares += _treasureFeeShares[i];
@@ -412,6 +450,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function _maxMintableShares(IHubVault _vault, uint256 _reserveRatio) internal view returns (uint256) {
         uint256 maxStETHMinted = (_vault.valuation() * (BPS_BASE - _reserveRatio)) / BPS_BASE;
         return stETH.getSharesByPooledEth(maxStETHMinted);
+    }
+
+    function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
+        assembly {
+            $.slot := VAULT_HUB_STORAGE_LOCATION
+        }
     }
 
     event VaultConnected(address vault, uint256 capShares, uint256 minReserveRatio, uint256 treasuryFeeBP);

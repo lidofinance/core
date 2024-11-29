@@ -88,23 +88,17 @@ describe("StakingVault.sol", async () => {
   });
 
   describe("initialize", () => {
-    it("reverts if `_owner` is zero address", async () => {
-      await expect(stakingVault.initialize(ZeroAddress, "0x"))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_owner");
-    });
-
-    it("reverts if call from non proxy", async () => {
+    it("reverts on impl initialization", async () => {
       await expect(stakingVault.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
-        stakingVault,
-        "NonProxyCallsForbidden",
+        vaultProxy,
+        "SenderShouldBeBeacon",
       );
     });
 
     it("reverts if already initialized", async () => {
       await expect(vaultProxy.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
         vaultProxy,
-        "NonZeroContractVersionOnInit",
+        "SenderShouldBeBeacon",
       );
     });
   });
