@@ -74,12 +74,14 @@ contract VaultFactory is UpgradeableBeacon {
         delegation.grantRole(delegation.OPERATOR_ROLE(), _initializationParams.operator);
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
 
+        delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
         delegation.setManagementFee(_initializationParams.managementFee);
         delegation.setPerformanceFee(_initializationParams.performanceFee);
 
         //revoke roles from factory
         delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
+        delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
         delegation.revokeRole(delegation.LIDO_DAO_ROLE(), address(this));
 
