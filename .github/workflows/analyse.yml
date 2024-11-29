@@ -40,11 +40,7 @@ jobs:
 
       - name: Run slither
         run: >
-          poetry run slither . \
-            --no-fail-pedantic \
-            --compile-force-framework hardhat \
-            --sarif results.sarif \
-            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted,pess-multiple-storage-read,pess-dubious-typecast
+          poetry run slither . --no-fail-pedantic --sarif results.sarif 
 
       - name: Check results.sarif presence
         id: results
