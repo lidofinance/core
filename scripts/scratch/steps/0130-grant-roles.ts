@@ -20,7 +20,7 @@ export async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
-  const accountingAddress = state[Sk.accounting].address;
+  const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
@@ -50,12 +50,9 @@ export async function main() {
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
     from: deployer,
   });
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.getFunction("REPORT_REWARDS_MINTED_ROLE")(), accountingAddress],
-    { from: deployer },
-  );
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
+    from: deployer,
+  });
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -105,7 +102,10 @@ export async function main() {
 
   // Accounting
   const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
-  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), deployer], {
+  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(accounting, "grantRole", [await accounting.VAULT_REGISTRY_ROLE(), deployer], {
     from: deployer,
   });
 }
