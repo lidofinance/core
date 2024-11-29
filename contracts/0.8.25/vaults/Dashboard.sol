@@ -11,14 +11,14 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/acces
 import {VaultHub} from "./VaultHub.sol";
 
 /**
- * @title StVaultOwnerWithDashboard
+ * @title Dashboard
  * @notice This contract is meant to be used as the owner of `StakingVault`.
  * This contract improves the vault UX by bundling all functions from the vault and vault hub
  * in this single contract. It provides administrative functions for managing the staking vault,
  * including funding, withdrawing, depositing to the beacon chain, minting, burning, and rebalancing operations.
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
  */
-contract StVaultOwnerWithDashboard is AccessControlEnumerable {
+contract Dashboard is AccessControlEnumerable {
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;

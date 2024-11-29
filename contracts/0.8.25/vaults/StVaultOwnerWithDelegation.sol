@@ -8,13 +8,13 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/ext
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
-import {StVaultOwnerWithDashboard} from "./StVaultOwnerWithDashboard.sol";
+import {Dashboard} from "./Dashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /**
  * @title StVaultOwnerWithDelegation
  * @notice This contract serves as an owner for `StakingVault` with additional delegation capabilities.
- * It extends `StVaultOwnerWithDashboard` and implements `IReportReceiver`.
+ * It extends `Dashboard` and implements `IReportReceiver`.
  * The contract provides administrative functions for managing the staking vault,
  * including funding, withdrawing, depositing to the beacon chain, minting, burning,
  * rebalancing operations, and fee management. All these functions are only callable
@@ -26,7 +26,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
  * @notice The term "fee" is used to express the fee percentage as basis points, e.g. 5%,
  * while "due" is the actual amount of the fee, e.g. 1 ether
  */
-contract StVaultOwnerWithDelegation is StVaultOwnerWithDashboard, IReportReceiver {
+contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
     // ==================== Constants ====================
 
     uint256 private constant BP_BASE = 10000; // Basis points base (100%)
@@ -117,7 +117,7 @@ contract StVaultOwnerWithDelegation is StVaultOwnerWithDashboard, IReportReceive
      * @notice Constructor sets the stETH token address.
      * @param _stETH Address of the stETH token contract.
      */
-    constructor(address _stETH) StVaultOwnerWithDashboard(_stETH) {}
+    constructor(address _stETH) Dashboard(_stETH) {}
 
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.
