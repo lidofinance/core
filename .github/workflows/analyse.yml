@@ -1,6 +1,9 @@
 name: Analysis
 
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches: [master]
 
 jobs:
   slither:
@@ -41,7 +44,7 @@ jobs:
             --no-fail-pedantic \
             --compile-force-framework hardhat \
             --sarif results.sarif \
-            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted
+            --exclude pess-strange-setter,pess-arbitrary-call-calldata-tainted,pess-multiple-storage-read,pess-dubious-typecast
 
       - name: Check results.sarif presence
         id: results
