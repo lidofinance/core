@@ -23,8 +23,8 @@ export async function main() {
   ]);
   const impAddress = await imp.getAddress();
 
-  // Deploy StVaultOwnerWithDelegation implementation contract
-  const room = await deployWithoutProxy(Sk.stVaultOwnerWithDelegationImpl, "StVaultOwnerWithDelegation", deployer, [lidoAddress]);
+  // Deploy Delegation implementation contract
+  const room = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [lidoAddress]);
   const roomAddress = await room.getAddress();
 
   // Deploy VaultFactory contract

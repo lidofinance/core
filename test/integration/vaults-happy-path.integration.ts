@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingVault, StVaultOwnerWithDelegation } from "typechain-types";
+import { StakingVault, Delegation } from "typechain-types";
 
 import { impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -55,7 +55,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   let vault101: StakingVault;
   let vault101Address: string;
-  let vault101AdminContract: StVaultOwnerWithDelegation;
+  let vault101AdminContract: Delegation;
   let vault101BeaconBalance = 0n;
   let vault101MintingMaximum = 0n;
 
@@ -139,10 +139,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     const implAddress = await stakingVaultFactory.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.stVaultOwnerWithDelegationImpl();
+    const adminContractImplAddress = await stakingVaultFactory.delegationImpl();
 
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
-    const vaultFactoryAdminContract = await ethers.getContractAt("StVaultOwnerWithDelegation", adminContractImplAddress);
+    const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
 
     expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
@@ -168,7 +168,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(createVaultEvents.length).to.equal(1n);
 
     vault101 = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
-    vault101AdminContract = await ethers.getContractAt("StVaultOwnerWithDelegation", createVaultEvents[0].args?.owner);
+    vault101AdminContract = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
 
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.DEFAULT_ADMIN_ROLE(), alice)).to.be.true;
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.MANAGER_ROLE(), alice)).to.be.true;

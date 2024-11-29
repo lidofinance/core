@@ -9,7 +9,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 pragma solidity 0.8.25;
 
-interface IStVaultOwnerWithDelegation {
+interface IDelegation {
     struct InitializationParams {
         uint256 managementFee;
         uint256 performanceFee;
@@ -37,59 +37,56 @@ interface IStVaultOwnerWithDelegation {
 }
 
 contract VaultFactory is UpgradeableBeacon {
-    address public immutable stVaultOwnerWithDelegationImpl;
+    address public immutable delegationImpl;
 
     /// @param _owner The address of the VaultFactory owner
     /// @param _stakingVaultImpl The address of the StakingVault implementation
-    /// @param _stVaultOwnerWithDelegationImpl The address of the StVaultOwnerWithDelegation implementation
+    /// @param _delegationImpl The address of the Delegation implementation
     constructor(
         address _owner,
         address _stakingVaultImpl,
-        address _stVaultOwnerWithDelegationImpl
+        address _delegationImpl
     ) UpgradeableBeacon(_stakingVaultImpl, _owner) {
-        if (_stVaultOwnerWithDelegationImpl == address(0)) revert ZeroArgument("_stVaultOwnerWithDelegation");
+        if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
 
-        stVaultOwnerWithDelegationImpl = _stVaultOwnerWithDelegationImpl;
+        delegationImpl = _delegationImpl;
     }
 
-    /// @notice Creates a new StakingVault and StVaultOwnerWithDelegation contracts
+    /// @notice Creates a new StakingVault and Delegation contracts
     /// @param _stakingVaultParams The params of vault initialization
     /// @param _initializationParams The params of vault initialization
     function createVault(
         bytes calldata _stakingVaultParams,
-        IStVaultOwnerWithDelegation.InitializationParams calldata _initializationParams,
+        IDelegation.InitializationParams calldata _initializationParams,
         address _lidoAgent
-    ) external returns (IStakingVault vault, IStVaultOwnerWithDelegation stVaultOwnerWithDelegation) {
+    ) external returns (IStakingVault vault, IDelegation delegation) {
         if (_initializationParams.manager == address(0)) revert ZeroArgument("manager");
         if (_initializationParams.operator == address(0)) revert ZeroArgument("operator");
 
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
 
-        stVaultOwnerWithDelegation = IStVaultOwnerWithDelegation(Clones.clone(stVaultOwnerWithDelegationImpl));
+        delegation = IDelegation(Clones.clone(delegationImpl));
 
-        stVaultOwnerWithDelegation.initialize(address(this), address(vault));
+        delegation.initialize(address(this), address(vault));
 
-        stVaultOwnerWithDelegation.grantRole(stVaultOwnerWithDelegation.LIDO_DAO_ROLE(), _lidoAgent);
-        stVaultOwnerWithDelegation.grantRole(stVaultOwnerWithDelegation.MANAGER_ROLE(), _initializationParams.manager);
-        stVaultOwnerWithDelegation.grantRole(
-            stVaultOwnerWithDelegation.OPERATOR_ROLE(),
-            _initializationParams.operator
-        );
-        stVaultOwnerWithDelegation.grantRole(stVaultOwnerWithDelegation.DEFAULT_ADMIN_ROLE(), msg.sender);
+        delegation.grantRole(delegation.LIDO_DAO_ROLE(), _lidoAgent);
+        delegation.grantRole(delegation.MANAGER_ROLE(), _initializationParams.manager);
+        delegation.grantRole(delegation.OPERATOR_ROLE(), _initializationParams.operator);
+        delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
 
-        stVaultOwnerWithDelegation.grantRole(stVaultOwnerWithDelegation.MANAGER_ROLE(), address(this));
-        stVaultOwnerWithDelegation.setManagementFee(_initializationParams.managementFee);
-        stVaultOwnerWithDelegation.setPerformanceFee(_initializationParams.performanceFee);
+        delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
+        delegation.setManagementFee(_initializationParams.managementFee);
+        delegation.setPerformanceFee(_initializationParams.performanceFee);
 
         //revoke roles from factory
-        stVaultOwnerWithDelegation.revokeRole(stVaultOwnerWithDelegation.MANAGER_ROLE(), address(this));
-        stVaultOwnerWithDelegation.revokeRole(stVaultOwnerWithDelegation.DEFAULT_ADMIN_ROLE(), address(this));
-        stVaultOwnerWithDelegation.revokeRole(stVaultOwnerWithDelegation.LIDO_DAO_ROLE(), address(this));
+        delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
+        delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
+        delegation.revokeRole(delegation.LIDO_DAO_ROLE(), address(this));
 
-        vault.initialize(address(stVaultOwnerWithDelegation), _stakingVaultParams);
+        vault.initialize(address(delegation), _stakingVaultParams);
 
-        emit VaultCreated(address(stVaultOwnerWithDelegation), address(vault));
-        emit StVaultOwnerWithDelegationCreated(msg.sender, address(stVaultOwnerWithDelegation));
+        emit VaultCreated(address(delegation), address(vault));
+        emit DelegationCreated(msg.sender, address(delegation));
     }
 
     /**
@@ -100,11 +97,11 @@ contract VaultFactory is UpgradeableBeacon {
     event VaultCreated(address indexed owner, address indexed vault);
 
     /**
-     * @notice Event emitted on a StVaultOwnerWithDelegation creation
-     * @param admin The address of the StVaultOwnerWithDelegation admin
-     * @param stVaultOwnerWithDelegation The address of the created StVaultOwnerWithDelegation
+     * @notice Event emitted on a Delegation creation
+     * @param admin The address of the Delegation admin
+     * @param delegation The address of the created Delegation
      */
-    event StVaultOwnerWithDelegationCreated(address indexed admin, address indexed stVaultOwnerWithDelegation);
+    event DelegationCreated(address indexed admin, address indexed delegation);
 
     error ZeroArgument(string);
 }

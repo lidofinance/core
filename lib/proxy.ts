@@ -8,14 +8,14 @@ import {
   OssifiableProxy,
   OssifiableProxy__factory,
   StakingVault,
-  StVaultOwnerWithDelegation,
+  Delegation,
   VaultFactory,
 } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 
-import { IStVaultOwnerWithDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
-import StVaultOwnerWithDelegationInitializationParamsStruct = IStVaultOwnerWithDelegation.InitializationParamsStruct;
+import { IDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
+import DelegationInitializationParamsStruct = IDelegation.InitializationParamsStruct;
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -44,7 +44,7 @@ interface CreateVaultResponse {
   tx: ContractTransactionResponse;
   proxy: BeaconProxy;
   vault: StakingVault;
-  stVaultOwnerWithDelegation: StVaultOwnerWithDelegation;
+  delegation: Delegation;
 }
 
 export async function createVaultProxy(
@@ -53,7 +53,7 @@ export async function createVaultProxy(
   _lidoAgent: HardhatEthersSigner,
 ): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
-  const initializationParams: StVaultOwnerWithDelegationInitializationParamsStruct = {
+  const initializationParams: DelegationInitializationParamsStruct = {
     managementFee: 100n,
     performanceFee: 200n,
     manager: await _owner.getAddress(),
@@ -71,28 +71,28 @@ export async function createVaultProxy(
   const event = events[0];
   const { vault } = event.args;
 
-  const stVaultOwnerWithDelegationEvents = findEventsWithInterfaces(
+  const delegationEvents = findEventsWithInterfaces(
     receipt,
-    "StVaultOwnerWithDelegationCreated",
+    "DelegationCreated",
     [vaultFactory.interface],
   );
 
-  if (stVaultOwnerWithDelegationEvents.length === 0) throw new Error("StVaultOwnerWithDelegation creation event not found");
+  if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
 
-  const { stVaultOwnerWithDelegation: stVaultOwnerWithDelegationAddress } = stVaultOwnerWithDelegationEvents[0].args;
+  const { delegation: delegationAddress } = delegationEvents[0].args;
 
   const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
-  const stVaultOwnerWithDelegation = (await ethers.getContractAt(
-    "StVaultOwnerWithDelegation",
-    stVaultOwnerWithDelegationAddress,
+  const delegation = (await ethers.getContractAt(
+    "Delegation",
+    delegationAddress,
     _owner,
-  )) as StVaultOwnerWithDelegation;
+  )) as Delegation;
 
   return {
     tx,
     proxy,
     vault: stakingVault,
-    stVaultOwnerWithDelegation,
+    delegation,
   };
 }

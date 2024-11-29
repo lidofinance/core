@@ -12,7 +12,7 @@ import {
   StETH__HarnessForVaultHub,
   VaultFactory,
   VaultHub,
-  StVaultOwnerWithDelegation,
+  Delegation,
 } from "typechain-types";
 
 import { certainAddress, createVaultProxy, ether } from "lib";
@@ -33,7 +33,7 @@ describe("VaultFactory.sol", () => {
   let vaultHub: VaultHub;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
-  let stVaultOwnerWithDelegation: StVaultOwnerWithDelegation;
+  let delegation: Delegation;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -60,8 +60,8 @@ describe("VaultFactory.sol", () => {
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
-    stVaultOwnerWithDelegation = await ethers.deployContract("StVaultOwnerWithDelegation", [steth], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, stVaultOwnerWithDelegation], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
 
     //add role to factory
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -87,10 +87,10 @@ describe("VaultFactory.sol", () => {
         .withArgs(ZeroAddress);
     });
 
-    it("reverts if `_stVaultOwnerWithDelegation` is zero address", async () => {
+    it("reverts if `_delegation` is zero address", async () => {
       await expect(ethers.deployContract("VaultFactory", [admin, implOld, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_stVaultOwnerWithDelegation");
+        .withArgs("_delegation");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
@@ -113,17 +113,17 @@ describe("VaultFactory.sol", () => {
 
   context("createVault", () => {
     it("works with empty `params`", async () => {
-      const { tx, vault, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { tx, vault, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
-        .withArgs(await stVaultOwnerWithDelegation.getAddress(), await vault.getAddress());
+        .withArgs(await delegation.getAddress(), await vault.getAddress());
 
       await expect(tx)
-        .to.emit(vaultFactory, "StVaultOwnerWithDelegationCreated")
-        .withArgs(await vaultOwner1.getAddress(), await stVaultOwnerWithDelegation.getAddress());
+        .to.emit(vaultFactory, "DelegationCreated")
+        .withArgs(await vaultOwner1.getAddress(), await delegation.getAddress());
 
-      expect(await stVaultOwnerWithDelegation.getAddress()).to.eq(await vault.owner());
+      expect(await delegation.getAddress()).to.eq(await vault.owner());
       expect(await vault.getBeacon()).to.eq(await vaultFactory.getAddress());
     });
 
@@ -149,8 +149,8 @@ describe("VaultFactory.sol", () => {
       };
 
       //create vault
-      const { vault: vault1, stVaultOwnerWithDelegation: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
-      const { vault: vault2, stVaultOwnerWithDelegation: delegator2 } = await createVaultProxy(vaultFactory, vaultOwner2, lidoAgent);
+      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(vaultFactory, vaultOwner2, lidoAgent);
 
       //owner of vault is delegator
       expect(await delegator1.getAddress()).to.eq(await vault1.owner());

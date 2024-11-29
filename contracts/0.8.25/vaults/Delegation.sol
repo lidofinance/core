@@ -12,7 +12,7 @@ import {Dashboard} from "./Dashboard.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /**
- * @title StVaultOwnerWithDelegation
+ * @title Delegation
  * @notice This contract serves as an owner for `StakingVault` with additional delegation capabilities.
  * It extends `Dashboard` and implements `IReportReceiver`.
  * The contract provides administrative functions for managing the staking vault,
@@ -26,7 +26,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
  * @notice The term "fee" is used to express the fee percentage as basis points, e.g. 5%,
  * while "due" is the actual amount of the fee, e.g. 1 ether
  */
-contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
+contract Delegation is Dashboard, IReportReceiver {
     // ==================== Constants ====================
 
     uint256 private constant BP_BASE = 10000; // Basis points base (100%)
@@ -45,7 +45,7 @@ contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
      * - vote on ownership transfer
      * - vote on performance fee changes
      */
-    bytes32 public constant MANAGER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.ManagerRole");
+    bytes32 public constant MANAGER_ROLE = keccak256("Vault.Delegation.ManagerRole");
 
     /**
      * @notice Role for the staker.
@@ -53,7 +53,7 @@ contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
      * - fund the vault
      * - withdraw from the vault
      */
-    bytes32 public constant STAKER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.StakerRole");
+    bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
     /** @notice Role for the operator
      * Operator can:
@@ -62,14 +62,14 @@ contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
      * - vote on ownership transfer
      * - set the Key Master role
      */
-    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.OperatorRole");
+    bytes32 public constant OPERATOR_ROLE = keccak256("Vault.Delegation.OperatorRole");
 
     /**
      * @notice Role for the key master.
      * Key master can:
      * - deposit validators to the beacon chain
      */
-    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.KeyMasterRole");
+    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.Delegation.KeyMasterRole");
 
     /**
      * @notice Role for the token master.
@@ -77,7 +77,7 @@ contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
      * - mint stETH tokens
      * - burn stETH tokens
      */
-    bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.TokenMasterRole");
+    bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.Delegation.TokenMasterRole");
 
     /**
      * @notice Role for the Lido DAO.
@@ -86,7 +86,7 @@ contract StVaultOwnerWithDelegation is Dashboard, IReportReceiver {
      * - set the operator role
      * - vote on ownership transfer
      */
-    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.StVaultOwnerWithDelegation.LidoDAORole");
+    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.Delegation.LidoDAORole");
 
     // ==================== State Variables ====================
 

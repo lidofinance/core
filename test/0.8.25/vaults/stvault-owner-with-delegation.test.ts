@@ -8,7 +8,7 @@ import {
   LidoLocator,
   StakingVault,
   StETH__HarnessForVaultHub,
-  StVaultOwnerWithDelegation,
+  Delegation,
   VaultFactory,
   VaultHub,
 } from "typechain-types";
@@ -18,7 +18,7 @@ import { certainAddress, createVaultProxy, ether } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("StVaultOwnerWithDelegation.sol", () => {
+describe("Delegation.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -29,7 +29,7 @@ describe("StVaultOwnerWithDelegation.sol", () => {
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let vaultHub: VaultHub;
   let implOld: StakingVault;
-  let stVaultOwnerWithDelegation: StVaultOwnerWithDelegation;
+  let delegation: Delegation;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -53,8 +53,8 @@ describe("StVaultOwnerWithDelegation.sol", () => {
     // VaultHub
     vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
     implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
-    stVaultOwnerWithDelegation = await ethers.deployContract("StVaultOwnerWithDelegation", [steth], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, stVaultOwnerWithDelegation], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
 
     //add role to factory
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -69,33 +69,33 @@ describe("StVaultOwnerWithDelegation.sol", () => {
 
   context("performanceDue", () => {
     it("performanceDue ", async () => {
-      const { stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await stVaultOwnerWithDelegation.performanceDue();
+      await delegation.performanceDue();
     });
   });
 
   context("initialize", async () => {
     it("reverts if initialize from implementation", async () => {
-      await expect(stVaultOwnerWithDelegation.initialize(admin, implOld)).to.revertedWithCustomError(
-        stVaultOwnerWithDelegation,
+      await expect(delegation.initialize(admin, implOld)).to.revertedWithCustomError(
+        delegation,
         "NonProxyCallsForbidden",
       );
     });
 
     it("reverts if already initialized", async () => {
-      const { vault: vault1, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { vault: vault1, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(stVaultOwnerWithDelegation.initialize(admin, vault1)).to.revertedWithCustomError(
-        stVaultOwnerWithDelegation,
+      await expect(delegation.initialize(admin, vault1)).to.revertedWithCustomError(
+        delegation,
         "AlreadyInitialized",
       );
     });
 
     it("initialize", async () => {
-      const { tx, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { tx, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(tx).to.emit(stVaultOwnerWithDelegation, "Initialized");
+      await expect(tx).to.emit(delegation, "Initialized");
     });
   });
 });

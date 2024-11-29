@@ -9,7 +9,7 @@ import {
   StakingVault,
   StakingVault__factory,
   StETH__HarnessForVaultHub,
-  StVaultOwnerWithDelegation,
+  Delegation,
   VaultFactory,
   VaultHub__MockForVault,
 } from "typechain-types";
@@ -33,7 +33,7 @@ describe("StakingVault.sol", async () => {
   let stakingVault: StakingVault;
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
-  let stVaulOwnerWithDelegation: StVaultOwnerWithDelegation;
+  let stVaulOwnerWithDelegation: Delegation;
   let vaultProxy: StakingVault;
 
   let originalState: string;
@@ -52,16 +52,16 @@ describe("StakingVault.sol", async () => {
     vaultCreateFactory = new StakingVault__factory(owner);
     stakingVault = await ethers.getContractFactory("StakingVault").then((f) => f.deploy(vaultHub, depositContract));
 
-    stVaulOwnerWithDelegation = await ethers.deployContract("StVaultOwnerWithDelegation", [steth], { from: deployer });
+    stVaulOwnerWithDelegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
 
     vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, stVaulOwnerWithDelegation], {
       from: deployer,
     });
 
-    const { vault, stVaultOwnerWithDelegation } = await createVaultProxy(vaultFactory, owner, lidoAgent);
+    const { vault, delegation } = await createVaultProxy(vaultFactory, owner, lidoAgent);
     vaultProxy = vault;
 
-    delegatorSigner = await impersonate(await stVaultOwnerWithDelegation.getAddress(), ether("100.0"));
+    delegatorSigner = await impersonate(await delegation.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
