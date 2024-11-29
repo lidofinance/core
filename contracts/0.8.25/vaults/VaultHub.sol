@@ -68,13 +68,16 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     StETH public immutable stETH;
     address public immutable treasury;
 
-    constructor(address _admin, StETH _stETH, address _treasury) {
+    constructor(StETH _stETH, address _treasury) {
         stETH = _stETH;
         treasury = _treasury;
 
-        _getVaultHubStorage().sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0)); // stone in the elevator
+        _disableInitializers();
+    }
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    function __VaultHub_init() internal onlyInitializing {
+        // stone in the elevator
+        _getVaultHubStorage().sockets.push(VaultSocket(IHubVault(address(0)), 0, 0, 0, 0, 0));
     }
 
     /// @notice added factory address to allowed list

@@ -5,13 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OssifiableProxy,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub,
   VaultStaffRoom,
 } from "typechain-types";
 
@@ -29,7 +30,9 @@ describe("VaultFactory.sol", () => {
   let vaultOwner2: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let vaultHub: VaultHub;
+  let proxy: OssifiableProxy;
+  let accountingImpl: Accounting;
+  let accounting: Accounting;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
   let vaultStaffRoom: VaultStaffRoom;
@@ -53,19 +56,23 @@ describe("VaultFactory.sol", () => {
     });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    // VaultHub
-    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
+    // Accounting
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
+    accounting = await ethers.getContractAt("Accounting", proxy, deployer);
+    await accounting.initialize(admin);
+
+    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
     vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
     //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
+    await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
@@ -133,7 +140,7 @@ describe("VaultFactory.sol", () => {
 
   context("connect", () => {
     it("connect ", async () => {
-      const vaultsBefore = await vaultHub.vaultsCount();
+      const vaultsBefore = await accounting.vaultsCount();
       expect(vaultsBefore).to.eq(0);
 
       const config1 = {
@@ -159,7 +166,7 @@ describe("VaultFactory.sol", () => {
 
       //try to connect vault without, factory not allowed
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -168,14 +175,14 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "FactoryNotAllowed");
+      ).to.revertedWithCustomError(accounting, "FactoryNotAllowed");
 
       //add factory to whitelist
-      await vaultHub.connect(admin).addFactory(vaultFactory);
+      await accounting.connect(admin).addFactory(vaultFactory);
 
       //try to connect vault without, impl not allowed
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -184,13 +191,13 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
+      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 
       //add impl to whitelist
-      await vaultHub.connect(admin).addImpl(implOld);
+      await accounting.connect(admin).addImpl(implOld);
 
       //connect vaults to VaultHub
-      await vaultHub
+      await accounting
         .connect(admin)
         .connectVault(
           await vault1.getAddress(),
@@ -199,7 +206,7 @@ describe("VaultFactory.sol", () => {
           config1.thresholdReserveRatioBP,
           config1.treasuryFeeBP,
         );
-      await vaultHub
+      await accounting
         .connect(admin)
         .connectVault(
           await vault2.getAddress(),
@@ -209,7 +216,7 @@ describe("VaultFactory.sol", () => {
           config2.treasuryFeeBP,
         );
 
-      const vaultsAfter = await vaultHub.vaultsCount();
+      const vaultsAfter = await accounting.vaultsCount();
       expect(vaultsAfter).to.eq(2);
 
       const version1Before = await vault1.version();
@@ -229,7 +236,7 @@ describe("VaultFactory.sol", () => {
 
       //we upgrade implementation and do not add it to whitelist
       await expect(
-        vaultHub
+        accounting
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
@@ -238,7 +245,7 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(vaultHub, "ImplNotAllowed");
+      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 
       const version1After = await vault1.version();
       const version2After = await vault2.version();

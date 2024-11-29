@@ -4,12 +4,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OssifiableProxy,
   StakingVault,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  VaultHub,
   VaultStaffRoom,
 } from "typechain-types";
 
@@ -26,7 +27,9 @@ describe("VaultStaffRoom.sol", () => {
   let vaultOwner1: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let vaultHub: VaultHub;
+  let proxy: OssifiableProxy;
+  let accountingImpl: Accounting;
+  let accounting: Accounting;
   let implOld: StakingVault;
   let vaultStaffRoom: VaultStaffRoom;
   let vaultFactory: VaultFactory;
@@ -49,14 +52,18 @@ describe("VaultStaffRoom.sol", () => {
     });
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    // VaultHub
-    vaultHub = await ethers.deployContract("Accounting", [admin, locator, steth, treasury], { from: deployer });
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    // Accounting
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
+    accounting = await ethers.getContractAt("Accounting", proxy, deployer);
+    await accounting.initialize(admin);
+
+    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
     vaultStaffRoom = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, vaultStaffRoom], { from: deployer });
 
     //add role to factory
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "NonProxyCallsForbidden");
