@@ -373,8 +373,7 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("enforces data safety boundaries", () => {
-      // TODO: restore test, but it is suspected to be inrelevant, must revert as it actually does
-      it.skip("passes fine when extra data do not feet in a single third phase transaction", async () => {
+      it("passes fine when extra data do not feet in a single third phase transaction", async () => {
         const MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION = 1;
 
         expect(reportFields.extraDataItemsCount).to.be.greaterThan(MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION);

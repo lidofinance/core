@@ -552,10 +552,6 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExtraDataItemsCountPerTransaction(
-            data.extraDataItemsCount
-        );
-
         LEGACY_ORACLE.handleConsensusLayerReport(data.refSlot, data.clBalanceGwei * 1e9, data.numValidators);
 
         uint256 slotsElapsed = data.refSlot - prevRefSlot;
