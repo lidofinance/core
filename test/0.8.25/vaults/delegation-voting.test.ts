@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Delegation,StakingVault__MockForVaultDelegationLayer } from "typechain-types";
+import { Delegation, StakingVault__MockForVaultDelegationLayer } from "typechain-types";
 
 import { advanceChainTime, certainAddress, days, proxify } from "lib";
 
@@ -51,7 +51,7 @@ describe("Delegation:Voting", () => {
 
   describe("setPerformanceFee", () => {
     it("reverts if the caller does not have the required role", async () => {
-      expect(delegation.connect(stranger).setPerformanceFee(100)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).setPerformanceFee(100)).to.be.revertedWithCustomError(
         delegation,
         "NotACommitteeMember",
       );
@@ -116,7 +116,7 @@ describe("Delegation:Voting", () => {
 
   describe("transferStakingVaultOwnership", () => {
     it("reverts if the caller does not have the required role", async () => {
-      expect(delegation.connect(stranger).transferStVaultOwnership(certainAddress("vault-delegation-layer-voting-new-owner"))).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).transferStVaultOwnership(certainAddress("vault-delegation-layer-voting-new-owner"))).to.be.revertedWithCustomError(
         delegation,
         "NotACommitteeMember",
       );
