@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting,
+  Delegation,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   OssifiableProxy,
@@ -13,7 +14,6 @@ import {
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
-  Delegation,
 } from "typechain-types";
 
 import { certainAddress, createVaultProxy, ether } from "lib";
@@ -122,17 +122,17 @@ describe("VaultFactory.sol", () => {
 
   context("createVault", () => {
     it("works with empty `params`", async () => {
-      const { tx, vault, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
-        .withArgs(await delegation.getAddress(), await vault.getAddress());
+        .withArgs(await delegation_.getAddress(), await vault.getAddress());
 
       await expect(tx)
         .to.emit(vaultFactory, "DelegationCreated")
-        .withArgs(await vaultOwner1.getAddress(), await delegation.getAddress());
+        .withArgs(await vaultOwner1.getAddress(), await delegation_.getAddress());
 
-      expect(await delegation.getAddress()).to.eq(await vault.owner());
+      expect(await delegation_.getAddress()).to.eq(await vault.owner());
       expect(await vault.getBeacon()).to.eq(await vaultFactory.getAddress());
     });
 

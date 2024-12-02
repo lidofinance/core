@@ -5,10 +5,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   BeaconProxy,
+  Delegation,
   OssifiableProxy,
   OssifiableProxy__factory,
   StakingVault,
-  Delegation,
   VaultFactory,
 } from "typechain-types";
 

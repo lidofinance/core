@@ -5,12 +5,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting,
+  Delegation,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   OssifiableProxy,
   StakingVault,
   StETH__HarnessForVaultHub,
-  Delegation,
   VaultFactory,
 } from "typechain-types";
 
@@ -76,9 +76,9 @@ describe("Delegation.sol", () => {
 
   context("performanceDue", () => {
     it("performanceDue ", async () => {
-      const { delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await delegation.performanceDue();
+      await delegation_.performanceDue();
     });
   });
 
@@ -91,18 +91,18 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if already initialized", async () => {
-      const { vault: vault1, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { vault: vault1, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(delegation.initialize(admin, vault1)).to.revertedWithCustomError(
+      await expect(delegation_.initialize(admin, vault1)).to.revertedWithCustomError(
         delegation,
         "AlreadyInitialized",
       );
     });
 
     it("initialize", async () => {
-      const { tx, delegation } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { tx, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(tx).to.emit(delegation, "Initialized");
+      await expect(tx).to.emit(delegation_, "Initialized");
     });
   });
 });

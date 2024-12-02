@@ -1,9 +1,13 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
+import { Delegation,StakingVault__MockForVaultDelegationLayer } from "typechain-types";
+
 import { advanceChainTime, certainAddress, days, proxify } from "lib";
+
 import { Snapshot } from "test/suite";
-import { StakingVault__MockForVaultDelegationLayer, Delegation } from "typechain-types";
 
 describe("Delegation:Voting", () => {
   let deployer: HardhatEthersSigner;

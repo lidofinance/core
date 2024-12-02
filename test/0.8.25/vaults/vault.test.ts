@@ -5,11 +5,11 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Delegation,
   DepositContract__MockForBeaconChainDepositor,
   StakingVault,
   StakingVault__factory,
   StETH__HarnessForVaultHub,
-  Delegation,
   VaultFactory,
   VaultHub__MockForVault,
 } from "typechain-types";
