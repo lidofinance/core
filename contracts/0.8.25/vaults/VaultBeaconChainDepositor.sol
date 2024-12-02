@@ -17,6 +17,15 @@ interface IDepositContract {
     ) external payable;
 }
 
+/**
+ * @dev This contract is used to deposit keys to the Beacon Chain.
+ * This is the same as BeaconChainDepositor except the Solidity version is 0.8.25.
+ * We cannot use the BeaconChainDepositor contract from the common library because
+ * it is using an older Solidity version. We also cannot have a common contract with a version
+ * range because that would break the verification of the old contracts using the 0.8.9 version of this contract.
+ *
+ * This contract will be refactored to support custom deposit amounts for MAX_EB.
+ */
 contract VaultBeaconChainDepositor {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant SIGNATURE_LENGTH = 96;
