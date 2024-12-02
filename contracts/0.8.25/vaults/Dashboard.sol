@@ -297,7 +297,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _ether Amount of ether to rebalance
      */
     function _rebalanceVault(uint256 _ether) internal {
-        stakingVault.rebalance{value: msg.value}(_ether);
+        stakingVault.rebalance(_ether);
     }
 
     // ==================== Events ====================
