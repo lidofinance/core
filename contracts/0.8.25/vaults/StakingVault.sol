@@ -12,15 +12,74 @@ import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
-import {Versioned} from "../utils/Versioned.sol";
 
-// TODO: extract interface and implement it
-
+/**
+ * @title StakingVault
+ * @author Lido
+ * @notice A staking contract that manages staking operations and ETH deposits to the Beacon Chain
+ * @dev
+ *
+ * ARCHITECTURE & STATE MANAGEMENT
+ * ------------------------------
+ * The vault uses ERC7201 namespaced storage pattern with a main VaultStorage struct containing:
+ * - report: Latest metrics snapshot (valuation and inOutDelta at time of report)
+ * - locked: Amount of ETH that cannot be withdrawn (managed by VaultHub)
+ * - inOutDelta: Running tally of deposits minus withdrawals since last report
+ *
+ * CORE MECHANICS
+ * -------------
+ * 1. Deposits & Withdrawals
+ *    - Owner can deposit ETH via fund()
+ *    - Owner can withdraw unlocked ETH via withdraw()
+ *    - All deposits/withdrawals update inOutDelta
+ *    - Withdrawals are only allowed if vault remains healthy
+ *
+ * 2. Valuation & Health
+ *    - Total value = report.valuation + (current inOutDelta - report.inOutDelta)
+ *    - Vault is "healthy" if total value >= locked amount
+ *    - Unlocked ETH = max(0, total value - locked amount)
+ *
+ * 3. Beacon Chain Integration
+ *    - Can deposit validators (32 ETH each) to Beacon Chain
+ *    - Withdrawal credentials are derived from vault address
+ *    - Can request validator exits when needed by emitting the event,
+ *      which acts as a signal to the operator to exit the validator,
+ *      Triggerable Exits are not supported for now
+ *
+ * 4. Reporting & Updates
+ *    - VaultHub periodically updates report data
+ *    - Reports capture valuation and inOutDelta at the time of report
+ *    - VaultHub can increase locked amount outside of reports
+ *
+ * 5. Rebalancing
+ *    - Owner or VaultHub can trigger rebalancing when unhealthy
+ *    - Moves ETH between vault and VaultHub to maintain health
+ *
+ * ACCESS CONTROL
+ * -------------
+ * - Owner: Can fund, withdraw, deposit to beacon chain, request exits
+ * - VaultHub: Can update reports, lock amounts, force rebalance when unhealthy
+ * - Beacon: Controls implementation upgrades
+ *
+ * SECURITY CONSIDERATIONS
+ * ----------------------
+ * - Locked amounts can only increase outside of reports
+ * - Withdrawals blocked if they would make vault unhealthy
+ * - Only VaultHub can update core state via reports
+ * - Uses ERC7201 storage pattern to prevent upgrade collisions
+ * - Withdrawal credentials are immutably tied to vault address
+ *
+ */
 contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
+    /**
+     * @dev Main storage structure for the vault
+     * @param report Latest report data containing valuation and inOutDelta
+     * @param locked Amount of ETH locked in the vault and cannot be withdrawn
+     * @param inOutDelta Net difference between deposits and withdrawals
+     */
     struct VaultStorage {
         IStakingVault.Report report;
-
         uint128 locked;
         int128 inOutDelta;
     }
@@ -58,18 +117,34 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         __Ownable_init(_owner);
     }
 
-    function version() public pure virtual returns(uint64) {
+    /**
+     * @notice Returns the current version of the contract
+     * @return uint64 contract version number
+     */
+    function version() public pure virtual returns (uint64) {
         return _version;
     }
 
+    /**
+     * @notice Returns the version of the contract when it was initialized
+     * @return uint64 The initialized version number
+     */
     function getInitializedVersion() public view returns (uint64) {
         return _getInitializedVersion();
     }
 
+    /**
+     * @notice Returns the beacon proxy address that controls this contract's implementation
+     * @return address The beacon proxy address
+     */
     function getBeacon() public view returns (address) {
         return ERC1967Utils.getBeacon();
     }
 
+    /**
+     * @notice Returns the address of the VaultHub contract
+     * @return address The VaultHub contract address
+     */
     function vaultHub() public view override returns (address) {
         return address(VAULT_HUB);
     }
@@ -80,23 +155,38 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit ExecutionLayerRewardsReceived(msg.sender, msg.value);
     }
 
+    /**
+     * @notice Returns the TVL of the vault
+     * @return uint256 total valuation in ETH
+     * @dev Calculated as:
+     *  latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
+     */
     function valuation() public view returns (uint256) {
         VaultStorage storage $ = _getVaultStorage();
-        return uint256(int256(
-            int128($.report.valuation)
-            + $.inOutDelta
-            - $.report.inOutDelta
-        ));
+        return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
     }
 
+    /**
+     * @notice Checks if the vault is in a healthy state
+     * @return true if valuation >= locked amount
+     */
     function isHealthy() public view returns (bool) {
         return valuation() >= _getVaultStorage().locked;
     }
 
-    function locked() external view returns(uint256) {
+    /**
+     * @notice Returns the current amount of ETH locked in the vault
+     * @return uint256 The amount of locked ETH
+     */
+    function locked() external view returns (uint256) {
         return _getVaultStorage().locked;
     }
 
+    /**
+     * @notice Returns amount of ETH available for withdrawal
+     * @return uint256 unlocked ETH that can be withdrawn
+     * @dev Calculated as: valuation - locked amount (returns 0 if locked > valuation)
+     */
     function unlocked() public view returns (uint256) {
         uint256 _valuation = valuation();
         uint256 _locked = _getVaultStorage().locked;
@@ -106,14 +196,26 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         return _valuation - _locked;
     }
 
-    function inOutDelta() external view returns(int256) {
+    /**
+     * @notice Returns the net difference between deposits and withdrawals
+     * @return int256 The current inOutDelta value
+     */
+    function inOutDelta() external view returns (int256) {
         return _getVaultStorage().inOutDelta;
     }
 
+    /**
+     * @notice Returns the withdrawal credentials for Beacon Chain deposits
+     * @return bytes32 withdrawal credentials derived from vault address
+     */
     function withdrawalCredentials() public view returns (bytes32) {
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
+    /**
+     * @notice Allows owner to fund the vault with ETH
+     * @dev Updates inOutDelta to track the net deposits
+     */
     function fund() external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
@@ -123,6 +225,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit Funded(msg.sender, msg.value);
     }
 
+    /**
+     * @notice Allows owner to withdraw unlocked ETH
+     * @param _recipient Address to receive the ETH
+     * @param _ether Amount of ETH to withdraw
+     * @dev Checks for sufficient unlocked balance and vault health
+     */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
@@ -140,6 +248,13 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
 
+    /**
+     * @notice Deposits ETH to the Beacon Chain for validators
+     * @param _numberOfDeposits Number of 32 ETH deposits to make
+     * @param _pubkeys Validator public keys
+     * @param _signatures Validator signatures
+     * @dev Ensures vault is healthy and handles deposit logistics
+     */
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
@@ -152,10 +267,19 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
     }
 
+    /**
+     * @notice Requests validator exit from the Beacon Chain
+     * @param _validatorPublicKey Public key of validator to exit
+     */
     function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyOwner {
         emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
+    /**
+     * @notice Updates the locked ETH amount
+     * @param _locked New amount to lock
+     * @dev Can only be called by VaultHub and cannot decrease locked amount
+     */
     function lock(uint256 _locked) external {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
 
@@ -167,15 +291,16 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         emit Locked(_locked);
     }
 
+    /**
+     * @notice Rebalances ETH between vault and VaultHub
+     * @param _ether Amount of ETH to rebalance
+     * @dev Can be called by owner or VaultHub when unhealthy
+     */
     function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
-        // TODO: should we revert on msg.value > _ether
 
         if (owner() == msg.sender || (!isHealthy() && msg.sender == address(VAULT_HUB))) {
-            // force rebalance
-            // TODO: check rounding here
-            // mint some stETH in Lido v2 and burn it on the vault
             VaultStorage storage $ = _getVaultStorage();
             $.inOutDelta -= SafeCast.toInt128(int256(_ether));
 
@@ -187,11 +312,22 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         }
     }
 
+    /**
+     * @notice Returns the latest report data for the vault
+     * @return Report struct containing valuation and inOutDelta from last report
+     */
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
         return $.report;
     }
 
+    /**
+     * @notice Updates vault report with new metrics
+     * @param _valuation New total valuation
+     * @param _inOutDelta New in/out delta
+     * @param _locked New locked amount
+     * @dev Can only be called by VaultHub
+     */
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("update", msg.sender);
 

@@ -591,16 +591,41 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
     }
 
+    /// @notice Mint stETH shares
+    /// @param _recipient recipient of the shares
+    /// @param _sharesAmount amount of shares to mint
+    /// @dev can be called only by accounting
+    function mintShares(address _recipient, uint256 _sharesAmount) public {
+        _auth(getLidoLocator().accounting());
+
+        _mintShares(_recipient, _sharesAmount);
+        // emit event after minting shares because we are always having the net new ether under the hood
+        // for vaults we have new locked ether and for fees we have a part of rewards
+        _emitTransferAfterMintingShares(_recipient, _sharesAmount);
+    }
+
+    /// @notice Burn stETH shares from the sender address
+    /// @param _sharesAmount amount of shares to burn
+    /// @dev can be called only by burner
+    function burnShares(uint256 _sharesAmount) public {
+        _auth(getLidoLocator().burner());
+
+        _burnShares(msg.sender, _sharesAmount);
+
+        // historically there is no events for this kind of burning
+        // TODO: should burn events be emitted here?
+        // maybe TransferShare for cover burn and all events for withdrawal burn
+    }
+
     /// @notice Mint shares backed by external vaults
     ///
     /// @param _receiver Address to receive the minted shares
     /// @param _amountOfShares Amount of shares to mint
-    ///
-    /// @dev authentication goes through isMinter in StETH
+    /// @return stethAmount The amount of stETH minted
+    /// @dev can be called only by accounting (authentication in mintShares method)
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
-        if (_receiver == address(0)) revert("MINT_RECEIVER_ZERO_ADDRESS");
-        if (_amountOfShares == 0) revert("MINT_ZERO_AMOUNT_OF_SHARES");
-
+        require(_receiver != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
+        require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
         _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
@@ -620,11 +645,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @notice Burns external shares from a specified account
     ///
     /// @param _amountOfShares Amount of shares to burn
-    ///
-    /// @dev authentication goes through _isBurner() method
     function burnExternalShares(uint256 _amountOfShares) external {
-        if (_amountOfShares == 0) revert("BURN_ZERO_AMOUNT_OF_SHARES");
-
+        require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
+        _auth(getLidoLocator().accounting());
         _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
@@ -634,7 +657,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(extBalance - stethAmount);
 
-        burnShares(msg.sender, _amountOfShares);
+        _burnShares(msg.sender, _amountOfShares);
+
+        _emitTransferEvents(msg.sender, address(0), stethAmount, _amountOfShares);
 
         emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
@@ -914,16 +939,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function _getTotalPooledEther() internal view returns (uint256) {
         return _getPooledEther().add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
-    }
-
-    /// @dev override isMinter from StETH to allow accounting to mint
-    function _isMinter(address _sender) internal view returns (bool) {
-        return _sender == getLidoLocator().accounting();
-    }
-
-    /// @dev override isBurner from StETH to allow accounting to burn
-    function _isBurner(address _sender) internal view returns (bool) {
-        return _sender == getLidoLocator().burner() || _sender == getLidoLocator().accounting();
     }
 
     function _pauseStaking() internal {

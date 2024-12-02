@@ -5,13 +5,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Delegation,
   DepositContract__MockForBeaconChainDepositor,
   StakingVault,
   StakingVault__factory,
   StETH__HarnessForVaultHub,
   VaultFactory,
   VaultHub__MockForVault,
-  VaultStaffRoom,
 } from "typechain-types";
 
 import { createVaultProxy, ether, impersonate } from "lib";
@@ -24,6 +24,7 @@ describe("StakingVault.sol", async () => {
   let executionLayerRewardsSender: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
+  let lidoAgent: HardhatEthersSigner;
   let delegatorSigner: HardhatEthersSigner;
 
   let vaultHub: VaultHub__MockForVault;
@@ -32,13 +33,13 @@ describe("StakingVault.sol", async () => {
   let stakingVault: StakingVault;
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
-  let vaultStaffRoomImpl: VaultStaffRoom;
+  let stVaulOwnerWithDelegation: Delegation;
   let vaultProxy: StakingVault;
 
   let originalState: string;
 
   before(async () => {
-    [deployer, owner, executionLayerRewardsSender, stranger, holder] = await ethers.getSigners();
+    [deployer, owner, executionLayerRewardsSender, stranger, holder, lidoAgent] = await ethers.getSigners();
 
     vaultHub = await ethers.deployContract("VaultHub__MockForVault", { from: deployer });
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
@@ -51,16 +52,16 @@ describe("StakingVault.sol", async () => {
     vaultCreateFactory = new StakingVault__factory(owner);
     stakingVault = await ethers.getContractFactory("StakingVault").then((f) => f.deploy(vaultHub, depositContract));
 
-    vaultStaffRoomImpl = await ethers.deployContract("VaultStaffRoom", [steth], { from: deployer });
+    stVaulOwnerWithDelegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
 
-    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, vaultStaffRoomImpl], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, stVaulOwnerWithDelegation], {
       from: deployer,
     });
 
-    const { vault, vaultStaffRoom } = await createVaultProxy(vaultFactory, owner);
+    const { vault, delegation } = await createVaultProxy(vaultFactory, owner, lidoAgent);
     vaultProxy = vault;
 
-    delegatorSigner = await impersonate(await vaultStaffRoom.getAddress(), ether("100.0"));
+    delegatorSigner = await impersonate(await delegation.getAddress(), ether("100.0"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

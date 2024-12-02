@@ -22,8 +22,8 @@ export async function main() {
   ]);
   const impAddress = await imp.getAddress();
 
-  // Deploy VaultStaffRoom implementation contract
-  const room = await deployWithoutProxy(Sk.vaultStaffRoomImpl, "VaultStaffRoom", deployer, [lidoAddress]);
+  // Deploy Delegation implementation contract
+  const room = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [lidoAddress]);
   const roomAddress = await room.getAddress();
 
   // Deploy VaultFactory contract
