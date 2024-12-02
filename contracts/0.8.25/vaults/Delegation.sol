@@ -414,9 +414,11 @@ contract Delegation is Dashboard, IReportReceiver {
      *
      * 4. Gas Optimization:
      *    - Votes are stored in a deferred manner using a memory array
-     *    - Storage writes only occur if the function cannot be executed immediately
+     *    - Vote storage writes only occur if the function cannot be executed immediately
      *    - This prevents unnecessary storage writes when all votes are present,
-     *      because the votes are cleared anyway after the function is executed
+     *      because the votes are cleared anyway after the function is executed,
+     *    - i.e. this optimization is beneficial for the deciding caller and
+     *      saves 1 storage write for each role the deciding caller has
      *
      * @param _committee Array of role identifiers that form the voting committee
      * @param _votingPeriod Time window in seconds during which votes remain valid
