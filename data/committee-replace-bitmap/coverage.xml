@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3303"  lines-covered="2816"  line-rate="0.8526"  branches-valid="1536"  branches-covered="1213"  branch-rate="0.7897"  timestamp="1733135524193" complexity="0" version="0.1">
+<coverage lines-valid="3303"  lines-covered="2816"  line-rate="0.8526"  branches-valid="1536"  branches-covered="1213"  branch-rate="0.7897"  timestamp="1733136022791" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2125,7 +2125,7 @@
 				<lines><line number="386"  hits="0" /></lines>
 			</method>
 			<method name="onlyIfVotedBy"  hits="23"  signature="()V" >
-				<lines><line number="431"  hits="23" /></lines>
+				<lines><line number="433"  hits="23" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2191,30 +2191,30 @@
 			<line number="388"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="389"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="391"  hits="0"  branch="false" />
-			<line number="432"  hits="23"  branch="false" />
-			<line number="433"  hits="23"  branch="false" />
 			<line number="434"  hits="23"  branch="false" />
 			<line number="435"  hits="23"  branch="false" />
 			<line number="436"  hits="23"  branch="false" />
 			<line number="437"  hits="23"  branch="false" />
+			<line number="438"  hits="23"  branch="false" />
 			<line number="439"  hits="23"  branch="false" />
-			<line number="440"  hits="54"  branch="false" />
-			<line number="442"  hits="54"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="443"  hits="33"  branch="false" />
-			<line number="444"  hits="33"  branch="false" />
+			<line number="441"  hits="23"  branch="false" />
+			<line number="442"  hits="54"  branch="false" />
+			<line number="444"  hits="54"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="445"  hits="33"  branch="false" />
+			<line number="446"  hits="33"  branch="false" />
 			<line number="447"  hits="33"  branch="false" />
-			<line number="449"  hits="5"  branch="false" />
-			<line number="453"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="455"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="456"  hits="13"  branch="false" />
-			<line number="457"  hits="28"  branch="false" />
-			<line number="458"  hits="28"  branch="false" />
-			<line number="460"  hits="13"  branch="false" />
-			<line number="462"  hits="8"  branch="false" />
-			<line number="463"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="449"  hits="33"  branch="false" />
+			<line number="451"  hits="5"  branch="false" />
+			<line number="455"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="457"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="458"  hits="13"  branch="false" />
+			<line number="459"  hits="28"  branch="false" />
+			<line number="460"  hits="28"  branch="false" />
+			<line number="462"  hits="13"  branch="false" />
 			<line number="464"  hits="8"  branch="false" />
-			<line number="465"  hits="8"  branch="false" />
+			<line number="465"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="466"  hits="8"  branch="false" />
+			<line number="467"  hits="8"  branch="false" />
 		</lines>
 		</class>
 		<class name="StakingVault.sol"  filename="contracts/0.8.25/vaults/StakingVault.sol"  line-rate="0.2879"  branch-rate="0.25" >
