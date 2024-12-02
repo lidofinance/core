@@ -391,10 +391,41 @@ contract Delegation is Dashboard, IReportReceiver {
     }
 
     /**
-     * @dev Modifier that requires approval from all committee members within a voting period.
-     * Uses a bitmap to track new votes within the call instead of updating storage immediately.
-     * @param _committee Array of role identifiers that form the voting committee.
-     * @param _votingPeriod Time window in seconds during which votes remain valid.
+     * @dev Modifier that implements a mechanism for multi-role committee approval.
+     * Each unique function call (identified by msg.data: selector + arguments) requires
+     * approval from all committee role members within a specified time window.
+     *
+     * The voting process works as follows:
+     * 1. When a committee member calls the function:
+     *    - Their vote is counted immediately
+     *    - If not enough votes exist, their vote is recorded
+     *    - If they're not a committee member, the call reverts
+     *
+     * 2. Vote counting:
+     *    - Counts the current caller's votes if they're a committee member
+     *    - Counts existing votes that are within the voting period
+     *    - All votes must occur within the same voting period window
+     *
+     * 3. Execution:
+     *    - If all committee members have voted within the period, executes the function
+     *    - On successful execution, clears all voting state for this call
+     *    - If not enough votes, stores the current votes
+     *    - Thus, if the caller has all the roles, the function is executed immediately
+     *
+     * 4. Gas Optimization:
+     *    - Votes are stored in a deferred manner using a memory array
+     *    - Storage writes only occur if the function cannot be executed immediately
+     *    - This prevents unnecessary storage writes when all votes are present,
+     *      because the votes are cleared anyway after the function is executed
+     *
+     * @param _committee Array of role identifiers that form the voting committee
+     * @param _votingPeriod Time window in seconds during which votes remain valid
+     *
+     * @notice Votes expire after the voting period and must be recast
+     * @notice All committee members must vote within the same voting period
+     * @notice Only committee members can initiate votes
+     *
+     * @custom:security-note Each unique function call (including parameters) requires its own set of votes
      */
     modifier onlyIfVotedBy(bytes32[] memory _committee, uint256 _votingPeriod) {
         bytes32 callId = keccak256(msg.data);
