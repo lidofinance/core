@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3303"  lines-covered="2816"  line-rate="0.8526"  branches-valid="1542"  branches-covered="1218"  branch-rate="0.7898999999999999"  timestamp="1733126400351" complexity="0" version="0.1">
+<coverage lines-valid="3303"  lines-covered="2816"  line-rate="0.8526"  branches-valid="1542"  branches-covered="1218"  branch-rate="0.7898999999999999"  timestamp="1733126892380" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2370,37 +2370,37 @@
 		<class name="VaultBeaconChainDepositor.sol"  filename="contracts/0.8.25/vaults/VaultBeaconChainDepositor.sol"  line-rate="0.09519999999999999"  branch-rate="0.3333" >
 		<methods>
 			<method name="constructor"  hits="6"  signature="()V" >
-				<lines><line number="31"  hits="6" /></lines>
+				<lines><line number="40"  hits="6" /></lines>
 			</method>
 			<method name="_makeBeaconChainDeposits32ETH"  hits="0"  signature="()V" >
-				<lines><line number="41"  hits="0" /></lines>
+				<lines><line number="50"  hits="0" /></lines>
 			</method>
 			<method name="_computeDepositDataRoot"  hits="0"  signature="()V" >
-				<lines><line number="77"  hits="0" /></lines>
+				<lines><line number="86"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="32"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="33"  hits="5"  branch="false" />
-			<line number="47"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="48"  hits="0"  branch="false" />
-			<line number="50"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="51"  hits="0"  branch="false" />
-			<line number="54"  hits="0"  branch="false" />
-			<line number="55"  hits="0"  branch="false" />
+			<line number="41"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="42"  hits="5"  branch="false" />
+			<line number="56"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="57"  hits="0"  branch="false" />
-			<line number="58"  hits="0"  branch="false" />
-			<line number="59"  hits="0"  branch="false" />
-			<line number="61"  hits="0"  branch="false" />
+			<line number="59"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="60"  hits="0"  branch="false" />
+			<line number="63"  hits="0"  branch="false" />
+			<line number="64"  hits="0"  branch="false" />
+			<line number="66"  hits="0"  branch="false" />
+			<line number="67"  hits="0"  branch="false" />
 			<line number="68"  hits="0"  branch="false" />
-			<line number="69"  hits="0"  branch="false" />
-			<line number="83"  hits="0"  branch="false" />
-			<line number="84"  hits="0"  branch="false" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="86"  hits="0"  branch="false" />
-			<line number="88"  hits="0"  branch="false" />
-			<line number="89"  hits="0"  branch="false" />
+			<line number="70"  hits="0"  branch="false" />
+			<line number="77"  hits="0"  branch="false" />
+			<line number="78"  hits="0"  branch="false" />
+			<line number="92"  hits="0"  branch="false" />
 			<line number="93"  hits="0"  branch="false" />
+			<line number="94"  hits="0"  branch="false" />
+			<line number="95"  hits="0"  branch="false" />
+			<line number="97"  hits="0"  branch="false" />
+			<line number="98"  hits="0"  branch="false" />
+			<line number="102"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="VaultFactory.sol"  filename="contracts/0.8.25/vaults/VaultFactory.sol"  line-rate="1"  branch-rate="0.6667000000000001" >
