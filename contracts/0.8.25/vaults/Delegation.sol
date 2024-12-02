@@ -53,7 +53,8 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
-    /** @notice Role for the operator
+    /** 
+     * @notice Role for the operator
      * Operator can:
      * - claim the performance due
      * - vote on performance fee changes
