@@ -88,7 +88,7 @@ describe("Delegation:Voting", () => {
       // updated with a single transaction
       await delegation.connect(manager).setPerformanceFee(newFee);
       expect(await delegation.performanceFee()).to.equal(newFee);
-    })
+    });
 
     it("does not execute if the vote is expired", async () => {
       await delegation.grantRole(await delegation.MANAGER_ROLE(), manager);
@@ -113,13 +113,13 @@ describe("Delegation:Voting", () => {
     });
   });
 
-
   describe("transferStakingVaultOwnership", () => {
     it("reverts if the caller does not have the required role", async () => {
-      await expect(delegation.connect(stranger).transferStVaultOwnership(certainAddress("vault-delegation-layer-voting-new-owner"))).to.be.revertedWithCustomError(
-        delegation,
-        "NotACommitteeMember",
-      );
+      await expect(
+        delegation
+          .connect(stranger)
+          .transferStVaultOwnership(certainAddress("vault-delegation-layer-voting-new-owner")),
+      ).to.be.revertedWithCustomError(delegation, "NotACommitteeMember");
     });
 
     it("executes if called by all distinct committee members", async () => {
@@ -155,7 +155,7 @@ describe("Delegation:Voting", () => {
       // updated with a single transaction
       await delegation.connect(lidoDao).transferStVaultOwnership(newOwner);
       expect(await stakingVault.owner()).to.equal(newOwner);
-    })
+    });
 
     it("does not execute if the vote is expired", async () => {
       await delegation.grantRole(await delegation.MANAGER_ROLE(), manager);

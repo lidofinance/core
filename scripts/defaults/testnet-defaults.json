@@ -78,7 +78,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -94,23 +94,26 @@
   },
   "depositSecurityModule": {
     "deployParameters": {
-      "maxDepositsPerBlock": 150,
-      "minDepositBlockDistance": 5,
+      "maxOperatorsPerUnvetting": 200,
       "pauseIntentValidityPeriodBlocks": 6646,
       "usePredefinedAddressInstead": null
     }
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "churnValidatorsPerDayLimit": 1500,
-      "oneOffCLBalanceDecreaseBPLimit": 500,
+      "exitedValidatorsPerDayLimit": 1500,
+      "appearedValidatorsPerDayLimit": 1500,
+      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,
       "maxValidatorExitRequestsPerReport": 2000,
-      "maxAccountingExtraDataListItemsCount": 100,
-      "maxNodeOperatorsPerExtraDataItemCount": 100,
+      "maxItemsPerExtraDataTransaction": 8,
+      "maxNodeOperatorsPerExtraDataItem": 24,
       "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 5000000
+      "maxPositiveTokenRebase": 5000000,
+      "initialSlashingAmountPWei": 1000,
+      "inactivityPenaltiesAmountPWei": 101,
+      "clBalanceOraclesErrorUpperBPLimit": 50
     }
   },
   "oracleDaemonConfig": {
@@ -134,7 +137,7 @@
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "curated-onchain-v1",
+      "stakingModuleTypeId": "simple-dvt-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },

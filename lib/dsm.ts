@@ -33,39 +33,75 @@ export class DSMAttestMessage extends DSMMessage {
   blockHash: string;
   depositRoot: string;
   stakingModule: number;
-  keysOpIndex: number;
+  nonce: number;
 
-  constructor(blockNumber: number, blockHash: string, depositRoot: string, stakingModule: number, keysOpIndex: number) {
+  constructor(blockNumber: number, blockHash: string, depositRoot: string, stakingModule: number, nonce: number) {
     super();
     this.blockNumber = blockNumber;
     this.blockHash = blockHash;
     this.depositRoot = depositRoot;
     this.stakingModule = stakingModule;
-    this.keysOpIndex = keysOpIndex;
+    this.nonce = nonce;
   }
 
   get hash() {
     return solidityPackedKeccak256(
       ["bytes32", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
-      [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.keysOpIndex],
+      [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.nonce],
     );
   }
 }
 
 export class DSMPauseMessage extends DSMMessage {
   blockNumber: number;
-  stakingModule: number;
 
-  constructor(blockNumber: number, stakingModule: number) {
+  constructor(blockNumber: number) {
     super();
     this.blockNumber = blockNumber;
+  }
+
+  get hash() {
+    return solidityPackedKeccak256(["bytes32", "uint256"], [this.messagePrefix, this.blockNumber]);
+  }
+}
+
+export class DSMUnvetMessage extends DSMMessage {
+  blockNumber: number;
+  blockHash: string;
+  stakingModule: number;
+  nonce: number;
+  nodeOperatorIds: string;
+  vettedSigningKeysCounts: string;
+
+  constructor(
+    blockNumber: number,
+    blockHash: string,
+    stakingModule: number,
+    nonce: number,
+    nodeOperatorIds: string,
+    vettedSigningKeysCounts: string,
+  ) {
+    super();
+    this.blockNumber = blockNumber;
+    this.blockHash = blockHash;
     this.stakingModule = stakingModule;
+    this.nonce = nonce;
+    this.nodeOperatorIds = nodeOperatorIds;
+    this.vettedSigningKeysCounts = vettedSigningKeysCounts;
   }
 
   get hash() {
     return solidityPackedKeccak256(
-      ["bytes32", "uint256", "uint256"],
-      [this.messagePrefix, this.blockNumber, this.stakingModule],
+      ["bytes32", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
+      [
+        this.messagePrefix,
+        this.blockNumber,
+        this.blockHash,
+        this.stakingModule,
+        this.nonce,
+        this.nodeOperatorIds,
+        this.vettedSigningKeysCounts,
+      ],
     );
   }
 }

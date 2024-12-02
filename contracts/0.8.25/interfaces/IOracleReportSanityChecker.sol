@@ -27,7 +27,7 @@ interface IOracleReportSanityChecker {
         uint256 _sharesRequestedToBurn,
         uint256 _preCLValidators,
         uint256 _postCLValidators
-    ) external view;
+    ) external;
 
     //
     function checkWithdrawalQueueOracleReport(

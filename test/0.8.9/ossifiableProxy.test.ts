@@ -28,7 +28,7 @@ describe("OssifiableProxy.sol", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  describe("deploy", () => {
+  context("deploy", () => {
     it("with empty calldata", async () => {
       const impl = await ethers.deployContract("Initializable__Mock");
       const newProxy = await ethers.deployContract("OssifiableProxy", [impl, admin, "0x"]);
@@ -60,7 +60,7 @@ describe("OssifiableProxy.sol", () => {
     });
   });
 
-  describe("getters", () => {
+  context("getters", () => {
     it("proxy__getAdmin()", async () => {
       expect(await proxy.proxy__getAdmin()).to.equal(await admin.getAddress());
     });
@@ -74,7 +74,7 @@ describe("OssifiableProxy.sol", () => {
     });
   });
 
-  describe("proxy__ossify()", () => {
+  context("proxy__ossify()", () => {
     it("should ossify the proxy when called by admin", async () => {
       await expect(proxy.connect(admin).proxy__ossify()).to.emit(proxy, "ProxyOssified");
       expect(await proxy.proxy__getIsOssified()).to.be.true;
@@ -95,7 +95,7 @@ describe("OssifiableProxy.sol", () => {
     });
   });
 
-  describe("proxy__changeAdmin()", () => {
+  context("proxy__changeAdmin()", () => {
     it("should fail to change admin when called by a stranger", async () => {
       await expect(
         proxy.connect(stranger).proxy__changeAdmin(await stranger.getAddress()),
@@ -130,7 +130,7 @@ describe("OssifiableProxy.sol", () => {
     });
   });
 
-  describe("proxy__upgradeTo()", () => {
+  context("proxy__upgradeTo()", () => {
     it('reverts with error "NotAdmin()" called by stranger', async () => {
       await expect(
         proxy.connect(stranger).proxy__upgradeTo(await currentImpl.getAddress()),
@@ -161,7 +161,7 @@ describe("OssifiableProxy.sol", () => {
     });
   });
 
-  describe("proxy__upgradeToAndCall()", () => {
+  context("proxy__upgradeToAndCall()", () => {
     it('reverts with error "NotAdmin()" when called by stranger', async () => {
       await expect(
         proxy.connect(stranger).proxy__upgradeToAndCall(await currentImpl.getAddress(), initPayload, false),

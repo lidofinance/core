@@ -128,13 +128,13 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
     function harness__getSigningKeysAllocationData(
         uint256 _keysCount
     )
-        external
-        view
-        returns (
-            uint256 allocatedKeysCount,
-            uint256[] memory nodeOperatorIds,
-            uint256[] memory activeKeyCountsAfterAllocation
-        )
+    external
+    view
+    returns (
+        uint256 allocatedKeysCount,
+        uint256[] memory nodeOperatorIds,
+        uint256[] memory activeKeyCountsAfterAllocation
+    )
     {
         return _getSigningKeysAllocationData(_keysCount);
     }
@@ -171,5 +171,13 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
 
         signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, _newVettedKeys);
         _saveOperatorSigningKeysStats(_nodeOperatorId, signingKeysStats);
+    }
+
+    function harness__setRewardDistributionState(RewardDistributionState _state) external {
+        _updateRewardDistributionState(_state);
+    }
+
+    function harness__setBaseVersion(uint256 _newBaseVersion) external {
+        _setContractVersion(_newBaseVersion);
     }
 }

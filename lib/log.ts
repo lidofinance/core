@@ -23,9 +23,9 @@ const MIN_LINE_LENGTH = 4;
 const LINE_LENGTH = 20;
 const LONG_LINE_LENGTH = 40;
 
-export const OK = gr("[✓]");
-export const NOT_OK = rd("[×]");
-export const WARN = yl("[!]");
+export const OK = "✅";
+export const NOT_OK = "🚨";
+export const WARN = "⚠️";
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 

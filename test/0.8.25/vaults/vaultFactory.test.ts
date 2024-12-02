@@ -141,7 +141,7 @@ describe("VaultFactory.sol", () => {
       expect(await vault.version()).to.eq(1);
     });
 
-    it.skip("works with non-empty `params`", async () => { });
+    it.skip("works with non-empty `params`", async () => {});
   });
 
   context("connect", () => {

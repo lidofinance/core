@@ -71,11 +71,7 @@ export async function createVaultProxy(
   const event = events[0];
   const { vault } = event.args;
 
-  const delegationEvents = findEventsWithInterfaces(
-    receipt,
-    "DelegationCreated",
-    [vaultFactory.interface],
-  );
+  const delegationEvents = findEventsWithInterfaces(receipt, "DelegationCreated", [vaultFactory.interface]);
 
   if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
 
@@ -83,11 +79,7 @@ export async function createVaultProxy(
 
   const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
-  const delegation = (await ethers.getContractAt(
-    "Delegation",
-    delegationAddress,
-    _owner,
-  )) as Delegation;
+  const delegation = (await ethers.getContractAt("Delegation", delegationAddress, _owner)) as Delegation;
 
   return {
     tx,
