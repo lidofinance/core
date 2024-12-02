@@ -401,14 +401,16 @@ contract Delegation is Dashboard, IReportReceiver {
         uint256 committeeSize = _committee.length;
         uint256 votingStart = block.timestamp - _votingPeriod;
         uint256 voteTally = 0;
-        uint256 votesToUpdateBitmap = 0;
+        bool[] memory deferredVotes = new bool[](committeeSize);
+        bool isCommitteeMember = false;
 
         for (uint256 i = 0; i < committeeSize; ++i) {
             bytes32 role = _committee[i];
 
             if (super.hasRole(role, msg.sender)) {
+                isCommitteeMember = true;
                 voteTally++;
-                votesToUpdateBitmap |= (1 << i);
+                deferredVotes[i] = true;
 
                 emit RoleMemberVoted(msg.sender, role, block.timestamp, msg.data);
             } else if (votings[callId][role] >= votingStart) {
@@ -416,7 +418,7 @@ contract Delegation is Dashboard, IReportReceiver {
             }
         }
 
-        if (votesToUpdateBitmap == 0) revert NotACommitteeMember();
+        if (!isCommitteeMember) revert NotACommitteeMember();
 
         if (voteTally == committeeSize) {
             for (uint256 i = 0; i < committeeSize; ++i) {
@@ -426,7 +428,7 @@ contract Delegation is Dashboard, IReportReceiver {
             _;
         } else {
             for (uint256 i = 0; i < committeeSize; ++i) {
-                if ((votesToUpdateBitmap & (1 << i)) != 0) {
+                if (deferredVotes[i]) {
                     bytes32 role = _committee[i];
                     votings[callId][role] = block.timestamp;
                 }
