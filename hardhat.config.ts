@@ -12,6 +12,7 @@ import "hardhat-tracer";
 import "hardhat-watcher";
 import "hardhat-ignore-warnings";
 import "hardhat-contract-sizer";
+import "hardhat-gas-reporter";
 import { globSync } from "glob";
 import { TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS } from "hardhat/builtin-tasks/task-names";
 import { HardhatUserConfig, subtask } from "hardhat/config";
@@ -50,6 +51,9 @@ function loadAccounts(networkName: string) {
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
+  gasReporter: {
+    enabled: true,
+  },
   networks: {
     "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(

@@ -5,17 +5,17 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   BeaconProxy,
+  Delegation,
   OssifiableProxy,
   OssifiableProxy__factory,
   StakingVault,
   VaultFactory,
-  VaultStaffRoom,
 } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 
-import { IVaultStaffRoom } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
-import VaultStaffRoomParamsStruct = IVaultStaffRoom.VaultStaffRoomParamsStruct;
+import { IDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
+import DelegationInitializationParamsStruct = IDelegation.InitializationParamsStruct;
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -44,22 +44,23 @@ interface CreateVaultResponse {
   tx: ContractTransactionResponse;
   proxy: BeaconProxy;
   vault: StakingVault;
-  vaultStaffRoom: VaultStaffRoom;
+  delegation: Delegation;
 }
 
 export async function createVaultProxy(
   vaultFactory: VaultFactory,
   _owner: HardhatEthersSigner,
+  _lidoAgent: HardhatEthersSigner,
 ): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
-  const vaultStaffRoomParams: VaultStaffRoomParamsStruct = {
+  const initializationParams: DelegationInitializationParamsStruct = {
     managementFee: 100n,
     performanceFee: 200n,
     manager: await _owner.getAddress(),
     operator: await _owner.getAddress(),
   };
 
-  const tx = await vaultFactory.connect(_owner).createVault("0x", vaultStaffRoomParams);
+  const tx = await vaultFactory.connect(_owner).createVault("0x", initializationParams, _lidoAgent);
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;
@@ -70,23 +71,28 @@ export async function createVaultProxy(
   const event = events[0];
   const { vault } = event.args;
 
-  const vaultStaffRoomEvents = findEventsWithInterfaces(receipt, "VaultStaffRoomCreated", [vaultFactory.interface]);
-  if (vaultStaffRoomEvents.length === 0) throw new Error("VaultStaffRoom creation event not found");
+  const delegationEvents = findEventsWithInterfaces(
+    receipt,
+    "DelegationCreated",
+    [vaultFactory.interface],
+  );
 
-  const { vaultStaffRoom: vaultStaffRoomAddress } = vaultStaffRoomEvents[0].args;
+  if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
+
+  const { delegation: delegationAddress } = delegationEvents[0].args;
 
   const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
-  const vaultStaffRoom = (await ethers.getContractAt(
-    "VaultStaffRoom",
-    vaultStaffRoomAddress,
+  const delegation = (await ethers.getContractAt(
+    "Delegation",
+    delegationAddress,
     _owner,
-  )) as VaultStaffRoom;
+  )) as Delegation;
 
   return {
     tx,
     proxy,
     vault: stakingVault,
-    vaultStaffRoom: vaultStaffRoom,
+    delegation,
   };
 }
