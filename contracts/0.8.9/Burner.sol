@@ -14,9 +14,9 @@ import {IBurner} from "../common/interfaces/IBurner.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
 /**
-  * @title Interface defining ERC20-compatible StETH token
+  * @title Interface defining Lido contract
   */
-interface IStETH is IERC20 {
+interface ILido is IERC20 {
     /**
       * @notice Get stETH amount by the provided shares amount
       * @param _sharesAmount shares amount
@@ -44,7 +44,11 @@ interface IStETH is IERC20 {
         address _sender, address _recipient, uint256 _sharesAmount
     ) external returns (uint256);
 
-    function burnShares(address _account, uint256 _amount) external;
+    /**
+     * @notice Burn shares from the account
+     * @param _amount amount of shares to burn
+     */
+    function burnShares(uint256 _amount) external;
 }
 
 /**
@@ -73,7 +77,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     uint256 private totalNonCoverSharesBurnt;
 
     ILidoLocator public immutable LOCATOR;
-    IStETH public immutable STETH;
+    ILido public immutable LIDO;
 
     /**
       * Emitted when a new stETH burning request is added by the `requestedBy` address.
@@ -148,7 +152,7 @@ contract Burner is IBurner, AccessControlEnumerable {
         _setupRole(REQUEST_BURN_SHARES_ROLE, _stETH);
 
         LOCATOR = ILidoLocator(_locator);
-        STETH = IStETH(_stETH);
+        LIDO = ILido(_stETH);
 
         totalCoverSharesBurnt = _totalCoverSharesBurnt;
         totalNonCoverSharesBurnt = _totalNonCoverSharesBurnt;
@@ -166,8 +170,8 @@ contract Burner is IBurner, AccessControlEnumerable {
       *
       */
     function requestBurnMyStETHForCover(uint256 _stETHAmountToBurn) external onlyRole(REQUEST_BURN_MY_STETH_ROLE) {
-        STETH.transferFrom(msg.sender, address(this), _stETHAmountToBurn);
-        uint256 sharesAmount = STETH.getSharesByPooledEth(_stETHAmountToBurn);
+        LIDO.transferFrom(msg.sender, address(this), _stETHAmountToBurn);
+        uint256 sharesAmount = LIDO.getSharesByPooledEth(_stETHAmountToBurn);
         _requestBurn(sharesAmount, _stETHAmountToBurn, true /* _isCover */);
     }
 
@@ -183,7 +187,7 @@ contract Burner is IBurner, AccessControlEnumerable {
       *
       */
     function requestBurnSharesForCover(address _from, uint256 _sharesAmountToBurn) external onlyRole(REQUEST_BURN_SHARES_ROLE) {
-        uint256 stETHAmount = STETH.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
+        uint256 stETHAmount = LIDO.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
         _requestBurn(_sharesAmountToBurn, stETHAmount, true /* _isCover */);
     }
 
@@ -199,8 +203,8 @@ contract Burner is IBurner, AccessControlEnumerable {
       *
       */
     function requestBurnMyStETH(uint256 _stETHAmountToBurn) external onlyRole(REQUEST_BURN_MY_STETH_ROLE) {
-        STETH.transferFrom(msg.sender, address(this), _stETHAmountToBurn);
-        uint256 sharesAmount = STETH.getSharesByPooledEth(_stETHAmountToBurn);
+        LIDO.transferFrom(msg.sender, address(this), _stETHAmountToBurn);
+        uint256 sharesAmount = LIDO.getSharesByPooledEth(_stETHAmountToBurn);
         _requestBurn(sharesAmount, _stETHAmountToBurn, false /* _isCover */);
     }
 
@@ -216,7 +220,7 @@ contract Burner is IBurner, AccessControlEnumerable {
       *
       */
     function requestBurnShares(address _from, uint256 _sharesAmountToBurn) external onlyRole(REQUEST_BURN_SHARES_ROLE) {
-        uint256 stETHAmount = STETH.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
+        uint256 stETHAmount = LIDO.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
         _requestBurn(_sharesAmountToBurn, stETHAmount, false /* _isCover */);
     }
 
@@ -229,11 +233,11 @@ contract Burner is IBurner, AccessControlEnumerable {
         uint256 excessStETH = getExcessStETH();
 
         if (excessStETH > 0) {
-            uint256 excessSharesAmount = STETH.getSharesByPooledEth(excessStETH);
+            uint256 excessSharesAmount = LIDO.getSharesByPooledEth(excessStETH);
 
             emit ExcessStETHRecovered(msg.sender, excessStETH, excessSharesAmount);
 
-            STETH.transfer(LOCATOR.treasury(), excessStETH);
+            LIDO.transfer(LOCATOR.treasury(), excessStETH);
         }
     }
 
@@ -253,7 +257,7 @@ contract Burner is IBurner, AccessControlEnumerable {
       */
     function recoverERC20(address _token, uint256 _amount) external {
         if (_amount == 0) revert ZeroRecoveryAmount();
-        if (_token == address(STETH)) revert StETHRecoveryWrongFunc();
+        if (_token == address(LIDO)) revert StETHRecoveryWrongFunc();
 
         emit ERC20Recovered(msg.sender, _token, _amount);
 
@@ -268,7 +272,7 @@ contract Burner is IBurner, AccessControlEnumerable {
       * @param _tokenId minted token id
       */
     function recoverERC721(address _token, uint256 _tokenId) external {
-        if (_token == address(STETH)) revert StETHRecoveryWrongFunc();
+        if (_token == address(LIDO)) revert StETHRecoveryWrongFunc();
 
         emit ERC721Recovered(msg.sender, _token, _tokenId);
 
@@ -307,7 +311,7 @@ contract Burner is IBurner, AccessControlEnumerable {
             uint256 sharesToBurnNowForCover = Math.min(_sharesToBurn, memCoverSharesBurnRequested);
 
             totalCoverSharesBurnt += sharesToBurnNowForCover;
-            uint256 stETHToBurnNowForCover = STETH.getPooledEthByShares(sharesToBurnNowForCover);
+            uint256 stETHToBurnNowForCover = LIDO.getPooledEthByShares(sharesToBurnNowForCover);
             emit StETHBurnt(true /* isCover */, stETHToBurnNowForCover, sharesToBurnNowForCover);
 
             coverSharesBurnRequested -= sharesToBurnNowForCover;
@@ -320,14 +324,15 @@ contract Burner is IBurner, AccessControlEnumerable {
             );
 
             totalNonCoverSharesBurnt += sharesToBurnNowForNonCover;
-            uint256 stETHToBurnNowForNonCover = STETH.getPooledEthByShares(sharesToBurnNowForNonCover);
+            uint256 stETHToBurnNowForNonCover = LIDO.getPooledEthByShares(sharesToBurnNowForNonCover);
             emit StETHBurnt(false /* isCover */, stETHToBurnNowForNonCover, sharesToBurnNowForNonCover);
 
             nonCoverSharesBurnRequested -= sharesToBurnNowForNonCover;
             sharesToBurnNow += sharesToBurnNowForNonCover;
         }
 
-        STETH.burnShares(address(this), _sharesToBurn);
+
+        LIDO.burnShares(_sharesToBurn);
         assert(sharesToBurnNow == _sharesToBurn);
     }
 
@@ -359,12 +364,12 @@ contract Burner is IBurner, AccessControlEnumerable {
       * Returns the stETH amount belonging to the burner contract address but not marked for burning.
       */
     function getExcessStETH() public view returns (uint256)  {
-        return STETH.getPooledEthByShares(_getExcessStETHShares());
+        return LIDO.getPooledEthByShares(_getExcessStETHShares());
     }
 
     function _getExcessStETHShares() internal view returns (uint256) {
         uint256 sharesBurnRequested = (coverSharesBurnRequested + nonCoverSharesBurnRequested);
-        uint256 totalShares = STETH.sharesOf(address(this));
+        uint256 totalShares = LIDO.sharesOf(address(this));
 
         // sanity check, don't revert
         if (totalShares <= sharesBurnRequested) {
