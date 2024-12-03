@@ -375,10 +375,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         prevStakeBlockNumber = stakeLimitData.prevStakeBlockNumber;
     }
 
-    /**
-     * @notice Sets the maximum allowed external balance as basis points of total pooled ether
-     * @param _maxExternalBalanceBP The maximum basis points [0-10000]
-     */
+    /// @notice Sets the maximum allowed external balance as basis points of total pooled ether
+    /// @param _maxExternalBalanceBP The maximum basis points [0-10000]
     function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
         _auth(STAKING_CONTROL_ROLE);
 
@@ -387,6 +385,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
 
         emit MaxExternalBalanceBPSet(_maxExternalBalanceBP);
+    }
+
+    /// @return max external balance in basis points
+    function getMaxExternalBalanceBP() external view returns (uint256) {
+        return MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
     }
 
     /**
