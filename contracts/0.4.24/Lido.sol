@@ -495,16 +495,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return EXTERNAL_BALANCE_POSITION.getStorageUint256();
     }
 
-    /// @notice Get the maximum allowed external ether balance
-    ///
-    /// @return max external balance in wei, calculated as basis points of total pooled ether
-    /// @dev Returns the maximum external balance at the current state of protocol
-    function getMaxExternalEther() external view returns (uint256) {
-        return _getBufferedEther()
-            .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientBalance())
-            .mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256())
-            .div(TOTAL_BASIS_POINTS);
+    /// @notice Get the maximum additional stETH amount that can be added to external balance without exceeding limits
+    /// @return Maximum stETH amount that can be added to external balance
+    function getMaxExternalEtherAmount() external view returns (uint256) {
+        return _getMaxExternalEtherAmount();
     }
 
     /**
@@ -928,29 +922,38 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
     }
 
+    /// @notice Calculates maximum additional stETH that can be added to external balance without exceeding limits
+    /// @return Maximum stETH amount that can be added to external balance
+    /// @dev Invariant: (currentExternal + x) / (totalPooled + x) <= maxBP / TOTAL_BP.
+    ///      Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP).
+    ///      Returns 0 if maxBP is 0 or if current external balance already exceeds limit.
+    ///      Returns uint256.max if maxBP >= TOTAL_BASIS_POINTS.
+    function _getMaxAdditionalExternalEther() internal view returns (uint256) {
+        uint256 maxBP = MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
+        uint256 externalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
+        uint256 totalPooledEther = _getTotalPooledEther();
+
+        if (maxBP == 0) return 0;
+        if (maxBP >= TOTAL_BASIS_POINTS) return uint256(-1);
+        if (externalBalance.mul(TOTAL_BASIS_POINTS) > totalPooledEther.mul(maxBP)) return 0;
+
+        return (maxBP.mul(totalPooledEther).sub(externalBalance.mul(TOTAL_BASIS_POINTS)))
+            .div(TOTAL_BASIS_POINTS.sub(maxBP));
+    }
+
     /// @notice Calculates the new external balance after adding stETH and validates against maximum limit
     ///
     /// @param _stethAmount The amount of stETH being added to external balance
     /// @return The new total external balance after adding _stethAmount
-    /// @dev The maximum allowed external balance is calculated as a percentage of total protocol TVL
-    ///      (total pooled ether excluding the new stETH amount). For example, if max is 3000 basis points (30%),
-    ///      external balance cannot exceed 30% of total protocol TVL. Reverts if limit would be exceeded.
+    /// @dev Validates that the new external balance would not exceed the maximum allowed amount
+    ///      by comparing with _getMaxPossibleExternalAmount
     function _getNewExternalBalance(uint256 _stethAmount) internal view returns (uint256) {
-        uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(_stethAmount);
+        uint256 currentExternal = EXTERNAL_BALANCE_POSITION.getStorageUint256();
+        uint256 maxAmountToAdd = _getMaxAdditionalExternalEther();
 
-        // Calculate total protocol TVL excluding the external balance
-        uint256 totalPooledEther = _getBufferedEther()
-            .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientBalance());
+        require(_stethAmount <= maxAmountToAdd, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        // Check that external balance proportion doesn't exceed maximum allowed percentage
-        uint256 maxBasisPoints = MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
-        require(
-            newExternalBalance.mul(TOTAL_BASIS_POINTS) <= totalPooledEther.mul(maxBasisPoints),
-            "EXTERNAL_BALANCE_LIMIT_EXCEEDED"
-        );
-
-        return newExternalBalance;
+        return currentExternal.add(_stethAmount);
     }
 
     function _pauseStaking() internal {
