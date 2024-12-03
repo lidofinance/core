@@ -158,9 +158,9 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         }
 
         uint256 capVaultBalance = stETH.getPooledEthByShares(_shareLimit);
-        uint256 maxExternalBalance = stETH.getMaxExternalEther();
-        if (capVaultBalance + stETH.getExternalEther() > maxExternalBalance) {
-            revert ExternalBalanceCapReached(address(_vault), capVaultBalance, maxExternalBalance);
+        uint256 maxAvailableExternalBalance = stETH.getMaxAvailableExternalBalance();
+        if (capVaultBalance > maxAvailableExternalBalance) {
+            revert ExternalBalanceCapReached(address(_vault), capVaultBalance, maxAvailableExternalBalance);
         }
 
         VaultSocket memory vr = VaultSocket(
@@ -480,7 +480,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxExternalBalance);
+    error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxAvailableExternalBalance);
     error InsufficientValuationToMint(address vault, uint256 valuation);
     error AlreadyExists(address addr);
     error FactoryNotAllowed(address beacon);

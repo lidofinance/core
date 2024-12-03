@@ -375,6 +375,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         prevStakeBlockNumber = stakeLimitData.prevStakeBlockNumber;
     }
 
+    /// @return max external balance in basis points
+    function getMaxExternalBalanceBP() external view returns (uint256) {
+        return MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
+    }
+
     /// @notice Sets the maximum allowed external balance as basis points of total pooled ether
     /// @param _maxExternalBalanceBP The maximum basis points [0-10000]
     function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
@@ -385,11 +390,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
 
         emit MaxExternalBalanceBPSet(_maxExternalBalanceBP);
-    }
-
-    /// @return max external balance in basis points
-    function getMaxExternalBalanceBP() external view returns (uint256) {
-        return MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
     }
 
     /**
@@ -497,8 +497,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @notice Get the maximum additional stETH amount that can be added to external balance without exceeding limits
     /// @return Maximum stETH amount that can be added to external balance
-    function getMaxExternalEtherAmount() external view returns (uint256) {
-        return _getMaxExternalEtherAmount();
+    function getMaxAvailableExternalBalance() external view returns (uint256) {
+        return _getMaxAvailableExternalBalance();
     }
 
     /**
@@ -928,7 +928,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///      Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP).
     ///      Returns 0 if maxBP is 0 or if current external balance already exceeds limit.
     ///      Returns uint256.max if maxBP >= TOTAL_BASIS_POINTS.
-    function _getMaxAdditionalExternalEther() internal view returns (uint256) {
+    function _getMaxAvailableExternalBalance() internal view returns (uint256) {
         uint256 maxBP = MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
         uint256 externalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
         uint256 totalPooledEther = _getTotalPooledEther();
@@ -946,10 +946,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @param _stethAmount The amount of stETH being added to external balance
     /// @return The new total external balance after adding _stethAmount
     /// @dev Validates that the new external balance would not exceed the maximum allowed amount
-    ///      by comparing with _getMaxPossibleExternalAmount
+    ///      by comparing with _getMaxAvailableExternalBalance
     function _getNewExternalBalance(uint256 _stethAmount) internal view returns (uint256) {
         uint256 currentExternal = EXTERNAL_BALANCE_POSITION.getStorageUint256();
-        uint256 maxAmountToAdd = _getMaxAdditionalExternalEther();
+        uint256 maxAmountToAdd = _getMaxAvailableExternalBalance();
 
         require(_stethAmount <= maxAmountToAdd, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 

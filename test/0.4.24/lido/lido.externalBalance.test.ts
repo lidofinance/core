@@ -52,7 +52,7 @@ describe("Lido.sol:externalBalance", () => {
 
   context("getMaxExternalBalanceBP", () => {
     it("should return the correct value", async () => {
-      expect(await lido.getMaxExternalBalanceBP()).to.be.equal(0n);
+      expect(await lido.getMaxExternalBalanceBP()).to.equal(0n);
     });
   });
 
@@ -76,7 +76,7 @@ describe("Lido.sol:externalBalance", () => {
         .to.emit(lido, "MaxExternalBalanceBPSet")
         .withArgs(newMaxExternalBalanceBP);
 
-      expect(await lido.getMaxExternalBalanceBP()).to.be.equal(newMaxExternalBalanceBP);
+      expect(await lido.getMaxExternalBalanceBP()).to.equal(newMaxExternalBalanceBP);
     });
   });
 
@@ -85,42 +85,55 @@ describe("Lido.sol:externalBalance", () => {
       await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
 
       // Add some external ether to protocol
-      const amountToMint = (await lido.getMaxExternalEther()) - 1n;
+      const amountToMint = (await lido.getMaxAvailableExternalBalance()) - 1n;
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
       await lido.connect(accountingSigner).mintExternalShares(whale, amountToMint);
 
-      expect(await lido.getExternalEther()).to.be.equal(amountToMint);
+      expect(await lido.getExternalEther()).to.equal(amountToMint);
     });
   });
 
-  context("getMaxExternalEther", () => {
+  context("getMaxAvailableExternalBalance", () => {
     beforeEach(async () => {
       // Increase the external ether limit to 10%
       await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
     });
 
+    /**
+     * Calculates the maximum additional stETH that can be added to external balance without exceeding limits
+     *
+     * Invariant: (currentExternal + x) / (totalPooled + x) <= maxBP / TOTAL_BP
+     * Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP)
+     */
+    async function getExpectedMaxAvailableExternalBalance() {
+      const totalPooledEther = await lido.getTotalPooledEther();
+      const externalEther = await lido.getExternalEther();
+
+      return (
+        (maxExternalBalanceBP * totalPooledEther - externalEther * TOTAL_BASIS_POINTS) /
+        (TOTAL_BASIS_POINTS - maxExternalBalanceBP)
+      );
+    }
+
     it("returns the correct value", async () => {
-      const totalEther = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
+      const expectedMaxExternalEther = await getExpectedMaxAvailableExternalBalance();
 
-      const expectedMaxExternalEther = (totalEther * maxExternalBalanceBP) / TOTAL_BASIS_POINTS;
-
-      expect(await lido.getMaxExternalEther()).to.be.equal(expectedMaxExternalEther);
+      expect(await lido.getMaxAvailableExternalBalance()).to.equal(expectedMaxExternalEther);
     });
 
     it("holds when external ether value changes", async () => {
-      const totalEtherBefore = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
-      const expectedMaxExternalEtherBefore = (totalEtherBefore * maxExternalBalanceBP) / TOTAL_BASIS_POINTS;
+      const expectedMaxExternalEtherBefore = await getExpectedMaxAvailableExternalBalance();
 
-      // Add some external ether to protocol
-      const amountToMint = (await lido.getMaxExternalEther()) - 1n;
+      expect(await lido.getMaxAvailableExternalBalance()).to.equal(expectedMaxExternalEtherBefore);
+
+      // Add all available external ether to protocol
+      const amountToMint = await lido.getMaxAvailableExternalBalance();
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
       await lido.connect(accountingSigner).mintExternalShares(whale, amountToMint);
 
-      const totalEtherAfter = (await lido.getTotalPooledEther()) - (await lido.getExternalEther());
-      const expectedMaxExternalEtherAfter = (totalEtherAfter * maxExternalBalanceBP) / TOTAL_BASIS_POINTS;
+      const expectedMaxExternalEtherAfter = await getExpectedMaxAvailableExternalBalance();
 
-      expect(expectedMaxExternalEtherBefore).to.be.equal(expectedMaxExternalEtherAfter);
-      expect(await lido.getMaxExternalEther()).to.be.equal(expectedMaxExternalEtherAfter);
+      expect(expectedMaxExternalEtherAfter).to.equal(0n);
     });
   });
 });

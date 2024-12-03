@@ -25,7 +25,8 @@ contract StETH__HarnessForVaultHub is StETH {
         return externalBalance;
     }
 
-    function getMaxExternalEther() external view returns (uint256) {
+    // This is simplified version of the function for testing purposes
+    function getMaxAvailableExternalBalance() external view returns (uint256) {
         return _getTotalPooledEther().mul(maxExternalBalanceBp).div(TOTAL_BASIS_POINTS);
     }
 
