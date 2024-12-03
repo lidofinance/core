@@ -235,8 +235,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         uint256 _unlocked = unlocked();
-        if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
+        if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
 
         VaultStorage storage $ = _getVaultStorage();
         $.inOutDelta -= SafeCast.toInt128(int256(_ether));
