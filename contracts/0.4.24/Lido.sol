@@ -382,7 +382,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
         _auth(STAKING_CONTROL_ROLE);
 
-        require(_maxExternalBalanceBP >= 0 && _maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
+        require(_maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
 
         MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
 
@@ -492,12 +492,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return EXTERNAL_BALANCE_POSITION.getStorageUint256();
     }
 
-    /**
-     * @notice Get the maximum allowed external ether balance
-     * @return max external balance in wei
-     */
+    /// @notice Get the maximum allowed external ether balance
+    ///
+    /// @return max external balance in wei, calculated as basis points of total pooled ether
+    /// @dev Returns the maximum external balance at the current state of protocol
     function getMaxExternalEther() external view returns (uint256) {
-        return _getMaxExternalEther();
+        return _getMaxExternalEther(0);
     }
 
     /**
@@ -621,19 +621,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///
     /// @param _receiver Address to receive the minted shares
     /// @param _amountOfShares Amount of shares to mint
-    /// @return stethAmount The amount of stETH minted
-    /// @dev can be called only by accounting (authentication in mintShares method)
+    /// @dev Can be called only by accounting (authentication in mintShares method).
+    ///      External balance is validated against the maximum allowed limit before minting shares.
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
         require(_receiver != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
         _whenNotStakingPaused();
 
         uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
-
-        uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(stethAmount);
-        uint256 maxExternalBalance = _getMaxExternalEther();
-
-        require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
+        uint256 newExternalBalance = _getNewExternalBalance(stethAmount);
 
         EXTERNAL_BALANCE_POSITION.setStorageUint256(newExternalBalance);
 
@@ -914,31 +910,42 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @dev Gets the maximum allowed external balance as basis points of total pooled ether
-     * @return max external balance in wei
-     */
-    function _getMaxExternalEther() internal view returns (uint256) {
-        return _getPooledEther()
-            .mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256())
-            .div(TOTAL_BASIS_POINTS);
-    }
-
-    /**
-     * @dev Gets the total amount of Ether controlled by the protocol
-     * @return total balance in wei
-     */
-    function _getPooledEther() internal view returns (uint256) {
-        return _getBufferedEther()
-            .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientBalance());
-    }
-
-    /**
      * @dev Gets the total amount of Ether controlled by the protocol and external entities
      * @return total balance in wei
      */
     function _getTotalPooledEther() internal view returns (uint256) {
-        return _getPooledEther().add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
+        return _getBufferedEther()
+            .add(CL_BALANCE_POSITION.getStorageUint256())
+            .add(_getTransientBalance())
+            .add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
+    }
+
+    /// @notice Calculates the maximum allowed external ether balance
+    ///
+    /// @param _stethAmount Additional stETH amount to include in calculation (optional)
+    /// @return Maximum allowed external balance in wei
+    function _getMaxExternalEther(uint256 _stethAmount) internal view returns (uint256) {
+        return _getBufferedEther()
+            .add(CL_BALANCE_POSITION.getStorageUint256())
+            .add(_getTransientBalance())
+            .add(_stethAmount)
+            .mul(MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256())
+            .div(TOTAL_BASIS_POINTS);
+    }
+
+    /// @notice Calculates the new external balance after adding stETH and validates against maximum limit
+    ///
+    /// @param _stethAmount The amount of stETH being added to external balance
+    /// @return The new total external balance after adding _stethAmount
+    /// @dev The maximum allowed external balance is calculated as basis points of the total pooled ether
+    ///      including the new stETH amount. Reverts if the new external balance would exceed this limit.
+    function _getNewExternalBalance(uint256 _stethAmount) internal view returns (uint256) {
+        uint256 newExternalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256().add(_stethAmount);
+        uint256 maxExternalBalance = _getMaxExternalEther(_stethAmount);
+
+        require(newExternalBalance <= maxExternalBalance, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
+
+        return newExternalBalance;
     }
 
     function _pauseStaking() internal {
@@ -1014,8 +1021,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
     }
 
-    // There is an invariant that protocol pause also implies staking pause.
-    // Thus, no need to check protocol pause explicitly.
+    /// @dev Protocol pause implies staking pause, so only check staking state
     function _whenNotStakingPaused() internal view {
         require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
     }
