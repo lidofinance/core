@@ -121,10 +121,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
-    /// @dev amount of external balance that is counted into total pooled eth
+    /// @dev amount of external balance that is counted into total protocol pooled ether
     bytes32 internal constant EXTERNAL_BALANCE_POSITION =
         0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
-    /// @dev maximum allowed external balance as basis points of total pooled ether
+    /// @dev maximum allowed external balance as basis points of total protocol pooled ether
     ///      this is a soft limit (can eventually hit the limit as a part of rebase)
     bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
         0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalBalanceBP")
@@ -922,12 +922,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
     }
 
-    /// @notice Calculates maximum additional stETH that can be added to external balance without exceeding limits
-    /// @return Maximum stETH amount that can be added to external balance
-    /// @dev Invariant: (currentExternal + x) / (totalPooled + x) <= maxBP / TOTAL_BP.
-    ///      Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP).
-    ///      Returns 0 if maxBP is 0 or if current external balance already exceeds limit.
-    ///      Returns uint256.max if maxBP >= TOTAL_BASIS_POINTS.
+    /// @notice Calculates the maximum amount of ether that can be added to the external balance while maintaining
+    ///         maximum allowed external balance limits for the protocol pooled ether
+    /// @return Maximum amount of ether that can be safely added to external balance
+    /// @dev This function enforces the ratio between external and protocol balance to stay below a limit.
+    ///      The limit is defined by some maxBP out of totalBP.
+    ///
+    ///      The calculation ensures: (external + x) / (totalPooled + x) <= maxBP / totalBP
+    ///      Which gives formula: x <= (maxBP * totalPooled - external * totalBP) / (totalBP - maxBP)
+    ///
+    ///      Special cases:
+    ///      - Returns 0 if maxBP is 0 (external balance disabled) or external balance already exceeds the limit
+    ///      - Returns uint256(-1) if maxBP >= totalBP (no limit)
     function _getMaxAvailableExternalBalance() internal view returns (uint256) {
         uint256 maxBP = MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
         uint256 externalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
