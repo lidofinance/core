@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3455"  lines-covered="2908"  line-rate="0.8417"  branches-valid="1606"  branches-covered="1234"  branch-rate="0.7684000000000001"  timestamp="1733243885595" complexity="0" version="0.1">
+<coverage lines-valid="3455"  lines-covered="2908"  line-rate="0.8417"  branches-valid="1606"  branches-covered="1234"  branch-rate="0.7684000000000001"  timestamp="1733243935640" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -39,11 +39,11 @@
 			<method name="getStakeLimitFullInfo"  hits="9"  signature="()V" >
 				<lines><line number="352"  hits="9" /></lines>
 			</method>
-			<method name="setMaxExternalBalanceBP"  hits="6"  signature="()V" >
-				<lines><line number="380"  hits="6" /></lines>
-			</method>
 			<method name="getMaxExternalBalanceBP"  hits="2"  signature="()V" >
-				<lines><line number="391"  hits="2" /></lines>
+				<lines><line number="379"  hits="2" /></lines>
+			</method>
+			<method name="setMaxExternalBalanceBP"  hits="6"  signature="()V" >
+				<lines><line number="385"  hits="6" /></lines>
 			</method>
 			<method name=""  hits="5"  signature="()V" >
 				<lines><line number="403"  hits="5" /></lines>
@@ -211,11 +211,11 @@
 			<line number="373"  hits="9"  branch="false" />
 			<line number="374"  hits="9"  branch="false" />
 			<line number="375"  hits="9"  branch="false" />
-			<line number="381"  hits="6"  branch="false" />
-			<line number="383"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="385"  hits="4"  branch="false" />
-			<line number="387"  hits="4"  branch="false" />
-			<line number="392"  hits="2"  branch="false" />
+			<line number="380"  hits="2"  branch="false" />
+			<line number="386"  hits="6"  branch="false" />
+			<line number="388"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="390"  hits="4"  branch="false" />
+			<line number="392"  hits="4"  branch="false" />
 			<line number="405"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="406"  hits="3"  branch="false" />
 			<line number="415"  hits="19"  branch="false" />
