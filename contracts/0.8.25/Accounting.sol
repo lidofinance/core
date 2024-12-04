@@ -89,9 +89,8 @@ contract Accounting is VaultHub {
 
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido,
-        address _treasury
-    ) VaultHub(_lido, _treasury) {
+        ILido _lido
+    ) VaultHub(_lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -330,12 +329,16 @@ contract Accounting is VaultHub {
             _update.etherToFinalizeWQ
         );
 
-        _updateVaults(
+        uint256 vaultFeeShares = _updateVaults(
             _report.vaultValues,
             _report.netCashFlows,
             _update.vaultsLockedEther,
             _update.vaultsTreasuryFeeShares
         );
+
+        if (vaultFeeShares > 0) {
+            STETH.mintExternalShares(LIDO_LOCATOR.treasury(), vaultFeeShares);
+        }
 
         _notifyObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
@@ -408,39 +411,39 @@ contract Accounting is VaultHub {
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
-        (uint256[] memory moduleRewards, uint256 totalModuleRewards) = _mintModuleRewards(
+        (uint256[] memory moduleFees, uint256 totalModuleFees) = _mintModuleFees(
             _rewardsDistribution.recipients,
             _rewardsDistribution.modulesFees,
             _rewardsDistribution.totalFee,
             _sharesToMintAsFees
         );
 
-        _mintTreasuryRewards(_sharesToMintAsFees - totalModuleRewards);
+        _mintTreasuryFees(_sharesToMintAsFees - totalModuleFees);
 
-        _stakingRouter.reportRewardsMinted(_rewardsDistribution.moduleIds, moduleRewards);
+        _stakingRouter.reportRewardsMinted(_rewardsDistribution.moduleIds, moduleFees);
     }
 
     /// @dev mint rewards to the StakingModule recipients
-    function _mintModuleRewards(
+    function _mintModuleFees(
         address[] memory _recipients,
         uint96[] memory _modulesFees,
         uint256 _totalFee,
-        uint256 _totalRewards
-    ) internal returns (uint256[] memory moduleRewards, uint256 totalModuleRewards) {
-        moduleRewards = new uint256[](_recipients.length);
+        uint256 _totalFees
+    ) internal returns (uint256[] memory moduleFees, uint256 totalModuleFees) {
+        moduleFees = new uint256[](_recipients.length);
 
         for (uint256 i; i < _recipients.length; ++i) {
             if (_modulesFees[i] > 0) {
-                uint256 iModuleRewards = (_totalRewards * _modulesFees[i]) / _totalFee;
-                moduleRewards[i] = iModuleRewards;
-                LIDO.mintShares(_recipients[i], iModuleRewards);
-                totalModuleRewards = totalModuleRewards + iModuleRewards;
+                uint256 iModuleFees = (_totalFees * _modulesFees[i]) / _totalFee;
+                moduleFees[i] = iModuleFees;
+                LIDO.mintShares(_recipients[i], iModuleFees);
+                totalModuleFees = totalModuleFees + iModuleFees;
             }
         }
     }
 
-    /// @dev mints treasury rewards
-    function _mintTreasuryRewards(uint256 _amount) internal {
+    /// @dev mints treasury fees
+    function _mintTreasuryFees(uint256 _amount) internal {
         address treasury = LIDO_LOCATOR.treasury();
 
         LIDO.mintShares(treasury, _amount);

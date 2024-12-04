@@ -6,9 +6,9 @@ pragma solidity 0.8.25;
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
+import {ILido as StETH} from "../interfaces/ILido.sol";
 
 /**
  * @title Dashboard
@@ -27,7 +27,7 @@ contract Dashboard is AccessControlEnumerable {
     bool public isInitialized;
 
     /// @notice The stETH token contract
-    IERC20 public immutable stETH;
+    StETH public immutable STETH;
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
@@ -43,7 +43,7 @@ contract Dashboard is AccessControlEnumerable {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
 
         _SELF = address(this);
-        stETH = IERC20(_stETH);
+        STETH = StETH(_stETH);
     }
 
     /**
@@ -98,7 +98,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Returns the number of stETHshares minted
      * @return The shares minted as a uint96
      */
-    function sharesMinted() external view returns (uint96) {
+    function sharesMinted() public view returns (uint96) {
         return vaultSocket().sharesMinted;
     }
 
@@ -107,7 +107,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The reserve ratio as a uint16
      */
     function reserveRatio() external view returns (uint16) {
-        return vaultSocket().reserveRatio;
+        return vaultSocket().reserveRatioBP;
     }
 
     /**
@@ -115,7 +115,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The threshold reserve ratio as a uint16.
      */
     function thresholdReserveRatio() external view returns (uint16) {
-        return vaultSocket().reserveRatioThreshold;
+        return vaultSocket().reserveRatioThresholdBP;
     }
 
     /**
@@ -139,8 +139,8 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function disconnectFromVaultHub() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _disconnectFromVaultHub();
+    function voluntaryDisconnect() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+        _voluntaryDisconnect();
     }
 
     /**
@@ -232,8 +232,13 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @dev Disconnects the staking vault from the vault hub
      */
-    function _disconnectFromVaultHub() internal {
-        vaultHub.disconnectVault(address(stakingVault));
+    function _voluntaryDisconnect() internal {
+        uint256 shares = sharesMinted();
+        if (shares > 0) {
+            _rebalanceVault(STETH.getPooledEthByShares(shares));
+        }
+
+        vaultHub.voluntaryDisconnect(address(stakingVault));
     }
 
     /**
@@ -288,7 +293,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of tokens to burn
      */
     function _burn(uint256 _tokens) internal {
-        stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
+        STETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
     }
 

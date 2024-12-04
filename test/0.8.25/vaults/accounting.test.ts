@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Accounting, LidoLocator, OssifiableProxy, StETH__HarnessForVaultHub } from "typechain-types";
 
-import { certainAddress, ether } from "lib";
+import { ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -26,8 +26,6 @@ describe("Accounting.sol", () => {
 
   let originalState: string;
 
-  const treasury = certainAddress("treasury");
-
   before(async () => {
     [deployer, admin, user, holder, stranger] = await ethers.getSigners();
 
@@ -38,7 +36,7 @@ describe("Accounting.sol", () => {
     });
 
     // VaultHub
-    vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
 

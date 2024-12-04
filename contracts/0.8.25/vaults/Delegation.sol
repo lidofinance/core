@@ -53,7 +53,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
-    /** 
+    /**
      * @notice Role for the operator
      * Operator can:
      * - claim the performance due
@@ -271,8 +271,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function disconnectFromVaultHub() external payable override onlyRole(MANAGER_ROLE) {
-        _disconnectFromVaultHub();
+    function voluntaryDisconnect() external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
+        _voluntaryDisconnect();
     }
 
     // ==================== Vault Operations ====================
@@ -366,11 +366,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Hook called by the staking vault during the report in the staking vault.
      * @param _valuation The new valuation of the vault.
-     * @param _inOutDelta The net inflow or outflow since the last report.
-     * @param _locked The amount of funds locked in the vault.
      */
-    // solhint-disable-next-line no-unused-vars
-    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function onReport(uint256 _valuation, int256 /*_inOutDelta*/, uint256 /*_locked*/) external {
         if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
