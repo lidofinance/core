@@ -111,9 +111,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     ///         The initialize function selector is not changed. For upgrades use `_params` variable
     ///
     /// @param _owner vault owner address
-    /// @param _params the calldata for initialize contract after upgrades
-    // solhint-disable-next-line no-unused-vars
-    function initialize(address _owner, bytes calldata _params) external onlyBeacon initializer {
+    /// @dev _params the calldata param reserved for further upgrades
+    function initialize(address _owner, bytes calldata /*_params*/) external onlyBeacon initializer {
         __Ownable_init(_owner);
     }
 
@@ -147,6 +146,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      */
     function vaultHub() public view override returns (address) {
         return address(VAULT_HUB);
+    }
+
+    function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
+        return super.owner();
     }
 
     receive() external payable {
@@ -316,7 +319,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @notice Returns the latest report data for the vault
      * @return Report struct containing valuation and inOutDelta from last report
      */
-    function latestReport() external view returns (IStakingVault.Report memory) {
+    function latestReport() external view returns (Report memory) {
         VaultStorage storage $ = _getVaultStorage();
         return $.report;
     }

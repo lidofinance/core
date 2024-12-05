@@ -29,7 +29,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
-    0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
+        0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
     constructor(
         address _vaultHub,
@@ -45,10 +45,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
         _;
     }
 
-    /// @notice Initialize the contract storage explicitly.
-    /// @param _owner owner address that can TBD
-    /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+    function initialize(address _owner, bytes calldata) external onlyBeacon reinitializer(_version) {
         __StakingVault_init_v2();
         __Ownable_init(_owner);
     }

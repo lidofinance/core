@@ -14,7 +14,7 @@ import {
   VaultFactory,
 } from "typechain-types";
 
-import { certainAddress, createVaultProxy, ether } from "lib";
+import { createVaultProxy, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -41,8 +41,6 @@ describe("Delegation.sol", () => {
 
   let originalState: string;
 
-  const treasury = certainAddress("treasury");
-
   before(async () => {
     [deployer, admin, holder, stranger, vaultOwner1, lidoAgent] = await ethers.getSigners();
 
@@ -54,7 +52,7 @@ describe("Delegation.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);

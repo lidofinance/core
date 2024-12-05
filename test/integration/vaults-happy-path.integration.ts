@@ -146,7 +146,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
+    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
@@ -270,7 +270,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedStETHOnVault");
     expect(mintEvents.length).to.equal(1n);
-    expect(mintEvents[0].args.sender).to.equal(vault101Address);
+    expect(mintEvents[0].args.vault).to.equal(vault101Address);
     expect(mintEvents[0].args.tokens).to.equal(vault101MintingMaximum);
 
     const lockedEvents = ctx.getEvents(mintTxReceipt, "Locked", [vault101.interface]);
@@ -439,18 +439,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { accounting, lido } = ctx.contracts;
 
     const socket = await accounting["vaultSocket(address)"](vault101Address);
-    const sharesMinted = (await lido.getPooledEthByShares(socket.sharesMinted)) + 1n; // +1 to avoid rounding errors
+    const stETHMinted = (await lido.getPooledEthByShares(socket.sharesMinted)) + 1n;
 
-    const rebalanceTx = await vault101AdminContract
-      .connect(alice)
-      .rebalanceVault(sharesMinted, { value: sharesMinted });
+    const rebalanceTx = await vault101AdminContract.connect(alice).rebalanceVault(stETHMinted, { value: stETHMinted });
 
     await trace("vault.rebalance", rebalanceTx);
   });
 
   it("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
-    const disconnectTx = await vault101AdminContract.connect(alice).disconnectFromVaultHub();
-    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.disconnectFromHub", disconnectTx);
+    const disconnectTx = await vault101AdminContract.connect(alice).voluntaryDisconnect();
+    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.voluntaryDisconnect", disconnectTx);
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
 
