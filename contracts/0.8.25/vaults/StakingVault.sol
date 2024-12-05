@@ -284,7 +284,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
-        if ($.locked > _locked) revert LockedCannotBeDecreased(_locked);
+        if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
 
         $.locked = SafeCast.toUint128(_locked);
 
@@ -366,6 +366,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     error TransferFailed(address recipient, uint256 amount);
     error NotHealthy();
     error NotAuthorized(string operation, address sender);
-    error LockedCannotBeDecreased(uint256 locked);
+    error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
     error SenderShouldBeBeacon(address sender, address beacon);
 }
