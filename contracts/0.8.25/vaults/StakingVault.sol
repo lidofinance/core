@@ -234,8 +234,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
-        uint256 _unlocked = unlocked();
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
+        uint256 _unlocked = unlocked();
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
 
         VaultStorage storage $ = _getVaultStorage();
