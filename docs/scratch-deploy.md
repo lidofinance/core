@@ -141,7 +141,7 @@ To do Holešky deployment, the following parameters must be set up via env varia
 Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
-To start the deployment, run (the env variables must already defined) from the root repo directory:
+To start the deployment, run (the env variables must already defined) from the root repo directory, e.g.:
 
 ```shell
 bash scripts/scratch/dao-holesky-deploy.sh
@@ -154,7 +154,7 @@ Deploy artifacts information will be stored in `deployed-holesky.json`.
 ### Publishing Sources to Etherscan
 
 ```shell
-NETWORK=<PUT-YOUR-VALUE> RPC_URL=<PUT-YOUR-VALUE> bash ./scripts/verify-contracts-code.sh
+yarn verify:deployed --network <network> (--file <path-to-deployed-json>)
 ```
 
 #### Issues with verification of part of the contracts deployed from factories
