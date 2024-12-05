@@ -28,6 +28,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     validatorsExitBusOracle: certainAddress("dummy-locator:validatorsExitBusOracle"),
     withdrawalQueue: certainAddress("dummy-locator:withdrawalQueue"),
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
+    accounting: certainAddress("dummy-locator:withdrawalVault"),
     ...config,
   });
 
@@ -102,6 +103,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",
+    "accounting",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

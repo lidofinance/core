@@ -3,7 +3,7 @@
 
 pragma solidity 0.4.24;
 
-contract WithdrawalVault__MockForLidoHandleOracleReport {
+contract WithdrawalVault__MockForLidoAccounting {
     event Mock__WithdrawalsWithdrawn();
 
     function withdrawWithdrawals(uint256 _amount) external {

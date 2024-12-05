@@ -10,7 +10,7 @@ import { finalizeWithdrawalQueue, handleOracleReport } from "lib/protocol/helper
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
-describe("Burn Shares", () => {
+describe("Scenario: Burn Shares", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -70,7 +70,7 @@ describe("Burn Shares", () => {
     const { burner } = ctx.contracts;
     const burnTx = burner.connect(stranger).commitSharesToBurn(sharesToBurn);
 
-    await expect(burnTx).to.be.revertedWithCustomError(burner, "AppAuthLidoFailed");
+    await expect(burnTx).to.be.revertedWithCustomError(burner, "AppAuthFailed");
   });
 
   it("Should burn shares after report", async () => {

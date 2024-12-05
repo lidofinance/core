@@ -47,6 +47,7 @@ declare namespace NodeJS {
     LOCAL_VALIDATORS_EXIT_BUS_ORACLE_ADDRESS?: string;
     LOCAL_WITHDRAWAL_QUEUE_ADDRESS?: string;
     LOCAL_WITHDRAWAL_VAULT_ADDRESS?: string;
+    LOCAL_STAKING_VAULT_FACTORY_ADDRESS?: string;
 
     /* for mainnet fork testing */
     MAINNET_RPC_URL: string;
@@ -71,8 +72,17 @@ declare namespace NodeJS {
     MAINNET_VALIDATORS_EXIT_BUS_ORACLE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_QUEUE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
+    MAINNET_STAKING_VAULT_FACTORY_ADDRESS?: string;
+
+    HOLESKY_RPC_URL?: string;
+    SEPOLIA_RPC_URL?: string;
+    MEKONG_RPC_URL?: string;
 
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;
+    BLOCKSCOUT_API_KEY?: string;
+
+    /* Scratch deploy environment variables */
+    NETWORK_STATE_FILE?: string;
   }
 }

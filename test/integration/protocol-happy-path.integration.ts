@@ -9,19 +9,17 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
   norEnsureOperators,
-  OracleReportOptions,
+  OracleReportParams,
   report,
   sdvtEnsureOperators,
 } from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
+import { MAX_DEPOSIT, ZERO_HASH } from "test/suite/constants";
 
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
-
-describe("Protocol Happy Path", () => {
+describe("Scenario: Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -184,16 +182,14 @@ describe("Protocol Happy Path", () => {
       );
     } else {
       expect(stakingLimitAfterSubmit).to.equal(
-        stakingLimitBeforeSubmit - AMOUNT + growthPerBlock,
+        stakingLimitBeforeSubmit - AMOUNT + BigInt(growthPerBlock),
         "Staking limit after submit",
       );
     }
   });
 
   it("Should deposit to staking modules", async () => {
-    const { lido, withdrawalQueue, stakingRouter } = ctx.contracts;
-
-    const { depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
 
     const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
@@ -288,7 +284,7 @@ describe("Protocol Happy Path", () => {
 
     // Stranger deposited 100 ETH, enough to deposit 3 validators, need to reflect this in the report
     // 0.01 ETH is added to the clDiff to simulate some rewards
-    const reportData: Partial<OracleReportOptions> = {
+    const reportData: Partial<OracleReportParams> = {
       clDiff: ether("96.01"),
       clAppearedValidators: 3n,
     };

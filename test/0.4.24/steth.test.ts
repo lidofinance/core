@@ -14,6 +14,8 @@ import { Snapshot } from "test/suite";
 const ONE_STETH = 10n ** 18n;
 const ONE_SHARE = 10n ** 18n;
 
+const INITIAL_SHARES_HOLDER = "0x000000000000000000000000000000000000dead";
+
 describe("StETH.sol:non-ERC-20 behavior", () => {
   let deployer: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -460,20 +462,16 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
     }
   });
 
-  context("mintShares", () => {
-    it("Reverts when minting to zero address", async () => {
-      await expect(steth.mintShares(ZeroAddress, 1n)).to.be.revertedWith("MINT_TO_ZERO_ADDR");
-    });
-  });
+  context("_mintInitialShares", () => {
+    it("Mints shares to the recipient and fires the transfer events", async () => {
+      const balanceOfInitialSharesHolderBefore = await steth.balanceOf(INITIAL_SHARES_HOLDER);
 
-  context("burnShares", () => {
-    it("Reverts when burning on zero address", async () => {
-      await expect(steth.burnShares(ZeroAddress, 1n)).to.be.revertedWith("BURN_FROM_ZERO_ADDR");
-    });
+      await steth.harness__mintInitialShares(1000n);
 
-    it("Reverts when burning more than the owner owns", async () => {
-      const sharesOfHolder = await steth.sharesOf(holder);
-      await expect(steth.burnShares(holder, sharesOfHolder + 1n)).to.be.revertedWith("BALANCE_EXCEEDED");
+      expect(await steth.balanceOf(INITIAL_SHARES_HOLDER)).to.approximately(
+        balanceOfInitialSharesHolderBefore + 1000n,
+        1n,
+      );
     });
   });
 });

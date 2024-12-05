@@ -12,6 +12,7 @@ import "hardhat-tracer";
 import "hardhat-watcher";
 import "hardhat-ignore-warnings";
 import "hardhat-contract-sizer";
+import "hardhat-gas-reporter";
 import { globSync } from "glob";
 import { TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS } from "hardhat/builtin-tasks/task-names";
 import { HardhatUserConfig, subtask } from "hardhat/config";
@@ -50,14 +51,10 @@ function loadAccounts(networkName: string) {
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
+  gasReporter: {
+    enabled: true,
+  },
   networks: {
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
     "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
@@ -73,14 +70,52 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "local": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+    },
+    "holesky-vaults-devnet-0": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "mekong-vaults-devnet-1": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "holesky": {
+      url: process.env.HOLESKY_RPC_URL || RPC_URL,
+      chainId: 17000,
+      accounts: loadAccounts("holesky"),
+    },
     "sepolia": {
-      url: RPC_URL,
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "mekong": {
+      url: process.env.MEKONG_RPC_URL || RPC_URL,
+      chainId: 7078815900,
+      accounts: loadAccounts("mekong"),
+    },
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    apiKey: {
+      default: process.env.ETHERSCAN_API_KEY || "",
+      mekong: process.env.BLOCKSCOUT_API_KEY || "",
+    },
+    customChains: [
+      {
+        network: "mekong",
+        chainId: 7078815900,
+        urls: {
+          apiURL: "https://explorer.mekong.ethpandaops.io/api",
+          browserURL: "https://explorer.mekong.ethpandaops.io",
+        },
+      },
+    ],
   },
   solidity: {
     compilers: [
@@ -132,6 +167,16 @@ const config: HardhatUserConfig = {
             runs: 200,
           },
           evmVersion: "istanbul",
+        },
+      },
+      {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          evmVersion: "cancun",
         },
       },
     ],

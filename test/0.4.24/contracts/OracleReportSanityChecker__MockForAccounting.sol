@@ -3,7 +3,7 @@
 
 pragma solidity 0.4.24;
 
-contract OracleReportSanityChecker__MockForLidoHandleOracleReport {
+contract OracleReportSanityChecker__MockForAccounting {
     bool private checkAccountingOracleReportReverts;
     bool private checkWithdrawalQueueOracleReportReverts;
     bool private checkSimulatedShareRateReverts;

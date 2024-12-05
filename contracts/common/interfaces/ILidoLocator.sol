@@ -20,6 +20,7 @@ interface ILidoLocator {
     function withdrawalVault() external view returns(address);
     function postTokenRebaseReceiver() external view returns(address);
     function oracleDaemonConfig() external view returns(address);
+    function accounting() external view returns (address);
     function coreComponents() external view returns(
         address elRewardsVault,
         address oracleReportSanityChecker,
@@ -28,13 +29,12 @@ interface ILidoLocator {
         address withdrawalQueue,
         address withdrawalVault
     );
-    function oracleReportComponentsForLido() external view returns(
+    function oracleReportComponents() external view returns(
         address accountingOracle,
-        address elRewardsVault,
         address oracleReportSanityChecker,
         address burner,
         address withdrawalQueue,
-        address withdrawalVault,
-        address postTokenRebaseReceiver
+        address postTokenRebaseReceiver,
+        address stakingRouter
     );
 }
