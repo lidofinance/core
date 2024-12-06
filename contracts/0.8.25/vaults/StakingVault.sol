@@ -304,7 +304,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
             VaultStorage storage $ = _getVaultStorage();
             $.inOutDelta -= SafeCast.toInt128(int256(_ether));
 
-            emit Withdrawn(msg.sender, msg.sender, _ether);
+            emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
 
             VAULT_HUB.rebalance{value: _ether}();
         } else {
