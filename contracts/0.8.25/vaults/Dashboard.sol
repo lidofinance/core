@@ -288,19 +288,39 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Burns stETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
-     * @param _tokens Amount of tokens to burn
+     * @param _tokens Amount of stETH tokens to burn
      */
     function burn(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         _burn(_tokens);
     }
 
     /**
+     * @notice Burns wstETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
+     * @param _tokens Amount of wstETH tokens to burn
+     */
+    function burnWstETH(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        IWstETH(wstETH).unwrap(_tokens);
+        _burn(_tokens);
+    }
+
+    /**
      * @notice Burns stETH tokens from the sender backed by the vault using EIP-2612 Permit.
-     * @param _tokens Amount of tokens to burn
+     * @param _tokens Amount of stETH tokens to burn
      * @param _permit data required for the stETH.permit() method to set the allowance
      */
     function burnWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         stETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
+        _burn(_tokens);
+    }
+
+    /**
+     * @notice Burns wstETH tokens from the sender backed by the vault using EIP-2612 Permit.
+     * @param _tokens Amount of wstETH tokens to burn
+     * @param _permit data required for the stETH.permit() method to set the allowance
+     */
+    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        stETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
+        IWstETH(wstETH).unwrap(_tokens);
         _burn(_tokens);
     }
 
