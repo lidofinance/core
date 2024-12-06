@@ -329,7 +329,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @dev Can only be called by VaultHub
      */
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("update", msg.sender);
+        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
         $.report.valuation = SafeCast.toUint128(_valuation);
