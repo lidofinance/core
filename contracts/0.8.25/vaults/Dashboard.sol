@@ -11,7 +11,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/acces
 import {VaultHub} from "./VaultHub.sol";
 
 interface IWeth {
-    function withdraw(uint256) external;
+    function withdraw(uint) external;
     function deposit() external payable;
 }
 
@@ -220,7 +220,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
     function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        IWeth(weth).withdraw{value: _wethAmount}();
+        IWeth(weth).withdraw(_wethAmount);
         _fund();
     }
 
