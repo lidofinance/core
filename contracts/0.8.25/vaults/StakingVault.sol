@@ -336,11 +336,20 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         $.report.inOutDelta = SafeCast.toInt128(_inOutDelta);
         $.locked = SafeCast.toUint128(_locked);
 
-        // solhint-disable-next-line avoid-low-level-calls
-        (bool success, bytes memory data) = owner().call(
-            abi.encodeWithSelector(IReportReceiver.onReport.selector, _valuation, _inOutDelta, _locked)
-        );
-        if (!success) emit OnReportFailed(address(this), data);
+        address _owner = owner();
+        uint256 codeSize;
+        assembly {
+            codeSize := extcodesize(_owner)
+        }
+
+        if (codeSize > 0) {
+            try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
+            catch (bytes memory reason) {
+                emit OnReportFailed(address(this), reason);
+            }
+        } else {
+            emit OnReportFailed(address(this), "");
+        }
 
         emit Reported(address(this), _valuation, _inOutDelta, _locked);
     }
