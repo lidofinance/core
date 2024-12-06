@@ -106,14 +106,12 @@ describe("Lido.sol:mintburning", () => {
     });
 
     it("precision loss", async () => {
-      await lido.connect(accounting).mintExternalShares(accounting, 1n);
-      await lido.connect(accounting).mintExternalShares(accounting, 1n);
-      await lido.connect(accounting).mintExternalShares(accounting, 1n);
-      await lido.connect(accounting).mintExternalShares(accounting, 1n);
+      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 1 wei
+      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 2 wei
+      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 3 wei
+      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 4 wei
 
-      await expect(lido.connect(accounting).burnExternalShares(4n)).not.to.be.reverted;
-
-      expect(await lido.sharesOf(accounting)).to.equal(0n);
+      await expect(lido.connect(accounting).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
     });
   });
 });

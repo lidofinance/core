@@ -532,7 +532,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxAvailableExternalBalance);
+    error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
     error AlreadyExists(address addr);
     error FactoryNotAllowed(address beacon);

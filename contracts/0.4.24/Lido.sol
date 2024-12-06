@@ -121,13 +121,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
-    /// @dev amount of external balance that is counted into total protocol pooled ether
-    bytes32 internal constant EXTERNAL_BALANCE_POSITION =
-        0xc5293dc5c305f507c944e5c29ae510e33e116d6467169c2daa1ee0db9af5b91d; // keccak256("lido.Lido.externalBalance");
-    /// @dev maximum allowed external balance as basis points of total protocol pooled ether
-    ///      this is a soft limit (can eventually hit the limit as a part of rebase)
+    /// @dev amount of token shares minted that is backed by external sources
+    bytes32 internal constant EXTERNAL_SHARES_POSITION =
+        0x2ab18be87d6c30f8dc2a29c9950ab4796c891232dbcc6a95a6b44b9f8aad9352; // keccak256("lido.Lido.externalShares");
+    /// @dev maximum allowed ratio of external shares to total shares in basis points
+    bytes32 internal constant MAX_EXTERNAL_RATIO_POSITION =
+        0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalRatioBP")
     bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
-        0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalBalanceBP")
+        0x5d9acd3b741c556363e77af693c2f6219b9bf4d826159e864c4e3c3f08e6d97a; // keccak256("lido.Lido.maxExternalBalance")
+    bytes32 internal constant EXTERNAL_BALANCE_POSITION =
+        0x2a094e9f51934d7c659e7b6195b27a4a50d3f8a3c5e2d91b2f6c2e68c16c485b; // keccak256("lido.Lido.externalBalance")
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -192,8 +195,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // External shares burned for account
     event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
 
-    // Maximum external balance basis points from the total pooled ether set
-    event MaxExternalBalanceBPSet(uint256 maxExternalBalanceBP);
+    // Maximum ratio of external shares to total shares in basis points set
+    event MaxExternalRatioBPSet(uint256 maxExternalRatioBP);
 
     /**
     * @dev As AragonApp, Lido contract must be initialized with following variables:
@@ -375,21 +378,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         prevStakeBlockNumber = stakeLimitData.prevStakeBlockNumber;
     }
 
-    /// @return max external balance in basis points
-    function getMaxExternalBalanceBP() external view returns (uint256) {
-        return MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
+    /// @return max external ratio in basis points
+    function getMaxExternalRatioBP() external view returns (uint256) {
+        return MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
     }
 
     /// @notice Sets the maximum allowed external balance as basis points of total pooled ether
-    /// @param _maxExternalBalanceBP The maximum basis points [0-10000]
-    function setMaxExternalBalanceBP(uint256 _maxExternalBalanceBP) external {
+    /// @param _maxExternalRatioBP The maximum basis points [0-10000]
+    function setMaxExternalRatioBP(uint256 _maxExternalRatioBP) external {
         _auth(STAKING_CONTROL_ROLE);
 
-        require(_maxExternalBalanceBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_BALANCE");
+        require(_maxExternalRatioBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_RATIO");
 
-        MAX_EXTERNAL_BALANCE_POSITION.setStorageUint256(_maxExternalBalanceBP);
+        MAX_EXTERNAL_RATIO_POSITION.setStorageUint256(_maxExternalRatioBP);
 
-        emit MaxExternalBalanceBPSet(_maxExternalBalanceBP);
+        emit MaxExternalRatioBPSet(_maxExternalRatioBP);
     }
 
     /**
@@ -488,17 +491,19 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Get the amount of Ether held by external contracts
+     * @notice Get the amount of ether held by external contracts
      * @return amount of external ether in wei
      */
     function getExternalEther() external view returns (uint256) {
-        return EXTERNAL_BALANCE_POSITION.getStorageUint256();
+        return _getExternalEther(_getInternalEther());
     }
 
-    /// @notice Get the maximum additional stETH amount that can be added to external balance without exceeding limits
-    /// @return Maximum stETH amount that can be added to external balance
-    function getMaxAvailableExternalBalance() external view returns (uint256) {
-        return _getMaxAvailableExternalBalance();
+    function getExternalShares() external view returns (uint256) {
+        return EXTERNAL_SHARES_POSITION.getStorageUint256();
+    }
+
+    function getMaxMintableExternalShares() external view returns (uint256) {
+        return _getMaxMintableExternalShares();
     }
 
     /**
@@ -524,8 +529,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     * @return depositedValidators - number of deposited validators from Lido contract side
     * @return beaconValidators - number of Lido validators visible on Consensus Layer, reported by oracle
     * @return beaconBalance - total amount of ether on the Consensus Layer side (sum of all the balances of Lido validators)
-    *
-    * @dev `beacon` in naming still here for historical reasons
     */
     function getBeaconStat() external view returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance) {
         depositedValidators = DEPOSITED_VALIDATORS_POSITION.getStorageUint256();
@@ -624,42 +627,42 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @param _amountOfShares Amount of shares to mint
     /// @dev Can be called only by accounting (authentication in mintShares method).
     ///      NB: Reverts if the the external balance limit is exceeded.
-    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
+    function mintExternalShares(address _receiver, uint256 _shares) external {
         require(_receiver != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
-        require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
+        require(_shares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
 
         // TODO: separate role and flag for external shares minting pause
         require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
 
-        uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
-        uint256 newExternalBalance = _getNewExternalBalance(stethAmount);
+        uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_shares);
+        uint256 maxMintableExternalShares = _getMaxMintableExternalShares();
 
-        EXTERNAL_BALANCE_POSITION.setStorageUint256(newExternalBalance);
+        require(newExternalShares <= maxMintableExternalShares, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        mintShares(_receiver, _amountOfShares);
+        EXTERNAL_SHARES_POSITION.setStorageUint256(newExternalShares);
 
-        emit ExternalSharesMinted(_receiver, _amountOfShares, stethAmount);
+        mintShares(_receiver, _shares);
+
+        emit ExternalSharesMinted(_receiver, _shares, getPooledEthByShares(_shares));
     }
 
     /// @notice Burns external shares from a specified account
     ///
-    /// @param _amountOfShares Amount of shares to burn
-    function burnExternalShares(uint256 _amountOfShares) external {
-        require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
+    /// @param _shares Amount of shares to burn
+    function burnExternalShares(uint256 _shares) external {
+        require(_shares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
         _auth(getLidoLocator().accounting());
 
-        uint256 stethAmount = super.getPooledEthByShares(_amountOfShares);
-        uint256 extBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
 
-        if (extBalance < stethAmount) revert("EXT_BALANCE_TOO_SMALL");
+        if (externalShares < _shares) revert("EXT_SHARES_TOO_SMALL");
+        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _shares);
 
-        EXTERNAL_BALANCE_POSITION.setStorageUint256(extBalance - stethAmount);
+        _burnShares(msg.sender, _shares);
 
-        _burnShares(msg.sender, _amountOfShares);
-
-        _emitTransferEvents(msg.sender, address(0), stethAmount, _amountOfShares);
-
-        emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
+        uint256 stethAmount = getPooledEthByShares(_shares);
+        _emitTransferEvents(msg.sender, address(0), stethAmount, _shares);
+        emit ExternalSharesBurned(msg.sender, _shares, stethAmount);
     }
 
     /// @notice processes CL related state changes as a part of the report processing
@@ -668,13 +671,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @param _preClValidators number of validators in the previous CL state (for event compatibility)
     /// @param _reportClValidators number of validators in the current CL state
     /// @param _reportClBalance total balance of the current CL state
-    /// @param _postExternalBalance total external ether balance
+    /// @param _postExternalShares total external shares
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
         uint256 _reportClBalance,
-        uint256 _postExternalBalance
+        uint256 _postExternalShares
     ) external {
         _whenNotStopped();
 
@@ -684,7 +687,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // calculate rewards on the next rebase
         CL_VALIDATORS_POSITION.setStorageUint256(_reportClValidators);
         CL_BALANCE_POSITION.setStorageUint256(_reportClBalance);
-        EXTERNAL_BALANCE_POSITION.setStorageUint256(_postExternalBalance);
+        EXTERNAL_SHARES_POSITION.setStorageUint256(_postExternalShares);
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
         // cl and external balance change are logged in ETHDistributed event later
@@ -846,7 +849,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Overrides default AragonApp behaviour to disallow recovery.
+     * @notice Overrides default AragonApp behavior to disallow recovery.
      */
     function transferToVault(address /* _token */) external {
         revert("NOT_SUPPORTED");
@@ -901,8 +904,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev Calculates and returns the total base balance (multiple of 32) of validators in transient state,
     ///     i.e. submitted to the official Deposit contract but not yet visible in the CL state.
-    /// @return transient balance in wei (1e-18 Ether)
-    function _getTransientBalance() internal view returns (uint256) {
+    /// @return transient ether in wei (1e-18 Ether)
+    function _getTransientEther() internal view returns (uint256) {
         uint256 depositedValidators = DEPOSITED_VALIDATORS_POSITION.getStorageUint256();
         uint256 clValidators = CL_VALIDATORS_POSITION.getStorageUint256();
         // clValidators can never be less than deposited ones.
@@ -911,55 +914,51 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
 
+    function _getInternalEther() internal view returns (uint256) {
+        return _getBufferedEther()
+        .add(CL_BALANCE_POSITION.getStorageUint256())
+        .add(_getTransientEther());
+    }
+
+    function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
+        // TODO: cache external ether to storage
+        // to exchange 1 SLOAD in _getTotalPooledEther() 1 SSTORE in mintEE/burnEE
+        // _getTPE is super wide used
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 internalShares = _getTotalShares() - externalShares;
+        return externalShares.mul(_internalEther).div(internalShares);
+    }
+
     /**
      * @dev Gets the total amount of Ether controlled by the protocol and external entities
      * @return total balance in wei
      */
     function _getTotalPooledEther() internal view returns (uint256) {
-        return _getBufferedEther()
-            .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientBalance())
-            .add(EXTERNAL_BALANCE_POSITION.getStorageUint256());
+        uint256 internalEther = _getInternalEther();
+        return internalEther.add(_getExternalEther(internalEther));
     }
 
-    /// @notice Calculates the maximum amount of ether that can be added to the external balance while maintaining
-    ///         maximum allowed external balance limits for the protocol pooled ether
-    /// @return Maximum amount of ether that can be safely added to external balance
-    /// @dev This function enforces the ratio between external and protocol balance to stay below a limit.
-    ///      The limit is defined by some maxBP out of totalBP.
+    /// @notice Calculates the maximum amount of external shares that can be minted while maintaining
+    ///         maximum allowed external ratio limits
+    /// @return Maximum amount of external shares that can be minted
+    /// @dev This function enforces the ratio between external and total shares to stay below a limit.
+    ///      The limit is defined by some maxRatioBP out of totalBP.
     ///
-    ///      The calculation ensures: (external + x) / (totalPooled + x) <= maxBP / totalBP
-    ///      Which gives formula: x <= (maxBP * totalPooled - external * totalBP) / (totalBP - maxBP)
+    ///      The calculation ensures: (external + x) / (total + x) <= maxRatioBP / totalBP
+    ///      Which gives formula: x <= (total * maxRatioBP - external * totalBP) / (totalBP - maxRatioBP)
     ///
     ///      Special cases:
-    ///      - Returns 0 if maxBP is 0 (external balance disabled) or external balance already exceeds the limit
-    ///      - Returns uint256(-1) if maxBP >= totalBP (no limit)
-    function _getMaxAvailableExternalBalance() internal view returns (uint256) {
-        uint256 maxBP = MAX_EXTERNAL_BALANCE_POSITION.getStorageUint256();
-        uint256 externalBalance = EXTERNAL_BALANCE_POSITION.getStorageUint256();
-        uint256 totalPooledEther = _getTotalPooledEther();
+    ///      - Returns 0 if maxBP is 0 (external minting is disabled) or external shares already exceed the limit
+    function _getMaxMintableExternalShares() internal view returns (uint256) {
+        uint256 maxRatioBP = MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 totalShares = _getTotalShares();
 
-        if (maxBP == 0) return 0;
-        if (maxBP >= TOTAL_BASIS_POINTS) return uint256(-1);
-        if (externalBalance.mul(TOTAL_BASIS_POINTS) > totalPooledEther.mul(maxBP)) return 0;
+        if (maxRatioBP == 0) return 0;
+        if (totalShares.mul(maxRatioBP) <= externalShares.mul(TOTAL_BASIS_POINTS)) return 0;
 
-        return (maxBP.mul(totalPooledEther).sub(externalBalance.mul(TOTAL_BASIS_POINTS)))
-            .div(TOTAL_BASIS_POINTS.sub(maxBP));
-    }
-
-    /// @notice Calculates the new external balance after adding stETH and validates against maximum limit
-    ///
-    /// @param _stethAmount The amount of stETH being added to external balance
-    /// @return The new total external balance after adding _stethAmount
-    /// @dev Validates that the new external balance would not exceed the maximum allowed amount
-    ///      by comparing with _getMaxAvailableExternalBalance
-    function _getNewExternalBalance(uint256 _stethAmount) internal view returns (uint256) {
-        uint256 currentExternal = EXTERNAL_BALANCE_POSITION.getStorageUint256();
-        uint256 maxAmountToAdd = _getMaxAvailableExternalBalance();
-
-        require(_stethAmount <= maxAmountToAdd, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
-
-        return currentExternal.add(_stethAmount);
+        return (totalShares.mul(maxRatioBP).sub(externalShares.mul(TOTAL_BASIS_POINTS)))
+            .div(TOTAL_BASIS_POINTS.sub(maxRatioBP));
     }
 
     function _pauseStaking() internal {
