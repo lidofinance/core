@@ -238,7 +238,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of tokens to withdraw
      */
     function withdrawToWeth(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _withdraw(address(weth), _tokens);
+        _withdraw(address(this), _tokens);
         IWeth(weth).deposit{value: _tokens}();
     }
 
