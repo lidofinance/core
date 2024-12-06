@@ -188,7 +188,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The amount of ether that can be withdrawn.
      */
     function canWithdraw() external view returns (uint256) {
-        return address(stakingVault).balance - stakingVault.locked();
+        return Math256.min(address(stakingVault).balance, stakingVault.unlocked());
     }
 
     // ==================== Vault Management Functions ====================
