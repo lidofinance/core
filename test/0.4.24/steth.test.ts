@@ -142,7 +142,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       );
     });
 
-    it("Reverts when transfering from zero address", async () => {
+    it("Reverts when transferring from zero address", async () => {
       await expect(steth.connect(zeroAddressSigner).transferShares(recipient, 0)).to.be.revertedWith(
         "TRANSFER_FROM_ZERO_ADDR",
       );
@@ -384,7 +384,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of shares is unchanged after a ${rebase} rebase`, async () => {
         const totalSharesBeforeRebase = await steth.getTotalShares();
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
@@ -401,7 +401,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of user shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of user shares is unchanged after a ${rebase} rebase`, async () => {
         const sharesOfHolderBeforeRebase = await steth.sharesOf(holder);
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
