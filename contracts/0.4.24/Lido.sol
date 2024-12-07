@@ -498,10 +498,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _getExternalEther(_getInternalEther());
     }
 
+    /**
+     * @notice Get the total amount of external shares
+     * @return total external shares
+     */
     function getExternalShares() external view returns (uint256) {
         return EXTERNAL_SHARES_POSITION.getStorageUint256();
     }
 
+    /**
+     * @notice Get the maximum amount of external shares that can be minted under the current external ratio limit
+     * @return maximum mintable external shares
+     */
     function getMaxMintableExternalShares() external view returns (uint256) {
         return _getMaxMintableExternalShares();
     }
@@ -597,24 +605,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @notice Mint stETH shares
     /// @param _recipient recipient of the shares
-    /// @param _sharesAmount amount of shares to mint
+    /// @param _amountOfShares amount of shares to mint
     /// @dev can be called only by accounting
-    function mintShares(address _recipient, uint256 _sharesAmount) public {
+    function mintShares(address _recipient, uint256 _amountOfShares) public {
         _auth(getLidoLocator().accounting());
 
-        _mintShares(_recipient, _sharesAmount);
+        _mintShares(_recipient, _amountOfShares);
         // emit event after minting shares because we are always having the net new ether under the hood
         // for vaults we have new locked ether and for fees we have a part of rewards
-        _emitTransferAfterMintingShares(_recipient, _sharesAmount);
+        _emitTransferAfterMintingShares(_recipient, _amountOfShares);
     }
 
     /// @notice Burn stETH shares from the sender address
-    /// @param _sharesAmount amount of shares to burn
+    /// @param _amountOfShares amount of shares to burn
     /// @dev can be called only by burner
-    function burnShares(uint256 _sharesAmount) public {
+    function burnShares(uint256 _amountOfShares) public {
         _auth(getLidoLocator().burner());
 
-        _burnShares(msg.sender, _sharesAmount);
+        _burnShares(msg.sender, _amountOfShares);
 
         // historically there is no events for this kind of burning
         // TODO: should burn events be emitted here?
@@ -627,42 +635,42 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @param _amountOfShares Amount of shares to mint
     /// @dev Can be called only by accounting (authentication in mintShares method).
     ///      NB: Reverts if the the external balance limit is exceeded.
-    function mintExternalShares(address _receiver, uint256 _shares) external {
+    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
         require(_receiver != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
-        require(_shares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
+        require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
 
         // TODO: separate role and flag for external shares minting pause
         require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
 
-        uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_shares);
+        uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_amountOfShares);
         uint256 maxMintableExternalShares = _getMaxMintableExternalShares();
 
         require(newExternalShares <= maxMintableExternalShares, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
         EXTERNAL_SHARES_POSITION.setStorageUint256(newExternalShares);
 
-        mintShares(_receiver, _shares);
+        mintShares(_receiver, _amountOfShares);
 
-        emit ExternalSharesMinted(_receiver, _shares, getPooledEthByShares(_shares));
+        emit ExternalSharesMinted(_receiver, _amountOfShares, getPooledEthByShares(_amountOfShares));
     }
 
     /// @notice Burns external shares from a specified account
     ///
-    /// @param _shares Amount of shares to burn
-    function burnExternalShares(uint256 _shares) external {
-        require(_shares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
+    /// @param _amountOfShares Amount of shares to burn
+    function burnExternalShares(uint256 _amountOfShares) external {
+        require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
         _auth(getLidoLocator().accounting());
 
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
 
-        if (externalShares < _shares) revert("EXT_SHARES_TOO_SMALL");
-        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _shares);
+        if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
+        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _amountOfShares);
 
-        _burnShares(msg.sender, _shares);
+        _burnShares(msg.sender, _amountOfShares);
 
-        uint256 stethAmount = getPooledEthByShares(_shares);
-        _emitTransferEvents(msg.sender, address(0), stethAmount, _shares);
-        emit ExternalSharesBurned(msg.sender, _shares, stethAmount);
+        uint256 stethAmount = getPooledEthByShares(_amountOfShares);
+        _emitTransferEvents(msg.sender, address(0), stethAmount, _amountOfShares);
+        emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
 
     /// @notice processes CL related state changes as a part of the report processing
@@ -697,7 +705,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev all data validation was done by Accounting and OracleReportSanityChecker
     /// @param _reportTimestamp timestamp of the report
     /// @param _reportClBalance total balance of validators reported by the oracle
-    /// @param _adjustedPreCLBalance total balance of validators in the previouce report and deposits made since then
+    /// @param _adjustedPreCLBalance total balance of validators in the previous report and deposits made since then
     /// @param _withdrawalsToWithdraw amount of withdrawals to collect from WithdrawalsVault
     /// @param _elRewardsToWithdraw amount of EL rewards to collect from ELRewardsVault
     /// @param _lastWithdrawalRequestToFinalize last withdrawal request ID to finalize
@@ -917,7 +925,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getInternalEther() internal view returns (uint256) {
         return _getBufferedEther()
         .add(CL_BALANCE_POSITION.getStorageUint256())
-        .add(_getTransientEther());
+            .add(_getTransientEther());
     }
 
     function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
@@ -955,6 +963,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 totalShares = _getTotalShares();
 
         if (maxRatioBP == 0) return 0;
+        if (maxRatioBP == TOTAL_BASIS_POINTS) return uint256(-1);
         if (totalShares.mul(maxRatioBP) <= externalShares.mul(TOTAL_BASIS_POINTS)) return 0;
 
         return (totalShares.mul(maxRatioBP).sub(externalShares.mul(TOTAL_BASIS_POINTS)))

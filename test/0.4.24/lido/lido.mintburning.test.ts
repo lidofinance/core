@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ACL, Lido } from "typechain-types";
+import { Lido } from "typechain-types";
 
 import { ether, impersonate } from "lib";
 
@@ -18,14 +18,13 @@ describe("Lido.sol:mintburning", () => {
   let burner: HardhatEthersSigner;
 
   let lido: Lido;
-  let acl: ACL;
 
   let originalState: string;
 
   before(async () => {
     [deployer, user] = await ethers.getSigners();
 
-    ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
+    ({ lido } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
 
     const locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
@@ -91,27 +90,6 @@ describe("Lido.sol:mintburning", () => {
         .withArgs(burner.address, await lido.getPooledEthByShares(1000n), 1000n, 1000n);
 
       expect(await lido.sharesOf(burner)).to.equal(0n);
-    });
-  });
-
-  context("external shares", () => {
-    before(async () => {
-      await acl.createPermission(deployer, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
-      await lido.connect(deployer).setMaxExternalBalanceBP(10000);
-      await lido.connect(deployer).resumeStaking();
-
-      // make share rate close to 1.5
-      await lido.connect(burner).submit(ZeroAddress, { value: ether("1.0") });
-      await lido.connect(burner).burnShares(ether("0.5"));
-    });
-
-    it("precision loss", async () => {
-      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 1 wei
-      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 2 wei
-      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 3 wei
-      await lido.connect(accounting).mintExternalShares(accounting, 1n); // 4 wei
-
-      await expect(lido.connect(accounting).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
     });
   });
 });

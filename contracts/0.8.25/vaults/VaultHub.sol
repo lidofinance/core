@@ -372,7 +372,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares) {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -404,6 +404,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
                     _preTotalShares,
                     _preTotalPooledEther
                 );
+
+                totalTreasuryFeeShares += treasuryFeeShares[i];
 
                 uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
                 uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
