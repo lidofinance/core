@@ -7,15 +7,22 @@ pragma solidity 0.8.25;
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/draft-IERC20Permit.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
 
-interface IWeth {
+/// @notice Interface defining a Lido liquid staking pool
+/// @dev see also [Lido liquid staking pool core contract](https://docs.lido.fi/contracts/lido)
+interface IStETH is IERC20, IERC20Permit {
+    function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256)
+}
+
+interface IWeth is IERC20 {
     function withdraw(uint) external;
     function deposit() external payable;
 }
 
-interface IWstETH {
+interface IWstETH is IERC20, IERC20Permit {
     function wrap(uint256) external returns (uint256);
     function unwrap(uint256) external returns (uint256);
 }
@@ -37,7 +44,7 @@ contract Dashboard is AccessControlEnumerable {
     bool public isInitialized;
 
     /// @notice The stETH token contract
-    IERC20 public immutable stETH;
+    IStETH public immutable stETH;
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
@@ -220,8 +227,9 @@ contract Dashboard is AccessControlEnumerable {
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
     function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        IWeth(weth).withdraw(_wethAmount);
-        _fund();
+        weth.transferFrom(msg.sender, address(this), _wethAmount);
+        weth.withdraw(_wethAmount);
+        _fund{value: _wethAmount}();
     }
 
     /**
@@ -235,11 +243,13 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Withdraws stETH tokens from the staking vault to wrapped ether. Approvals for the passed amounts should be done before.
-     * @param _tokens Amount of tokens to withdraw
+     * @param _recipient Address of the recipient
+     * @param _ether Amount of ether to withdraw
      */
-    function withdrawToWeth(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _withdraw(address(this), _tokens);
-        IWeth(weth).deposit{value: _tokens}();
+    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _withdraw(address(this), _ether);
+        weth.deposit{value: _ether}();
+        weth.transfer(_recipient, _ether);
     }
 
     /**
@@ -282,8 +292,11 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _tokens) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
-        _mint(_recipient, _tokens);
-        IWstETH(wstETH).wrap(_tokens);
+        _mint(address(this), _tokens);
+
+        stETH.approve(address(wstETH), _tokens);
+        uint256 wstETHAmount = wstETH.wrap(_tokens);
+        wstETH.transfer(_recipient, wstETHAmount);
     }
 
     /**
@@ -299,8 +312,11 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of wstETH tokens to burn
      */
     function burnWstETH(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        IWstETH(wstETH).unwrap(_tokens);
-        _burn(_tokens);
+        wstETH.transferFrom(msg.sender, address(this), _tokens);
+        stETH.approve(address(wstETH), _tokens);
+
+        uint256 stETHAmount = wstETH.unwrap(_tokens);
+        _burn(stETHAmount);
     }
 
     /**
@@ -316,12 +332,15 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault using EIP-2612 Permit.
      * @param _tokens Amount of wstETH tokens to burn
-     * @param _permit data required for the stETH.permit() method to set the allowance
+     * @param _wstETHPermit data required for the wstETH.permit() method to set the allowance
      */
-    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        stETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
-        IWstETH(wstETH).unwrap(_tokens);
-        _burn(_tokens);
+    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _wstETHPermit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        wstETH.permit(msg.sender, address(this), _wstETHPermit.value, _wstETHPermit.deadline, _wstETHPermit.v, _wstETHPermit.r, _wstETHPermit.s);
+
+        wstETH.transferFrom(msg.sender, address(this), _tokens);
+        stETH.approve(address(wstETH), _tokens);
+        uint256 stETHAmount = wstETH.unwrap(_tokens);
+        _burn(stETHAmount);
     }
 
     /**
