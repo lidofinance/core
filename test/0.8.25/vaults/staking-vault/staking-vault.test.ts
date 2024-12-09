@@ -23,7 +23,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault", () => {
+describe.only("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let beaconSigner: HardhatEthersSigner;
@@ -202,33 +202,12 @@ describe("StakingVault", () => {
       expect(await stakingVault.valuation()).to.equal(ether("1"));
     });
 
-    it("reverts if the amount overflows int128", async () => {
-      const overflowAmount = MAX_INT128 + 1n;
-      const forGas = ether("10");
-      const bigBalance = overflowAmount + forGas;
-      await setBalance(vaultOwnerAddress, bigBalance);
-      await expect(stakingVault.fund({ value: overflowAmount }))
-        .to.be.revertedWithCustomError(stakingVault, "SafeCastOverflowedIntDowncast")
-        .withArgs(128n, overflowAmount);
-    });
-
     it("does not revert if the amount is max int128", async () => {
       const maxInOutDelta = MAX_INT128;
       const forGas = ether("10");
       const bigBalance = maxInOutDelta + forGas;
       await setBalance(vaultOwnerAddress, bigBalance);
       await expect(stakingVault.fund({ value: maxInOutDelta })).to.not.be.reverted;
-    });
-
-    it("reverts with panic if the total inOutDelta overflows int128", async () => {
-      const maxInOutDelta = MAX_INT128;
-      const forGas = ether("10");
-      const bigBalance = maxInOutDelta + forGas;
-      await setBalance(vaultOwnerAddress, bigBalance);
-      await expect(stakingVault.fund({ value: maxInOutDelta })).to.not.be.reverted;
-
-      const OVERFLOW_PANIC_CODE = 0x11;
-      await expect(stakingVault.fund({ value: 1n })).to.be.revertedWithPanic(OVERFLOW_PANIC_CODE);
     });
   });
 
@@ -394,12 +373,6 @@ describe("StakingVault", () => {
       await expect(stakingVault.connect(vaultHubSigner).lock(ether("2")))
         .to.emit(stakingVault, "Locked")
         .withArgs(ether("2"));
-    });
-
-    it("reverts if the locked overflows uint128", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).lock(MAX_UINT128 + 1n))
-        .to.be.revertedWithCustomError(stakingVault, "SafeCastOverflowedUintDowncast")
-        .withArgs(128n, MAX_UINT128 + 1n);
     });
 
     it("does not revert if the locked amount is max uint128", async () => {

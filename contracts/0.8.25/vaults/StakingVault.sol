@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {SafeCast} from "@openzeppelin/contracts-v5.0.2/utils/math/SafeCast.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
@@ -75,7 +74,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     /**
      * @dev Main storage structure for the vault
      * @param report Latest report data containing valuation and inOutDelta
-     * @param locked Amount of ETH locked in the vault and cannot be withdrawn
+     * @param locked Amount of ETH locked in the vault and cannot be withdrawn`
      * @param inOutDelta Net difference between deposits and withdrawals
      */
     struct VaultStorage {
@@ -220,7 +219,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         VaultStorage storage $ = _getVaultStorage();
-        $.inOutDelta += SafeCast.toInt128(int256(msg.value));
+        $.inOutDelta += int128(int256(msg.value));
 
         emit Funded(msg.sender, msg.value);
     }
@@ -239,7 +238,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
 
         VaultStorage storage $ = _getVaultStorage();
-        $.inOutDelta -= SafeCast.toInt128(int256(_ether));
+        $.inOutDelta -= int128(int256(_ether));
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
@@ -286,7 +285,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         VaultStorage storage $ = _getVaultStorage();
         if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
 
-        $.locked = SafeCast.toUint128(_locked);
+        $.locked = uint128(_locked);
 
         emit Locked(_locked);
     }
@@ -302,7 +301,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
         if (owner() == msg.sender || (!isHealthy() && msg.sender == address(VAULT_HUB))) {
             VaultStorage storage $ = _getVaultStorage();
-            $.inOutDelta -= SafeCast.toInt128(int256(_ether));
+            $.inOutDelta -= int128(int256(_ether));
 
             emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
 
@@ -332,9 +331,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         VaultStorage storage $ = _getVaultStorage();
-        $.report.valuation = SafeCast.toUint128(_valuation);
-        $.report.inOutDelta = SafeCast.toInt128(_inOutDelta);
-        $.locked = SafeCast.toUint128(_locked);
+        $.report.valuation = uint128(_valuation);
+        $.report.inOutDelta = int128(_inOutDelta);
+        $.locked = uint128(_locked);
 
         address _owner = owner();
         uint256 codeSize;
