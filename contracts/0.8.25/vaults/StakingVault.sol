@@ -23,7 +23,8 @@ import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
  * The vault uses ERC7201 namespaced storage pattern with a main VaultStorage struct containing:
  * - report: Latest metrics snapshot (valuation and inOutDelta at time of report)
  * - locked: Amount of ETH that cannot be withdrawn (managed by VaultHub)
- * - inOutDelta: Running tally of deposits minus withdrawals since last report
+ * - inOutDelta: The net difference between deposits and withdrawals,
+ *               can be negative if withdrawals > deposits due to rewards
  *
  * CORE MECHANICS
  * -------------
@@ -31,16 +32,16 @@ import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
  *    - Owner can deposit ETH via fund()
  *    - Owner can withdraw unlocked ETH via withdraw()
  *    - All deposits/withdrawals update inOutDelta
- *    - Withdrawals are only allowed if vault remains healthy
+ *    - Withdrawals are only allowed if vault remains balanced
  *
- * 2. Valuation & Health
- *    - Total value = report.valuation + (current inOutDelta - report.inOutDelta)
- *    - Vault is "healthy" if total value >= locked amount
- *    - Unlocked ETH = max(0, total value - locked amount)
+ * 2. Valuation & Balance
+ *    - Total valuation = report.valuation + (current inOutDelta - report.inOutDelta)
+ *    - Vault is "balanced" if total valuation >= locked amount
+ *    - Unlocked ETH = max(0, total valuation - locked amount)
  *
  * 3. Beacon Chain Integration
  *    - Can deposit validators (32 ETH each) to Beacon Chain
- *    - Withdrawal credentials are derived from vault address
+ *    - Withdrawal credentials are derived from vault address, for now only 0x01 is supported
  *    - Can request validator exits when needed by emitting the event,
  *      which acts as a signal to the operator to exit the validator,
  *      Triggerable Exits are not supported for now
@@ -51,23 +52,25 @@ import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
  *    - VaultHub can increase locked amount outside of reports
  *
  * 5. Rebalancing
- *    - Owner or VaultHub can trigger rebalancing when unhealthy
- *    - Moves ETH between vault and VaultHub to maintain health
+ *    - Owner or VaultHub can trigger rebalancing when unbalanced
+ *    - Moves ETH between vault and VaultHub to maintain balance
  *
  * ACCESS CONTROL
  * -------------
- * - Owner: Can fund, withdraw, deposit to beacon chain, request exits
- * - VaultHub: Can update reports, lock amounts, force rebalance when unhealthy
+ * - Owner: Can fund, withdraw, deposit to beacon chain, request exits, rebalance
+ * - VaultHub: Can update reports, lock amounts, force rebalance when unbalanced
  * - Beacon: Controls implementation upgrades
  *
  * SECURITY CONSIDERATIONS
  * ----------------------
- * - Locked amounts can only increase outside of reports
- * - Withdrawals blocked if they would make vault unhealthy
+ * - Locked amounts can't decrease outside of reports
+ * - Withdrawal reverts if it makes vault unbalanced
  * - Only VaultHub can update core state via reports
  * - Uses ERC7201 storage pattern to prevent upgrade collisions
  * - Withdrawal credentials are immutably tied to vault address
- *
+ * - This contract uses OpenZeppelin's OwnableUpgradeable which itself inherits Initializable,
+ *   thus, this intentionally violates the LIP-10:
+ *   https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
  */
 contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
@@ -102,7 +105,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     modifier onlyBeacon() {
-        if (msg.sender != getBeacon()) revert SenderShouldBeBeacon(msg.sender, getBeacon());
+        if (msg.sender != getBeacon()) revert SenderNotBeacon(msg.sender, getBeacon());
         _;
     }
 
@@ -120,7 +123,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @notice Returns the current version of the contract
      * @return uint64 contract version number
      */
-    function version() public pure virtual returns (uint64) {
+    function version() external pure virtual returns (uint64) {
         return _version;
     }
 
@@ -128,8 +131,28 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @notice Returns the version of the contract when it was initialized
      * @return uint64 The initialized version number
      */
-    function getInitializedVersion() public view returns (uint64) {
+    function getInitializedVersion() external view returns (uint64) {
         return _getInitializedVersion();
+    }
+
+    /**
+     * @notice Returns the address of the VaultHub contract
+     * @return address The VaultHub contract address
+     */
+    function vaultHub() external view returns (address) {
+        return address(VAULT_HUB);
+    }
+
+    /**
+     * @notice Returns the current amount of ETH locked in the vault
+     * @return uint256 The amount of locked ETH
+     */
+    function locked() external view returns (uint256) {
+        return _getVaultStorage().locked;
+    }
+
+    receive() external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
     }
 
     /**
@@ -141,21 +164,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     /**
-     * @notice Returns the address of the VaultHub contract
-     * @return address The VaultHub contract address
-     */
-    function vaultHub() public view override returns (address) {
-        return address(VAULT_HUB);
-    }
-
-    receive() external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-
-        emit ExecutionLayerRewardsReceived(msg.sender, msg.value);
-    }
-
-    /**
-     * @notice Returns the TVL of the vault
+     * @notice Returns the valuation of the vault
      * @return uint256 total valuation in ETH
      * @dev Calculated as:
      *  latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
@@ -166,19 +175,11 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     }
 
     /**
-     * @notice Checks if the vault is in a healthy state
+     * @notice Returns true if the vault is in a balanced state
      * @return true if valuation >= locked amount
      */
-    function isHealthy() public view returns (bool) {
+    function isBalanced() public view returns (bool) {
         return valuation() >= _getVaultStorage().locked;
-    }
-
-    /**
-     * @notice Returns the current amount of ETH locked in the vault
-     * @return uint256 The amount of locked ETH
-     */
-    function locked() external view returns (uint256) {
-        return _getVaultStorage().locked;
     }
 
     /**
@@ -205,6 +206,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
     /**
      * @notice Returns the withdrawal credentials for Beacon Chain deposits
+     * @dev For now only 0x01 is supported
      * @return bytes32 withdrawal credentials derived from vault address
      */
     function withdrawalCredentials() public view returns (bytes32) {
@@ -228,7 +230,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @notice Allows owner to withdraw unlocked ETH
      * @param _recipient Address to receive the ETH
      * @param _ether Amount of ETH to withdraw
-     * @dev Checks for sufficient unlocked balance and vault health
+     * @dev Checks for sufficient unlocked balance and reverts if unbalanced
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -242,7 +244,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
-        if (!isHealthy()) revert NotHealthy();
+        if (!isBalanced()) revert Unbalanced();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -252,7 +254,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @param _numberOfDeposits Number of 32 ETH deposits to make
      * @param _pubkeys Validator public keys
      * @param _signatures Validator signatures
-     * @dev Ensures vault is healthy and handles deposit logistics
+     * @dev Ensures vault is balanced and handles deposit logistics
      */
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
@@ -260,7 +262,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         bytes calldata _signatures
     ) external onlyOwner {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
-        if (!isHealthy()) revert NotHealthy();
+        if (!isBalanced()) revert Unbalanced();
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
@@ -271,6 +273,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      * @param _validatorPublicKey Public key of validator to exit
      */
     function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyOwner {
+        // Question: should this be compatible with Lido VEBO?
         emit ValidatorsExitRequest(msg.sender, _validatorPublicKey);
     }
 
@@ -293,13 +296,13 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     /**
      * @notice Rebalances ETH between vault and VaultHub
      * @param _ether Amount of ETH to rebalance
-     * @dev Can be called by owner or VaultHub when unhealthy
+     * @dev Can be called by owner or VaultHub when unbalanced
      */
     function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        if (owner() == msg.sender || (!isHealthy() && msg.sender == address(VAULT_HUB))) {
+        if (owner() == msg.sender || (!isBalanced() && msg.sender == address(VAULT_HUB))) {
             VaultStorage storage $ = _getVaultStorage();
             $.inOutDelta -= int128(int256(_ether));
 
@@ -362,7 +365,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     event Funded(address indexed sender, uint256 amount);
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
     event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
-    event ExecutionLayerRewardsReceived(address indexed sender, uint256 amount);
     event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
     event Reported(address indexed vault, uint256 valuation, int256 inOutDelta, uint256 locked);
@@ -372,8 +374,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     error InsufficientBalance(uint256 balance);
     error InsufficientUnlocked(uint256 unlocked);
     error TransferFailed(address recipient, uint256 amount);
-    error NotHealthy();
+    error Unbalanced();
     error NotAuthorized(string operation, address sender);
     error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
-    error SenderShouldBeBeacon(address sender, address beacon);
+    error SenderNotBeacon(address sender, address beacon);
 }

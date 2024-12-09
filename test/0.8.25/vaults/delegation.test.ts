@@ -67,7 +67,7 @@ describe("Delegation.sol", () => {
     await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderShouldBeBeacon");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderNotBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -93,10 +93,7 @@ describe("Delegation.sol", () => {
     it("reverts if already initialized", async () => {
       const { vault: vault1, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
 
-      await expect(delegation_.initialize(admin, vault1)).to.revertedWithCustomError(
-        delegation,
-        "AlreadyInitialized",
-      );
+      await expect(delegation_.initialize(admin, vault1)).to.revertedWithCustomError(delegation, "AlreadyInitialized");
     });
 
     it("initialize", async () => {

@@ -53,7 +53,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
-    /** 
+    /**
      * @notice Role for the operator
      * Operator can:
      * - claim the performance due
@@ -240,7 +240,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (!stakingVault.isHealthy()) revert VaultNotHealthy();
+        if (!stakingVault.isBalanced()) revert VaultUnbalanced();
 
         uint256 due = managementDue;
 
@@ -491,8 +491,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /// @param requested The amount requested to withdraw.
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
 
-    /// @notice Error when the vault is not healthy.
-    error VaultNotHealthy();
+    /// @notice Error when the vault is not balanced.
+    error VaultUnbalanced();
 
     /// @notice Hook can only be called by the staking vault.
     error OnlyStVaultCanCallOnReportHook();

@@ -76,7 +76,7 @@ describe("VaultFactory.sol", () => {
     await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderShouldBeBeacon");
+    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderNotBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -141,7 +141,7 @@ describe("VaultFactory.sol", () => {
       expect(await vault.version()).to.eq(1);
     });
 
-    it.skip("works with non-empty `params`", async () => { });
+    it.skip("works with non-empty `params`", async () => {});
   });
 
   context("connect", () => {

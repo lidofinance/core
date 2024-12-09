@@ -92,14 +92,14 @@ describe("StakingVault.sol", async () => {
     it("reverts on impl initialization", async () => {
       await expect(stakingVault.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
         vaultProxy,
-        "SenderShouldBeBeacon",
+        "SenderNotBeacon",
       );
     });
 
     it("reverts if already initialized", async () => {
       await expect(vaultProxy.initialize(await owner.getAddress(), "0x")).to.be.revertedWithCustomError(
         vaultProxy,
-        "SenderShouldBeBeacon",
+        "SenderNotBeacon",
       );
     });
   });
@@ -129,9 +129,7 @@ describe("StakingVault.sol", async () => {
       // can't chain `emit` and `changeEtherBalance`, so we have two expects
       // https://hardhat.org/hardhat-runner/plugins/nomicfoundation-hardhat-chai-matchers#chaining-async-matchers
       // we could also
-      await expect(tx)
-        .to.emit(stakingVault, "ExecutionLayerRewardsReceived")
-        .withArgs(await executionLayerRewardsSender.getAddress(), executionLayerRewardsAmount);
+      await expect(tx).not.to.be.reverted;
       await expect(tx).to.changeEtherBalance(stakingVault, balanceBefore + executionLayerRewardsAmount);
     });
   });

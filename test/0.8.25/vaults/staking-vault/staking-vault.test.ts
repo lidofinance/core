@@ -23,7 +23,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe.only("StakingVault", () => {
+describe("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let beaconSigner: HardhatEthersSigner;
@@ -109,7 +109,7 @@ describe.only("StakingVault", () => {
 
     it("reverts on initialization if the caller is not the beacon", async () => {
       await expect(stakingVaultImplementation.connect(stranger).initialize(await vaultOwner.getAddress(), "0x"))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "SenderShouldBeBeacon")
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "SenderNotBeacon")
         .withArgs(stranger, await stakingVaultImplementation.getBeacon());
     });
   });
@@ -131,7 +131,7 @@ describe.only("StakingVault", () => {
         ("0x01" + "00".repeat(11) + de0x(stakingVaultAddress)).toLowerCase(),
       );
       expect(await stakingVault.valuation()).to.equal(0n);
-      expect(await stakingVault.isHealthy()).to.be.true;
+      expect(await stakingVault.isBalanced()).to.be.true;
 
       const storageSlot = "0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000";
       const value = await getStorageAt(stakingVaultAddress, storageSlot);
@@ -171,12 +171,12 @@ describe.only("StakingVault", () => {
         .withArgs("msg.value");
     });
 
-    it("receives execution layer rewards", async () => {
+    it("receives direct transfers without updating inOutDelta", async () => {
+      const inOutDeltaBefore = await stakingVault.inOutDelta();
       const balanceBefore = await ethers.provider.getBalance(stakingVaultAddress);
-      await expect(vaultOwner.sendTransaction({ to: stakingVaultAddress, value: ether("1") }))
-        .to.emit(stakingVault, "ExecutionLayerRewardsReceived")
-        .withArgs(vaultOwnerAddress, ether("1"));
+      await expect(vaultOwner.sendTransaction({ to: stakingVaultAddress, value: ether("1") })).to.not.be.reverted;
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(balanceBefore + ether("1"));
+      expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore);
     });
   });
 
@@ -313,11 +313,11 @@ describe.only("StakingVault", () => {
         .withArgs("_numberOfDeposits");
     });
 
-    it("reverts if the vault is not healthy", async () => {
+    it("reverts if the vault is not balanced", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
       await expect(stakingVault.depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
         stakingVault,
-        "NotHealthy",
+        "Unbalanced",
       );
     });
 
@@ -415,9 +415,9 @@ describe.only("StakingVault", () => {
       expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore - ether("1"));
     });
 
-    it("can be called by the vault hub when the vault is unhealthy", async () => {
+    it("can be called by the vault hub when the vault is unbalanced", async () => {
       await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
-      expect(await stakingVault.isHealthy()).to.equal(false);
+      expect(await stakingVault.isBalanced()).to.equal(false);
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: ether("0.1") });
 

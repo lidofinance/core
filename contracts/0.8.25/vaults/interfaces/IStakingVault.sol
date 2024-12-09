@@ -22,7 +22,7 @@ interface IStakingVault {
 
     function valuation() external view returns (uint256);
 
-    function isHealthy() external view returns (bool);
+    function isBalanced() external view returns (bool);
 
     function unlocked() external view returns (uint256);
 
