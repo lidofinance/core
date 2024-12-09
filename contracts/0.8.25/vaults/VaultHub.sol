@@ -117,35 +117,6 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         return $.sockets[$.vaultIndex[IHubVault(_vault)]];
     }
 
-    /// @notice Returns all vaults owned by a given address
-    /// @param _owner Address of the owner
-    /// @return An array of vaults owned by the given address
-    function vaultsByOwner(address _owner) external view returns (IHubVault[] memory) {
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        uint256 count = 0;
-
-        // First, count how many vaults belong to the owner
-        for (uint256 i = 1; i < $.sockets.length; i++) {
-            if ($.sockets[i].vault.owner() == _owner) {
-                count++;
-            }
-        }
-
-        // Create an array to hold the owner's vaults
-        IHubVault[] memory ownerVaults = new IHubVault[](count);
-        uint256 index = 0;
-
-        // Populate the array with the owner's vaults
-        for (uint256 i = 1; i < $.sockets.length; i++) {
-            if ($.sockets[i].vault.owner() == _owner) {
-                ownerVaults[index] = $.sockets[i].vault;
-                index++;
-            }
-        }
-
-        return ownerVaults;
-    }
-
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
