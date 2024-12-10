@@ -7,6 +7,11 @@ export NETWORK=holesky
 export NETWORK_STATE_FILE="deployed-${NETWORK}-vaults-devnet-1.json"
 export NETWORK_STATE_DEFAULTS_FILE="testnet-defaults.json"
 
+# Accounting Oracle args
+export GAS_PRIORITY_FEE=2
+export GENESIS_TIME=1695902400
+export DSM_PREDEFINED_ADDRESS=0x22f05077be05be96d213c6bdbd61c8f506ccd126
+
 # Holesky params: https://github.com/eth-clients/holesky/blob/main/README.md
 export DEPOSIT_CONTRACT=0x4242424242424242424242424242424242424242
 
