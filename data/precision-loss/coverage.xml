@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3460"  lines-covered="2925"  line-rate="0.8454"  branches-valid="1614"  branches-covered="1245"  branch-rate="0.7714"  timestamp="1733824681499" complexity="0" version="0.1">
+<coverage lines-valid="3463"  lines-covered="2925"  line-rate="0.8445999999999999"  branches-valid="1616"  branches-covered="1245"  branch-rate="0.7704000000000001"  timestamp="1733827753527" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1961,7 +1961,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults"  line-rate="0.3811"  branch-rate="0.2575" >
+	<package name="0.8.25.vaults"  line-rate="0.3782"  branch-rate="0.2556" >
 	<classes>
 		<class name="Dashboard.sol"  filename="contracts/0.8.25/vaults/Dashboard.sol"  line-rate="0.2955"  branch-rate="0.18420000000000003" >
 		<methods>
@@ -2464,7 +2464,7 @@
 			<line number="91"  hits="9"  branch="false" />
 		</lines>
 		</class>
-		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.25170000000000003"  branch-rate="0.23329999999999998" >
+		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.2468"  branch-rate="0.22829999999999998" >
 		<methods>
 			<method name="constructor"  hits="3"  signature="()V" >
 				<lines><line number="81"  hits="3" /></lines>
@@ -2530,19 +2530,19 @@
 				<lines><line number="452"  hits="0" /></lines>
 			</method>
 			<method name="_vaultAuth"  hits="0"  signature="()V" >
-				<lines><line number="483"  hits="0" /></lines>
+				<lines><line number="489"  hits="0" /></lines>
 			</method>
 			<method name="_connectedSocket"  hits="0"  signature="()V" >
-				<lines><line number="487"  hits="0" /></lines>
+				<lines><line number="493"  hits="0" /></lines>
 			</method>
 			<method name="_maxMintableShares"  hits="0"  signature="()V" >
-				<lines><line number="496"  hits="0" /></lines>
+				<lines><line number="502"  hits="0" /></lines>
 			</method>
 			<method name="_getVaultHubStorage"  hits="16"  signature="()V" >
-				<lines><line number="502"  hits="16" /></lines>
+				<lines><line number="508"  hits="16" /></lines>
 			</method>
 			<method name="_checkShareLimitUpperBound"  hits="4"  signature="()V" >
-				<lines><line number="509"  hits="4" /></lines>
+				<lines><line number="515"  hits="4" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2672,31 +2672,34 @@
 			<line number="449"  hits="0"  branch="false" />
 			<line number="458"  hits="0"  branch="false" />
 			<line number="460"  hits="0"  branch="false" />
-			<line number="462"  hits="0"  branch="false" />
-			<line number="463"  hits="0"  branch="false" />
-			<line number="464"  hits="0"  branch="false" />
-			<line number="465"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="461"  hits="0"  branch="false" />
+			<line number="463"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="465"  hits="0"  branch="false" />
+			<line number="466"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="467"  hits="0"  branch="false" />
 			<line number="468"  hits="0"  branch="false" />
-			<line number="469"  hits="0"  branch="false" />
 			<line number="470"  hits="0"  branch="false" />
-			<line number="471"  hits="0"  branch="false" />
-			<line number="473"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="474"  hits="0"  branch="false" />
+			<line number="473"  hits="0"  branch="false" />
 			<line number="475"  hits="0"  branch="false" />
-			<line number="477"  hits="0"  branch="false" />
-			<line number="478"  hits="0"  branch="false" />
-			<line number="484"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="488"  hits="0"  branch="false" />
-			<line number="489"  hits="0"  branch="false" />
-			<line number="490"  hits="0"  branch="true"  condition-coverage="0% (0/4)" />
-			<line number="491"  hits="0"  branch="false" />
+			<line number="476"  hits="0"  branch="false" />
+			<line number="477"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="479"  hits="0"  branch="false" />
+			<line number="480"  hits="0"  branch="false" />
+			<line number="481"  hits="0"  branch="false" />
+			<line number="482"  hits="0"  branch="false" />
+			<line number="483"  hits="0"  branch="false" />
+			<line number="484"  hits="0"  branch="false" />
+			<line number="490"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="494"  hits="0"  branch="false" />
+			<line number="495"  hits="0"  branch="false" />
+			<line number="496"  hits="0"  branch="true"  condition-coverage="0% (0/4)" />
 			<line number="497"  hits="0"  branch="false" />
-			<line number="499"  hits="0"  branch="false" />
-			<line number="503"  hits="16"  branch="false" />
-			<line number="511"  hits="4"  branch="false" />
-			<line number="512"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="513"  hits="0"  branch="false" />
+			<line number="503"  hits="0"  branch="false" />
+			<line number="505"  hits="0"  branch="false" />
+			<line number="509"  hits="16"  branch="false" />
+			<line number="517"  hits="4"  branch="false" />
+			<line number="518"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="519"  hits="0"  branch="false" />
 		</lines>
 		</class>
 	</classes>
