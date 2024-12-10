@@ -13,11 +13,13 @@ interface ILido {
 
     function getExternalEther() external view returns (uint256);
 
+    function getExternalShares() external view returns (uint256);
+
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
 
-    function getMaxAvailableExternalBalance() external view returns (uint256);
+    function getMaxMintableExternalShares() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 
