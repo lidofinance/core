@@ -226,25 +226,26 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         _disconnect(_vault);
     }
 
-    /// @notice mint StETH tokens backed by vault external balance to the receiver address
+    /// @notice mint StETH shares backed by vault external balance to the receiver address
     /// @param _vault vault address
     /// @param _recipient address of the receiver
-    /// @param _tokens amount of stETH tokens to mint
+    /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintStethBackedByVault(address _vault, address _recipient, uint256 _tokens) external {
+    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
 
         _vaultAuth(_vault, "mint");
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 sharesToMint = STETH.getSharesByPooledEth(_tokens);
-        uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
-        if (vaultSharesAfterMint > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
+        uint256 vaultSharesAfterMint = socket.sharesMinted + _amountOfShares;
+        uint256 shareLimit = socket.shareLimit;
+        if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
-        uint256 maxMintableShares = _maxMintableShares(_vault, socket.reserveRatioBP);
+        uint256 reserveRatioBP = socket.reserveRatioBP;
+        uint256 maxMintableShares = _maxMintableShares(_vault, reserveRatioBP);
 
         if (vaultSharesAfterMint > maxMintableShares) {
             revert InsufficientValuationToMint(_vault, IStakingVault(_vault).valuation());
@@ -252,37 +253,35 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
 
-        STETH.mintExternalShares(_recipient, sharesToMint);
-
-        emit MintedStETHOnVault(_vault, _tokens);
-
         uint256 totalEtherLocked = (STETH.getPooledEthByShares(vaultSharesAfterMint) * TOTAL_BASIS_POINTS) /
-            (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+            (TOTAL_BASIS_POINTS - reserveRatioBP);
 
         IStakingVault(_vault).lock(totalEtherLocked);
+        STETH.mintExternalShares(_recipient, _amountOfShares);
+
+        emit MintedSharesOnVault(_vault, _amountOfShares);
     }
 
-    /// @notice burn steth from the balance of the vault contract
+    /// @notice burn steth shares from the balance of the VaultHub contract
     /// @param _vault vault address
-    /// @param _tokens amount of tokens to burn
+    /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
-    /// @dev vaultHub must be approved to transfer stETH
-    function burnStethBackedByVault(address _vault, uint256 _tokens) public {
+    /// @dev VaultHub must have all the stETH on its balance
+    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         _vaultAuth(_vault, "burn");
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 amountOfShares = STETH.getSharesByPooledEth(_tokens);
         uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, sharesMinted);
+        if (sharesMinted < _amountOfShares) revert InsufficientSharesToBurn(_vault, sharesMinted);
 
-        socket.sharesMinted = uint96(sharesMinted - amountOfShares);
+        socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
-        STETH.burnExternalShares(amountOfShares);
+        STETH.burnExternalShares(_amountOfShares);
 
-        emit BurnedStETHOnVault(_vault, _tokens);
+        emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
@@ -290,7 +289,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function transferAndBurnStethBackedByVault(address _vault, uint256 _tokens) external {
         STETH.transferFrom(msg.sender, address(this), _tokens);
 
-        burnStethBackedByVault(_vault, _tokens);
+        burnSharesBackedByVault(_vault, _tokens);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio
@@ -515,8 +514,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 treasuryFeeBP);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
-    event MintedStETHOnVault(address indexed vault, uint256 tokens);
-    event BurnedStETHOnVault(address indexed vault, uint256 tokens);
+    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultImplAdded(address indexed impl);
     event VaultFactoryAdded(address indexed factory);
