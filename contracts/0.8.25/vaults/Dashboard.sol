@@ -17,6 +17,7 @@ import {VaultHub} from "./VaultHub.sol";
  * in this single contract. It provides administrative functions for managing the staking vault,
  * including funding, withdrawing, depositing to the beacon chain, minting, burning, and rebalancing operations.
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
+ * Question: Do we need recover methods for ether and ERC20?
  */
 contract Dashboard is AccessControlEnumerable {
     /// @notice Address of the implementation contract
