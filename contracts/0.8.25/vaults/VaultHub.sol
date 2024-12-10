@@ -457,25 +457,31 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     ) internal returns (uint256 totalTreasuryShares) {
         VaultHubStorage storage $ = _getVaultHubStorage();
 
-        uint256 index = 1; // NOTE!: first socket is always empty and we skip disconnected sockets
-
         for (uint256 i = 0; i < _valuations.length; i++) {
-            VaultSocket memory socket = $.sockets[index];
-            address vault_ = socket.vault;
+            VaultSocket storage socket = $.sockets[i + 1];
+
+            if (socket.isDisconnected) continue; // we skip disconnected vaults
+
+            uint256 treasuryFeeShares = _treasureFeeShares[i];
+            if (treasuryFeeShares > 0) {
+                socket.sharesMinted += uint96(treasuryFeeShares);
+                totalTreasuryShares += treasuryFeeShares;
+            }
+            IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
+        }
+
+        uint256 length = $.sockets.length;
+
+        for (uint256 i = 1; i < length; i++) {
+            VaultSocket storage socket = $.sockets[i];
             if (socket.isDisconnected) {
                 // remove disconnected vault from the list
-                VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
-                $.sockets[index] = lastSocket;
-                $.vaultIndex[lastSocket.vault] = index;
-                $.sockets.pop(); // NOTE!: we can replace pop with length-- to save some
-                delete $.vaultIndex[vault_];
-            } else {
-                if (_treasureFeeShares[i] > 0) {
-                    $.sockets[index].sharesMinted += uint96(_treasureFeeShares[i]);
-                    totalTreasuryShares += _treasureFeeShares[i];
-                }
-                IStakingVault(vault_).report(_valuations[i], _inOutDeltas[i], _locked[i]);
-                ++index;
+                VaultSocket memory lastSocket = $.sockets[length - 1];
+                $.sockets[i] = lastSocket;
+                $.vaultIndex[lastSocket.vault] = i;
+                $.sockets.pop(); // TODO: replace with length--
+                delete $.vaultIndex[socket.vault];
+                --length;
             }
         }
     }
