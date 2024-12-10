@@ -256,7 +256,10 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 totalEtherLocked = (STETH.getPooledEthByShares(vaultSharesAfterMint) * TOTAL_BASIS_POINTS) /
             (TOTAL_BASIS_POINTS - reserveRatioBP);
 
-        IStakingVault(_vault).lock(totalEtherLocked);
+        if (totalEtherLocked > IStakingVault(_vault).locked()) {
+            IStakingVault(_vault).lock(totalEtherLocked);
+        }
+
         STETH.mintExternalShares(_recipient, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
