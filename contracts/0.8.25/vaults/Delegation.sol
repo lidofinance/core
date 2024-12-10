@@ -163,13 +163,13 @@ contract Delegation is Dashboard, IReportReceiver {
     function withdrawable() public view returns (uint256) {
         // Question: shouldn't we reserve both locked + dues, not max(locked, dues)?
         uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
-        uint256 value = stakingVault.valuation();
+        uint256 valuation = stakingVault.valuation();
 
-        if (reserved > value) {
+        if (reserved > valuation) {
             return 0;
         }
 
-        return value - reserved;
+        return valuation - reserved;
     }
 
     /**
