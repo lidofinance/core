@@ -14,7 +14,7 @@ import {
   VaultHub__MockForDashboard,
 } from "typechain-types";
 
-describe.only("Dashboard", () => {
+describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
