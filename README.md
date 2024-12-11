@@ -5,7 +5,7 @@ This is the core repository of the Lido on Ethereum protocol. The entire codebas
 ---
 
 <div>
-    <img alt="Lido" src="https://img.shields.io/badge/v2-version?label=lido&labelColor=rgb(91%2C%20162%2C%20252)&color=white"/>
+    <img alt="Lido" src="https://img.shields.io/badge/v2.1-version?label=lido&labelColor=rgb(91%2C%20162%2C%20252)&color=white"/>
     <img alt="GitHub license" src="https://img.shields.io/github/license/lidofinance/lido-dao?labelColor=orange&color=white"/>
     <img alt="Solidity" src="https://img.shields.io/badge/multiver-s?style=flat&label=solidity&labelColor=rgb(86%2C%2085%2C%20212)&color=white"/>
     <img alt="Aragon OS" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Flidofinance%2Fcore%2Fmaster%2Fpackage.json&query=%24.dependencies%5B'%40aragon%2Fos'%5D&style=flat&label=aragon%2Fos&labelColor=rgb(70%2C%20100%2C%20246)&color=white"/>
@@ -14,7 +14,9 @@ This is the core repository of the Lido on Ethereum protocol. The entire codebas
     <img alt="Hardhat" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Flidofinance%2Fcore%2Fmaster%2Fpackage.json&query=%24.devDependencies.hardhat&style=flat&label=hardhat&labelColor=rgb(251%2C%20240%2C%2056)&color=white" />
     <img alt="Ethers" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Flidofinance%2Fcore%2Fmaster%2Fpackage.json&query=%24.devDependencies.ethers&style=flat&label=ethers&labelColor=rgb(51%2C%2077%2C%20121)&color=white" />
     <br/>
-    <img alt="GitHub tests" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/tests.yml?label=tests">
+    <img alt="GitHub unit tests" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/tests-unit.yml?label=tests:unit">
+    <img alt="GitHub integration tests (scratch)" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/tests-integration-scratch.yml?label=tests:integration:scratch">
+    <img alt="GitHub integration tests (mainnet-fork)" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/tests-integration-mainnet.yml?label=tests:integration:mainnet-fork">
     <img alt="GitHub linters" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/linters.yml?label=linters">
     <img alt="GitHub code analysis" src="https://img.shields.io/github/actions/workflow/status/lidofinance/core/analyse.yml?label=code analysis">
 </div>
