@@ -257,7 +257,7 @@ contract Accounting is VaultHub {
         ReportValues memory _report,
         PreReportState memory _pre,
         CalculatedValues memory _calculated
-    ) internal pure returns (uint256 sharesToMintAsFees, uint256 externalEther) {
+    ) internal pure returns (uint256 sharesToMintAsFees, uint256 postExternalEther) {
         // we are calculating the share rate equal to the post-rebase share rate
         // but with fees taken as eth deduction
         // and without externalBalance taken into account
@@ -285,7 +285,7 @@ contract Accounting is VaultHub {
         }
 
         // externalBalance is rebasing at the same rate as the primary balance does
-        externalEther = (_pre.externalShares * eth) / shares;
+        postExternalEther = (_pre.externalShares * eth) / shares;
     }
 
     /// @dev applies the precalculated changes to the protocol state

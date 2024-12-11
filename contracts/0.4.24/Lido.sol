@@ -920,7 +920,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function _getInternalEther() internal view returns (uint256) {
         return _getBufferedEther()
-        .add(CL_BALANCE_POSITION.getStorageUint256())
+            .add(CL_BALANCE_POSITION.getStorageUint256())
             .add(_getTransientEther());
     }
 

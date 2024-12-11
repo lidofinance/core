@@ -273,7 +273,7 @@ describe("Lido.sol:externalShares", () => {
     });
   });
 
-  it("precision loss", async () => {
+  it("Can mint and burn without precision loss", async () => {
     await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
     await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 1 wei
@@ -282,6 +282,9 @@ describe("Lido.sol:externalShares", () => {
     await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 4 wei
 
     await expect(lido.connect(accountingSigner).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
+    expect(await lido.getExternalEther()).to.equal(0n);
+    expect(await lido.getExternalShares()).to.equal(0n);
+    expect(await lido.sharesOf(accountingSigner)).to.equal(0n);
   });
 
   // Helpers
