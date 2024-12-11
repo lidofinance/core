@@ -232,9 +232,10 @@ contract Accounting is VaultHub {
             update.sharesToMintAsFees
         );
 
+        update.postExternalShares = _pre.externalShares + totalTreasuryFeeShares;
+
         // Add the treasury fee shares to the total pooled ether and external shares
         update.postTotalPooledEther += totalTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
-        update.postExternalShares += totalTreasuryFeeShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -342,7 +343,10 @@ contract Accounting is VaultHub {
         );
 
         if (vaultFeeShares > 0) {
-            STETH.mintExternalShares(LIDO_LOCATOR.treasury(), vaultFeeShares);
+            // Q: should we change it to mintShares and update externalShares before on the 2nd step?
+            STETH.mintShares(LIDO_LOCATOR.treasury(), vaultFeeShares);
+
+            // TODO: consistent events?
         }
 
         _notifyObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);

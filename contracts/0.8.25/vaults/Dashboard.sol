@@ -235,7 +235,7 @@ contract Dashboard is AccessControlEnumerable {
     function _voluntaryDisconnect() internal {
         uint256 shares = sharesMinted();
         if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthByShares(shares));
+            _rebalanceVault(_getPooledEthFromSharesRoundingUp(shares));
         }
 
         vaultHub.voluntaryDisconnect(address(stakingVault));
@@ -293,7 +293,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _amountOfShares Amount of tokens to burn
      */
     function _burn(uint256 _amountOfShares) internal {
-        STETH.transferFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
         vaultHub.burnSharesBackedByVault(address(stakingVault), _amountOfShares);
     }
 
@@ -303,6 +303,17 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _rebalanceVault(uint256 _ether) internal {
         stakingVault.rebalance(_ether);
+    }
+
+    function _getPooledEthFromSharesRoundingUp(uint256 _shares) internal view returns (uint256) {
+        uint256 pooledEth = STETH.getPooledEthByShares(_shares);
+        uint256 backToShares = STETH.getSharesByPooledEth(pooledEth);
+
+        if (backToShares < _shares) {
+            return pooledEth + 1;
+        }
+
+        return pooledEth;
     }
 
     // ==================== Events ====================

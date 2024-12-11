@@ -9,6 +9,8 @@ interface ILido {
 
     function transferFrom(address, address, uint256) external;
 
+    function transferSharesFrom(address, address, uint256) external returns (uint256);
+
     function getTotalPooledEther() external view returns (uint256);
 
     function getExternalEther() external view returns (uint256);

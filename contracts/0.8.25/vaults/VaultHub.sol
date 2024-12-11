@@ -310,7 +310,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             revert AlreadyBalanced(_vault, sharesMinted, threshold);
         }
 
-        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted);
+        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted); // TODO: fix rounding issue
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 

@@ -34,7 +34,7 @@ const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
-const VAULT_OWNER_FEE = 1_00n; // 1% owner fee
+const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
 describe("Scenario: Staking Vaults Happy Path", () => {
@@ -406,7 +406,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { lido } = ctx.contracts;
 
     // Mario can approve the vault to burn the shares
-    const approveVaultTx = await lido.connect(mario).approve(vault101AdminContract, vault101MintingMaximum);
+    const approveVaultTx = await lido
+      .connect(mario)
+      .approve(vault101AdminContract, await lido.getPooledEthByShares(vault101MintingMaximum));
     await trace("lido.approve", approveVaultTx);
 
     const burnTx = await vault101AdminContract.connect(mario).burn(vault101MintingMaximum);

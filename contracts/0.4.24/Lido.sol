@@ -126,11 +126,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         0x2ab18be87d6c30f8dc2a29c9950ab4796c891232dbcc6a95a6b44b9f8aad9352; // keccak256("lido.Lido.externalShares");
     /// @dev maximum allowed ratio of external shares to total shares in basis points
     bytes32 internal constant MAX_EXTERNAL_RATIO_POSITION =
-        0x5248bc99214b4b9bfb04eed7603bdab7b47ab5b436236fcbf7bda3acc9aea148; // keccak256("lido.Lido.maxExternalRatioBP")
-    bytes32 internal constant MAX_EXTERNAL_BALANCE_POSITION =
-        0x5d9acd3b741c556363e77af693c2f6219b9bf4d826159e864c4e3c3f08e6d97a; // keccak256("lido.Lido.maxExternalBalance")
-    bytes32 internal constant EXTERNAL_BALANCE_POSITION =
-        0x2a094e9f51934d7c659e7b6195b27a4a50d3f8a3c5e2d91b2f6c2e68c16c485b; // keccak256("lido.Lido.externalBalance")
+        0xf243b7ab6a2698a3d0a16e54fb43706d25b46e82d0a92f60e7e1a4aa86c30e1f; // keccak256("lido.Lido.maxExternalRatioBP")
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
