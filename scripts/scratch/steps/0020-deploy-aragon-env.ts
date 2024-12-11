@@ -94,13 +94,12 @@ export async function main() {
   if (daoFactoryAddress) {
     log(`Using pre-deployed DAOFactory: ${cy(state[Sk.daoFactory].address)}`);
   } else {
-    const kernelBase = await deployImplementation(Sk.aragonKernel, "Kernel", deployer, [true]);
-    const aclBase = await deployImplementation(Sk.aragonAcl, "ACL", deployer);
-    const evmScriptRegistryFactory = await deployWithoutProxy(
-      Sk.evmScriptRegistryFactory,
-      "EVMScriptRegistryFactory",
-      deployer,
-    );
+    const [kernelBase, aclBase, evmScriptRegistryFactory] = await Promise.all([
+      deployImplementation(Sk.aragonKernel, "Kernel", deployer, [true]),
+      deployImplementation(Sk.aragonAcl, "ACL", deployer),
+      deployWithoutProxy(Sk.evmScriptRegistryFactory, "EVMScriptRegistryFactory", deployer),
+    ]);
+
     const daoFactoryArgs = [kernelBase.address, aclBase.address, evmScriptRegistryFactory.address];
     daoFactoryAddress = (await deployWithoutProxy(Sk.daoFactory, "DAOFactory", deployer, daoFactoryArgs)).address;
   }
@@ -108,13 +107,12 @@ export async function main() {
 
   // Deploy APM registry factory
   log.header(`APM registry factory`);
-  const apmRegistryBase = await deployImplementation(Sk.aragonApmRegistry, "APMRegistry", deployer);
-  const apmRepoBase = await deployWithoutProxy(Sk.aragonRepoBase, "Repo", deployer);
-  const ensSubdomainRegistrarBase = await deployImplementation(
-    Sk.ensSubdomainRegistrar,
-    "ENSSubdomainRegistrar",
-    deployer,
-  );
+  const [apmRegistryBase, apmRepoBase, ensSubdomainRegistrarBase] = await Promise.all([
+    deployImplementation(Sk.aragonApmRegistry, "APMRegistry", deployer),
+    deployWithoutProxy(Sk.aragonRepoBase, "Repo", deployer),
+    deployImplementation(Sk.ensSubdomainRegistrar, "ENSSubdomainRegistrar", deployer),
+  ]);
+  
 
   const apmRegistryFactory = await deployWithoutProxy(Sk.apmRegistryFactory, "APMRegistryFactory", deployer, [
     daoFactory.address,
