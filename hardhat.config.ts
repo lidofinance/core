@@ -54,6 +54,10 @@ const config: HardhatUserConfig = {
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
+    "local-devnet": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      accounts: [process.env.LOCAL_DEVNET_PK || ""],
+    },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
@@ -80,7 +84,19 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
+    ],
+    apiKey: {
+      "local-devnet": "local-devnet",
+    },
   },
   solidity: {
     compilers: [

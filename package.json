@@ -33,7 +33,7 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
-    "verify:deployed": "hardhat verify:deployed --no-compile"
+    "verify:deployed": "hardhat verify:deployed"
   },
   "lint-staged": {
     "./**/*.ts": [
