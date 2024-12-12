@@ -133,13 +133,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Emits when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
+    // Emits when external shares changed during the report
+    event ExternalSharesChanged(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
+
     // Emits when var at `DEPOSITED_VALIDATORS_POSITION` changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emits when oracle accounting report processed
+    // @dev principalCLBalance is the balance of the validators on previous report
+    // plus the amount of ether that was deposited to the deposit contract
     event ETHDistributed(
         uint256 indexed reportTimestamp,
-        uint256 preCLBalance,
+        uint256 principalCLBalance,
         uint256 postCLBalance,
         uint256 withdrawalsWithdrawn,
         uint256 executionLayerRewardsWithdrawn,
@@ -667,13 +672,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev All data validation was done by Accounting and OracleReportSanityChecker
      * @param _reportTimestamp timestamp of the report
      * @param _preClValidators number of validators in the previous CL state (for event compatibility)
+     * @param _preExternalShares number of external shares before the report
      * @param _reportClValidators number of validators in the current CL state
      * @param _reportClBalance total balance of the current CL state
-     * @param _postExternalShares total external shares
+     * @param _postExternalShares total external shares after the report
      */
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
+        uint256 _preExternalShares,
         uint256 _reportClValidators,
         uint256 _reportClBalance,
         uint256 _postExternalShares
@@ -689,7 +696,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         EXTERNAL_SHARES_POSITION.setStorageUint256(_postExternalShares);
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
-        // cl and external balance change are logged in ETHDistributed event later
+        emit ExternalSharesChanged(_reportTimestamp, _preExternalShares, _postExternalShares);
+        // cl balance change are logged in ETHDistributed event later
     }
 
     /**
@@ -697,7 +705,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev All data validation was done by Accounting and OracleReportSanityChecker
      * @param _reportTimestamp timestamp of the report
      * @param _reportClBalance total balance of validators reported by the oracle
-     * @param _adjustedPreCLBalance total balance of validators in the previous report and deposits made since then
+     * @param _principalCLBalance total balance of validators in the previous report and deposits made since then
      * @param _withdrawalsToWithdraw amount of withdrawals to collect from WithdrawalsVault
      * @param _elRewardsToWithdraw amount of EL rewards to collect from ELRewardsVault
      * @param _lastWithdrawalRequestToFinalize last withdrawal request ID to finalize
@@ -707,7 +715,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
-        uint256 _adjustedPreCLBalance,
+        uint256 _principalCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
@@ -746,7 +754,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         emit ETHDistributed(
             _reportTimestamp,
-            _adjustedPreCLBalance,
+            _principalCLBalance,
             _reportClBalance,
             _withdrawalsToWithdraw,
             _elRewardsToWithdraw,

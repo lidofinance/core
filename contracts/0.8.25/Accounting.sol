@@ -310,6 +310,7 @@ contract Accounting is VaultHub {
         LIDO.processClStateUpdate(
             _report.timestamp,
             _pre.clValidators,
+            _pre.externalShares,
             _report.clValidators,
             _report.clBalance,
             _update.postExternalShares

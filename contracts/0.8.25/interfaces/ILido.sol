@@ -35,9 +35,10 @@ interface ILido {
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
+        uint256 _preExternalShares,
         uint256 _reportClValidators,
         uint256 _reportClBalance,
-        uint256 _postExternalBalance
+        uint256 _postExternalShares
     ) external;
 
     function collectRewardsAndProcessWithdrawals(
