@@ -54,17 +54,17 @@ interface IWithdrawalVault {
 /**
  * @title Liquid staking pool implementation
  *
- * Lido is an Ethereum liquid staking protocol solving the problem of frozen staked ether on Consensus Layer
- * being unavailable for transfers and DeFi on Execution Layer.
+ * Lido is an Ethereum liquid staking protocol solving the problem of frozen staked ether on the Consensus Layer
+ * being unavailable for transfers and DeFi on the Execution Layer.
  *
- * Since balances of all token holders change when the amount of total pooled Ether
+ * Since balances of all token holders change when the amount of total pooled ether
  * changes, this token cannot fully implement ERC20 standard: it only emits `Transfer`
- * events upon explicit transfer between holders. In contrast, when Lido oracle reports
- * rewards, no Transfer events are generated: doing so would require emitting an event
- * for each token holder and thus running an unbounded loop.
+ * events upon explicit transfer between holders. In contrast, when the Lido oracle reports
+ * rewards, no `Transfer` events are emitted: doing so would require an event for each token holder
+ * and thus running an unbounded loop.
  *
- * ---
- * NB: Order of inheritance must preserve the structured storage layout of the previous versions.
+ * ######### STRUCTURED STORAGE #########
+ * NB: The order of inheritance must preserve the structured storage layout of the previous versions.
  *
  * @dev Lido is derived from `StETHPermit` that has a structured storage:
  * SLOT 0: mapping (address => uint256) private shares (`StETH`)
@@ -97,7 +97,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev storage slot position of the staking rate limit structure
     bytes32 internal constant STAKING_STATE_POSITION =
         0xa3678de4a579be090bed1177e0a24f77cc29d181ac22fd7688aca344d8938015; // keccak256("lido.Lido.stakeLimit");
-    /// @dev amount of Ether (on the current Ethereum side) buffered on this smart contract balance
+    /// @dev amount of ether (on the current Ethereum side) buffered on this smart contract balance
     bytes32 internal constant BUFFERED_ETHER_POSITION =
         0xed310af23f61f96daefbcd140b306c0bdbf8c178398299741687b90e794772b0; // keccak256("lido.Lido.bufferedEther");
     /// @dev number of deposited validators (incrementing counter of deposit operations).
@@ -230,9 +230,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Stops accepting new Ether to the protocol
+     * @notice Stop accepting new ether to the protocol
      *
-     * @dev While accepting new Ether is stopped, calls to the `submit` function,
+     * @dev While accepting new ether is stopped, calls to the `submit` function,
      * as well as to the default payable function, will revert.
      *
      * Emits `StakingPaused` event.
@@ -244,13 +244,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Resumes accepting new Ether to the protocol (if `pauseStaking` was called previously)
+     * @notice Resume accepting new ether to the protocol (if `pauseStaking` was called previously)
      * NB: Staking could be rate-limited by imposing a limit on the stake amount
      * at each moment in time, see `setStakingLimit()` and `removeStakingLimit()`
      *
      * @dev Preserves staking limit if it was set previously
-     *
-     * Emits `StakingResumed` event
      */
     function resumeStaking() external {
         _auth(STAKING_CONTROL_ROLE);
@@ -260,7 +258,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Sets the staking rate limit
+     * @notice Set the staking rate limit
      *
      * ▲ Stake limit
      * │.....  .....   ........ ...            ....     ... Stake limit = max
@@ -275,8 +273,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * - `_maxStakeLimit` >= 2^96
      * - `_maxStakeLimit` < `_stakeLimitIncreasePerBlock`
      * - `_maxStakeLimit` / `_stakeLimitIncreasePerBlock` >= 2^32 (only if `_stakeLimitIncreasePerBlock` != 0)
-     *
-     * Emits `StakingLimitSet` event
      *
      * @param _maxStakeLimit max stake limit value
      * @param _stakeLimitIncreasePerBlock stake limit increase per single block
@@ -295,9 +291,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Removes the staking rate limit
-     *
-     * Emits `StakingLimitRemoved` event
+     * @notice Remove the staking rate limit
      */
     function removeStakingLimit() external {
         _auth(STAKING_CONTROL_ROLE);
@@ -317,7 +311,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Returns how much ether can be staked in the current block
+     * @return the maximum amount of ether that can be staked in the current block
      * @dev Special return values:
      * - 2^256 - 1 if staking is unlimited;
      * - 0 if staking is paused or if limit is exhausted.
@@ -327,7 +321,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Returns full info about current stake limit params and state
+     * @notice Get the full info about current stake limit params and state
      * @dev Might be used for the advanced integration requests.
      * @return isStakingPaused_ staking pause state (equivalent to return of isStakingPaused())
      * @return isStakingLimitSet whether the stake limit is set
@@ -364,14 +358,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Get the maximum allowed external shares ratio as basis points of total shares
+     * @return the maximum allowed external shares ratio as basis points of total shares
      */
     function getMaxExternalRatioBP() external view returns (uint256) {
         return MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
     }
 
     /**
-     * @notice Sets the maximum allowed external shares ratio as basis points of total shares
+     * @notice Set the maximum allowed external shares ratio as basis points of total shares
      * @param _maxExternalRatioBP The maximum ratio in basis points [0-10000]
      */
     function setMaxExternalRatioBP(uint256 _maxExternalRatioBP) external {
@@ -384,11 +378,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Send funds to the pool
-     * @dev Users are able to submit their funds by transacting to the fallback function.
+     * @notice Send funds to the pool and mint StETH to the `msg.sender` address
+     * @dev Users are able to submit their funds by sending ether to the contract address
      * Unlike vanilla Ethereum Deposit contract, accepting only 32-Ether transactions, Lido
-     * accepts payments of any size. Submitted Ethers are stored in Buffer until someone calls
-     * deposit() and pushes them to the Ethereum Deposit contract.
+     * accepts payments of any size. Submitted ether is stored in the buffer until someone calls
+     * deposit() and pushes it to the Ethereum Deposit contract.
      */
     // solhint-disable-next-line no-complex-fallback
     function() external payable {
@@ -398,9 +392,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Send funds to the pool with optional _referral parameter
-     * @dev This function is alternative way to submit funds. Supports optional referral address.
-     * @return Amount of StETH shares generated
+     * @notice Send funds to the pool with the optional `_referral` parameter and mint StETH to the `msg.sender` address
+     * @param _referral optional referral address
+     * @return Amount of StETH shares minted
      */
     function submit(address _referral) external payable returns (uint256) {
         return _submit(_referral);
@@ -452,7 +446,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Unsafely change deposited validators
+     * @notice Unsafely change the deposited validators counter
      *
      * The method unsafely changes deposited validator counter.
      * Can be required when onboarding external validators to Lido
@@ -469,7 +463,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Get the amount of Ether temporary buffered on this contract balance
+     * @notice Get the amount of ether temporary buffered on this contract balance
      * @dev Buffered balance is kept on the contract from the moment the funds are received from user
      * until the moment they are actually sent to the official Deposit contract.
      * @return amount of buffered funds in wei
@@ -503,25 +497,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Get total amount of execution layer rewards collected to Lido contract
-     * @dev Ether got through LidoExecutionLayerRewardsVault is kept on this contract's balance the same way
-     * as other buffered Ether is kept (until it gets deposited)
-     * @return amount of funds received as execution layer rewards in wei
+     * @return the total amount of execution layer rewards collected to the Lido contract in wei
+     * @dev ether received through LidoExecutionLayerRewardsVault is kept on this contract's balance the same way
+     * as other buffered ether is kept (until it gets deposited)
      */
     function getTotalELRewardsCollected() public view returns (uint256) {
         return TOTAL_EL_REWARDS_COLLECTED_POSITION.getStorageUint256();
     }
 
     /**
-     * @notice Gets authorized oracle address
-     * @return address of oracle contract
+     * @return the Lido Locator address
      */
     function getLidoLocator() public view returns (ILidoLocator) {
         return ILidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
     }
 
     /**
-     * @notice Returns the key values related to Consensus Layer side of the contract. It historically contains beacon
+     * @notice Get the key values related to the Consensus Layer side of the contract.
      * @return depositedValidators - number of deposited validators from Lido contract side
      * @return beaconValidators - number of Lido validators visible on Consensus Layer, reported by oracle
      * @return beaconBalance - total amount of ether on the Consensus Layer side (sum of all the balances of Lido validators)
@@ -537,16 +529,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @dev Check that Lido allows depositing buffered ether to the consensus layer
-     * Depends on the bunker state and protocol's pause state
+     * @notice Check that Lido allows depositing buffered ether to the Consensus Layer
+     * @dev Depends on the bunker mode and protocol pause state
      */
     function canDeposit() public view returns (bool) {
         return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
     }
 
     /**
-     * @dev Returns depositable ether amount.
-     * Takes into account unfinalized stETH required by WithdrawalQueue
+     * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
+     * @dev Takes into account unfinalized stETH required by WithdrawalQueue
      */
     function getDepositableEther() public view returns (uint256) {
         uint256 bufferedEther = _getBufferedEther();
@@ -555,7 +547,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @dev Invokes a deposit call to the Staking Router contract and updates buffered counters
+     * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
      * @param _maxDepositsCount max deposits count
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
@@ -607,7 +599,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Burn stETH shares from the sender address
+     * @notice Burn stETH shares from the `msg.sender` address
      * @param _amountOfShares amount of shares to burn
      * @dev can be called only by burner
      */
@@ -763,8 +755,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Emit TokenRebase event
-     * @dev it's here for back compatibility reasons
+     * @notice Emit the `TokenRebase` event
+     * @dev It's here for back compatibility reasons
      */
     function emitTokenRebase(
         uint256 _reportTimestamp,
@@ -862,9 +854,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         revert("NOT_SUPPORTED");
     }
 
-    /// @dev Process user deposit, mints liquid tokens and increase the pool buffer
+    /// @dev Process user deposit, mint liquid tokens and increase the pool buffer
     /// @param _referral address of referral.
-    /// @return amount of StETH shares generated
+    /// @return amount of StETH shares minted
     function _submit(address _referral) internal returns (uint256) {
         require(msg.value != 0, "ZERO_DEPOSIT");
 
@@ -894,17 +886,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return sharesAmount;
     }
 
-    /// @dev Gets the amount of Ether temporary buffered on this contract balance
+    /// @dev Get the amount of ether temporary buffered on this contract balance
     function _getBufferedEther() internal view returns (uint256) {
         return BUFFERED_ETHER_POSITION.getStorageUint256();
     }
 
-    /// @dev Sets the amount of Ether temporary buffered on this contract balance
+    /// @dev Set the amount of ether temporary buffered on this contract balance
     function _setBufferedEther(uint256 _newBufferedEther) internal {
         BUFFERED_ETHER_POSITION.setStorageUint256(_newBufferedEther);
     }
 
-    /// @dev Calculates and returns the total base balance (multiple of 32) of validators in transient state,
+    /// @dev Calculate and return the total base balance (multiple of 32) of validators in transient state,
     ///     i.e. submitted to the official Deposit contract but not yet visible in the CL state.
     /// @return transient ether in wei (1e-18 Ether)
     function _getTransientEther() internal view returns (uint256) {
@@ -916,7 +908,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
 
-    /// @dev Gets the total amount of ether controlled by the protocol internally
+    /// @dev Get the total amount of ether controlled by the protocol internally
     /// (buffered + CL balance of StakingRouter controlled validators + transient)
     function _getInternalEther() internal view returns (uint256) {
         return _getBufferedEther()
@@ -924,7 +916,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .add(_getTransientEther());
     }
 
-    /// @dev Calculates the amount of ether controlled by external entities
+    /// @dev Calculate the amount of ether controlled by external entities
     function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
         // TODO: cache external ether to storage
         // to exchange 1 SLOAD in _getTotalPooledEther() 1 SSTORE in mintEE/burnEE
@@ -934,14 +926,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return externalShares.mul(_internalEther).div(internalShares);
     }
 
-    /// @dev Gets the total amount of Ether controlled by the protocol and external entities
+    /// @dev Get the total amount of ether controlled by the protocol and external entities
     /// @return total balance in wei
     function _getTotalPooledEther() internal view returns (uint256) {
         uint256 internalEther = _getInternalEther();
         return internalEther.add(_getExternalEther(internalEther));
     }
 
-    /// @notice Calculates the maximum amount of external shares that can be minted while maintaining
+    /// @notice Calculate the maximum amount of external shares that can be minted while maintaining
     ///         maximum allowed external ratio limits
     /// @return Maximum amount of external shares that can be minted
     /// @dev This function enforces the ratio between external and total shares to stay below a limit.
