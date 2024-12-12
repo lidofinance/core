@@ -226,25 +226,26 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         _disconnect(_vault);
     }
 
-    /// @notice mint StETH tokens backed by vault external balance to the receiver address
+    /// @notice mint StETH shares backed by vault external balance to the receiver address
     /// @param _vault vault address
     /// @param _recipient address of the receiver
-    /// @param _tokens amount of stETH tokens to mint
+    /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintStethBackedByVault(address _vault, address _recipient, uint256 _tokens) external {
+    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
 
         _vaultAuth(_vault, "mint");
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 sharesToMint = STETH.getSharesByPooledEth(_tokens);
-        uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
-        if (vaultSharesAfterMint > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
+        uint256 vaultSharesAfterMint = socket.sharesMinted + _amountOfShares;
+        uint256 shareLimit = socket.shareLimit;
+        if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
-        uint256 maxMintableShares = _maxMintableShares(_vault, socket.reserveRatioBP);
+        uint256 reserveRatioBP = socket.reserveRatioBP;
+        uint256 maxMintableShares = _maxMintableShares(_vault, reserveRatioBP);
 
         if (vaultSharesAfterMint > maxMintableShares) {
             revert InsufficientValuationToMint(_vault, IStakingVault(_vault).valuation());
@@ -252,37 +253,38 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
 
-        STETH.mintExternalShares(_recipient, sharesToMint);
-
-        emit MintedStETHOnVault(_vault, _tokens);
-
         uint256 totalEtherLocked = (STETH.getPooledEthByShares(vaultSharesAfterMint) * TOTAL_BASIS_POINTS) /
-            (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+            (TOTAL_BASIS_POINTS - reserveRatioBP);
 
-        IStakingVault(_vault).lock(totalEtherLocked);
+        if (totalEtherLocked > IStakingVault(_vault).locked()) {
+            IStakingVault(_vault).lock(totalEtherLocked);
+        }
+
+        STETH.mintExternalShares(_recipient, _amountOfShares);
+
+        emit MintedSharesOnVault(_vault, _amountOfShares);
     }
 
-    /// @notice burn steth from the balance of the vault contract
+    /// @notice burn steth shares from the balance of the VaultHub contract
     /// @param _vault vault address
-    /// @param _tokens amount of tokens to burn
+    /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
-    /// @dev vaultHub must be approved to transfer stETH
-    function burnStethBackedByVault(address _vault, uint256 _tokens) public {
+    /// @dev VaultHub must have all the stETH on its balance
+    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (_tokens == 0) revert ZeroArgument("_tokens");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         _vaultAuth(_vault, "burn");
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 amountOfShares = STETH.getSharesByPooledEth(_tokens);
         uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted < amountOfShares) revert InsufficientSharesToBurn(_vault, sharesMinted);
+        if (sharesMinted < _amountOfShares) revert InsufficientSharesToBurn(_vault, sharesMinted);
 
-        socket.sharesMinted = uint96(sharesMinted - amountOfShares);
+        socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
-        STETH.burnExternalShares(amountOfShares);
+        STETH.burnExternalShares(_amountOfShares);
 
-        emit BurnedStETHOnVault(_vault, _tokens);
+        emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
@@ -290,7 +292,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     function transferAndBurnStethBackedByVault(address _vault, uint256 _tokens) external {
         STETH.transferFrom(msg.sender, address(this), _tokens);
 
-        burnStethBackedByVault(_vault, _tokens);
+        burnSharesBackedByVault(_vault, _tokens);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio
@@ -308,7 +310,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             revert AlreadyBalanced(_vault, sharesMinted, threshold);
         }
 
-        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted);
+        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted); // TODO: fix rounding issue
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
@@ -372,7 +374,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares) {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -404,6 +406,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
                     _preTotalShares,
                     _preTotalPooledEther
                 );
+
+                totalTreasuryFeeShares += treasuryFeeShares[i];
 
                 uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
                 uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
@@ -453,25 +457,31 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     ) internal returns (uint256 totalTreasuryShares) {
         VaultHubStorage storage $ = _getVaultHubStorage();
 
-        uint256 index = 1; // NOTE!: first socket is always empty and we skip disconnected sockets
-
         for (uint256 i = 0; i < _valuations.length; i++) {
-            VaultSocket memory socket = $.sockets[index];
-            address vault_ = socket.vault;
+            VaultSocket storage socket = $.sockets[i + 1];
+
+            if (socket.isDisconnected) continue; // we skip disconnected vaults
+
+            uint256 treasuryFeeShares = _treasureFeeShares[i];
+            if (treasuryFeeShares > 0) {
+                socket.sharesMinted += uint96(treasuryFeeShares);
+                totalTreasuryShares += treasuryFeeShares;
+            }
+            IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
+        }
+
+        uint256 length = $.sockets.length;
+
+        for (uint256 i = 1; i < length; i++) {
+            VaultSocket storage socket = $.sockets[i];
             if (socket.isDisconnected) {
                 // remove disconnected vault from the list
-                VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
-                $.sockets[index] = lastSocket;
-                $.vaultIndex[lastSocket.vault] = index;
-                $.sockets.pop(); // NOTE!: we can replace pop with length-- to save some
-                delete $.vaultIndex[vault_];
-            } else {
-                if (_treasureFeeShares[i] > 0) {
-                    $.sockets[index].sharesMinted += uint96(_treasureFeeShares[i]);
-                    totalTreasuryShares += _treasureFeeShares[i];
-                }
-                IStakingVault(vault_).report(_valuations[i], _inOutDeltas[i], _locked[i]);
-                ++index;
+                VaultSocket memory lastSocket = $.sockets[length - 1];
+                $.sockets[i] = lastSocket;
+                $.vaultIndex[lastSocket.vault] = i;
+                $.sockets.pop(); // TODO: replace with length--
+                delete $.vaultIndex[socket.vault];
+                --length;
             }
         }
     }
@@ -513,8 +523,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 treasuryFeeBP);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
-    event MintedStETHOnVault(address indexed vault, uint256 tokens);
-    event BurnedStETHOnVault(address indexed vault, uint256 tokens);
+    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultImplAdded(address indexed impl);
     event VaultFactoryAdded(address indexed factory);
@@ -532,7 +542,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error ExternalBalanceCapReached(address vault, uint256 capVaultBalance, uint256 maxAvailableExternalBalance);
+    error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
     error AlreadyExists(address addr);
     error FactoryNotAllowed(address beacon);

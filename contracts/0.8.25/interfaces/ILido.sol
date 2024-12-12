@@ -9,15 +9,19 @@ interface ILido {
 
     function transferFrom(address, address, uint256) external;
 
+    function transferSharesFrom(address, address, uint256) external returns (uint256);
+
     function getTotalPooledEther() external view returns (uint256);
 
     function getExternalEther() external view returns (uint256);
+
+    function getExternalShares() external view returns (uint256);
 
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
 
-    function getMaxAvailableExternalBalance() external view returns (uint256);
+    function getMaxMintableExternalShares() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 
@@ -31,9 +35,10 @@ interface ILido {
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
+        uint256 _preExternalShares,
         uint256 _reportClValidators,
         uint256 _reportClBalance,
-        uint256 _postExternalBalance
+        uint256 _postExternalShares
     ) external;
 
     function collectRewardsAndProcessWithdrawals(

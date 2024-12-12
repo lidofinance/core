@@ -248,7 +248,7 @@ contract Delegation is Dashboard, IReportReceiver {
             managementDue = 0;
 
             if (_liquid) {
-                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
+                _mint(_recipient, STETH.getSharesByPooledEth(due));
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -326,7 +326,7 @@ contract Delegation is Dashboard, IReportReceiver {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                _mint(_recipient, due);
+                _mint(_recipient, STETH.getSharesByPooledEth(due));
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -334,23 +334,23 @@ contract Delegation is Dashboard, IReportReceiver {
     }
 
     /**
-     * @notice Mints stETH tokens backed by the vault to a recipient.
+     * @notice Mints stETH shares backed by the vault to a recipient.
      * @param _recipient Address of the recipient.
-     * @param _tokens Amount of tokens to mint.
+     * @param _amountOfShares Amount of shares to mint.
      */
     function mint(
         address _recipient,
-        uint256 _tokens
+        uint256 _amountOfShares
     ) external payable override onlyRole(TOKEN_MASTER_ROLE) fundAndProceed {
-        _mint(_recipient, _tokens);
+        _mint(_recipient, _amountOfShares);
     }
 
     /**
-     * @notice Burns stETH tokens from the sender backed by the vault.
-     * @param _tokens Amount of tokens to burn.
+     * @notice Burns stETH shares from the sender backed by the vault.
+     * @param _amountOfShares Amount of shares to burn.
      */
-    function burn(uint256 _tokens) external override onlyRole(TOKEN_MASTER_ROLE) {
-        _burn(_tokens);
+    function burn(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
+        _burn(_amountOfShares);
     }
 
     /**

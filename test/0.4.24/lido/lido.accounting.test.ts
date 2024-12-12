@@ -80,7 +80,7 @@ describe("Lido:accounting", () => {
           ...args({
             postClValidators: 100n,
             postClBalance: 100n,
-            postExternalBalance: 100n,
+            postExternalShares: 100n,
           }),
         ),
       )
@@ -88,23 +88,25 @@ describe("Lido:accounting", () => {
         .withArgs(0n, 0n, 100n);
     });
 
-    type ArgsTuple = [BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish];
+    type ArgsTuple = [BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish];
 
     interface Args {
       reportTimestamp: BigNumberish;
       preClValidators: BigNumberish;
+      preExternalShares: BigNumberish;
       postClValidators: BigNumberish;
       postClBalance: BigNumberish;
-      postExternalBalance: BigNumberish;
+      postExternalShares: BigNumberish;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
       return Object.values({
         reportTimestamp: 0n,
         preClValidators: 0n,
+        preExternalShares: 0n,
         postClValidators: 0n,
         postClBalance: 0n,
-        postExternalBalance: 0n,
+        postExternalShares: 0n,
         ...overrides,
       }) as ArgsTuple;
     }

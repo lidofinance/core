@@ -182,23 +182,23 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Mints stETH tokens backed by the vault to a recipient.
+     * @notice Mints stETH shares backed by the vault to a recipient.
      * @param _recipient Address of the recipient
-     * @param _tokens Amount of tokens to mint
+     * @param _amountOfShares Amount of shares to mint
      */
     function mint(
         address _recipient,
-        uint256 _tokens
+        uint256 _amountOfShares
     ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
-        _mint(_recipient, _tokens);
+        _mint(_recipient, _amountOfShares);
     }
 
     /**
-     * @notice Burns stETH tokens from the sender backed by the vault
-     * @param _tokens Amount of tokens to burn
+     * @notice Burns stETH shares from the sender backed by the vault
+     * @param _amountOfShares Amount of shares to burn
      */
-    function burn(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _burn(_tokens);
+    function burn(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _burn(_amountOfShares);
     }
 
     /**
@@ -235,7 +235,7 @@ contract Dashboard is AccessControlEnumerable {
     function _voluntaryDisconnect() internal {
         uint256 shares = sharesMinted();
         if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthByShares(shares));
+            _rebalanceVault(_getPooledEthFromSharesRoundingUp(shares));
         }
 
         vaultHub.voluntaryDisconnect(address(stakingVault));
@@ -282,19 +282,19 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @dev Mints stETH tokens backed by the vault to a recipient
      * @param _recipient Address of the recipient
-     * @param _tokens Amount of tokens to mint
+     * @param _amountOfShares Amount of tokens to mint
      */
-    function _mint(address _recipient, uint256 _tokens) internal {
-        vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, _tokens);
+    function _mint(address _recipient, uint256 _amountOfShares) internal {
+        vaultHub.mintSharesBackedByVault(address(stakingVault), _recipient, _amountOfShares);
     }
 
     /**
      * @dev Burns stETH tokens from the sender backed by the vault
-     * @param _tokens Amount of tokens to burn
+     * @param _amountOfShares Amount of tokens to burn
      */
-    function _burn(uint256 _tokens) internal {
-        STETH.transferFrom(msg.sender, address(vaultHub), _tokens);
-        vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    function _burn(uint256 _amountOfShares) internal {
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        vaultHub.burnSharesBackedByVault(address(stakingVault), _amountOfShares);
     }
 
     /**
@@ -303,6 +303,17 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _rebalanceVault(uint256 _ether) internal {
         stakingVault.rebalance(_ether);
+    }
+
+    function _getPooledEthFromSharesRoundingUp(uint256 _shares) internal view returns (uint256) {
+        uint256 pooledEth = STETH.getPooledEthByShares(_shares);
+        uint256 backToShares = STETH.getSharesByPooledEth(pooledEth);
+
+        if (backToShares < _shares) {
+            return pooledEth + 1;
+        }
+
+        return pooledEth;
     }
 
     // ==================== Events ====================

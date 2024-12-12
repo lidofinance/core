@@ -13,7 +13,7 @@ import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 10000n;
 
-describe("Lido.sol:externalBalance", () => {
+describe("Lido.sol:externalShares", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
@@ -25,7 +25,7 @@ describe("Lido.sol:externalBalance", () => {
 
   let originalState: string;
 
-  const maxExternalBalanceBP = 1000n;
+  const maxExternalRatioBP = 1000n;
 
   before(async () => {
     [deployer, user, whale] = await ethers.getSigners();
@@ -54,100 +54,100 @@ describe("Lido.sol:externalBalance", () => {
 
   context("getMaxExternalBalanceBP", () => {
     it("Returns the correct value", async () => {
-      expect(await lido.getMaxExternalBalanceBP()).to.equal(0n);
+      expect(await lido.getMaxExternalRatioBP()).to.equal(0n);
     });
   });
 
   context("setMaxExternalBalanceBP", () => {
     context("Reverts", () => {
       it("if caller is not authorized", async () => {
-        await expect(lido.connect(whale).setMaxExternalBalanceBP(1)).to.be.revertedWith("APP_AUTH_FAILED");
+        await expect(lido.connect(whale).setMaxExternalRatioBP(1)).to.be.revertedWith("APP_AUTH_FAILED");
       });
 
-      it("if max external balance is greater than total basis points", async () => {
-        await expect(lido.setMaxExternalBalanceBP(TOTAL_BASIS_POINTS + 1n)).to.be.revertedWith(
-          "INVALID_MAX_EXTERNAL_BALANCE",
+      it("if max external ratio is greater than total basis points", async () => {
+        await expect(lido.setMaxExternalRatioBP(TOTAL_BASIS_POINTS + 1n)).to.be.revertedWith(
+          "INVALID_MAX_EXTERNAL_RATIO",
         );
       });
     });
 
-    it("Updates the value and emits `MaxExternalBalanceBPSet`", async () => {
-      const newMaxExternalBalanceBP = 100n;
+    it("Updates the value and emits `MaxExternalRatioBPSet`", async () => {
+      const newMaxExternalRatioBP = 100n;
 
-      await expect(lido.setMaxExternalBalanceBP(newMaxExternalBalanceBP))
-        .to.emit(lido, "MaxExternalBalanceBPSet")
-        .withArgs(newMaxExternalBalanceBP);
+      await expect(lido.setMaxExternalRatioBP(newMaxExternalRatioBP))
+        .to.emit(lido, "MaxExternalRatioBPSet")
+        .withArgs(newMaxExternalRatioBP);
 
-      expect(await lido.getMaxExternalBalanceBP()).to.equal(newMaxExternalBalanceBP);
+      expect(await lido.getMaxExternalRatioBP()).to.equal(newMaxExternalRatioBP);
     });
 
-    it("Accepts max external balance of 0", async () => {
-      await expect(lido.setMaxExternalBalanceBP(0n)).to.not.be.reverted;
+    it("Accepts max external ratio of 0", async () => {
+      await expect(lido.setMaxExternalRatioBP(0n)).to.not.be.reverted;
     });
 
     it("Sets to max allowed value", async () => {
-      await expect(lido.setMaxExternalBalanceBP(TOTAL_BASIS_POINTS)).to.not.be.reverted;
+      await expect(lido.setMaxExternalRatioBP(TOTAL_BASIS_POINTS)).to.not.be.reverted;
 
-      expect(await lido.getMaxExternalBalanceBP()).to.equal(TOTAL_BASIS_POINTS);
+      expect(await lido.getMaxExternalRatioBP()).to.equal(TOTAL_BASIS_POINTS);
     });
   });
 
   context("getExternalEther", () => {
     it("Returns the external ether value", async () => {
-      await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
       // Add some external ether to protocol
-      const amountToMint = (await lido.getMaxAvailableExternalBalance()) - 1n;
+      const amountToMint = (await lido.getMaxMintableExternalShares()) - 1n;
 
       await lido.connect(accountingSigner).mintExternalShares(whale, amountToMint);
 
-      expect(await lido.getExternalEther()).to.equal(amountToMint);
+      expect(await lido.getExternalShares()).to.equal(amountToMint);
     });
 
-    it("Returns zero when no external ether", async () => {
-      expect(await lido.getExternalEther()).to.equal(0n);
+    it("Returns zero when no external shares", async () => {
+      expect(await lido.getExternalShares()).to.equal(0n);
     });
   });
 
-  context("getMaxAvailableExternalBalance", () => {
+  context("getMaxMintableExternalShares", () => {
     beforeEach(async () => {
       // Increase the external ether limit to 10%
-      await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
     });
 
     it("Returns the correct value", async () => {
-      const expectedMaxExternalEther = await getExpectedMaxAvailableExternalBalance();
+      const expectedMaxExternalShares = await getExpectedMaxMintableExternalShares();
 
-      expect(await lido.getMaxAvailableExternalBalance()).to.equal(expectedMaxExternalEther);
+      expect(await lido.getMaxMintableExternalShares()).to.equal(expectedMaxExternalShares);
     });
 
     it("Returns zero after minting max available amount", async () => {
-      const amountToMint = await lido.getMaxAvailableExternalBalance();
+      const amountToMint = await lido.getMaxMintableExternalShares();
 
       await lido.connect(accountingSigner).mintExternalShares(whale, amountToMint);
 
-      expect(await lido.getMaxAvailableExternalBalance()).to.equal(0n);
+      expect(await lido.getMaxMintableExternalShares()).to.equal(0n);
     });
 
-    it("Returns zero when max external balance is set to zero", async () => {
-      await lido.setMaxExternalBalanceBP(0n);
+    it("Returns zero when max external ratio is set to zero", async () => {
+      await lido.setMaxExternalRatioBP(0n);
 
-      expect(await lido.getMaxAvailableExternalBalance()).to.equal(0n);
+      expect(await lido.getMaxMintableExternalShares()).to.equal(0n);
     });
 
-    it("Returns MAX_UINT256 when max external balance is set to 100%", async () => {
-      await lido.setMaxExternalBalanceBP(TOTAL_BASIS_POINTS);
+    it("Returns MAX_UINT256 when max external ratio is set to 100%", async () => {
+      await lido.setMaxExternalRatioBP(TOTAL_BASIS_POINTS);
 
-      expect(await lido.getMaxAvailableExternalBalance()).to.equal(MAX_UINT256);
+      expect(await lido.getMaxMintableExternalShares()).to.equal(MAX_UINT256);
     });
 
     it("Increases when total pooled ether increases", async () => {
-      const initialMax = await lido.getMaxAvailableExternalBalance();
+      const initialMax = await lido.getMaxMintableExternalShares();
 
       // Add more ether to increase total pooled
       await lido.connect(whale).submit(ZeroAddress, { value: ether("10") });
 
-      const newMax = await lido.getMaxAvailableExternalBalance();
+      const newMax = await lido.getMaxMintableExternalShares();
 
       expect(newMax).to.be.gt(initialMax);
     });
@@ -172,14 +172,14 @@ describe("Lido.sol:externalBalance", () => {
 
       it("if not authorized", async () => {
         // Increase the external ether limit to 10%
-        await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
         await expect(lido.connect(user).mintExternalShares(whale, 1n)).to.be.revertedWith("APP_AUTH_FAILED");
       });
 
       it("if amount exceeds limit for external ether", async () => {
-        await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
-        const maxAvailable = await lido.getMaxAvailableExternalBalance();
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+        const maxAvailable = await lido.getMaxMintableExternalShares();
 
         await expect(lido.connect(accountingSigner).mintExternalShares(whale, maxAvailable + 1n)).to.be.revertedWith(
           "EXTERNAL_BALANCE_LIMIT_EXCEEDED",
@@ -189,9 +189,9 @@ describe("Lido.sol:externalBalance", () => {
 
     it("Mints shares correctly and emits events", async () => {
       // Increase the external ether limit to 10%
-      await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
-      const amountToMint = await lido.getMaxAvailableExternalBalance();
+      const amountToMint = await lido.getMaxMintableExternalShares();
 
       await expect(lido.connect(accountingSigner).mintExternalShares(whale, amountToMint))
         .to.emit(lido, "Transfer")
@@ -218,25 +218,25 @@ describe("Lido.sol:externalBalance", () => {
       });
 
       it("if external balance is too small", async () => {
-        await expect(lido.connect(accountingSigner).burnExternalShares(1n)).to.be.revertedWith("EXT_BALANCE_TOO_SMALL");
+        await expect(lido.connect(accountingSigner).burnExternalShares(1n)).to.be.revertedWith("EXT_SHARES_TOO_SMALL");
       });
 
       it("if trying to burn more than minted", async () => {
-        await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
         const amount = 100n;
         await lido.connect(accountingSigner).mintExternalShares(whale, amount);
 
         await expect(lido.connect(accountingSigner).burnExternalShares(amount + 1n)).to.be.revertedWith(
-          "EXT_BALANCE_TOO_SMALL",
+          "EXT_SHARES_TOO_SMALL",
         );
       });
     });
 
     it("Burns shares correctly and emits events", async () => {
       // First mint some external shares
-      await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
-      const amountToMint = await lido.getMaxAvailableExternalBalance();
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      const amountToMint = await lido.getMaxMintableExternalShares();
 
       await lido.connect(accountingSigner).mintExternalShares(accountingSigner.address, amountToMint);
 
@@ -257,7 +257,7 @@ describe("Lido.sol:externalBalance", () => {
     });
 
     it("Burns shares partially and after multiple mints", async () => {
-      await lido.setMaxExternalBalanceBP(maxExternalBalanceBP);
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
       // Multiple mints
       await lido.connect(accountingSigner).mintExternalShares(accountingSigner.address, 100n);
@@ -273,6 +273,20 @@ describe("Lido.sol:externalBalance", () => {
     });
   });
 
+  it("Can mint and burn without precision loss", async () => {
+    await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+
+    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 1 wei
+    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 2 wei
+    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 3 wei
+    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 4 wei
+
+    await expect(lido.connect(accountingSigner).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
+    expect(await lido.getExternalEther()).to.equal(0n);
+    expect(await lido.getExternalShares()).to.equal(0n);
+    expect(await lido.sharesOf(accountingSigner)).to.equal(0n);
+  });
+
   // Helpers
 
   /**
@@ -281,13 +295,13 @@ describe("Lido.sol:externalBalance", () => {
    * Invariant: (currentExternal + x) / (totalPooled + x) <= maxBP / TOTAL_BP
    * Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP)
    */
-  async function getExpectedMaxAvailableExternalBalance() {
+  async function getExpectedMaxMintableExternalShares() {
     const totalPooledEther = await lido.getTotalPooledEther();
-    const externalEther = await lido.getExternalEther();
+    const externalShares = await lido.getExternalShares();
 
     return (
-      (maxExternalBalanceBP * totalPooledEther - externalEther * TOTAL_BASIS_POINTS) /
-      (TOTAL_BASIS_POINTS - maxExternalBalanceBP)
+      (maxExternalRatioBP * totalPooledEther - externalShares * TOTAL_BASIS_POINTS) /
+      (TOTAL_BASIS_POINTS - maxExternalRatioBP)
     );
   }
 });
