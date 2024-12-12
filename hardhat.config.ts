@@ -27,6 +27,8 @@ const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
 
 const INTEGRATION_WITH_SCRATCH_DEPLOY = process.env.INTEGRATION_WITH_SCRATCH_DEPLOY || "off";
 
+export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 /* Determines the forking configuration for Hardhat */
 function getHardhatForkingConfig() {
   if (INTEGRATION_WITH_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL) {
@@ -56,7 +58,7 @@ const config: HardhatUserConfig = {
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
-      accounts: [process.env.LOCAL_DEVNET_PK || ""],
+      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
