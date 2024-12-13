@@ -12,9 +12,9 @@ contract VaultFactory__MockForStakingVault is UpgradeableBeacon {
 
     constructor(address _stakingVaultImplementation) UpgradeableBeacon(_stakingVaultImplementation, msg.sender) {}
 
-    function createVault(address _owner) external {
+    function createVault(address _owner, address _operator) external {
         IStakingVault vault = IStakingVault(address(new BeaconProxy(address(this), "")));
-        vault.initialize(_owner, "");
+        vault.initialize(_owner, _operator, "");
 
         emit VaultCreated(address(vault));
     }

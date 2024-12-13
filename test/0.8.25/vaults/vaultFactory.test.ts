@@ -25,8 +25,8 @@ describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
+  let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let lidoAgent: HardhatEthersSigner;
   let vaultOwner1: HardhatEthersSigner;
   let vaultOwner2: HardhatEthersSigner;
 
@@ -48,7 +48,7 @@ describe("VaultFactory.sol", () => {
   const treasury = certainAddress("treasury");
 
   before(async () => {
-    [deployer, admin, holder, stranger, vaultOwner1, vaultOwner2, lidoAgent] = await ethers.getSigners();
+    [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
     locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
@@ -76,7 +76,7 @@ describe("VaultFactory.sol", () => {
     await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, "0x")).to.revertedWithCustomError(implOld, "SenderNotBeacon");
+    await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(implOld, "SenderNotBeacon");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -122,7 +122,7 @@ describe("VaultFactory.sol", () => {
 
   context("createVault", () => {
     it("works with empty `params`", async () => {
-      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
@@ -137,7 +137,7 @@ describe("VaultFactory.sol", () => {
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { vault } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
       expect(await vault.version()).to.eq(1);
     });
 
@@ -163,8 +163,8 @@ describe("VaultFactory.sol", () => {
       };
 
       //create vault
-      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
-      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(vaultFactory, vaultOwner2, lidoAgent);
+      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
+      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(vaultFactory, vaultOwner2, operator);
 
       //owner of vault is delegator
       expect(await delegator1.getAddress()).to.eq(await vault1.owner());
@@ -238,7 +238,7 @@ describe("VaultFactory.sol", () => {
       expect(implAfter).to.eq(await implNew.getAddress());
 
       //create new vault with new implementation
-      const { vault: vault3 } = await createVaultProxy(vaultFactory, vaultOwner1, lidoAgent);
+      const { vault: vault3 } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
 
       //we upgrade implementation and do not add it to whitelist
       await expect(

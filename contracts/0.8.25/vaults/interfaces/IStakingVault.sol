@@ -10,9 +10,11 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
-    function initialize(address owner, bytes calldata params) external;
+    function initialize(address owner, address operator, bytes calldata params) external;
 
     function vaultHub() external view returns (address);
+
+    function operator() external view returns (address);
 
     function latestReport() external view returns (Report memory);
 

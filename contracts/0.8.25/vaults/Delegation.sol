@@ -54,21 +54,13 @@ contract Delegation is Dashboard, IReportReceiver {
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
     /**
-     * @notice Role for the operator
-     * Operator can:
+     * @notice Role for the node operator
+     * Node operator rewards claimer can:
      * - claim the performance due
      * - vote on performance fee changes
      * - vote on ownership transfer
-     * - set the Key Master role
      */
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.Delegation.OperatorRole");
-
-    /**
-     * @notice Role for the key master.
-     * Key master can:
-     * - deposit validators to the beacon chain
-     */
-    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.Delegation.KeyMasterRole");
 
     /**
      * @notice Role for the token master.
@@ -77,15 +69,6 @@ contract Delegation is Dashboard, IReportReceiver {
      * - burn stETH tokens
      */
     bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.Delegation.TokenMasterRole");
-
-    /**
-     * @notice Role for the Lido DAO.
-     * This can be the Lido DAO agent, EasyTrack or any other DAO decision-making system.
-     * Lido DAO can:
-     * - set the operator role
-     * - vote on ownership transfer
-     */
-    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.Delegation.LidoDAORole");
 
     // ==================== State Variables ====================
 
@@ -121,36 +104,16 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.
      * Sets up roles and role administrators.
-     * @param _defaultAdmin Address to be granted the `DEFAULT_ADMIN_ROLE`.
      * @param _stakingVault Address of the `StakingVault` contract.
+     * @dev This function is called by the `VaultFactory` contract
      */
-    function initialize(address _defaultAdmin, address _stakingVault) external override {
-        _initialize(_defaultAdmin, _stakingVault);
+    function initialize(address _stakingVault) external override {
+        _initialize(_stakingVault);
 
-        /**
-         * Granting `LIDO_DAO_ROLE` to the default admin is needed to set the initial Lido DAO address
-         * in the `createVault` function in the vault factory, so that we don't have to pass it
-         * to this initialize function and break the inherited function signature.
-         * This role will be revoked in the `createVault` function in the vault factory and
-         * will only remain on the Lido DAO address
-         */
-        _grantRole(LIDO_DAO_ROLE, _defaultAdmin);
-
-        /**
-         * Only Lido DAO can assign the Lido DAO role.
-         */
-        _setRoleAdmin(LIDO_DAO_ROLE, LIDO_DAO_ROLE);
-
-        /**
-         * The node operator in the vault must be approved by Lido DAO.
-         * The vault owner (`DEFAULT_ADMIN_ROLE`) cannot change the node operator.
-         */
-        _setRoleAdmin(OPERATOR_ROLE, LIDO_DAO_ROLE);
-
-        /**
-         * The operator role can change the key master role.
-         */
-        _setRoleAdmin(KEY_MASTER_ROLE, OPERATOR_ROLE);
+        // `OPERATOR_ROLE` is set to `msg.sender` to allow the `VaultFactory` to set the initial operator fee
+        // the role will be revoked from `VaultFactory`
+        _grantRole(OPERATOR_ROLE, msg.sender);
+        _setRoleAdmin(OPERATOR_ROLE, OPERATOR_ROLE);
     }
 
     // ==================== View Functions ====================
@@ -194,10 +157,9 @@ contract Delegation is Dashboard, IReportReceiver {
      * @return An array of role identifiers.
      */
     function ownershipTransferCommittee() public pure returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](3);
+        bytes32[] memory roles = new bytes32[](2);
         roles[0] = MANAGER_ROLE;
         roles[1] = OPERATOR_ROLE;
-        roles[2] = LIDO_DAO_ROLE;
         return roles;
     }
 
@@ -296,20 +258,6 @@ contract Delegation is Dashboard, IReportReceiver {
         if (available < _ether) revert InsufficientWithdrawableAmount(available, _ether);
 
         _withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @notice Deposits validators to the beacon chain.
-     * @param _numberOfDeposits Number of validator deposits.
-     * @param _pubkeys Concatenated public keys of the validators.
-     * @param _signatures Concatenated signatures of the validators.
-     */
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external override onlyRole(KEY_MASTER_ROLE) {
-        _depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
     /**

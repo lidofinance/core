@@ -25,6 +25,7 @@ const MAX_UINT128 = 2n ** 128n - 1n;
 // @TODO: test reentrancy attacks
 describe("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
+  let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let beaconSigner: HardhatEthersSigner;
   let elRewardsSender: HardhatEthersSigner;
@@ -48,7 +49,7 @@ describe("StakingVault", () => {
   let originalState: string;
 
   before(async () => {
-    [vaultOwner, elRewardsSender, stranger] = await ethers.getSigners();
+    [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
     [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract] =
       await deployStakingVaultBehindBeaconProxy();
     ethRejector = await ethers.deployContract("EthRejector");
@@ -103,12 +104,12 @@ describe("StakingVault", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(beaconSigner).initialize(await vaultOwner.getAddress(), "0x"),
+        stakingVaultImplementation.connect(beaconSigner).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts on initialization if the caller is not the beacon", async () => {
-      await expect(stakingVaultImplementation.connect(stranger).initialize(await vaultOwner.getAddress(), "0x"))
+      await expect(stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "SenderNotBeacon")
         .withArgs(stranger, await stakingVaultImplementation.getBeacon());
     });
@@ -123,6 +124,7 @@ describe("StakingVault", () => {
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
       expect(await stakingVault.getBeacon()).to.equal(vaultFactoryAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
+      expect(await stakingVault.operator()).to.equal(operator);
 
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(0n);
@@ -132,10 +134,6 @@ describe("StakingVault", () => {
       );
       expect(await stakingVault.valuation()).to.equal(0n);
       expect(await stakingVault.isBalanced()).to.be.true;
-
-      const storageSlot = "0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000";
-      const value = await getStorageAt(stakingVaultAddress, storageSlot);
-      expect(value).to.equal(0n);
     });
   });
 
@@ -301,10 +299,10 @@ describe("StakingVault", () => {
   });
 
   context("depositToBeaconChain", () => {
-    it("reverts if called by a non-owner", async () => {
+    it("reverts if called by a non-operator", async () => {
       await expect(stakingVault.connect(stranger).depositToBeaconChain(1, "0x", "0x"))
-        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
-        .withArgs(await stranger.getAddress());
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("depositToBeaconChain", stranger);
     });
 
     it("reverts if the number of deposits is zero", async () => {
@@ -315,7 +313,7 @@ describe("StakingVault", () => {
 
     it("reverts if the vault is not balanced", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(stakingVault.depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
+      await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
         stakingVault,
         "Unbalanced",
       );
@@ -326,9 +324,9 @@ describe("StakingVault", () => {
 
       const pubkey = "0x" + "ab".repeat(48);
       const signature = "0x" + "ef".repeat(96);
-      await expect(stakingVault.depositToBeaconChain(1, pubkey, signature))
+      await expect(stakingVault.connect(operator).depositToBeaconChain(1, pubkey, signature))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(vaultOwnerAddress, 1, ether("32"));
+        .withArgs(operator, 1, ether("32"));
     });
   });
 
@@ -499,7 +497,9 @@ describe("StakingVault", () => {
     ]);
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(await vaultOwner.getAddress()).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_
+      .createVault(await vaultOwner.getAddress(), await operator.getAddress())
+      .then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");

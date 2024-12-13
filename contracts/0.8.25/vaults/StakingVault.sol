@@ -10,7 +10,7 @@ import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
+import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
 
 /**
  * @title StakingVault
@@ -72,7 +72,7 @@ import {VaultBeaconChainDepositor} from "./VaultBeaconChainDepositor.sol";
  *   thus, this intentionally violates the LIP-10:
  *   https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
  */
-contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
+contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     /**
      * @dev Main storage structure for the vault
@@ -84,6 +84,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         IStakingVault.Report report;
         uint128 locked;
         int128 inOutDelta;
+        address operator;
     }
 
     uint64 private constant _version = 1;
@@ -96,7 +97,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     constructor(
         address _vaultHub,
         address _beaconChainDepositContract
-    ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
+    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         VAULT_HUB = VaultHub(_vaultHub);
@@ -113,10 +114,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
     ///         The initialize function selector is not changed. For upgrades use `_params` variable
     ///
     /// @param _owner vault owner address
+    /// @param _operator address of the account that can make deposits to the beacon chain
     /// @param _params the calldata for initialize contract after upgrades
     // solhint-disable-next-line no-unused-vars
-    function initialize(address _owner, bytes calldata _params) external onlyBeacon initializer {
+    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon initializer {
         __Ownable_init(_owner);
+        _getVaultStorage().operator = _operator;
     }
 
     /**
@@ -141,6 +144,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
      */
     function vaultHub() external view returns (address) {
         return address(VAULT_HUB);
+    }
+
+    /**
+     * @notice Returns the address of the account that can make deposits to the beacon chain
+     * @return address of the account of the beacon chain depositor
+     */
+    function operator() external view returns (address) {
+        return _getVaultStorage().operator;
     }
 
     /**
@@ -260,9 +271,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, VaultBeaconChainDepositor,
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures
-    ) external onlyOwner {
+    ) external {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
+        if (msg.sender != _getVaultStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);

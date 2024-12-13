@@ -17,6 +17,7 @@ import {
 describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
+  let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let steth: StETH__MockForDashboard;
@@ -32,7 +33,7 @@ describe("Dashboard", () => {
   let originalState: string;
 
   before(async () => {
-    [factoryOwner, vaultOwner, stranger] = await ethers.getSigners();
+    [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
@@ -44,9 +45,10 @@ describe("Dashboard", () => {
 
     factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
     expect(await factory.owner()).to.equal(factoryOwner);
+    expect(await factory.implementation()).to.equal(vaultImpl);
     expect(await factory.dashboardImpl()).to.equal(dashboardImpl);
 
-    const createVaultTx = await factory.connect(vaultOwner).createVault();
+    const createVaultTx = await factory.connect(vaultOwner).createVault(operator);
     const createVaultReceipt = await createVaultTx.wait();
     if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
 
@@ -84,37 +86,27 @@ describe("Dashboard", () => {
   });
 
   context("initialize", () => {
-    it("reverts if default admin is zero address", async () => {
-      await expect(dashboard.initialize(ethers.ZeroAddress, vault))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_defaultAdmin");
-    });
-
     it("reverts if staking vault is zero address", async () => {
-      await expect(dashboard.initialize(vaultOwner, ethers.ZeroAddress))
+      await expect(dashboard.initialize(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
         .withArgs("_stakingVault");
     });
 
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vaultOwner, vault)).to.be.revertedWithCustomError(
-        dashboard,
-        "AlreadyInitialized",
-      );
+      await expect(dashboard.initialize(vault)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
-    it("reverts if called by a non-proxy", async () => {
+    it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
 
-      await expect(dashboard_.initialize(vaultOwner, vault)).to.be.revertedWithCustomError(
-        dashboard_,
-        "NonProxyCallsForbidden",
-      );
+      await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
   });
 
   context("initialized state", () => {
     it("post-initialization state is correct", async () => {
+      expect(await vault.owner()).to.equal(dashboard);
+      expect(await vault.operator()).to.equal(operator);
       expect(await dashboard.isInitialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
@@ -228,31 +220,6 @@ describe("Dashboard", () => {
       await expect(dashboard.requestValidatorExit(validatorPublicKey))
         .to.emit(vault, "ValidatorsExitRequest")
         .withArgs(dashboard, validatorPublicKey);
-    });
-  });
-
-  context("depositToBeaconChain", () => {
-    it("reverts if called by a non-admin", async () => {
-      const numberOfDeposits = 1;
-      const pubkeys = "0x" + randomBytes(48).toString("hex");
-      const signatures = "0x" + randomBytes(96).toString("hex");
-
-      await expect(
-        dashboard.connect(stranger).depositToBeaconChain(numberOfDeposits, pubkeys, signatures),
-      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
-    });
-
-    it("deposits validators to the beacon chain", async () => {
-      const numberOfDeposits = 1n;
-      const pubkeys = "0x" + randomBytes(48).toString("hex");
-      const signatures = "0x" + randomBytes(96).toString("hex");
-      const depositAmount = numberOfDeposits * ether("32");
-
-      await dashboard.fund({ value: depositAmount });
-
-      await expect(dashboard.depositToBeaconChain(numberOfDeposits, pubkeys, signatures))
-        .to.emit(vault, "DepositedToBeaconChain")
-        .withArgs(dashboard, numberOfDeposits, depositAmount);
     });
   });
 

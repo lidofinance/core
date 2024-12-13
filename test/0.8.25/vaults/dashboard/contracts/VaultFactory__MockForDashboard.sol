@@ -22,13 +22,16 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboardImpl = _dashboardImpl;
     }
 
-    function createVault() external returns (IStakingVault vault, Dashboard dashboard) {
+    function createVault(address _operator) external returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
 
         dashboard = Dashboard(Clones.clone(dashboardImpl));
 
-        dashboard.initialize(msg.sender, address(vault));
-        vault.initialize(address(dashboard), "");
+        dashboard.initialize(address(vault));
+        dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
+        dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
+
+        vault.initialize(address(dashboard), _operator, "");
 
         emit VaultCreated(address(dashboard), address(vault));
         emit DashboardCreated(msg.sender, address(dashboard));

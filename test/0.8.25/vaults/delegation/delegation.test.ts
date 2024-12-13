@@ -16,14 +16,13 @@ import {
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
-describe.only("Delegation", () => {
+describe("Delegation", () => {
   let deployer: HardhatEthersSigner;
-  let defaultAdmin: HardhatEthersSigner;
+  let vaultOwner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
+  let staker: HardhatEthersSigner;
   let keyMaster: HardhatEthersSigner;
-  let lidoDao: HardhatEthersSigner;
   let tokenMaster: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let factoryOwner: HardhatEthersSigner;
@@ -41,40 +40,42 @@ describe.only("Delegation", () => {
   let originalState: string;
 
   before(async () => {
-    [deployer, defaultAdmin, manager, staker, operator, keyMaster, lidoDao, tokenMaster, stranger, factoryOwner] =
+    [deployer, vaultOwner, manager, staker, operator, keyMaster, tokenMaster, stranger, factoryOwner] =
       await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     delegationImpl = await ethers.deployContract("Delegation", [steth]);
+    expect(await delegationImpl.stETH()).to.equal(steth);
 
     hub = await ethers.deployContract("VaultHub__MockForDelegation");
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     factory = await ethers.deployContract("VaultFactory", [
       factoryOwner,
       vaultImpl.getAddress(),
       delegationImpl.getAddress(),
     ]);
-
+    expect(await factory.implementation()).to.equal(vaultImpl);
     expect(await factory.delegationImpl()).to.equal(delegationImpl);
 
     const vaultCreationTx = await factory
-      .connect(defaultAdmin)
-      .createVault("0x", { managementFee: 0n, performanceFee: 0n, manager, operator }, lidoDao);
+      .connect(vaultOwner)
+      .createVault({ managementFee: 0n, performanceFee: 0n, manager, operator }, "0x");
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation receipt not found");
 
     const vaultCreatedEvents = findEvents(vaultCreationReceipt, "VaultCreated");
     expect(vaultCreatedEvents.length).to.equal(1);
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
-    vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, defaultAdmin);
+    vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
     expect(await vault.getBeacon()).to.equal(factory);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);
     const delegationAddress = delegationCreatedEvents[0].args.delegation;
-    delegation = await ethers.getContractAt("Delegation", delegationAddress, defaultAdmin);
+    delegation = await ethers.getContractAt("Delegation", delegationAddress, vaultOwner);
     expect(await delegation.stakingVault()).to.equal(vault);
 
     hubSigner = await impersonate(await hub.getAddress(), ether("100"));
@@ -102,61 +103,35 @@ describe.only("Delegation", () => {
   });
 
   context("initialize", () => {
-    it("reverts if default admin is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth]);
-
-      await expect(delegation_.initialize(ethers.ZeroAddress, vault))
-        .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
-        .withArgs("_defaultAdmin");
-    });
-
     it("reverts if staking vault is zero address", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [steth]);
 
-      await expect(delegation_.initialize(defaultAdmin, ethers.ZeroAddress))
+      await expect(delegation_.initialize(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
         .withArgs("_stakingVault");
     });
 
     it("reverts if already initialized", async () => {
-      await expect(delegation.initialize(defaultAdmin, vault)).to.be.revertedWithCustomError(
-        delegation,
-        "AlreadyInitialized",
-      );
+      await expect(delegation.initialize(vault)).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
     });
 
-    it("reverts if non-proxy calls are made", async () => {
+    it("reverts if called on the implementation", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [steth]);
 
-      await expect(delegation_.initialize(defaultAdmin, vault)).to.be.revertedWithCustomError(
-        delegation_,
-        "NonProxyCallsForbidden",
-      );
+      await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
     });
   });
 
   context("initialized state", () => {
     it("initializes the contract correctly", async () => {
       expect(await vault.owner()).to.equal(delegation);
+      expect(await vault.operator()).to.equal(operator);
 
       expect(await delegation.stakingVault()).to.equal(vault);
       expect(await delegation.vaultHub()).to.equal(hub);
 
-      expect(await delegation.hasRole(await delegation.LIDO_DAO_ROLE(), defaultAdmin)).to.be.false;
-      expect(await delegation.getRoleAdmin(await delegation.LIDO_DAO_ROLE())).to.equal(
-        await delegation.LIDO_DAO_ROLE(),
-      );
-      expect(await delegation.getRoleAdmin(await delegation.OPERATOR_ROLE())).to.equal(
-        await delegation.LIDO_DAO_ROLE(),
-      );
-      expect(await delegation.getRoleAdmin(await delegation.KEY_MASTER_ROLE())).to.equal(
-        await delegation.OPERATOR_ROLE(),
-      );
-
-      expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), defaultAdmin)).to.be.true;
+      expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await delegation.getRoleMemberCount(await delegation.DEFAULT_ADMIN_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.LIDO_DAO_ROLE(), lidoDao)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.LIDO_DAO_ROLE())).to.equal(1);
       expect(await delegation.hasRole(await delegation.MANAGER_ROLE(), manager)).to.be.true;
       expect(await delegation.getRoleMemberCount(await delegation.MANAGER_ROLE())).to.equal(1);
       expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
@@ -164,7 +139,6 @@ describe.only("Delegation", () => {
 
       expect(await delegation.getRoleMemberCount(await delegation.STAKER_ROLE())).to.equal(0);
       expect(await delegation.getRoleMemberCount(await delegation.TOKEN_MASTER_ROLE())).to.equal(0);
-      expect(await delegation.getRoleMemberCount(await delegation.KEY_MASTER_ROLE())).to.equal(0);
 
       expect(await delegation.managementFee()).to.equal(0n);
       expect(await delegation.performanceFee()).to.equal(0n);
@@ -217,7 +191,6 @@ describe.only("Delegation", () => {
       expect(await delegation.ownershipTransferCommittee()).to.deep.equal([
         await delegation.MANAGER_ROLE(),
         await delegation.OPERATOR_ROLE(),
-        await delegation.LIDO_DAO_ROLE(),
       ]);
     });
   });
