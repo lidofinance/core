@@ -104,6 +104,7 @@ const config: HardhatUserConfig = {
   etherscan: {
     apiKey: {
       default: process.env.ETHERSCAN_API_KEY || "",
+      holesky: process.env.ETHERSCAN_API_KEY || "",
       mekong: process.env.BLOCKSCOUT_API_KEY || "",
     },
     customChains: [
