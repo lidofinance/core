@@ -1296,7 +1296,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/edr@npm:^0.6.4":
+"@nomicfoundation/edr@npm:^0.6.5":
   version: 0.6.5
   resolution: "@nomicfoundation/edr@npm:0.6.5"
   dependencies:
@@ -6659,13 +6659,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:2.22.16":
-  version: 2.22.16
-  resolution: "hardhat@npm:2.22.16"
+"hardhat@npm:^2.22.17":
+  version: 2.22.17
+  resolution: "hardhat@npm:2.22.17"
   dependencies:
     "@ethersproject/abi": "npm:^5.1.2"
     "@metamask/eth-sig-util": "npm:^4.0.0"
-    "@nomicfoundation/edr": "npm:^0.6.4"
+    "@nomicfoundation/edr": "npm:^0.6.5"
     "@nomicfoundation/ethereumjs-common": "npm:4.0.4"
     "@nomicfoundation/ethereumjs-tx": "npm:5.0.4"
     "@nomicfoundation/ethereumjs-util": "npm:9.0.4"
@@ -6717,7 +6717,7 @@ __metadata:
       optional: true
   bin:
     hardhat: internal/cli/bootstrap.js
-  checksum: 10c0/d193d8dbd02aba9875fc4df23c49fe8cf441afb63382c9e248c776c75aca6e081e9b7b75fb262739f20bff152f9e0e4112bb22e3609dfa63ed4469d3ea46c0ca
+  checksum: 10c0/d64419a36bfdeb6b4b623d68dcbbb31c724b54999fde5be64c6c102d2f94f98d37ff3964e0293e64c5b436bc194349b09c0874946c687d362bb7a24f989ca685
   languageName: node
   linkType: hard
 
@@ -8080,14 +8080,14 @@ __metadata:
     eslint-plugin-no-only-tests: "npm:3.3.0"
     eslint-plugin-prettier: "npm:5.2.1"
     eslint-plugin-simple-import-sort: "npm:12.1.1"
-    ethereumjs-util: "npm:7.1.5"
-    ethers: "npm:6.13.4"
-    glob: "npm:11.0.0"
-    globals: "npm:15.12.0"
-    hardhat: "npm:2.22.16"
-    hardhat-contract-sizer: "npm:2.10.0"
-    hardhat-gas-reporter: "npm:1.0.10"
-    hardhat-ignore-warnings: "npm:0.2.12"
+    ethereumjs-util: "npm:^7.1.5"
+    ethers: "npm:^6.13.4"
+    glob: "npm:^11.0.0"
+    globals: "npm:^15.12.0"
+    hardhat: "npm:^2.22.17"
+    hardhat-contract-sizer: "npm:^2.10.0"
+    hardhat-gas-reporter: "npm:^1.0.10"
+    hardhat-ignore-warnings: "npm:^0.2.12"
     hardhat-tracer: "npm:3.1.0"
     hardhat-watcher: "npm:2.5.0"
     husky: "npm:9.1.7"
