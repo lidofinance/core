@@ -53,7 +53,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
-    /** 
+    /**
      * @notice Role for the operator
      * Operator can:
      * - claim the performance due
@@ -115,8 +115,11 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Constructor sets the stETH token address.
      * @param _stETH Address of the stETH token contract.
+     * @param _weth Address of the weth token contract.
+     * @param _wstETH Address of the wstETH token contract.
+     * @param _vaultHub Address of the vault hub contract.
      */
-    constructor(address _stETH) Dashboard(_stETH) {}
+    constructor(address _stETH, address _weth, address _wstETH, address _vaultHub) Dashboard(_stETH, _weth, _wstETH) {}
 
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.

@@ -7,14 +7,15 @@ pragma solidity 0.8.25;
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/draft-IERC20Permit.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 
 /// @notice Interface defining a Lido liquid staking pool
 /// @dev see also [Lido liquid staking pool core contract](https://docs.lido.fi/contracts/lido)
 interface IStETH is IERC20, IERC20Permit {
-    function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256)
+    function getSharesByPooledEth(uint256 _ethAmount) external view returns (uint256);
 }
 
 interface IWeth is IERC20 {
@@ -36,6 +37,9 @@ interface IWstETH is IERC20, IERC20Permit {
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
  */
 contract Dashboard is AccessControlEnumerable {
+    /// @dev basis points base
+    uint256 internal constant BPS_BASE = 100_00;
+
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;
@@ -70,7 +74,7 @@ contract Dashboard is AccessControlEnumerable {
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
         _SELF = address(this);
-        stETH = IERC20(_stETH);
+        stETH = IStETH(_stETH);
         weth = IWeth(_weth);
         wstETH = IWstETH(_wstETH);
     }
@@ -157,10 +161,16 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Returns the maximum number of stETH shares that can be minted on the vault.
+     * @dev This is a public view method for the _maxMintableShares method in VaultHub
      * @return The maximum number of stETH shares as a uint256.
      */
-    function maxMintableShares() external view returns (uint256) {
-        return vaultHub._maxMintableShares(address(stakingVault), vaultSocket().reserveRatio);
+    function maxMintableShares() public view returns (uint256) {
+        uint256 valuation = stakingVault.valuation();
+        uint256 reserveRatio = vaultSocket().reserveRatio;
+
+        uint256 maxStETHMinted = (valuation * (BPS_BASE - reserveRatio)) / BPS_BASE;
+
+        return stETH.getSharesByPooledEth(maxStETHMinted);
     }
 
     /**
@@ -168,11 +178,10 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares that can be minted.
      */
     function canMint() external view returns (uint256) {
+        uint256 maxMintableSharesValue = maxMintableShares();
+        uint256 sharesMintedValue = vaultSocket().sharesMinted;
 
-        uint256 maxMintableShares = maxMintableShares();
-        uint256 sharesMinted = vaultSocket().sharesMinted;
-
-        return maxMintableShares - sharesMinted;
+        return maxMintableSharesValue - sharesMintedValue;
     }
 
     /**
@@ -183,11 +192,11 @@ contract Dashboard is AccessControlEnumerable {
     function canMintByEther(uint256 _ether) external view returns (uint256) {
         if (_ether == 0) return 0;
 
-        uint256 maxMintableShares = maxMintableShares();
-        uint256 sharesMinted = vaultSocket().sharesMinted;
-        uint256 sharesToMint = stETH.getSharesByPooledEth(_ether);
+        uint256 maxMintableSharesValue = maxMintableShares();
+        uint256 sharesMintedValue = vaultSocket().sharesMinted;
+        uint256 sharesToMintValue = stETH.getSharesByPooledEth(_ether);
 
-        return sharesMinted + sharesToMint > maxMintableShares ? maxMintableShares - sharesMinted : sharesToMint;
+        return sharesMintedValue + sharesToMintValue > maxMintableSharesValue ? maxMintableSharesValue - sharesMintedValue : sharesToMintValue;
     }
 
     /**
@@ -197,6 +206,8 @@ contract Dashboard is AccessControlEnumerable {
     function canWithdraw() external view returns (uint256) {
         return Math256.min(address(stakingVault).balance, stakingVault.unlocked());
     }
+
+    // TODO: add preview view methods for minting and burning
 
     // ==================== Vault Management Functions ====================
 
@@ -229,7 +240,9 @@ contract Dashboard is AccessControlEnumerable {
     function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         weth.transferFrom(msg.sender, address(this), _wethAmount);
         weth.withdraw(_wethAmount);
-        _fund{value: _wethAmount}();
+
+        // TODO: find way to use _fund() instead of stakingVault directly
+        stakingVault.fund{value: _wethAmount}();
     }
 
     /**
@@ -319,26 +332,53 @@ contract Dashboard is AccessControlEnumerable {
         _burn(stETHAmount);
     }
 
+    struct PermitInput {
+        uint256 value;
+        uint256 deadline;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
+    /**
+     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
+     */
+    modifier trustlessPermit(
+        address token,
+        address owner,
+        address spender,
+        PermitInput calldata permitInput
+    ) {
+        // Try permit() before allowance check to advance nonce if possible
+        try IERC20Permit(token).permit(owner, spender, permitInput.value, permitInput.deadline, permitInput.v, permitInput.r, permitInput.s) {
+            _;
+            return;
+        } catch {
+            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
+            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
+                _;
+                return;
+            }
+        }
+        revert("Permit failure");
+    }
+
     /**
      * @notice Burns stETH tokens from the sender backed by the vault using EIP-2612 Permit.
      * @param _tokens Amount of stETH tokens to burn
      * @param _permit data required for the stETH.permit() method to set the allowance
      */
-    function burnWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        stETH.permit(msg.sender, address(this), _permit.value, _permit.deadline, _permit.v, _permit.r, _permit.s);
+    function burnWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) trustlessPermit(address(stETH), msg.sender, address(this), _permit) {
         _burn(_tokens);
     }
 
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault using EIP-2612 Permit.
      * @param _tokens Amount of wstETH tokens to burn
-     * @param _wstETHPermit data required for the wstETH.permit() method to set the allowance
+     * @param _permit data required for the wstETH.permit() method to set the allowance
      */
-    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _wstETHPermit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        wstETH.permit(msg.sender, address(this), _wstETHPermit.value, _wstETHPermit.deadline, _wstETHPermit.v, _wstETHPermit.r, _wstETHPermit.s);
-
+    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) trustlessPermit(address(wstETH), msg.sender, address(this), _permit) {
         wstETH.transferFrom(msg.sender, address(this), _tokens);
-        stETH.approve(address(wstETH), _tokens);
         uint256 stETHAmount = wstETH.unwrap(_tokens);
         _burn(stETHAmount);
     }
