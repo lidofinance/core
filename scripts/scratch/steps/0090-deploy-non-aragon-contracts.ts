@@ -210,6 +210,7 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     accounting.address,
+    wstETH.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

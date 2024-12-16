@@ -86,6 +86,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
         accounting: await accounting.getAddress(),
+        wstETH: deployer.address,
       },
     ]);
 
