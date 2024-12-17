@@ -34,10 +34,11 @@ describe("Lido.sol:externalShares", () => {
 
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.STAKING_PAUSE_ROLE(), deployer);
+    await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
 
     lido = lido.connect(user);
 
-    await lido.resumeStaking();
+    await lido.resume();
 
     const locatorAddress = await lido.getLidoLocator();
     locator = await ethers.getContractAt("LidoLocator", locatorAddress, deployer);
@@ -46,6 +47,11 @@ describe("Lido.sol:externalShares", () => {
 
     // Add some ether to the protocol
     await lido.connect(whale).submit(ZeroAddress, { value: 1000n });
+
+    // Burn some shares to make share rate fractional
+    const burner = await impersonate(await locator.burner(), ether("1"));
+    await lido.connect(whale).transfer(burner, 500n);
+    await lido.connect(burner).burnShares(500n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -192,18 +198,19 @@ describe("Lido.sol:externalShares", () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
       const amountToMint = await lido.getMaxMintableExternalShares();
+      const etherToMint = await lido.getPooledEthByShares(amountToMint);
 
       await expect(lido.connect(accountingSigner).mintExternalShares(whale, amountToMint))
         .to.emit(lido, "Transfer")
-        .withArgs(ZeroAddress, whale, amountToMint)
+        .withArgs(ZeroAddress, whale, etherToMint)
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, whale, amountToMint)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, amountToMint, amountToMint);
+        .withArgs(whale, amountToMint, etherToMint);
 
       // Verify external balance was increased
       const externalEther = await lido.getExternalEther();
-      expect(externalEther).to.equal(amountToMint);
+      expect(externalEther).to.equal(etherToMint);
     });
   });
 
@@ -285,9 +292,11 @@ describe("Lido.sol:externalShares", () => {
     });
 
     it("Reverts if amount of ether is greater than minted shares", async () => {
-      await expect(lido.connect(accountingSigner).rebalanceExternalEtherToInternal({ value: 1n })).to.be.revertedWith(
-        "EXT_SHARES_TOO_SMALL",
-      );
+      await expect(
+        lido
+          .connect(accountingSigner)
+          .rebalanceExternalEtherToInternal({ value: await lido.getPooledEthBySharesRoundUp(1n) }),
+      ).to.be.revertedWith("EXT_SHARES_TOO_SMALL");
     });
 
     it("Decreases external shares and increases the buffered ether", async () => {
@@ -298,13 +307,13 @@ describe("Lido.sol:externalShares", () => {
 
       const bufferedEtherBefore = await lido.getBufferedEther();
 
-      const etherToRebalance = await lido.getPooledEthByShares(100n);
+      const etherToRebalance = await lido.getPooledEthBySharesRoundUp(1n);
 
       await lido.connect(accountingSigner).rebalanceExternalEtherToInternal({
         value: etherToRebalance,
       });
 
-      expect(await lido.getExternalShares()).to.equal(amountToMint - 100n);
+      expect(await lido.getExternalShares()).to.equal(amountToMint - 1n);
       expect(await lido.getBufferedEther()).to.equal(bufferedEtherBefore + etherToRebalance);
     });
   });
@@ -336,11 +345,11 @@ describe("Lido.sol:externalShares", () => {
    * Formula: x <= (maxBP * totalPooled - currentExternal * TOTAL_BP) / (TOTAL_BP - maxBP)
    */
   async function getExpectedMaxMintableExternalShares() {
-    const totalPooledEther = await lido.getTotalPooledEther();
+    const totalShares = await lido.getTotalShares();
     const externalShares = await lido.getExternalShares();
 
     return (
-      (maxExternalRatioBP * totalPooledEther - externalShares * TOTAL_BASIS_POINTS) /
+      (totalShares * maxExternalRatioBP - externalShares * TOTAL_BASIS_POINTS) /
       (TOTAL_BASIS_POINTS - maxExternalRatioBP)
     );
   }
