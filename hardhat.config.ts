@@ -95,6 +95,10 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "sepolia-fork": {
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
+      chainId: 11155111,
+    },
     "mekong": {
       url: process.env.MEKONG_RPC_URL || RPC_URL,
       chainId: 7078815900,
