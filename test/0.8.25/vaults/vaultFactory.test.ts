@@ -13,6 +13,7 @@ import {
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
+  UpgradeableBeacon,
   VaultFactory,
 } from "typechain-types";
 
@@ -32,6 +33,7 @@ describe("VaultFactory.sol", () => {
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let proxy: OssifiableProxy;
+  let beacon: UpgradeableBeacon;
   let accountingImpl: Accounting;
   let accounting: Accounting;
   let implOld: StakingVault;
@@ -63,51 +65,72 @@ describe("VaultFactory.sol", () => {
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
 
+    //vault implementation
     implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
+
+    //beacon
+    beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
+
     delegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
     //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
     await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
+    console.log({
+      beaconAddress: await beacon.getAddress(),
+      delegationAddress: await delegation.getAddress(),
+      factoryAddress: await vaultFactory.getAddress(),
+    });
+
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(implOld, "SenderNotBeacon");
+    await expect(implOld.initialize(admin, stranger, operator, "0x")).to.revertedWithCustomError(
+      implOld,
+      "InvalidInitialization",
+    );
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
 
+  context("beacon.constructor", () => {});
+
   context("constructor", () => {
     it("reverts if `_owner` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, implOld, steth], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "OwnableInvalidOwner")
+      await expect(ethers.deployContract("UpgradeableBeacon", [ZeroAddress, admin], { from: deployer }))
+        .to.be.revertedWithCustomError(beacon, "BeaconInvalidImplementation")
+        .withArgs(ZeroAddress);
+    });
+    it("reverts if `_owner` is zero address", async () => {
+      await expect(ethers.deployContract("UpgradeableBeacon", [implOld, ZeroAddress], { from: deployer }))
+        .to.be.revertedWithCustomError(beacon, "OwnableInvalidOwner")
         .withArgs(ZeroAddress);
     });
 
     it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [admin, ZeroAddress, steth], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "BeaconInvalidImplementation")
-        .withArgs(ZeroAddress);
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+        .withArgs("_beacon");
     });
 
     it("reverts if `_delegation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [admin, implOld, ZeroAddress], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_delegation");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
-      const beacon = await ethers.deployContract(
-        "VaultFactory",
-        [await admin.getAddress(), await implOld.getAddress(), await steth.getAddress()],
-        { from: deployer },
-      );
+      // const beacon = await ethers.deployContract(
+      //   "VaultFactory",
+      //   [await implOld.getAddress(), await steth.getAddress()],
+      //   { from: deployer },
+      // );
 
       const tx = beacon.deploymentTransaction();
 
@@ -122,7 +145,7 @@ describe("VaultFactory.sol", () => {
 
   context("createVault", () => {
     it("works with empty `params`", async () => {
-      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
+      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
@@ -133,11 +156,12 @@ describe("VaultFactory.sol", () => {
         .withArgs(await vaultOwner1.getAddress(), await delegation_.getAddress());
 
       expect(await delegation_.getAddress()).to.eq(await vault.owner());
-      expect(await vault.getBeacon()).to.eq(await vaultFactory.getAddress());
+      expect(await vault.beacon()).to.eq(await beacon.getAddress());
+      expect(await vault.factory()).to.eq(await vaultFactory.getAddress());
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
+      const { vault } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
       expect(await vault.version()).to.eq(1);
     });
 
@@ -145,6 +169,7 @@ describe("VaultFactory.sol", () => {
   });
 
   context("connect", () => {
+    it("create vault ", async () => {});
     it("connect ", async () => {
       const vaultsBefore = await accounting.vaultsCount();
       expect(vaultsBefore).to.eq(0);
@@ -163,14 +188,24 @@ describe("VaultFactory.sol", () => {
       };
 
       //create vault
-      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
-      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(vaultFactory, vaultOwner2, operator);
+      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(
+        vaultFactory,
+        admin,
+        vaultOwner1,
+        operator,
+      );
+      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(
+        vaultFactory,
+        admin,
+        vaultOwner2,
+        operator,
+      );
 
       //owner of vault is delegator
       expect(await delegator1.getAddress()).to.eq(await vault1.owner());
       expect(await delegator2.getAddress()).to.eq(await vault2.owner());
 
-      //try to connect vault without, factory not allowed
+      //try to connect vault without factory not allowed
       await expect(
         accounting
           .connect(admin)
@@ -228,17 +263,17 @@ describe("VaultFactory.sol", () => {
       const version1Before = await vault1.version();
       const version2Before = await vault2.version();
 
-      const implBefore = await vaultFactory.implementation();
+      const implBefore = await beacon.implementation();
       expect(implBefore).to.eq(await implOld.getAddress());
 
       //upgrade beacon to new implementation
-      await vaultFactory.connect(admin).upgradeTo(implNew);
+      await beacon.connect(admin).upgradeTo(implNew);
 
-      const implAfter = await vaultFactory.implementation();
+      const implAfter = await beacon.implementation();
       expect(implAfter).to.eq(await implNew.getAddress());
 
       //create new vault with new implementation
-      const { vault: vault3 } = await createVaultProxy(vaultFactory, vaultOwner1, operator);
+      const { vault: vault3 } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
 
       //we upgrade implementation and do not add it to whitelist
       await expect(
@@ -259,6 +294,12 @@ describe("VaultFactory.sol", () => {
 
       //finalize first vault
       await vault1WithNewImpl.finalizeUpgrade_v2();
+
+      //try to initialize the second vault
+      await expect(vault2WithNewImpl.initialize(ZeroAddress, admin, operator, "0x")).to.revertedWithCustomError(
+        vault2WithNewImpl,
+        "VaultAlreadyInitialized",
+      );
 
       const version1After = await vault1WithNewImpl.version();
       const version2After = await vault2WithNewImpl.version();
@@ -281,10 +322,6 @@ describe("VaultFactory.sol", () => {
       const v3 = { version: version3After, getInitializedVersion: version3AfterV2 };
 
       console.table([v1, v2, v3]);
-
-      // await vault1.initialize(stranger, "0x")
-      // await vault2.initialize(stranger, "0x")
-      // await vault3.initialize(stranger, "0x")
     });
   });
 });

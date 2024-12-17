@@ -84,6 +84,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         IStakingVault.Report report;
         uint128 locked;
         int128 inOutDelta;
+        address factory;
         address operator;
     }
 
@@ -105,21 +106,21 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         _disableInitializers();
     }
 
-    modifier onlyBeacon() {
-        if (msg.sender != getBeacon()) revert SenderNotBeacon(msg.sender, getBeacon());
-        _;
-    }
-
     /// @notice Initialize the contract storage explicitly.
-    ///         The initialize function selector is not changed. For upgrades use `_params` variable
+    ///         The initialize function selector is not changed. For upgrades use `_params` variable.
+    ///         To
     ///
+    /// @param _factory the contract from which the vault was created
     /// @param _owner vault owner address
     /// @param _operator address of the account that can make deposits to the beacon chain
     /// @param _params the calldata for initialize contract after upgrades
     // solhint-disable-next-line no-unused-vars
-    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon initializer {
+    function initialize(address _factory, address _owner, address _operator, bytes calldata _params) external initializer {
+        VaultStorage storage $ = _getVaultStorage();
+
         __Ownable_init(_owner);
-        _getVaultStorage().operator = _operator;
+        $.operator = _operator;
+        $.factory = _factory;
     }
 
     /**
@@ -170,8 +171,16 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Returns the beacon proxy address that controls this contract's implementation
      * @return address The beacon proxy address
      */
-    function getBeacon() public view returns (address) {
+    function beacon() public view returns (address) {
         return ERC1967Utils.getBeacon();
+    }
+
+    /**
+     * @notice Returns the factory proxy address
+     * @return address The factory address
+     */
+    function factory() public view returns (address) {
+        return _getVaultStorage().factory;
     }
 
     /**
@@ -389,5 +398,4 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     error Unbalanced();
     error NotAuthorized(string operation, address sender);
     error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
-    error SenderNotBeacon(address sender, address beacon);
 }

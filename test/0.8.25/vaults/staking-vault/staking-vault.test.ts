@@ -3,7 +3,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
@@ -59,7 +59,7 @@ describe("StakingVault", () => {
     stakingVaultAddress = await stakingVault.getAddress();
     vaultHubAddress = await vaultHub.getAddress();
     depositContractAddress = await depositContract.getAddress();
-    beaconAddress = await stakingVaultImplementation.getBeacon();
+    beaconAddress = await stakingVaultImplementation.beacon();
     vaultFactoryAddress = await vaultFactory.getAddress();
     ethRejectorAddress = await ethRejector.getAddress();
 
@@ -104,14 +104,8 @@ describe("StakingVault", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(beaconSigner).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(beaconSigner).initialize(vaultFactoryAddress, vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
-    });
-
-    it("reverts on initialization if the caller is not the beacon", async () => {
-      await expect(stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "SenderNotBeacon")
-        .withArgs(stranger, await stakingVaultImplementation.getBeacon());
     });
   });
 
@@ -122,7 +116,7 @@ describe("StakingVault", () => {
       expect(await stakingVault.VAULT_HUB()).to.equal(vaultHubAddress);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
-      expect(await stakingVault.getBeacon()).to.equal(vaultFactoryAddress);
+      expect(await stakingVault.beacon()).to.equal(vaultFactoryAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
       expect(await stakingVault.operator()).to.equal(operator);
 

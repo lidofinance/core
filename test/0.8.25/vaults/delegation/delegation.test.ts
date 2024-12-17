@@ -1,9 +1,9 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
-import { advanceChainTime, days, ether, findEvents, getNextBlockTimestamp, impersonate, streccak } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   Delegation,
   DepositContract__MockForStakingVault,
@@ -13,17 +13,17 @@ import {
   VaultHub__MockForDelegation,
 } from "typechain-types";
 
+import { advanceChainTime, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+
+import { Snapshot } from "test/suite";
+
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
 describe("Delegation", () => {
-  let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let keyMaster: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let factoryOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;

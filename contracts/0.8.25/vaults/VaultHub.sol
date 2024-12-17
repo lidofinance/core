@@ -10,6 +10,8 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as StETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultFactory} from "./VaultFactory.sol";
 
 // TODO: rebalance gas compensation
 // TODO: unstructured storag and upgradability
@@ -145,11 +147,17 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         VaultHubStorage storage $ = _getVaultHubStorage();
 
-        address factory = IBeaconProxy(address (_vault)).getBeacon();
-        if (!$.vaultFactories[factory]) revert FactoryNotAllowed(factory);
+        {
+            address factory = IStakingVault(address (_vault)).factory();
+            if (!$.vaultFactories[factory]) revert FactoryNotAllowed(factory);
 
-        address impl = IBeacon(factory).implementation();
-        if (!$.vaultImpl[impl]) revert ImplNotAllowed(impl);
+            address vaultBeacon = IBeaconProxy(address (_vault)).beacon();
+            address factoryBeacon = VaultFactory(factory).BEACON();
+            if (factoryBeacon != vaultBeacon) revert BeaconNotAllowed(factoryBeacon, vaultBeacon);
+
+            address impl = IBeacon(vaultBeacon).implementation();
+            if (!$.vaultImpl[impl]) revert ImplNotAllowed(impl);
+        }
 
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(address(_vault), $.vaultIndex[_vault]);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
@@ -485,4 +493,5 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error AlreadyExists(address addr);
     error FactoryNotAllowed(address beacon);
     error ImplNotAllowed(address impl);
+    error BeaconNotAllowed(address factoryBeacon, address vaultBeacon);
 }

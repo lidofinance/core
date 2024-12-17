@@ -1,10 +1,10 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
-import { certainAddress, ether, findEvents } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   Dashboard,
   DepositContract__MockForStakingVault,
@@ -13,6 +13,10 @@ import {
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
 } from "typechain-types";
+
+import { certainAddress, ether, findEvents } from "lib";
+
+import { Snapshot } from "test/suite";
 
 describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
