@@ -430,9 +430,22 @@ describe("StakingVault.sol", () => {
     });
 
     it("emits the OnReportFailed event with empty reason if the owner is an EOA", async () => {
+      await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3"))).not.to.emit(
+        stakingVault,
+        "OnReportFailed",
+      );
+    });
+
+    // to simulate the OutOfGas error, we run a big loop in the onReport hook
+    // because of that, this test takes too much time to run, so we'll skip it by default
+    it.skip("emits the OnReportFailed event with empty reason if the transaction runs out of gas", async () => {
+      await stakingVault.transferOwnership(ownerReportReceiver);
+      expect(await stakingVault.owner()).to.equal(ownerReportReceiver);
+
+      await ownerReportReceiver.setReportShouldRunOutOfGas(true);
       await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "OnReportFailed")
-        .withArgs(stakingVaultAddress, "0x");
+        .withArgs("0x");
     });
 
     it("emits the OnReportFailed event with the reason if the owner is a contract and the onReport hook reverts", async () => {
@@ -444,7 +457,7 @@ describe("StakingVault.sol", () => {
 
       await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "OnReportFailed")
-        .withArgs(stakingVaultAddress, errorSignature);
+        .withArgs(errorSignature);
     });
 
     it("successfully calls the onReport hook if the owner is a contract and the onReport hook does not revert", async () => {

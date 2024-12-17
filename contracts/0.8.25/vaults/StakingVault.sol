@@ -361,6 +361,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
 
         address _owner = owner();
         uint256 codeSize;
+
         assembly {
             codeSize := extcodesize(_owner)
         }
@@ -368,10 +369,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         if (codeSize > 0) {
             try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
             catch (bytes memory reason) {
-                emit OnReportFailed(address(this), reason);
+                emit OnReportFailed(reason.length == 0 ? bytes("") : reason);
             }
-        } else {
-            emit OnReportFailed(address(this), "");
         }
 
         emit Reported(address(this), _valuation, _inOutDelta, _locked);
@@ -389,7 +388,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     event ValidatorsExitRequest(address indexed sender, bytes validatorPublicKey);
     event Locked(uint256 locked);
     event Reported(address indexed vault, uint256 valuation, int256 inOutDelta, uint256 locked);
-    event OnReportFailed(address vault, bytes reason);
+    event OnReportFailed(bytes reason);
 
     error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
