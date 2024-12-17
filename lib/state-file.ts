@@ -91,6 +91,7 @@ export enum Sk {
   stakingVaultImpl = "stakingVaultImpl",
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
+  stakingVaultBeacon = "stakingVaultBeacon",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
