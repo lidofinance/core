@@ -5,7 +5,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { DepositContract__MockForBeaconChainDepositor, StakingModule__Mock, StakingRouter } from "typechain-types";
+import {
+  DepositContract__MockForBeaconChainDepositor,
+  StakingModule__MockForStakingRouter,
+  StakingRouter,
+} from "typechain-types";
 
 import { ether, getNextBlock, proxify } from "lib";
 
@@ -18,7 +22,7 @@ describe("StakingRouter.sol:module-sync", () => {
   let lido: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
-  let stakingModule: StakingModule__Mock;
+  let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
 
   let moduleId: bigint;
@@ -30,7 +34,10 @@ describe("StakingRouter.sol:module-sync", () => {
   const name = "myStakingModule";
   const stakingModuleFee = 5_00n;
   const treasuryFee = 5_00n;
-  const targetShare = 1_00n;
+  const stakeShareLimit = 1_00n;
+  const priorityExitShareThreshold = 2_00n;
+  const maxDepositsPerBlock = 150n;
+  const minDepositBlockDistance = 25n;
 
   let originalState: string;
 
@@ -38,7 +45,14 @@ describe("StakingRouter.sol:module-sync", () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const impl = await ethers.deployContract("StakingRouter", [depositContract], deployer);
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
+
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -54,20 +68,29 @@ describe("StakingRouter.sol:module-sync", () => {
     await Promise.all([
       stakingRouter.grantRole(await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin),
-      stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_PAUSE_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), admin),
+      stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), admin),
     ]);
 
     // add staking module
-    stakingModule = await ethers.deployContract("StakingModule__Mock", deployer);
+    stakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
     stakingModuleAddress = await stakingModule.getAddress();
     const { timestamp, number } = await getNextBlock();
     lastDepositAt = timestamp;
     lastDepositBlock = number;
 
-    await stakingRouter.addStakingModule(name, stakingModuleAddress, targetShare, stakingModuleFee, treasuryFee);
+    await stakingRouter.addStakingModule(
+      name,
+      stakingModuleAddress,
+      stakeShareLimit,
+      priorityExitShareThreshold,
+      stakingModuleFee,
+      treasuryFee,
+      maxDepositsPerBlock,
+      minDepositBlockDistance,
+    );
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
@@ -77,17 +100,31 @@ describe("StakingRouter.sol:module-sync", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("Getters", () => {
-    let stakingModuleInfo: [bigint, string, bigint, bigint, bigint, bigint, string, bigint, bigint, bigint];
+    let stakingModuleInfo: [
+      bigint,
+      string,
+      bigint,
+      bigint,
+      bigint,
+      number,
+      string,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+    ];
 
     // module mock state
-    const stakingModuleSummary: Parameters<StakingModule__Mock["mock__getStakingModuleSummary"]> = [
+    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__getStakingModuleSummary"]> = [
       100n, // exitedValidators
       1000, // depositedValidators
       200, // depositableValidators
     ];
 
-    const nodeOperatorSummary: Parameters<StakingModule__Mock["mock__getNodeOperatorSummary"]> = [
-      true, // isTargetLimitActive
+    const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
+      1, // targetLimitMode
       100n, // targetValidatorsCount
       1n, // stuckValidatorsCount
       5n, // refundedValidatorsCount
@@ -97,7 +134,7 @@ describe("StakingRouter.sol:module-sync", () => {
       200n, // depositableValidatorsCount
     ];
 
-    const nodeOperatorsCounts: Parameters<StakingModule__Mock["mock__nodeOperatorsCount"]> = [
+    const nodeOperatorsCounts: Parameters<StakingModule__MockForStakingRouter["mock__nodeOperatorsCount"]> = [
       100n, // nodeOperatorsCount
       95n, // activeNodeOperatorsCount
     ];
@@ -110,12 +147,15 @@ describe("StakingRouter.sol:module-sync", () => {
         stakingModuleAddress,
         stakingModuleFee,
         treasuryFee,
-        targetShare,
-        0n, // status
+        stakeShareLimit,
+        Status.Active,
         name,
         lastDepositAt,
         lastDepositBlock,
-        0n, // exitedValidatorsCount
+        0n, // exitedValidatorsCount,
+        priorityExitShareThreshold,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
       ];
 
       // mocking module state
@@ -235,6 +275,18 @@ describe("StakingRouter.sol:module-sync", () => {
       });
     });
 
+    context("getStakingModuleMinDepositBlockDistance", () => {
+      it("Returns the minimum deposit block distance", async () => {
+        expect(await stakingRouter.getStakingModuleMinDepositBlockDistance(moduleId)).to.equal(minDepositBlockDistance);
+      });
+    });
+
+    context("getStakingModuleMaxDepositsPerBlock", () => {
+      it("Returns the maximum deposits per block", async () => {
+        expect(await stakingRouter.getStakingModuleMaxDepositsPerBlock(moduleId)).to.equal(maxDepositsPerBlock);
+      });
+    });
+
     context("getStakingModuleActiveValidatorsCount", () => {
       it("Returns the number of active validators in the module", async () => {
         const [exitedValidators, depositedValidators] = stakingModuleSummary;
@@ -292,23 +344,23 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("updateTargetValidatorsLimits", () => {
     const NODE_OPERATOR_ID = 0n;
-    const IS_TARGET_LIMIT_ACTIVE = true;
+    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - forced
     const TARGET_LIMIT = 100n;
 
     it("Reverts if the caller does not have the role", async () => {
       await expect(
         stakingRouter
           .connect(user)
-          .updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT),
+          .updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT),
       ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Redirects the call to the staking module", async () => {
       await expect(
-        stakingRouter.updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT),
+        stakingRouter.updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT),
       )
         .to.emit(stakingModule, "Mock__TargetValidatorsLimitsUpdated")
-        .withArgs(NODE_OPERATOR_ID, IS_TARGET_LIMIT_ACTIVE, TARGET_LIMIT);
+        .withArgs(NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT);
     });
   });
 
@@ -579,14 +631,54 @@ describe("StakingRouter.sol:module-sync", () => {
   context("unsafeSetExitedValidatorsCount", () => {
     const nodeOperatorId = 1n;
 
-    const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
-      currentModuleExitedValidatorsCount: 0n,
-      currentNodeOperatorExitedValidatorsCount: 0n,
-      currentNodeOperatorStuckValidatorsCount: 0n,
-      newModuleExitedValidatorsCount: 1n,
-      newNodeOperatorExitedValidatorsCount: 2n,
-      newNodeOperatorStuckValidatorsCount: 3n,
+    const moduleSummary = {
+      totalExitedValidators: 5n,
+      totalDepositedValidators: 10n,
+      depositableValidatorsCount: 2n,
     };
+
+    const operatorSummary = {
+      targetLimitMode: 1,
+      targetValidatorsCount: 100n,
+      stuckValidatorsCount: 0n,
+      refundedValidatorsCount: 0n,
+      stuckPenaltyEndTimestamp: 0n,
+      totalExitedValidators: 3n,
+      totalDepositedValidators: 5n,
+      depositableValidatorsCount: 1n,
+    };
+
+    const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
+      currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
+      currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
+      currentNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount,
+      newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
+      newNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators + 1n,
+      newNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount + 1n,
+    };
+
+    beforeEach(async () => {
+      await stakingModule.mock__getStakingModuleSummary(
+        moduleSummary.totalExitedValidators,
+        moduleSummary.totalDepositedValidators,
+        moduleSummary.depositableValidatorsCount,
+      );
+
+      const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
+        operatorSummary.targetLimitMode,
+        operatorSummary.targetValidatorsCount,
+        operatorSummary.stuckValidatorsCount,
+        operatorSummary.refundedValidatorsCount,
+        operatorSummary.stuckPenaltyEndTimestamp,
+        operatorSummary.totalExitedValidators,
+        operatorSummary.totalDepositedValidators,
+        operatorSummary.depositableValidatorsCount,
+      ];
+
+      await stakingModule.mock__getNodeOperatorSummary(...nodeOperatorSummary);
+
+      await stakingRouter.updateExitedValidatorsCountByStakingModule([moduleId], [moduleSummary.totalExitedValidators]);
+    });
 
     it("Reverts if the caller does not have the role", async () => {
       await expect(
@@ -602,7 +694,11 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(0n, 0n, 0n);
+        .withArgs(
+          correction.currentModuleExitedValidatorsCount,
+          correction.currentNodeOperatorExitedValidatorsCount,
+          correction.currentNodeOperatorStuckValidatorsCount,
+        );
     });
 
     it("Reverts if the number of exited validators of the operator does not match what is stored on the contract", async () => {
@@ -613,7 +709,11 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(0n, 0n, 0n);
+        .withArgs(
+          correction.currentModuleExitedValidatorsCount,
+          correction.currentNodeOperatorExitedValidatorsCount,
+          correction.currentNodeOperatorStuckValidatorsCount,
+        );
     });
 
     it("Reverts if the number of stuck validators of the operator does not match what is stored on the contract", async () => {
@@ -624,10 +724,40 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(0n, 0n, 0n);
+        .withArgs(
+          correction.currentModuleExitedValidatorsCount,
+          correction.currentNodeOperatorExitedValidatorsCount,
+          correction.currentNodeOperatorStuckValidatorsCount,
+        );
     });
 
-    it("Update unsafely the number of exited validators on the staking module", async () => {
+    it("Reverts if the total exited validators exceed the module's deposited validators", async () => {
+      const newModuleExitedValidatorsCount = 50n;
+
+      await expect(
+        stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, {
+          ...correction,
+          newModuleExitedValidatorsCount,
+        }),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "ReportedExitedValidatorsExceedDeposited")
+        .withArgs(newModuleExitedValidatorsCount, moduleSummary.totalDepositedValidators);
+    });
+
+    it("Reverts if the total exited validators count in the staking module does not match the staking router after the final update", async () => {
+      const newModuleExitedValidatorsCount = 10n;
+
+      await expect(
+        stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, {
+          ...correction,
+          newModuleExitedValidatorsCount,
+        }),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedFinalExitedValidatorsCount")
+        .withArgs(moduleSummary.totalExitedValidators, newModuleExitedValidatorsCount);
+    });
+
+    it("Update unsafely the number of exited validators on the staking module with finalization hook triggering", async () => {
       await expect(stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, correction))
         .to.be.emit(stakingModule, "Mock__ValidatorsCountUnsafelyUpdated")
         .withArgs(
@@ -785,6 +915,93 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 
+  context("decreaseStakingModuleVettedKeysCountByNodeOperator", () => {
+    const NODE_OPERATOR_IDS = bigintToHex(1n, true, 8);
+    const VETTED_KEYS_COUNTS = bigintToHex(100n, true, 16);
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(
+        stakingRouter
+          .connect(user)
+          .decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, NODE_OPERATOR_IDS, VETTED_KEYS_COUNTS),
+      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_UNVETTING_ROLE());
+    });
+
+    it("Reverts if the node operators ids are packed incorrectly", async () => {
+      const incorrectlyPackedNodeOperatorIds = bufToHex(new Uint8Array([1]), true, 7);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          incorrectlyPackedNodeOperatorIds,
+          VETTED_KEYS_COUNTS,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(3n);
+    });
+
+    it("Reverts if the validator counts are packed incorrectly", async () => {
+      const incorrectlyPackedValidatorCounts = bufToHex(new Uint8Array([100]), true, 15);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          incorrectlyPackedValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(3n);
+    });
+
+    it("Reverts if the number of node operators does not match validator counts", async () => {
+      const tooManyValidatorCounts = VETTED_KEYS_COUNTS + bigintToHex(101n, false, 16);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          tooManyValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(2n);
+    });
+
+    it("Reverts if the number of node operators does not match validator counts", async () => {
+      const tooManyValidatorCounts = VETTED_KEYS_COUNTS + bigintToHex(101n, false, 16);
+
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          tooManyValidatorCounts,
+        ),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(2n);
+    });
+
+    it("Reverts if the node operators ids is empty", async () => {
+      await expect(stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, "0x", "0x"))
+        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .withArgs(1n);
+    });
+
+    it("Updates stuck validators count on the module", async () => {
+      await expect(
+        stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(
+          moduleId,
+          NODE_OPERATOR_IDS,
+          VETTED_KEYS_COUNTS,
+        ),
+      )
+        .to.emit(stakingModule, "Mock__VettedSigningKeysCountDecreased")
+        .withArgs(NODE_OPERATOR_IDS, VETTED_KEYS_COUNTS);
+    });
+  });
+
   context("deposit", () => {
     beforeEach(async () => {
       stakingRouter = stakingRouter.connect(lido);
@@ -807,7 +1024,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Reverts if the staking module is not active", async () => {
-      await stakingRouter.connect(admin).pauseStakingModule(moduleId);
+      await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
@@ -847,3 +1064,9 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 });
+
+enum Status {
+  Active,
+  DepositsPaused,
+  Stopped,
+}

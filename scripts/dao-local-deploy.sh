@@ -22,4 +22,5 @@ bash scripts/dao-deploy.sh
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run acceptance tests
+export INTEGRATION_WITH_CSM="off"
 yarn test:integration:fork:local

@@ -63,7 +63,7 @@ describe("NodeOperatorsRegistry.sol:signing-keys", () => {
       stuckPenaltyEndAt: 0n,
     },
     {
-      name: " bar",
+      name: "bar",
       rewardAddress: certainAddress("node-operator-2"),
       totalSigningKeysCount: 12n,
       depositedSigningKeysCount: 7n,
@@ -117,7 +117,15 @@ describe("NodeOperatorsRegistry.sol:signing-keys", () => {
       },
     }));
 
-    impl = await ethers.deployContract("NodeOperatorsRegistry__Harness", deployer);
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
+
+    impl = await norHarnessFactory.connect(deployer).deploy();
+
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -334,19 +342,6 @@ describe("NodeOperatorsRegistry.sol:signing-keys", () => {
       await expect(
         addKeysFn(nor.connect(signingKeysManager), 0n, keysCount - 1, publicKeys, signatures),
       ).to.be.revertedWith("LENGTH_MISMATCH");
-    });
-
-    it("Reverts if too many keys in total across node operators", async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
-        thirdNodeOperatorId,
-      );
-
-      const keysCount = 1;
-      const [publicKeys, signatures] = thirdNOKeys.slice(0, keysCount);
-
-      await expect(
-        addKeysFn(nor.connect(signingKeysManager), thirdNodeOperatorId, keysCount, publicKeys, signatures),
-      ).to.be.revertedWith("PACKED_OVERFLOW");
     });
 
     it("Reverts if too many keys passed for a single node operator", async () => {

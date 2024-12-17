@@ -81,3 +81,28 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
 
   return { lido, dao, acl };
 }
+
+export async function deployLidoDaoForNor({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
+  const { dao, acl } = await createAragonDao(rootAccount);
+
+  const impl = await ethers.deployContract("Lido__HarnessForDistributeReward", rootAccount);
+
+  const lidoProxyAddress = await addAragonApp({
+    dao,
+    name: "lido",
+    impl,
+    rootAccount,
+  });
+
+  const lido = await ethers.getContractAt("Lido__HarnessForDistributeReward", lidoProxyAddress, rootAccount);
+
+  const burner = await ethers.deployContract("Burner__MockForDistributeReward", rootAccount);
+
+  if (initialized) {
+    const locator = await deployLidoLocator({ lido, burner, ...locatorConfig }, rootAccount);
+    const eip712steth = await ethers.deployContract("EIP712StETH", [lido], rootAccount);
+    await lido.initialize(locator, eip712steth, { value: ether("1.0") });
+  }
+
+  return { lido, dao, acl, burner };
+}
