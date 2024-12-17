@@ -21,6 +21,7 @@ const services = [
   "withdrawalVault",
   "oracleDaemonConfig",
   "accounting",
+  "wstETH",
 ] as const;
 
 type Service = ArrayToUnion<typeof services>;

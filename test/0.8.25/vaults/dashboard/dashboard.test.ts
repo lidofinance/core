@@ -4,7 +4,6 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -13,7 +12,7 @@ import {
   StETH__MockForDashboard,
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
-  WETH9_MockForVault,
+  WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
 
@@ -28,7 +27,7 @@ describe("Dashboard", () => {
   let stranger: HardhatEthersSigner;
 
   let steth: StETH__MockForDashboard;
-  let weth: WETH9_MockForVault;
+  let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
@@ -45,7 +44,7 @@ describe("Dashboard", () => {
     [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
-    weth = await ethers.deployContract("WETH9_MockForVault");
+    weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");

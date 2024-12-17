@@ -58,6 +58,7 @@ const defaultEnv = {
   withdrawalQueue: "WITHDRAWAL_QUEUE_ADDRESS",
   withdrawalVault: "WITHDRAWAL_VAULT_ADDRESS",
   oracleDaemonConfig: "ORACLE_DAEMON_CONFIG_ADDRESS",
+  wstETH: "WSTETH_ADDRESS",
   // aragon contracts
   kernel: "ARAGON_KERNEL_ADDRESS",
   acl: "ARAGON_ACL_ADDRESS",

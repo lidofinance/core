@@ -1,9 +1,9 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
-import { advanceChainTime, days, ether, findEvents, getNextBlockTimestamp, impersonate, streccak } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   Delegation,
   DepositContract__MockForStakingVault,
@@ -13,17 +13,17 @@ import {
   VaultHub__MockForDelegation,
 } from "typechain-types";
 
+import { advanceChainTime, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+
+import { Snapshot } from "test/suite";
+
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
 describe("Delegation", () => {
-  let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let keyMaster: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let factoryOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
@@ -40,8 +40,7 @@ describe("Delegation", () => {
   let originalState: string;
 
   before(async () => {
-    [deployer, vaultOwner, manager, staker, operator, keyMaster, tokenMaster, stranger, factoryOwner] =
-      await ethers.getSigners();
+    [, vaultOwner, manager, operator, stranger, factoryOwner] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     delegationImpl = await ethers.deployContract("Delegation", [steth]);
@@ -63,6 +62,7 @@ describe("Delegation", () => {
     const vaultCreationTx = await factory
       .connect(vaultOwner)
       .createVault({ managementFee: 0n, performanceFee: 0n, manager, operator }, "0x");
+
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation receipt not found");
 

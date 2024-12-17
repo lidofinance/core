@@ -5,7 +5,7 @@ pragma solidity >=0.4.22 <0.6;
 
 import {StETH} from "contracts/0.4.24/StETH.sol";
 
-contract WETH9_MockForVault {
+contract WETH9__MockForVault {
     string public name     = "Wrapped Ether";
     string public symbol   = "WETH";
     uint8  public decimals = 18;
@@ -21,10 +21,12 @@ contract WETH9_MockForVault {
     function() external payable {
         deposit();
     }
+
     function deposit() public payable {
         balanceOf[msg.sender] += msg.value;
         emit Deposit(msg.sender, msg.value);
     }
+
     function withdraw(uint wad) public {
         require(balanceOf[msg.sender] >= wad);
         balanceOf[msg.sender] -= wad;
