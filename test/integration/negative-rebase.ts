@@ -6,7 +6,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { report } from "lib/protocol/helpers/accounting";
 
 import { Snapshot } from "test/suite";
 
@@ -51,10 +51,10 @@ describe("Negative rebase", () => {
 
   const exitedValidatorsCount = async () => {
     const ids = await ctx.contracts.stakingRouter.getStakingModuleIds();
-    let exited = 0n;
+    const exited = new Map<bigint, bigint>();
     for (const id of ids) {
       const module = await ctx.contracts.stakingRouter.getStakingModule(id);
-      exited += module["exitedValidatorsCount"];
+      exited.set(id, module["exitedValidatorsCount"]);
     }
     return exited;
   };
@@ -64,20 +64,14 @@ describe("Negative rebase", () => {
 
     expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);
 
-    await report(ctx, {
-      clDiff: ether("96"),
-      skipWithdrawals: true,
-      clAppearedValidators: 3n,
-    });
-
     const currentExited = await exitedValidatorsCount();
-    const reportExitedValidators = currentExited + 2n;
+    const reportExitedValidators = currentExited.get(1n) ?? 0n;
     await report(ctx, {
       clDiff: ether("0"),
       skipWithdrawals: true,
       clAppearedValidators: 0n,
       stakingModuleIdsWithNewlyExitedValidators: [1n],
-      numExitedValidatorsByStakingModule: [reportExitedValidators],
+      numExitedValidatorsByStakingModule: [reportExitedValidators + 2n],
     });
 
     const count = await oracleReportSanityChecker.getReportDataCount();
@@ -86,13 +80,11 @@ describe("Negative rebase", () => {
     const lastReportData = await oracleReportSanityChecker.reportData(count - 1n);
     const beforeLastReportData = await oracleReportSanityChecker.reportData(count - 2n);
 
-    expect(lastReportData.totalExitedValidators).to.be.equal(reportExitedValidators);
-    expect(beforeLastReportData.totalExitedValidators).to.be.equal(currentExited);
+    const lastExitedTotal = Array.from(currentExited.values()).reduce((acc, val) => acc + val, 0n);
 
-    // for (let i = count - 1n; i >= 0; --i) {
-    //   const reportData = await oracleReportSanityChecker.reportData(i);
-    //   console.log("reportData", i, reportData);
-    // }
+    expect(lastReportData.totalExitedValidators).to.be.equal(lastExitedTotal + 2n);
+    expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
+
   });
 
   it("Should store correctly many negative rebases", async () => {
@@ -100,18 +92,14 @@ describe("Negative rebase", () => {
 
     expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);
 
-    await report(ctx, {
-      clDiff: ether("96"),
-      skipWithdrawals: true,
-      clAppearedValidators: 3n,
-    });
-
     const REPORTS_REPEATED = 56;
     const SINGLE_REPORT_DECREASE = -1000000000n;
     for (let i = 0; i < REPORTS_REPEATED; i++) {
       await report(ctx, {
         clDiff: SINGLE_REPORT_DECREASE * BigInt(i + 1),
         skipWithdrawals: true,
+        reportWithdrawalsVault: false,
+        reportElVault: false,
       });
     }
     const count = await oracleReportSanityChecker.getReportDataCount();
@@ -121,9 +109,5 @@ describe("Negative rebase", () => {
       const reportData = await oracleReportSanityChecker.reportData(i);
       expect(reportData.negativeCLRebaseWei).to.be.equal(-1n * SINGLE_REPORT_DECREASE * BigInt(j + 1));
     }
-    // for (let i = count - 1n; i >= 0; --i) {
-    //   const reportData = await oracleReportSanityChecker.reportData(i);
-    //   console.log("reportData", i, reportData);
-    // }
   });
 });
