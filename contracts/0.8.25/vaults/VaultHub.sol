@@ -54,7 +54,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool isDisconnected;
-        // ### we have 104 bytes left in this slot
+        // ### we have 104 bits left in this slot
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -289,10 +289,10 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
     /// @dev msg.sender should be vault's owner
-    function transferAndBurnStethBackedByVault(address _vault, uint256 _tokens) external {
-        STETH.transferFrom(msg.sender, address(this), _tokens);
+    function transferAndBurnSharesBackedByVault(address _vault, uint256 _amountOfShares) external {
+        STETH.transferSharesFrom(msg.sender, address(this), _amountOfShares);
 
-        burnSharesBackedByVault(_vault, _tokens);
+        burnSharesBackedByVault(_vault, _amountOfShares);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio
@@ -443,7 +443,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         // TODO: optimize potential rewards calculation
         uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) -chargeableValue);
+            (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
         uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
 
         treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;

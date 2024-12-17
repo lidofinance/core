@@ -130,16 +130,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Staking limit was removed
     event StakingLimitRemoved();
 
-    // Emits when validators number delivered by the oracle
+    // Emitted when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
-    // Emits when external shares changed during the report
+    // Emitted when external shares changed during the report
     event ExternalSharesChanged(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
-    // Emits when var at `DEPOSITED_VALIDATORS_POSITION` changed
+    // Emitted when var at `DEPOSITED_VALIDATORS_POSITION` changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
-    // Emits when oracle accounting report processed
+    // Emitted when oracle accounting report processed
     // @dev principalCLBalance is the balance of the validators on previous report
     // plus the amount of ether that was deposited to the deposit contract
     event ETHDistributed(
@@ -151,7 +151,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 postBufferedEther
     );
 
-    // Emits when token rebased (total supply and/or total shares were changed)
+    // Emitted when token is rebased (total supply and/or total shares were changed)
     event TokenRebased(
         uint256 indexed reportTimestamp,
         uint256 timeElapsed,
@@ -237,8 +237,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *
      * @dev While accepting new ether is stopped, calls to the `submit` function,
      * as well as to the default payable function, will revert.
-     *
-     * Emits `StakingPaused` event.
      */
     function pauseStaking() external {
         _auth(STAKING_PAUSE_ROLE);
@@ -361,7 +359,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @return the maximum allowed external shares ratio as basis points of total shares
+     * @return the maximum allowed external shares ratio as basis points of total shares [0-10000]
      */
     function getMaxExternalRatioBP() external view returns (uint256) {
         return MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
@@ -618,13 +616,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Mint shares backed by external vaults
-     * @param _receiver Address to receive the minted shares
+     * @param _recipient Address to receive the minted shares
      * @param _amountOfShares Amount of shares to mint
      * @dev Can be called only by accounting (authentication in mintShares method).
      *      NB: Reverts if the the external balance limit is exceeded.
      */
-    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {
-        require(_receiver != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
+    function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
+        require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
 
         // TODO: separate role and flag for external shares minting pause
@@ -637,9 +635,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         EXTERNAL_SHARES_POSITION.setStorageUint256(newExternalShares);
 
-        mintShares(_receiver, _amountOfShares);
+        mintShares(_recipient, _amountOfShares);
 
-        emit ExternalSharesMinted(_receiver, _amountOfShares, getPooledEthByShares(_amountOfShares));
+        emit ExternalSharesMinted(_recipient, _amountOfShares, getPooledEthByShares(_amountOfShares));
     }
 
     /**
@@ -816,7 +814,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ////////////////////////////////////////////////////////////////////////////
 
     /**
-     * @notice DEPRECATED:Returns current withdrawal credentials of deposited validators
+     * @notice DEPRECATED: Returns current withdrawal credentials of deposited validators
      * @dev DEPRECATED: use StakingRouter.getWithdrawalCredentials() instead
      */
     function getWithdrawalCredentials() external view returns (bytes32) {
@@ -975,6 +973,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///
     ///      Special cases:
     ///      - Returns 0 if maxBP is 0 (external minting is disabled) or external shares already exceed the limit
+    ///      - Returns 2^256-1 if maxBP is 100% (external minting is unlimited)
     function _getMaxMintableExternalShares() internal view returns (uint256) {
         uint256 maxRatioBP = MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
