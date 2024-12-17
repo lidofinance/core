@@ -82,12 +82,6 @@ describe("VaultFactory.sol", () => {
     //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
     await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
 
-    console.log({
-      beaconAddress: await beacon.getAddress(),
-      delegationAddress: await delegation.getAddress(),
-      factoryAddress: await vaultFactory.getAddress(),
-    });
-
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(admin, stranger, operator, "0x")).to.revertedWithCustomError(
       implOld,
