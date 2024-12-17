@@ -15,7 +15,16 @@ import { Snapshot } from "test/suite";
 describe("Negative rebase", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
+  let beforeTestSnapshot: string;
   let ethHolder, stEthHolder: HardhatEthersSigner;
+
+  before(async () => {
+    beforeTestSnapshot = await Snapshot.take();
+  });
+
+  after(async () => {
+    await Snapshot.restore(beforeTestSnapshot);
+  });
 
   beforeEach(async () => {
     ctx = await getProtocolContext();
