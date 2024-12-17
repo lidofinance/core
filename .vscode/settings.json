@@ -3,23 +3,5 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "always"
   },
-  "solidity.defaultCompiler": "remote",
-  "cSpell.words": [
-    "IETHRegistrarController",
-    "sealables",
-    "streccak",
-    "TmplAppInstalled",
-    "TmplDAOAndTokenDeployed"
-  ],
-  "wake.compiler.solc.remappings": [
-    "@aragon/=node_modules/@aragon/",
-    "@openzeppelin/=node_modules/@openzeppelin/",
-    "ens/=node_modules/@aragon/os/contracts/lib/ens/",
-    "eth-gas-reporter/=node_modules/eth-gas-reporter/",
-    "hardhat/=node_modules/hardhat/",
-    "math/=node_modules/@aragon/os/contracts/lib/math/",
-    "misc/=node_modules/@aragon/os/contracts/lib/misc/",
-    "openzeppelin-solidity/=node_modules/openzeppelin-solidity/",
-    "token/=node_modules/@aragon/os/contracts/lib/token/"
-  ]
+  "solidity.defaultCompiler": "remote"
 }
