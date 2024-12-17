@@ -317,6 +317,23 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
+     * @return the amount of ether that corresponds to `_sharesAmount` token shares.
+     * @dev The result is rounded up. So getSharesByPooledEth(getPooledEthBySharesRoundUp(1)) will be 1.
+     */
+    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+        uint256 totalEther = _getTotalPooledEther();
+        uint256 totalShares = _getTotalShares();
+
+        etherAmount = _sharesAmount
+            .mul(totalEther)
+            .div(totalShares);
+
+        if (etherAmount.mul(totalShares) != _sharesAmount.mul(totalEther)) {
+            ++etherAmount;
+        }
+    }
+
+    /**
      * @notice Moves `_sharesAmount` token shares from the caller's account to the `_recipient` account.
      *
      * @return amount of transferred tokens.

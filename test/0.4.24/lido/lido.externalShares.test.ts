@@ -273,18 +273,58 @@ describe("Lido.sol:externalShares", () => {
     });
   });
 
-  it("Can mint and burn without precision loss", async () => {
-    await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+  context("rebalanceExternalEtherToInternal", () => {
+    it("Reverts if amount of shares is zero", async () => {
+      await expect(lido.connect(user).rebalanceExternalEtherToInternal()).to.be.revertedWith("ZERO_VALUE");
+    });
 
-    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 1 wei
-    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 2 wei
-    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 3 wei
-    await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 4 wei
+    it("Reverts if not authorized", async () => {
+      await expect(lido.connect(user).rebalanceExternalEtherToInternal({ value: 1n })).to.be.revertedWith(
+        "APP_AUTH_FAILED",
+      );
+    });
 
-    await expect(lido.connect(accountingSigner).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
-    expect(await lido.getExternalEther()).to.equal(0n);
-    expect(await lido.getExternalShares()).to.equal(0n);
-    expect(await lido.sharesOf(accountingSigner)).to.equal(0n);
+    it("Reverts if amount of ether is greater than minted shares", async () => {
+      await expect(lido.connect(accountingSigner).rebalanceExternalEtherToInternal({ value: 1n })).to.be.revertedWith(
+        "EXT_SHARES_TOO_SMALL",
+      );
+    });
+
+    it("Decreases external shares and increases the buffered ether", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+
+      const amountToMint = await lido.getMaxMintableExternalShares();
+      await lido.connect(accountingSigner).mintExternalShares(accountingSigner.address, amountToMint);
+
+      const bufferedEtherBefore = await lido.getBufferedEther();
+
+      const etherToRebalance = await lido.getPooledEthByShares(100n);
+
+      await lido.connect(accountingSigner).rebalanceExternalEtherToInternal({
+        value: etherToRebalance,
+      });
+
+      expect(await lido.getExternalShares()).to.equal(amountToMint - 100n);
+      expect(await lido.getBufferedEther()).to.equal(bufferedEtherBefore + etherToRebalance);
+    });
+  });
+
+  context("Precision issues", () => {
+    beforeEach(async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+    });
+
+    it("Can mint and burn without precision loss", async () => {
+      await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 1 wei
+      await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 2 wei
+      await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 3 wei
+      await lido.connect(accountingSigner).mintExternalShares(accountingSigner, 1n); // 4 wei
+
+      await expect(lido.connect(accountingSigner).burnExternalShares(4n)).not.to.be.reverted; // 4 * 1.5 = 6 wei
+      expect(await lido.getExternalEther()).to.equal(0n);
+      expect(await lido.getExternalShares()).to.equal(0n);
+      expect(await lido.sharesOf(accountingSigner)).to.equal(0n);
+    });
   });
 
   // Helpers

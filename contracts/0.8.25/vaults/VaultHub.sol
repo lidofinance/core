@@ -317,11 +317,14 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         // how much ETH should be moved out of the vault to rebalance it to minimal reserve ratio
 
         // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / BPS_BASE
+        // (mintedStETH - X) * BPS_BASE = (vault.valuation() - X) * maxMintableRatio
         // mintedStETH * BPS_BASE - X * BPS_BASE = vault.valuation() * maxMintableRatio - X * maxMintableRatio
         // X * maxMintableRatio - X * BPS_BASE = vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE
+        // X * (maxMintableRatio - BPS_BASE) = vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE
         // X = (vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE) / (maxMintableRatio - BPS_BASE)
-        // X = mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio / (BPS_BASE - maxMintableRatio);
-        // X = mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio / reserveRatio
+        // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / (BPS_BASE - maxMintableRatio)
+        // reserveRatio = BPS_BASE - maxMintableRatio
+        // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
 
         uint256 amountToRebalance = (mintedStETH * TOTAL_BASIS_POINTS -
             IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
@@ -330,8 +333,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         IStakingVault(_vault).rebalance(amountToRebalance);
     }
 
-    /// @notice rebalances the vault by writing off the the amount of ether equal
-    ///     to msg.value from the vault's minted stETH
+    /// @notice rebalances the vault by writing off the amount of ether equal
+    ///     to `msg.value` from the vault's minted stETH
     /// @dev msg.sender should be vault's contract
     function rebalance() external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
@@ -344,10 +347,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         socket.sharesMinted = uint96(sharesMinted - sharesToBurn);
 
-        // mint stETH (shares+ TPE+)
-        (bool success, ) = address(STETH).call{value: msg.value}("");
-        if (!success) revert StETHMintFailed(msg.sender);
-        STETH.burnExternalShares(sharesToBurn);
+        STETH.rebalanceExternalEtherToInternal{value: msg.value}();
 
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }

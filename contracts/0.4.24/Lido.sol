@@ -186,6 +186,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Maximum ratio of external shares to total shares in basis points set
     event MaxExternalRatioBPSet(uint256 maxExternalRatioBP);
 
+    // External ether transferred to buffer
+    event ExternalEtherTransferredToBuffer(uint256 amount);
+
     /**
      * @dev As AragonApp, Lido contract must be initialized with following variables:
      *      NB: by default, staking and the whole Lido pool are in paused state
@@ -657,6 +660,34 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
         _emitTransferEvents(msg.sender, address(0), stethAmount, _amountOfShares);
         emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
+    }
+
+
+    /**
+     * @notice Transfer ether to the buffer decreasing the number of external shares in the same time
+     * @dev it's an equivalent of using `submit` and then `burnExternalShares`
+     * but without any limits or pauses
+     *
+     * - msg.value is transferred to the buffer
+     */
+    function rebalanceExternalEtherToInternal() external payable {
+        require(msg.value != 0, "ZERO_VALUE");
+        _auth(getLidoLocator().accounting());
+        uint256 shares = getSharesByPooledEth(msg.value);
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+
+        if (externalShares < shares) revert("EXT_SHARES_TOO_SMALL");
+
+        // here the external balance is decreased (totalShares remains the same)
+        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - shares);
+
+        // here the buffer is increased
+        _setBufferedEther(_getBufferedEther().add(msg.value));
+
+        // the result can be a smallish rebase like 1-2 wei per tx
+        // but it's not worth then using submit for it,
+        // so invariants are the same
+        emit ExternalEtherTransferredToBuffer(msg.value);
     }
 
     /**
