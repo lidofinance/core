@@ -42,7 +42,7 @@ describe("Delegation.sol", () => {
   let originalState: string;
 
   before(async () => {
-    [vaultOwner, manager, operator, stranger, beaconOwner] = await ethers.getSigners();
+    [, vaultOwner, manager, operator, stranger, factoryOwner] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     delegationImpl = await ethers.deployContract("Delegation", [steth]);

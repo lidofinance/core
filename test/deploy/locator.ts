@@ -29,6 +29,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     withdrawalQueue: certainAddress("dummy-locator:withdrawalQueue"),
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
     accounting: certainAddress("dummy-locator:withdrawalVault"),
+    wstETH: certainAddress("dummy-locator:wstETH"),
     ...config,
   });
 
@@ -103,6 +104,8 @@ async function getLocatorConfig(locatorAddress: string) {
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",
+    "accounting",
+    "wstETH",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

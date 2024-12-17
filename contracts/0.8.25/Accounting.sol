@@ -357,7 +357,7 @@ contract Accounting is VaultHub {
         ReportValues memory _report,
         PreReportState memory _pre,
         CalculatedValues memory _update
-    ) internal view {
+    ) internal {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         if (_report.clValidators < _pre.clValidators || _report.clValidators > _pre.depositedValidators) {
             revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);

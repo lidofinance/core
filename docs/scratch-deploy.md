@@ -141,7 +141,7 @@ To do Holešky deployment, the following parameters must be set up via env varia
 Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
-To start the deployment, run (the env variables must already defined) from the root repo directory:
+To start the deployment, run (the env variables must already defined) from the root repo directory, e.g.:
 
 ```shell
 bash scripts/scratch/dao-holesky-deploy.sh
@@ -154,7 +154,7 @@ Deploy artifacts information will be stored in `deployed-holesky.json`.
 ### Publishing Sources to Etherscan
 
 ```shell
-NETWORK=<PUT-YOUR-VALUE> RPC_URL=<PUT-YOUR-VALUE> bash ./scripts/verify-contracts-code.sh
+yarn verify:deployed --network <network> (--file <path-to-deployed-json>)
 ```
 
 #### Issues with verification of part of the contracts deployed from factories
@@ -202,9 +202,12 @@ await stakingRouter.grantRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from:
 await stakingRouter.addStakingModule(
   state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
   nodeOperatorsRegistry.address,
-  NOR_STAKING_MODULE_TARGET_SHARE_BP,
+  NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+  NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
   NOR_STAKING_MODULE_MODULE_FEE_BP,
   NOR_STAKING_MODULE_TREASURY_FEE_BP,
+  NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+  NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
   { from: agent.address },
 );
 await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from: agent.address });
