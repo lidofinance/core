@@ -7,18 +7,20 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { ether, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { report } from "lib/protocol/helpers/accounting";
+import { norEnsureOperators } from "lib/protocol/helpers/nor";
+import { finalizeWithdrawalQueue } from "lib/protocol/helpers/withdrawal";
 
 import { Snapshot } from "test/suite";
 
 describe("Negative rebase", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
-  let ethHolder: HardhatEthersSigner;
+  let ethHolder, stEthHolder: HardhatEthersSigner;
 
   beforeEach(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder] = await ethers.getSigners();
+    [ethHolder, stEthHolder] = await ethers.getSigners();
     await setBalance(ethHolder.address, ether("1000000"));
     const network = await ethers.provider.getNetwork();
     console.log("network", network.name);
@@ -32,16 +34,26 @@ describe("Negative rebase", () => {
 
       const adapterAddr = await ctx.contracts.stakingRouter.DEPOSIT_CONTRACT();
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
+    }
+    const beaconStat = await ctx.contracts.lido.getBeaconStat();
+    if (beaconStat.beaconValidators == 0n) {
+      const MAX_DEPOSIT = 150n;
+      const CURATED_MODULE_ID = 1n;
+      const ZERO_HASH = new Uint8Array(32).fill(0);
+      const { lido, depositSecurityModule } = ctx.contracts;
 
-      const beaconStat = await ctx.contracts.lido.getBeaconStat();
-      if (beaconStat.beaconValidators == 0n) {
-        const MAX_DEPOSIT = 96n;
-        const CURATED_MODULE_ID = 1n;
-        const ZERO_HASH = new Uint8Array(32).fill(0);
+      await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
-        const dsmSigner = await impersonate(ctx.contracts.depositSecurityModule.address, ether("100"));
-        await ctx.contracts.lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-      }
+      await norEnsureOperators(ctx, 3n, 5n);
+
+      const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
+      await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+
+      await report(ctx, {
+        clDiff: ether("32") * 3n,
+        clAppearedValidators: 3n,
+        excludeVaultsBalances: true,
+      });
     }
 
     snapshot = await Snapshot.take();
