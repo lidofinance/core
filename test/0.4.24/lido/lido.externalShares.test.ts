@@ -33,8 +33,8 @@ describe("Lido.sol:externalShares", () => {
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
 
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
-    await acl.createPermission(user, lido, await lido.STAKING_PAUSE_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
+    await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
 
     lido = lido.connect(user);
 
@@ -169,13 +169,6 @@ describe("Lido.sol:externalShares", () => {
         await expect(lido.mintExternalShares(whale, 0n)).to.be.revertedWith("MINT_ZERO_AMOUNT_OF_SHARES");
       });
 
-      // TODO: update the code and this test
-      it("if staking is paused", async () => {
-        await lido.pauseStaking();
-
-        await expect(lido.mintExternalShares(whale, 1n)).to.be.revertedWith("STAKING_PAUSED");
-      });
-
       it("if not authorized", async () => {
         // Increase the external ether limit to 10%
         await lido.setMaxExternalRatioBP(maxExternalRatioBP);
@@ -189,6 +182,15 @@ describe("Lido.sol:externalShares", () => {
 
         await expect(lido.connect(accountingSigner).mintExternalShares(whale, maxAvailable + 1n)).to.be.revertedWith(
           "EXTERNAL_BALANCE_LIMIT_EXCEEDED",
+        );
+      });
+
+      it("if protocol is stopped", async () => {
+        await lido.stop();
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+
+        await expect(lido.connect(accountingSigner).mintExternalShares(whale, 1n)).to.be.revertedWith(
+          "CONTRACT_IS_STOPPED",
         );
       });
     });
@@ -226,6 +228,12 @@ describe("Lido.sol:externalShares", () => {
 
       it("if external balance is too small", async () => {
         await expect(lido.connect(accountingSigner).burnExternalShares(1n)).to.be.revertedWith("EXT_SHARES_TOO_SMALL");
+      });
+
+      it("if protocol is stopped", async () => {
+        await lido.stop();
+
+        await expect(lido.connect(accountingSigner).burnExternalShares(1n)).to.be.revertedWith("CONTRACT_IS_STOPPED");
       });
 
       it("if trying to burn more than minted", async () => {

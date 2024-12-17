@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Lido } from "typechain-types";
+import { ACL, Lido } from "typechain-types";
 
 import { ether, impersonate } from "lib";
 
@@ -18,13 +18,15 @@ describe("Lido.sol:mintburning", () => {
   let burner: HardhatEthersSigner;
 
   let lido: Lido;
-
+  let acl: ACL;
   let originalState: string;
 
   before(async () => {
     [deployer, user] = await ethers.getSigners();
 
-    ({ lido } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
+    ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
+    await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
+    await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
 
     const locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
@@ -32,6 +34,8 @@ describe("Lido.sol:mintburning", () => {
     burner = await impersonate(await locator.burner(), ether("100.0"));
 
     lido = lido.connect(user);
+
+    await lido.resume();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -45,6 +49,12 @@ describe("Lido.sol:mintburning", () => {
 
     it("Reverts when minting to zero address", async () => {
       await expect(lido.connect(accounting).mintShares(ZeroAddress, 1n)).to.be.revertedWith("MINT_TO_ZERO_ADDR");
+    });
+
+    it("if protocol is stopped", async () => {
+      await lido.stop();
+
+      await expect(lido.connect(accounting).mintShares(user, 1n)).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
     it("Mints shares to the recipient and fires the transfer events", async () => {
@@ -68,6 +78,12 @@ describe("Lido.sol:mintburning", () => {
       const sharesOfHolder = await lido.sharesOf(burner);
 
       await expect(lido.connect(burner).burnShares(sharesOfHolder + 1n)).to.be.revertedWith("BALANCE_EXCEEDED");
+    });
+
+    it("if protocol is stopped", async () => {
+      await lido.stop();
+
+      await expect(lido.connect(burner).burnShares(1n)).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
     it("Zero burn", async () => {

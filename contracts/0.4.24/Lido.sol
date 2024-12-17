@@ -592,6 +592,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function mintShares(address _recipient, uint256 _amountOfShares) public {
         _auth(getLidoLocator().accounting());
+        _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
         // emit event after minting shares because we are always having the net new ether under the hood
@@ -606,7 +607,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function burnShares(uint256 _amountOfShares) public {
         _auth(getLidoLocator().burner());
-
+        _whenNotStopped();
         _burnShares(msg.sender, _amountOfShares);
 
         // historically there is no events for this kind of burning
@@ -624,9 +625,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
         require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
-
-        // TODO: separate role and flag for external shares minting pause
-        require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "STAKING_PAUSED");
 
         uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_amountOfShares);
         uint256 maxMintableExternalShares = _getMaxMintableExternalShares();
@@ -647,6 +645,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function burnExternalShares(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
         _auth(getLidoLocator().accounting());
+        _whenNotStopped();
 
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
 
@@ -660,7 +659,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
     }
 
-
     /**
      * @notice Transfer ether to the buffer decreasing the number of external shares in the same time
      * @dev it's an equivalent of using `submit` and then `burnExternalShares`
@@ -671,6 +669,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function rebalanceExternalEtherToInternal() external payable {
         require(msg.value != 0, "ZERO_VALUE");
         _auth(getLidoLocator().accounting());
+        _whenNotStopped();
+
         uint256 shares = getSharesByPooledEth(msg.value);
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
 
@@ -707,7 +707,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postExternalShares
     ) external {
         _whenNotStopped();
-
         _auth(getLidoLocator().accounting());
 
         // Save the current CL balance and validators to
