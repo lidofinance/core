@@ -58,10 +58,10 @@ contract Dashboard is AccessControlEnumerable {
     VaultHub public vaultHub;
 
     /// @notice The wrapped ether token contract
-    IWeth public weth;
+    IWeth public immutable weth;
 
     /// @notice The wrapped staked ether token contract
-    IWstETH public wstETH;
+    IWstETH public immutable wstETH;
 
     /**
      * @notice Constructor sets the stETH token address and the implementation contract address.
@@ -71,7 +71,7 @@ contract Dashboard is AccessControlEnumerable {
      */
     constructor(address _stETH, address _weth, address _wstETH) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
-        if (_weth == address(0)) revert ZeroArgument("_weth");
+        if (_weth == address(0)) revert ZeroArgument("_WETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
         _SELF = address(this);
@@ -155,18 +155,22 @@ contract Dashboard is AccessControlEnumerable {
         return vaultSocket().treasuryFeeBP;
     }
 
+    function valuation() external view returns (uint256) {
+        return stakingVault.valuation();
+    }
+
     /**
      * @notice Returns the maximum number of stETH shares that can be minted on the vault.
      * @dev This is a public view method for the _maxMintableShares method in VaultHub
      * @return The maximum number of stETH shares as a uint256.
      */
-    function maxMintableShares() public view returns (uint256) {
-        uint256 valuation = stakingVault.valuation();
-        uint256 reserveRatio = vaultSocket().reserveRatio;
+    function availableMintableShares() public view returns (uint256) {
+        uint256 valuationValue = stakingVault.valuation();
+        uint256 reserveRatioValue = vaultSocket().reserveRatio;
 
-        uint256 maxStETHMinted = (valuation * (BPS_BASE - reserveRatio)) / BPS_BASE;
+        uint256 maxStETHMinted = (valuationValue * (BPS_BASE - reserveRatioValue)) / BPS_BASE;
 
-        return stETH.getSharesByPooledEth(maxStETHMinted);
+        return Math256.min(stETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
     }
 
     /**
@@ -174,10 +178,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares that can be minted.
      */
     function canMint() external view returns (uint256) {
-        uint256 maxMintableSharesValue = maxMintableShares();
-        uint256 sharesMintedValue = vaultSocket().sharesMinted;
-
-        return maxMintableSharesValue - sharesMintedValue;
+        return availableMintableShares() - vaultSocket().sharesMinted;
     }
 
     /**
@@ -188,11 +189,11 @@ contract Dashboard is AccessControlEnumerable {
     function canMintByEther(uint256 _ether) external view returns (uint256) {
         if (_ether == 0) return 0;
 
-        uint256 maxMintableSharesValue = maxMintableShares();
+        uint256 availableMintableSharesValue = availableMintableShares();
         uint256 sharesMintedValue = vaultSocket().sharesMinted;
         uint256 sharesToMintValue = stETH.getSharesByPooledEth(_ether);
 
-        return sharesMintedValue + sharesToMintValue > maxMintableSharesValue ? maxMintableSharesValue - sharesMintedValue : sharesToMintValue;
+        return sharesMintedValue + sharesToMintValue > availableMintableSharesValue ? availableMintableSharesValue - sharesMintedValue : sharesToMintValue;
     }
 
     /**
@@ -206,6 +207,14 @@ contract Dashboard is AccessControlEnumerable {
     // TODO: add preview view methods for minting and burning
 
     // ==================== Vault Management Functions ====================
+
+    /**
+     * @dev Receive function to accept ether
+     */
+    // TODO: Consider the amount of ether on balance of the contract
+    receive() external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+    }
 
     /**
      * @notice Transfers ownership of the staking vault to a new owner.
@@ -234,6 +243,8 @@ contract Dashboard is AccessControlEnumerable {
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
     function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(weth.allowance(msg.sender, address(this)) >= _wethAmount, "ERC20: transfer amount exceeds allowance");
+
         weth.transferFrom(msg.sender, address(this), _wethAmount);
         weth.withdraw(_wethAmount);
 
@@ -251,7 +262,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Withdraws stETH tokens from the staking vault to wrapped ether. Approvals for the passed amounts should be done before.
+     * @notice Withdraws stETH tokens from the staking vault to wrapped ether.
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */

@@ -1,10 +1,11 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
-import { certainAddress, ether, findEvents } from "lib";
-import { Snapshot } from "test/suite";
+
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+
 import {
   Dashboard,
   DepositContract__MockForStakingVault,
@@ -12,7 +13,13 @@ import {
   StETH__MockForDashboard,
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
+  WETH9_MockForVault,
+  WstETH__HarnessForVault,
 } from "typechain-types";
+
+import { certainAddress, ether, findEvents } from "lib";
+
+import { Snapshot } from "test/suite";
 
 describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
@@ -21,6 +28,8 @@ describe("Dashboard", () => {
   let stranger: HardhatEthersSigner;
 
   let steth: StETH__MockForDashboard;
+  let weth: WETH9_MockForVault;
+  let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultImpl: StakingVault;
@@ -36,12 +45,16 @@ describe("Dashboard", () => {
     [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
+    weth = await ethers.deployContract("WETH9_MockForVault");
+    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.VAULT_HUB()).to.equal(hub);
-    dashboardImpl = await ethers.deployContract("Dashboard", [steth]);
+    dashboardImpl = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
     expect(await dashboardImpl.stETH()).to.equal(steth);
+    expect(await dashboardImpl.weth()).to.equal(weth);
+    expect(await dashboardImpl.wstETH()).to.equal(wsteth);
 
     factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
     expect(await factory.owner()).to.equal(factoryOwner);
@@ -74,14 +87,28 @@ describe("Dashboard", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress]))
+      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, weth, wsteth]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
         .withArgs("_stETH");
     });
 
-    it("sets the stETH address", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
+    it("reverts if WETH is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, wsteth]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("_WETH");
+    });
+
+    it("reverts if wstETH is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, weth, ethers.ZeroAddress]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("_wstETH");
+    });
+
+    it("sets the stETH, wETH, and wstETH addresses", async () => {
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
       expect(await dashboard_.stETH()).to.equal(steth);
+      expect(await dashboard_.weth()).to.equal(weth);
+      expect(await dashboard_.wstETH()).to.equal(wsteth);
     });
   });
 
@@ -97,7 +124,7 @@ describe("Dashboard", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
 
       await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
@@ -111,6 +138,8 @@ describe("Dashboard", () => {
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.stETH()).to.equal(steth);
+      expect(await dashboard.weth()).to.equal(weth);
+      expect(await dashboard.wstETH()).to.equal(wsteth);
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
@@ -137,6 +166,72 @@ describe("Dashboard", () => {
       expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThreshold);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
     });
+  });
+
+  context("availableMintableShares", () => {
+    beforeEach(async () => {
+      await steth.mock__setTotalPooledEther(ether("600.00"));
+    });
+
+    it("returns the correct max mintable shares", async () => {
+      const availableMintableShares = await dashboard.availableMintableShares();
+
+      expect(availableMintableShares).to.equal(0n);
+    });
+
+    // TODO: add more tests when the vault params are changed
+  });
+
+  context("canMint", () => {
+    beforeEach(async () => {
+      await steth.mock__setTotalPooledEther(ether("600.00"));
+    });
+
+    it("returns the correct can mint shares", async () => {
+      const canMint = await dashboard.canMint();
+      expect(canMint).to.equal(0n);
+    });
+
+    // TODO: add more tests when the vault params are changed
+  });
+
+  context("canMintByEther", () => {
+    beforeEach(async () => {
+      await steth.mock__setTotalPooledEther(ether("600.00"));
+    });
+
+    it("returns the correct can mint shares by ether", async () => {
+      const canMint = await dashboard.canMintByEther(ether("1"));
+      expect(canMint).to.equal(0n);
+    });
+
+    // TODO: add more tests when the vault params are changed
+  });
+
+  context("canWithdraw", () => {
+    it("returns the correct can withdraw ether", async () => {
+      const canWithdraw = await dashboard.canWithdraw();
+      expect(canWithdraw).to.equal(0n);
+    });
+
+    it("funds and returns the correct can withdraw ether", async () => {
+      const amount = ether("1");
+
+      await dashboard.fund({ value: amount });
+
+      const canWithdraw = await dashboard.canWithdraw();
+      expect(canWithdraw).to.equal(amount);
+    });
+
+    it("funds and returns the correct can withdraw ether minus locked amount", async () => {
+      const amount = ether("1");
+
+      await dashboard.fund({ value: amount });
+
+      // TODO: add tests
+    });
+
+    // TODO: add more tests when the vault params are changed
   });
 
   context("transferStVaultOwnership", () => {
@@ -185,6 +280,40 @@ describe("Dashboard", () => {
     });
   });
 
+  context("fundByWeth", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      await setBalance(vaultOwner.address, ether("10"));
+    });
+
+    beforeEach(async () => {
+      await weth.connect(vaultOwner).deposit({ value: amount });
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).fundByWeth(ether("1"))).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("funds by weth", async () => {
+      await weth.connect(vaultOwner).approve(dashboard, amount);
+
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner }))
+        .to.emit(vault, "Funded")
+        .withArgs(dashboard, amount);
+      expect(await ethers.provider.getBalance(vault)).to.equal(amount);
+    });
+
+    it("reverts without approval", async () => {
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWith(
+        "ERC20: transfer amount exceeds allowance",
+      );
+    });
+  });
+
   context("withdraw", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).withdraw(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
@@ -203,6 +332,33 @@ describe("Dashboard", () => {
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, recipient, amount);
       expect(await ethers.provider.getBalance(recipient)).to.equal(previousBalance + amount);
+    });
+  });
+
+  context("withdrawToWeth", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      await setBalance(vaultOwner.address, ether("10"));
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).withdrawToWeth(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("withdraws ether from the staking vault to weth", async () => {
+      await dashboard.fund({ value: amount });
+      const previousBalance = await ethers.provider.getBalance(stranger);
+
+      await expect(dashboard.withdrawToWeth(stranger, amount))
+        .to.emit(vault, "Withdrawn")
+        .withArgs(dashboard, dashboard, amount);
+
+      expect(await ethers.provider.getBalance(stranger)).to.equal(previousBalance);
+      expect(await weth.balanceOf(stranger)).to.equal(amount);
     });
   });
 

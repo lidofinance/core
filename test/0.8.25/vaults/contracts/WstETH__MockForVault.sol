@@ -1,0 +1,10 @@
+import {WstETH} from "contracts/0.6.12/WstETH.sol";
+import {IStETH} from "contracts/0.6.12/interfaces/IStETH.sol";
+
+contract WstETH__HarnessForVault is WstETH {
+    constructor(IStETH _StETH) public WstETH(_StETH) {}
+
+    function harness__mint(address recipient, uint256 amount) public {
+        _mint(recipient, amount);
+    }
+}
