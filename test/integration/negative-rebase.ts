@@ -14,19 +14,12 @@ import { Snapshot } from "test/suite";
 
 describe("Negative rebase", () => {
   let ctx: ProtocolContext;
-  let snapshot: string;
-  let beforeTestSnapshot: string;
+  let beforeSnapshot: string;
+  let beforeEachSnapshot: string;
   let ethHolder, stEthHolder: HardhatEthersSigner;
 
   before(async () => {
-    beforeTestSnapshot = await Snapshot.take();
-  });
-
-  after(async () => {
-    await Snapshot.restore(beforeTestSnapshot);
-  });
-
-  beforeEach(async () => {
+    beforeSnapshot = await Snapshot.take();
     ctx = await getProtocolContext();
 
     [ethHolder, stEthHolder] = await ethers.getSigners();
@@ -64,11 +57,17 @@ describe("Negative rebase", () => {
         excludeVaultsBalances: true,
       });
     }
-
-    snapshot = await Snapshot.take();
   });
 
-  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => {
+    await Snapshot.restore(beforeSnapshot);
+  });
+
+  beforeEach(async () => {
+    beforeEachSnapshot = await Snapshot.take();
+  });
+
+  afterEach(async () => await Snapshot.restore(beforeEachSnapshot));
 
   const exitedValidatorsCount = async () => {
     const ids = await ctx.contracts.stakingRouter.getStakingModuleIds();
