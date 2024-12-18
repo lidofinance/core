@@ -17,12 +17,10 @@ import {BeaconChainDepositLogistics} from "contracts/0.8.25/vaults/BeaconChainDe
 contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
-        uint128 reportValuation;
-        int128 reportInOutDelta;
-
-        uint256 locked;
-        int256 inOutDelta;
-
+        IStakingVault.Report report;
+        uint128 locked;
+        int128 inOutDelta;
+        address factory;
         address operator;
     }
 
@@ -42,22 +40,21 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
         vaultHub = VaultHub(_vaultHub);
     }
 
-    modifier onlyBeacon() {
-        if (msg.sender != getBeacon()) revert UnauthorizedSender(msg.sender);
-        _;
-    }
-
-    /// @notice Initialize the contract storage explicitly.
-    /// @param _owner owner address that can TBD
+    /// @notice Initialize the contract storage explicitly. Only new contracts can be initialized here.
+    /// @param _factory the contract from which the vault was created
+    /// @param _owner owner address
+    /// @param _operator address of the account that can make deposits to the beacon chain
     /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+    function initialize(address _factory, address _owner, address _operator, bytes calldata _params) external reinitializer(_version) {
+        VaultStorage storage $ = _getVaultStorage();
+        if ($.factory != address(0)) {
+            revert VaultAlreadyInitialized();
+        }
+
         __StakingVault_init_v2();
         __Ownable_init(_owner);
-        _getVaultStorage().operator = _operator;
-    }
-
-    function operator() external view returns (address) {
-        return _getVaultStorage().operator;
+        $.factory = _factory;
+        $.operator = _operator;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {
@@ -65,7 +62,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
     }
 
     event InitializedV2();
-    function __StakingVault_init_v2() internal  {
+    function __StakingVault_init_v2() internal onlyInitializing {
         emit InitializedV2();
     }
 
@@ -77,15 +74,19 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
         return _version;
     }
 
-    function getBeacon() public view returns (address) {
+    function beacon() public view returns (address) {
         return ERC1967Utils.getBeacon();
+    }
+
+    function factory() public view returns (address) {
+        return _getVaultStorage().factory;
     }
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
         return IStakingVault.Report({
-            valuation: $.reportValuation,
-            inOutDelta: $.reportInOutDelta
+            valuation: $.report.valuation,
+            inOutDelta: $.report.inOutDelta
         });
     }
 
@@ -96,5 +97,5 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
     }
 
     error ZeroArgument(string name);
-    error UnauthorizedSender(address sender);
+    error VaultAlreadyInitialized();
 }

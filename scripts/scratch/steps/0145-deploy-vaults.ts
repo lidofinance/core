@@ -26,10 +26,13 @@ export async function main() {
   const room = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [lidoAddress]);
   const roomAddress = await room.getAddress();
 
+  // Deploy Delegation implementation contract
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
+  const beaconAddress = await beacon.getAddress();
+
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
-    deployer,
-    impAddress,
+    beaconAddress,
     roomAddress,
   ]);
   const factoryAddress = await factory.getAddress();

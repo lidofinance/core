@@ -5,6 +5,6 @@
 pragma solidity 0.8.25;
 
 interface IBeaconProxy {
-    function getBeacon() external view returns (address);
+    function beacon() external view returns (address);
     function version() external pure returns(uint64);
 }

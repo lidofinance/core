@@ -9,6 +9,7 @@ import {
   DepositContract__MockForStakingVault,
   StakingVault,
   StETH__MockForDelegation,
+  UpgradeableBeacon,
   VaultFactory,
   VaultHub__MockForDelegation,
 } from "typechain-types";
@@ -20,12 +21,12 @@ import { Snapshot } from "test/suite";
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
-describe("Delegation", () => {
+describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let factoryOwner: HardhatEthersSigner;
+  let beaconOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
 
   let steth: StETH__MockForDelegation;
@@ -36,6 +37,7 @@ describe("Delegation", () => {
   let factory: VaultFactory;
   let vault: StakingVault;
   let delegation: Delegation;
+  let beacon: UpgradeableBeacon;
 
   let originalState: string;
 
@@ -51,18 +53,19 @@ describe("Delegation", () => {
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
-    factory = await ethers.deployContract("VaultFactory", [
-      factoryOwner,
-      vaultImpl.getAddress(),
-      delegationImpl.getAddress(),
-    ]);
-    expect(await factory.implementation()).to.equal(vaultImpl);
-    expect(await factory.delegationImpl()).to.equal(delegationImpl);
+    beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
+
+    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    expect(await beacon.implementation()).to.equal(vaultImpl);
+    expect(await factory.BEACON()).to.equal(beacon);
+    expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
 
     const vaultCreationTx = await factory
       .connect(vaultOwner)
-      .createVault({ managementFee: 0n, performanceFee: 0n, manager, operator }, "0x");
-
+      .createVaultWithDelegation(
+        { managementFeeBP: 0n, performanceFeeBP: 0n, defaultAdmin: vaultOwner, manager, operator },
+        "0x",
+      );
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation receipt not found");
 
@@ -70,7 +73,8 @@ describe("Delegation", () => {
     expect(vaultCreatedEvents.length).to.equal(1);
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
-    expect(await vault.getBeacon()).to.equal(factory);
+    expect(await vault.beacon()).to.equal(beacon);
+    expect(await vault.factory()).to.equal(factory);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);
