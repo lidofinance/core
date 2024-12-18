@@ -10,9 +10,11 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
-    function initialize(address owner, bytes calldata params) external;
+    function initialize(address owner, address operator, bytes calldata params) external;
 
     function vaultHub() external view returns (address);
+
+    function operator() external view returns (address);
 
     function latestReport() external view returns (Report memory);
 
@@ -22,7 +24,7 @@ interface IStakingVault {
 
     function valuation() external view returns (uint256);
 
-    function isHealthy() external view returns (bool);
+    function isBalanced() external view returns (bool);
 
     function unlocked() external view returns (uint256);
 
@@ -39,6 +41,8 @@ interface IStakingVault {
     ) external;
 
     function requestValidatorExit(bytes calldata _validatorPublicKey) external;
+
+    function lock(uint256 _locked) external;
 
     function rebalance(uint256 _ether) external;
 

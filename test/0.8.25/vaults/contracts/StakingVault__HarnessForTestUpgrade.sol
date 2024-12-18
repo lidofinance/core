@@ -12,9 +12,9 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IReportReceiver} from "contracts/0.8.25/vaults/interfaces/IReportReceiver.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "contracts/0.8.25/vaults/interfaces/IBeaconProxy.sol";
-import {VaultBeaconChainDepositor} from "contracts/0.8.25/vaults/VaultBeaconChainDepositor.sol";
+import {BeaconChainDepositLogistics} from "contracts/0.8.25/vaults/BeaconChainDepositLogistics.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDepositor, OwnableUpgradeable {
+contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
@@ -22,6 +22,8 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
 
         uint256 locked;
         int256 inOutDelta;
+
+        address operator;
     }
 
     uint64 private constant _version = 2;
@@ -34,7 +36,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
     constructor(
         address _vaultHub,
         address _beaconChainDepositContract
-    ) VaultBeaconChainDepositor(_beaconChainDepositContract) {
+    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         vaultHub = VaultHub(_vaultHub);
@@ -48,9 +50,14 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, VaultBeaconChainDe
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
     /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon reinitializer(_version) {
         __StakingVault_init_v2();
         __Ownable_init(_owner);
+        _getVaultStorage().operator = _operator;
+    }
+
+    function operator() external view returns (address) {
+        return _getVaultStorage().operator;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {

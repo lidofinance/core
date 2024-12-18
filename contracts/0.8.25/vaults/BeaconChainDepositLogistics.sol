@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {MemUtils} from "../../common/lib/MemUtils.sol";
+import {MemUtils} from "contracts/common/lib/MemUtils.sol";
 
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);
@@ -26,7 +26,7 @@ interface IDepositContract {
  *
  * This contract will be refactored to support custom deposit amounts for MAX_EB.
  */
-contract VaultBeaconChainDepositor {
+contract BeaconChainDepositLogistics {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant SIGNATURE_LENGTH = 96;
     uint256 internal constant DEPOSIT_SIZE = 32 ether;

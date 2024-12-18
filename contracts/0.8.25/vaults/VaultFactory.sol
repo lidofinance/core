@@ -10,7 +10,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 pragma solidity 0.8.25;
 
 interface IDelegation {
-    struct InitializationParams {
+    struct InitialState {
         uint256 managementFee;
         uint256 performanceFee;
         address manager;
@@ -23,9 +23,7 @@ interface IDelegation {
 
     function OPERATOR_ROLE() external view returns (bytes32);
 
-    function LIDO_DAO_ROLE() external view returns (bytes32);
-
-    function initialize(address admin, address stakingVault) external;
+    function initialize(address _stakingVault) external;
 
     function setManagementFee(uint256 _newManagementFee) external;
 
@@ -53,39 +51,34 @@ contract VaultFactory is UpgradeableBeacon {
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
-    /// @param _stakingVaultParams The params of vault initialization
-    /// @param _initializationParams The params of vault initialization
+    /// @param _delegationInitialState The params of vault initialization
+    /// @param _stakingVaultInitializerExtraParams The params of vault initialization
     function createVault(
-        bytes calldata _stakingVaultParams,
-        IDelegation.InitializationParams calldata _initializationParams,
-        address _lidoAgent
+        IDelegation.InitialState calldata _delegationInitialState,
+        bytes calldata _stakingVaultInitializerExtraParams
     ) external returns (IStakingVault vault, IDelegation delegation) {
-        if (_initializationParams.manager == address(0)) revert ZeroArgument("manager");
-        if (_initializationParams.operator == address(0)) revert ZeroArgument("operator");
+        if (_delegationInitialState.manager == address(0)) revert ZeroArgument("manager");
 
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
-
         delegation = IDelegation(Clones.clone(delegationImpl));
 
-        delegation.initialize(address(this), address(vault));
+        delegation.initialize(address(vault));
 
-        delegation.grantRole(delegation.LIDO_DAO_ROLE(), _lidoAgent);
-        delegation.grantRole(delegation.MANAGER_ROLE(), _initializationParams.manager);
-        delegation.grantRole(delegation.OPERATOR_ROLE(), _initializationParams.operator);
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
+        delegation.grantRole(delegation.MANAGER_ROLE(), _delegationInitialState.manager);
+        delegation.grantRole(delegation.OPERATOR_ROLE(), _delegationInitialState.operator);
 
-        delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
-        delegation.setManagementFee(_initializationParams.managementFee);
-        delegation.setPerformanceFee(_initializationParams.performanceFee);
+        delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
+        delegation.setManagementFee(_delegationInitialState.managementFee);
+        delegation.setPerformanceFee(_delegationInitialState.performanceFee);
 
         //revoke roles from factory
         delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
-        delegation.revokeRole(delegation.LIDO_DAO_ROLE(), address(this));
 
-        vault.initialize(address(delegation), _stakingVaultParams);
+        vault.initialize(address(delegation), _delegationInitialState.operator, _stakingVaultInitializerExtraParams);
 
         emit VaultCreated(address(delegation), address(vault));
         emit DelegationCreated(msg.sender, address(delegation));
