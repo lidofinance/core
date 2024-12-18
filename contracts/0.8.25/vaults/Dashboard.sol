@@ -167,41 +167,20 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares as a uint256.
      */
     function totalMintableShares() public view returns (uint256) {
-        uint256 valuationValue = stakingVault.valuation();
-        uint256 reserveRatioValue = vaultSocket().reserveRatio;
-
-        uint256 maxStETHMinted = (valuationValue * (BPS_BASE - reserveRatioValue)) / BPS_BASE;
-
-        return Math256.min(stETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
+        return _totalMintableShares(stakingVault.valuation());
     }
 
     /**
-     * @notice Returns the maximum number of stETH shares that can be minted.
-     * @return The maximum number of stETH shares that can be minted.
-     */
-    function canMintShares() external view returns (uint256) {
-        uint256 maxShares = totalMintableShares();
-        uint256 mintedShares = vaultSocket().sharesMinted;
-        if (maxShares < mintedShares) return 0;
-        return maxShares - mintedShares;
-    }
-
-    /**
-     * @notice Returns the maximum number of stETH that can be minted for deposited ether.
-     * @param _ether The amount of ether to check.
+     * @notice Returns the maximum number of shares that can be minted with deposited ether.
+     * @param _ether the amount of ether to be funded
      * @return the maximum number of stETH that can be minted by ether
      */
-    function canMintByEther(uint256 _ether) external view returns (uint256) {
-        if (_ether == 0) return 0;
+    function canMintShares(uint256 _ether) external view returns (uint256) {
+        uint256 _totalShares = _totalMintableShares(stakingVault.valuation() + _ether);
+        uint256 _sharesMinted = vaultSocket().sharesMinted;
 
-        uint256 maxMintableSharesValue = totalMintableShares();
-        uint256 sharesMintedValue = vaultSocket().sharesMinted;
-        uint256 sharesToMintValue = stETH.getSharesByPooledEth(_ether);
-
-        return
-            sharesMintedValue + sharesToMintValue > maxMintableSharesValue
-                ? maxMintableSharesValue - sharesMintedValue
-                : sharesToMintValue;
+        if (_totalShares < _sharesMinted) return 0;
+        return _totalShares - _sharesMinted;
     }
 
     /**
@@ -506,6 +485,18 @@ contract Dashboard is AccessControlEnumerable {
     function _burn(uint256 _tokens) internal {
         stETH.transferFrom(msg.sender, address(vaultHub), _tokens);
         vaultHub.burnStethBackedByVault(address(stakingVault), _tokens);
+    }
+
+    /**
+     * @dev calculates total shares vault can mint
+     * @param _valuation custom vault valuation
+     */
+    function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
+        uint256 reserveRatioValue = vaultSocket().reserveRatio;
+
+        uint256 maxStETHMinted = (_valuation * (BPS_BASE - reserveRatioValue)) / BPS_BASE;
+
+        return Math256.min(stETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
     }
 
     /**
