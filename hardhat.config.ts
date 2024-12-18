@@ -95,6 +95,10 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "sepolia-fork": {
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
+      chainId: 11155111,
+    },
     "mekong": {
       url: process.env.MEKONG_RPC_URL || RPC_URL,
       chainId: 7078815900,
@@ -104,6 +108,7 @@ const config: HardhatUserConfig = {
   etherscan: {
     apiKey: {
       default: process.env.ETHERSCAN_API_KEY || "",
+      holesky: process.env.ETHERSCAN_API_KEY || "",
       mekong: process.env.BLOCKSCOUT_API_KEY || "",
     },
     customChains: [
@@ -207,9 +212,6 @@ const config: HardhatUserConfig = {
     "@aragon/**/*": {
       default: "off",
     },
-    "contracts/*/test_helpers/**/*": {
-      default: "off",
-    },
     "contracts/*/mocks/**/*": {
       default: "off",
     },
@@ -225,7 +227,7 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: true,
     strict: true,
-    except: ["test_helpers", "template", "mocks", "@aragon", "openzeppelin", "test"],
+    except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };
 

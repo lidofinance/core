@@ -9,7 +9,7 @@ import { CONSENSUS_VERSION } from "lib";
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const CONSENSUS_VERSION_2 = 2n;
+const CONSENSUS_VERSION_NEW = 3n;
 
 describe("HashConsensus.sol:submitReport", function () {
   let admin: Signer;
@@ -50,9 +50,9 @@ describe("HashConsensus.sol:submitReport", function () {
     });
 
     it("reverts with UnexpectedConsensusVersion", async () => {
-      await expect(consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION_2))
+      await expect(consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION_NEW))
         .to.be.revertedWithCustomError(consensus, "UnexpectedConsensusVersion")
-        .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION_2);
+        .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION_NEW);
     });
 
     it("reverts with EmptyReport", async () => {

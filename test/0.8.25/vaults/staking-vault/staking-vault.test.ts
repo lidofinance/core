@@ -3,7 +3,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
@@ -23,7 +23,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe.only("StakingVault", () => {
+describe("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;

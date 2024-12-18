@@ -17,6 +17,9 @@ declare namespace NodeJS {
     /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
     INTEGRATION_ON_SCRATCH?: "on" | "off"; // default: "off"
 
+    /* if "on" the integration tests will assume CSM module is present in the StakingRouter, and adjust accordingly */
+    INTEGRATION_WITH_CSM?: "on" | "off"; // default: "off"
+
     /**
      * Network configuration for the protocol discovery.
      */
@@ -36,6 +39,7 @@ declare namespace NodeJS {
     LOCAL_KERNEL_ADDRESS?: string;
     LOCAL_LEGACY_ORACLE_ADDRESS?: string;
     LOCAL_LIDO_ADDRESS?: string;
+    LOCAL_WSTETH_ADDRESS?: string;
     LOCAL_NOR_ADDRESS?: string;
     LOCAL_ORACLE_DAEMON_CONFIG_ADDRESS?: string;
     LOCAL_ORACLE_REPORT_SANITY_CHECKER_ADDRESS?: string;
@@ -61,6 +65,7 @@ declare namespace NodeJS {
     MAINNET_KERNEL_ADDRESS?: string;
     MAINNET_LEGACY_ORACLE_ADDRESS?: string;
     MAINNET_LIDO_ADDRESS?: string;
+    MAINNET_WSTETH_ADDRESS?: string;
     MAINNET_NOR_ADDRESS?: string;
     MAINNET_ORACLE_DAEMON_CONFIG_ADDRESS?: string;
     MAINNET_ORACLE_REPORT_SANITY_CHECKER_ADDRESS?: string;

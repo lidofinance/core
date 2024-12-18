@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-contract Burner__MockForOracleSanityChecker {
+contract Burner__MockForSanityChecker {
     uint256 private nonCover;
     uint256 private cover;
 

@@ -4,12 +4,29 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
+import {
+  ACL,
+  Burner__MockForDistributeReward,
+  Kernel,
+  Lido__HarnessForDistributeReward,
+  LidoLocator,
+  NodeOperatorsRegistry__Harness,
+} from "typechain-types";
 
-import { addNodeOperator, certainAddress, NodeOperatorConfig, randomAddress } from "lib";
+import {
+  addNodeOperator,
+  advanceChainTime,
+  certainAddress,
+  ether,
+  NodeOperatorConfig,
+  randomAddress,
+  RewardDistributionState,
+} from "lib";
 
-import { addAragonApp, deployLidoDao } from "test/deploy";
+import { addAragonApp, deployLidoDaoForNor } from "test/deploy";
 import { Snapshot } from "test/suite";
+
+const ONE_DAY = 86400n;
 
 describe("NodeOperatorsRegistry.sol:management", () => {
   let deployer: HardhatEthersSigner;
@@ -19,7 +36,10 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   let nodeOperatorsManager: HardhatEthersSigner;
   let signingKeysManager: HardhatEthersSigner;
   let stakingRouter: HardhatEthersSigner;
-  let lido: Lido;
+  let user1: HardhatEthersSigner;
+  let user2: HardhatEthersSigner;
+  let user3: HardhatEthersSigner;
+  let lido: Lido__HarnessForDistributeReward;
   let dao: Kernel;
   let acl: ACL;
   let locator: LidoLocator;
@@ -28,6 +48,8 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   let nor: NodeOperatorsRegistry__Harness;
 
   let originalState: string;
+
+  let burner: Burner__MockForDistributeReward;
 
   const firstNodeOperatorId = 0;
   const secondNodeOperatorId = 1;
@@ -46,7 +68,7 @@ describe("NodeOperatorsRegistry.sol:management", () => {
       stuckPenaltyEndAt: 0n,
     },
     {
-      name: " bar",
+      name: "bar",
       rewardAddress: certainAddress("node-operator-2"),
       totalSigningKeysCount: 15n,
       depositedSigningKeysCount: 7n,
@@ -75,18 +97,26 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   const contractVersion = 2n;
 
   before(async () => {
-    [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager] =
+    [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, user1, user2, user3] =
       await ethers.getSigners();
 
-    ({ lido, dao, acl } = await deployLidoDao({
+    ({ lido, dao, acl, burner } = await deployLidoDaoForNor({
       rootAccount: deployer,
       initialized: true,
       locatorConfig: {
         stakingRouter,
       },
     }));
+    // await burner.grantRole(web3.utils.keccak256(`REQUEST_BURN_SHARES_ROLE`), app.address, { from: voting })
+    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
+      libraries: {
+        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      },
+    });
 
-    impl = await ethers.deployContract("NodeOperatorsRegistry__Harness", deployer);
+    impl = await norHarnessFactory.connect(deployer).deploy();
+
     const appProxy = await addAragonApp({
       dao,
       name: "node-operators-registry",
@@ -341,133 +371,6 @@ describe("NodeOperatorsRegistry.sol:management", () => {
     });
   });
 
-  context("setNodeOperatorStakingLimit", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
-        thirdNodeOperatorId,
-      );
-    });
-
-    it("Reverts if no such an operator exists", async () => {
-      await expect(nor.setNodeOperatorStakingLimit(5n, 10n)).to.be.revertedWith("OUT_OF_RANGE");
-    });
-
-    it("Reverts if no SET_NODE_OPERATOR_LIMIT_ROLE assigned", async () => {
-      await expect(nor.setNodeOperatorStakingLimit(firstNodeOperatorId, 0n)).to.be.revertedWith("APP_AUTH_FAILED");
-    });
-
-    it("Reverts if the node operator is inactive", async () => {
-      await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(thirdNodeOperatorId, 0n)).to.be.revertedWith(
-        "WRONG_OPERATOR_ACTIVE_STATE",
-      );
-    });
-
-    it("Does nothing if vetted keys count stays the same", async () => {
-      const vetted = (await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators;
-
-      await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, vetted)).to.not.emit(
-        nor,
-        "VettedSigningKeysCountChanged",
-      );
-    });
-
-    it("Able to set decrease vetted keys count", async () => {
-      const oldVetted = 6n;
-      const newVetted = 5n;
-      expect(newVetted < oldVetted);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
-      const oldNonce = await nor.getNonce();
-
-      await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, newVetted))
-        .to.emit(nor, "VettedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, newVetted)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(oldNonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(oldNonce + 1n);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(newVetted);
-    });
-
-    it("Able to increase vetted keys count", async () => {
-      const oldVetted = 6n;
-      const newVetted = 8n;
-      expect(newVetted > oldVetted);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
-      const oldNonce = await nor.getNonce();
-
-      await expect(nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, newVetted))
-        .to.emit(nor, "VettedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, newVetted)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(oldNonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(oldNonce + 1n);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(newVetted);
-    });
-
-    it("Vetted keys count can only be ≥ deposited", async () => {
-      const oldVetted = 6n;
-      const vettedBelowDeposited = 3n;
-
-      expect(vettedBelowDeposited < oldVetted);
-      const firstNo = await nor.getNodeOperator(firstNodeOperatorId, false);
-      expect(vettedBelowDeposited < firstNo.totalDepositedValidators);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
-      const oldNonce = await nor.getNonce();
-
-      await expect(
-        nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, firstNo.totalDepositedValidators),
-      )
-        .to.emit(nor, "VettedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, firstNo.totalDepositedValidators)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(oldNonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(oldNonce + 1n);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(
-        firstNo.totalDepositedValidators,
-      );
-    });
-
-    it("Vetted keys count can only be ≤ total added", async () => {
-      const oldVetted = 6n;
-      const vettedAboveTotal = 11n;
-
-      expect(vettedAboveTotal > oldVetted);
-      const firstNo = await nor.getNodeOperator(firstNodeOperatorId, false);
-      expect(vettedAboveTotal > firstNo.totalAddedValidators);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(oldVetted);
-      const oldNonce = await nor.getNonce();
-
-      await expect(
-        nor.connect(limitsManager).setNodeOperatorStakingLimit(firstNodeOperatorId, firstNo.totalAddedValidators),
-      )
-        .to.emit(nor, "VettedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, firstNo.totalAddedValidators)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(oldNonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(oldNonce + 1n);
-
-      expect((await nor.getNodeOperator(firstNodeOperatorId, false)).totalVettedValidators).to.equal(
-        firstNo.totalAddedValidators,
-      );
-    });
-  });
-
   context("getNodeOperator", () => {
     beforeEach(async () => {
       expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
@@ -554,7 +457,7 @@ describe("NodeOperatorsRegistry.sol:management", () => {
 
       const noSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
 
-      expect(noSummary.isTargetLimitActive).to.be.false;
+      expect(noSummary.targetLimitMode).to.be.equal(0n);
       expect(noSummary.targetValidatorsCount).to.equal(0n);
       expect(noSummary.stuckValidatorsCount).to.equal(0n);
       expect(noSummary.refundedValidatorsCount).to.equal(0n);
@@ -577,7 +480,7 @@ describe("NodeOperatorsRegistry.sol:management", () => {
 
       const noSummary = await nor.getNodeOperatorSummary(secondNodeOperatorId);
 
-      expect(noSummary.isTargetLimitActive).to.be.false;
+      expect(noSummary.targetLimitMode).to.be.equal(0n);
       expect(noSummary.targetValidatorsCount).to.equal(0n);
       expect(noSummary.stuckValidatorsCount).to.equal(0n);
       expect(noSummary.refundedValidatorsCount).to.equal(0n);
@@ -706,6 +609,241 @@ describe("NodeOperatorsRegistry.sol:management", () => {
       for (let i = 0n; i < 10n; ++i) {
         expect(await nor.getNodeOperatorIsActive(i)).to.be.false;
       }
+    });
+  });
+
+  context("getRewardDistributionState()", () => {
+    it("returns correct reward distribution state", async () => {
+      await nor.harness__setRewardDistributionState(RewardDistributionState.ReadyForDistribution);
+      expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.ReadyForDistribution);
+
+      await nor.harness__setRewardDistributionState(RewardDistributionState.TransferredToModule);
+      expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.TransferredToModule);
+
+      await nor.harness__setRewardDistributionState(RewardDistributionState.Distributed);
+      expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.Distributed);
+    });
+  });
+
+  context("distributeReward()", () => {
+    const firstNodeOperator = 0;
+    const secondNodeOperator = 1;
+
+    beforeEach(async () => {
+      await nor.harness__addNodeOperator("0", user1, 3, 3, 3, 0);
+      await nor.harness__addNodeOperator("1", user2, 7, 7, 7, 0);
+      await nor.harness__addNodeOperator("2", user3, 0, 0, 0, 0);
+
+      await nor.harness__setRewardDistributionState(RewardDistributionState.ReadyForDistribution);
+
+      expect(await lido.sharesOf(user1)).to.be.equal(0);
+      expect(await lido.sharesOf(user2)).to.be.equal(0);
+      expect(await lido.sharesOf(user3)).to.be.equal(0);
+    });
+
+    it('distribute reward when module in "ReadyForDistribution" status', async () => {
+      expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.ReadyForDistribution);
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardDistributionStateChanged")
+        .withArgs(RewardDistributionState.Distributed);
+      expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.Distributed);
+    });
+
+    it('reverts with "DISTRIBUTION_NOT_READY" error when module not in "ReadyForDistribution" status', async () => {
+      await nor.harness__setRewardDistributionState(RewardDistributionState.TransferredToModule);
+      await expect(nor.distributeReward()).to.be.revertedWith("DISTRIBUTION_NOT_READY");
+
+      await nor.harness__setRewardDistributionState(RewardDistributionState.Distributed);
+      await expect(nor.distributeReward()).to.be.revertedWith("DISTRIBUTION_NOT_READY");
+    });
+
+    it("doesn't distributes rewards if no shares to distribute", async () => {
+      const sharesCount = await lido.sharesOf(await nor.getAddress());
+      expect(sharesCount).to.be.eq(0);
+
+      const recipientsSharesBefore = await Promise.all([
+        lido.sharesOf(user1),
+        lido.sharesOf(user2),
+        lido.sharesOf(user3),
+      ]);
+
+      await nor.distributeReward();
+
+      const recipientsSharesAfter = await Promise.all([
+        lido.sharesOf(user1),
+        lido.sharesOf(user2),
+        lido.sharesOf(user3),
+      ]);
+      expect(recipientsSharesBefore).to.have.length(recipientsSharesAfter.length);
+      for (let i = 0; i < recipientsSharesBefore.length; ++i) {
+        expect(recipientsSharesBefore[i]).to.equal(recipientsSharesAfter[i]);
+      }
+    });
+
+    it("must distribute rewards to operators", async () => {
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), ether("10"));
+
+      await nor.distributeReward();
+      expect(await lido.sharesOf(user1)).to.be.equal(ether("3"));
+      expect(await lido.sharesOf(user2)).to.be.equal(ether("7"));
+      expect(await lido.sharesOf(user3)).to.be.equal(0);
+    });
+
+    it("emits RewardsDistributed with correct params on reward distribution", async () => {
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), ether("10"));
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether("3"))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether("7"));
+    });
+
+    it("distribute with stopped works", async () => {
+      const totalRewardShares = ether("10");
+
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), totalRewardShares);
+
+      // before
+      //      operatorId | Total | Deposited | Exited | Active (deposited-exited)
+      //         0           3         3         0        3
+      //         1           7         7         0        7
+      //         2           0         0         0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         0       10
+      //
+      // perValidatorShare 10*10^18 / 10 = 10^18
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 0);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
+
+      // after
+      //      operatorId | Total | Deposited | Exited | Stuck | Active (deposited-exited)
+      //         0           3         3         1        0        2
+      //         1           7         7         1        0        6
+      //         2           0         0         0        0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         2       0         8
+      //
+      // perValidatorShare 10*10^18 / 8 = 1250000000000000000 == 1.25 * 10^18
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(2 * 1.25 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""));
+    });
+
+    it("penalized keys with stopped and stuck works", async () => {
+      const totalRewardShares = ether("10");
+
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), totalRewardShares);
+
+      // before
+      //      operatorId | Total | Deposited | Exited | Active (deposited-exited)
+      //         0           3         3         0        3
+      //         1           7         7         0        7
+      //         2           0         0         0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         0       10
+      //
+      // perValidatorShare 10*10^18 / 10 = 10^18
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
+
+      // after
+      //      operatorId | Total | Deposited | Exited | Stuck | Active (deposited-exited)
+      //         0           3         3         1        1        2
+      //         1           7         7         1        0        6
+      //         2           0         0         0        0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         2       1         8
+      //
+      // perValidatorShare 10*10^18 / 8 = 1250000000000000000 == 1.25 * 10^18
+      // but half goes to burner
+      await expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.ReadyForDistribution);
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(1.25 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""))
+        .and.to.emit(nor, "NodeOperatorPenalized")
+        .withArgs(await user1.getAddress(), ether(1.25 + ""))
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(false, await nor.getAddress(), ether("2.5"), ether("1.25"));
+    });
+
+    it("penalized firstOperator, add refund but 2 days have not passed yet", async () => {
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), ether("10"));
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
+
+      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(1.25 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""))
+        .and.to.emit(nor, "NodeOperatorPenalized")
+        .withArgs(await user1.getAddress(), ether(1.25 + ""));
+    });
+
+    it("penalized firstOperator, add refund less than stuck validators", async () => {
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), ether("10"));
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 2, 1);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 3, 0);
+
+      // perValidator = ETH(10) / 5 = 2 eth
+
+      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(1 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(4 * 2 + ""))
+        .and.to.emit(nor, "NodeOperatorPenalized")
+        .withArgs(await user1.getAddress(), ether(1 + ""));
+    });
+
+    it("penalized firstOperator, add refund and 2 days passed", async () => {
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), ether("10"));
+
+      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.false;
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
+      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.true;
+
+      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
+      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.true;
+
+      await advanceChainTime(2n * ONE_DAY);
+
+      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.false;
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(2.5 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(7.5 + ""));
     });
   });
 

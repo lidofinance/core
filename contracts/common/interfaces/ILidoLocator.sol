@@ -21,6 +21,10 @@ interface ILidoLocator {
     function postTokenRebaseReceiver() external view returns(address);
     function oracleDaemonConfig() external view returns(address);
     function accounting() external view returns (address);
+    function wstETH() external view returns (address);
+
+    /// @notice Returns core Lido protocol component addresses in a single call
+    /// @dev This function provides a gas-efficient way to fetch multiple component addresses in a single call
     function coreComponents() external view returns(
         address elRewardsVault,
         address oracleReportSanityChecker,
@@ -29,6 +33,9 @@ interface ILidoLocator {
         address withdrawalQueue,
         address withdrawalVault
     );
+
+    /// @notice Returns addresses of components involved in processing oracle reports in the Lido contract
+    /// @dev This function provides a gas-efficient way to fetch multiple component addresses in a single call
     function oracleReportComponents() external view returns(
         address accountingOracle,
         address oracleReportSanityChecker,
