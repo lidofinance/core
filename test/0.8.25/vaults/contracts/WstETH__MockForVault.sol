@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
+pragma solidity 0.6.12;
+
 import {WstETH} from "contracts/0.6.12/WstETH.sol";
 import {IStETH} from "contracts/0.6.12/interfaces/IStETH.sol";
 

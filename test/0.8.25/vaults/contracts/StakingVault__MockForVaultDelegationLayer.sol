@@ -1,7 +1,6 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
-// See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";

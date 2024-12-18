@@ -1,13 +1,13 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
+pragma solidity 0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.0.2/proxy/Clones.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
-
-pragma solidity 0.8.25;
 
 contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     address public immutable dashboardImpl;

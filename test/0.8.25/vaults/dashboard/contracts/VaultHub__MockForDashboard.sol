@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.25;
 
 import { VaultHub } from "contracts/0.8.25/vaults/VaultHub.sol";
 import { StETH__MockForDashboard } from "./StETH__MockForDashboard.sol";

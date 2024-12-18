@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity >=0.4.22 <0.6;
+pragma solidity 0.4.24;
 
 import {StETH} from "contracts/0.4.24/StETH.sol";
 
