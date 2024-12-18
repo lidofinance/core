@@ -4,6 +4,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -44,6 +45,9 @@ describe("Dashboard", () => {
     [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
+    await steth.mock__setTotalShares(ether("1000000"));
+    await steth.mock__setTotalPooledEther(ether("2000000"));
+
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
@@ -167,27 +171,92 @@ describe("Dashboard", () => {
     });
   });
 
-  context("availableMintableShares", () => {
-    beforeEach(async () => {
-      await steth.mock__setTotalPooledEther(ether("600.00"));
+  context("maxMintableShares", () => {
+    it("returns the trivial max mintable shares", async () => {
+      const maxShares = await dashboard.maxMintableShares();
+
+      expect(maxShares).to.equal(0n);
     });
 
-    it("returns the correct max mintable shares", async () => {
-      const availableMintableShares = await dashboard.availableMintableShares();
+    it("returns correct max mintable shares when not bound by shareLimit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 1000000000n,
+        sharesMinted: 555n,
+        reserveRatio: 1000n,
+        reserveRatioThreshold: 800n,
+        treasuryFeeBP: 500n,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const maxMintableShares = await dashboard.maxMintableShares();
+      const maxStETHMinted = ((await vault.valuation()) * (10000n - sockets.reserveRatio)) / 10000n;
+      const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
+
+      expect(maxMintableShares).to.equal(maxSharesMinted);
+    });
+
+    it("returns correct max mintable shares when bound by shareLimit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 100n,
+        sharesMinted: 0n,
+        reserveRatio: 1000n,
+        reserveRatioThreshold: 800n,
+        treasuryFeeBP: 500n,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const availableMintableShares = await dashboard.maxMintableShares();
+
+      expect(availableMintableShares).to.equal(sockets.shareLimit);
+    });
+
+    it("returns zero when reserve ratio is does not allow mint", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 1000000000n,
+        sharesMinted: 555n,
+        reserveRatio: 10_000n,
+        reserveRatioThreshold: 800n,
+        treasuryFeeBP: 500n,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const availableMintableShares = await dashboard.maxMintableShares();
 
       expect(availableMintableShares).to.equal(0n);
     });
 
-    // TODO: add more tests when the vault params are changed
+    it("returns funded amount when reserve ratio is zero", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 555n,
+        reserveRatio: 0n,
+        reserveRatioThreshold: 0n,
+        treasuryFeeBP: 500n,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 1000n;
+      await dashboard.fund({ value: funding });
+
+      const availableMintableShares = await dashboard.maxMintableShares();
+
+      const toShares = await steth.getSharesByPooledEth(funding);
+      expect(availableMintableShares).to.equal(toShares);
+    });
   });
 
-  context("canMint", () => {
-    beforeEach(async () => {
-      await steth.mock__setTotalPooledEther(ether("600.00"));
-    });
-
+  context("canMintShares", () => {
     it("returns the correct can mint shares", async () => {
-      const canMint = await dashboard.canMint();
+      const canMint = await dashboard.canMintShares();
       expect(canMint).to.equal(0n);
     });
 
@@ -195,10 +264,6 @@ describe("Dashboard", () => {
   });
 
   context("canMintByEther", () => {
-    beforeEach(async () => {
-      await steth.mock__setTotalPooledEther(ether("600.00"));
-    });
-
     it("returns the correct can mint shares by ether", async () => {
       const canMint = await dashboard.canMintByEther(ether("1"));
       expect(canMint).to.equal(0n);

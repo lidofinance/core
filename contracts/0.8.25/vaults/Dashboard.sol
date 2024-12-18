@@ -20,11 +20,13 @@ interface IStETH is IERC20, IERC20Permit {
 
 interface IWeth is IERC20 {
     function withdraw(uint) external;
+
     function deposit() external payable;
 }
 
 interface IWstETH is IERC20, IERC20Permit {
     function wrap(uint256) external returns (uint256);
+
     function unwrap(uint256) external returns (uint256);
 }
 
@@ -164,7 +166,7 @@ contract Dashboard is AccessControlEnumerable {
      * @dev This is a public view method for the _maxMintableShares method in VaultHub
      * @return The maximum number of stETH shares as a uint256.
      */
-    function availableMintableShares() public view returns (uint256) {
+    function maxMintableShares() public view returns (uint256) {
         uint256 valuationValue = stakingVault.valuation();
         uint256 reserveRatioValue = vaultSocket().reserveRatio;
 
@@ -177,8 +179,8 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Returns the maximum number of stETH shares that can be minted.
      * @return The maximum number of stETH shares that can be minted.
      */
-    function canMint() external view returns (uint256) {
-        return availableMintableShares() - vaultSocket().sharesMinted;
+    function canMintShares() external view returns (uint256) {
+        return maxMintableShares() - vaultSocket().sharesMinted;
     }
 
     /**
@@ -189,11 +191,14 @@ contract Dashboard is AccessControlEnumerable {
     function canMintByEther(uint256 _ether) external view returns (uint256) {
         if (_ether == 0) return 0;
 
-        uint256 availableMintableSharesValue = availableMintableShares();
+        uint256 maxMintableSharesValue = maxMintableShares();
         uint256 sharesMintedValue = vaultSocket().sharesMinted;
         uint256 sharesToMintValue = stETH.getSharesByPooledEth(_ether);
 
-        return sharesMintedValue + sharesToMintValue > availableMintableSharesValue ? availableMintableSharesValue - sharesMintedValue : sharesToMintValue;
+        return
+            sharesMintedValue + sharesToMintValue > maxMintableSharesValue
+                ? maxMintableSharesValue - sharesMintedValue
+                : sharesToMintValue;
     }
 
     /**
@@ -297,7 +302,10 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _tokens Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _tokens) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function mintWstETH(
+        address _recipient,
+        uint256 _tokens
+    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
         _mint(address(this), _tokens);
 
         stETH.approve(address(wstETH), _tokens);
@@ -343,7 +351,17 @@ contract Dashboard is AccessControlEnumerable {
         PermitInput calldata permitInput
     ) {
         // Try permit() before allowance check to advance nonce if possible
-        try IERC20Permit(token).permit(owner, spender, permitInput.value, permitInput.deadline, permitInput.v, permitInput.r, permitInput.s) {
+        try
+            IERC20Permit(token).permit(
+                owner,
+                spender,
+                permitInput.value,
+                permitInput.deadline,
+                permitInput.v,
+                permitInput.r,
+                permitInput.s
+            )
+        {
             _;
             return;
         } catch {
@@ -361,7 +379,15 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of stETH tokens to burn
      * @param _permit data required for the stETH.permit() method to set the allowance
      */
-    function burnWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) trustlessPermit(address(stETH), msg.sender, address(this), _permit) {
+    function burnWithPermit(
+        uint256 _tokens,
+        PermitInput calldata _permit
+    )
+        external
+        virtual
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        trustlessPermit(address(stETH), msg.sender, address(this), _permit)
+    {
         _burn(_tokens);
     }
 
@@ -370,7 +396,15 @@ contract Dashboard is AccessControlEnumerable {
      * @param _tokens Amount of wstETH tokens to burn
      * @param _permit data required for the wstETH.permit() method to set the allowance
      */
-    function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) trustlessPermit(address(wstETH), msg.sender, address(this), _permit) {
+    function burnWstETHWithPermit(
+        uint256 _tokens,
+        PermitInput calldata _permit
+    )
+        external
+        virtual
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        trustlessPermit(address(wstETH), msg.sender, address(this), _permit)
+    {
         wstETH.transferFrom(msg.sender, address(this), _tokens);
         uint256 stETHAmount = wstETH.unwrap(_tokens);
         _burn(stETHAmount);
