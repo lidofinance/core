@@ -16,20 +16,20 @@ import {
 } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
+import {
+  CURATED_MODULE_ID,
+  LIMITER_PRECISION_BASE,
+  MAX_BASIS_POINTS,
+  MAX_DEPOSIT,
+  ONE_DAY,
+  SHARE_RATE_PRECISION,
+  SIMPLE_DVT_MODULE_ID,
+  ZERO_HASH,
+} from "test/suite/constants";
 
-const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
-
-const SHARE_RATE_PRECISION = BigInt(10 ** 27);
-const ONE_DAY = 86400n;
-const MAX_BASIS_POINTS = 10000n;
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
-const SIMPLE_DVT_MODULE_ID = 2n;
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
-
-describe("Accounting", () => {
+describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
@@ -249,7 +249,7 @@ describe("Accounting", () => {
     expect(sharesRateAfter).to.be.lessThan(sharesRateBefore);
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
-    expect(ethDistributedEvent[0].args.preCLBalance + REBASE_AMOUNT).to.equal(
+    expect(ethDistributedEvent[0].args.principalCLBalance + REBASE_AMOUNT).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance differs from expected",
     );
@@ -351,7 +351,7 @@ describe("Accounting", () => {
     expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
-    expect(ethDistributedEvent[0].args.preCLBalance + rebaseAmount).to.equal(
+    expect(ethDistributedEvent[0].args.principalCLBalance + rebaseAmount).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance has not increased",
     );
