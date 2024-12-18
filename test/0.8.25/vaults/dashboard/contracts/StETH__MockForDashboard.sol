@@ -30,6 +30,11 @@ contract StETH__MockForDashboard is ERC20 {
         return (_ethAmount * _getTotalShares()) / totalPooledEther;
     }
 
+    // StETH::getPooledEthByShares
+    function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
+        return (_sharesAmount * totalPooledEther) / _getTotalShares();
+    }
+
     // Mock functions
     function mock__setTotalPooledEther(uint256 _totalPooledEther) external {
         totalPooledEther = _totalPooledEther;
