@@ -333,6 +333,23 @@ describe("Dashboard", () => {
       const canMint = await dashboard.canMintShares();
       expect(canMint).to.equal(sharesFunded - sockets.sharesMinted);
     });
+
+    it("can not mint when bound by share limit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 500n,
+        sharesMinted: 500n,
+        reserveRatio: 1000n,
+        reserveRatioThreshold: 800n,
+        treasuryFeeBP: 500n,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 2000n;
+      await dashboard.fund({ value: funding });
+
+      const canMint = await dashboard.canMintShares();
+      expect(canMint).to.equal(0n);
+    });
   });
 
   context("canMintByEther", () => {
