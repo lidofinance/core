@@ -180,7 +180,10 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares that can be minted.
      */
     function canMintShares() external view returns (uint256) {
-        return maxMintableShares() - vaultSocket().sharesMinted;
+        uint256 maxShares = maxMintableShares();
+        uint256 mintedShares = vaultSocket().sharesMinted;
+        if (maxShares < mintedShares) return 0;
+        return maxShares - mintedShares;
     }
 
     /**
