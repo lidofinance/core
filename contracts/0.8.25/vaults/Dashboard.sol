@@ -375,7 +375,9 @@ contract Dashboard is AccessControlEnumerable {
     function burnWstETHWithPermit(uint256 _tokens, PermitInput calldata _permit) external virtual onlyRole(DEFAULT_ADMIN_ROLE) trustlessPermit(address(wstETH), msg.sender, address(this), _permit) {
         wstETH.transferFrom(msg.sender, address(this), _tokens);
         uint256 stETHAmount = wstETH.unwrap(_tokens);
-        _burn(stETHAmount);
+
+        stETH.transfer(address(vaultHub), stETHAmount);
+        vaultHub.burnStethBackedByVault(address(stakingVault), stETHAmount);
     }
 
     /**
