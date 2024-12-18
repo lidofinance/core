@@ -633,7 +633,6 @@ describe("Dashboard", () => {
       const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
       const stethBalanceBefore = await steth.balanceOf(vaultOwner);
       await wsteth.connect(vaultOwner).approve(dashboard, amount);
-      await steth.connect(vaultOwner).approve(dashboard, amount);
 
       const result = await dashboard.burnWstETH(amount);
 
