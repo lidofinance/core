@@ -454,7 +454,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         int256[] memory _inOutDeltas,
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
-    ) internal returns (uint256 totalTreasuryShares) {
+    ) internal {
         VaultHubStorage storage $ = _getVaultHubStorage();
 
         for (uint256 i = 0; i < _valuations.length; i++) {
@@ -465,7 +465,6 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
             uint256 treasuryFeeShares = _treasureFeeShares[i];
             if (treasuryFeeShares > 0) {
                 socket.sharesMinted += uint96(treasuryFeeShares);
-                totalTreasuryShares += treasuryFeeShares;
             }
             IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
         }

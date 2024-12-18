@@ -133,9 +133,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Emitted when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
-    // Emitted when external shares changed during the report
-    event ExternalSharesChanged(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
-
     // Emitted when var at `DEPOSITED_VALIDATORS_POSITION` changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
@@ -693,18 +690,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev All data validation was done by Accounting and OracleReportSanityChecker
      * @param _reportTimestamp timestamp of the report
      * @param _preClValidators number of validators in the previous CL state (for event compatibility)
-     * @param _preExternalShares number of external shares before the report
      * @param _reportClValidators number of validators in the current CL state
      * @param _reportClBalance total balance of the current CL state
-     * @param _postExternalShares total external shares after the report
      */
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
-        uint256 _preExternalShares,
         uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _postExternalShares
+        uint256 _reportClBalance
     ) external {
         _whenNotStopped();
         _auth(getLidoLocator().accounting());
@@ -713,10 +706,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // calculate rewards on the next rebase
         CL_VALIDATORS_POSITION.setStorageUint256(_reportClValidators);
         CL_BALANCE_POSITION.setStorageUint256(_reportClBalance);
-        EXTERNAL_SHARES_POSITION.setStorageUint256(_postExternalShares);
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
-        emit ExternalSharesChanged(_reportTimestamp, _preExternalShares, _postExternalShares);
         // cl balance change are logged in ETHDistributed event later
     }
 
