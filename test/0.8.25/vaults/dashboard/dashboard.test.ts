@@ -173,9 +173,9 @@ describe("Dashboard", () => {
     });
   });
 
-  context("maxMintableShares", () => {
+  context("totalMintableShares", () => {
     it("returns the trivial max mintable shares", async () => {
-      const maxShares = await dashboard.maxMintableShares();
+      const maxShares = await dashboard.totalMintableShares();
 
       expect(maxShares).to.equal(0n);
     });
@@ -193,7 +193,7 @@ describe("Dashboard", () => {
 
       await dashboard.fund({ value: 1000n });
 
-      const maxMintableShares = await dashboard.maxMintableShares();
+      const maxMintableShares = await dashboard.totalMintableShares();
       const maxStETHMinted = ((await vault.valuation()) * (BP_BASE - sockets.reserveRatio)) / BP_BASE;
       const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
 
@@ -213,7 +213,7 @@ describe("Dashboard", () => {
 
       await dashboard.fund({ value: 1000n });
 
-      const availableMintableShares = await dashboard.maxMintableShares();
+      const availableMintableShares = await dashboard.totalMintableShares();
 
       expect(availableMintableShares).to.equal(sockets.shareLimit);
     });
@@ -231,7 +231,7 @@ describe("Dashboard", () => {
 
       await dashboard.fund({ value: 1000n });
 
-      const availableMintableShares = await dashboard.maxMintableShares();
+      const availableMintableShares = await dashboard.totalMintableShares();
 
       expect(availableMintableShares).to.equal(0n);
     });
@@ -249,7 +249,7 @@ describe("Dashboard", () => {
       const funding = 1000n;
       await dashboard.fund({ value: funding });
 
-      const availableMintableShares = await dashboard.maxMintableShares();
+      const availableMintableShares = await dashboard.totalMintableShares();
 
       const toShares = await steth.getSharesByPooledEth(funding);
       expect(availableMintableShares).to.equal(toShares);
@@ -275,7 +275,7 @@ describe("Dashboard", () => {
       const funding = 1000n;
       await dashboard.fund({ value: funding });
 
-      const availableMintableShares = await dashboard.maxMintableShares();
+      const availableMintableShares = await dashboard.totalMintableShares();
 
       const canMint = await dashboard.canMintShares();
       expect(canMint).to.equal(availableMintableShares);

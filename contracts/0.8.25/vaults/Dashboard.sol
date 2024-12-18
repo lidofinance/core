@@ -162,11 +162,11 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Returns the maximum number of stETH shares that can be minted on the vault.
+     * @notice Returns the total of stETH shares that can be minted on the vault bound by valuation and vault share limit.
      * @dev This is a public view method for the _maxMintableShares method in VaultHub
      * @return The maximum number of stETH shares as a uint256.
      */
-    function maxMintableShares() public view returns (uint256) {
+    function totalMintableShares() public view returns (uint256) {
         uint256 valuationValue = stakingVault.valuation();
         uint256 reserveRatioValue = vaultSocket().reserveRatio;
 
@@ -180,7 +180,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares that can be minted.
      */
     function canMintShares() external view returns (uint256) {
-        uint256 maxShares = maxMintableShares();
+        uint256 maxShares = totalMintableShares();
         uint256 mintedShares = vaultSocket().sharesMinted;
         if (maxShares < mintedShares) return 0;
         return maxShares - mintedShares;
@@ -194,7 +194,7 @@ contract Dashboard is AccessControlEnumerable {
     function canMintByEther(uint256 _ether) external view returns (uint256) {
         if (_ether == 0) return 0;
 
-        uint256 maxMintableSharesValue = maxMintableShares();
+        uint256 maxMintableSharesValue = totalMintableShares();
         uint256 sharesMintedValue = vaultSocket().sharesMinted;
         uint256 sharesToMintValue = stETH.getSharesByPooledEth(_ether);
 
