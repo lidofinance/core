@@ -322,7 +322,9 @@ contract Dashboard is AccessControlEnumerable {
         stETH.approve(address(wstETH), _tokens);
 
         uint256 stETHAmount = wstETH.unwrap(_tokens);
-        _burn(stETHAmount);
+
+        stETH.transfer(address(vaultHub), stETHAmount);
+        vaultHub.burnStethBackedByVault(address(stakingVault), stETHAmount);
     }
 
     struct PermitInput {
