@@ -120,23 +120,8 @@ contract DepositSecurityModule {
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
 
-        ATTEST_MESSAGE_PREFIX = keccak256(
-            abi.encodePacked(
-                // keccak256("lido.DepositSecurityModule.ATTEST_MESSAGE")
-                bytes32(0x1085395a994e25b1b3d0ea7937b7395495fb405b31c7d22dbc3976a6bd01f2bf),
-                block.chainid,
-                address(this)
-            )
-        );
-
-        PAUSE_MESSAGE_PREFIX = keccak256(
-            abi.encodePacked(
-                // keccak256("lido.DepositSecurityModule.PAUSE_MESSAGE")
-                bytes32(0x9c4c40205558f12027f21204d6218b8006985b7a6359bcab15404bcc3e3fa122),
-                block.chainid,
-                address(this)
-            )
-        );
+        ATTEST_MESSAGE_PREFIX = _computeMessagePrefix(0x1085395a994e25b1b3d0ea7937b7395495fb405b31c7d22dbc3976a6bd01f2bf);
+        PAUSE_MESSAGE_PREFIX = _computeMessagePrefix(0x9c4c40205558f12027f21204d6218b8006985b7a6359bcab15404bcc3e3fa122);
 
         UNVET_MESSAGE_PREFIX = keccak256(
             abi.encodePacked(
@@ -151,6 +136,10 @@ contract DepositSecurityModule {
         _setLastDepositBlock(block.number);
         _setPauseIntentValidityPeriodBlocks(_pauseIntentValidityPeriodBlocks);
         _setMaxOperatorsPerUnvetting(_maxOperatorsPerUnvetting);
+    }
+
+    function _computeMessagePrefix(bytes32 context) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked(context, block.chainid, address(this)));
     }
 
     /**
