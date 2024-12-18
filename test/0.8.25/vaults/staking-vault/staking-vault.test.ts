@@ -394,6 +394,15 @@ describe.only("StakingVault", () => {
         .withArgs(0n);
     });
 
+    it.only("reverts if the rebalance amount exceeds the valuation", async () => {
+      await stranger.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
+      expect(await stakingVault.valuation()).to.equal(ether("0"));
+
+      await expect(stakingVault.rebalance(ether("1")))
+        .to.be.revertedWithCustomError(stakingVault, "RebalanceAmountExceedsValuation")
+        .withArgs(ether("0"), ether("1"));
+    });
+
     it("reverts if the caller is not the owner or the vault hub", async () => {
       await stakingVault.fund({ value: ether("2") });
 

@@ -313,6 +313,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
+        uint256 _valuation = valuation();
+        if (_ether > _valuation) revert RebalanceAmountExceedsValuation(_valuation, _ether);
 
         if (owner() == msg.sender || (!isBalanced() && msg.sender == address(VAULT_HUB))) {
             VaultStorage storage $ = _getVaultStorage();
@@ -384,6 +386,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     error ZeroArgument(string name);
     error InsufficientBalance(uint256 balance);
     error InsufficientUnlocked(uint256 unlocked);
+    error RebalanceAmountExceedsValuation(uint256 valuation, uint256 rebalanceAmount);
     error TransferFailed(address recipient, uint256 amount);
     error Unbalanced();
     error NotAuthorized(string operation, address sender);
