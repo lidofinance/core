@@ -394,7 +394,7 @@ describe("StakingVault", () => {
         .withArgs(0n);
     });
 
-    it.only("reverts if the rebalance amount exceeds the valuation", async () => {
+    it("reverts if the rebalance amount exceeds the valuation", async () => {
       await stranger.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
       expect(await stakingVault.valuation()).to.equal(ether("0"));
 

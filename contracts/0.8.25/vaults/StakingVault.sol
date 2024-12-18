@@ -73,7 +73,7 @@ import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
  *   https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
  */
 contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
-    /// @custom:storage-location erc7201:StakingVault.Vault
+    /// @custom:storage-location erc7201:Lido.Vaults.StakingVault
     /**
      * @dev Main storage structure for the vault
      * @param report Latest report data containing valuation and inOutDelta
@@ -90,9 +90,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     uint64 private constant _version = 1;
     VaultHub public immutable VAULT_HUB;
 
-    /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
+    /// keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_STORAGE_LOCATION =
-        0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
+        0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     constructor(
         address _vaultHub,
