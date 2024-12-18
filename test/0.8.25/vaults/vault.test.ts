@@ -33,7 +33,7 @@ describe("StakingVault.sol", async () => {
   let stakingVault: StakingVault;
   let steth: StETH__HarnessForVaultHub;
   let vaultFactory: VaultFactory;
-  let stVaulOwnerWithDelegation: Delegation;
+  let stVaultOwnerWithDelegation: Delegation;
   let vaultProxy: StakingVault;
 
   let originalState: string;
@@ -52,9 +52,9 @@ describe("StakingVault.sol", async () => {
     vaultCreateFactory = new StakingVault__factory(owner);
     stakingVault = await ethers.getContractFactory("StakingVault").then((f) => f.deploy(vaultHub, depositContract));
 
-    stVaulOwnerWithDelegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
+    stVaultOwnerWithDelegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
 
-    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, stVaulOwnerWithDelegation], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [deployer, stakingVault, stVaultOwnerWithDelegation], {
       from: deployer,
     });
 

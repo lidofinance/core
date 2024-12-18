@@ -5,23 +5,31 @@
 pragma solidity 0.8.25;
 
 interface ILido {
+    function getSharesByPooledEth(uint256) external view returns (uint256);
+
     function getPooledEthByShares(uint256) external view returns (uint256);
 
+    function getPooledEthBySharesRoundUp(uint256) external view returns (uint256);
+
     function transferFrom(address, address, uint256) external;
+
+    function transferSharesFrom(address, address, uint256) external returns (uint256);
+
+    function rebalanceExternalEtherToInternal() external payable;
 
     function getTotalPooledEther() external view returns (uint256);
 
     function getExternalEther() external view returns (uint256);
 
+    function getExternalShares() external view returns (uint256);
+
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
 
-    function getMaxAvailableExternalBalance() external view returns (uint256);
+    function getMaxMintableExternalShares() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
-
-    function getSharesByPooledEth(uint256) external view returns (uint256);
 
     function getBeaconStat()
         external
@@ -32,8 +40,7 @@ interface ILido {
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _postExternalBalance
+        uint256 _reportClBalance
     ) external;
 
     function collectRewardsAndProcessWithdrawals(

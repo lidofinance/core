@@ -16,7 +16,7 @@ import {
   VaultFactory,
 } from "typechain-types";
 
-import { certainAddress, createVaultProxy, ether } from "lib";
+import { createVaultProxy, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -45,8 +45,6 @@ describe("VaultFactory.sol", () => {
 
   let originalState: string;
 
-  const treasury = certainAddress("treasury");
-
   before(async () => {
     [deployer, admin, holder, stranger, vaultOwner1, vaultOwner2, lidoAgent] = await ethers.getSigners();
 
@@ -58,7 +56,7 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, treasury], { from: deployer });
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
@@ -200,9 +198,9 @@ describe("VaultFactory.sol", () => {
       ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 
       //add impl to whitelist
-      await accounting.connect(admin).addImpl(implOld);
+      await accounting.connect(admin).addVaultImpl(implOld);
 
-      //connect vaults to VaultHub
+      //connect vault 1 to VaultHub
       await accounting
         .connect(admin)
         .connectVault(
@@ -212,18 +210,9 @@ describe("VaultFactory.sol", () => {
           config1.thresholdReserveRatioBP,
           config1.treasuryFeeBP,
         );
-      await accounting
-        .connect(admin)
-        .connectVault(
-          await vault2.getAddress(),
-          config2.shareLimit,
-          config2.minReserveRatioBP,
-          config2.thresholdReserveRatioBP,
-          config2.treasuryFeeBP,
-        );
 
       const vaultsAfter = await accounting.vaultsCount();
-      expect(vaultsAfter).to.eq(2);
+      expect(vaultsAfter).to.eq(1);
 
       const version1Before = await vault1.version();
       const version2Before = await vault2.version();
@@ -245,11 +234,11 @@ describe("VaultFactory.sol", () => {
         accounting
           .connect(admin)
           .connectVault(
-            await vault1.getAddress(),
-            config1.shareLimit,
-            config1.minReserveRatioBP,
-            config1.thresholdReserveRatioBP,
-            config1.treasuryFeeBP,
+            await vault2.getAddress(),
+            config2.shareLimit,
+            config2.minReserveRatioBP,
+            config2.thresholdReserveRatioBP,
+            config2.treasuryFeeBP,
           ),
       ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
 

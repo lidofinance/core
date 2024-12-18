@@ -53,7 +53,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
-    /** 
+    /**
      * @notice Role for the operator
      * Operator can:
      * - claim the performance due
@@ -248,7 +248,7 @@ contract Delegation is Dashboard, IReportReceiver {
             managementDue = 0;
 
             if (_liquid) {
-                vaultHub.mintStethBackedByVault(address(stakingVault), _recipient, due);
+                _mint(_recipient, STETH.getSharesByPooledEth(due));
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -271,8 +271,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function disconnectFromVaultHub() external payable override onlyRole(MANAGER_ROLE) {
-        _disconnectFromVaultHub();
+    function voluntaryDisconnect() external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
+        _voluntaryDisconnect();
     }
 
     // ==================== Vault Operations ====================
@@ -326,7 +326,7 @@ contract Delegation is Dashboard, IReportReceiver {
             lastClaimedReport = stakingVault.latestReport();
 
             if (_liquid) {
-                _mint(_recipient, due);
+                _mint(_recipient, STETH.getSharesByPooledEth(due));
             } else {
                 _withdrawDue(_recipient, due);
             }
@@ -334,23 +334,23 @@ contract Delegation is Dashboard, IReportReceiver {
     }
 
     /**
-     * @notice Mints stETH tokens backed by the vault to a recipient.
+     * @notice Mints stETH shares backed by the vault to a recipient.
      * @param _recipient Address of the recipient.
-     * @param _tokens Amount of tokens to mint.
+     * @param _amountOfShares Amount of shares to mint.
      */
     function mint(
         address _recipient,
-        uint256 _tokens
+        uint256 _amountOfShares
     ) external payable override onlyRole(TOKEN_MASTER_ROLE) fundAndProceed {
-        _mint(_recipient, _tokens);
+        _mint(_recipient, _amountOfShares);
     }
 
     /**
-     * @notice Burns stETH tokens from the sender backed by the vault.
-     * @param _tokens Amount of tokens to burn.
+     * @notice Burns stETH shares from the sender backed by the vault.
+     * @param _amountOfShares Amount of shares to burn.
      */
-    function burn(uint256 _tokens) external override onlyRole(TOKEN_MASTER_ROLE) {
-        _burn(_tokens);
+    function burn(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
+        _burn(_amountOfShares);
     }
 
     /**
@@ -366,11 +366,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Hook called by the staking vault during the report in the staking vault.
      * @param _valuation The new valuation of the vault.
-     * @param _inOutDelta The net inflow or outflow since the last report.
-     * @param _locked The amount of funds locked in the vault.
      */
-    // solhint-disable-next-line no-unused-vars
-    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function onReport(uint256 _valuation, int256 /*_inOutDelta*/, uint256 /*_locked*/) external {
         if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
