@@ -5,11 +5,22 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ERC20__Harness, ERC721__Harness, Lido__MockForWithdrawalVault, WithdrawalVault } from "typechain-types";
+import {
+  ERC20__Harness,
+  ERC721__Harness,
+  Lido__MockForWithdrawalVault,
+  WithdrawalsPredeployed_Mock,
+  WithdrawalVault,
+} from "typechain-types";
 
 import { MAX_UINT256, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
+
+import {
+  deployWithdrawalsPredeployedMock,
+  tesWithdrawalRequestsBehavior,
+} from "./lib/withdrawalCredentials/withdrawalRequests.behaviour";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -17,23 +28,31 @@ describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let treasury: HardhatEthersSigner;
+  let validatorsExitBus: HardhatEthersSigner;
 
   let originalState: string;
 
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
 
+  let withdrawalsPredeployed: WithdrawalsPredeployed_Mock;
+
   let impl: WithdrawalVault;
   let vault: WithdrawalVault;
   let vaultAddress: string;
 
+  const getWithdrawalCredentialsContract = () => vault.connect(validatorsExitBus);
+  const getWithdrawalsPredeployedContract = () => withdrawalsPredeployed.connect(user);
+
   before(async () => {
-    [owner, user, treasury] = await ethers.getSigners();
+    [owner, user, treasury, validatorsExitBus] = await ethers.getSigners();
+
+    withdrawalsPredeployed = await deployWithdrawalsPredeployedMock();
 
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
 
-    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address]);
+    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, validatorsExitBus.address]);
 
     [vault] = await proxify({ impl, admin: owner });
 
@@ -47,20 +66,26 @@ describe("WithdrawalVault.sol", () => {
   context("Constructor", () => {
     it("Reverts if the Lido address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address]),
-      ).to.be.revertedWithCustomError(vault, "LidoZeroAddress");
+        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address, validatorsExitBus.address]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Reverts if the treasury address is zero", async () => {
-      await expect(ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress])).to.be.revertedWithCustomError(
-        vault,
-        "TreasuryZeroAddress",
-      );
+      await expect(
+        ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress, validatorsExitBus.address]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the validator exit buss address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, ZeroAddress]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Sets initial properties", async () => {
       expect(await vault.LIDO()).to.equal(lidoAddress, "Lido address");
       expect(await vault.TREASURY()).to.equal(treasury.address, "Treasury address");
+      expect(await vault.VALIDATORS_EXIT_BUS()).to.equal(validatorsExitBus.address, "Validator exit bus address");
     });
 
     it("Petrifies the implementation", async () => {
@@ -80,7 +105,11 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Initializes the contract", async () => {
-      await expect(vault.initialize()).to.emit(vault, "ContractVersionSet").withArgs(1);
+      await expect(vault.initialize())
+        .to.emit(vault, "ContractVersionSet")
+        .withArgs(1)
+        .and.to.emit(vault, "ContractVersionSet")
+        .withArgs(2);
     });
   });
 
@@ -167,5 +196,16 @@ describe("WithdrawalVault.sol", () => {
 
       expect(await token.ownerOf(1)).to.equal(treasury.address);
     });
+  });
+
+  context("addWithdrawalRequests", () => {
+    it("Reverts if the caller is not Validator Exit Bus", async () => {
+      await expect(vault.connect(user).addWithdrawalRequests(["0x1234"], [0n])).to.be.revertedWithCustomError(
+        vault,
+        "NotValidatorExitBus",
+      );
+    });
+
+    tesWithdrawalRequestsBehavior(getWithdrawalCredentialsContract, getWithdrawalsPredeployedContract);
   });
 });
