@@ -74,5 +74,8 @@ declare namespace NodeJS {
 
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;
+
+    /* for local devnet */
+    LOCAL_DEVNET_PK?: string;
   }
 }

@@ -6,6 +6,7 @@ import { LidoLocator } from "typechain-types";
 
 import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
 import { ConvertibleToString, cy, gr, log, yl } from "lib/log";
+import { getNonceManagerWithDeployer } from "lib/nonce-manager";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
@@ -33,9 +34,11 @@ export async function makeTx(
   txParams: TxParams,
   withStateFile = true,
 ): Promise<ContractTransactionReceipt> {
+  const contractWithNonceManager = contract.connect(await getNonceManagerWithDeployer());
+
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
-  const tx = await contract.getFunction(funcName)(...args, txParams);
+  const tx = await contractWithNonceManager.getFunction(funcName)(...args, txParams);
   log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})...`);
 
   const receipt = await tx.wait();
@@ -74,7 +77,9 @@ async function deployContractType2(
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
   const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
-  const contract = await factory.deploy(...constructorArgs, txParams);
+  const factoryWithNonceManager = factory.connect(await getNonceManagerWithDeployer());
+
+  const contract = await factoryWithNonceManager.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
