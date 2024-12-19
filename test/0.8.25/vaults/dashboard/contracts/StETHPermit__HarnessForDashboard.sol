@@ -1,23 +1,45 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.25;
+pragma solidity 0.4.24;
 
-import {ERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/ERC20.sol";
+import {StETHPermit} from "contracts/0.4.24/StETHPermit.sol";
 
-contract StETH__MockForDashboard is ERC20 {
+contract StETHPermit__HarnessForDashboard is StETHPermit {
     uint256 public totalPooledEther;
     uint256 public totalShares;
     mapping(address => uint256) private shares;
 
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
+    constructor(address _holder) public payable {
+        _resume();
+        uint256 balance = address(this).balance;
+        assert(balance != 0);
 
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
+        setTotalPooledEther(balance);
+        _mintShares(_holder, balance);
     }
 
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
+    function _getTotalPooledEther() internal view returns (uint256) {
+        return totalPooledEther;
+    }
+
+    function setTotalPooledEther(uint256 _totalPooledEther) public {
+        totalPooledEther = _totalPooledEther;
+    }
+
+    // Lido::mintShares
+    function mintExternalShares(address _recipient, uint256 _sharesAmount) external {
+        _mintShares(_recipient, _sharesAmount);
+
+        uint256 _tokenAmount = getPooledEthByShares(_sharesAmount);
+
+        emit Transfer(address(0), _recipient, _tokenAmount);
+        emit TransferShares(address(0), _recipient, _sharesAmount);
+    }
+
+    // Lido::burnShares
+    function burnExternalShares(uint256 _sharesAmount) external {
+        _burnShares(msg.sender, _sharesAmount);
     }
 
     // StETH::_getTotalShares

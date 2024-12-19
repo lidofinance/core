@@ -10,7 +10,7 @@ import {
   Dashboard,
   DepositContract__MockForStakingVault,
   StakingVault,
-  StETH__MockForDashboard,
+  StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
@@ -26,8 +26,9 @@ describe("Dashboard", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let stethOwner: HardhatEthersSigner;
 
-  let steth: StETH__MockForDashboard;
+  let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDashboard;
@@ -44,9 +45,12 @@ describe("Dashboard", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
+    [stethOwner, factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
-    steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
+    steth = await ethers.deployContract("StETHPermit__HarnessForDashboard", [stethOwner], {
+      value: ether("1"),
+      from: stethOwner,
+    });
     await steth.mock__setTotalShares(ether("1000000"));
     await steth.mock__setTotalPooledEther(ether("2000000"));
 
