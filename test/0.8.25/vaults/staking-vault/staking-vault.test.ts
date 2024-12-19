@@ -457,9 +457,9 @@ describe("StakingVault", () => {
       expect(await stakingVault.owner()).to.equal(ownerReportReceiver);
 
       await ownerReportReceiver.setReportShouldRunOutOfGas(true);
-      await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
-        .to.emit(stakingVault, "OnReportFailed")
-        .withArgs("0x");
+      await expect(
+        stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")),
+      ).to.be.revertedWithCustomError(stakingVault, "UnrecoverableError");
     });
 
     it("emits the OnReportFailed event with the reason if the owner is a contract and the onReport hook reverts", async () => {

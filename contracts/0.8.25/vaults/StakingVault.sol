@@ -399,7 +399,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         if (codeSize > 0) {
             try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
             catch (bytes memory reason) {
-                emit OnReportFailed(reason.length == 0 ? bytes("") : reason);
+                /// @dev This check is required to prevent incorrect gas estimation of the method.
+                ///      Without it, Ethereum nodes that use binary search for gas estimation may
+                ///      return an invalid value when the onReport() reverts because of the
+                ///      "out of gas" error. Here we assume that the onReport() method doesn't
+                ///      have reverts with empty error data except "out of gas".
+                if (reason.length == 0) revert UnrecoverableError();
+
+                emit OnReportFailed(reason);
             }
         }
 
@@ -524,4 +531,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @param beacon Expected beacon address
      */
     error SenderNotBeacon(address sender, address beacon);
+
+    /**
+     * @notice Thrown when the onReport() hook reverts with an Out of Gas error
+     */
+    error UnrecoverableError();
 }
