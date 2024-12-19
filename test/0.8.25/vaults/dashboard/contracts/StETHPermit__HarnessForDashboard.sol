@@ -10,7 +10,9 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
     uint256 public totalShares;
     mapping(address => uint256) private shares;
 
-    constructor() public {}
+    constructor() public {
+        _resume();
+    }
 
     function _getTotalPooledEther() internal view returns (uint256) {
         return totalPooledEther;
