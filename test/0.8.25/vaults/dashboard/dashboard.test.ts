@@ -10,7 +10,7 @@ import {
   Dashboard,
   DepositContract__MockForStakingVault,
   StakingVault,
-  StETH__MockForDashboard,
+  StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
@@ -27,7 +27,7 @@ describe("Dashboard", () => {
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let steth: StETH__MockForDashboard;
+  let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDashboard;
@@ -46,16 +46,16 @@ describe("Dashboard", () => {
   before(async () => {
     [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
-    steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
+    steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
-    await steth.mock__setTotalPooledEther(ether("2000000"));
+    await steth.mock__setTotalPooledEther(ether("1000000"));
 
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
-    expect(await vaultImpl.VAULT_HUB()).to.equal(hub);
+    expect(await vaultImpl.vaultHub()).to.equal(hub);
     dashboardImpl = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
     expect(await dashboardImpl.stETH()).to.equal(steth);
     expect(await dashboardImpl.weth()).to.equal(weth);
@@ -303,7 +303,7 @@ describe("Dashboard", () => {
       await dashboard.fund({ value: funding });
 
       const canMint = await dashboard.canMintShares(0n);
-      expect(canMint).to.equal(0n);
+      expect(canMint).to.equal(400n); // 1000 - 10% - 500 = 400
       expect(canMint).to.equal(preFundCanMint);
     });
 
@@ -580,6 +580,8 @@ describe("Dashboard", () => {
       const amount = ether("1");
       await expect(dashboard.mint(vaultOwner, amount))
         .to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amount)
+        .and.to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, vaultOwner, amount);
 
       expect(await steth.balanceOf(vaultOwner)).to.equal(amount);
@@ -591,6 +593,8 @@ describe("Dashboard", () => {
         .to.emit(vault, "Funded")
         .withArgs(dashboard, amount)
         .to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amount)
+        .and.to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, vaultOwner, amount);
     });
   });
@@ -642,10 +646,12 @@ describe("Dashboard", () => {
       expect(await steth.allowance(vaultOwner, dashboard)).to.equal(amount);
 
       await expect(dashboard.burn(amount))
-        .to.emit(steth, "Transfer") // tranfer from owner to hub
+        .to.emit(steth, "Transfer") // transfer from owner to hub
         .withArgs(vaultOwner, hub, amount)
-        .and.to.emit(steth, "Transfer") // burn
-        .withArgs(hub, ZeroAddress, amount);
+        .and.to.emit(steth, "TransferShares") // transfer shares to hub
+        .withArgs(vaultOwner, hub, amount)
+        .and.to.emit(steth, "SharesBurnt") // burn
+        .withArgs(hub, amount, amount, amount);
       expect(await steth.balanceOf(vaultOwner)).to.equal(0);
     });
   });
@@ -688,7 +694,8 @@ describe("Dashboard", () => {
       await expect(result).to.emit(wsteth, "Transfer").withArgs(dashboard, ZeroAddress, amount); // burn wsteth
 
       await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, hub, amount); // transfer steth to hub
-      await expect(result).to.emit(steth, "Transfer").withArgs(hub, ZeroAddress, amount); // burn
+      await expect(result).to.emit(steth, "TransferShares").withArgs(dashboard, hub, amount); // transfer shares to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth (mocked event data)
 
       await expect(result).to.emit(steth, "Approval").withArgs(dashboard, wsteth, amount); // approve steth from dashboard to wsteth
 

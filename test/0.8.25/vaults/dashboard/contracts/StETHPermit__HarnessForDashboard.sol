@@ -1,23 +1,35 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.25;
+pragma solidity 0.4.24;
 
-import {ERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/ERC20.sol";
+import {StETHPermit} from "contracts/0.4.24/StETHPermit.sol";
 
-contract StETH__MockForDashboard is ERC20 {
+contract StETHPermit__HarnessForDashboard is StETHPermit {
     uint256 public totalPooledEther;
     uint256 public totalShares;
     mapping(address => uint256) private shares;
 
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
+    constructor() public {
+        _resume();
     }
 
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
+    function _getTotalPooledEther() internal view returns (uint256) {
+        return totalPooledEther;
+    }
+
+    // Lido::mintShares
+    function mintExternalShares(address _recipient, uint256 _sharesAmount) external {
+        _mintShares(_recipient, _sharesAmount);
+
+        // StETH::_emitTransferEvents
+        emit Transfer(address(0), _recipient, getPooledEthByShares(_sharesAmount));
+        emit TransferShares(address(0), _recipient, _sharesAmount);
+    }
+
+    // Lido::burnShares
+    function burnExternalShares(uint256 _sharesAmount) external {
+        _burnShares(msg.sender, _sharesAmount);
     }
 
     // StETH::_getTotalShares
@@ -27,12 +39,12 @@ contract StETH__MockForDashboard is ERC20 {
 
     // StETH::getSharesByPooledEth
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
-        return (_ethAmount * _getTotalShares()) / totalPooledEther;
+        return (_ethAmount * _getTotalShares()) / _getTotalPooledEther();
     }
 
     // StETH::getPooledEthByShares
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
-        return (_sharesAmount * totalPooledEther) / _getTotalShares();
+        return (_sharesAmount * _getTotalPooledEther()) / _getTotalShares();
     }
 
     // Mock functions

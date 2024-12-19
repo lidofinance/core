@@ -317,11 +317,10 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Hook called by the staking vault during the report in the staking vault.
      * @param _valuation The new valuation of the vault.
-     * @param _inOutDelta The net inflow or outflow since the last report.
-     * @param _locked The amount of funds locked in the vault.
+     * @param - The net inflow or outflow since the last report.
+     * @param - The amount of funds locked in the vault.
      */
-    // solhint-disable-next-line no-unused-vars
-    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function onReport(uint256 _valuation, int256 /* _inOutDelta */, uint256 /* _locked */) external {
         if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;

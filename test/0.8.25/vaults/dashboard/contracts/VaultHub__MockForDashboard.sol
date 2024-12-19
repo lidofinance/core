@@ -5,13 +5,18 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
-import {StETH__MockForDashboard} from "./StETH__MockForDashboard.sol";
+
+contract IStETH {
+    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
+
+    function burnExternalShares(uint256 _amountOfShares) external {}
+}
 
 contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
-    StETH__MockForDashboard public immutable steth;
+    IStETH public immutable steth;
 
-    constructor(StETH__MockForDashboard _steth) {
+    constructor(IStETH _steth) {
         steth = _steth;
     }
 
@@ -36,14 +41,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultDisconnected(vault);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function mintStethBackedByVault(address vault, address recipient, uint256 amount) external {
-        steth.mint(recipient, amount);
+    function mintStethBackedByVault(address /* vault */, address recipient, uint256 amount) external {
+        steth.mintExternalShares(recipient, amount);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function burnStethBackedByVault(address vault, uint256 amount) external {
-        steth.burn(amount);
+    function burnStethBackedByVault(address /* vault */, uint256 amount) external {
+        steth.burnExternalShares(amount);
     }
 
     function rebalance() external payable {

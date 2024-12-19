@@ -17,7 +17,7 @@ import {
 } from "lib/protocol/helpers";
 import { ether } from "lib/units";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
 const PUBKEY_LENGTH = 48n;
@@ -79,6 +79,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   after(async () => await Snapshot.restore(snapshot));
+
+  beforeEach(bailOnFailure);
 
   async function calculateReportParams() {
     const { beaconBalance } = await ctx.contracts.lido.getBeaconStat();
@@ -145,7 +147,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
     const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
 
-    expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
+    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
 
@@ -269,7 +271,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(mintEvents[0].args.sender).to.equal(stakingVaultAddress);
     expect(mintEvents[0].args.tokens).to.equal(stakingVaultMintingMaximum);
 
-    const lockedEvents = ctx.getEvents(mintTxReceipt, "Locked", [stakingVault.interface]);
+    const lockedEvents = ctx.getEvents(mintTxReceipt, "LockedIncreased", [stakingVault.interface]);
     expect(lockedEvents.length).to.equal(1n);
     expect(lockedEvents[0].args?.locked).to.equal(VAULT_DEPOSIT);
 
@@ -304,7 +306,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
     expect(vaultReportedEvent.length).to.equal(1n);
 
-    expect(vaultReportedEvent[0].args?.vault).to.equal(stakingVaultAddress);
     expect(vaultReportedEvent[0].args?.valuation).to.equal(vaultValue);
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
