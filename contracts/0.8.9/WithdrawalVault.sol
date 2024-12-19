@@ -9,8 +9,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
-import {IWithdrawalCredentialsRequests} from "./interfaces/IWithdrawalCredentialsRequests.sol";
-import {WithdrawalCredentialsRequests} from "./lib/WithdrawalCredentialsRequests.sol";
+import {WithdrawalRequests} from "./lib/WithdrawalRequests.sol";
 
 interface ILido {
     /**
@@ -24,9 +23,8 @@ interface ILido {
 /**
  * @title A vault for temporary storage of withdrawals
  */
-contract WithdrawalVault is Versioned, IWithdrawalCredentialsRequests {
+contract WithdrawalVault is Versioned {
     using SafeERC20 for IERC20;
-    using WithdrawalCredentialsRequests for *;
 
     ILido public immutable LIDO;
     address public immutable TREASURY;
@@ -131,19 +129,23 @@ contract WithdrawalVault is Versioned, IWithdrawalCredentialsRequests {
         _token.transferFrom(address(this), TREASURY, _tokenId);
     }
 
-    function addWithdrawalRequests(
-        bytes[] calldata pubkeys,
-        uint64[] calldata amounts
+    /**
+     * @dev Adds full withdrawal requests for the provided public keys.
+     *      The validator will fully withdraw and exit its duties as a validator.
+     * @param pubkeys An array of public keys for the validators requesting full withdrawals.
+     */
+    function addFullWithdrawalRequests(
+        bytes[] calldata pubkeys
     ) external payable {
         if(msg.sender != address(VALIDATORS_EXIT_BUS)) {
             revert NotValidatorExitBus();
         }
 
-        WithdrawalCredentialsRequests.addWithdrawalRequests(pubkeys, amounts);
+        WithdrawalRequests.addFullWithdrawalRequests(pubkeys);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {
-        return WithdrawalCredentialsRequests.getWithdrawalRequestFee();
+        return WithdrawalRequests.getWithdrawalRequestFee();
     }
 
     function _assertNonZero(address _address) internal pure {

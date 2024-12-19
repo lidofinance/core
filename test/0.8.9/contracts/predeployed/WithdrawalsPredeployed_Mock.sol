@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.9;
 
+/**
+ * @notice This is an mock of EIP-7002's pre-deploy contract.
+ */
 contract WithdrawalsPredeployed_Mock {
-    event WithdrawalRequestedMetadata(
-       uint256 dataLength
-    );
-    event WithdrawalRequested(
-        bytes pubKey,
-        uint64 amount,
-        uint256 feePaid,
-        address sender
-    );
-
     uint256 public fee;
     bool public failOnAddRequest;
     bool public failOnGetFee;
@@ -33,9 +26,7 @@ contract WithdrawalsPredeployed_Mock {
         if (input.length == 0) {
             require(!failOnGetFee, "fail on get fee");
 
-            uint256 currentFee = fee;
-            output = new bytes(32);
-            assembly { mstore(add(output, 32), currentFee) }
+            output = abi.encode(fee);
             return output;
         }
 

@@ -19,8 +19,8 @@ import { Snapshot } from "test/suite";
 
 import {
   deployWithdrawalsPredeployedMock,
-  tesWithdrawalRequestsBehavior,
-} from "./lib/withdrawalCredentials/withdrawalRequests.behaviour";
+  testFullWithdrawalRequestBehavior,
+} from "./lib/withdrawalCredentials/withdrawalRequests.behavior";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -40,9 +40,6 @@ describe("WithdrawalVault.sol", () => {
   let impl: WithdrawalVault;
   let vault: WithdrawalVault;
   let vaultAddress: string;
-
-  const getWithdrawalCredentialsContract = () => vault.connect(validatorsExitBus);
-  const getWithdrawalsPredeployedContract = () => withdrawalsPredeployed.connect(user);
 
   before(async () => {
     [owner, user, treasury, validatorsExitBus] = await ethers.getSigners();
@@ -200,12 +197,15 @@ describe("WithdrawalVault.sol", () => {
 
   context("addWithdrawalRequests", () => {
     it("Reverts if the caller is not Validator Exit Bus", async () => {
-      await expect(vault.connect(user).addWithdrawalRequests(["0x1234"], [0n])).to.be.revertedWithCustomError(
+      await expect(vault.connect(user).addFullWithdrawalRequests(["0x1234"])).to.be.revertedWithCustomError(
         vault,
         "NotValidatorExitBus",
       );
     });
 
-    tesWithdrawalRequestsBehavior(getWithdrawalCredentialsContract, getWithdrawalsPredeployedContract);
+    testFullWithdrawalRequestBehavior(
+      () => vault.connect(validatorsExitBus),
+      () => withdrawalsPredeployed.connect(user),
+    );
   });
 });

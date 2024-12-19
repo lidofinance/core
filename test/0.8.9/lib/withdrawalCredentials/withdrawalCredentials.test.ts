@@ -6,7 +6,11 @@ import { WithdrawalCredentials_Harness, WithdrawalsPredeployed_Mock } from "type
 
 import { Snapshot } from "test/suite";
 
-import { deployWithdrawalsPredeployedMock, tesWithdrawalRequestsBehavior } from "./withdrawalRequests.behaviour";
+import {
+  deployWithdrawalsPredeployedMock,
+  testFullWithdrawalRequestBehavior,
+  testPartialWithdrawalRequestBehavior,
+} from "./withdrawalRequests.behavior";
 
 describe("WithdrawalCredentials.sol", () => {
   let actor: HardhatEthersSigner;
@@ -15,9 +19,6 @@ describe("WithdrawalCredentials.sol", () => {
   let withdrawalCredentials: WithdrawalCredentials_Harness;
 
   let originalState: string;
-
-  const getWithdrawalCredentialsContract = () => withdrawalCredentials.connect(actor);
-  const getWithdrawalsPredeployedContract = () => withdrawalsPredeployed.connect(actor);
 
   before(async () => {
     [actor] = await ethers.getSigners();
@@ -30,7 +31,13 @@ describe("WithdrawalCredentials.sol", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  context("max", () => {
-    tesWithdrawalRequestsBehavior(getWithdrawalCredentialsContract, getWithdrawalsPredeployedContract);
-  });
+  testFullWithdrawalRequestBehavior(
+    () => withdrawalCredentials.connect(actor),
+    () => withdrawalsPredeployed.connect(actor),
+  );
+
+  testPartialWithdrawalRequestBehavior(
+    () => withdrawalCredentials.connect(actor),
+    () => withdrawalsPredeployed.connect(actor),
+  );
 });
