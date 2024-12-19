@@ -117,13 +117,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Initializes `StakingVault` with an owner, operator, and optional parameters
      * @param _owner Address that will own the vault
      * @param _operator Address of the node operator
-     * @param _params Additional initialization parameters
+     * @param - Additional initialization parameters
      */
     function initialize(
         address _owner,
         address _operator,
-        // solhint-disable-next-line no-unused-vars
-        bytes calldata _params
+        bytes calldata /* _params */
     ) external onlyBeacon initializer {
         __Ownable_init(_owner);
         _getStorage().operator = _operator;

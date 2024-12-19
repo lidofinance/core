@@ -41,13 +41,11 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultDisconnected(vault);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function mintStethBackedByVault(address vault, address recipient, uint256 amount) external {
+    function mintStethBackedByVault(address /* vault */, address recipient, uint256 amount) external {
         steth.mintExternalShares(recipient, amount);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function burnStethBackedByVault(address vault, uint256 amount) external {
+    function burnStethBackedByVault(address /* vault */, uint256 amount) external {
         steth.burnExternalShares(amount);
     }
 

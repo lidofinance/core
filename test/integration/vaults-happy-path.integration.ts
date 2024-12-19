@@ -145,7 +145,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
     const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
 
-    expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
+    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
 
