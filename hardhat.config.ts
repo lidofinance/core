@@ -27,6 +27,8 @@ const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
 
 const INTEGRATION_WITH_SCRATCH_DEPLOY = process.env.INTEGRATION_WITH_SCRATCH_DEPLOY || "off";
 
+export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 /* Determines the forking configuration for Hardhat */
 function getHardhatForkingConfig() {
   if (INTEGRATION_WITH_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL) {
@@ -54,6 +56,10 @@ const config: HardhatUserConfig = {
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
+    "local-devnet": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
+    },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
@@ -80,7 +86,19 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
+    ],
+    apiKey: {
+      "local-devnet": "local-devnet",
+    },
   },
   solidity: {
     compilers: [
