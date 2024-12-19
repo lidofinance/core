@@ -14,6 +14,8 @@ import {
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   VaultFactory,
+  WETH9__MockForVault,
+  WstETH__HarnessForVault,
 } from "typechain-types";
 
 import { certainAddress, createVaultProxy, ether } from "lib";
@@ -40,6 +42,8 @@ describe("VaultFactory.sol", () => {
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
+  let weth: WETH9__MockForVault;
+  let wsteth: WstETH__HarnessForVault;
 
   let locator: LidoLocator;
 
@@ -55,6 +59,8 @@ describe("VaultFactory.sol", () => {
       value: ether("10.0"),
       from: deployer,
     });
+    weth = await ethers.deployContract("WETH9__MockForVault");
+    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
@@ -67,7 +73,7 @@ describe("VaultFactory.sol", () => {
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
-    delegation = await ethers.deployContract("Delegation", [steth], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth, accounting], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub

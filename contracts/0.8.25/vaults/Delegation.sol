@@ -98,8 +98,11 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Constructor sets the stETH token address.
      * @param _stETH Address of the stETH token contract.
+     * @param _weth Address of the weth token contract.
+     * @param _wstETH Address of the wstETH token contract.
+     * @param _vaultHub Address of the vault hub contract.
      */
-    constructor(address _stETH) Dashboard(_stETH) {}
+    constructor(address _stETH, address _weth, address _wstETH, address _vaultHub) Dashboard(_stETH, _weth, _wstETH) {}
 
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.
@@ -314,11 +317,10 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Hook called by the staking vault during the report in the staking vault.
      * @param _valuation The new valuation of the vault.
-     * @param _inOutDelta The net inflow or outflow since the last report.
-     * @param _locked The amount of funds locked in the vault.
+     * @param - The net inflow or outflow since the last report.
+     * @param - The amount of funds locked in the vault.
      */
-    // solhint-disable-next-line no-unused-vars
-    function onReport(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function onReport(uint256 _valuation, int256 /* _inOutDelta */, uint256 /* _locked */) external {
         if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
         managementDue += (_valuation * managementFee) / 365 / BP_BASE;
