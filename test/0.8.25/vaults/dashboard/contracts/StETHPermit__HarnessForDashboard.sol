@@ -14,6 +14,10 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
         _resume();
     }
 
+    function initializeEIP712StETH(address _eip712StETH) external {
+        _initializeEIP712StETH(_eip712StETH);
+    }
+
     function _getTotalPooledEther() internal view returns (uint256) {
         return totalPooledEther;
     }

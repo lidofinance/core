@@ -309,7 +309,6 @@ contract Dashboard is AccessControlEnumerable {
      */
     function burnWstETH(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         wstETH.transferFrom(msg.sender, address(this), _tokens);
-        stETH.approve(address(wstETH), _tokens);
 
         uint256 stETHAmount = wstETH.unwrap(_tokens);
 
