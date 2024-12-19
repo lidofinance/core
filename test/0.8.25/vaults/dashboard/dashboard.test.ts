@@ -43,7 +43,7 @@ describe("Dashboard", () => {
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
-    expect(await vaultImpl.VAULT_HUB()).to.equal(hub);
+    expect(await vaultImpl.vaultHub()).to.equal(hub);
     dashboardImpl = await ethers.deployContract("Dashboard", [steth]);
     expect(await dashboardImpl.stETH()).to.equal(steth);
 

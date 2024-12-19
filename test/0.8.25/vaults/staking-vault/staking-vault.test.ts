@@ -77,7 +77,7 @@ describe("StakingVault", () => {
 
   context("constructor", () => {
     it("sets the vault hub address in the implementation", async () => {
-      expect(await stakingVaultImplementation.VAULT_HUB()).to.equal(vaultHubAddress);
+      expect(await stakingVaultImplementation.vaultHub()).to.equal(vaultHubAddress);
     });
 
     it("sets the deposit contract address in the implementation", async () => {
@@ -119,7 +119,6 @@ describe("StakingVault", () => {
     it("returns the correct initial state and constants", async () => {
       expect(await stakingVault.version()).to.equal(1n);
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
-      expect(await stakingVault.VAULT_HUB()).to.equal(vaultHubAddress);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
       expect(await stakingVault.getBeacon()).to.equal(vaultFactoryAddress);
@@ -354,7 +353,7 @@ describe("StakingVault", () => {
 
     it("updates the locked amount and emits the Locked event", async () => {
       await expect(stakingVault.connect(vaultHubSigner).lock(ether("1")))
-        .to.emit(stakingVault, "Locked")
+        .to.emit(stakingVault, "LockedIncreased")
         .withArgs(ether("1"));
       expect(await stakingVault.locked()).to.equal(ether("1"));
     });
@@ -369,13 +368,13 @@ describe("StakingVault", () => {
     it("does not revert if the new locked amount is equal to the current locked amount", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
       await expect(stakingVault.connect(vaultHubSigner).lock(ether("2")))
-        .to.emit(stakingVault, "Locked")
+        .to.emit(stakingVault, "LockedIncreased")
         .withArgs(ether("2"));
     });
 
     it("does not revert if the locked amount is max uint128", async () => {
       await expect(stakingVault.connect(vaultHubSigner).lock(MAX_UINT128))
-        .to.emit(stakingVault, "Locked")
+        .to.emit(stakingVault, "LockedIncreased")
         .withArgs(MAX_UINT128);
     });
   });
@@ -482,7 +481,7 @@ describe("StakingVault", () => {
       await ownerReportReceiver.setReportShouldRevert(false);
       await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "Reported")
-        .withArgs(stakingVaultAddress, ether("1"), ether("2"), ether("3"))
+        .withArgs(ether("1"), ether("2"), ether("3"))
         .and.to.emit(ownerReportReceiver, "Mock__ReportReceived")
         .withArgs(ether("1"), ether("2"), ether("3"));
     });
@@ -490,7 +489,7 @@ describe("StakingVault", () => {
     it("updates the state and emits the Reported event", async () => {
       await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "Reported")
-        .withArgs(stakingVaultAddress, ether("1"), ether("2"), ether("3"));
+        .withArgs(ether("1"), ether("2"), ether("3"));
       expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
     });
