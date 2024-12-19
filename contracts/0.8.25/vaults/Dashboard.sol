@@ -11,6 +11,7 @@ import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extension
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {VaultHelpers} from "./VaultHelpers.sol";
 
 /// @notice Interface defining a Lido liquid staking pool
 /// @dev see also [Lido liquid staking pool core contract](https://docs.lido.fi/contracts/lido)
@@ -40,9 +41,6 @@ interface IWstETH is IERC20, IERC20Permit {
  * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
 contract Dashboard is AccessControlEnumerable {
-    /// @dev basis points base
-    uint256 internal constant BPS_BASE = 100_00;
-
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;
@@ -492,11 +490,10 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 reserveRatioValue = vaultSocket().reserveRatio;
-
-        uint256 maxStETHMinted = (_valuation * (BPS_BASE - reserveRatioValue)) / BPS_BASE;
-
-        return Math256.min(stETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
+        return Math256.min(
+            VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatio, address(stETH)),
+            vaultSocket().shareLimit
+        );
     }
 
     /**
