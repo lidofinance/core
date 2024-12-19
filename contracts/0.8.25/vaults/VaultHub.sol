@@ -10,6 +10,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as StETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+import {VaultHelpers} from "./VaultHelpers.sol";
 
 // TODO: rebalance gas compensation
 // TODO: unstructured storag and upgradability
@@ -229,7 +230,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 vaultSharesAfterMint = socket.sharesMinted + sharesToMint;
         if (vaultSharesAfterMint > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
 
-        uint256 maxMintableShares = _maxMintableShares(socket.vault, socket.reserveRatio);
+        uint256 maxMintableShares = VaultHelpers.getMaxMintableShares(socket.vault.valuation(), socket.reserveRatio, address(stETH));
 
         if (vaultSharesAfterMint > maxMintableShares) {
             revert InsufficientValuationToMint(address(vault_), vault_.valuation());
@@ -290,7 +291,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (index == 0) revert NotConnectedToHub(msg.sender);
         VaultSocket memory socket = $.sockets[index];
 
-        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThreshold);
+        uint256 threshold = VaultHelpers.getMaxMintableShares(_vault.valuation(), socket.reserveRatioThreshold, address(stETH));
         if (socket.sharesMinted <= threshold) {
             revert AlreadyBalanced(address(_vault), socket.sharesMinted, threshold);
         }
@@ -443,13 +444,6 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (totalTreasuryShares > 0) {
             stETH.mintExternalShares(treasury, totalTreasuryShares);
         }
-    }
-
-    /// @dev returns total number of stETH shares that is possible to mint on the provided vault with provided reserveRatio
-    /// it does not count shares that is already minted
-    function _maxMintableShares(IHubVault _vault, uint256 _reserveRatio) internal view returns (uint256) {
-        uint256 maxStETHMinted = (_vault.valuation() * (BPS_BASE - _reserveRatio)) / BPS_BASE;
-        return stETH.getSharesByPooledEth(maxStETHMinted);
     }
 
     function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
