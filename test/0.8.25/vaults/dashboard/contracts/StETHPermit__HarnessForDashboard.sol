@@ -10,30 +10,20 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
     uint256 public totalShares;
     mapping(address => uint256) private shares;
 
-    constructor(address _holder) public payable {
+    constructor() public {
         _resume();
-        uint256 balance = address(this).balance;
-        assert(balance != 0);
-
-        setTotalPooledEther(balance);
-        _mintShares(_holder, balance);
     }
 
     function _getTotalPooledEther() internal view returns (uint256) {
         return totalPooledEther;
     }
 
-    function setTotalPooledEther(uint256 _totalPooledEther) public {
-        totalPooledEther = _totalPooledEther;
-    }
-
     // Lido::mintShares
     function mintExternalShares(address _recipient, uint256 _sharesAmount) external {
         _mintShares(_recipient, _sharesAmount);
 
-        uint256 _tokenAmount = getPooledEthByShares(_sharesAmount);
-
-        emit Transfer(address(0), _recipient, _tokenAmount);
+        // StETH::_emitTransferEvents
+        emit Transfer(address(0), _recipient, getPooledEthByShares(_sharesAmount));
         emit TransferShares(address(0), _recipient, _sharesAmount);
     }
 
@@ -49,12 +39,12 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
 
     // StETH::getSharesByPooledEth
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
-        return (_ethAmount * _getTotalShares()) / totalPooledEther;
+        return (_ethAmount * _getTotalShares()) / _getTotalPooledEther();
     }
 
     // StETH::getPooledEthByShares
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
-        return (_sharesAmount * totalPooledEther) / _getTotalShares();
+        return (_sharesAmount * _getTotalPooledEther()) / _getTotalShares();
     }
 
     // Mock functions
