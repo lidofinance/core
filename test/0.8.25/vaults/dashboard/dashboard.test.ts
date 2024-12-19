@@ -4,7 +4,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -17,7 +17,7 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { certainAddress, ether, findEvents } from "lib";
+import { certainAddress, days, ether, findEvents, signPermit, stethDomain } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -674,8 +674,11 @@ describe("Dashboard", () => {
       // wrap steth to wsteth to get the amount of wsteth for the burn
       await wsteth.connect(vaultOwner).wrap(amount);
 
+      // user flow
+
       const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
       const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      // approve wsteth to dashboard contract
       await wsteth.connect(vaultOwner).approve(dashboard, amount);
 
       const result = await dashboard.burnWstETH(amount);
@@ -691,6 +694,46 @@ describe("Dashboard", () => {
 
       expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amount);
+    });
+  });
+
+  context("burnWithPermit", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      await steth.mock__setTotalPooledEther(ether("1000"));
+      await steth.mock__setTotalShares(ether("1000"));
+
+      // mint steth to the vault owner for the burn
+      await dashboard.mint(vaultOwner, amount + amount);
+    });
+
+    beforeEach(async () => {
+      const eip712helper = await ethers.deployContract("EIP712StETH", [steth]);
+      await steth.initializeEIP712StETH(eip712helper);
+    });
+
+    it("burns stETH with permit", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: amount,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(7n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { owner, spender, deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await dashboard.burnWithPermit(amount, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+      expect(await steth.balanceOf(vaultOwner)).to.equal(0);
     });
   });
 
