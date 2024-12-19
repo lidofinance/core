@@ -4,6 +4,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -368,7 +369,7 @@ describe("Dashboard", () => {
   });
 
   context("canWithdraw", () => {
-    it("returns the correct can withdraw ether", async () => {
+    it("returns the trivial amount can withdraw ether", async () => {
       const canWithdraw = await dashboard.canWithdraw();
       expect(canWithdraw).to.equal(0n);
     });
@@ -382,15 +383,52 @@ describe("Dashboard", () => {
       expect(canWithdraw).to.equal(amount);
     });
 
-    it("funds and returns the correct can withdraw ether minus locked amount", async () => {
+    it("funds and recieves external but and can only withdraw unlocked", async () => {
       const amount = ether("1");
-
       await dashboard.fund({ value: amount });
-
-      // TODO: add tests
+      await vaultOwner.sendTransaction({ to: vault.getAddress(), value: amount });
+      expect(await dashboard.canWithdraw()).to.equal(amount);
     });
 
-    // TODO: add more tests when the vault params are changed
+    it("funds and get all ether locked and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount);
+
+      expect(await dashboard.canWithdraw()).to.equal(0n);
+    });
+
+    it("funds and get all ether locked and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount);
+
+      expect(await dashboard.canWithdraw()).to.equal(0n);
+    });
+
+    it("funds and get all half locked and can only half withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+
+      expect(await dashboard.canWithdraw()).to.equal(amount / 2n);
+    });
+
+    it("funds and get all half locked, but no balance and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+
+      await setBalance(await vault.getAddress(), 0n);
+
+      expect(await dashboard.canWithdraw()).to.equal(0n);
+    });
+
+    // TODO: add more tests when the vault params are change
   });
 
   context("transferStVaultOwnership", () => {

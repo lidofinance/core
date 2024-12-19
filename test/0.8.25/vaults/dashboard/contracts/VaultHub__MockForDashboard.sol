@@ -3,10 +3,12 @@
 
 pragma solidity 0.8.25;
 
-import { VaultHub } from "contracts/0.8.25/vaults/VaultHub.sol";
-import { StETH__MockForDashboard } from "./StETH__MockForDashboard.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {StETH__MockForDashboard} from "./StETH__MockForDashboard.sol";
 
 contract VaultHub__MockForDashboard {
+    uint256 internal constant BPS_BASE = 100_00;
     StETH__MockForDashboard public immutable steth;
 
     constructor(StETH__MockForDashboard _steth) {
@@ -20,6 +22,10 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultSocket(address vault, VaultHub.VaultSocket memory socket) external {
         vaultSockets[vault] = socket;
+    }
+
+    function mock_vaultLock(address vault, uint256 amount) external {
+        IStakingVault(vault).lock(amount);
     }
 
     function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
@@ -44,4 +50,3 @@ contract VaultHub__MockForDashboard {
         emit Mock__Rebalanced(msg.value);
     }
 }
-
