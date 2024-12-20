@@ -4,21 +4,22 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {VaultHub} from "./VaultHub.sol";
+
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {VaultHelpers} from "./VaultHelpers.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
+
 import {VaultHub} from "./VaultHub.sol";
-import {ILido as StETH} from "../interfaces/ILido.sol";
+import {VaultHelpers} from "./VaultHelpers.sol";
+
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILido} from "../interfaces/ILido.sol";
 
 /// @notice Interface defining a Lido liquid staking pool
 /// @dev see also [Lido liquid staking pool core contract](https://docs.lido.fi/contracts/lido)
-interface IStETH is IERC20, IERC20Permit {
+interface StETH is ILido, IERC20, IERC20Permit {
     function getSharesByPooledEth(uint256 _ethAmount) external view returns (uint256);
 }
 

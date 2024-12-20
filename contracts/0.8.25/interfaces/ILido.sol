@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
-
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-interface ILido is IERC20 {
+interface ILido {
     function getSharesByPooledEth(uint256) external view returns (uint256);
 
     function getPooledEthByShares(uint256) external view returns (uint256);
