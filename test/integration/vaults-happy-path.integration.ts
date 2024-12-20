@@ -32,12 +32,11 @@ const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 const ONE_YEAR = 365n * ONE_DAY;
 const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
-const MAX_BASIS_POINTS = 100_00n; // 100%
+const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
-const VAULT_OWNER_FEE = 1_00n; // 1% owner fee
+const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
-// based on https://hackmd.io/9D40wO_USaCH7gWOpDe08Q
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
@@ -51,7 +50,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
   const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
-  const vault101LTV = MAX_BASIS_POINTS - reserveRatio; // 90% LTV
+  const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let vault101: StakingVault;
   let vault101Address: string;
@@ -85,9 +84,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     log.debug("Report time elapsed", { timeElapsed });
 
-    const gross = (TARGET_APR * MAX_BASIS_POINTS) / (MAX_BASIS_POINTS - PROTOCOL_FEE); // take into account 10% Lido fee
-    const elapsedProtocolReward = (beaconBalance * gross * timeElapsed) / MAX_BASIS_POINTS / ONE_YEAR;
-    const elapsedVaultReward = (VAULT_DEPOSIT * gross * timeElapsed) / MAX_BASIS_POINTS / ONE_YEAR;
+    const gross = (TARGET_APR * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - PROTOCOL_FEE); // take into account 10% Lido fee
+    const elapsedProtocolReward = (beaconBalance * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
+    const elapsedVaultReward = (VAULT_DEPOSIT * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
 
     log.debug("Report values", {
       "Elapsed rewards": elapsedProtocolReward,
@@ -146,7 +145,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
+    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
@@ -185,7 +184,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), bob)).to.be.false;
   });
 
-  it("Should allow Alice to assign staker and plumber roles", async () => {
+  it("Should allow Alice to assign staker and TOKEN_MASTER_ROLE roles", async () => {
     await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.STAKER_ROLE(), alice);
     await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario);
 
@@ -193,7 +192,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario)).to.be.true;
   });
 
-  it("Should allow Bob to assign the keymaster role", async () => {
+  it("Should allow Bob to assign the KEY_MASTER_ROLE role", async () => {
     await vault101AdminContract.connect(bob).grantRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob);
 
     expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob)).to.be.true;
@@ -202,11 +201,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, accounting } = ctx.contracts;
 
-    // only equivalent of 10.0% of total eth can be minted as stETH on the vaults
     const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalBalanceBP(10_00n);
+    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 
-    // TODO: make cap and reserveRatio reflect the real values
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
     const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
 
     const agentSigner = await ctx.getSigner("agent");
@@ -248,15 +246,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Mario to mint max stETH", async () => {
-    const { accounting } = ctx.contracts;
+    const { accounting, lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
-    vault101MintingMaximum = (VAULT_DEPOSIT * vault101LTV) / MAX_BASIS_POINTS;
+    vault101MintingMaximum = await lido.getSharesByPooledEth((VAULT_DEPOSIT * mintableRatio) / TOTAL_BASIS_POINTS);
 
     log.debug("Vault 101", {
       "Vault 101 Address": vault101Address,
       "Total ETH": await vault101.valuation(),
-      "Max stETH": vault101MintingMaximum,
+      "Max shares": vault101MintingMaximum,
     });
 
     // Validate minting with the cap
@@ -268,10 +266,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const mintTx = await vault101AdminContract.connect(mario).mint(mario, vault101MintingMaximum);
     const mintTxReceipt = await trace<ContractTransactionReceipt>("vaultAdminContract.mint", mintTx);
 
-    const mintEvents = ctx.getEvents(mintTxReceipt, "MintedStETHOnVault");
+    const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
     expect(mintEvents.length).to.equal(1n);
-    expect(mintEvents[0].args.sender).to.equal(vault101Address);
-    expect(mintEvents[0].args.tokens).to.equal(vault101MintingMaximum);
+    expect(mintEvents[0].args.vault).to.equal(vault101Address);
+    expect(mintEvents[0].args.amountOfShares).to.equal(vault101MintingMaximum);
 
     const lockedEvents = ctx.getEvents(mintTxReceipt, "Locked", [vault101.interface]);
     expect(lockedEvents.length).to.equal(1n);
@@ -407,7 +405,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { lido } = ctx.contracts;
 
     // Mario can approve the vault to burn the shares
-    const approveVaultTx = await lido.connect(mario).approve(vault101AdminContract, vault101MintingMaximum);
+    const approveVaultTx = await lido
+      .connect(mario)
+      .approve(vault101AdminContract, await lido.getPooledEthByShares(vault101MintingMaximum));
     await trace("lido.approve", approveVaultTx);
 
     const burnTx = await vault101AdminContract.connect(mario).burn(vault101MintingMaximum);
@@ -439,18 +439,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { accounting, lido } = ctx.contracts;
 
     const socket = await accounting["vaultSocket(address)"](vault101Address);
-    const sharesMinted = (await lido.getPooledEthByShares(socket.sharesMinted)) + 1n; // +1 to avoid rounding errors
+    const stETHMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    const rebalanceTx = await vault101AdminContract
-      .connect(alice)
-      .rebalanceVault(sharesMinted, { value: sharesMinted });
+    const rebalanceTx = await vault101AdminContract.connect(alice).rebalanceVault(stETHMinted, { value: stETHMinted });
 
     await trace("vault.rebalance", rebalanceTx);
   });
 
   it("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
-    const disconnectTx = await vault101AdminContract.connect(alice).disconnectFromVaultHub();
-    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.disconnectFromHub", disconnectTx);
+    const disconnectTx = await vault101AdminContract.connect(alice).voluntaryDisconnect();
+    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.voluntaryDisconnect", disconnectTx);
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
 
