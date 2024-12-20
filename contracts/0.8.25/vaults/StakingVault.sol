@@ -5,12 +5,14 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
+import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
+
 import {VaultHub} from "./VaultHub.sol";
 import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
+
+import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 /**
  * @title StakingVault
@@ -395,6 +397,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
             codeSize := extcodesize(_owner)
         }
 
+        // only call hook if owner is a contract
         if (codeSize > 0) {
             try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
             catch (bytes memory reason) {

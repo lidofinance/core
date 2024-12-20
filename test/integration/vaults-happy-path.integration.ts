@@ -17,7 +17,7 @@ import {
 } from "lib/protocol/helpers";
 import { ether } from "lib/units";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
 const PUBKEY_LENGTH = 48n;
@@ -32,33 +32,31 @@ const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 const ONE_YEAR = 365n * ONE_DAY;
 const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
-const MAX_BASIS_POINTS = 100_00n; // 100%
+const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
-const VAULT_OWNER_FEE = 1_00n; // 1% owner fee
+const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
-// based on https://hackmd.io/9D40wO_USaCH7gWOpDe08Q
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
-  let owner: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
-  let manager: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
+  let alice: HardhatEthersSigner;
+  let bob: HardhatEthersSigner;
+  let mario: HardhatEthersSigner;
+  let lidoAgent: HardhatEthersSigner;
 
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
   const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
-  const vault101LTV = MAX_BASIS_POINTS - reserveRatio; // 90% LTV
+  const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
-  let delegation: Delegation;
-  let stakingVault: StakingVault;
-  let stakingVaultAddress: string;
-  let stakingVaultBeaconBalance = 0n;
-  let stakingVaultMintingMaximum = 0n;
+  let vault101: StakingVault;
+  let vault101Address: string;
+  let vault101AdminContract: Delegation;
+  let vault101BeaconBalance = 0n;
+  let vault101MintingMaximum = 0n;
 
   const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
@@ -70,7 +68,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, operator, manager, staker, tokenMaster] = await ethers.getSigners();
+    [ethHolder, alice, bob, mario, lidoAgent] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -80,17 +78,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  beforeEach(bailOnFailure);
-
   async function calculateReportParams() {
     const { beaconBalance } = await ctx.contracts.lido.getBeaconStat();
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
     log.debug("Report time elapsed", { timeElapsed });
 
-    const gross = (TARGET_APR * MAX_BASIS_POINTS) / (MAX_BASIS_POINTS - PROTOCOL_FEE); // take into account 10% Lido fee
-    const elapsedProtocolReward = (beaconBalance * gross * timeElapsed) / MAX_BASIS_POINTS / ONE_YEAR;
-    const elapsedVaultReward = (VAULT_DEPOSIT * gross * timeElapsed) / MAX_BASIS_POINTS / ONE_YEAR;
+    const gross = (TARGET_APR * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - PROTOCOL_FEE); // take into account 10% Lido fee
+    const elapsedProtocolReward = (beaconBalance * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
+    const elapsedVaultReward = (VAULT_DEPOSIT * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
 
     log.debug("Report values", {
       "Elapsed rewards": elapsedProtocolReward,
@@ -101,15 +97,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   }
 
   async function addRewards(rewards: bigint) {
-    if (!stakingVaultAddress || !stakingVault) {
-      throw new Error("Staking Vault is not initialized");
+    if (!vault101Address || !vault101) {
+      throw new Error("Vault 101 is not initialized");
     }
 
-    const vault101Balance = (await ethers.provider.getBalance(stakingVaultAddress)) + rewards;
-    await updateBalance(stakingVaultAddress, vault101Balance);
+    const vault101Balance = (await ethers.provider.getBalance(vault101Address)) + rewards;
+    await updateBalance(vault101Address, vault101Balance);
 
     // Use beacon balance to calculate the vault value
-    return vault101Balance + stakingVaultBeaconBalance;
+    return vault101Balance + vault101BeaconBalance;
   }
 
   it("Should have at least 10 deposited node operators in NOR", async () => {
@@ -147,25 +143,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
     const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
 
-    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
+    expect(await vaultImpl.VAULT_HUB()).to.equal(ctx.contracts.accounting.address);
     expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.stETH()).to.equal(ctx.contracts.lido.address);
+    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
 
-  it("Should allow Owner to create vaults and assign Operator as node operator", async () => {
+  it("Should allow Alice to create vaults and assign Bob as node operator", async () => {
     const { stakingVaultFactory } = ctx.contracts;
 
-    // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVault(
+    // Alice can create a vault with Bob as a node operator
+    const deployTx = await stakingVaultFactory.connect(alice).createVault(
+      "0x",
       {
         managementFee: VAULT_OWNER_FEE,
         performanceFee: VAULT_NODE_OPERATOR_FEE,
-        manager: manager,
-        operator: operator,
+        manager: alice,
+        operator: bob,
       },
-      "0x",
+      lidoAgent,
     );
 
     const createVaultTxReceipt = await trace<ContractTransactionReceipt>("vaultsFactory.createVault", deployTx);
@@ -173,113 +170,116 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(createVaultEvents.length).to.equal(1n);
 
-    stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
-    delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    vault101 = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
+    vault101AdminContract = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
 
-    expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), owner)).to.be.true;
-    expect(await delegation.hasRole(await delegation.MANAGER_ROLE(), manager)).to.be.true;
-    expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.DEFAULT_ADMIN_ROLE(), alice)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.MANAGER_ROLE(), alice)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.OPERATOR_ROLE(), bob)).to.be.true;
 
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), owner)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), operator)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), staker)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), alice)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob)).to.be.false;
 
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), tokenMaster)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), manager)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), owner)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), alice)).to.be.false;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), bob)).to.be.false;
   });
 
-  it("Should allow Owner to assign Staker and Token Master roles", async () => {
-    await delegation.connect(owner).grantRole(await delegation.STAKER_ROLE(), staker);
-    await delegation.connect(owner).grantRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster);
+  it("Should allow Alice to assign staker and TOKEN_MASTER_ROLE roles", async () => {
+    await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.STAKER_ROLE(), alice);
+    await vault101AdminContract.connect(alice).grantRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario);
 
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario)).to.be.true;
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.TOKEN_MASTER_ROLE(), mario)).to.be.true;
+  });
+
+  it("Should allow Bob to assign the KEY_MASTER_ROLE role", async () => {
+    await vault101AdminContract.connect(bob).grantRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob);
+
+    expect(await vault101AdminContract.hasRole(await vault101AdminContract.KEY_MASTER_ROLE(), bob)).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, accounting } = ctx.contracts;
 
-    // only equivalent of 10.0% of total eth can be minted as stETH on the vaults
     const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalBalanceBP(10_00n);
+    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 
-    // TODO: make cap and reserveRatio reflect the real values
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
     const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
 
     const agentSigner = await ctx.getSigner("agent");
 
     await accounting
       .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFeeBP);
+      .connectVault(vault101, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFeeBP);
 
     expect(await accounting.vaultsCount()).to.equal(1n);
   });
 
-  it("Should allow Staker to fund vault via delegation contract", async () => {
-    const depositTx = await delegation.connect(staker).fund({ value: VAULT_DEPOSIT });
-    await trace("delegation.fund", depositTx);
+  it("Should allow Alice to fund vault via admin contract", async () => {
+    const depositTx = await vault101AdminContract.connect(alice).fund({ value: VAULT_DEPOSIT });
+    await trace("vaultAdminContract.fund", depositTx);
 
-    const vaultBalance = await ethers.provider.getBalance(stakingVault);
+    const vaultBalance = await ethers.provider.getBalance(vault101);
 
     expect(vaultBalance).to.equal(VAULT_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
+    expect(await vault101.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow Operator to deposit validators from the vault", async () => {
+  it("Should allow Bob to deposit validators from the vault", async () => {
     const keysToAdd = VALIDATORS_PER_VAULT;
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault.connect(operator).depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const topUpTx = await vault101AdminContract
+      .connect(bob)
+      .depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
 
-    await trace("stakingVault.depositToBeaconChain", topUpTx);
+    await trace("vaultAdminContract.depositToBeaconChain", topUpTx);
 
-    stakingVaultBeaconBalance += VAULT_DEPOSIT;
-    stakingVaultAddress = await stakingVault.getAddress();
+    vault101BeaconBalance += VAULT_DEPOSIT;
+    vault101Address = await vault101.getAddress();
 
-    const vaultBalance = await ethers.provider.getBalance(stakingVault);
+    const vaultBalance = await ethers.provider.getBalance(vault101);
     expect(vaultBalance).to.equal(0n);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
+    expect(await vault101.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow Token Master to mint max stETH", async () => {
-    const { accounting } = ctx.contracts;
+  it("Should allow Mario to mint max stETH", async () => {
+    const { accounting, lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
-    stakingVaultMintingMaximum = (VAULT_DEPOSIT * vault101LTV) / MAX_BASIS_POINTS;
+    vault101MintingMaximum = await lido.getSharesByPooledEth((VAULT_DEPOSIT * mintableRatio) / TOTAL_BASIS_POINTS);
 
-    log.debug("Staking Vault", {
-      "Staking Vault Address": stakingVaultAddress,
-      "Total ETH": await stakingVault.valuation(),
-      "Max stETH": stakingVaultMintingMaximum,
+    log.debug("Vault 101", {
+      "Vault 101 Address": vault101Address,
+      "Total ETH": await vault101.valuation(),
+      "Max shares": vault101MintingMaximum,
     });
 
     // Validate minting with the cap
-    const mintOverLimitTx = delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMintingMaximum + 1n);
+    const mintOverLimitTx = vault101AdminContract.connect(mario).mint(mario, vault101MintingMaximum + 1n);
     await expect(mintOverLimitTx)
       .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
-      .withArgs(stakingVault, stakingVault.valuation());
+      .withArgs(vault101, vault101.valuation());
 
-    const mintTx = await delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMintingMaximum);
-    const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
+    const mintTx = await vault101AdminContract.connect(mario).mint(mario, vault101MintingMaximum);
+    const mintTxReceipt = await trace<ContractTransactionReceipt>("vaultAdminContract.mint", mintTx);
 
-    const mintEvents = ctx.getEvents(mintTxReceipt, "MintedStETHOnVault");
+    const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
     expect(mintEvents.length).to.equal(1n);
-    expect(mintEvents[0].args.sender).to.equal(stakingVaultAddress);
-    expect(mintEvents[0].args.tokens).to.equal(stakingVaultMintingMaximum);
+    expect(mintEvents[0].args.vault).to.equal(vault101Address);
+    expect(mintEvents[0].args.amountOfShares).to.equal(vault101MintingMaximum);
 
-    const lockedEvents = ctx.getEvents(mintTxReceipt, "LockedIncreased", [stakingVault.interface]);
+    const lockedEvents = ctx.getEvents(mintTxReceipt, "Locked", [vault101.interface]);
     expect(lockedEvents.length).to.equal(1n);
     expect(lockedEvents[0].args?.locked).to.equal(VAULT_DEPOSIT);
 
-    expect(await stakingVault.locked()).to.equal(VAULT_DEPOSIT);
+    expect(await vault101.locked()).to.equal(VAULT_DEPOSIT);
 
-    log.debug("Staking Vault", {
-      "Staking Vault Minted": stakingVaultMintingMaximum,
-      "Staking Vault Locked": VAULT_DEPOSIT,
+    log.debug("Vault 101", {
+      "Vault 101 Minted": vault101MintingMaximum,
+      "Vault 101 Locked": VAULT_DEPOSIT,
     });
   });
 
@@ -300,67 +300,66 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     };
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 
-    const errorReportingEvent = ctx.getEvents(reportTxReceipt, "OnReportFailed", [stakingVault.interface]);
+    const errorReportingEvent = ctx.getEvents(reportTxReceipt, "OnReportFailed", [vault101.interface]);
     expect(errorReportingEvent.length).to.equal(0n);
 
-    const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
+    const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [vault101.interface]);
     expect(vaultReportedEvent.length).to.equal(1n);
 
+    expect(vaultReportedEvent[0].args?.vault).to.equal(vault101Address);
     expect(vaultReportedEvent[0].args?.valuation).to.equal(vaultValue);
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
 
-    expect(await delegation.managementDue()).to.be.gt(0n);
-    expect(await delegation.performanceDue()).to.be.gt(0n);
+    expect(await vault101AdminContract.managementDue()).to.be.gt(0n);
+    expect(await vault101AdminContract.performanceDue()).to.be.gt(0n);
   });
 
-  it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await delegation.performanceDue();
-    log.debug("Staking Vault stats", {
-      "Staking Vault performance fee": ethers.formatEther(performanceFee),
+  it("Should allow Bob to withdraw node operator fees", async () => {
+    const nodeOperatorFee = await vault101AdminContract.performanceDue();
+    log.debug("Vault 101 stats", {
+      "Vault 101 node operator fee": ethers.formatEther(nodeOperatorFee),
     });
 
-    const operatorBalanceBefore = await ethers.provider.getBalance(operator);
+    const bobBalanceBefore = await ethers.provider.getBalance(bob);
 
-    const claimPerformanceFeesTx = await delegation.connect(operator).claimPerformanceDue(operator, false);
-    const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimPerformanceDue",
-      claimPerformanceFeesTx,
-    );
+    const claimNOFeesTx = await vault101AdminContract.connect(bob).claimPerformanceDue(bob, false);
+    const claimNOFeesTxReceipt = await trace<ContractTransactionReceipt>("vault.claimNodeOperatorFee", claimNOFeesTx);
 
-    const operatorBalanceAfter = await ethers.provider.getBalance(operator);
-    const gasFee = claimPerformanceFeesTxReceipt.gasPrice * claimPerformanceFeesTxReceipt.cumulativeGasUsed;
+    const bobBalanceAfter = await ethers.provider.getBalance(bob);
 
-    log.debug("Operator's StETH balance", {
-      "Balance before": ethers.formatEther(operatorBalanceBefore),
-      "Balance after": ethers.formatEther(operatorBalanceAfter),
-      "Gas used": claimPerformanceFeesTxReceipt.cumulativeGasUsed,
+    const gasFee = claimNOFeesTxReceipt.gasPrice * claimNOFeesTxReceipt.cumulativeGasUsed;
+
+    log.debug("Bob's StETH balance", {
+      "Bob's balance before": ethers.formatEther(bobBalanceBefore),
+      "Bob's balance after": ethers.formatEther(bobBalanceAfter),
+      "Gas used": claimNOFeesTxReceipt.cumulativeGasUsed,
       "Gas fees": ethers.formatEther(gasFee),
     });
 
-    expect(operatorBalanceAfter).to.equal(operatorBalanceBefore + performanceFee - gasFee);
+    expect(bobBalanceAfter).to.equal(bobBalanceBefore + nodeOperatorFee - gasFee);
   });
 
-  it("Should stop Manager from claiming management fee is stETH after reserve limit reached", async () => {
-    await expect(delegation.connect(manager).claimManagementDue(manager, true))
+  it("Should stop Alice from claiming management fee is stETH after reserve limit reached", async () => {
+    await expect(vault101AdminContract.connect(alice).claimManagementDue(alice, true))
       .to.be.revertedWithCustomError(ctx.contracts.accounting, "InsufficientValuationToMint")
-      .withArgs(stakingVaultAddress, await stakingVault.valuation());
+      .withArgs(vault101Address, await vault101.valuation());
   });
 
-  it("Should stop Manager from claiming management fee in ETH if not not enough unlocked ETH", async () => {
-    const feesToClaim = await delegation.managementDue();
-    const availableToClaim = (await stakingVault.valuation()) - (await stakingVault.locked());
+  it("Should stop Alice from claiming management fee in ETH if not not enough unlocked ETH", async () => {
+    const feesToClaim = await vault101AdminContract.managementDue();
+    const availableToClaim = (await vault101.valuation()) - (await vault101.locked());
 
-    await expect(delegation.connect(owner).connect(manager).claimManagementDue(manager, false))
-      .to.be.revertedWithCustomError(delegation, "InsufficientUnlockedAmount")
+    await expect(vault101AdminContract.connect(alice).connect(alice).claimManagementDue(alice, false))
+      .to.be.revertedWithCustomError(vault101AdminContract, "InsufficientUnlockedAmount")
       .withArgs(availableToClaim, feesToClaim);
   });
 
-  it("Should allow Owner to trigger validator exit to cover fees", async () => {
+  it("Should allow Alice to trigger validator exit to cover fees", async () => {
     // simulate validator exit
     const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
-    await delegation.connect(owner).requestValidatorExit(secondValidatorKey);
-    await updateBalance(stakingVaultAddress, VALIDATOR_DEPOSIT_SIZE);
+    await vault101AdminContract.connect(alice).requestValidatorExit(secondValidatorKey);
+    await updateBalance(vault101Address, VALIDATOR_DEPOSIT_SIZE);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value to simulate the validator exit
@@ -375,42 +374,44 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await report(ctx, params);
   });
 
-  it("Should allow Manager to claim manager rewards in ETH after rebase with exited validator", async () => {
-    const feesToClaim = await delegation.managementDue();
+  it("Should allow Alice to claim manager rewards in ETH after rebase with exited validator", async () => {
+    const feesToClaim = await vault101AdminContract.managementDue();
 
-    log.debug("Staking Vault stats after operator exit", {
-      "Staking Vault management fee": ethers.formatEther(feesToClaim),
-      "Staking Vault balance": ethers.formatEther(await ethers.provider.getBalance(stakingVaultAddress)),
+    log.debug("Vault 101 stats after operator exit", {
+      "Vault 101 owner fee": ethers.formatEther(feesToClaim),
+      "Vault 101 balance": ethers.formatEther(await ethers.provider.getBalance(vault101Address)),
     });
 
-    const managerBalanceBefore = await ethers.provider.getBalance(manager.address);
+    const aliceBalanceBefore = await ethers.provider.getBalance(alice.address);
 
-    const claimEthTx = await delegation.connect(manager).claimManagementDue(manager, false);
-    const { gasUsed, gasPrice } = await trace("delegation.claimManagementDue", claimEthTx);
+    const claimEthTx = await vault101AdminContract.connect(alice).claimManagementDue(alice, false);
+    const { gasUsed, gasPrice } = await trace("vaultAdmin.claimManagementDue", claimEthTx);
 
-    const managerBalanceAfter = await ethers.provider.getBalance(manager.address);
-    const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
+    const aliceBalanceAfter = await ethers.provider.getBalance(alice.address);
+    const vaultBalance = await ethers.provider.getBalance(vault101Address);
 
     log.debug("Balances after owner fee claim", {
-      "Manager's ETH balance before": ethers.formatEther(managerBalanceBefore),
-      "Manager's ETH balance after": ethers.formatEther(managerBalanceAfter),
-      "Manager's ETH balance diff": ethers.formatEther(managerBalanceAfter - managerBalanceBefore),
-      "Staking Vault owner fee": ethers.formatEther(feesToClaim),
-      "Staking Vault balance": ethers.formatEther(vaultBalance),
+      "Alice's ETH balance before": ethers.formatEther(aliceBalanceBefore),
+      "Alice's ETH balance after": ethers.formatEther(aliceBalanceAfter),
+      "Alice's ETH balance diff": ethers.formatEther(aliceBalanceAfter - aliceBalanceBefore),
+      "Vault 101 owner fee": ethers.formatEther(feesToClaim),
+      "Vault 101 balance": ethers.formatEther(vaultBalance),
     });
 
-    expect(managerBalanceAfter).to.equal(managerBalanceBefore + feesToClaim - gasUsed * gasPrice);
+    expect(aliceBalanceAfter).to.equal(aliceBalanceBefore + feesToClaim - gasUsed * gasPrice);
   });
 
-  it("Should allow Token Master to burn shares to repay debt", async () => {
+  it("Should allow Mario to burn shares to repay debt", async () => {
     const { lido } = ctx.contracts;
 
-    // Token master can approve the vault to burn the shares
-    const approveVaultTx = await lido.connect(tokenMaster).approve(delegation, stakingVaultMintingMaximum);
+    // Mario can approve the vault to burn the shares
+    const approveVaultTx = await lido
+      .connect(mario)
+      .approve(vault101AdminContract, await lido.getPooledEthByShares(vault101MintingMaximum));
     await trace("lido.approve", approveVaultTx);
 
-    const burnTx = await delegation.connect(tokenMaster).burn(stakingVaultMintingMaximum);
-    await trace("delegation.burn", burnTx);
+    const burnTx = await vault101AdminContract.connect(mario).burn(vault101MintingMaximum);
+    await trace("vault.burn", burnTx);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
@@ -428,26 +429,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     };
     await trace("report", reportTx);
 
-    const lockedOnVault = await stakingVault.locked();
+    const lockedOnVault = await vault101.locked();
     expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
 
     // TODO: add more checks here
   });
 
-  it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
+  it("Should allow Alice to rebalance the vault to reduce the debt", async () => {
     const { accounting, lido } = ctx.contracts;
 
-    const socket = await accounting["vaultSocket(address)"](stakingVaultAddress);
-    const sharesMinted = (await lido.getPooledEthByShares(socket.sharesMinted)) + 1n; // +1 to avoid rounding errors
+    const socket = await accounting["vaultSocket(address)"](vault101Address);
+    const stETHMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    const rebalanceTx = await delegation.connect(manager).rebalanceVault(sharesMinted, { value: sharesMinted });
+    const rebalanceTx = await vault101AdminContract.connect(alice).rebalanceVault(stETHMinted, { value: stETHMinted });
 
-    await trace("delegation.rebalanceVault", rebalanceTx);
+    await trace("vault.rebalance", rebalanceTx);
   });
 
-  it("Should allow Manager to disconnect vaults from the hub", async () => {
-    const disconnectTx = await delegation.connect(manager).disconnectFromVaultHub();
-    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("manager.disconnectFromVaultHub", disconnectTx);
+  it("Should allow Alice to disconnect vaults from the hub providing the debt in ETH", async () => {
+    const disconnectTx = await vault101AdminContract.connect(alice).voluntaryDisconnect();
+    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("vault.voluntaryDisconnect", disconnectTx);
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
 

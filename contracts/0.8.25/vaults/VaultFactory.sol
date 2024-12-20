@@ -61,12 +61,13 @@ contract VaultFactory is UpgradeableBeacon {
 
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
         delegation = IDelegation(Clones.clone(delegationImpl));
+        vault.initialize(address(delegation), _delegationInitialState.operator, _stakingVaultInitializerExtraParams);
 
         delegation.initialize(address(vault));
 
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
         delegation.grantRole(delegation.MANAGER_ROLE(), _delegationInitialState.manager);
-        delegation.grantRole(delegation.OPERATOR_ROLE(), _delegationInitialState.operator);
+        delegation.grantRole(delegation.OPERATOR_ROLE(), vault.operator());
 
         delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
         delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
@@ -77,8 +78,6 @@ contract VaultFactory is UpgradeableBeacon {
         delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
-
-        vault.initialize(address(delegation), _delegationInitialState.operator, _stakingVaultInitializerExtraParams);
 
         emit VaultCreated(address(delegation), address(vault));
         emit DelegationCreated(msg.sender, address(delegation));

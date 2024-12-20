@@ -30,7 +30,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
-    0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
+        0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
     constructor(
         address _vaultHub,

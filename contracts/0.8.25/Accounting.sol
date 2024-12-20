@@ -36,6 +36,7 @@ contract Accounting is VaultHub {
         uint256 totalPooledEther;
         uint256 totalShares;
         uint256 depositedValidators;
+        uint256 externalShares;
         uint256 externalEther;
     }
 
@@ -63,12 +64,12 @@ contract Accounting is VaultHub {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
-        /// @notice rebased amount of external ether
-        uint256 externalEther;
         /// @notice amount of ether to be locked in the vaults
         uint256[] vaultsLockedEther;
         /// @notice amount of shares to be minted as vault fees to the treasury
         uint256[] vaultsTreasuryFeeShares;
+        /// @notice total amount of shares to be minted as vault fees to the treasury
+        uint256 totalVaultsTreasuryFeeShares;
     }
 
     struct StakingRewardsDistribution {
@@ -89,9 +90,8 @@ contract Accounting is VaultHub {
 
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido,
-        address _treasury
-    ) VaultHub(_lido, _treasury) {
+        ILido _lido
+    ) VaultHub(_lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -152,6 +152,7 @@ contract Accounting is VaultHub {
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
+        pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
     }
 
@@ -180,7 +181,7 @@ contract Accounting is VaultHub {
         update.principalClBalance = _pre.clBalance + (_report.clValidators - _pre.clValidators) * DEPOSIT_SIZE;
 
         // Limit the rebase to avoid oracle frontrunning
-        // by leaving some ether to sit in elrevards vault or withdrawals vault
+        // by leaving some ether to sit in EL rewards vault or withdrawals vault
         // and/or leaving some shares unburnt on Burner to be processed on future reports
         (
             update.withdrawals,
@@ -201,8 +202,8 @@ contract Accounting is VaultHub {
 
         // Pre-calculate total amount of protocol fees for this rebase
         // amount of shares that will be minted to pay it
-        // and the new value of externalEther after the rebase
-        (update.sharesToMintAsFees, update.externalEther) = _calculateFeesAndExternalBalance(_report, _pre, update);
+        uint256 postExternalEther;
+        (update.sharesToMintAsFees, postExternalEther) = _calculateFeesAndExternalEther(_report, _pre, update);
 
         // Calculate the new total shares and total pooled ether after the rebase
         update.postTotalShares =
@@ -211,24 +212,28 @@ contract Accounting is VaultHub {
             update.totalSharesToBurn; // shares burned for withdrawals and cover
 
         update.postTotalPooledEther =
-            _pre.totalPooledEther + // was before the report
+            _pre.totalPooledEther + // was before the report (includes externalEther)
             _report.clBalance +
             update.withdrawals -
             update.principalClBalance + // total cl rewards (or penalty)
-            update.elRewards + // elrewards
-            update.externalEther -
-            _pre.externalEther - // vaults rewards
-            update.etherToFinalizeWQ; // withdrawals
+            update.elRewards + // ELRewards
+            postExternalEther - _pre.externalEther // vaults rebase
+            - update.etherToFinalizeWQ; // withdrawals
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares) = _calculateVaultsRebase(
-            update.postTotalShares,
-            update.postTotalPooledEther,
-            _pre.totalShares,
-            _pre.totalPooledEther,
-            update.sharesToMintAsFees
-        );
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+            _calculateVaultsRebase(
+                update.postTotalShares,
+                update.postTotalPooledEther,
+                _pre.totalShares,
+                _pre.totalPooledEther,
+                update.sharesToMintAsFees
+            );
+
+        update.postTotalPooledEther +=
+            update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
+        update.postTotalShares += update.totalVaultsTreasuryFeeShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -246,17 +251,15 @@ contract Accounting is VaultHub {
     }
 
     /// @dev calculates shares that are minted to treasury as the protocol fees
-    ///      and rebased value of the external balance
-    function _calculateFeesAndExternalBalance(
+    function _calculateFeesAndExternalEther(
         ReportValues memory _report,
         PreReportState memory _pre,
         CalculatedValues memory _calculated
-    ) internal view returns (uint256 sharesToMintAsFees, uint256 externalEther) {
+    ) internal pure returns (uint256 sharesToMintAsFees, uint256 postExternalEther) {
         // we are calculating the share rate equal to the post-rebase share rate
         // but with fees taken as eth deduction
         // and without externalBalance taken into account
-        uint256 externalShares = LIDO.getSharesByPooledEth(_pre.externalEther);
-        uint256 shares = _pre.totalShares - _calculated.totalSharesToBurn - externalShares;
+        uint256 shares = _pre.totalShares - _calculated.totalSharesToBurn - _pre.externalShares;
         uint256 eth = _pre.totalPooledEther - _calculated.etherToFinalizeWQ - _pre.externalEther;
 
         uint256 unifiedClBalance = _report.clBalance + _calculated.withdrawals;
@@ -280,7 +283,7 @@ contract Accounting is VaultHub {
         }
 
         // externalBalance is rebasing at the same rate as the primary balance does
-        externalEther = (externalShares * eth) / shares;
+        postExternalEther = (_pre.externalShares * eth) / shares;
     }
 
     /// @dev applies the precalculated changes to the protocol state
@@ -306,8 +309,7 @@ contract Accounting is VaultHub {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance,
-            _update.externalEther
+            _report.clBalance
         );
 
         if (_update.totalSharesToBurn > 0) {
@@ -336,6 +338,10 @@ contract Accounting is VaultHub {
             _update.vaultsLockedEther,
             _update.vaultsTreasuryFeeShares
         );
+
+        if (_update.totalVaultsTreasuryFeeShares > 0) {
+            STETH.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
+        }
 
         _notifyObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
@@ -408,39 +414,39 @@ contract Accounting is VaultHub {
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
-        (uint256[] memory moduleRewards, uint256 totalModuleRewards) = _mintModuleRewards(
+        (uint256[] memory moduleFees, uint256 totalModuleFees) = _mintModuleFees(
             _rewardsDistribution.recipients,
             _rewardsDistribution.modulesFees,
             _rewardsDistribution.totalFee,
             _sharesToMintAsFees
         );
 
-        _mintTreasuryRewards(_sharesToMintAsFees - totalModuleRewards);
+        _mintTreasuryFees(_sharesToMintAsFees - totalModuleFees);
 
-        _stakingRouter.reportRewardsMinted(_rewardsDistribution.moduleIds, moduleRewards);
+        _stakingRouter.reportRewardsMinted(_rewardsDistribution.moduleIds, moduleFees);
     }
 
     /// @dev mint rewards to the StakingModule recipients
-    function _mintModuleRewards(
+    function _mintModuleFees(
         address[] memory _recipients,
         uint96[] memory _modulesFees,
         uint256 _totalFee,
-        uint256 _totalRewards
-    ) internal returns (uint256[] memory moduleRewards, uint256 totalModuleRewards) {
-        moduleRewards = new uint256[](_recipients.length);
+        uint256 _totalFees
+    ) internal returns (uint256[] memory moduleFees, uint256 totalModuleFees) {
+        moduleFees = new uint256[](_recipients.length);
 
         for (uint256 i; i < _recipients.length; ++i) {
             if (_modulesFees[i] > 0) {
-                uint256 iModuleRewards = (_totalRewards * _modulesFees[i]) / _totalFee;
-                moduleRewards[i] = iModuleRewards;
-                LIDO.mintShares(_recipients[i], iModuleRewards);
-                totalModuleRewards = totalModuleRewards + iModuleRewards;
+                uint256 iModuleFees = (_totalFees * _modulesFees[i]) / _totalFee;
+                moduleFees[i] = iModuleFees;
+                LIDO.mintShares(_recipients[i], iModuleFees);
+                totalModuleFees = totalModuleFees + iModuleFees;
             }
         }
     }
 
-    /// @dev mints treasury rewards
-    function _mintTreasuryRewards(uint256 _amount) internal {
+    /// @dev mints treasury fees
+    function _mintTreasuryFees(uint256 _amount) internal {
         address treasury = LIDO_LOCATOR.treasury();
 
         LIDO.mintShares(treasury, _amount);
@@ -476,12 +482,12 @@ contract Accounting is VaultHub {
             .getStakingRewardsDistribution();
 
         if (ret.recipients.length != ret.modulesFees.length)
-            revert InequalArrayLengths(ret.recipients.length, ret.modulesFees.length);
+            revert UnequalArrayLengths(ret.recipients.length, ret.modulesFees.length);
         if (ret.moduleIds.length != ret.modulesFees.length)
-            revert InequalArrayLengths(ret.moduleIds.length, ret.modulesFees.length);
+            revert UnequalArrayLengths(ret.moduleIds.length, ret.modulesFees.length);
     }
 
-    error InequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
+    error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
 }

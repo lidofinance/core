@@ -49,6 +49,10 @@ contract VaultHub__MockForDashboard {
         steth.burnExternalShares(amount);
     }
 
+    function voluntaryDisconnect(address _vault) external {
+        emit Mock__VaultDisconnected(_vault);
+    }
+
     function rebalance() external payable {
         emit Mock__Rebalanced(msg.value);
     }

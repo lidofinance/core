@@ -142,7 +142,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       );
     });
 
-    it("Reverts when transfering from zero address", async () => {
+    it("Reverts when transferring from zero address", async () => {
       await expect(steth.connect(zeroAddressSigner).transferShares(recipient, 0)).to.be.revertedWith(
         "TRANSFER_FROM_ZERO_ADDR",
       );
@@ -384,7 +384,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of shares is unchanged after a ${rebase} rebase`, async () => {
         const totalSharesBeforeRebase = await steth.getTotalShares();
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
@@ -401,7 +401,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of user shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of user shares is unchanged after a ${rebase} rebase`, async () => {
         const sharesOfHolderBeforeRebase = await steth.sharesOf(holder);
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
@@ -458,6 +458,27 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
         const oneShareInSteth = (ONE_SHARE * totalPooledEther) / totalShares;
 
         expect(await steth.getPooledEthByShares(ONE_SHARE)).to.equal(oneShareInSteth);
+      });
+    }
+  });
+
+  context("getPooledEthBySharesRoundUp", () => {
+    for (const [rebase, factor] of [
+      ["neutral", 100n], // 1
+      ["positive", 103n], // 0.97
+      ["negative", 97n], // 1.03
+    ]) {
+      it(`Returns the correct rate after a ${rebase} rebase`, async () => {
+        // before the first rebase, steth are equivalent to shares
+        expect(await steth.getPooledEthBySharesRoundUp(ONE_SHARE)).to.equal(ONE_STETH);
+
+        const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
+        await steth.setTotalPooledEther(rebasedSupply);
+
+        expect(await steth.getSharesByPooledEth(await steth.getPooledEthBySharesRoundUp(1))).to.equal(1n);
+        expect(await steth.getSharesByPooledEth(await steth.getPooledEthBySharesRoundUp(ONE_SHARE))).to.equal(
+          ONE_SHARE,
+        );
       });
     }
   });

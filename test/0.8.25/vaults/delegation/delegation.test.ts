@@ -49,12 +49,15 @@ describe("Delegation", () => {
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    delegationImpl = await ethers.deployContract("Delegation", [steth]);
+    expect(await delegationImpl.STETH()).to.equal(steth);
+
     hub = await ethers.deployContract("VaultHub__MockForDelegation");
 
     delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth, hub]);
-    expect(await delegationImpl.weth()).to.equal(weth);
-    expect(await delegationImpl.stETH()).to.equal(steth);
-    expect(await delegationImpl.wstETH()).to.equal(wsteth);
+    expect(await delegationImpl.WETH()).to.equal(weth);
+    expect(await delegationImpl.STETH()).to.equal(steth);
+    expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
@@ -119,7 +122,7 @@ describe("Delegation", () => {
 
     it("sets the stETH address", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth, hub]);
-      expect(await delegation_.stETH()).to.equal(steth);
+      expect(await delegation_.STETH()).to.equal(steth);
     });
   });
 

@@ -52,7 +52,7 @@ export async function main() {
   await makeTx(accounting, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
 
   await makeTx(accounting, "addFactory", [factoryAddress], { from: deployer });
-  await makeTx(accounting, "addImpl", [impAddress], { from: deployer });
+  await makeTx(accounting, "addVaultImpl", [impAddress], { from: deployer });
 
   await makeTx(accounting, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(accounting, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
