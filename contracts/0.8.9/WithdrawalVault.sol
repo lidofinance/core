@@ -9,6 +9,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
+import {WithdrawalRequests} from "./lib/WithdrawalRequests.sol";
 
 interface ILido {
     /**
@@ -27,6 +28,7 @@ contract WithdrawalVault is Versioned {
 
     ILido public immutable LIDO;
     address public immutable TREASURY;
+    address public immutable VALIDATORS_EXIT_BUS;
 
     // Events
     /**
@@ -42,9 +44,9 @@ contract WithdrawalVault is Versioned {
     event ERC721Recovered(address indexed requestedBy, address indexed token, uint256 tokenId);
 
     // Errors
-    error LidoZeroAddress();
-    error TreasuryZeroAddress();
+    error ZeroAddress();
     error NotLido();
+    error NotValidatorExitBus();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
 
@@ -52,16 +54,14 @@ contract WithdrawalVault is Versioned {
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
-    constructor(ILido _lido, address _treasury) {
-        if (address(_lido) == address(0)) {
-            revert LidoZeroAddress();
-        }
-        if (_treasury == address(0)) {
-            revert TreasuryZeroAddress();
-        }
+    constructor(address _lido, address _treasury, address _validatorsExitBus) {
+        _assertNonZero(_lido);
+        _assertNonZero(_treasury);
+        _assertNonZero(_validatorsExitBus);
 
-        LIDO = _lido;
+        LIDO = ILido(_lido);
         TREASURY = _treasury;
+        VALIDATORS_EXIT_BUS = _validatorsExitBus;
     }
 
     /**
@@ -70,6 +70,12 @@ contract WithdrawalVault is Versioned {
      */
     function initialize() external {
         _initializeContractVersionTo(1);
+        _updateContractVersion(2);
+    }
+
+    function finalizeUpgrade_v2() external {
+        _checkContractVersion(1);
+        _updateContractVersion(2);
     }
 
     /**
@@ -121,5 +127,28 @@ contract WithdrawalVault is Versioned {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
         _token.transferFrom(address(this), TREASURY, _tokenId);
+    }
+
+    /**
+     * @dev Adds full withdrawal requests for the provided public keys.
+     *      The validator will fully withdraw and exit its duties as a validator.
+     * @param pubkeys An array of public keys for the validators requesting full withdrawals.
+     */
+    function addFullWithdrawalRequests(
+        bytes[] calldata pubkeys
+    ) external payable {
+        if(msg.sender != address(VALIDATORS_EXIT_BUS)) {
+            revert NotValidatorExitBus();
+        }
+
+        WithdrawalRequests.addFullWithdrawalRequests(pubkeys);
+    }
+
+    function getWithdrawalRequestFee() external view returns (uint256) {
+        return WithdrawalRequests.getWithdrawalRequestFee();
+    }
+
+    function _assertNonZero(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
     }
 }
