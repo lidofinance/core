@@ -17,6 +17,7 @@ import {ILido as StETH} from "../interfaces/ILido.sol";
  * in this single contract. It provides administrative functions for managing the staking vault,
  * including funding, withdrawing, depositing to the beacon chain, minting, burning, and rebalancing operations.
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
+ * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
 contract Dashboard is AccessControlEnumerable {
     /// @notice Address of the implementation contract
@@ -48,30 +49,25 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.
-     * @param _defaultAdmin Address to be granted the `DEFAULT_ADMIN_ROLE`, i.e. the actual owner of the stVault
      * @param _stakingVault Address of the `StakingVault` contract.
      */
-    function initialize(address _defaultAdmin, address _stakingVault) external virtual {
-        _initialize(_defaultAdmin, _stakingVault);
+    function initialize(address _stakingVault) external virtual {
+        _initialize(_stakingVault);
     }
 
     /**
      * @dev Internal initialize function.
-     * @param _defaultAdmin Address to be granted the `DEFAULT_ADMIN_ROLE`
      * @param _stakingVault Address of the `StakingVault` contract.
      */
-    function _initialize(address _defaultAdmin, address _stakingVault) internal {
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+    function _initialize(address _stakingVault) internal {
         if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
         if (isInitialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
         isInitialized = true;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-
         stakingVault = IStakingVault(_stakingVault);
         vaultHub = VaultHub(stakingVault.vaultHub());
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         emit Initialized();
     }
@@ -168,21 +164,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Deposits validators to the beacon chain
-     * @param _numberOfDeposits Number of validator deposits
-     * @param _pubkeys Concatenated public keys of the validators
-     * @param _signatures Concatenated signatures of the validators
-     */
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
-    }
-
-    /**
-     * @notice Mints stETH shares backed by the vault to a recipient.
+     * @notice Mints stETH tokens backed by the vault to a recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of shares to mint
      */

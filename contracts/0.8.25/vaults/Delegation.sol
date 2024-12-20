@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {Dashboard} from "./Dashboard.sol";
 
@@ -24,11 +23,11 @@ import {Dashboard} from "./Dashboard.sol";
  * @notice The term "fee" is used to express the fee percentage as basis points, e.g. 5%,
  * while "due" is the actual amount of the fee, e.g. 1 ether
  */
-contract Delegation is Dashboard, IReportReceiver {
+contract Delegation is Dashboard {
     // ==================== Constants ====================
 
-    uint256 private constant BP_BASE = 10000; // Basis points base (100%)
-    uint256 private constant MAX_FEE = BP_BASE; // Maximum fee in basis points (100%)
+    uint256 private constant TOTAL_BASIS_POINTS = 10000; // Basis points base (100%)
+    uint256 private constant MAX_FEE = TOTAL_BASIS_POINTS; // Maximum fee in basis points (100%)
 
     // ==================== Roles ====================
 
@@ -54,21 +53,13 @@ contract Delegation is Dashboard, IReportReceiver {
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
     /**
-     * @notice Role for the operator
-     * Operator can:
+     * @notice Role for the node operator
+     * Node operator can:
      * - claim the performance due
      * - vote on performance fee changes
      * - vote on ownership transfer
-     * - set the Key Master role
      */
     bytes32 public constant OPERATOR_ROLE = keccak256("Vault.Delegation.OperatorRole");
-
-    /**
-     * @notice Role for the key master.
-     * Key master can:
-     * - deposit validators to the beacon chain
-     */
-    bytes32 public constant KEY_MASTER_ROLE = keccak256("Vault.Delegation.KeyMasterRole");
 
     /**
      * @notice Role for the token master.
@@ -77,15 +68,6 @@ contract Delegation is Dashboard, IReportReceiver {
      * - burn stETH tokens
      */
     bytes32 public constant TOKEN_MASTER_ROLE = keccak256("Vault.Delegation.TokenMasterRole");
-
-    /**
-     * @notice Role for the Lido DAO.
-     * This can be the Lido DAO agent, EasyTrack or any other DAO decision-making system.
-     * Lido DAO can:
-     * - set the operator role
-     * - vote on ownership transfer
-     */
-    bytes32 public constant LIDO_DAO_ROLE = keccak256("Vault.Delegation.LidoDAORole");
 
     // ==================== State Variables ====================
 
@@ -121,36 +103,16 @@ contract Delegation is Dashboard, IReportReceiver {
     /**
      * @notice Initializes the contract with the default admin and `StakingVault` address.
      * Sets up roles and role administrators.
-     * @param _defaultAdmin Address to be granted the `DEFAULT_ADMIN_ROLE`.
      * @param _stakingVault Address of the `StakingVault` contract.
+     * @dev This function is called by the `VaultFactory` contract
      */
-    function initialize(address _defaultAdmin, address _stakingVault) external override {
-        _initialize(_defaultAdmin, _stakingVault);
+    function initialize(address _stakingVault) external override {
+        _initialize(_stakingVault);
 
-        /**
-         * Granting `LIDO_DAO_ROLE` to the default admin is needed to set the initial Lido DAO address
-         * in the `createVault` function in the vault factory, so that we don't have to pass it
-         * to this initialize function and break the inherited function signature.
-         * This role will be revoked in the `createVault` function in the vault factory and
-         * will only remain on the Lido DAO address
-         */
-        _grantRole(LIDO_DAO_ROLE, _defaultAdmin);
-
-        /**
-         * Only Lido DAO can assign the Lido DAO role.
-         */
-        _setRoleAdmin(LIDO_DAO_ROLE, LIDO_DAO_ROLE);
-
-        /**
-         * The node operator in the vault must be approved by Lido DAO.
-         * The vault owner (`DEFAULT_ADMIN_ROLE`) cannot change the node operator.
-         */
-        _setRoleAdmin(OPERATOR_ROLE, LIDO_DAO_ROLE);
-
-        /**
-         * The operator role can change the key master role.
-         */
-        _setRoleAdmin(KEY_MASTER_ROLE, OPERATOR_ROLE);
+        // `OPERATOR_ROLE` is set to `msg.sender` to allow the `VaultFactory` to set the initial operator fee
+        // the role will be revoked from `VaultFactory`
+        _grantRole(OPERATOR_ROLE, msg.sender);
+        _setRoleAdmin(OPERATOR_ROLE, OPERATOR_ROLE);
     }
 
     // ==================== View Functions ====================
@@ -163,13 +125,13 @@ contract Delegation is Dashboard, IReportReceiver {
     function withdrawable() public view returns (uint256) {
         // Question: shouldn't we reserve both locked + dues, not max(locked, dues)?
         uint256 reserved = Math256.max(stakingVault.locked(), managementDue + performanceDue());
-        uint256 value = stakingVault.valuation();
+        uint256 valuation = stakingVault.valuation();
 
-        if (reserved > value) {
+        if (reserved > valuation) {
             return 0;
         }
 
-        return value - reserved;
+        return valuation - reserved;
     }
 
     /**
@@ -183,7 +145,7 @@ contract Delegation is Dashboard, IReportReceiver {
             (latestReport.inOutDelta - lastClaimedReport.inOutDelta);
 
         if (rewardsAccrued > 0) {
-            return (uint128(rewardsAccrued) * performanceFee) / BP_BASE;
+            return (uint128(rewardsAccrued) * performanceFee) / TOTAL_BASIS_POINTS;
         } else {
             return 0;
         }
@@ -194,10 +156,9 @@ contract Delegation is Dashboard, IReportReceiver {
      * @return An array of role identifiers.
      */
     function ownershipTransferCommittee() public pure returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](3);
+        bytes32[] memory roles = new bytes32[](2);
         roles[0] = MANAGER_ROLE;
         roles[1] = OPERATOR_ROLE;
-        roles[2] = LIDO_DAO_ROLE;
         return roles;
     }
 
@@ -240,7 +201,7 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     function claimManagementDue(address _recipient, bool _liquid) external onlyRole(MANAGER_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (!stakingVault.isHealthy()) revert VaultNotHealthy();
+        if (!stakingVault.isBalanced()) revert VaultUnbalanced();
 
         uint256 due = managementDue;
 
@@ -299,20 +260,6 @@ contract Delegation is Dashboard, IReportReceiver {
     }
 
     /**
-     * @notice Deposits validators to the beacon chain.
-     * @param _numberOfDeposits Number of validator deposits.
-     * @param _pubkeys Concatenated public keys of the validators.
-     * @param _signatures Concatenated signatures of the validators.
-     */
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external override onlyRole(KEY_MASTER_ROLE) {
-        _depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
-    }
-
-    /**
      * @notice Claims the performance fee due.
      * @param _recipient Address of the recipient.
      * @param _liquid If true, mints stETH tokens; otherwise, withdraws ether.
@@ -359,18 +306,6 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     function rebalanceVault(uint256 _ether) external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
-    }
-
-    // ==================== Report Handling ====================
-
-    /**
-     * @notice Hook called by the staking vault during the report in the staking vault.
-     * @param _valuation The new valuation of the vault.
-     */
-    function onReport(uint256 _valuation, int256 /*_inOutDelta*/, uint256 /*_locked*/) external {
-        if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
-
-        managementDue += (_valuation * managementFee) / 365 / BP_BASE;
     }
 
     // ==================== Internal Functions ====================
@@ -488,8 +423,8 @@ contract Delegation is Dashboard, IReportReceiver {
     /// @param requested The amount requested to withdraw.
     error InsufficientUnlockedAmount(uint256 unlocked, uint256 requested);
 
-    /// @notice Error when the vault is not healthy.
-    error VaultNotHealthy();
+    /// @notice Error when the vault is not balanced.
+    error VaultUnbalanced();
 
     /// @notice Hook can only be called by the staking vault.
     error OnlyStVaultCanCallOnReportHook();
