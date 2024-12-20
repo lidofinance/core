@@ -49,9 +49,6 @@ describe("Delegation", () => {
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
-    delegationImpl = await ethers.deployContract("Delegation", [steth]);
-    expect(await delegationImpl.STETH()).to.equal(steth);
-
     hub = await ethers.deployContract("VaultHub__MockForDelegation");
 
     delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth, hub]);
