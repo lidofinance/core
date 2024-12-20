@@ -27,8 +27,8 @@ import {Dashboard} from "./Dashboard.sol";
 contract Delegation is Dashboard, IReportReceiver {
     // ==================== Constants ====================
 
-    uint256 private constant BP_BASE = 10000; // Basis points base (100%)
-    uint256 private constant MAX_FEE = BP_BASE; // Maximum fee in basis points (100%)
+    uint256 private constant TOTAL_BASIS_POINTS = 10000; // Basis points base (100%)
+    uint256 private constant MAX_FEE = TOTAL_BASIS_POINTS; // Maximum fee in basis points (100%)
 
     // ==================== Roles ====================
 
@@ -54,8 +54,8 @@ contract Delegation is Dashboard, IReportReceiver {
     bytes32 public constant STAKER_ROLE = keccak256("Vault.Delegation.StakerRole");
 
     /**
-     * @notice Role for the operator
-     * Operator can:
+     * @notice Role for the node operator
+     * Node operator can:
      * - claim the performance due
      * - vote on performance fee changes
      * - vote on ownership transfer
@@ -146,7 +146,7 @@ contract Delegation is Dashboard, IReportReceiver {
             (latestReport.inOutDelta - lastClaimedReport.inOutDelta);
 
         if (rewardsAccrued > 0) {
-            return (uint128(rewardsAccrued) * performanceFee) / BP_BASE;
+            return (uint128(rewardsAccrued) * performanceFee) / TOTAL_BASIS_POINTS;
         } else {
             return 0;
         }
@@ -318,7 +318,7 @@ contract Delegation is Dashboard, IReportReceiver {
     function onReport(uint256 _valuation, int256 /*_inOutDelta*/, uint256 /*_locked*/) external {
         if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
 
-        managementDue += (_valuation * managementFee) / 365 / BP_BASE;
+        managementDue += (_valuation * managementFee) / 365 / TOTAL_BASIS_POINTS;
     }
 
     // ==================== Internal Functions ====================

@@ -18,7 +18,7 @@ import { certainAddress, ether, findEvents } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe.only("Dashboard", () => {
+describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;

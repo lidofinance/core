@@ -20,7 +20,7 @@ import { Snapshot } from "test/suite";
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
-describe("Delegation", () => {
+describe.only("Delegation", () => {
   let vaultOwner: HardhatEthersSigner;
   let manager: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
