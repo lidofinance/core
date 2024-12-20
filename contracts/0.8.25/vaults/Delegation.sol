@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {Dashboard} from "./Dashboard.sol";
 
@@ -24,7 +23,7 @@ import {Dashboard} from "./Dashboard.sol";
  * @notice The term "fee" is used to express the fee percentage as basis points, e.g. 5%,
  * while "due" is the actual amount of the fee, e.g. 1 ether
  */
-contract Delegation is Dashboard, IReportReceiver {
+contract Delegation is Dashboard {
     // ==================== Constants ====================
 
     uint256 private constant TOTAL_BASIS_POINTS = 10000; // Basis points base (100%)
@@ -307,18 +306,6 @@ contract Delegation is Dashboard, IReportReceiver {
      */
     function rebalanceVault(uint256 _ether) external payable override onlyRole(MANAGER_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
-    }
-
-    // ==================== Report Handling ====================
-
-    /**
-     * @notice Hook called by the staking vault during the report in the staking vault.
-     * @param _valuation The new valuation of the vault.
-     */
-    function onReport(uint256 _valuation, int256 /*_inOutDelta*/, uint256 /*_locked*/) external {
-        if (msg.sender != address(stakingVault)) revert OnlyStVaultCanCallOnReportHook();
-
-        managementDue += (_valuation * managementFee) / 365 / TOTAL_BASIS_POINTS;
     }
 
     // ==================== Internal Functions ====================

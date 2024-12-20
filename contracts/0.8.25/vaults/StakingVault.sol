@@ -8,7 +8,6 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/acces
 import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {IReportReceiver} from "./interfaces/IReportReceiver.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
@@ -119,14 +118,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Initializes `StakingVault` with an owner, operator, and optional parameters
      * @param _owner Address that will own the vault
      * @param _operator Address of the node operator
-     * @param _params Additional initialization parameters
      */
-    function initialize(
-        address _owner,
-        address _operator,
-        // solhint-disable-next-line no-unused-vars
-        bytes calldata _params
-    ) external onlyBeacon initializer {
+    function initialize(address _owner, address _operator, bytes calldata /* _params */ ) external onlyBeacon initializer {
         __Ownable_init(_owner);
         _getStorage().operator = _operator;
     }
@@ -387,31 +380,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
+
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
-
-        address _owner = owner();
-        uint256 codeSize;
-
-        assembly {
-            codeSize := extcodesize(_owner)
-        }
-
-        // only call hook if owner is a contract
-        if (codeSize > 0) {
-            try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
-            catch (bytes memory reason) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onReport() reverts because of the
-                ///      "out of gas" error. Here we assume that the onReport() method doesn't
-                ///      have reverts with empty error data except "out of gas".
-                if (reason.length == 0) revert UnrecoverableError();
-
-                emit OnReportFailed(reason);
-            }
-        }
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }
@@ -421,7 +393,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
             $.slot := ERC721_STORAGE_LOCATION
         }
     }
-
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
