@@ -66,6 +66,14 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice The `VaultHub` contract
     VaultHub public vaultHub;
 
+    struct PermitInput {
+        uint256 value;
+        uint256 deadline;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
     /**
      * @notice Constructor sets the stETH token address and the implementation contract address.
      * @param _stETH Address of the stETH token contract.
@@ -138,7 +146,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Returns the reserve ratio of the vault
      * @return The reserve ratio as a uint16
      */
-    function reserveRatio() external view returns (uint16) {
+    function reserveRatio() public view returns (uint16) {
         return vaultSocket().reserveRatioBP;
     }
 
@@ -290,7 +298,7 @@ contract Dashboard is AccessControlEnumerable {
     ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
         _mint(address(this), _tokens);
 
-        stETH.approve(address(WSTETH), _tokens);
+        STETH.approve(address(WSTETH), _tokens);
         uint256 wstETHAmount = WSTETH.wrap(_tokens);
         WSTETH.transfer(_recipient, wstETHAmount);
     }
@@ -312,16 +320,11 @@ contract Dashboard is AccessControlEnumerable {
 
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
 
-        stETH.transfer(address(vaultHub), stETHAmount);
-        vaultHub.burnStethBackedByVault(address(stakingVault), stETHAmount);
-    }
+        STETH.transfer(address(vaultHub), stETHAmount);
 
-    struct PermitInput {
-        uint256 value;
-        uint256 deadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
+        uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
+
+        vaultHub.burnSharesBackedByVault(address(stakingVault), sharesAmount);
     }
 
     /**
@@ -369,7 +372,7 @@ contract Dashboard is AccessControlEnumerable {
         external
         virtual
         onlyRole(DEFAULT_ADMIN_ROLE)
-        trustlessPermit(address(stETH), msg.sender, address(this), _permit)
+        trustlessPermit(address(STETH), msg.sender, address(this), _permit)
     {
         _burn(_tokens);
     }
@@ -391,8 +394,11 @@ contract Dashboard is AccessControlEnumerable {
         WSTETH.transferFrom(msg.sender, address(this), _tokens);
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
 
-        stETH.transfer(address(vaultHub), stETHAmount);
-        vaultHub.burnStethBackedByVault(address(stakingVault), stETHAmount);
+        STETH.transfer(address(vaultHub), stETHAmount);
+
+        uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
+
+        vaultHub.burnSharesBackedByVault(address(stakingVault), sharesAmount);
     }
 
     /**
@@ -498,7 +504,7 @@ contract Dashboard is AccessControlEnumerable {
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
         return
             Math256.min(
-                VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatio, address(stETH)),
+                VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatioBP, address(STETH)),
                 vaultSocket().shareLimit
             );
     }
