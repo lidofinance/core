@@ -29,7 +29,6 @@ export async function main() {
     lidoAddress,
     wethContract,
     wstEthAddress,
-    accountingAddress,
   ]);
   const delegationAddress = await delegation.getAddress();
 

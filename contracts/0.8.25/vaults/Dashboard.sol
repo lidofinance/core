@@ -12,10 +12,9 @@ import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extension
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {VaultHelpers} from "./VaultHelpers.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {ILido as StETH} from "../interfaces/ILido.sol";
+import {ILido as IStETH} from "../interfaces/ILido.sol";
 
 interface IWeth is IERC20 {
     function withdraw(uint) external;
@@ -42,12 +41,14 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;
+    /// @dev basis points base
+    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /// @notice Indicates whether the contract has been initialized
     bool public isInitialized;
 
     /// @notice The stETH token contract
-    StETH public immutable STETH;
+    IStETH public immutable STETH;
 
     /// @notice The wrapped staked ether token contract
     IWstETH public immutable WSTETH;
@@ -81,7 +82,7 @@ contract Dashboard is AccessControlEnumerable {
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
         _SELF = address(this);
-        STETH = StETH(_stETH);
+        STETH = IStETH(_stETH);
         WETH = IWeth(_weth);
         WSTETH = IWstETH(_wstETH);
     }
@@ -497,11 +498,8 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        return
-            Math256.min(
-                VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatioBP, address(STETH)),
-                vaultSocket().shareLimit
-            );
+        uint256 maxStETHMinted = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        return Math256.min(STETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
     }
 
     /**
