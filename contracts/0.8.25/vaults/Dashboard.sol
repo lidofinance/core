@@ -162,6 +162,10 @@ contract Dashboard is AccessControlEnumerable {
         return vaultSocket().treasuryFeeBP;
     }
 
+    /**
+     * @notice Returns the valuation of the vault in ether.
+     * @return The valuation as a uint256.
+     */
     function valuation() external view returns (uint256) {
         return stakingVault.valuation();
     }
@@ -498,8 +502,8 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 maxStETHMinted = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
-        return Math256.min(STETH.getSharesByPooledEth(maxStETHMinted), vaultSocket().shareLimit);
+        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
     /**

@@ -153,11 +153,9 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
-            revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
         if (_reserveRatioThresholdBP == 0) revert ZeroArgument("_reserveRatioThresholdBP");
-        if (_reserveRatioThresholdBP > _reserveRatioBP)
-            revert ReserveRatioTooHigh(_vault, _reserveRatioThresholdBP, _reserveRatioBP);
+        if (_reserveRatioThresholdBP > _reserveRatioBP) revert ReserveRatioTooHigh(_vault, _reserveRatioThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
         _checkShareLimitUpperBound(_vault, _shareLimit);
@@ -326,10 +324,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         // reserveRatio = BPS_BASE - maxMintableRatio
         // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        uint256 amountToRebalance = (mintedStETH *
-            TOTAL_BASIS_POINTS -
-            IStakingVault(_vault).valuation() *
-            maxMintableRatio) / reserveRatioBP;
+        uint256 amountToRebalance = (mintedStETH * TOTAL_BASIS_POINTS -
+            IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
@@ -376,11 +372,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    )
-        internal
-        view
-        returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares)
-    {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -449,8 +441,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         // TODO: optimize potential rewards calculation
         uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) -
-            chargeableValue);
+            (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
         uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
 
         treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;

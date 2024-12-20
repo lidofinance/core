@@ -120,11 +120,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @param _operator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(
-        address _owner,
-        address _operator,
-        bytes calldata /* _params */
-    ) external onlyBeacon initializer {
+    function initialize(address _owner, address _operator, bytes calldata /* _params */ ) external onlyBeacon initializer {
         __Ownable_init(_owner);
         _getStorage().operator = _operator;
     }
