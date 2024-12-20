@@ -398,6 +398,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
             codeSize := extcodesize(_owner)
         }
 
+        // only call hook if owner is a contract
         if (codeSize > 0) {
             try IReportReceiver(_owner).onReport(_valuation, _inOutDelta, _locked) {}
             catch (bytes memory reason) {
