@@ -71,7 +71,7 @@ describe("VaultFactory.sol", () => {
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
-    delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth, accounting], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
