@@ -12,8 +12,10 @@ export async function main() {
 
   const accountingAddress = state[Sk.accounting].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
+  const wstEthAddress = state[Sk.wstETH].address;
 
   const depositContract = state.chainSpec.depositContract;
+  const wethContract = state.delegation.deployParameters.wethContract;
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
@@ -23,14 +25,18 @@ export async function main() {
   const impAddress = await imp.getAddress();
 
   // Deploy Delegation implementation contract
-  const room = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [lidoAddress]);
-  const roomAddress = await room.getAddress();
+  const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
+    lidoAddress,
+    wethContract,
+    wstEthAddress,
+  ]);
+  const delegationAddress = await delegation.getAddress();
 
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     deployer,
     impAddress,
-    roomAddress,
+    delegationAddress,
   ]);
   const factoryAddress = await factory.getAddress();
 

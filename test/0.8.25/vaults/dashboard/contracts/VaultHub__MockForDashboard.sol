@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.25;
 
-import { VaultHub } from "contracts/0.8.25/vaults/VaultHub.sol";
-import { StETH__MockForDashboard } from "./StETH__MockForDashboard.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
+contract IStETH {
+    function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
+
+    function burnExternalShares(uint256 _amountOfShares) external {}
+}
 
 contract VaultHub__MockForDashboard {
-    StETH__MockForDashboard public immutable steth;
+    uint256 internal constant BPS_BASE = 100_00;
+    IStETH public immutable steth;
 
-    constructor(StETH__MockForDashboard _steth) {
+    constructor(IStETH _steth) {
         steth = _steth;
     }
 
@@ -22,6 +29,10 @@ contract VaultHub__MockForDashboard {
         vaultSockets[vault] = socket;
     }
 
+    function mock_vaultLock(address vault, uint256 amount) external {
+        IStakingVault(vault).lock(amount);
+    }
+
     function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
         return vaultSockets[vault];
     }
@@ -30,14 +41,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultDisconnected(vault);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
-        steth.mint(recipient, amount);
+    function mintSharesBackedByVault(address /* vault */, address recipient, uint256 amount) external {
+        steth.mintExternalShares(recipient, amount);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function burnSharesBackedByVault(address vault, uint256 amount) external {
-        steth.burn(amount);
+    function burnSharesBackedByVault(address /* vault */, uint256 amount) external {
+        steth.burnExternalShares(amount);
     }
 
     function voluntaryDisconnect(address _vault) external {
@@ -48,4 +57,3 @@ contract VaultHub__MockForDashboard {
         emit Mock__Rebalanced(msg.value);
     }
 }
-
