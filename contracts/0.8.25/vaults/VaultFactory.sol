@@ -59,22 +59,29 @@ contract VaultFactory is UpgradeableBeacon {
     ) external returns (IStakingVault vault, IDelegation delegation) {
         if (_delegationInitialState.manager == address(0)) revert ZeroArgument("manager");
 
+        // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
+        // create Delegation
         delegation = IDelegation(Clones.clone(delegationImpl));
-        vault.initialize(address(delegation), _delegationInitialState.operator, _stakingVaultInitializerExtraParams);
 
+        // initialize StakingVault
+        vault.initialize(address(delegation), _delegationInitialState.operator, _stakingVaultInitializerExtraParams);
+        // initialize Delegation
         delegation.initialize(address(vault));
 
+        // grant roles to owner, manager, operator
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
         delegation.grantRole(delegation.MANAGER_ROLE(), _delegationInitialState.manager);
         delegation.grantRole(delegation.OPERATOR_ROLE(), vault.operator());
 
+        // grant temporary roles to factory
         delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
         delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
+        // set fees
         delegation.setManagementFee(_delegationInitialState.managementFee);
         delegation.setPerformanceFee(_delegationInitialState.performanceFee);
 
-        //revoke roles from factory
+        // revoke temporary roles from factory
         delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
