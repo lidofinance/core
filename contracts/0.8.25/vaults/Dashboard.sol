@@ -160,8 +160,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Returns the total of stETH shares that can be minted on the vault bound by valuation and vault share limit.
-     * @dev This is a public view method for the _maxMintableShares method in VaultHub
+     * @notice Returns the total of shares that can be minted on the vault bound by valuation and vault share limit.
      * @return The maximum number of stETH shares as a uint256.
      */
     function totalMintableShares() public view returns (uint256) {
@@ -170,10 +169,10 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Returns the maximum number of shares that can be minted with deposited ether.
-     * @param _ether the amount of ether to be funded
-     * @return the maximum number of stETH that can be minted by ether
+     * @param _ether the amount of ether to be funded, can be zero
+     * @return the maximum number of shares that can be minted by ether
      */
-    function canMintShares(uint256 _ether) external view returns (uint256) {
+    function getMintableShares(uint256 _ether) external view returns (uint256) {
         uint256 _totalShares = _totalMintableShares(stakingVault.valuation() + _ether);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
@@ -185,7 +184,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
      * @return The amount of ether that can be withdrawn.
      */
-    function canWithdraw() external view returns (uint256) {
+    function getWithdrawableEther() external view returns (uint256) {
         return Math256.min(address(stakingVault).balance, stakingVault.unlocked());
     }
 
@@ -228,7 +227,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
     function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(weth.allowance(msg.sender, address(this)) >= _wethAmount, "ERC20: transfer amount exceeds allowance");
+        if (weth.allowance(msg.sender, address(this)) < _wethAmount) revert("ERC20: transfer amount exceeds allowance");
 
         weth.transferFrom(msg.sender, address(this), _wethAmount);
         weth.withdraw(_wethAmount);
@@ -489,10 +488,11 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        return Math256.min(
-            VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatio, address(stETH)),
-            vaultSocket().shareLimit
-        );
+        return
+            Math256.min(
+                VaultHelpers.getMaxMintableShares(_valuation, vaultSocket().reserveRatio, address(stETH)),
+                vaultSocket().shareLimit
+            );
     }
 
     /**

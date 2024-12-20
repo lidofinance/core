@@ -257,9 +257,9 @@ describe("Dashboard", () => {
     });
   });
 
-  context("canMintShares", () => {
+  context("getMintableShares", () => {
     it("returns trivial can mint shares", async () => {
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(0n);
     });
 
@@ -276,13 +276,13 @@ describe("Dashboard", () => {
 
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.canMintShares(funding);
+      const preFundCanMint = await dashboard.getMintableShares(funding);
 
       await dashboard.fund({ value: funding });
 
       const availableMintableShares = await dashboard.totalMintableShares();
 
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(availableMintableShares);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -299,11 +299,11 @@ describe("Dashboard", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.canMintShares(funding);
+      const preFundCanMint = await dashboard.getMintableShares(funding);
 
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(400n); // 1000 - 10% - 500 = 400
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -319,10 +319,10 @@ describe("Dashboard", () => {
       };
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
-      const preFundCanMint = await dashboard.canMintShares(funding);
+      const preFundCanMint = await dashboard.getMintableShares(funding);
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -339,12 +339,12 @@ describe("Dashboard", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
 
-      const preFundCanMint = await dashboard.canMintShares(funding);
+      const preFundCanMint = await dashboard.getMintableShares(funding);
       await dashboard.fund({ value: funding });
 
       const sharesFunded = await steth.getSharesByPooledEth((funding * (BP_BASE - sockets.reserveRatio)) / BP_BASE);
 
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(sharesFunded - sockets.sharesMinted);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -360,19 +360,19 @@ describe("Dashboard", () => {
       };
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
-      const preFundCanMint = await dashboard.canMintShares(funding);
+      const preFundCanMint = await dashboard.getMintableShares(funding);
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.canMintShares(0n);
+      const canMint = await dashboard.getMintableShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
     });
   });
 
-  context("canWithdraw", () => {
+  context("getWithdrawableEther", () => {
     it("returns the trivial amount can withdraw ether", async () => {
-      const canWithdraw = await dashboard.canWithdraw();
-      expect(canWithdraw).to.equal(0n);
+      const getWithdrawableEther = await dashboard.getWithdrawableEther();
+      expect(getWithdrawableEther).to.equal(0n);
     });
 
     it("funds and returns the correct can withdraw ether", async () => {
@@ -380,15 +380,15 @@ describe("Dashboard", () => {
 
       await dashboard.fund({ value: amount });
 
-      const canWithdraw = await dashboard.canWithdraw();
-      expect(canWithdraw).to.equal(amount);
+      const getWithdrawableEther = await dashboard.getWithdrawableEther();
+      expect(getWithdrawableEther).to.equal(amount);
     });
 
     it("funds and recieves external but and can only withdraw unlocked", async () => {
       const amount = ether("1");
       await dashboard.fund({ value: amount });
       await vaultOwner.sendTransaction({ to: vault.getAddress(), value: amount });
-      expect(await dashboard.canWithdraw()).to.equal(amount);
+      expect(await dashboard.getWithdrawableEther()).to.equal(amount);
     });
 
     it("funds and get all ether locked and can not withdraw", async () => {
@@ -397,7 +397,7 @@ describe("Dashboard", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount);
 
-      expect(await dashboard.canWithdraw()).to.equal(0n);
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
     });
 
     it("funds and get all ether locked and can not withdraw", async () => {
@@ -406,7 +406,7 @@ describe("Dashboard", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount);
 
-      expect(await dashboard.canWithdraw()).to.equal(0n);
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
     });
 
     it("funds and get all half locked and can only half withdraw", async () => {
@@ -415,7 +415,7 @@ describe("Dashboard", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
 
-      expect(await dashboard.canWithdraw()).to.equal(amount / 2n);
+      expect(await dashboard.getWithdrawableEther()).to.equal(amount / 2n);
     });
 
     it("funds and get all half locked, but no balance and can not withdraw", async () => {
@@ -426,7 +426,7 @@ describe("Dashboard", () => {
 
       await setBalance(await vault.getAddress(), 0n);
 
-      expect(await dashboard.canWithdraw()).to.equal(0n);
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
     });
 
     // TODO: add more tests when the vault params are change
