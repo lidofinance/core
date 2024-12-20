@@ -44,7 +44,7 @@ describe("Delegation", () => {
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     delegationImpl = await ethers.deployContract("Delegation", [steth]);
-    expect(await delegationImpl.stETH()).to.equal(steth);
+    expect(await delegationImpl.STETH()).to.equal(steth);
 
     hub = await ethers.deployContract("VaultHub__MockForDelegation");
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -98,7 +98,7 @@ describe("Delegation", () => {
 
     it("sets the stETH address", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [steth]);
-      expect(await delegation_.stETH()).to.equal(steth);
+      expect(await delegation_.STETH()).to.equal(steth);
     });
   });
 

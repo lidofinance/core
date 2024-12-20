@@ -15,6 +15,11 @@ contract StETH__MockForDashboard is ERC20 {
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
     }
+
+    function transferSharesFrom(address from, address to, uint256 amount) external returns (uint256) {
+        _transfer(from, to, amount);
+        return amount;
+    }
 }
 
 

@@ -31,13 +31,17 @@ contract VaultHub__MockForDashboard {
     }
 
     // solhint-disable-next-line no-unused-vars
-    function mintStethBackedByVault(address vault, address recipient, uint256 amount) external {
+    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
         steth.mint(recipient, amount);
     }
 
     // solhint-disable-next-line no-unused-vars
-    function burnStethBackedByVault(address vault, uint256 amount) external {
+    function burnSharesBackedByVault(address vault, uint256 amount) external {
         steth.burn(amount);
+    }
+
+    function voluntaryDisconnect(address _vault) external {
+        emit Mock__VaultDisconnected(_vault);
     }
 
     function rebalance() external payable {

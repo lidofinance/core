@@ -18,7 +18,7 @@ import { certainAddress, ether, findEvents } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe("Dashboard", () => {
+describe.only("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
@@ -45,7 +45,7 @@ describe("Dashboard", () => {
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
     dashboardImpl = await ethers.deployContract("Dashboard", [steth]);
-    expect(await dashboardImpl.stETH()).to.equal(steth);
+    expect(await dashboardImpl.STETH()).to.equal(steth);
 
     factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
     expect(await factory.owner()).to.equal(factoryOwner);
@@ -85,7 +85,7 @@ describe("Dashboard", () => {
 
     it("sets the stETH address", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
-      expect(await dashboard_.stETH()).to.equal(steth);
+      expect(await dashboard_.STETH()).to.equal(steth);
     });
   });
 
@@ -114,7 +114,7 @@ describe("Dashboard", () => {
       expect(await dashboard.isInitialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
-      expect(await dashboard.stETH()).to.equal(steth);
+      expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
@@ -125,11 +125,12 @@ describe("Dashboard", () => {
     it("returns the correct vault socket data", async () => {
       const sockets = {
         vault: await vault.getAddress(),
-        shareLimit: 1000,
-        sharesMinted: 555,
-        reserveRatio: 1000,
-        reserveRatioThreshold: 800,
-        treasuryFeeBP: 500,
+        sharesMinted: 555n,
+        shareLimit: 1000n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -137,8 +138,8 @@ describe("Dashboard", () => {
       expect(await dashboard.vaultSocket()).to.deep.equal(Object.values(sockets));
       expect(await dashboard.shareLimit()).to.equal(sockets.shareLimit);
       expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
-      expect(await dashboard.reserveRatio()).to.equal(sockets.reserveRatio);
-      expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThreshold);
+      expect(await dashboard.reserveRatio()).to.equal(sockets.reserveRatioBP);
+      expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
     });
   });
@@ -161,13 +162,13 @@ describe("Dashboard", () => {
 
   context("disconnectFromVaultHub", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).disconnectFromVaultHub())
+      await expect(dashboard.connect(stranger).voluntaryDisconnect())
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
     });
 
     it("disconnects the staking vault from the vault hub", async () => {
-      await expect(dashboard.disconnectFromVaultHub()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
+      await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
     });
   });
 
