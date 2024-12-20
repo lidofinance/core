@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as StETH} from "../interfaces/ILido.sol";
@@ -486,7 +487,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     }
 
     function _vaultAuth(address _vault, string memory _operation) internal view {
-        if (msg.sender != IStakingVault(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
+        if (msg.sender != OwnableUpgradeable(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
     }
 
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
