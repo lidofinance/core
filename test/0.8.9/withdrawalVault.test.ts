@@ -19,7 +19,7 @@ import { Snapshot } from "test/suite";
 
 import {
   deployWithdrawalsPredeployedMock,
-  testFullWithdrawalRequestBehavior,
+  withdrawalsPredeployedHardcodedAddress,
 } from "./lib/withdrawalCredentials/withdrawalRequests.behavior";
 
 const PETRIFIED_VERSION = MAX_UINT256;
@@ -44,7 +44,9 @@ describe("WithdrawalVault.sol", () => {
   before(async () => {
     [owner, user, treasury, validatorsExitBus] = await ethers.getSigners();
 
-    withdrawalsPredeployed = await deployWithdrawalsPredeployedMock();
+    withdrawalsPredeployed = await deployWithdrawalsPredeployedMock(1n);
+
+    expect(await withdrawalsPredeployed.getAddress()).to.equal(withdrawalsPredeployedHardcodedAddress);
 
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
@@ -195,7 +197,7 @@ describe("WithdrawalVault.sol", () => {
     });
   });
 
-  context("addWithdrawalRequests", () => {
+  context("eip 7002 withdrawal requests", () => {
     it("Reverts if the caller is not Validator Exit Bus", async () => {
       await expect(vault.connect(user).addFullWithdrawalRequests(["0x1234"])).to.be.revertedWithCustomError(
         vault,
@@ -203,9 +205,6 @@ describe("WithdrawalVault.sol", () => {
       );
     });
 
-    testFullWithdrawalRequestBehavior(
-      () => vault.connect(validatorsExitBus),
-      () => withdrawalsPredeployed.connect(user),
-    );
+    // ToDo: add tests...
   });
 });

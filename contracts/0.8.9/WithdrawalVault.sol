@@ -55,9 +55,9 @@ contract WithdrawalVault is Versioned {
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
     constructor(address _lido, address _treasury, address _validatorsExitBus) {
-        _assertNonZero(_lido);
-        _assertNonZero(_treasury);
-        _assertNonZero(_validatorsExitBus);
+        _requireNonZero(_lido);
+        _requireNonZero(_treasury);
+        _requireNonZero(_validatorsExitBus);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
@@ -141,14 +141,14 @@ contract WithdrawalVault is Versioned {
             revert NotValidatorExitBus();
         }
 
-        WithdrawalRequests.addFullWithdrawalRequests(pubkeys);
+        WithdrawalRequests.addFullWithdrawalRequests(pubkeys, msg.value);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {
         return WithdrawalRequests.getWithdrawalRequestFee();
     }
 
-    function _assertNonZero(address _address) internal pure {
+    function _requireNonZero(address _address) internal pure {
         if (_address == address(0)) revert ZeroAddress();
     }
 }

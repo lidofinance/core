@@ -7,7 +7,8 @@ library WithdrawalRequests {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
-    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 msgValue);
+    error InsufficientBalance(uint256 balance, uint256 totalWithdrawalFee);
+    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 providedTotalFee);
 
     error WithdrawalRequestFeeReadFailed();
     error InvalidPubkeyLength(bytes pubkey);
@@ -23,17 +24,17 @@ library WithdrawalRequests {
      * @param pubkeys An array of public keys for the validators requesting full withdrawals.
      */
     function addFullWithdrawalRequests(
-        bytes[] calldata pubkeys
+        bytes[] calldata pubkeys,
+        uint256 totalWithdrawalFee
     ) internal {
-        uint256 keysCount = pubkeys.length;
-        uint64[] memory amounts = new uint64[](keysCount);
-
-        _addWithdrawalRequests(pubkeys, amounts);
+        uint64[] memory amounts = new uint64[](pubkeys.length);
+        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
     }
 
     /**
      * @dev Adds partial withdrawal requests for the provided public keys with corresponding amounts.
      *      A partial withdrawal is any withdrawal where the amount is greater than zero.
+     *      A full withdrawal is any withdrawal where the amount is zero.
      *      This allows withdrawal of any balance exceeding 32 ETH (e.g., if a validator has 35 ETH, up to 3 ETH can be withdrawn).
      *      However, the protocol enforces a minimum balance of 32 ETH per validator, even if a higher amount is requested.
      * @param pubkeys An array of public keys for the validators requesting withdrawals.
@@ -41,23 +42,35 @@ library WithdrawalRequests {
      */
     function addPartialWithdrawalRequests(
         bytes[] calldata pubkeys,
-        uint64[] calldata amounts
+        uint64[] calldata amounts,
+        uint256 totalWithdrawalFee
     ) internal {
-        uint256 keysCount = pubkeys.length;
-        if (keysCount != amounts.length) {
-            revert MismatchedArrayLengths(keysCount, amounts.length);
-        }
+        _requireArrayLengthsMatch(pubkeys, amounts);
 
-        uint64[] memory _amounts = new uint64[](keysCount);
-        for (uint256 i = 0; i < keysCount; i++) {
+        for (uint256 i = 0; i < amounts.length; i++) {
             if (amounts[i] == 0) {
                 revert PartialWithdrawalRequired(pubkeys[i]);
             }
-
-            _amounts[i] = amounts[i];
         }
 
-        _addWithdrawalRequests(pubkeys, _amounts);
+        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+    }
+
+        /**
+     * @dev Adds partial or full withdrawal requests for the provided public keys with corresponding amounts.
+     *      A partial withdrawal is any withdrawal where the amount is greater than zero.
+     *      This allows withdrawal of any balance exceeding 32 ETH (e.g., if a validator has 35 ETH, up to 3 ETH can be withdrawn).
+     *      However, the protocol enforces a minimum balance of 32 ETH per validator, even if a higher amount is requested.
+     * @param pubkeys An array of public keys for the validators requesting withdrawals.
+     * @param amounts An array of corresponding withdrawal amounts for each public key.
+     */
+    function addWithdrawalRequests(
+        bytes[] calldata pubkeys,
+        uint64[] calldata amounts,
+        uint256 totalWithdrawalFee
+    ) internal {
+        _requireArrayLengthsMatch(pubkeys, amounts);
+        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
     }
 
     /**
@@ -76,22 +89,26 @@ library WithdrawalRequests {
 
     function _addWithdrawalRequests(
         bytes[] calldata pubkeys,
-        uint64[] memory amounts
+        uint64[] memory amounts,
+        uint256 totalWithdrawalFee
     ) internal {
         uint256 keysCount = pubkeys.length;
         if (keysCount == 0) {
             revert NoWithdrawalRequests();
         }
 
-        uint256 minFeePerRequest = getWithdrawalRequestFee();
-        if (minFeePerRequest * keysCount > msg.value) {
-            revert FeeNotEnough(minFeePerRequest, keysCount, msg.value);
+        if(address(this).balance < totalWithdrawalFee) {
+            revert InsufficientBalance(address(this).balance, totalWithdrawalFee);
         }
 
-        uint256 feePerRequest = msg.value / keysCount;
-        uint256 unallocatedFee = msg.value % keysCount;
-        uint256 prevBalance = address(this).balance - msg.value;
+        uint256 minFeePerRequest = getWithdrawalRequestFee();
+        if (minFeePerRequest * keysCount > totalWithdrawalFee) {
+            revert FeeNotEnough(minFeePerRequest, keysCount, totalWithdrawalFee);
+        }
 
+        uint256 feePerRequest = totalWithdrawalFee / keysCount;
+        uint256 unallocatedFee = totalWithdrawalFee % keysCount;
+        uint256 prevBalance = address(this).balance - totalWithdrawalFee;
 
         for (uint256 i = 0; i < keysCount; ++i) {
             bytes memory pubkey = pubkeys[i];
@@ -118,5 +135,14 @@ library WithdrawalRequests {
         }
 
         assert(address(this).balance == prevBalance);
+    }
+
+    function _requireArrayLengthsMatch(
+        bytes[] calldata pubkeys,
+        uint64[] calldata amounts
+    ) internal pure {
+        if (pubkeys.length != amounts.length) {
+            revert MismatchedArrayLengths(pubkeys.length, amounts.length);
+        }
     }
 }
