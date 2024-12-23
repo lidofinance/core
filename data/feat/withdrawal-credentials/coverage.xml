@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3064"  lines-covered="2942"  line-rate="0.9601999999999999"  branches-valid="1354"  branches-covered="1277"  branch-rate="0.9431"  timestamp="1734958794846" complexity="0" version="0.1">
+<coverage lines-valid="3064"  lines-covered="2942"  line-rate="0.9601999999999999"  branches-valid="1354"  branches-covered="1277"  branch-rate="0.9431"  timestamp="1734960052819" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3734,21 +3734,7 @@
 			<line number="172"  hits="39"  branch="false" />
 		</lines>
 		</class>
-		<class name="UnstructuredRefStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredRefStorage.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-			<method name="storageMapUint256Address"  hits="64"  signature="()V" >
-				<lines><line number="7"  hits="64" /></lines>
-			</method>
-			<method name="storageMapAddressMapAddressBool"  hits="31"  signature="()V" >
-				<lines><line number="13"  hits="31" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="10"  hits="64"  branch="false" />
-			<line number="16"  hits="31"  branch="false" />
-		</lines>
-		</class>
-		<class name="WithdrawalRequests.sol"  filename="contracts/0.8.9/lib/WithdrawalRequests.sol"  line-rate="1"  branch-rate="1" >
+		<class name="TriggerableWithdrawals.sol"  filename="contracts/0.8.9/lib/TriggerableWithdrawals.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
 			<method name="addFullWithdrawalRequests"  hits="19"  signature="()V" >
 				<lines><line number="26"  hits="19" /></lines>
@@ -3810,6 +3796,20 @@
 			<line number="137"  hits="42"  branch="false" />
 			<line number="144"  hits="44"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="145"  hits="2"  branch="false" />
+		</lines>
+		</class>
+		<class name="UnstructuredRefStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredRefStorage.sol"  line-rate="1"  branch-rate="1" >
+		<methods>
+			<method name="storageMapUint256Address"  hits="64"  signature="()V" >
+				<lines><line number="7"  hits="64" /></lines>
+			</method>
+			<method name="storageMapAddressMapAddressBool"  hits="31"  signature="()V" >
+				<lines><line number="13"  hits="31" /></lines>
+			</method>
+		</methods>
+		<lines>
+			<line number="10"  hits="64"  branch="false" />
+			<line number="16"  hits="31"  branch="false" />
 		</lines>
 		</class>
 	</classes>
