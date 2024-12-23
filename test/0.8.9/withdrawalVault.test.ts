@@ -20,7 +20,7 @@ import { Snapshot } from "test/suite";
 import {
   deployWithdrawalsPredeployedMock,
   withdrawalsPredeployedHardcodedAddress,
-} from "./lib/withdrawalCredentials/withdrawalRequests.behavior";
+} from "./lib/triggerableWithdrawals/utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -197,7 +197,7 @@ describe("WithdrawalVault.sol", () => {
     });
   });
 
-  context("eip 7002 withdrawal requests", () => {
+  context("eip 7002 triggerable withdrawals", () => {
     it("Reverts if the caller is not Validator Exit Bus", async () => {
       await expect(vault.connect(user).addFullWithdrawalRequests(["0x1234"])).to.be.revertedWithCustomError(
         vault,

@@ -1,13 +1,13 @@
 pragma solidity 0.8.9;
 
-import {WithdrawalRequests} from "contracts/0.8.9/lib/WithdrawalRequests.sol";
+import {TriggerableWithdrawals} from "contracts/0.8.9/lib/TriggerableWithdrawals.sol";
 
-contract WithdrawalCredentials_Harness {
+contract TriggerableWithdrawals_Harness {
     function addFullWithdrawalRequests(
         bytes[] calldata pubkeys,
         uint256 totalWithdrawalFee
     ) external {
-        WithdrawalRequests.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee);
+        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee);
     }
 
     function addPartialWithdrawalRequests(
@@ -15,7 +15,7 @@ contract WithdrawalCredentials_Harness {
         uint64[] calldata amounts,
         uint256 totalWithdrawalFee
     ) external {
-        WithdrawalRequests.addPartialWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        TriggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
     }
 
     function addWithdrawalRequests(
@@ -23,15 +23,15 @@ contract WithdrawalCredentials_Harness {
         uint64[] calldata amounts,
         uint256 totalWithdrawalFee
     ) external {
-        WithdrawalRequests.addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        TriggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {
-        return WithdrawalRequests.getWithdrawalRequestFee();
+        return TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
     function getWithdrawalsContractAddress() public pure returns (address) {
-        return WithdrawalRequests.WITHDRAWAL_REQUEST;
+        return TriggerableWithdrawals.WITHDRAWAL_REQUEST;
     }
 
     function deposit() external payable {}

@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
-import {WithdrawalRequests} from "./lib/WithdrawalRequests.sol";
+import {TriggerableWithdrawals} from "./lib/TriggerableWithdrawals.sol";
 
 interface ILido {
     /**
@@ -141,11 +141,11 @@ contract WithdrawalVault is Versioned {
             revert NotValidatorExitBus();
         }
 
-        WithdrawalRequests.addFullWithdrawalRequests(pubkeys, msg.value);
+        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, msg.value);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {
-        return WithdrawalRequests.getWithdrawalRequestFee();
+        return TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
     function _requireNonZero(address _address) internal pure {

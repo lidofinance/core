@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-library WithdrawalRequests {
+library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
