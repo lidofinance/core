@@ -11,23 +11,32 @@ pragma solidity 0.8.25;
 
 interface IDelegation {
     struct InitialState {
-        uint256 managementFee;
-        uint256 performanceFee;
-        address manager;
+        address curator;
+        address staker;
+        address tokenMaster;
         address operator;
+        address claimOperatorDueRole;
+        uint256 curatorFee;
+        uint256 operatorFee;
     }
 
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
-    function MANAGER_ROLE() external view returns (bytes32);
+    function CURATOR_ROLE() external view returns (bytes32);
+
+    function STAKER_ROLE() external view returns (bytes32);
+
+    function TOKEN_MASTER_ROLE() external view returns (bytes32);
 
     function OPERATOR_ROLE() external view returns (bytes32);
 
+    function CLAIM_OPERATOR_DUE_ROLE() external view returns (bytes32);
+
     function initialize(address _stakingVault) external;
 
-    function setManagementFee(uint256 _newManagementFee) external;
+    function setCuratorFee(uint256 _newCuratorFee) external;
 
-    function setPerformanceFee(uint256 _newPerformanceFee) external;
+    function setOperatorFee(uint256 _newOperatorFee) external;
 
     function grantRole(bytes32 role, address account) external;
 
@@ -57,7 +66,7 @@ contract VaultFactory is UpgradeableBeacon {
         IDelegation.InitialState calldata _delegationInitialState,
         bytes calldata _stakingVaultInitializerExtraParams
     ) external returns (IStakingVault vault, IDelegation delegation) {
-        if (_delegationInitialState.manager == address(0)) revert ZeroArgument("manager");
+        if (_delegationInitialState.curator == address(0)) revert ZeroArgument("curator");
 
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
@@ -71,18 +80,21 @@ contract VaultFactory is UpgradeableBeacon {
 
         // grant roles to owner, manager, operator
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), msg.sender);
-        delegation.grantRole(delegation.MANAGER_ROLE(), _delegationInitialState.manager);
-        delegation.grantRole(delegation.OPERATOR_ROLE(), vault.operator());
+        delegation.grantRole(delegation.CURATOR_ROLE(), _delegationInitialState.curator);
+        delegation.grantRole(delegation.STAKER_ROLE(), _delegationInitialState.staker);
+        delegation.grantRole(delegation.TOKEN_MASTER_ROLE(), _delegationInitialState.tokenMaster);
+        delegation.grantRole(delegation.OPERATOR_ROLE(), _delegationInitialState.operator);
+        delegation.grantRole(delegation.CLAIM_OPERATOR_DUE_ROLE(), _delegationInitialState.claimOperatorDueRole);
 
         // grant temporary roles to factory
-        delegation.grantRole(delegation.MANAGER_ROLE(), address(this));
+        delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
         delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
         // set fees
-        delegation.setManagementFee(_delegationInitialState.managementFee);
-        delegation.setPerformanceFee(_delegationInitialState.performanceFee);
+        delegation.setCuratorFee(_delegationInitialState.curatorFee);
+        delegation.setOperatorFee(_delegationInitialState.operatorFee);
 
         // revoke temporary roles from factory
-        delegation.revokeRole(delegation.MANAGER_ROLE(), address(this));
+        delegation.revokeRole(delegation.CURATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 

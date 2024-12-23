@@ -3,11 +3,21 @@
 
 pragma solidity ^0.8.0;
 
-contract StETH__MockForDelegation {
-    function hello() external pure returns (string memory) {
-        return "hello";
+import {ERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/ERC20.sol";
+
+contract StETH__MockForDelegation is ERC20 {
+    constructor() ERC20("Staked Ether", "stETH") {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
+    }
+
+    function transferSharesFrom(address from, address to, uint256 amount) external returns (uint256) {
+        _transfer(from, to, amount);
+        return amount;
     }
 }
-
-
-
