@@ -219,7 +219,7 @@ describe("VaultHubViewerV1", () => {
     beforeEach(async () => {
       await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
       await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
-      // await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress()); // TODO: fix revert
+      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
     });
 
     it("returns all vaults with a given role on Delegation", async () => {

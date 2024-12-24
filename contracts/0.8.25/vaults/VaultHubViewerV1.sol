@@ -68,6 +68,8 @@ contract VaultHubViewerV1 {
             return false;
         }
 
+        if (!isContract(owner)) return false;
+
         try IDashboardACL(owner).hasRole(_role, _member) returns (bool result) {
             return result;
         } catch {
