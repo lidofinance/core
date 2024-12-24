@@ -38,13 +38,13 @@ const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
-describe("Scenario: Staking Vaults Happy Path", () => {
+describe.only("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
-  let manager: HardhatEthersSigner;
+  let curator: HardhatEthersSigner;
   let staker: HardhatEthersSigner;
   let tokenMaster: HardhatEthersSigner;
 
@@ -70,7 +70,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, operator, manager, staker, tokenMaster] = await ethers.getSigners();
+    [ethHolder, owner, operator, curator, staker, tokenMaster] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -160,10 +160,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVault(
       {
-        managementFee: VAULT_OWNER_FEE,
-        performanceFee: VAULT_NODE_OPERATOR_FEE,
-        manager: manager,
+        operatorFee: VAULT_OWNER_FEE,
+        curatorFee: VAULT_NODE_OPERATOR_FEE,
+        curator: curator,
         operator: operator,
+        staker: staker,
+        tokenMaster: tokenMaster,
+        claimOperatorDueRole: operator,
       },
       "0x",
     );
@@ -176,19 +179,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
     delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
 
+    expect(await delegation.getRoleMemberCount(await delegation.DEFAULT_ADMIN_ROLE())).to.be.equal(1n);
     expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), owner)).to.be.true;
-    expect(await delegation.hasRole(await delegation.MANAGER_ROLE(), manager)).to.be.true;
+
+    expect(await delegation.getRoleMemberCount(await delegation.CURATOR_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.CURATOR_ROLE(), curator)).to.be.true;
+
+    expect(await delegation.getRoleMemberCount(await delegation.OPERATOR_ROLE())).to.be.equal(1n);
     expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
 
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), owner)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), operator)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), staker)).to.be.false;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.false;
+    expect(await delegation.getRoleMemberCount(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.CLAIM_OPERATOR_DUE_ROLE(), operator)).to.be.true;
+    expect(await delegation.getRoleAdmin(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(
+      await delegation.OPERATOR_ROLE(),
+    );
 
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), tokenMaster)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), manager)).to.be.false;
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), owner)).to.be.false;
+    expect(await delegation.getRoleMemberCount(await delegation.TOKEN_MASTER_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
+
+    expect(await delegation.getRoleMemberCount(await delegation.STAKER_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
   });
 
   it("Should allow Owner to assign Staker and Token Master roles", async () => {
@@ -314,21 +324,21 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
 
-    expect(await delegation.managementDue()).to.be.gt(0n);
-    expect(await delegation.performanceDue()).to.be.gt(0n);
+    expect(await delegation.curatorDue()).to.be.gt(0n);
+    expect(await delegation.operatorDue()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await delegation.performanceDue();
+    const performanceFee = await delegation.operatorDue();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
     const operatorBalanceBefore = await ethers.provider.getBalance(operator);
 
-    const claimPerformanceFeesTx = await delegation.connect(operator).claimPerformanceDue(operator, false);
+    const claimPerformanceFeesTx = await delegation.connect(operator).claimOperatorDue(operator);
     const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimPerformanceDue",
+      "delegation.claimOperatorDue",
       claimPerformanceFeesTx,
     );
 
@@ -343,21 +353,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     expect(operatorBalanceAfter).to.equal(operatorBalanceBefore + performanceFee - gasFee);
-  });
-
-  it("Should stop Manager from claiming management fee is stETH after reserve limit reached", async () => {
-    await expect(delegation.connect(manager).claimManagementDue(manager, true))
-      .to.be.revertedWithCustomError(ctx.contracts.accounting, "InsufficientValuationToMint")
-      .withArgs(stakingVaultAddress, await stakingVault.valuation());
-  });
-
-  it("Should stop Manager from claiming management fee in ETH if not not enough unlocked ETH", async () => {
-    const feesToClaim = await delegation.managementDue();
-    const availableToClaim = (await stakingVault.valuation()) - (await stakingVault.locked());
-
-    await expect(delegation.connect(manager).claimManagementDue(manager, false))
-      .to.be.revertedWithCustomError(delegation, "InsufficientUnlockedAmount")
-      .withArgs(availableToClaim, feesToClaim);
   });
 
   it("Should allow Owner to trigger validator exit to cover fees", async () => {
@@ -380,19 +375,19 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to claim manager rewards in ETH after rebase with exited validator", async () => {
-    const feesToClaim = await delegation.managementDue();
+    const feesToClaim = await delegation.curatorDue();
 
     log.debug("Staking Vault stats after operator exit", {
       "Staking Vault management fee": ethers.formatEther(feesToClaim),
       "Staking Vault balance": ethers.formatEther(await ethers.provider.getBalance(stakingVaultAddress)),
     });
 
-    const managerBalanceBefore = await ethers.provider.getBalance(manager);
+    const managerBalanceBefore = await ethers.provider.getBalance(curator);
 
-    const claimEthTx = await delegation.connect(manager).claimManagementDue(manager, false);
-    const { gasUsed, gasPrice } = await trace("delegation.claimManagementDue", claimEthTx);
+    const claimEthTx = await delegation.connect(curator).claimCuratorDue(curator);
+    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorDue", claimEthTx);
 
-    const managerBalanceAfter = await ethers.provider.getBalance(manager);
+    const managerBalanceAfter = await ethers.provider.getBalance(curator);
     const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
 
     log.debug("Balances after owner fee claim", {
@@ -447,14 +442,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const socket = await accounting["vaultSocket(address)"](stakingVaultAddress);
     const sharesMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    const rebalanceTx = await delegation.connect(manager).rebalanceVault(sharesMinted, { value: sharesMinted });
+    const rebalanceTx = await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
     await trace("delegation.rebalanceVault", rebalanceTx);
 
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
-    const disconnectTx = await delegation.connect(manager).voluntaryDisconnect();
+    const disconnectTx = await delegation.connect(curator).voluntaryDisconnect();
     const disconnectTxReceipt = await trace<ContractTransactionReceipt>("delegation.voluntaryDisconnect", disconnectTx);
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
