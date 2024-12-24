@@ -28,10 +28,6 @@ import {Dashboard} from "./Dashboard.sol";
  * The due is the amount of ether that is owed to the Curator or Operator based on the fee.
  */
 contract Delegation is Dashboard {
-    /**
-     * @notice Total basis points for fee calculations; equals to 100%.
-     */
-    uint256 private constant TOTAL_BASIS_POINTS = 10000;
 
     /**
      * @notice Maximum fee value; equals to 100%.
