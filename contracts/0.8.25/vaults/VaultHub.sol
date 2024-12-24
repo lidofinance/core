@@ -6,9 +6,10 @@ pragma solidity 0.8.25;
 
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {ILido as StETH} from "../interfaces/ILido.sol";
+import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -24,15 +25,13 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         /// @notice vault sockets with vaults connected to the hub
         /// @dev first socket is always zero. stone in the elevator
         VaultSocket[] sockets;
-
         /// @notice mapping from vault address to its socket
         /// @dev if vault is not connected to the hub, its index is zero
         mapping(address => uint256) vaultIndex;
-
         /// @notice allowed factory addresses
-        mapping (address => bool) vaultFactories;
+        mapping(address => bool) vaultFactories;
         /// @notice allowed vault implementation addresses
-        mapping (address => bool) vaultImpl;
+        mapping(address => bool) vaultImpl;
     }
 
     struct VaultSocket {
@@ -41,7 +40,6 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         address vault;
         /// @notice total number of stETH shares minted by the vault
         uint96 sharesMinted;
-
         // ### 2nd slot
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
@@ -75,10 +73,10 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     uint256 internal constant CONNECT_DEPOSIT = 1 ether;
 
     /// @notice Lido stETH contract
-    StETH public immutable STETH;
+    IStETH public immutable STETH;
 
     /// @param _stETH Lido stETH contract
-    constructor(StETH _stETH) {
+    constructor(IStETH _stETH) {
         STETH = _stETH;
 
         _disableInitializers();
@@ -245,7 +243,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
         uint256 reserveRatioBP = socket.reserveRatioBP;
-        uint256 maxMintableShares = _maxMintableShares(_vault, reserveRatioBP);
+        uint256 maxMintableShares = _maxMintableShares(_vault, reserveRatioBP, shareLimit);
 
         if (vaultSharesAfterMint > maxMintableShares) {
             revert InsufficientValuationToMint(_vault, IStakingVault(_vault).valuation());
@@ -303,7 +301,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP);
+        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
         uint256 sharesMinted = socket.sharesMinted;
         if (sharesMinted <= threshold) {
             // NOTE!: on connect vault is always balanced
@@ -486,7 +484,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     }
 
     function _vaultAuth(address _vault, string memory _operation) internal view {
-        if (msg.sender != IStakingVault(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
+        if (msg.sender != OwnableUpgradeable(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
     }
 
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
@@ -497,11 +495,12 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     }
 
     /// @dev returns total number of stETH shares that is possible to mint on the provided vault with provided reserveRatio
-    /// it does not count shares that is already minted
-    function _maxMintableShares(address _vault, uint256 _reserveRatio) internal view returns (uint256) {
+    ///      it does not count shares that is already minted, but does count shareLimit on the vault
+    function _maxMintableShares(address _vault, uint256 _reserveRatio, uint256 _shareLimit) internal view returns (uint256) {
         uint256 maxStETHMinted = (IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - _reserveRatio)) /
             TOTAL_BASIS_POINTS;
-        return STETH.getSharesByPooledEth(maxStETHMinted);
+
+        return Math256.min(STETH.getSharesByPooledEth(maxStETHMinted), _shareLimit);
     }
 
     function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
@@ -527,6 +526,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultImplAdded(address indexed impl);
     event VaultFactoryAdded(address indexed factory);
+
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
     error InsufficientSharesToBurn(address vault, uint256 amount);

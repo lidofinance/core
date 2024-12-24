@@ -80,7 +80,7 @@
     "ethers": "6.13.4",
     "glob": "11.0.0",
     "globals": "15.12.0",
-    "hardhat": "2.22.16",
+    "hardhat": "2.22.17",
     "hardhat-contract-sizer": "2.10.0",
     "hardhat-gas-reporter": "1.0.10",
     "hardhat-ignore-warnings": "0.2.12",

@@ -15,7 +15,7 @@ import {
 import { findEventsWithInterfaces } from "lib";
 
 import { IDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
-import DelegationInitializationParamsStruct = IDelegation.InitializationParamsStruct;
+import DelegationInitializationParamsStruct = IDelegation.InitialStateStruct;
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -50,17 +50,20 @@ interface CreateVaultResponse {
 export async function createVaultProxy(
   vaultFactory: VaultFactory,
   _owner: HardhatEthersSigner,
-  _lidoAgent: HardhatEthersSigner,
+  _operator: HardhatEthersSigner,
 ): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
   const initializationParams: DelegationInitializationParamsStruct = {
-    managementFee: 100n,
-    performanceFee: 200n,
-    manager: await _owner.getAddress(),
-    operator: await _owner.getAddress(),
+    curatorFee: 100n,
+    operatorFee: 200n,
+    curator: await _owner.getAddress(),
+    staker: await _owner.getAddress(),
+    tokenMaster: await _owner.getAddress(),
+    operator: await _operator.getAddress(),
+    claimOperatorDueRole: await _owner.getAddress(),
   };
 
-  const tx = await vaultFactory.connect(_owner).createVault("0x", initializationParams, _lidoAgent);
+  const tx = await vaultFactory.connect(_owner).createVault(initializationParams, "0x");
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;
