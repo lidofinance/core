@@ -161,9 +161,9 @@ describe("Delegation", () => {
     });
   });
 
-  context("voteLifetimeCommittee", () => {
+  context("votingCommittee", () => {
     it("returns the correct roles", async () => {
-      expect(await delegation.voteLifetimeCommittee()).to.deep.equal([
+      expect(await delegation.votingCommittee()).to.deep.equal([
         await delegation.CURATOR_ROLE(),
         await delegation.OPERATOR_ROLE(),
       ]);
@@ -193,7 +193,7 @@ describe("Delegation", () => {
         .to.emit(delegation, "RoleMemberVoted")
         .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData)
         .and.to.emit(delegation, "VoteLifetimeSet")
-        .withArgs(oldVoteLifetime, newVoteLifetime);
+        .withArgs(operator, oldVoteLifetime, newVoteLifetime);
 
       expect(await delegation.voteLifetime()).to.equal(newVoteLifetime);
     });
@@ -217,24 +217,6 @@ describe("Delegation", () => {
       await expect(delegation.connect(curator).claimCuratorDue(stranger)).to.be.revertedWithCustomError(
         delegation,
         "NoDueToClaim",
-      );
-    });
-
-    it("reverts if the due is greater than the balance", async () => {
-      const curatorFee = 10_00n; // 10%
-      await delegation.connect(curator).setCuratorFee(curatorFee);
-      expect(await delegation.curatorFee()).to.equal(curatorFee);
-
-      const rewards = ether("1");
-      await vault.connect(hubSigner).report(rewards, 0n, 0n);
-
-      const expectedDue = (rewards * curatorFee) / BP_BASE;
-      expect(await delegation.curatorDue()).to.equal(expectedDue);
-      expect(await delegation.curatorDue()).to.be.greaterThan(await ethers.provider.getBalance(vault));
-
-      await expect(delegation.connect(curator).claimCuratorDue(recipient)).to.be.revertedWithCustomError(
-        delegation,
-        "InsufficientBalance",
       );
     });
 
@@ -282,25 +264,6 @@ describe("Delegation", () => {
       await expect(delegation.connect(claimOperatorDueRole).claimOperatorDue(recipient)).to.be.revertedWithCustomError(
         delegation,
         "NoDueToClaim",
-      );
-    });
-
-    it("reverts if the due is greater than the balance", async () => {
-      const operatorFee = 10_00n; // 10%
-      await delegation.connect(operator).setOperatorFee(operatorFee);
-      await delegation.connect(curator).setOperatorFee(operatorFee);
-      expect(await delegation.operatorFee()).to.equal(operatorFee);
-
-      const rewards = ether("1");
-      await vault.connect(hubSigner).report(rewards, 0n, 0n);
-
-      const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await delegation.operatorDue()).to.equal(expectedDue);
-      expect(await delegation.operatorDue()).to.be.greaterThan(await ethers.provider.getBalance(vault));
-
-      await expect(delegation.connect(claimOperatorDueRole).claimOperatorDue(recipient)).to.be.revertedWithCustomError(
-        delegation,
-        "InsufficientBalance",
       );
     });
 
@@ -396,16 +359,6 @@ describe("Delegation", () => {
       await expect(delegation.connect(staker).withdraw(recipient, unreserved + 1n)).to.be.revertedWithCustomError(
         delegation,
         "RequestedAmountExceedsUnreserved",
-      );
-    });
-
-    it("reverts if the amount is greater than the balance of the contract", async () => {
-      const amount = ether("1");
-      await vault.connect(hubSigner).report(amount, 0n, 0n);
-      expect(await ethers.provider.getBalance(vault)).to.lessThan(amount);
-      await expect(delegation.connect(staker).withdraw(recipient, amount)).to.be.revertedWithCustomError(
-        delegation,
-        "InsufficientBalance",
       );
     });
 
@@ -512,15 +465,6 @@ describe("Delegation", () => {
     });
   });
 
-  context("operatorFeeCommittee", () => {
-    it("returns the correct roles", async () => {
-      expect(await delegation.operatorFeeCommittee()).to.deep.equal([
-        await delegation.CURATOR_ROLE(),
-        await delegation.OPERATOR_ROLE(),
-      ]);
-    });
-  });
-
   context("setOperatorFee", () => {
     it("reverts if new fee is greater than max fee", async () => {
       const invalidFee = MAX_FEE + 1n;
@@ -571,17 +515,19 @@ describe("Delegation", () => {
       voteTimestamp = await getNextBlockTimestamp();
       await expect(delegation.connect(operator).setOperatorFee(newOperatorFee))
         .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData);
+        .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData)
+        .and.to.emit(delegation, "OperatorFeeSet")
+        .withArgs(operator, previousOperatorFee, newOperatorFee);
 
       expect(await delegation.operatorFee()).to.equal(newOperatorFee);
 
       // resets the votes
-      for (const role of await delegation.operatorFeeCommittee()) {
+      for (const role of await delegation.votingCommittee()) {
         expect(await delegation.votings(keccak256(msgData), role)).to.equal(0n);
       }
     });
 
-    it("reverts if the caller is not a member of the performance fee committee", async () => {
+    it("reverts if the caller is not a member of the operator fee committee", async () => {
       const newOperatorFee = 1000n;
       await expect(delegation.connect(stranger).setOperatorFee(newOperatorFee)).to.be.revertedWithCustomError(
         delegation,
@@ -620,18 +566,11 @@ describe("Delegation", () => {
       voteTimestamp = await getNextBlockTimestamp();
       await expect(delegation.connect(curator).setOperatorFee(newOperatorFee))
         .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
+        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData)
+        .and.to.emit(delegation, "OperatorFeeSet")
+        .withArgs(curator, previousOperatorFee, newOperatorFee);
       // fee is now changed
       expect(await delegation.operatorFee()).to.equal(newOperatorFee);
-    });
-  });
-
-  context("ownershipTransferCommittee", () => {
-    it("returns the correct roles", async () => {
-      expect(await delegation.ownershipTransferCommittee()).to.deep.equal([
-        await delegation.CURATOR_ROLE(),
-        await delegation.OPERATOR_ROLE(),
-      ]);
     });
   });
 
