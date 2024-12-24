@@ -28,20 +28,20 @@ contract VaultHub__MockForHubViewer {
 
     mapping(address => VaultHub.VaultSocket) public vaultSockets;
 
-    function mock__setVaultSocket(address vault, VaultHub.VaultSocket memory socket) external {
-        vaultSockets[vault] = socket;
+    function mock__setVaultSocket(address _vault, VaultHub.VaultSocket memory socket) external {
+        vaultSockets[_vault] = socket;
     }
 
-    function mock_vaultLock(address vault, uint256 amount) external {
-        IStakingVault(vault).lock(amount);
+    function mock_vaultLock(address _vault, uint256 amount) external {
+        IStakingVault(_vault).lock(amount);
     }
 
-    function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
-        return vaultSockets[vault];
+    function vaultSocket(address _vault) external view returns (VaultHub.VaultSocket memory) {
+        return vaultSockets[_vault];
     }
 
-    function vaultSocketIndex(address vault) public view returns (uint256) {
-        return _getVaultHubStorage().vaultIndex[vault];
+    function vaultSocketIndex(address _vault) public view returns (uint256) {
+        return _getVaultHubStorage().vaultIndex[_vault];
     }
 
     function vaultsCount() public view returns (uint256) {
@@ -56,8 +56,8 @@ contract VaultHub__MockForHubViewer {
         return _getVaultHubStorage().sockets;
     }
 
-    function disconnectVault(address vault) external {
-        emit Mock__VaultDisconnected(vault);
+    function disconnectVault(address _vault) external {
+        emit Mock__VaultDisconnected(_vault);
     }
 
     function mintSharesBackedByVault(address /* vault */, address recipient, uint256 amount) external {
