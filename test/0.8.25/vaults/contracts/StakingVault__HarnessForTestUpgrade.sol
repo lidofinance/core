@@ -1,7 +1,6 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 
-// See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
@@ -48,8 +47,8 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+    /// @param - the calldata for initialize contract after upgrades
+    function initialize(address _owner, address _operator, bytes calldata /* _params */) external onlyBeacon reinitializer(_version) {
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().operator = _operator;

@@ -4,17 +4,21 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
   DepositContract__MockForStakingVault,
   StakingVault,
-  StETH__MockForDashboard,
+  StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
   VaultHub__MockForDashboard,
+  WETH9__MockForVault,
+  WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { certainAddress, ether, findEvents } from "lib";
+import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstethDomain } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -24,7 +28,9 @@ describe("Dashboard", () => {
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let steth: StETH__MockForDashboard;
+  let steth: StETHPermit__HarnessForDashboard;
+  let weth: WETH9__MockForVault;
+  let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultImpl: StakingVault;
@@ -36,16 +42,25 @@ describe("Dashboard", () => {
 
   let originalState: string;
 
+  const BP_BASE = 10_000n;
+
   before(async () => {
     [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
 
-    steth = await ethers.deployContract("StETH__MockForDashboard", ["Staked ETH", "stETH"]);
+    steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
+    await steth.mock__setTotalShares(ether("1000000"));
+    await steth.mock__setTotalPooledEther(ether("1000000"));
+
+    weth = await ethers.deployContract("WETH9__MockForVault");
+    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
-    dashboardImpl = await ethers.deployContract("Dashboard", [steth]);
+    dashboardImpl = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
+    expect(await dashboardImpl.WETH()).to.equal(weth);
+    expect(await dashboardImpl.WSTETH()).to.equal(wsteth);
 
     factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
     expect(await factory.owner()).to.equal(factoryOwner);
@@ -78,14 +93,28 @@ describe("Dashboard", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress]))
+      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, weth, wsteth]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
         .withArgs("_stETH");
     });
 
-    it("sets the stETH address", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
+    it("reverts if WETH is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, wsteth]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("_WETH");
+    });
+
+    it("reverts if wstETH is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, weth, ethers.ZeroAddress]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("_wstETH");
+    });
+
+    it("sets the stETH, wETH, and wstETH addresses", async () => {
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
       expect(await dashboard_.STETH()).to.equal(steth);
+      expect(await dashboard_.WETH()).to.equal(weth);
+      expect(await dashboard_.WSTETH()).to.equal(wsteth);
     });
   });
 
@@ -101,7 +130,7 @@ describe("Dashboard", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [steth]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
 
       await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
@@ -115,6 +144,8 @@ describe("Dashboard", () => {
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
+      expect(await dashboard.WETH()).to.equal(weth);
+      expect(await dashboard.WSTETH()).to.equal(wsteth);
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
@@ -142,6 +173,274 @@ describe("Dashboard", () => {
       expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
     });
+  });
+
+  context("totalMintableShares", () => {
+    it("returns the trivial max mintable shares", async () => {
+      const maxShares = await dashboard.totalMintableShares();
+
+      expect(maxShares).to.equal(0n);
+    });
+
+    it("returns correct max mintable shares when not bound by shareLimit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 1000000000n,
+        sharesMinted: 555n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const maxMintableShares = await dashboard.totalMintableShares();
+      const maxStETHMinted = ((await vault.valuation()) * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE;
+      const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
+
+      expect(maxMintableShares).to.equal(maxSharesMinted);
+    });
+
+    it("returns correct max mintable shares when bound by shareLimit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 100n,
+        sharesMinted: 0n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const availableMintableShares = await dashboard.totalMintableShares();
+
+      expect(availableMintableShares).to.equal(sockets.shareLimit);
+    });
+
+    it("returns zero when reserve ratio is does not allow mint", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 1000000000n,
+        sharesMinted: 555n,
+        reserveRatioBP: 10_000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      await dashboard.fund({ value: 1000n });
+
+      const availableMintableShares = await dashboard.totalMintableShares();
+
+      expect(availableMintableShares).to.equal(0n);
+    });
+
+    it("returns funded amount when reserve ratio is zero", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 555n,
+        reserveRatioBP: 0n,
+        reserveRatioThresholdBP: 0n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 1000n;
+      await dashboard.fund({ value: funding });
+
+      const availableMintableShares = await dashboard.totalMintableShares();
+
+      const toShares = await steth.getSharesByPooledEth(funding);
+      expect(availableMintableShares).to.equal(toShares);
+    });
+  });
+
+  context("getMintableShares", () => {
+    it("returns trivial can mint shares", async () => {
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(0n);
+    });
+
+    it("can mint all available shares", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 0n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+
+      const funding = 1000n;
+
+      const preFundCanMint = await dashboard.getMintableShares(funding);
+
+      await dashboard.fund({ value: funding });
+
+      const availableMintableShares = await dashboard.totalMintableShares();
+
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(availableMintableShares);
+      expect(canMint).to.equal(preFundCanMint);
+    });
+
+    it("cannot mint shares", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 900n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 1000n;
+
+      const preFundCanMint = await dashboard.getMintableShares(funding);
+
+      await dashboard.fund({ value: funding });
+
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(0n); // 1000 - 10% - 900 = 0
+      expect(canMint).to.equal(preFundCanMint);
+    });
+
+    it("cannot mint shares when over limit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 10000n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 1000n;
+      const preFundCanMint = await dashboard.getMintableShares(funding);
+      await dashboard.fund({ value: funding });
+
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(0n);
+      expect(canMint).to.equal(preFundCanMint);
+    });
+
+    it("can mint to full ratio", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 10000000n,
+        sharesMinted: 500n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 2000n;
+
+      const preFundCanMint = await dashboard.getMintableShares(funding);
+      await dashboard.fund({ value: funding });
+
+      const sharesFunded = await steth.getSharesByPooledEth((funding * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE);
+
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(sharesFunded - sockets.sharesMinted);
+      expect(canMint).to.equal(preFundCanMint);
+    });
+
+    it("can not mint when bound by share limit", async () => {
+      const sockets = {
+        vault: await vault.getAddress(),
+        shareLimit: 500n,
+        sharesMinted: 500n,
+        reserveRatioBP: 1000n,
+        reserveRatioThresholdBP: 800n,
+        treasuryFeeBP: 500n,
+        isDisconnected: false,
+      };
+
+      await hub.mock__setVaultSocket(vault, sockets);
+      const funding = 2000n;
+      const preFundCanMint = await dashboard.getMintableShares(funding);
+      await dashboard.fund({ value: funding });
+
+      const canMint = await dashboard.getMintableShares(0n);
+      expect(canMint).to.equal(0n);
+      expect(canMint).to.equal(preFundCanMint);
+    });
+  });
+
+  context("getWithdrawableEther", () => {
+    it("returns the trivial amount can withdraw ether", async () => {
+      const getWithdrawableEther = await dashboard.getWithdrawableEther();
+      expect(getWithdrawableEther).to.equal(0n);
+    });
+
+    it("funds and returns the correct can withdraw ether", async () => {
+      const amount = ether("1");
+
+      await dashboard.fund({ value: amount });
+
+      const getWithdrawableEther = await dashboard.getWithdrawableEther();
+      expect(getWithdrawableEther).to.equal(amount);
+    });
+
+    it("funds and recieves external but and can only withdraw unlocked", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+      await vaultOwner.sendTransaction({ to: vault.getAddress(), value: amount });
+      expect(await dashboard.getWithdrawableEther()).to.equal(amount);
+    });
+
+    it("funds and get all ether locked and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount);
+
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+    });
+
+    it("funds and get all ether locked and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount);
+
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+    });
+
+    it("funds and get all half locked and can only half withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+
+      expect(await dashboard.getWithdrawableEther()).to.equal(amount / 2n);
+    });
+
+    it("funds and get all half locked, but no balance and can not withdraw", async () => {
+      const amount = ether("1");
+      await dashboard.fund({ value: amount });
+
+      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+
+      await setBalance(await vault.getAddress(), 0n);
+
+      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+    });
+
+    // TODO: add more tests when the vault params are change
   });
 
   context("transferStVaultOwnership", () => {
@@ -190,6 +489,36 @@ describe("Dashboard", () => {
     });
   });
 
+  context("fundByWeth", () => {
+    const amount = ether("1");
+
+    beforeEach(async () => {
+      await weth.connect(vaultOwner).deposit({ value: amount });
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).fundByWeth(ether("1"))).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("funds by weth", async () => {
+      await weth.connect(vaultOwner).approve(dashboard, amount);
+
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner }))
+        .to.emit(vault, "Funded")
+        .withArgs(dashboard, amount);
+      expect(await ethers.provider.getBalance(vault)).to.equal(amount);
+    });
+
+    it("reverts without approval", async () => {
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWith(
+        "ERC20: transfer amount exceeds allowance",
+      );
+    });
+  });
+
   context("withdraw", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).withdraw(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
@@ -208,6 +537,29 @@ describe("Dashboard", () => {
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, recipient, amount);
       expect(await ethers.provider.getBalance(recipient)).to.equal(previousBalance + amount);
+    });
+  });
+
+  context("withdrawToWeth", () => {
+    const amount = ether("1");
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).withdrawToWeth(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("withdraws ether from the staking vault to weth", async () => {
+      await dashboard.fund({ value: amount });
+      const previousBalance = await ethers.provider.getBalance(stranger);
+
+      await expect(dashboard.withdrawToWeth(stranger, amount))
+        .to.emit(vault, "Withdrawn")
+        .withArgs(dashboard, dashboard, amount);
+
+      expect(await ethers.provider.getBalance(stranger)).to.equal(previousBalance);
+      expect(await weth.balanceOf(stranger)).to.equal(amount);
     });
   });
 
@@ -240,6 +592,8 @@ describe("Dashboard", () => {
       const amount = ether("1");
       await expect(dashboard.mint(vaultOwner, amount))
         .to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amount)
+        .and.to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, vaultOwner, amount);
 
       expect(await steth.balanceOf(vaultOwner)).to.equal(amount);
@@ -251,7 +605,37 @@ describe("Dashboard", () => {
         .to.emit(vault, "Funded")
         .withArgs(dashboard, amount)
         .to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amount)
+        .and.to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, vaultOwner, amount);
+    });
+  });
+
+  context("mintWstETH", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      await steth.mock__setTotalPooledEther(ether("1000"));
+      await steth.mock__setTotalShares(ether("1000"));
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).mintWstETH(vaultOwner, amount)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("mints wstETH backed by the vault", async () => {
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+
+      const result = await dashboard.mintWstETH(vaultOwner, amount);
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, wsteth, amount);
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(ZeroAddress, dashboard, amount);
+      await expect(result).to.emit(steth, "Approval").withArgs(dashboard, wsteth, amount);
+
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore + amount);
     });
   });
 
@@ -274,11 +658,313 @@ describe("Dashboard", () => {
       expect(await steth.allowance(vaultOwner, dashboard)).to.equal(amount);
 
       await expect(dashboard.burn(amount))
-        .to.emit(steth, "Transfer") // tranfer from owner to hub
+        .to.emit(steth, "Transfer") // transfer from owner to hub
         .withArgs(vaultOwner, hub, amount)
-        .and.to.emit(steth, "Transfer") // burn
-        .withArgs(hub, ZeroAddress, amount);
+        .and.to.emit(steth, "TransferShares") // transfer shares to hub
+        .withArgs(vaultOwner, hub, amount)
+        .and.to.emit(steth, "SharesBurnt") // burn
+        .withArgs(hub, amount, amount, amount);
       expect(await steth.balanceOf(vaultOwner)).to.equal(0);
+    });
+  });
+
+  context("burnWstETH", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      // mint steth to the vault owner for the burn
+      await dashboard.mint(vaultOwner, amount + amount);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).burnWstETH(amount)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("burns wstETH backed by the vault", async () => {
+      // approve for wsteth wrap
+      await steth.connect(vaultOwner).approve(wsteth, amount);
+      // wrap steth to wsteth to get the amount of wsteth for the burn
+      await wsteth.connect(vaultOwner).wrap(amount);
+
+      // user flow
+
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      // approve wsteth to dashboard contract
+      await wsteth.connect(vaultOwner).approve(dashboard, amount);
+
+      const result = await dashboard.burnWstETH(amount);
+
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amount); // transfer wsteth to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amount); // unwrap wsteth to steth
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(dashboard, ZeroAddress, amount); // burn wsteth
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, hub, amount); // transfer steth to hub
+      await expect(result).to.emit(steth, "TransferShares").withArgs(dashboard, hub, amount); // transfer shares to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth (mocked event data)
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amount);
+    });
+  });
+
+  context("burnWithPermit", () => {
+    const amount = ether("1");
+
+    before(async () => {
+      // mint steth to the vault owner for the burn
+      await dashboard.mint(vaultOwner, amount);
+    });
+
+    beforeEach(async () => {
+      const eip712helper = await ethers.deployContract("EIP712StETH", [steth]);
+      await steth.initializeEIP712StETH(eip712helper);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: amount,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(stranger).burnWithPermit(amount, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if the permit is invalid", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: stranger.address, // invalid spender
+        value: amount,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(vaultOwner).burnWithPermit(amount, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWith("Permit failure");
+    });
+
+    it("burns stETH with permit", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: amount,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWithPermit(amount, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+
+      await expect(result).to.emit(steth, "Approval").withArgs(vaultOwner, dashboard, amount); // approve steth from vault owner to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, amount); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - amount);
+    });
+
+    it("succeeds if has allowance", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target), // invalid spender
+        value: amount,
+        nonce: (await steth.nonces(vaultOwner)) + 1n, // invalid nonce
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+      const permitData = {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      await expect(dashboard.connect(vaultOwner).burnWithPermit(amount, permitData)).to.be.revertedWith(
+        "Permit failure",
+      );
+
+      await steth.connect(vaultOwner).approve(dashboard, amount);
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWithPermit(amount, permitData);
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, amount); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - amount);
+    });
+  });
+
+  context("burnWstETHWithPermit", () => {
+    const amount = ether("1");
+
+    beforeEach(async () => {
+      // mint steth to the vault owner for the burn
+      await dashboard.mint(vaultOwner, amount);
+      // approve for wsteth wrap
+      await steth.connect(vaultOwner).approve(wsteth, amount);
+      // wrap steth to wsteth to get the amount of wsteth for the burn
+      await wsteth.connect(vaultOwner).wrap(amount);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: amount,
+        nonce: await wsteth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(stranger).burnWithPermit(amount, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if the permit is invalid", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: stranger.address, // invalid spender
+        value: amount,
+        nonce: await wsteth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(vaultOwner).burnWstETHWithPermit(amount, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWith("Permit failure");
+    });
+
+    it("burns wstETH with permit", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: amount,
+        nonce: await wsteth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWstETHWithPermit(amount, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+
+      await expect(result).to.emit(wsteth, "Approval").withArgs(vaultOwner, dashboard, amount); // approve steth from vault owner to dashboard
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amount); // transfer steth to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amount); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amount);
+    });
+
+    it("succeeds if has allowance", async () => {
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target), // invalid spender
+        value: amount,
+        nonce: (await wsteth.nonces(vaultOwner)) + 1n, // invalid nonce
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+      const permitData = {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      await expect(dashboard.connect(vaultOwner).burnWstETHWithPermit(amount, permitData)).to.be.revertedWith(
+        "Permit failure",
+      );
+
+      await wsteth.connect(vaultOwner).approve(dashboard, amount);
+
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWstETHWithPermit(amount, permitData);
+
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amount); // transfer steth to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amount); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amount, amount, amount); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amount);
     });
   });
 

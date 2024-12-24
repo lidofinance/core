@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
+// SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
@@ -121,8 +121,10 @@ contract Delegation is Dashboard {
     /**
      * @notice Initializes the contract with the stETH address.
      * @param _stETH The address of the stETH token.
+     * @param _weth Address of the weth token contract.
+     * @param _wstETH Address of the wstETH token contract.
      */
-    constructor(address _stETH) Dashboard(_stETH) {}
+    constructor(address _stETH, address _weth, address _wstETH) Dashboard(_stETH, _weth, _wstETH) {}
 
     /**
      * @notice Initializes the contract:

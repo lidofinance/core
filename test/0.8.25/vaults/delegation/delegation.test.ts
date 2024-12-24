@@ -11,6 +11,8 @@ import {
   StETH__MockForDelegation,
   VaultFactory,
   VaultHub__MockForDelegation,
+  WETH9__MockForVault,
+  WstETH__HarnessForVault,
 } from "typechain-types";
 
 import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
@@ -20,7 +22,7 @@ import { Snapshot } from "test/suite";
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
 
-describe("Delegation", () => {
+describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
   let staker: HardhatEthersSigner;
@@ -34,6 +36,8 @@ describe("Delegation", () => {
   const recipient = certainAddress("some-recipient");
 
   let steth: StETH__MockForDelegation;
+  let weth: WETH9__MockForVault;
+  let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForDelegation;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultImpl: StakingVault;
@@ -45,14 +49,19 @@ describe("Delegation", () => {
   let originalState: string;
 
   before(async () => {
-    [, vaultOwner, curator, staker, tokenMaster, operator, claimOperatorDueRole, stranger, factoryOwner, rewarder] =
+    [vaultOwner, curator, staker, tokenMaster, operator, claimOperatorDueRole, stranger, factoryOwner, rewarder] =
       await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
-    delegationImpl = await ethers.deployContract("Delegation", [steth]);
-    expect(await delegationImpl.STETH()).to.equal(steth);
-
+    weth = await ethers.deployContract("WETH9__MockForVault");
+    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+
+    delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+    expect(await delegationImpl.WETH()).to.equal(weth);
+    expect(await delegationImpl.STETH()).to.equal(steth);
+    expect(await delegationImpl.WSTETH()).to.equal(wsteth);
+
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
@@ -77,6 +86,7 @@ describe("Delegation", () => {
 
     const vaultCreatedEvents = findEvents(vaultCreationReceipt, "VaultCreated");
     expect(vaultCreatedEvents.length).to.equal(1);
+
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
     expect(await vault.getBeacon()).to.equal(factory);
@@ -84,6 +94,7 @@ describe("Delegation", () => {
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);
     const delegationAddress = delegationCreatedEvents[0].args.delegation;
+
     delegation = await ethers.getContractAt("Delegation", delegationAddress, vaultOwner);
     expect(await delegation.stakingVault()).to.equal(vault);
 
@@ -100,20 +111,32 @@ describe("Delegation", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, weth, wsteth]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_stETH");
     });
 
+    it("reverts if wETH is zero address", async () => {
+      await expect(ethers.deployContract("Delegation", [steth, ethers.ZeroAddress, wsteth]))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_WETH");
+    });
+
+    it("reverts if wstETH is zero address", async () => {
+      await expect(ethers.deployContract("Delegation", [steth, weth, ethers.ZeroAddress]))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_wstETH");
+    });
+
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth]);
+      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
       expect(await delegation_.STETH()).to.equal(steth);
     });
   });
 
   context("initialize", () => {
     it("reverts if staking vault is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth]);
+      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
 
       await expect(delegation_.initialize(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
@@ -125,7 +148,7 @@ describe("Delegation", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth]);
+      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
 
       await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
     });
