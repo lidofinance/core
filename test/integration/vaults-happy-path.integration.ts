@@ -38,7 +38,7 @@ const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
-describe.only("Scenario: Staking Vaults Happy Path", () => {
+describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
