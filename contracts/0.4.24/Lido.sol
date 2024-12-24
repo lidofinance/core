@@ -960,10 +960,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///      - Returns 0 if maxBP is 0 (external minting is disabled) or external shares already exceed the limit
     ///      - Returns 2^256-1 if maxBP is 100% (external minting is unlimited)
     function _getMaxMintableExternalShares() internal view returns (uint256) {
+        uint256 maxRatioBP = MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
         if (maxRatioBP == 0) return 0;
         if (maxRatioBP == TOTAL_BASIS_POINTS) return uint256(-1);
 
-        uint256 maxRatioBP = MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
         uint256 totalShares = _getTotalShares();
 
