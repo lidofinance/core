@@ -297,7 +297,7 @@ describe("Dashboard", () => {
       const sockets = {
         vault: await vault.getAddress(),
         shareLimit: 10000000n,
-        sharesMinted: 500n,
+        sharesMinted: 900n,
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -311,7 +311,7 @@ describe("Dashboard", () => {
       await dashboard.fund({ value: funding });
 
       const canMint = await dashboard.getMintableShares(0n);
-      expect(canMint).to.equal(400n); // 1000 - 10% - 500 = 400
+      expect(canMint).to.equal(0n); // 1000 - 10% - 900 = 0
       expect(canMint).to.equal(preFundCanMint);
     });
 
