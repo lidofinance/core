@@ -77,19 +77,19 @@ contract Lido__HarnessForDistributeReward is Lido {
         return totalPooledEther;
     }
 
-    function mintShares(address _to, uint256 _sharesAmount) public returns (uint256 newTotalShares) {
-        newTotalShares = _mintShares(_to, _sharesAmount);
-        _emitTransferAfterMintingShares(_to, _sharesAmount);
+    function mintShares(address _recipient, uint256 _sharesAmount) public {
+        _mintShares(_recipient, _sharesAmount);
+        _emitTransferAfterMintingShares(_recipient, _sharesAmount);
     }
 
-    function mintSteth(address _to) public payable {
+    function mintSteth(address _recipient) public payable {
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
-        mintShares(_to, sharesAmount);
+        mintShares(_recipient, sharesAmount);
         setTotalPooledEther(_getTotalPooledEther().add(msg.value));
     }
 
-    function burnShares(address _account, uint256 _sharesAmount) public returns (uint256 newTotalShares) {
-        return _burnShares(_account, _sharesAmount);
+    function burnShares(address _account, uint256 _sharesAmount) public {
+        _burnShares(_account, _sharesAmount);
     }
 
 }

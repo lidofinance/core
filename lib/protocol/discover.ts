@@ -1,6 +1,13 @@
 import hre from "hardhat";
 
-import { AccountingOracle, Lido, LidoLocator, StakingRouter, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  AccountingOracle,
+  Lido,
+  LidoLocator,
+  StakingRouter,
+  VaultFactory,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { batch, log } from "lib";
 
@@ -78,6 +85,7 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
     ),
     legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
+    accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
       config.get("oracleReportSanityChecker") || (await locator.oracleReportSanityChecker()),
@@ -153,6 +161,15 @@ const getWstEthContract = async (
   })) as WstETHContracts;
 };
 
+/**
+ * Load all required vaults contracts.
+ */
+const getVaultsContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+  return (await batch({
+    stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
+  })) as { stakingVaultFactory: LoadedContract<VaultFactory> };
+};
+
 export async function discover() {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
@@ -165,11 +182,13 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
+    ...(await getVaultsContracts(locator, networkConfig)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
+    "Accounting": foundationContracts.accounting.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
@@ -187,6 +206,8 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
+    // Vaults
+    "Staking Vault Factory": contracts.stakingVaultFactory.address,
   });
 
   const signers = {
