@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -114,7 +114,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
-    /// @dev amount of token shares minted that is backed by external sources
+    /// @dev amount of stETH shares backed by external ether sources
     bytes32 internal constant EXTERNAL_SHARES_POSITION =
         0x2ab18be87d6c30f8dc2a29c9950ab4796c891232dbcc6a95a6b44b9f8aad9352; // keccak256("lido.Lido.externalShares");
     /// @dev maximum allowed ratio of external shares to total shares in basis points
@@ -137,11 +137,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
-    // @dev principalCLBalance is the balance of the validators on previous report
-    // plus the amount of ether that was deposited to the deposit contract
+    // @dev `principalCLBalance` is the balance of the validators on previous report
+    // plus the amount of ether that was deposited to the deposit contract since then
     event ETHDistributed(
         uint256 indexed reportTimestamp,
-        uint256 principalCLBalance,
+        uint256 principalCLBalance, // preClBalance + deposits
         uint256 postCLBalance,
         uint256 withdrawalsWithdrawn,
         uint256 executionLayerRewardsWithdrawn,
@@ -175,7 +175,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event Unbuffered(uint256 amount);
 
     // External shares minted for receiver
-    event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 stethAmount);
+    event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 amountOfStETH);
 
     // External shares burned for account
     event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
@@ -451,6 +451,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * (i.e., had deposited before and rotated their type-0x00 withdrawal credentials to Lido)
      *
      * @param _newDepositedValidators new value
+     *
+     * TODO: remove this with maxEB-friendly accounting
      */
     function unsafeChangeDepositedValidators(uint256 _newDepositedValidators) external {
         _auth(UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE);
@@ -461,43 +463,39 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Get the amount of ether temporary buffered on this contract balance
+     * @return the amount of ether temporarily buffered on this contract balance
      * @dev Buffered balance is kept on the contract from the moment the funds are received from user
-     * until the moment they are actually sent to the official Deposit contract.
-     * @return amount of buffered funds in wei
+     * until the moment they are actually sent to the official Deposit contract or used to fulfill withdrawal requests
      */
     function getBufferedEther() external view returns (uint256) {
         return _getBufferedEther();
     }
 
     /**
-     * @notice Get the amount of ether held by external contracts
-     * @return amount of external ether in wei
+     * @return the amount of ether held by external sources to back external shares
      */
     function getExternalEther() external view returns (uint256) {
         return _getExternalEther(_getInternalEther());
     }
 
     /**
-     * @notice Get the total amount of shares backed by external contracts
-     * @return total external shares
+     * @return the total amount of shares backed by external ether sources
      */
     function getExternalShares() external view returns (uint256) {
         return EXTERNAL_SHARES_POSITION.getStorageUint256();
     }
 
     /**
-     * @notice Get the maximum amount of external shares that can be minted under the current external ratio limit
-     * @return maximum mintable external shares
+     * @return the maximum amount of external shares that can be minted under the current external ratio limit
      */
     function getMaxMintableExternalShares() external view returns (uint256) {
         return _getMaxMintableExternalShares();
     }
 
     /**
-     * @return the total amount of execution layer rewards collected to the Lido contract in wei
+     * @return the total amount of Execution Layer rewards collected to the Lido contract
      * @dev ether received through LidoExecutionLayerRewardsVault is kept on this contract's balance the same way
-     * as other buffered ether is kept (until it gets deposited)
+     * as other buffered ether is kept (until it gets deposited or withdrawn)
      */
     function getTotalELRewardsCollected() public view returns (uint256) {
         return TOTAL_EL_REWARDS_COLLECTED_POSITION.getStorageUint256();
@@ -613,7 +611,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Mint shares backed by external vaults
+     * @notice Mint shares backed by external ether sources
      * @param _recipient Address to receive the minted shares
      * @param _amountOfShares Amount of shares to mint
      * @dev Can be called only by accounting (authentication in mintShares method).
@@ -636,7 +634,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Burn external shares `msg.sender` address
+     * @notice Burn external shares from the `msg.sender` address
      * @param _amountOfShares Amount of shares to burn
      */
     function burnExternalShares(uint256 _amountOfShares) external {
@@ -937,9 +935,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev Calculate the amount of ether controlled by external entities
     function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
-        // TODO: cache external ether to storage
-        // to exchange 1 SLOAD in _getTotalPooledEther() 1 SSTORE in mintEE/burnEE
-        // _getTPE is super wide used
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
         uint256 internalShares = _getTotalShares() - externalShares;
         return externalShares.mul(_internalEther).div(internalShares);
@@ -958,19 +953,20 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev This function enforces the ratio between external and total shares to stay below a limit.
     ///      The limit is defined by some maxRatioBP out of totalBP.
     ///
-    ///      The calculation ensures: (external + x) / (total + x) <= maxRatioBP / totalBP
-    ///      Which gives formula: x <= (total * maxRatioBP - external * totalBP) / (totalBP - maxRatioBP)
+    ///      The calculation ensures: (externalShares + x) / (totalShares + x) <= maxRatioBP / totalBP
+    ///      Which gives formula: x <= (totalShares * maxRatioBP - externalShares * totalBP) / (totalBP - maxRatioBP)
     ///
     ///      Special cases:
     ///      - Returns 0 if maxBP is 0 (external minting is disabled) or external shares already exceed the limit
     ///      - Returns 2^256-1 if maxBP is 100% (external minting is unlimited)
     function _getMaxMintableExternalShares() internal view returns (uint256) {
+        if (maxRatioBP == 0) return 0;
+        if (maxRatioBP == TOTAL_BASIS_POINTS) return uint256(-1);
+
         uint256 maxRatioBP = MAX_EXTERNAL_RATIO_POSITION.getStorageUint256();
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
         uint256 totalShares = _getTotalShares();
 
-        if (maxRatioBP == 0) return 0;
-        if (maxRatioBP == TOTAL_BASIS_POINTS) return uint256(-1);
         if (totalShares.mul(maxRatioBP) <= externalShares.mul(TOTAL_BASIS_POINTS)) return 0;
 
         return
@@ -1006,7 +1002,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _stakeLimitData.calculateCurrentStakeLimit();
     }
 
-    /// @dev Size-efficient analog of the `auth(_role)` modifier
+    /// @dev Bytecode size-efficient analog of the `auth(_role)` modifier
     /// @param _role Permission name
     function _auth(bytes32 _role) internal view {
         require(canPerform(msg.sender, _role, new uint256[](0)), "APP_AUTH_FAILED");

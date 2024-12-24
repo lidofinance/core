@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -10,8 +10,6 @@ interface ILido {
     function getPooledEthByShares(uint256) external view returns (uint256);
 
     function getPooledEthBySharesRoundUp(uint256) external view returns (uint256);
-
-    function transferFrom(address, address, uint256) external;
 
     function transferSharesFrom(address, address, uint256) external returns (uint256);
 
@@ -26,8 +24,6 @@ interface ILido {
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
-
-    function getMaxMintableExternalShares() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 
@@ -65,6 +61,4 @@ interface ILido {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
-
-    function burnShares(address _account, uint256 _sharesAmount) external;
 }

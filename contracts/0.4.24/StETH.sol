@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -176,7 +176,7 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_recipient` cannot be the zero address or the stETH contract itself
+     * - `_recipient` cannot be the zero address or the stETH contract itself.
      * - the caller must have a balance of at least `_amount`.
      * - the contract must not be paused.
      *
@@ -230,8 +230,8 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_sender` cannot be the zero address
-     * - `_recipient` cannot be the zero address or the stETH contract itself
+     * - `_sender` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or the stETH contract itself.
      * - `_sender` must have a balance of at least `_amount`.
      * - the caller must have allowance for `_sender`'s tokens of at least `_amount`.
      * - the contract must not be paused.
@@ -318,7 +318,8 @@ contract StETH is IERC20, Pausable {
 
     /**
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
-     * @dev The result is rounded up. So getSharesByPooledEth(getPooledEthBySharesRoundUp(1)) will be 1.
+     * @dev The result is rounded up. So,
+     *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
     function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
         uint256 totalEther = _getTotalPooledEther();
