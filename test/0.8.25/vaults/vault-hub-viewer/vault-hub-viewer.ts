@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  CustomOwner__MockForHubViewer,
   Dashboard,
   Delegation,
   DepositContract__MockForStakingVault,
@@ -93,6 +94,24 @@ const deployVaultDashboard = async (
   return { vaultDashboard, dashboard };
 };
 
+const deployCustomOwner = async (vaultImpl: StakingVault, operator: HardhatEthersSigner) => {
+  const customOwner = await ethers.deployContract("CustomOwner__MockForHubViewer");
+  // deploying factory/beacon
+  const factoryStakingVault = await ethers.deployContract("VaultFactory__MockForStakingVault", [
+    await vaultImpl.getAddress(),
+  ]);
+  const vaultCreation = await factoryStakingVault
+    .createVault(await customOwner.getAddress(), await operator.getAddress())
+    .then((tx) => tx.wait());
+  if (!vaultCreation) throw new Error("Vault creation failed");
+  const events = findEvents(vaultCreation, "VaultCreated");
+  if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
+  const vaultCreatedEvent = events[0];
+
+  const stakingVault = StakingVault__factory.connect(vaultCreatedEvent.args.vault);
+  return { stakingVault, customOwner };
+};
+
 const deployStakingVault = async (
   vaultImpl: StakingVault,
   vaultOwner: HardhatEthersSigner,
@@ -139,9 +158,12 @@ describe("VaultHubViewerV1", () => {
   let stakingVault: StakingVault;
   let vaultDashboard: StakingVault;
   let vaultDelegation: StakingVault;
+  let vaultCustom: StakingVault;
   let vaultHubViewer: VaultHubViewerV1;
+
   let dashboard: Dashboard;
   let delegation: Delegation;
+  let customOwnerContract: CustomOwner__MockForHubViewer;
 
   let originalState: string;
 
@@ -160,6 +182,7 @@ describe("VaultHubViewerV1", () => {
     dashboardImpl = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
     delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
 
+    // Delegation controlled vault
     const delegationResult = await deployVaultDelegation(
       vaultImpl,
       delegationImpl,
@@ -171,11 +194,18 @@ describe("VaultHubViewerV1", () => {
     vaultDelegation = delegationResult.vaultDelegation;
     delegation = delegationResult.delegation;
 
+    // Dashboard conntroled vault
     const dashboardResult = await deployVaultDashboard(vaultImpl, dashboardImpl, factoryOwner, vaultOwner, operator);
     vaultDashboard = dashboardResult.vaultDashboard;
     dashboard = dashboardResult.dashboard;
 
+    // EOA controlled vault
     stakingVault = await deployStakingVault(vaultImpl, vaultOwner, operator);
+
+    // Custom owner controlled vault
+    const customdResult = await deployCustomOwner(vaultImpl, operator);
+    vaultCustom = customdResult.stakingVault;
+    customOwnerContract = customdResult.customOwner;
 
     vaultHubViewer = await ethers.deployContract("VaultHubViewerV1", [hub]);
     expect(await vaultHubViewer.vaultHub()).to.equal(hub);
@@ -204,6 +234,7 @@ describe("VaultHubViewerV1", () => {
       await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
       await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
       await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
     });
 
     it("returns all vaults owned by a given address", async () => {
@@ -213,6 +244,12 @@ describe("VaultHubViewerV1", () => {
       expect(vaults[1]).to.equal(vaultDashboard);
       expect(vaults[2]).to.equal(stakingVault);
     });
+
+    it("returns correct owner for custom vault", async () => {
+      const vaults = await vaultHubViewer.vaultsByOwner(customOwnerContract.getAddress());
+      expect(vaults.length).to.equal(1);
+      expect(vaults[0]).to.equal(vaultCustom);
+    });
   });
 
   context("vaultsByRole", () => {
@@ -220,6 +257,7 @@ describe("VaultHubViewerV1", () => {
       await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
       await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
       await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
     });
 
     it("returns all vaults with a given role on Delegation", async () => {

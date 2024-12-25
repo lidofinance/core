@@ -22,6 +22,8 @@ interface IVaultHub {
 }
 
 contract VaultHubViewerV1 {
+    bytes32 constant strictTrue = keccak256(hex"0000000000000000000000000000000000000000000000000000000000000001");
+
     IVaultHub public immutable vaultHub;
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -43,38 +45,26 @@ contract VaultHubViewerV1 {
     /// @param _owner The address to check
     /// @return True if the address is the owner, false otherwise
     function isOwner(IVault vault, address _owner) public view returns (bool) {
-        address currentOwner = vault.owner();
-        if (currentOwner == _owner) {
+        address vaultOwner = vault.owner();
+        if (vaultOwner == _owner) {
             return true;
         }
-        if (isContract(currentOwner)) {
-            try IDashboardACL(currentOwner).hasRole(DEFAULT_ADMIN_ROLE, _owner) returns (bool result) {
-                return result;
-            } catch {
-                return false;
-            }
-        }
-        return false;
+
+        return _checkHasRole(vaultOwner, _owner, DEFAULT_ADMIN_ROLE);
     }
 
-    /// @notice Checks if a given address has a given role on a vault
+    /// @notice Checks if a given address has a given role on a vault owner contract
     /// @param vault The vault to check
     /// @param _member The address to check
     /// @param _role The role to check
     /// @return True if the address has the role, false otherwise
     function hasRole(IVault vault, address _member, bytes32 _role) public view returns (bool) {
-        address owner = vault.owner();
-        if (owner == address(0)) {
+        address vaultOwner = vault.owner();
+        if (vaultOwner == address(0)) {
             return false;
         }
 
-        if (!isContract(owner)) return false;
-
-        try IDashboardACL(owner).hasRole(_role, _member) returns (bool result) {
-            return result;
-        } catch {
-            return false;
-        }
+        return _checkHasRole(vaultOwner, _member, _role);
     }
 
     /// @notice Returns all vaults owned by a given address
@@ -116,6 +106,23 @@ contract VaultHubViewerV1 {
         }
 
         return _filterNonZeroVaults(vaults, valid);
+    }
+
+    /// @notice safely returns if role member has given role
+    /// @param _contract that can have ACL or not
+    /// @param _member addrress to check for role
+    /// @return _role ACL role bytes
+    function _checkHasRole(address _contract, address _member, bytes32 _role) internal view returns (bool) {
+        if (!isContract(_contract)) return false;
+
+        bytes memory payload = abi.encodeWithSignature("hasRole(bytes32,address)", _role, _member);
+        (bool success, bytes memory result) = _contract.staticcall(payload);
+
+        if (success && keccak256(result) == strictTrue) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /// @notice Filters out zero address vaults from an array
