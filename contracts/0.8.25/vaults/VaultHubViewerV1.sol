@@ -30,6 +30,9 @@ contract VaultHubViewerV1 {
         vaultHub = IVaultHub(_vaultHubAddress);
     }
 
+    /// @notice Checks if a given address is a contract
+    /// @param account The address to check
+    /// @return True if the address is a contract, false otherwise
     function isContract(address account) public view returns (bool) {
         uint256 size;
         assembly {
@@ -47,14 +50,13 @@ contract VaultHubViewerV1 {
         if (currentOwner == _owner) {
             return true;
         }
-        if (isContract(currentOwner)) {
-            try IDashboardACL(currentOwner).hasRole(DEFAULT_ADMIN_ROLE, _owner) returns (bool result) {
-                return result;
-            } catch {
-                return false;
-            }
+        if (!isContract(currentOwner)) return false;
+
+        try IDashboardACL(currentOwner).hasRole(DEFAULT_ADMIN_ROLE, _owner) returns (bool result) {
+            return result;
+        } catch {
+            return false;
         }
-        return false;
     }
 
     /// @notice Checks if a given address has a given role on a vault
