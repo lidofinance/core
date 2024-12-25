@@ -32,6 +32,9 @@ contract VaultHubViewerV1 {
         vaultHub = IVaultHub(_vaultHubAddress);
     }
 
+    /// @notice Checks if a given address is a contract
+    /// @param account The address to check
+    /// @return True if the address is a contract, false otherwise
     function isContract(address account) public view returns (bool) {
         uint256 size;
         assembly {
