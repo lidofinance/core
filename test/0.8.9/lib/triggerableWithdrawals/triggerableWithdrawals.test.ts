@@ -9,7 +9,7 @@ import { TriggerableWithdrawals_Harness, WithdrawalsPredeployed_Mock } from "typ
 
 import { Snapshot } from "test/suite";
 
-import { findEvents } from "./findEvents";
+import { findEip7002TriggerableWithdrawalMockEvents, findEvents } from "./findEvents";
 import {
   deployWithdrawalsPredeployedMock,
   generateWithdrawalRequestPayload,
@@ -33,6 +33,8 @@ describe("TriggerableWithdrawals.sol", () => {
     const contractAddress = await withdrawalsPredeployed.getAddress();
     return await ethers.provider.getBalance(contractAddress);
   }
+
+  const MAX_UINT64 = (1n << 64n) - 1n;
 
   before(async () => {
     [actor] = await ethers.getSigners();
@@ -109,9 +111,25 @@ describe("TriggerableWithdrawals.sol", () => {
         .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
         .withArgs(pubkeys.length, amounts.length);
 
+      await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, [], fee))
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
+        .withArgs(pubkeys.length, 0);
+
+      await expect(triggerableWithdrawals.addPartialWithdrawalRequests([], amounts, fee))
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
+        .withArgs(0, amounts.length);
+
       await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, fee))
         .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
         .withArgs(pubkeys.length, amounts.length);
+
+      await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeys, [], fee))
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
+        .withArgs(pubkeys.length, 0);
+
+      await expect(triggerableWithdrawals.addWithdrawalRequests([], amounts, fee))
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "MismatchedArrayLengths")
+        .withArgs(0, amounts.length);
     });
 
     it("Should revert if not enough fee is sent", async function () {
@@ -194,7 +212,7 @@ describe("TriggerableWithdrawals.sol", () => {
       );
     });
 
-    it("Should revert if full withdrawal requested in 'addPartialWithdrawalRequests'", async function () {
+    it("Should revert when a full withdrawal amount is included in 'addPartialWithdrawalRequests'", async function () {
       const { pubkeys } = generateWithdrawalRequestPayload(2);
       const amounts = [1n, 0n]; // Partial and Full withdrawal
       const fee = await getFee(pubkeys.length);
@@ -204,8 +222,8 @@ describe("TriggerableWithdrawals.sol", () => {
       ).to.be.revertedWithCustomError(triggerableWithdrawals, "PartialWithdrawalRequired");
     });
 
-    it("Should revert if contract balance insufficient'", async function () {
-      const { pubkeys, partialWithdrawalAmounts, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
+    it("Should revert when balance is less than total withdrawal fee", async function () {
+      const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
       const fee = 10n;
       const totalWithdrawalFee = 20n;
       const balance = 19n;
@@ -223,25 +241,59 @@ describe("TriggerableWithdrawals.sol", () => {
         .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
         .withArgs(balance, totalWithdrawalFee);
 
-      await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeys, fullWithdrawalAmounts, totalWithdrawalFee))
+      await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, totalWithdrawalFee))
         .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
         .withArgs(balance, totalWithdrawalFee);
     });
 
-    it("Should accept exactly required fee without revert", async function () {
+    it("Should revert when fee read fails", async function () {
+      await withdrawalsPredeployed.setFailOnGetFee(true);
+
+      const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
+      const fee = 10n;
+
+      await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, fee)).to.be.revertedWithCustomError(
+        triggerableWithdrawals,
+        "WithdrawalRequestFeeReadFailed",
+      );
+
+      await expect(
+        triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, fee),
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestFeeReadFailed");
+
+      await expect(
+        triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee),
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestFeeReadFailed");
+    });
+
+    it("Should accept withdrawal requests when the provided fee matches the exact required amount", async function () {
       const requestCount = 3;
       const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
 
       await withdrawalsPredeployed.setFee(3n);
-      const fee = 9n;
+      const totalWithdrawalFee = 9n;
 
-      await triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, fee);
-      await triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, fee);
-      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee);
+      await triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee);
+      await triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, totalWithdrawalFee);
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, totalWithdrawalFee);
+
+      // Check extremely high fee
+      await withdrawalsPredeployed.setFee(ethers.parseEther("10"));
+      const largeTotalWithdrawalFee = ethers.parseEther("30");
+
+      await triggerableWithdrawals.connect(actor).deposit({ value: largeTotalWithdrawalFee * BigInt(requestCount) });
+
+      await triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, largeTotalWithdrawalFee);
+      await triggerableWithdrawals.addPartialWithdrawalRequests(
+        pubkeys,
+        partialWithdrawalAmounts,
+        largeTotalWithdrawalFee,
+      );
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, largeTotalWithdrawalFee);
     });
 
-    it("Should accept exceed fee without revert", async function () {
+    it("Should accept withdrawal requests when the provided fee exceeds the required amount", async function () {
       const requestCount = 3;
       const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
@@ -252,9 +304,21 @@ describe("TriggerableWithdrawals.sol", () => {
       await triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, fee);
       await triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, fee);
       await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee);
+
+      // Check when the provided fee extremely exceeds the required amount
+      const largeTotalWithdrawalFee = ethers.parseEther("10");
+      await triggerableWithdrawals.connect(actor).deposit({ value: largeTotalWithdrawalFee * BigInt(requestCount) });
+
+      await triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, largeTotalWithdrawalFee);
+      await triggerableWithdrawals.addPartialWithdrawalRequests(
+        pubkeys,
+        partialWithdrawalAmounts,
+        largeTotalWithdrawalFee,
+      );
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, largeTotalWithdrawalFee);
     });
 
-    it("Should deduct precise fee value from contract balance", async function () {
+    it("Should correctly deduct the exact fee amount from the contract balance", async function () {
       const requestCount = 3;
       const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
@@ -275,7 +339,7 @@ describe("TriggerableWithdrawals.sol", () => {
       await testFeeDeduction(() => triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee));
     });
 
-    it("Should send all fee to eip 7002 withdrawal contract", async function () {
+    it("Should transfer the total calculated fee to the EIP-7002 withdrawal contract", async function () {
       const requestCount = 3;
       const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
@@ -298,7 +362,25 @@ describe("TriggerableWithdrawals.sol", () => {
       );
     });
 
-    it("should emit a 'WithdrawalRequestAdded' event when a new withdrawal request is added", async function () {
+    it("Should accept full, partial, and mixed withdrawal requests via 'addWithdrawalRequests' function", async function () {
+      const { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(3);
+      const fee = await getFee(pubkeys.length);
+
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, fullWithdrawalAmounts, fee);
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, partialWithdrawalAmounts, fee);
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee);
+    });
+
+    it("Should handle maximum uint64 withdrawal amount in partial withdrawal requests", async function () {
+      const { pubkeys } = generateWithdrawalRequestPayload(1);
+      const amounts = [MAX_UINT64];
+
+      await triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, amounts, 10n);
+      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, 10n);
+    });
+
+    it("Should emit a 'WithdrawalRequestAdded' event when a new withdrawal request is added", async function () {
       const requestCount = 3;
       const { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
@@ -338,6 +420,95 @@ describe("TriggerableWithdrawals.sol", () => {
       );
     });
 
+    it("Should verify correct fee distribution among requests", async function () {
+      await withdrawalsPredeployed.setFee(2n);
+
+      const requestCount = 5;
+      const { pubkeys, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
+
+      const testFeeDistribution = async (totalWithdrawalFee: bigint, expectedFeePerRequest: bigint[]) => {
+        const checkEip7002MockEvents = async (addRequests: () => Promise<ContractTransactionResponse>) => {
+          const tx = await addRequests();
+
+          const receipt = await tx.wait();
+          const events = findEip7002TriggerableWithdrawalMockEvents(receipt!, "eip7002WithdrawalRequestAdded");
+          expect(events.length).to.equal(requestCount);
+
+          for (let i = 0; i < requestCount; i++) {
+            expect(events[i].args[1]).to.equal(expectedFeePerRequest[i]);
+          }
+        };
+
+        await checkEip7002MockEvents(() =>
+          triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee),
+        );
+
+        await checkEip7002MockEvents(() =>
+          triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, totalWithdrawalFee),
+        );
+
+        await checkEip7002MockEvents(() =>
+          triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, totalWithdrawalFee),
+        );
+      };
+
+      await testFeeDistribution(10n, [2n, 2n, 2n, 2n, 2n]);
+      await testFeeDistribution(11n, [2n, 2n, 2n, 2n, 3n]);
+      await testFeeDistribution(14n, [2n, 2n, 2n, 2n, 6n]);
+      await testFeeDistribution(15n, [3n, 3n, 3n, 3n, 3n]);
+    });
+
+    it("Should ensure withdrawal requests are encoded as expected with a 48-byte pubkey and 8-byte amount", async function () {
+      const requestCount = 16;
+      const { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
+      const totalWithdrawalFee = 333n;
+
+      const normalize = (hex: string) => (hex.startsWith("0x") ? hex.slice(2).toLowerCase() : hex.toLowerCase());
+
+      const testEncoding = async (
+        addRequests: () => Promise<ContractTransactionResponse>,
+        expectedPubKeys: string[],
+        expectedAmounts: bigint[],
+      ) => {
+        const tx = await addRequests();
+
+        const receipt = await tx.wait();
+
+        const events = findEip7002TriggerableWithdrawalMockEvents(receipt!, "eip7002WithdrawalRequestAdded");
+        expect(events.length).to.equal(requestCount);
+
+        for (let i = 0; i < requestCount; i++) {
+          const encodedRequest = events[i].args[0];
+          // 0x (2 characters) + 48-byte pubkey (96 characters) + 8-byte amount (16 characters) = 114 characters
+          expect(encodedRequest.length).to.equal(114);
+
+          expect(normalize(encodedRequest.substring(0, 98))).to.equal(normalize(expectedPubKeys[i]));
+          expect(normalize(encodedRequest.substring(98, 114))).to.equal(
+            expectedAmounts[i].toString(16).padStart(16, "0"),
+          );
+        }
+      };
+
+      await testEncoding(
+        () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee),
+        pubkeys,
+        fullWithdrawalAmounts,
+      );
+      await testEncoding(
+        () =>
+          triggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, partialWithdrawalAmounts, totalWithdrawalFee),
+        pubkeys,
+        partialWithdrawalAmounts,
+      );
+      await testEncoding(
+        () => triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, totalWithdrawalFee),
+        pubkeys,
+        mixedWithdrawalAmounts,
+      );
+    });
+
     async function addWithdrawalRequests(
       addRequests: () => Promise<ContractTransactionResponse>,
       expectedPubkeys: string[],
@@ -359,16 +530,28 @@ describe("TriggerableWithdrawals.sol", () => {
         expect(events[i].args[0]).to.equal(expectedPubkeys[i]);
         expect(events[i].args[1]).to.equal(expectedAmounts[i]);
       }
+
+      const eip7002TriggerableWithdrawalMockEvents = findEip7002TriggerableWithdrawalMockEvents(
+        receipt!,
+        "eip7002WithdrawalRequestAdded",
+      );
+      expect(eip7002TriggerableWithdrawalMockEvents.length).to.equal(expectedPubkeys.length);
+      for (let i = 0; i < expectedPubkeys.length; i++) {
+        expect(eip7002TriggerableWithdrawalMockEvents[i].args[0]).to.equal(
+          expectedPubkeys[i].concat(expectedAmounts[i].toString(16).padStart(16, "0")),
+        );
+      }
     }
 
     const testCasesForWithdrawalRequests = [
       { requestCount: 1, extraFee: 0n },
       { requestCount: 1, extraFee: 100n },
+      { requestCount: 1, extraFee: 100_000_000_000n },
       { requestCount: 3, extraFee: 0n },
       { requestCount: 3, extraFee: 1n },
       { requestCount: 7, extraFee: 3n },
       { requestCount: 10, extraFee: 0n },
-      { requestCount: 10, extraFee: 1_000_000n },
+      { requestCount: 10, extraFee: 100_000_000_000n },
       { requestCount: 100, extraFee: 0n },
     ];
 
@@ -400,16 +583,6 @@ describe("TriggerableWithdrawals.sol", () => {
           totalWithdrawalFee,
         );
       });
-    });
-
-    it("Should accept full and partial withdrawals requested", async function () {
-      const { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
-        generateWithdrawalRequestPayload(3);
-      const fee = await getFee(pubkeys.length);
-
-      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, fullWithdrawalAmounts, fee);
-      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, partialWithdrawalAmounts, fee);
-      await triggerableWithdrawals.addWithdrawalRequests(pubkeys, mixedWithdrawalAmounts, fee);
     });
   });
 });
