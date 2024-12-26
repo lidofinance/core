@@ -65,7 +65,7 @@ describe("TriggerableWithdrawals.sol", () => {
     });
   });
 
-  context("get withdrawal request fee", () => {
+  context("get triggerable withdrawal request fee", () => {
     it("Should get fee from the EIP 7002 contract", async function () {
       await withdrawalsPredeployed.setFee(333n);
       expect(
@@ -83,7 +83,7 @@ describe("TriggerableWithdrawals.sol", () => {
     });
   });
 
-  context("add withdrawal requests", () => {
+  context("add triggerable withdrawal requests", () => {
     it("Should revert if empty arrays are provided", async function () {
       await expect(triggerableWithdrawals.addFullWithdrawalRequests([], 1n)).to.be.revertedWithCustomError(
         triggerableWithdrawals,
