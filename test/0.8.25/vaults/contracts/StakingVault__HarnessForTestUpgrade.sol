@@ -11,9 +11,10 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "contracts/0.8.25/vaults/interfaces/IBeaconProxy.sol";
-import {BeaconChainDepositLogistics} from "contracts/0.8.25/vaults/BeaconChainDepositLogistics.sol";
+import {DepositLogistics} from "contracts/0.8.25/lib/DepositLogistics.sol";
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
@@ -27,6 +28,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     uint64 private constant _version = 2;
     VaultHub public immutable vaultHub;
+    IDepositContract public immutable depositContract;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -34,11 +36,13 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     constructor(
         address _vaultHub,
-        address _beaconChainDepositContract
-    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
+        address _depositContract
+    ) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositContract == address(0)) revert ZeroArgument("_depositContract");
 
         vaultHub = VaultHub(_vaultHub);
+        depositContract = IDepositContract(_depositContract);
     }
 
     modifier onlyBeacon() {
@@ -48,8 +52,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
-    /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, address _operator, bytes calldata _params) external onlyBeacon reinitializer(_version) {
+    function initialize(address _owner, address _operator, bytes calldata /* _params */) external onlyBeacon reinitializer(_version) {
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().operator = _operator;

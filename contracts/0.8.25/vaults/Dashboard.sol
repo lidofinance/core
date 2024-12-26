@@ -256,9 +256,10 @@ contract Dashboard is AccessControlEnumerable {
     function _depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
-        bytes calldata _signatures
+        bytes calldata _signatures,
+        bytes calldata _sizes
     ) internal {
-        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
+        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures, _sizes);
     }
 
     /**

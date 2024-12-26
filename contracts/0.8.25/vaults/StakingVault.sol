@@ -4,14 +4,17 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {DepositLogistics} from "../lib/DepositLogistics.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
+
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+import {IDepositContract} from "../interfaces/IDepositContract.sol";
 
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 /**
  * @title StakingVault
@@ -52,7 +55,9 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
+    using DepositLogistics for IDepositContract;
+
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -73,6 +78,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      *         The implementation is petrified to this version
      */
     uint64 private constant _VERSION = 1;
+
+    IDepositContract private immutable DEPOSIT_CONTRACT;
 
     /**
      * @notice Address of `VaultHub`
@@ -97,10 +104,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     constructor(
         address _vaultHub,
         address _beaconChainDepositContract
-    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
+    ) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -151,6 +160,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     // * * * * * * * * * * * * * * * * * * * *  //
     // * * * STAKING VAULT BUSINESS LOGIC * * * //
     // * * * * * * * * * * * * * * * * * * * *  //
+
+    /**
+     * @notice Returns the address of the deposit contract
+     * @return Address of the deposit contract
+     */
+    function depositContract() external view returns (address) {
+        return address(DEPOSIT_CONTRACT);
+    }
 
     /**
      * @notice Returns the address of `VaultHub`
@@ -311,13 +328,22 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
-        bytes calldata _signatures
+        bytes calldata _signatures,
+        bytes calldata _sizes
     ) external {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
         if (msg.sender != _getStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
-        _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
+        DepositLogistics.processDeposits(
+            DEPOSIT_CONTRACT,
+            _numberOfDeposits,
+            bytes.concat(withdrawalCredentials()),
+            _pubkeys,
+            _signatures,
+            _sizes
+        );
+
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
     }
 

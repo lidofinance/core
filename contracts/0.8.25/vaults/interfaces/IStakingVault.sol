@@ -35,7 +35,8 @@ interface IStakingVault {
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
-        bytes calldata _signatures
+        bytes calldata _signatures,
+        bytes calldata _sizes
     ) external;
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function lock(uint256 _locked) external;

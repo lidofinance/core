@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { AbiCoder, BytesLike, hexlify, keccak256, ZeroAddress, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -7,6 +7,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
+  DepositLogistics,
   EthRejector,
   StakingVault,
   StakingVault__factory,
@@ -31,6 +32,7 @@ describe("StakingVault", () => {
   let vaultHubSigner: HardhatEthersSigner;
 
   let stakingVault: StakingVault;
+  let depositLogistics: DepositLogistics;
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
@@ -48,7 +50,7 @@ describe("StakingVault", () => {
 
   before(async () => {
     [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
-    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract] =
+    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract, depositLogistics] =
       await deployStakingVaultBehindBeaconProxy();
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -78,20 +80,31 @@ describe("StakingVault", () => {
     });
 
     it("sets the deposit contract address in the implementation", async () => {
-      expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
+      expect(await stakingVaultImplementation.depositContract()).to.equal(depositContractAddress);
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
+      await expect(
+        ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress], {
+          libraries: {
+            DepositLogistics: depositLogistics,
+          },
+        }),
+      )
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress])).to.be.revertedWithCustomError(
-        stakingVaultImplementation,
-        "DepositContractZeroAddress",
-      );
+      await expect(
+        ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress], {
+          libraries: {
+            DepositLogistics: depositLogistics,
+          },
+        }),
+      )
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_beaconChainDepositContract");
     });
 
     it("petrifies the implementation by setting the initialized version to 2^64 - 1", async () => {
@@ -117,7 +130,7 @@ describe("StakingVault", () => {
       expect(await stakingVault.version()).to.equal(1n);
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
-      expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
+      expect(await stakingVault.depositContract()).to.equal(depositContractAddress);
       expect(await stakingVault.getBeacon()).to.equal(vaultFactoryAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
       expect(await stakingVault.operator()).to.equal(operator);
@@ -296,23 +309,22 @@ describe("StakingVault", () => {
 
   context("depositToBeaconChain", () => {
     it("reverts if called by a non-operator", async () => {
-      await expect(stakingVault.connect(stranger).depositToBeaconChain(1, "0x", "0x"))
+      await expect(stakingVault.connect(stranger).depositToBeaconChain(1, "0x", "0x", "0x"))
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("depositToBeaconChain", stranger);
     });
 
     it("reverts if the number of deposits is zero", async () => {
-      await expect(stakingVault.depositToBeaconChain(0, "0x", "0x"))
+      await expect(stakingVault.depositToBeaconChain(0, "0x", "0x", "0x"))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_numberOfDeposits");
     });
 
     it("reverts if the vault is not balanced", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
-        stakingVault,
-        "Unbalanced",
-      );
+      await expect(
+        stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x", "0x"),
+      ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
     });
 
     it("makes deposits to the beacon chain and emits the DepositedToBeaconChain event", async () => {
@@ -320,9 +332,20 @@ describe("StakingVault", () => {
 
       const pubkey = "0x" + "ab".repeat(48);
       const signature = "0x" + "ef".repeat(96);
-      await expect(stakingVault.connect(operator).depositToBeaconChain(1, pubkey, signature))
+      const size = "0x0000000773594000"; // 32 eth in gwei
+
+      const depositDataRoot = computeDepositDataRoot(
+        await stakingVault.withdrawalCredentials(),
+        pubkey,
+        signature,
+        size,
+      );
+
+      await expect(stakingVault.connect(operator).depositToBeaconChain(1, pubkey, signature, size))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 1, ether("32"));
+        .withArgs(operator, 1, ether("32"))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey, await stakingVault.withdrawalCredentials(), signature, depositDataRoot);
     });
   });
 
@@ -456,15 +479,18 @@ describe("StakingVault", () => {
       VaultFactory__MockForStakingVault,
       StakingVault,
       DepositContract__MockForStakingVault,
+      DepositLogistics,
     ]
   > {
     // deploying implementation
     const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
     const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
-      await vaultHub_.getAddress(),
-      await depositContract_.getAddress(),
-    ]);
+    const depositLogistics = await ethers.deployContract("DepositLogistics");
+    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract_], {
+      libraries: {
+        DepositLogistics: depositLogistics,
+      },
+    });
 
     // deploying factory/beacon
     const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
@@ -483,6 +509,30 @@ describe("StakingVault", () => {
     const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, vaultOwner);
     expect(await stakingVault_.owner()).to.equal(await vaultOwner.getAddress());
 
-    return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_];
+    return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_, depositLogistics];
+  }
+
+  function computeDepositDataRoot(creds: string, pubkey: string, signature: string, size: string) {
+    // strip everything of the 0x prefix to make 0x explicit when slicing
+    creds = creds.slice(2);
+    pubkey = pubkey.slice(2);
+    signature = signature.slice(2);
+    size = size.slice(2);
+
+    const pubkeyRoot = keccak256("0x" + pubkey + "00".repeat(16)).slice(2);
+    const sigSlice1root = keccak256("0x" + signature.slice(0, 128)).slice(2);
+    const sigSlice2root = keccak256("0x" + signature.slice(128, signature.length) + "00".repeat(32)).slice(2);
+    const sigRoot = keccak256("0x" + sigSlice1root + sigSlice2root).slice(2);
+    const sizeInGweiLE64 = toLittleEndian(size);
+
+    const pubkeyCredsRoot = keccak256("0x" + pubkeyRoot + creds).slice(2);
+    const sizeSigRoot = keccak256("0x" + sizeInGweiLE64 + "00".repeat(24) + sigRoot).slice(2);
+
+    return keccak256("0x" + pubkeyCredsRoot + sizeSigRoot);
+  }
+
+  function toLittleEndian(value: string) {
+    const bytes = Buffer.from(value, "hex");
+    return bytes.reverse().toString("hex");
   }
 });
