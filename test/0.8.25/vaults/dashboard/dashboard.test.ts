@@ -992,4 +992,43 @@ describe("Dashboard", () => {
         .withArgs(amount);
     });
   });
+
+  context("recover", async () => {
+    const amount = ether("1");
+
+    before(async () => {
+      const wethContract = weth.connect(vaultOwner);
+
+      await wethContract.deposit({ value: amount });
+
+      await vaultOwner.sendTransaction({ to: dashboard.getAddress(), value: amount });
+      await wethContract.transfer(dashboard.getAddress(), amount);
+
+      expect(await ethers.provider.getBalance(dashboard.getAddress())).to.equal(amount);
+      expect(await wethContract.balanceOf(dashboard.getAddress())).to.equal(amount);
+    });
+
+    it("allows only admin to recover", async () => {
+      await expect(dashboard.connect(stranger).recover(ZeroAddress)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("recovers all ether", async () => {
+      const preBalance = await ethers.provider.getBalance(vaultOwner);
+      const tx = await dashboard.recover(ZeroAddress);
+      const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
+
+      expect(await ethers.provider.getBalance(dashboard.getAddress())).to.equal(0);
+      expect(await ethers.provider.getBalance(vaultOwner)).to.equal(preBalance + amount - gasUsed * gasPrice);
+    });
+
+    it("recovers all weth", async () => {
+      const preBalance = await weth.balanceOf(vaultOwner);
+      await dashboard.recover(weth.getAddress());
+      expect(await weth.balanceOf(dashboard.getAddress())).to.equal(0);
+      expect(await weth.balanceOf(vaultOwner)).to.equal(preBalance + amount);
+    });
+  });
 });

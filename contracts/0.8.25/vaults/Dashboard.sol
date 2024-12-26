@@ -409,6 +409,19 @@ contract Dashboard is AccessControlEnumerable {
         _rebalanceVault(_ether);
     }
 
+    /**
+     * @notice recovers ERC20 tokens or ether from the vault
+     * @param _token Address of the token to recover, 0 for ether
+     */
+    function recover(address _token) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_token == address(0)) {
+            payable(msg.sender).transfer(address(this).balance);
+        } else {
+            bool success = IERC20(_token).transfer(msg.sender, IERC20(_token).balanceOf(address(this)));
+            if (!success) revert("ERC20: Transfer failed");
+        }
+    }
+
     // ==================== Internal Functions ====================
 
     /**
@@ -502,7 +515,8 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
+            TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
