@@ -37,7 +37,7 @@ library DepositLogistics {
     /**
      * @notice Domain separator for the security signature
      */
-    bytes32 internal constant GUARDIAN_SIGNATURE_PREFIX = keccak256(abi.encodePacked("  "));
+    bytes32 internal constant GUARDIAN_SIGNATURE_PREFIX = keccak256(abi.encodePacked("GuardianSignaturePrefix"));
 
     /**
      * @notice Error thrown when the number of deposits is zero
