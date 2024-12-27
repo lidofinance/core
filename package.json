@@ -30,6 +30,7 @@
     "test:integration:scratch:fulltrace": "INTEGRATION_WITH_CSM=off INTEGRATION_WITH_SCRATCH_DEPLOY=on hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
     "test:integration:fork:local": "hardhat test test/integration/**/*.ts --network local",
     "test:integration:fork:mainnet": "hardhat test test/integration/**/*.ts --network mainnet-fork",
+    "test:integration:fork:mainnet:custom": "hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
