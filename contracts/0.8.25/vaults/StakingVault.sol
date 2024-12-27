@@ -322,17 +322,18 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
      * @param _pubkeys Concatenated validator public keys
      * @param _signatures Concatenated deposit data signatures
      * @param _amounts Concatenated deposit amounts in gwei
+     * @param _guardianSignature Guardian signature (owner in this case)
      * @dev Includes a check to ensure StakingVault is balanced before making deposits
      */
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures,
-        bytes calldata _amounts
+        bytes calldata _amounts,
+        DepositLogistics.Signature memory _guardianSignature
     ) external {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
-        if (msg.sender != _getStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         DepositLogistics.processDeposits(
             IDepositContract(address(DEPOSIT_CONTRACT)),
@@ -340,7 +341,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
             bytes.concat(withdrawalCredentials()),
             _pubkeys,
             _signatures,
-            _amounts
+            _amounts,
+            _guardianSignature,
+            owner()
         );
 
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits);

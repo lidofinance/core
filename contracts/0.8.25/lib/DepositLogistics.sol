@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import { Memory } from "../lib/Memory.sol";
 import { IDepositContract } from "../interfaces/IDepositContract.sol";
+import {ECDSA} from "contracts/common/lib/ECDSA.sol";
 
 /**
  * @title DepositLogistics
@@ -13,6 +14,11 @@ import { IDepositContract } from "../interfaces/IDepositContract.sol";
  * @dev Provides functionality to process multiple validator deposits to the Beacon Chain deposit contract
  */
 library DepositLogistics {
+    struct Signature {
+        bytes32 r;
+        bytes32 vs;
+    }
+
     /**
      * @notice Byte length of the BLS12-381 public key (a.k.a. validator public key)
      */
@@ -27,6 +33,11 @@ library DepositLogistics {
      * @notice Byte length of the deposit amount (value) in gwei
      */
     uint256 internal constant AMOUNT_LENGTH = 8;
+
+    /**
+     * @notice Domain separator for the security signature
+     */
+    bytes32 internal constant GUARDIAN_SIGNATURE_PREFIX = keccak256(abi.encodePacked("  "));
 
     /**
      * @notice Error thrown when the number of deposits is zero
@@ -49,6 +60,11 @@ library DepositLogistics {
     error AmountsLengthMismatch(uint256 actual, uint256 expected);
 
     /**
+     * @notice Error thrown when the guardian signature does not match the expected guardian
+     */
+    error InvalidGuardianSignature();
+
+    /**
      * @notice Processes multiple validator deposits to the Beacon Chain deposit contract
      * @param _depositContract The deposit contract interface
      * @param _deposits Number of validator keys to process
@@ -63,7 +79,9 @@ library DepositLogistics {
         bytes memory _creds,
         bytes memory _pubkeys,
         bytes memory _sigs,
-        bytes memory _amounts
+        bytes memory _amounts,
+        Signature memory _guardianSignature,
+        address _guardian
     ) internal {
         if (_deposits == 0) revert ZeroDeposits();
         if (_pubkeys.length != PUBKEY_LENGTH * _deposits) revert PubkeysLengthMismatch(_pubkeys.length, PUBKEY_LENGTH * _deposits);
@@ -75,6 +93,9 @@ library DepositLogistics {
         bytes memory sig = Memory.alloc(SIG_LENGTH);
         bytes memory amount = Memory.alloc(AMOUNT_LENGTH);
 
+        // aggregate deposit data roots
+        bytes memory depositDataRoots;
+
         for (uint256 i; i < _deposits; i++) {
             // Copy pubkey, sig, and amount to the allocated memory slots
             Memory.copy(_pubkeys, pubkey, i * PUBKEY_LENGTH, 0, PUBKEY_LENGTH);
@@ -84,8 +105,26 @@ library DepositLogistics {
             uint256 amountInWei = _gweiBytesToWei(amount);
             bytes32 root = _computeRoot(_creds, pubkey, sig, amount);
 
+            depositDataRoots = abi.encodePacked(depositDataRoots, root);
+
             _depositContract.deposit{value: amountInWei}(pubkey, _creds, sig, root);
         }
+
+        // reverts the deposit transaction if the current deposit root does not match the expected one.
+        // The expected deposit root is the one against which the guardian signature was produced, i.e.
+        // against which the deposit data was validated to make sure there were no deposits with these pubkeys,
+        // i.e. no deposit front-running.
+
+        // the guardians signs a concatenation of 3 things:
+        // 1. deposit prefix (a constant that reduces the signature validity space)
+        // 2. the deposit root against which the deposit data was validated
+        // 3. the aggregate of all deposit data roots
+
+        bytes32 currentDepositRoot = _depositContract.get_deposit_root();
+        bytes32 securityMessageHash = keccak256(abi.encodePacked(GUARDIAN_SIGNATURE_PREFIX, currentDepositRoot, depositDataRoots));
+        address signer = ECDSA.recover(securityMessageHash, _guardianSignature.r, _guardianSignature.vs);
+
+        if (signer != _guardian) revert InvalidGuardianSignature();
     }
 
     /**

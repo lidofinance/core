@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import { DepositLogistics } from "../../lib/DepositLogistics.sol";
+
 /**
  * @title IStakingVault
  * @author Lido
@@ -36,7 +38,8 @@ interface IStakingVault {
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures,
-        bytes calldata _sizes
+        bytes calldata _sizes,
+        DepositLogistics.Signature memory _guardianSignature
     ) external;
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function lock(uint256 _locked) external;
