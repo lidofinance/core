@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { AbiCoder, BytesLike, hexlify, keccak256, ZeroAddress, zeroPadValue } from "ethers";
+import { AbiCoder, BytesLike, hexlify, keccak256, ZeroAddress, zeroPadBytes, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -15,9 +15,10 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { de0x, ether, findEvents, impersonate } from "lib";
+import { de0x, ether, etherToGweiBytes, findEvents, gwei, impersonate } from "lib";
 
 import { Snapshot } from "test/suite";
+import { randomBytes } from "crypto";
 
 const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
@@ -314,25 +315,76 @@ describe.only("StakingVault", () => {
       ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
     });
 
-    it("makes deposits to the beacon chain and emits the DepositedToBeaconChain event", async () => {
+    it("makes one 32 eth deposit to the beacon chain and emits the DepositedToBeaconChain event", async () => {
       await stakingVault.fund({ value: ether("32") });
 
-      const pubkey = "0x" + "ab".repeat(48);
-      const signature = "0x" + "ef".repeat(96);
-      const size = "0x0000000773594000"; // 32 eth in gwei
+      const pubkey = hexlify(randomBytes(48));
+      const signature = hexlify(randomBytes(96));
+      const size = etherToGweiBytes("32", 8);
 
-      const depositDataRoot = computeDepositDataRoot(
-        await stakingVault.withdrawalCredentials(),
-        pubkey,
-        signature,
-        size,
-      );
+      const depositDataRoot = getRoot(await stakingVault.withdrawalCredentials(), pubkey, signature, size);
 
       await expect(stakingVault.connect(operator).depositToBeaconChain(1, pubkey, signature, size))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 1, ether("32"))
+        .withArgs(operator, 1)
         .and.to.emit(depositContract, "DepositEvent")
         .withArgs(pubkey, await stakingVault.withdrawalCredentials(), signature, depositDataRoot);
+    });
+
+    it("makes multiple deposits with different amounts to the beacon chain and emits the DepositedToBeaconChain event", async () => {
+      const deposits = 5;
+
+      // deposit 1
+      const pubkey1 = hexlify(randomBytes(48));
+      const sig1 = hexlify(randomBytes(96));
+      const amountBigInt1 = ether("1");
+      const amountGwei1 = etherToGweiBytes("1", 8);
+
+      // deposit 2
+      const pubkey2 = hexlify(randomBytes(48));
+      const sig2 = hexlify(randomBytes(96));
+      const amountBigInt2 = ether("10");
+      const amountGwei2 = etherToGweiBytes("10", 8);
+
+      // deposit 3
+      const pubkey3 = hexlify(randomBytes(48));
+      const sig3 = hexlify(randomBytes(96));
+      const amountBigInt3 = ether("32");
+      const amountGwei3 = etherToGweiBytes("32", 8);
+
+      // deposit 4
+      const pubkey4 = hexlify(randomBytes(48));
+      const sig4 = hexlify(randomBytes(96));
+      const amountBigInt4 = ether("35");
+      const amountGwei4 = etherToGweiBytes("35", 8);
+
+      // deposit 5
+      const pubkey5 = hexlify(randomBytes(48));
+      const sig5 = hexlify(randomBytes(96));
+      const amountBigInt5 = ether("50");
+      const amountGwei5 = etherToGweiBytes("50", 8);
+
+      await stakingVault.fund({ value: amountBigInt1 + amountBigInt2 + amountBigInt3 + amountBigInt4 + amountBigInt5 });
+
+      let pubkeys = pubkey1 + de0x(pubkey2) + de0x(pubkey3) + de0x(pubkey4) + de0x(pubkey5);
+      let sigs = sig1 + de0x(sig2) + de0x(sig3) + de0x(sig4) + de0x(sig5);
+      let amounts = amountGwei1 + de0x(amountGwei2) + de0x(amountGwei3) + de0x(amountGwei4) + de0x(amountGwei5);
+
+      const creds = await stakingVault.withdrawalCredentials();
+
+      await expect(stakingVault.connect(operator).depositToBeaconChain(deposits, pubkeys, sigs, amounts))
+        .to.emit(stakingVault, "DepositedToBeaconChain")
+        .withArgs(operator, deposits)
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey1, creds, sig1, getRoot(creds, pubkey1, sig1, amountGwei1))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey2, creds, sig2, getRoot(creds, pubkey2, sig2, amountGwei2))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey3, creds, sig3, getRoot(creds, pubkey3, sig3, amountGwei3))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey4, creds, sig4, getRoot(creds, pubkey4, sig4, amountGwei4))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey5, creds, sig5, getRoot(creds, pubkey5, sig5, amountGwei5));
     });
   });
 
@@ -493,7 +545,7 @@ describe.only("StakingVault", () => {
     return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_];
   }
 
-  function computeDepositDataRoot(creds: string, pubkey: string, signature: string, size: string) {
+  function getRoot(creds: string, pubkey: string, signature: string, size: string) {
     // strip everything of the 0x prefix to make 0x explicit when slicing
     creds = creds.slice(2);
     pubkey = pubkey.slice(2);

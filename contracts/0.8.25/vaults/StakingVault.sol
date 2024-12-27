@@ -56,8 +56,6 @@ import {IDepositContract} from "../interfaces/IDepositContract.sol";
  *
  */
 contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
-    using DepositLogistics for IDepositContract;
-
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -323,28 +321,29 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
      * @param _numberOfDeposits Number of deposits to make
      * @param _pubkeys Concatenated validator public keys
      * @param _signatures Concatenated deposit data signatures
+     * @param _amounts Concatenated deposit amounts in gwei
      * @dev Includes a check to ensure StakingVault is balanced before making deposits
      */
     function depositToBeaconChain(
         uint256 _numberOfDeposits,
         bytes calldata _pubkeys,
         bytes calldata _signatures,
-        bytes calldata _sizes
+        bytes calldata _amounts
     ) external {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
         if (msg.sender != _getStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         DepositLogistics.processDeposits(
-            DEPOSIT_CONTRACT,
+            IDepositContract(address(DEPOSIT_CONTRACT)),
             _numberOfDeposits,
             bytes.concat(withdrawalCredentials()),
             _pubkeys,
             _signatures,
-            _sizes
+            _amounts
         );
 
-        emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
+        emit DepositedToBeaconChain(msg.sender, _numberOfDeposits);
     }
 
     /**
@@ -441,9 +440,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
      * @notice Emitted when ether is deposited to `DepositContract`
      * @param sender Address that initiated the deposit
      * @param deposits Number of validator deposits made
-     * @param amount Total amount of ether deposited
      */
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
+    event DepositedToBeaconChain(address indexed sender, uint256 deposits);
 
     /**
      * @notice Emitted when a validator exit request is made
