@@ -23,7 +23,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault", () => {
+describe.only("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -32,7 +32,6 @@ describe("StakingVault", () => {
   let vaultHubSigner: HardhatEthersSigner;
 
   let stakingVault: StakingVault;
-  let depositLogistics: DepositLogistics;
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
@@ -50,7 +49,7 @@ describe("StakingVault", () => {
 
   before(async () => {
     [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
-    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract, depositLogistics] =
+    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract] =
       await deployStakingVaultBehindBeaconProxy();
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -84,25 +83,13 @@ describe("StakingVault", () => {
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(
-        ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress], {
-          libraries: {
-            DepositLogistics: depositLogistics,
-          },
-        }),
-      )
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(
-        ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress], {
-          libraries: {
-            DepositLogistics: depositLogistics,
-          },
-        }),
-      )
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -479,18 +466,12 @@ describe("StakingVault", () => {
       VaultFactory__MockForStakingVault,
       StakingVault,
       DepositContract__MockForStakingVault,
-      DepositLogistics,
     ]
   > {
     // deploying implementation
     const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
     const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
-    const depositLogistics = await ethers.deployContract("DepositLogistics");
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract_], {
-      libraries: {
-        DepositLogistics: depositLogistics,
-      },
-    });
+    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract_]);
 
     // deploying factory/beacon
     const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
@@ -509,7 +490,7 @@ describe("StakingVault", () => {
     const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, vaultOwner);
     expect(await stakingVault_.owner()).to.equal(await vaultOwner.getAddress());
 
-    return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_, depositLogistics];
+    return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_];
   }
 
   function computeDepositDataRoot(creds: string, pubkey: string, signature: string, size: string) {

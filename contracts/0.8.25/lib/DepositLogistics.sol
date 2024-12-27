@@ -39,7 +39,7 @@ library DepositLogistics {
         bytes memory _pubkeys,
         bytes memory _sigs,
         bytes memory _sizes
-    ) external {
+    ) internal {
         if (_keyCount == 0) revert ZeroKeyCount();
         if (_pubkeys.length != PUBLIC_KEY_LENGTH * _keyCount) revert PubkeysLengthMismatch(_pubkeys.length, PUBLIC_KEY_LENGTH * _keyCount);
         if (_sigs.length != SIGNATURE_LENGTH * _keyCount) revert SignaturesLengthMismatch(_sigs.length, SIGNATURE_LENGTH * _keyCount);
