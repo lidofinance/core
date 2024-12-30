@@ -7,7 +7,7 @@ import { Kernel, LidoLocator } from "typechain-types";
 
 import { ether, findEvents, streccak } from "lib";
 
-import { deployLidoLocator } from "./locator";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 
 interface CreateAddAppArgs {
   dao: Kernel;
@@ -79,7 +79,11 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
     await lido.initialize(locator, eip712steth, { value: ether("1.0") });
   }
 
-  return { lido, dao, acl };
+  const locator = await lido.getLidoLocator();
+  const accounting = await ethers.deployContract("Accounting", [locator, lido], rootAccount);
+  await updateLidoLocatorImplementation(locator, { accounting });
+
+  return { lido, dao, acl, accounting };
 }
 
 export async function deployLidoDaoForNor({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
