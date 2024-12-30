@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { BigNumberish } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -8,13 +7,15 @@ import { getStorageAt } from "@nomicfoundation/hardhat-network-helpers";
 import {
   Accounting,
   ACL,
+  IPostTokenRebaseReceiver,
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalVault__MockForLidoAccounting,
-  WithdrawalVault__MockForLidoAccounting__factory,
+  WithdrawalVault__MockForLidoAccounting__factory
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.25/Accounting";
 import { OracleReportSanityChecker__MockForLidoHandleOracleReport__factory } from "typechain-types/factories/test/0.4.24/contracts/OracleReportSanityChecker__MockForLidoHandleOracleReport__factory";
@@ -33,6 +34,7 @@ describe("Lido:accounting", () => {
   let lido: Lido;
   let acl: ACL;
   let accounting: Accounting;
+  let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   // let locator: LidoLocator;
 
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
@@ -44,11 +46,12 @@ describe("Lido:accounting", () => {
     // [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
     [deployer, stranger, withdrawalQueue] = await ethers.getSigners();
 
-    [elRewardsVault, stakingRouter, withdrawalVault, oracleReportSanityChecker] = await Promise.all([
+    [elRewardsVault, stakingRouter, withdrawalVault, oracleReportSanityChecker, postTokenRebaseReceiver] = await Promise.all([
       new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
       new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
       new OracleReportSanityChecker__MockForLidoHandleOracleReport__factory(deployer).deploy(),
+      new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
     ]);
 
     ({ lido, acl, accounting } = await deployLidoDao({
@@ -60,6 +63,7 @@ describe("Lido:accounting", () => {
         withdrawalVault,
         stakingRouter,
         oracleReportSanityChecker,
+        postTokenRebaseReceiver
       },
     }));
 
