@@ -11,15 +11,15 @@ import {
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  OracleReportSanityChecker__MockForAccounting,
+  OracleReportSanityChecker__MockForAccounting__factory,
   PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalVault__MockForLidoAccounting,
   WithdrawalVault__MockForLidoAccounting__factory
 } from "typechain-types";
-import { ReportValuesStruct } from "typechain-types/contracts/0.8.25/Accounting";
-import { OracleReportSanityChecker__MockForLidoHandleOracleReport__factory } from "typechain-types/factories/test/0.4.24/contracts/OracleReportSanityChecker__MockForLidoHandleOracleReport__factory";
-import { OracleReportSanityChecker__MockForLidoHandleOracleReport } from "typechain-types/test/0.4.24/contracts/OracleReportSanityChecker__MockForLidoHandleOracleReport";
+import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
 import { streccak } from "lib";
 
@@ -40,7 +40,7 @@ describe("Lido:accounting", () => {
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
-  let oracleReportSanityChecker: OracleReportSanityChecker__MockForLidoHandleOracleReport;
+  let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
 
   beforeEach(async () => {
     // [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
@@ -50,7 +50,7 @@ describe("Lido:accounting", () => {
       new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
       new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForLidoHandleOracleReport__factory(deployer).deploy(),
+      new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
       new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
     ]);
 
