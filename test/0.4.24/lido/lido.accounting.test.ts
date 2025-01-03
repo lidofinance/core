@@ -17,7 +17,7 @@ import {
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalVault__MockForLidoAccounting,
-  WithdrawalVault__MockForLidoAccounting__factory
+  WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
@@ -46,13 +46,14 @@ describe("Lido:accounting", () => {
     // [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
     [deployer, stranger, withdrawalQueue] = await ethers.getSigners();
 
-    [elRewardsVault, stakingRouter, withdrawalVault, oracleReportSanityChecker, postTokenRebaseReceiver] = await Promise.all([
-      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
-      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
-      new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
-    ]);
+    [elRewardsVault, stakingRouter, withdrawalVault, oracleReportSanityChecker, postTokenRebaseReceiver] =
+      await Promise.all([
+        new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
+        new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
+        new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
+        new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
+        new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
+      ]);
 
     ({ lido, acl, accounting } = await deployLidoDao({
       rootAccount: deployer,
@@ -63,7 +64,7 @@ describe("Lido:accounting", () => {
         withdrawalVault,
         stakingRouter,
         oracleReportSanityChecker,
-        postTokenRebaseReceiver
+        postTokenRebaseReceiver,
       },
     }));
 
@@ -99,13 +100,13 @@ describe("Lido:accounting", () => {
         .withArgs(0n, 0n, 100n);
     });
 
-    type ArgsTuple = [BigNumberish, BigNumberish, BigNumberish, BigNumberish];
+    type ArgsTuple = [bigint, bigint, bigint, bigint];
 
     interface Args {
-      reportTimestamp: BigNumberish;
-      preClValidators: BigNumberish;
-      postClValidators: BigNumberish;
-      postClBalance: BigNumberish;
+      reportTimestamp: bigint;
+      preClValidators: bigint;
+      postClValidators: bigint;
+      postClBalance: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
@@ -131,26 +132,17 @@ describe("Lido:accounting", () => {
       );
     });
 
-    type ArgsTuple = [
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-      BigNumberish,
-    ];
+    type ArgsTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
 
     interface Args {
-      reportTimestamp: BigNumberish;
-      reportClBalance: BigNumberish;
-      adjustedPreCLBalance: BigNumberish;
-      withdrawalsToWithdraw: BigNumberish;
-      elRewardsToWithdraw: BigNumberish;
-      lastWithdrawalRequestToFinalize: BigNumberish;
-      simulatedShareRate: BigNumberish;
-      etherToLockOnWithdrawalQueue: BigNumberish;
+      reportTimestamp: bigint;
+      reportClBalance: bigint;
+      adjustedPreCLBalance: bigint;
+      withdrawalsToWithdraw: bigint;
+      elRewardsToWithdraw: bigint;
+      lastWithdrawalRequestToFinalize: bigint;
+      simulatedShareRate: bigint;
+      etherToLockOnWithdrawalQueue: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
@@ -168,7 +160,6 @@ describe("Lido:accounting", () => {
     }
   });
 
-  // TODO: [@tamtamchik] restore tests
   context("handleOracleReport", () => {
     it("Update CL validators count if reported more", async () => {
       await updateLidoLocatorImplementation(await lido.getLidoLocator(), { accountingOracle: deployer });
@@ -218,7 +209,6 @@ describe("Lido:accounting", () => {
         ...overrides,
       };
     }
-
 
     //   it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
     //     await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
