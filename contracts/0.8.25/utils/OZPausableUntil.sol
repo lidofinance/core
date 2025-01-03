@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-/// @title PausableAccessControlEnumerableUpgradeable aka PausableACEU
+/// @title OZPausableUntil is a PausableUntil reference implementation using OpenZeppelin's AccessControlEnumerableUpgradeable
 /// @author folkyatina
 abstract contract OZPausableUntil is PausableUntil, AccessControlEnumerableUpgradeable {
     /// @notice role that allows to pause the hub
