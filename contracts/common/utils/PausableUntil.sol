@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
+// solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.9;
 
 import {UnstructuredStorage} from "contracts/common/lib/UnstructuredStorage.sol";

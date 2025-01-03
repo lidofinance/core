@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>, Aragon
 // SPDX-License-Identifier: MIT
 
+// solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.9;
 
 library UnstructuredStorage {

@@ -8095,7 +8095,7 @@ __metadata:
     openzeppelin-solidity: "npm:2.0.0"
     prettier: "npm:3.4.1"
     prettier-plugin-solidity: "npm:1.4.1"
-    solhint: "npm:5.0.3"
+    solhint: "npm:^5.0.4"
     solhint-plugin-lido: "npm:0.0.4"
     solidity-coverage: "npm:0.8.14"
     ts-node: "npm:10.9.2"
@@ -10638,11 +10638,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"solhint@npm:5.0.3":
-  version: 5.0.3
-  resolution: "solhint@npm:5.0.3"
+"solhint@npm:^5.0.4":
+  version: 5.0.4
+  resolution: "solhint@npm:5.0.4"
   dependencies:
-    "@solidity-parser/parser": "npm:^0.18.0"
+    "@solidity-parser/parser": "npm:^0.19.0"
     ajv: "npm:^6.12.6"
     antlr4: "npm:^4.13.1-patch-1"
     ast-parents: "npm:^0.0.1"
@@ -10666,7 +10666,7 @@ __metadata:
       optional: true
   bin:
     solhint: solhint.js
-  checksum: 10c0/262e86a8932d7d4d6ebae2a9d7317749e5068092e7cdf4caf07ac39fc72bd2c94f3907daaedcad37592ec001b57caed6dc5ed7c3fd6cd18b6443182f38c1715e
+  checksum: 10c0/70058b23c8746762fc88d48b571c4571719913ca7f3c582a55c123ad9ba38976a2338782025fbb9643bb75bfad18bf3dce1b71e500df6d99589e9814fbcce1d7
   languageName: node
   linkType: hard
 
