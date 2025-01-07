@@ -90,7 +90,7 @@
     "lint-staged": "15.2.10",
     "prettier": "3.4.1",
     "prettier-plugin-solidity": "1.4.1",
-    "solhint": "^5.0.4",
+    "solhint": "5.0.4",
     "solhint-plugin-lido": "0.0.4",
     "solidity-coverage": "0.8.14",
     "ts-node": "10.9.2",
