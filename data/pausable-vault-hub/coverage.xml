@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3537"  lines-covered="3093"  line-rate="0.8745"  branches-valid="1658"  branches-covered="1373"  branch-rate="0.8281000000000001"  timestamp="1735920028363" complexity="0" version="0.1">
+<coverage lines-valid="3537"  lines-covered="3093"  line-rate="0.8745"  branches-valid="1658"  branches-covered="1373"  branch-rate="0.8281000000000001"  timestamp="1736255523515" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1984,22 +1984,22 @@
 	</package>
 	<package name="0.8.25.utils"  line-rate="0"  branch-rate="0" >
 	<classes>
-		<class name="OZPausableUntil.sol"  filename="contracts/0.8.25/utils/OZPausableUntil.sol"  line-rate="0"  branch-rate="0" >
+		<class name="PausableUntilWithRoles.sol"  filename="contracts/0.8.25/utils/PausableUntilWithRoles.sol"  line-rate="0"  branch-rate="0" >
 		<methods>
 			<method name="resume"  hits="0"  signature="()V" >
-				<lines><line number="20"  hits="0" /></lines>
+				<lines><line number="27"  hits="0" /></lines>
 			</method>
 			<method name="pauseFor"  hits="0"  signature="()V" >
-				<lines><line number="29"  hits="0" /></lines>
+				<lines><line number="38"  hits="0" /></lines>
 			</method>
 			<method name="pauseUntil"  hits="0"  signature="()V" >
-				<lines><line number="38"  hits="0" /></lines>
+				<lines><line number="49"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="21"  hits="0"  branch="false" />
-			<line number="30"  hits="0"  branch="false" />
+			<line number="28"  hits="0"  branch="false" />
 			<line number="39"  hits="0"  branch="false" />
+			<line number="50"  hits="0"  branch="false" />
 		</lines>
 		</class>
 	</classes>
