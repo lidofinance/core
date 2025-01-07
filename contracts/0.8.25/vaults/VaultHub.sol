@@ -11,7 +11,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
-import {OZPausableUntil} from "../utils/OZPausableUntil.sol";
+import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -20,7 +20,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 /// It also allows to force rebalance of the vaults
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
-abstract contract VaultHub is OZPausableUntil {
+abstract contract VaultHub is PausableUntilWithRoles {
     /// @custom:storage-location erc7201:VaultHub
     struct VaultHubStorage {
         /// @notice vault sockets with vaults connected to the hub
