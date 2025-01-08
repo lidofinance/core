@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3537"  lines-covered="3126"  line-rate="0.8837999999999999"  branches-valid="1658"  branches-covered="1397"  branch-rate="0.8426"  timestamp="1736343056971" complexity="0" version="0.1">
+<coverage lines-valid="3537"  lines-covered="3126"  line-rate="0.8837999999999999"  branches-valid="1658"  branches-covered="1397"  branch-rate="0.8426"  timestamp="1736343479711" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1987,19 +1987,19 @@
 		<class name="PausableUntilWithRoles.sol"  filename="contracts/0.8.25/utils/PausableUntilWithRoles.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
 			<method name="resume"  hits="4"  signature="()V" >
-				<lines><line number="27"  hits="4" /></lines>
+				<lines><line number="24"  hits="4" /></lines>
 			</method>
 			<method name="pauseFor"  hits="12"  signature="()V" >
-				<lines><line number="38"  hits="12" /></lines>
+				<lines><line number="35"  hits="12" /></lines>
 			</method>
 			<method name="pauseUntil"  hits="3"  signature="()V" >
-				<lines><line number="49"  hits="3" /></lines>
+				<lines><line number="46"  hits="3" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="28"  hits="4"  branch="false" />
-			<line number="39"  hits="12"  branch="false" />
-			<line number="50"  hits="3"  branch="false" />
+			<line number="25"  hits="4"  branch="false" />
+			<line number="36"  hits="12"  branch="false" />
+			<line number="47"  hits="3"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -6387,63 +6387,63 @@
 		<class name="PausableUntil.sol"  filename="contracts/common/utils/PausableUntil.sol"  line-rate="0.9655"  branch-rate="1" >
 		<methods>
 			<method name="whenResumed"  hits="5"  signature="()V" >
-				<lines><line number="28"  hits="5" /></lines>
-			</method>
-			<method name="_checkPaused"  hits="4"  signature="()V" >
-				<lines><line number="33"  hits="4" /></lines>
-			</method>
-			<method name="_checkResumed"  hits="20"  signature="()V" >
-				<lines><line number="39"  hits="20" /></lines>
+				<lines><line number="31"  hits="5" /></lines>
 			</method>
 			<method name="isPaused"  hits="35"  signature="()V" >
-				<lines><line number="46"  hits="35" /></lines>
+				<lines><line number="37"  hits="35" /></lines>
 			</method>
 			<method name="getResumeSinceTimestamp"  hits="6"  signature="()V" >
-				<lines><line number="54"  hits="6" /></lines>
+				<lines><line number="45"  hits="6" /></lines>
+			</method>
+			<method name="_checkPaused"  hits="4"  signature="()V" >
+				<lines><line number="49"  hits="4" /></lines>
+			</method>
+			<method name="_checkResumed"  hits="20"  signature="()V" >
+				<lines><line number="55"  hits="20" /></lines>
 			</method>
 			<method name="_resume"  hits="4"  signature="()V" >
-				<lines><line number="58"  hits="4" /></lines>
+				<lines><line number="61"  hits="4" /></lines>
 			</method>
 			<method name="_pauseFor"  hits="12"  signature="()V" >
-				<lines><line number="64"  hits="12" /></lines>
+				<lines><line number="67"  hits="12" /></lines>
 			</method>
 			<method name="_pauseUntil"  hits="3"  signature="()V" >
-				<lines><line number="77"  hits="3" /></lines>
+				<lines><line number="80"  hits="3" /></lines>
 			</method>
 			<method name="_setPausedState"  hits="12"  signature="()V" >
-				<lines><line number="90"  hits="12" /></lines>
+				<lines><line number="93"  hits="12" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="29"  hits="5"  branch="false" />
-			<line number="30"  hits="0"  branch="false" />
-			<line number="34"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="35"  hits="2"  branch="false" />
-			<line number="40"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="41"  hits="6"  branch="false" />
-			<line number="47"  hits="35"  branch="false" />
-			<line number="55"  hits="6"  branch="false" />
-			<line number="59"  hits="4"  branch="false" />
-			<line number="60"  hits="2"  branch="false" />
-			<line number="61"  hits="2"  branch="false" />
-			<line number="65"  hits="12"  branch="false" />
-			<line number="66"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="68"  hits="10"  branch="false" />
-			<line number="69"  hits="10"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="70"  hits="1"  branch="false" />
-			<line number="72"  hits="9"  branch="false" />
-			<line number="74"  hits="10"  branch="false" />
-			<line number="78"  hits="3"  branch="false" />
-			<line number="79"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="81"  hits="2"  branch="false" />
-			<line number="82"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="83"  hits="1"  branch="false" />
-			<line number="85"  hits="1"  branch="false" />
-			<line number="87"  hits="2"  branch="false" />
-			<line number="91"  hits="12"  branch="false" />
-			<line number="92"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="93"  hits="2"  branch="false" />
-			<line number="95"  hits="10"  branch="false" />
+			<line number="32"  hits="5"  branch="false" />
+			<line number="33"  hits="0"  branch="false" />
+			<line number="38"  hits="35"  branch="false" />
+			<line number="46"  hits="6"  branch="false" />
+			<line number="50"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="51"  hits="2"  branch="false" />
+			<line number="56"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="57"  hits="6"  branch="false" />
+			<line number="62"  hits="4"  branch="false" />
+			<line number="63"  hits="2"  branch="false" />
+			<line number="64"  hits="2"  branch="false" />
+			<line number="68"  hits="12"  branch="false" />
+			<line number="69"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="71"  hits="10"  branch="false" />
+			<line number="72"  hits="10"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="73"  hits="1"  branch="false" />
+			<line number="75"  hits="9"  branch="false" />
+			<line number="77"  hits="10"  branch="false" />
+			<line number="81"  hits="3"  branch="false" />
+			<line number="82"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="84"  hits="2"  branch="false" />
+			<line number="85"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="86"  hits="1"  branch="false" />
+			<line number="88"  hits="1"  branch="false" />
+			<line number="90"  hits="2"  branch="false" />
+			<line number="94"  hits="12"  branch="false" />
+			<line number="95"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="96"  hits="2"  branch="false" />
+			<line number="98"  hits="10"  branch="false" />
 		</lines>
 		</class>
 	</classes>
