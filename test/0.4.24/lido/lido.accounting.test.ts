@@ -11,6 +11,7 @@ import {
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  LidoLocator__factory,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
   PostTokenRebaseReceiver__MockForAccounting__factory,
@@ -21,9 +22,9 @@ import {
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
-import { streccak } from "lib";
+import { ether, impersonate, streccak } from "lib";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
+import { deployLidoDao } from "test/deploy";
 
 describe("Lido:accounting", () => {
   let deployer: HardhatEthersSigner;
@@ -35,7 +36,7 @@ describe("Lido:accounting", () => {
   let acl: ACL;
   let accounting: Accounting;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
-  // let locator: LidoLocator;
+  let locator: LidoLocator;
 
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
@@ -68,7 +69,7 @@ describe("Lido:accounting", () => {
       },
     }));
 
-    // locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
+    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
 
     await acl.createPermission(deployer, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(deployer, lido, await lido.PAUSE_ROLE(), deployer);
@@ -87,7 +88,8 @@ describe("Lido:accounting", () => {
     });
 
     it("Updates beacon stats", async () => {
-      await updateLidoLocatorImplementation(await lido.getLidoLocator(), { accounting: deployer });
+      const accountingSigner = await impersonate(await accounting.getAddress(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
       await expect(
         lido.processClStateUpdate(
           ...args({
@@ -162,11 +164,11 @@ describe("Lido:accounting", () => {
 
   context("handleOracleReport", () => {
     it("Update CL validators count if reported more", async () => {
-      await updateLidoLocatorImplementation(await lido.getLidoLocator(), { accountingOracle: deployer });
-
       let depositedValidators = 100n;
       await lido.connect(deployer).unsafeChangeDepositedValidators(depositedValidators);
 
+      const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
+      accounting = accounting.connect(accountingOracleSigner);
       // first report, 100 validators
       await accounting.handleOracleReport(
         report({
