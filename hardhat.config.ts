@@ -52,7 +52,7 @@ function loadAccounts(networkName: string) {
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
-    enabled: true,
+    enabled: process.env.SKIP_GAS_REPORT ? false : true,
   },
   networks: {
     "hardhat": {
@@ -198,7 +198,10 @@ const config: HardhatUserConfig = {
   },
   watcher: {
     test: {
-      tasks: [{ command: "test", params: { testFiles: ["{path}"] } }],
+      tasks: [
+        { command: "compile", params: { quiet: true } },
+        { command: "test", params: { noCompile: true, testFiles: ["{path}"] } },
+      ],
       files: ["./test/**/*"],
       clearOnStart: true,
       start: "echo Running tests...",
@@ -225,7 +228,7 @@ const config: HardhatUserConfig = {
   contractSizer: {
     alphaSort: false,
     disambiguatePaths: false,
-    runOnCompile: true,
+    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
     strict: true,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
