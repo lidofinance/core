@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -9,10 +9,8 @@ import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/u
 
 /**
  * @title PausableUntilWithRoles
- * @author folkyatina
- * @notice a `PausableUntil` reference implementation using OpenZeppelin's `AccessControlEnumerableUpgradeable`
- * @dev This contract is abstract and should be inherited by the actual contract that is using `whenNotPaused` modifier
- * to actually block some functions on pause
+ * @notice a `PausableUntil` implementation using OpenZeppelin's `AccessControlEnumerableUpgradeable`
+ * @dev the inheriting contract must use `whenNotPaused` modifier from `PausableUntil` to block some functions on pause
  */
 abstract contract PausableUntilWithRoles is PausableUntil, AccessControlEnumerableUpgradeable {
     /// @notice role that allows to pause the contract
@@ -22,7 +20,6 @@ abstract contract PausableUntilWithRoles is PausableUntil, AccessControlEnumerab
 
     /**
      * @notice Resume the contract
-     * @dev Contract is deployed in paused state and should be resumed explicitly
      */
     function resume() external onlyRole(RESUME_ROLE) {
         _resume();

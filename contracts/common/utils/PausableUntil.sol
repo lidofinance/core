@@ -1,11 +1,14 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.9;
 
 import {UnstructuredStorage} from "contracts/common/lib/UnstructuredStorage.sol";
 
-
+/**
+ * @title PausableUntil
+ * @notice allows to pause the contract for a specific duration or indefinitely
+ */
 abstract contract PausableUntil {
     using UnstructuredStorage for bytes32;
 
@@ -24,10 +27,23 @@ abstract contract PausableUntil {
     error ResumedExpected();
     error PauseUntilMustBeInFuture();
 
-    /// @notice Reverts when paused
+    /// @notice Reverts if paused
     modifier whenResumed() {
         _checkResumed();
         _;
+    }
+
+    /// @notice Returns whether the contract is paused
+    function isPaused() public view returns (bool) {
+        return block.timestamp < RESUME_SINCE_TIMESTAMP_POSITION.getStorageUint256();
+    }
+
+    /// @notice Returns one of:
+    ///  - PAUSE_INFINITELY if paused infinitely returns
+    ///  - the timestamp when the contract get resumed if paused for specific duration
+    ///  - some timestamp in past if not paused
+    function getResumeSinceTimestamp() external view returns (uint256) {
+        return RESUME_SINCE_TIMESTAMP_POSITION.getStorageUint256();
     }
 
     function _checkPaused() internal view {
@@ -40,19 +56,6 @@ abstract contract PausableUntil {
         if (isPaused()) {
             revert ResumedExpected();
         }
-    }
-
-    /// @notice Returns whether the contract is paused
-    function isPaused() public view returns (bool) {
-        return block.timestamp < RESUME_SINCE_TIMESTAMP_POSITION.getStorageUint256();
-    }
-
-    /// @notice Returns one of:
-    ///  - PAUSE_INFINITELY if paused infinitely returns
-    ///  - first second when get contract get resumed if paused for specific duration
-    ///  - some timestamp in past if not paused
-    function getResumeSinceTimestamp() external view returns (uint256) {
-        return RESUME_SINCE_TIMESTAMP_POSITION.getStorageUint256();
     }
 
     function _resume() internal {
