@@ -1030,6 +1030,78 @@ describe("Dashboard", () => {
       expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amount);
     });
+
+    it("succeeds with rebalanced shares - 1 share = 0.5 stETH", async () => {
+      await steth.mock__setTotalShares(ether("1000000"));
+      await steth.mock__setTotalPooledEther(ether("500000"));
+      const sharesToBurn = ether("1");
+      const stethToBurn = sharesToBurn / 2n; // 1 share = 0.5 steth
+
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: sharesToBurn,
+        nonce: await wsteth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWstETHWithPermit(sharesToBurn, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, sharesToBurn); // transfer steth to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, stethToBurn); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - sharesToBurn);
+    });
+
+    it("succeeds with rebalanced shares - 1 share = 2 stETH", async () => {
+      await steth.mock__setTotalShares(ether("500000"));
+      await steth.mock__setTotalPooledEther(ether("1000000"));
+      const sharesToBurn = ether("1");
+      const stethToBurn = sharesToBurn * 2n; // 1 share = 2 steth
+
+      const permit = {
+        owner: await vaultOwner.address,
+        spender: String(dashboard.target),
+        value: sharesToBurn,
+        nonce: await wsteth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnWstETHWithPermit(sharesToBurn, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+
+      await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, sharesToBurn); // transfer steth to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, stethToBurn); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+      expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - sharesToBurn);
+    });
   });
 
   context("rebalanceVault", () => {
