@@ -18,6 +18,7 @@ import {
   OracleDaemonConfig,
   OracleReportSanityChecker,
   StakingRouter,
+  UpgradeableBeacon,
   ValidatorsExitBusOracle,
   VaultFactory,
   WithdrawalQueueERC721,
@@ -56,6 +57,7 @@ export type ProtocolNetworkItems = {
   hashConsensus: string;
   // vaults
   stakingVaultFactory: string;
+  stakingVaultBeacon: string;
 };
 
 export interface ContractTypes {
@@ -79,6 +81,7 @@ export interface ContractTypes {
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
   VaultFactory: VaultFactory;
+  UpgradeableBeacon: UpgradeableBeacon;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -129,6 +132,7 @@ export type WstETHContracts = {
 
 export type VaultsContracts = {
   stakingVaultFactory: LoadedContract<VaultFactory>;
+  stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &

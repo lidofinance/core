@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Delegation,StakingVault } from "typechain-types";
+import { Delegation, StakingVault } from "typechain-types";
 
 import { impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -136,10 +136,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
-    const implAddress = await stakingVaultFactory.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.delegationImpl();
+    const implAddress = await stakingVaultBeacon.implementation();
+    const adminContractImplAddress = await stakingVaultFactory.DELEGATION_IMPL();
 
     const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
     const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
@@ -155,12 +155,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     // Alice can create a vault with Bob as a node operator
-    const deployTx = await stakingVaultFactory.connect(alice).createVault("0x", {
-      managementFee: VAULT_OWNER_FEE,
-      performanceFee: VAULT_NODE_OPERATOR_FEE,
-      manager: alice,
-      operator: bob,
-    }, lidoAgent);
+    const deployTx = await stakingVaultFactory.connect(alice).createVaultWithDelegation(
+      {
+        managementFeeBP: VAULT_OWNER_FEE,
+        performanceFeeBP: VAULT_NODE_OPERATOR_FEE,
+        defaultAdmin: lidoAgent,
+        manager: alice,
+        operator: bob,
+      },
+      lidoAgent,
+    );
 
     const createVaultTxReceipt = await trace<ContractTransactionReceipt>("vaultsFactory.createVault", deployTx);
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
