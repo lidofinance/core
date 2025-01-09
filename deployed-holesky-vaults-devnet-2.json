@@ -695,5 +695,10 @@
     "contract": "contracts/0.6.12/WstETH.sol",
     "address": "0xD154a2778a1d1a74F7ab01D42d199B4C9510690b",
     "constructorArgs": ["0x447C0D745D6CB3c473CF1F01EF749c9fea0F68f7"]
+  },
+  "beaconProxy": {
+    "contract": "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol",
+    "address": "0x8dF00f76f5C962Dd5F1e9F1675A93393b568c538",
+    "constructorArgs": ["0x4A2D0f7433315D22d41F70FFd802eDf4Fb4fCf0c", "0x"]
   }
 }
