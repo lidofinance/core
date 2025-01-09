@@ -18,6 +18,8 @@ import {
   PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
+  WithdrawalQueue__MockForAccounting,
+  WithdrawalQueue__MockForAccounting__factory,
   WithdrawalVault__MockForLidoAccounting,
   WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
@@ -31,7 +33,6 @@ describe("Lido:accounting", () => {
   let deployer: HardhatEthersSigner;
   // let stethWhale: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let withdrawalQueue: HardhatEthersSigner;
 
   let lido: Lido;
   let acl: ACL;
@@ -43,19 +44,27 @@ describe("Lido:accounting", () => {
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
   let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
+  let withdrawalQueue: WithdrawalQueue__MockForAccounting;
 
   beforeEach(async () => {
     // [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
-    [deployer, stranger, withdrawalQueue] = await ethers.getSigners();
+    [deployer, stranger] = await ethers.getSigners();
 
-    [elRewardsVault, stakingRouter, withdrawalVault, oracleReportSanityChecker, postTokenRebaseReceiver] =
-      await Promise.all([
-        new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
-        new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
-        new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
-        new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
-        new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
-      ]);
+    [
+      elRewardsVault,
+      stakingRouter,
+      withdrawalVault,
+      oracleReportSanityChecker,
+      postTokenRebaseReceiver,
+      withdrawalQueue,
+    ] = await Promise.all([
+      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
+      new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
+      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
+      new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
+      new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
+      new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
+    ]);
 
     ({ lido, acl, accounting } = await deployLidoDao({
       rootAccount: deployer,
@@ -71,6 +80,9 @@ describe("Lido:accounting", () => {
     }));
 
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
+
+    const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
+    accounting = accounting.connect(accountingOracleSigner);
 
     await acl.createPermission(deployer, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(deployer, lido, await lido.PAUSE_ROLE(), deployer);
@@ -168,8 +180,6 @@ describe("Lido:accounting", () => {
       let depositedValidators = 100n;
       await lido.connect(deployer).unsafeChangeDepositedValidators(depositedValidators);
 
-      const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
-      accounting = accounting.connect(accountingOracleSigner);
       // first report, 100 validators
       await accounting.handleOracleReport(
         report({
@@ -213,52 +223,52 @@ describe("Lido:accounting", () => {
       };
     }
 
-    //   it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
-    //     await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
+    it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
+      await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
 
-    //     await expect(lido.handleOracleReport(...report())).to.be.reverted;
-    //   });
+      await expect(accounting.handleOracleReport(report())).to.be.reverted;
+    });
 
-    //   it("Reverts if the `checkWithdrawalQueueOracleReport` sanity check fails", async () => {
-    //     await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n],
-    //         }),
-    //       ),
-    //     ).to.be.reverted;
-    //   });
+    it("Reverts if the `checkWithdrawalQueueOracleReport` sanity check fails", async () => {
+      await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            withdrawalFinalizationBatches: [1n],
+          }),
+        ),
+      ).to.be.reverted;
+    });
 
-    //   it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but no withdrawal batches were reported", async () => {
-    //     await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
-    //     await withdrawalQueue.mock__isPaused(true);
+    it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but no withdrawal batches were reported", async () => {
+      await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
+      await withdrawalQueue.mock__isPaused(true);
 
-    //     await expect(lido.handleOracleReport(...report())).not.to.be.reverted;
-    //   });
+      await expect(accounting.handleOracleReport(report())).not.to.be.reverted;
+    });
 
-    //   it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but `withdrawalQueue` is paused", async () => {
-    //     await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
-    //     await withdrawalQueue.mock__isPaused(true);
+    // it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but `withdrawalQueue` is paused", async () => {
+    //   await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
+    //   await withdrawalQueue.mock__isPaused(true);
 
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n],
-    //         }),
-    //       ),
-    //     ).not.to.be.reverted;
-    //   });
+    // await expect(
+    //   accounting.handleOracleReport(
+    //     report({
+    //       withdrawalFinalizationBatches: [1n],
+    //     }),
+    //   ),
+    // ).not.to.be.reverted;
+    // });
 
-    //   it("Does not emit `StETHBurnRequested` if there are no shares to burn", async () => {
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n],
-    //         }),
-    //       ),
-    //     ).not.to.emit(burner, "StETHBurnRequested");
-    //   });
+    // it("Does not emit `StETHBurnRequested` if there are no shares to burn", async () => {
+    //   await expect(
+    //     accounting.handleOracleReport(
+    //       report({
+    //         withdrawalFinalizationBatches: [1n],
+    //       }),
+    //     ),
+    //   ).not.to.emit(burner, "StETHBurnRequested");
+    // });
 
     //   it("Emits `StETHBurnRequested` if there are shares to burn", async () => {
     //     const sharesToBurn = 1n;
