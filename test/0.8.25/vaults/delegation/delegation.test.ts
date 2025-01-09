@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   Delegation,
   DepositContract__MockForStakingVault,
+  LidoLocator__HarnessForDashboard,
   StakingVault,
   StETH__MockForDelegation,
   VaultFactory,
@@ -35,6 +36,7 @@ describe("Delegation.sol", () => {
   let rewarder: HardhatEthersSigner;
   const recipient = certainAddress("some-recipient");
 
+  let lidoLocator: LidoLocator__HarnessForDashboard;
   let steth: StETH__MockForDelegation;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
@@ -56,8 +58,9 @@ describe("Delegation.sol", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+    lidoLocator = await ethers.deployContract("LidoLocator__HarnessForDashboard", [steth, wsteth]);
 
-    delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+    delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
@@ -111,32 +114,28 @@ describe("Delegation.sol", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, weth, wsteth]))
+      await expect(ethers.deployContract("Delegation", [weth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_stETH");
+        .withArgs("_lidoLocator");
     });
 
     it("reverts if wETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, ethers.ZeroAddress, wsteth]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_WETH");
     });
 
-    it("reverts if wstETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, weth, ethers.ZeroAddress]))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_wstETH");
-    });
-
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
       expect(await delegation_.STETH()).to.equal(steth);
+      expect(await delegation_.WETH()).to.equal(weth);
+      expect(await delegation_.WSTETH()).to.equal(wsteth);
     });
   });
 
   context("initialize", () => {
     it("reverts if staking vault is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
       await expect(delegation_.initialize(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
@@ -148,7 +147,7 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
       await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
     });
