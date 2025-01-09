@@ -115,12 +115,11 @@ contract Delegation is Dashboard {
     uint256 public voteLifetime;
 
     /**
-     * @notice Initializes the contract with the stETH address.
-     * @param _stETH The address of the stETH token.
+     * @notice Initializes the contract with the weth address.
      * @param _weth Address of the weth token contract.
-     * @param _wstETH Address of the wstETH token contract.
+     * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _weth, address _wstETH) Dashboard(_stETH, _weth, _wstETH) {}
+    constructor(address _weth, address _lidoLocator) Dashboard(_weth, _lidoLocator) {}
 
     /**
      * @notice Initializes the contract:
@@ -207,7 +206,7 @@ contract Delegation is Dashboard {
      * @notice Funds the StakingVault with ether.
      */
     function fund() external payable override onlyRole(STAKER_ROLE) {
-        _fund();
+        _fund(msg.value);
     }
 
     /**
@@ -250,7 +249,7 @@ contract Delegation is Dashboard {
      * @param _amountOfShares The amount of shares to burn.
      */
     function burn(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
-        _burn(_amountOfShares);
+        _burn(msg.sender, _amountOfShares);
     }
 
     /**
