@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -7,6 +8,8 @@ import { getStorageAt } from "@nomicfoundation/hardhat-network-helpers";
 import {
   Accounting,
   ACL,
+  Burner__MockForAccounting,
+  Burner__MockForAccounting__factory,
   IPostTokenRebaseReceiver,
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
@@ -25,14 +28,14 @@ import {
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
-import { ether, impersonate, streccak } from "lib";
+import { ether, getNextBlockTimestamp, impersonate, streccak } from "lib";
 
 import { deployLidoDao } from "test/deploy";
 
 describe("Lido:accounting", () => {
   let deployer: HardhatEthersSigner;
-  // let stethWhale: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let stethWhale: HardhatEthersSigner;
 
   let lido: Lido;
   let acl: ACL;
@@ -45,10 +48,12 @@ describe("Lido:accounting", () => {
   let stakingRouter: StakingRouter__MockForLidoAccounting;
   let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
+  let burner: Burner__MockForAccounting;
 
   beforeEach(async () => {
     // [deployer, accounting, stethWhale, stranger, withdrawalQueue] = await ethers.getSigners();
-    [deployer, stranger] = await ethers.getSigners();
+    [deployer, stranger, stethWhale] = await ethers.getSigners();
+    stethWhale;
 
     [
       elRewardsVault,
@@ -57,6 +62,7 @@ describe("Lido:accounting", () => {
       oracleReportSanityChecker,
       postTokenRebaseReceiver,
       withdrawalQueue,
+      burner,
     ] = await Promise.all([
       new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
@@ -64,6 +70,7 @@ describe("Lido:accounting", () => {
       new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
       new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
       new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
+      new Burner__MockForAccounting__factory(deployer).deploy(),
     ]);
 
     ({ lido, acl, accounting } = await deployLidoDao({
@@ -76,6 +83,7 @@ describe("Lido:accounting", () => {
         stakingRouter,
         oracleReportSanityChecker,
         postTokenRebaseReceiver,
+        burner,
       },
     }));
 
@@ -247,160 +255,163 @@ describe("Lido:accounting", () => {
       await expect(accounting.handleOracleReport(report())).not.to.be.reverted;
     });
 
+    /// NOTE: This test is not applicable to the current implementation (Accounting's _checkAccountingOracleReport() checks for checkWithdrawalQueueOracleReport()
+    /// explicitly in case _report.withdrawalFinalizationBatches.length > 0
     // it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but `withdrawalQueue` is paused", async () => {
     //   await oracleReportSanityChecker.mock__checkWithdrawalQueueOracleReportReverts(true);
     //   await withdrawalQueue.mock__isPaused(true);
 
-    // await expect(
-    //   accounting.handleOracleReport(
-    //     report({
-    //       withdrawalFinalizationBatches: [1n],
-    //     }),
-    //   ),
-    // ).not.to.be.reverted;
+    //   await expect(accounting.handleOracleReport(report({ withdrawalFinalizationBatches: [1n] }))).not.to.be.reverted;
     // });
 
-    // it("Does not emit `StETHBurnRequested` if there are no shares to burn", async () => {
+    it("Does not emit `StETHBurnRequested` if there are no shares to burn", async () => {
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            withdrawalFinalizationBatches: [1n],
+          }),
+        ),
+      ).not.to.emit(burner, "StETHBurnRequested");
+    });
+
+    it("Emits `StETHBurnRequested` if there are shares to burn", async () => {
+      const sharesToBurn = 1n;
+      const isCover = false;
+      const steth = 1n * 2n; // imitating 1:2 rate, see Burner `mock__prefinalizeReturn`
+
+      await withdrawalQueue.mock__prefinalizeReturn(0n, sharesToBurn);
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            withdrawalFinalizationBatches: [1n],
+          }),
+        ),
+      )
+        .to.emit(burner, "StETHBurnRequested")
+        .withArgs(isCover, await accounting.getAddress(), steth, sharesToBurn);
+    });
+
+    it("Withdraws ether from `ElRewardsVault` if EL rewards are greater than 0 as returned from `smoothenTokenRebase`", async () => {
+      const withdrawals = 0n;
+      const elRewards = 1n;
+      const simulatedSharesToBurn = 0n;
+      const sharesToBurn = 0n;
+
+      await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(
+        withdrawals,
+        elRewards,
+        simulatedSharesToBurn,
+        sharesToBurn,
+      );
+
+      // `Mock__RewardsWithdrawn` event is only emitted on the mock to verify
+      // that `ElRewardsVault.withdrawRewards` was actually called
+      await expect(accounting.handleOracleReport(report())).to.emit(elRewardsVault, "Mock__RewardsWithdrawn");
+    });
+
+    it("Withdraws ether from `WithdrawalVault` if withdrawals are greater than 0 as returned from `smoothenTokenRebase`", async () => {
+      const withdrawals = 1n;
+      const elRewards = 0n;
+      const simulatedSharesToBurn = 0n;
+      const sharesToBurn = 0n;
+
+      await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(
+        withdrawals,
+        elRewards,
+        simulatedSharesToBurn,
+        sharesToBurn,
+      );
+      const totalFee = 1000;
+      const precisionPoints = 10n ** 20n;
+      await stakingRouter.mock__getStakingRewardsDistribution([], [], [], totalFee, precisionPoints);
+
+      // `Mock__WithdrawalsWithdrawn` event is only emitted on the mock to verify
+      // that `WithdrawalVault.withdrawWithdrawals` was actually called
+      await expect(accounting.handleOracleReport(report())).to.emit(withdrawalVault, "Mock__WithdrawalsWithdrawn");
+    });
+
+    it("Finalizes withdrawals if there is ether to lock on `WithdrawalQueue` as returned from `prefinalize`", async () => {
+      const ethToLock = ether("10.0");
+      await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
+      // top up buffer via submit
+      await lido.submit(ZeroAddress, { value: ethToLock });
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            withdrawalFinalizationBatches: [1n, 2n],
+          }),
+        ),
+      ).to.emit(withdrawalQueue, "WithdrawalsFinalized");
+    });
+
+    it("Updates buffered ether", async () => {
+      const initialBufferedEther = await lido.getBufferedEther();
+      const ethToLock = 1n;
+
+      // assert that the buffer has enough eth to lock for withdrawals
+      // should have some eth from the initial 0xdead holder
+      expect(initialBufferedEther).greaterThanOrEqual(ethToLock);
+      await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            withdrawalFinalizationBatches: [1n],
+          }),
+        ),
+      ).to.not.be.reverted;
+
+      expect(await lido.getBufferedEther()).to.equal(initialBufferedEther - ethToLock);
+    });
+
+    it("Emits an `ETHDistributed` event", async () => {
+      const reportTimestamp = await getNextBlockTimestamp();
+      const preClBalance = 0n;
+      const clBalance = 1n;
+      const withdrawals = 0n;
+      const elRewards = 0n;
+      const bufferedEther = await lido.getBufferedEther();
+
+      const totalFee = 1000;
+      const precisionPoints = 10n ** 20n;
+      await stakingRouter.mock__getStakingRewardsDistribution([], [], [], totalFee, precisionPoints);
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            timestamp: reportTimestamp,
+            clBalance,
+          }),
+        ),
+      )
+        .to.emit(lido, "ETHDistributed")
+        .withArgs(reportTimestamp, preClBalance, clBalance, withdrawals, elRewards, bufferedEther);
+    });
+
+    // it("Burns shares if there are shares to burn as returned from `smoothenTokenRebaseReturn`", async () => {
+    //   const sharesRequestedToBurn = 1n;
+
+    //   await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(0n, 0n, 0n, sharesRequestedToBurn);
+
+    //   // set up steth whale, in case we need to send steth to other accounts
+    //   await setBalance(stethWhale.address, ether("101.0"));
+    //   await lido.connect(stethWhale).submit(ZeroAddress, { value: ether("100.0") });
+    //   // top up Burner with steth to burn
+    //   await lido.connect(stethWhale).transferShares(burner, sharesRequestedToBurn);
+
     //   await expect(
     //     accounting.handleOracleReport(
     //       report({
-    //         withdrawalFinalizationBatches: [1n],
+    //         sharesRequestedToBurn,
     //       }),
     //     ),
-    //   ).not.to.emit(burner, "StETHBurnRequested");
+    //   )
+    //     .to.emit(burner, "Mock__CommitSharesToBurnWasCalled")
+    //     .and.to.emit(lido, "SharesBurnt")
+    //     .withArgs(await burner.getAddress(), sharesRequestedToBurn, sharesRequestedToBurn, sharesRequestedToBurn);
     // });
-
-    //   it("Emits `StETHBurnRequested` if there are shares to burn", async () => {
-    //     const sharesToBurn = 1n;
-    //     const isCover = false;
-    //     const steth = 1n * 2n; // imitating 1:2 rate, see Burner `mock__prefinalizeReturn`
-
-    //     await withdrawalQueue.mock__prefinalizeReturn(0n, sharesToBurn);
-
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n],
-    //         }),
-    //       ),
-    //     )
-    //       .to.emit(burner, "StETHBurnRequested")
-    //       .withArgs(isCover, await lido.getAddress(), steth, sharesToBurn);
-    //   });
-
-    //   it("Withdraws ether from `ElRewardsVault` if EL rewards are greater than 0 as returned from `smoothenTokenRebase`", async () => {
-    //     const withdrawals = 0n;
-    //     const elRewards = 1n;
-    //     const simulatedSharesToBurn = 0n;
-    //     const sharesToBurn = 0n;
-
-    //     await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(
-    //       withdrawals,
-    //       elRewards,
-    //       simulatedSharesToBurn,
-    //       sharesToBurn,
-    //     );
-
-    //     // `Mock__RewardsWithdrawn` event is only emitted on the mock to verify
-    //     // that `ElRewardsVault.withdrawRewards` was actually called
-    //     await expect(lido.handleOracleReport(...report())).to.emit(elRewardsVault, "Mock__RewardsWithdrawn");
-    //   });
-
-    //   it("Withdraws ether from `WithdrawalVault` if withdrawals are greater than 0 as returned from `smoothenTokenRebase`", async () => {
-    //     const withdrawals = 1n;
-    //     const elRewards = 0n;
-    //     const simulatedSharesToBurn = 0n;
-    //     const sharesToBurn = 0n;
-
-    //     await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(
-    //       withdrawals,
-    //       elRewards,
-    //       simulatedSharesToBurn,
-    //       sharesToBurn,
-    //     );
-
-    //     // `Mock__WithdrawalsWithdrawn` event is only emitted on the mock to verify
-    //     // that `WithdrawalVault.withdrawWithdrawals` was actually called
-    //     await expect(lido.handleOracleReport(...report())).to.emit(withdrawalVault, "Mock__WithdrawalsWithdrawn");
-    //   });
-
-    //   it("Finalizes withdrawals if there is ether to lock on `WithdrawalQueue` as returned from `prefinalize`", async () => {
-    //     const ethToLock = ether("10.0");
-    //     await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
-    //     // top up buffer via submit
-    //     await lido.submit(ZeroAddress, { value: ethToLock });
-
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n, 2n],
-    //         }),
-    //       ),
-    //     ).to.emit(withdrawalQueue, "WithdrawalsFinalized");
-    //   });
-
-    //   it("Updates buffered ether", async () => {
-    //     const initialBufferedEther = await lido.getBufferedEther();
-    //     const ethToLock = 1n;
-
-    //     // assert that the buffer has enough eth to lock for withdrawals
-    //     // should have some eth from the initial 0xdead holder
-    //     expect(initialBufferedEther).greaterThanOrEqual(ethToLock);
-    //     await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
-
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           withdrawalFinalizationBatches: [1n],
-    //         }),
-    //       ),
-    //     ).to.not.be.reverted;
-
-    //     expect(await lido.getBufferedEther()).to.equal(initialBufferedEther - ethToLock);
-    //   });
-
-    //   it("Emits an `ETHDistributed` event", async () => {
-    //     const reportTimestamp = await getNextBlockTimestamp();
-    //     const preClBalance = 0n;
-    //     const clBalance = 1n;
-    //     const withdrawals = 0n;
-    //     const elRewards = 0n;
-    //     const bufferedEther = await lido.getBufferedEther();
-
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           reportTimestamp: reportTimestamp,
-    //           clBalance,
-    //         }),
-    //       ),
-    //     )
-    //       .to.emit(lido, "ETHDistributed")
-    //       .withArgs(reportTimestamp, preClBalance, clBalance, withdrawals, elRewards, bufferedEther);
-    //   });
-
-    //   it("Burns shares if there are shares to burn as returned from `smoothenTokenRebaseReturn`", async () => {
-    //     const sharesRequestedToBurn = 1n;
-
-    //     await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(0n, 0n, 0n, sharesRequestedToBurn);
-
-    //     // set up steth whale, in case we need to send steth to other accounts
-    //     await setBalance(stethWhale.address, ether("101.0"));
-    //     await lido.connect(stethWhale).submit(ZeroAddress, { value: ether("100.0") });
-    //     // top up Burner with steth to burn
-    //     await lido.connect(stethWhale).transferShares(burner, sharesRequestedToBurn);
-
-    //     await expect(
-    //       lido.handleOracleReport(
-    //         ...report({
-    //           sharesRequestedToBurn,
-    //         }),
-    //       ),
-    //     )
-    //       .to.emit(burner, "Mock__CommitSharesToBurnWasCalled")
-    //       .and.to.emit(lido, "SharesBurnt")
-    //       .withArgs(await burner.getAddress(), sharesRequestedToBurn, sharesRequestedToBurn, sharesRequestedToBurn);
-    //   });
 
     //   it("Reverts if the number of reward recipients does not match the number of module fees as returned from `StakingRouter.getStakingRewardsDistribution`", async () => {
     //     // one recipient
