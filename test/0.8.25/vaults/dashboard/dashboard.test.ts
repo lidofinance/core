@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
+import { get } from "http";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -42,6 +43,7 @@ describe("Dashboard", () => {
 
   let vault: StakingVault;
   let dashboard: Dashboard;
+  let dashboardAddress: string;
 
   let originalState: string;
 
@@ -82,7 +84,7 @@ describe("Dashboard", () => {
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);
-    const dashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+    dashboardAddress = dashboardCreatedEvents[0].args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
     expect(await dashboard.stakingVault()).to.equal(vault);
   });
@@ -176,6 +178,13 @@ describe("Dashboard", () => {
       expect(await dashboard.reserveRatio()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
+    });
+  });
+
+  context("valuation", () => {
+    it("returns the correct stETH valuation from vault", async () => {
+      const valuation = await dashboard.valuation();
+      expect(valuation).to.equal(await vault.valuation());
     });
   });
 
@@ -717,13 +726,11 @@ describe("Dashboard", () => {
   context("burnSharesWithPermit", () => {
     const amountShares = ether("1");
     let amountSteth: bigint;
-    let dashboardAddress: string;
 
     before(async () => {
       // mint steth to the vault owner for the burn
       await dashboard.mintShares(vaultOwner, amountShares);
       amountSteth = await steth.getPooledEthByShares(amountShares);
-      dashboardAddress = await dashboard.getAddress();
     });
 
     beforeEach(async () => {
@@ -914,11 +921,6 @@ describe("Dashboard", () => {
 
   context("burnWstETHWithPermit", () => {
     const amountShares = ether("1");
-    let dashboardAddress: string;
-
-    before(async () => {
-      dashboardAddress = await dashboard.getAddress();
-    });
 
     beforeEach(async () => {
       // mint steth to the vault owner for the burn
@@ -1142,6 +1144,25 @@ describe("Dashboard", () => {
         .withArgs(dashboard, amount)
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
+    });
+  });
+
+  context("fallback behavior", () => {
+    const amount = ether("1");
+
+    it("reverts on zero value sent", async () => {
+      const tx = vaultOwner.sendTransaction({ to: dashboardAddress, value: 0 });
+      await expect(tx).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+    });
+
+    it("does not allow fallback behavior", async () => {
+      const tx = vaultOwner.sendTransaction({ to: dashboardAddress, data: "0x111111111111", value: amount });
+      await expect(tx).to.be.revertedWithoutReason();
+    });
+
+    it("allows ether to be recieved", async () => {
+      await vaultOwner.sendTransaction({ to: dashboardAddress, value: amount });
+      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount);
     });
   });
 });
