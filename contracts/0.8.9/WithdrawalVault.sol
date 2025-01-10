@@ -10,6 +10,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 import {TriggerableWithdrawals} from "./lib/TriggerableWithdrawals.sol";
+import { ILidoLocator } from "../common/interfaces/ILidoLocator.sol";
 
 interface ILido {
     /**
@@ -28,7 +29,7 @@ contract WithdrawalVault is Versioned {
 
     ILido public immutable LIDO;
     address public immutable TREASURY;
-    address public immutable VALIDATORS_EXIT_BUS;
+    ILidoLocator public immutable LOCATOR;
 
     // Events
     /**
@@ -54,14 +55,14 @@ contract WithdrawalVault is Versioned {
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
-    constructor(address _lido, address _treasury, address _validatorsExitBus) {
+    constructor(address _lido, address _treasury, address _locator) {
         _requireNonZero(_lido);
         _requireNonZero(_treasury);
-        _requireNonZero(_validatorsExitBus);
+        _requireNonZero(_locator);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
-        VALIDATORS_EXIT_BUS = _validatorsExitBus;
+        LOCATOR = ILidoLocator(_locator);
     }
 
     /**
@@ -137,7 +138,7 @@ contract WithdrawalVault is Versioned {
     function addFullWithdrawalRequests(
         bytes[] calldata pubkeys
     ) external payable {
-        if(msg.sender != address(VALIDATORS_EXIT_BUS)) {
+        if(msg.sender != LOCATOR.validatorsExitBusOracle()) {
             revert NotValidatorExitBus();
         }
 

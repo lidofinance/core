@@ -9,12 +9,14 @@ import {
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
+  LidoLocator,
   WithdrawalsPredeployed_Mock,
   WithdrawalVault,
 } from "typechain-types";
 
 import { MAX_UINT256, proxify } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { findEip7002TriggerableWithdrawalMockEvents, findEvents } from "./lib/triggerableWithdrawals/findEvents";
@@ -37,6 +39,9 @@ describe("WithdrawalVault.sol", () => {
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
 
+  let locator: LidoLocator;
+  let locatorAddress: string;
+
   let withdrawalsPredeployed: WithdrawalsPredeployed_Mock;
 
   let impl: WithdrawalVault;
@@ -53,7 +58,10 @@ describe("WithdrawalVault.sol", () => {
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
 
-    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, validatorsExitBus.address]);
+    locator = await deployLidoLocator({ lido, validatorsExitBusOracle: validatorsExitBus });
+    locatorAddress = await locator.getAddress();
+
+    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, locatorAddress]);
 
     [vault] = await proxify({ impl, admin: owner });
 
@@ -86,7 +94,7 @@ describe("WithdrawalVault.sol", () => {
     it("Sets initial properties", async () => {
       expect(await vault.LIDO()).to.equal(lidoAddress, "Lido address");
       expect(await vault.TREASURY()).to.equal(treasury.address, "Treasury address");
-      expect(await vault.VALIDATORS_EXIT_BUS()).to.equal(validatorsExitBus.address, "Validator exit bus address");
+      expect(await vault.LOCATOR()).to.equal(locatorAddress, "Validator exit bus address");
     });
 
     it("Petrifies the implementation", async () => {
