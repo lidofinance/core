@@ -34,7 +34,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
-    "verify:deployed": "hardhat verify:deployed"
+    "verify:deployed": "hardhat verify:deployed",
+    "test:custom": "forge test -vvvv --match-path \"test/0.8.25/vaults/contracts/ShareRate.t.sol\""
   },
   "lint-staged": {
     "./**/*.ts": [
