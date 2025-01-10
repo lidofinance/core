@@ -731,7 +731,7 @@ describe("Dashboard", () => {
 
     it("reverts if called by a non-admin", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target),
         value: amountSteth,
         nonce: await steth.nonces(vaultOwner),
@@ -755,7 +755,7 @@ describe("Dashboard", () => {
 
     it("reverts if the permit is invalid", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: stranger.address, // invalid spender
         value: amountSteth,
         nonce: await steth.nonces(vaultOwner),
@@ -924,7 +924,7 @@ describe("Dashboard", () => {
 
     it("reverts if called by a non-admin", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target),
         value: amountShares,
         nonce: await wsteth.nonces(vaultOwner),
@@ -948,7 +948,7 @@ describe("Dashboard", () => {
 
     it("reverts if the permit is invalid", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: stranger.address, // invalid spender
         value: amountShares,
         nonce: await wsteth.nonces(vaultOwner),
@@ -972,7 +972,7 @@ describe("Dashboard", () => {
 
     it("burns wstETH with permit", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target),
         value: amountShares,
         nonce: await wsteth.nonces(vaultOwner),
@@ -1004,7 +1004,7 @@ describe("Dashboard", () => {
 
     it("succeeds if has allowance", async () => {
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target), // invalid spender
         value: amountShares,
         nonce: (await wsteth.nonces(vaultOwner)) + 1n, // invalid nonce
@@ -1047,7 +1047,7 @@ describe("Dashboard", () => {
       const stethToBurn = sharesToBurn / 2n; // 1 share = 0.5 steth
 
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target),
         value: sharesToBurn,
         nonce: await wsteth.nonces(vaultOwner),
@@ -1083,7 +1083,7 @@ describe("Dashboard", () => {
       const stethToBurn = sharesToBurn * 2n; // 1 share = 2 steth
 
       const permit = {
-        owner: await vaultOwner.address,
+        owner: vaultOwner.address,
         spender: String(dashboard.target),
         value: sharesToBurn,
         nonce: await wsteth.nonces(vaultOwner),
