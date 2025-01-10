@@ -28,7 +28,6 @@ import {Dashboard} from "./Dashboard.sol";
  * The due is the amount of ether that is owed to the Curator or Operator based on the fee.
  */
 contract Delegation is Dashboard {
-
     /**
      * @notice Maximum fee value; equals to 100%.
      */
@@ -234,7 +233,7 @@ contract Delegation is Dashboard {
      * @param _recipient The address to which the shares will be minted.
      * @param _amountOfShares The amount of shares to mint.
      */
-    function mint(
+    function mintShares(
         address _recipient,
         uint256 _amountOfShares
     ) external payable override onlyRole(TOKEN_MASTER_ROLE) fundAndProceed {
@@ -248,7 +247,7 @@ contract Delegation is Dashboard {
      * NB: Delegation contract must have ERC-20 approved allowance to burn sender's shares.
      * @param _amountOfShares The amount of shares to burn.
      */
-    function burn(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
+    function burnShares(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
         _burn(msg.sender, _amountOfShares);
     }
 

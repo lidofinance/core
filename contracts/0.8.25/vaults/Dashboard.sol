@@ -361,7 +361,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _amountOfShares Amount of shares to burn
      * @param _permit data required for the stETH.permit() method to set the allowance
      */
-    function burnWithPermit(
+    function burnSharesWithPermit(
         uint256 _amountOfShares,
         PermitInput calldata _permit
     )
