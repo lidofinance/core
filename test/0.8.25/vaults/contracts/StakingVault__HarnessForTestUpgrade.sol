@@ -17,10 +17,8 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
     struct VaultStorage {
         uint128 reportValuation;
         int128 reportInOutDelta;
-
         uint256 locked;
         int256 inOutDelta;
-
         address operator;
     }
 
@@ -48,7 +46,11 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
     /// @notice Initialize the contract storage explicitly.
     /// @param _owner owner address that can TBD
     /// @param - the calldata for initialize contract after upgrades
-    function initialize(address _owner, address _operator, bytes calldata /* _params */) external onlyBeacon reinitializer(_version) {
+    function initialize(
+        address _owner,
+        address _operator,
+        bytes calldata /* _params */
+    ) external onlyBeacon reinitializer(_version) {
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().operator = _operator;
@@ -63,7 +65,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
     }
 
     event InitializedV2();
-    function __StakingVault_init_v2() internal  {
+    function __StakingVault_init_v2() internal {
         emit InitializedV2();
     }
 
@@ -71,7 +73,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
         return _getInitializedVersion();
     }
 
-    function version() external pure virtual returns(uint64) {
+    function version() external pure virtual returns (uint64) {
         return _version;
     }
 
@@ -81,10 +83,7 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
-        return IStakingVault.Report({
-            valuation: $.reportValuation,
-            inOutDelta: $.reportInOutDelta
-        });
+        return IStakingVault.Report({valuation: $.reportValuation, inOutDelta: $.reportInOutDelta});
     }
 
     function _getVaultStorage() private pure returns (VaultStorage storage $) {

@@ -27,10 +27,7 @@ contract AccountingOracle__MockForSanityChecker {
         GENESIS_TIME = genesisTime;
     }
 
-    function submitReportData(
-        AccountingOracle.ReportData calldata data,
-        uint256 /* contractVersion */
-    ) external {
+    function submitReportData(AccountingOracle.ReportData calldata data, uint256 /* contractVersion */) external {
         require(data.refSlot >= _lastRefSlot, "refSlot less than _lastRefSlot");
         uint256 slotsElapsed = data.refSlot - _lastRefSlot;
         _lastRefSlot = data.refSlot;

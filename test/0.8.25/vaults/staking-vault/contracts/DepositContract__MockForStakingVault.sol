@@ -4,7 +4,7 @@
 pragma solidity ^0.8.0;
 
 contract DepositContract__MockForStakingVault {
-  event DepositEvent(bytes pubkey, bytes withdrawal_credentials, bytes signature, bytes32 deposit_data_root);
+    event DepositEvent(bytes pubkey, bytes withdrawal_credentials, bytes signature, bytes32 deposit_data_root);
 
     function deposit(
         bytes calldata pubkey, // 48 bytes
@@ -12,6 +12,6 @@ contract DepositContract__MockForStakingVault {
         bytes calldata signature, // 96 bytes
         bytes32 deposit_data_root
     ) external payable {
-      emit DepositEvent(pubkey, withdrawal_credentials, signature, deposit_data_root);
+        emit DepositEvent(pubkey, withdrawal_credentials, signature, deposit_data_root);
     }
 }
