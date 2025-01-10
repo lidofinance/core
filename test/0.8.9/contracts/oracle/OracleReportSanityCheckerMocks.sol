@@ -125,14 +125,6 @@ contract OracleReportSanityCheckerStub {
         uint256 _reportTimestamp
     ) external view {}
 
-    function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
-        uint256 _etherLockedOnWithdrawalQueue,
-        uint256 _sharesBurntDueToWithdrawals,
-        uint256 _simulatedShareRate
-    ) external view {}
-
     function smoothenTokenRebase(
         uint256,
         uint256,

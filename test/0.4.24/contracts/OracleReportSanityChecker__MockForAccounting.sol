@@ -6,7 +6,6 @@ pragma solidity 0.4.24;
 contract OracleReportSanityChecker__MockForAccounting {
     bool private checkAccountingOracleReportReverts;
     bool private checkWithdrawalQueueOracleReportReverts;
-    bool private checkSimulatedShareRateReverts;
 
     uint256 private _withdrawals;
     uint256 private _elRewards;
@@ -54,16 +53,6 @@ contract OracleReportSanityChecker__MockForAccounting {
         sharesToBurn = _sharesToBurn;
     }
 
-    function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
-        uint256 _etherLockedOnWithdrawalQueue,
-        uint256 _sharesBurntDueToWithdrawals,
-        uint256 _simulatedShareRate
-    ) external view {
-        if (checkSimulatedShareRateReverts) revert();
-    }
-
     // mocking
 
     function mock__checkAccountingOracleReportReverts(bool reverts) external {
@@ -72,10 +61,6 @@ contract OracleReportSanityChecker__MockForAccounting {
 
     function mock__checkWithdrawalQueueOracleReportReverts(bool reverts) external {
         checkWithdrawalQueueOracleReportReverts = reverts;
-    }
-
-    function mock__checkSimulatedShareRateReverts(bool reverts) external {
-        checkSimulatedShareRateReverts = reverts;
     }
 
     function mock__smoothenTokenRebaseReturn(
