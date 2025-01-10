@@ -52,27 +52,32 @@ describe("VaultFactory.sol", () => {
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
-    locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
       value: ether("10.0"),
       from: deployer,
     });
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+
+    locator = await deployLidoLocator({
+      lido: steth,
+      wstETH: wsteth,
+    });
+
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
 
-    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract]);
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
       from: deployer,
     });
-    delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [weth, locator]);
+    vaultFactory = await ethers.deployContract("VaultFactory", [admin, implOld, delegation]);
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);

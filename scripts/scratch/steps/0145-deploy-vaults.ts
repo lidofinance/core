@@ -11,8 +11,7 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   const accountingAddress = state[Sk.accounting].proxy.address;
-  const lidoAddress = state[Sk.appLido].proxy.address;
-  const wstEthAddress = state[Sk.wstETH].address;
+  const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
@@ -26,9 +25,8 @@ export async function main() {
 
   // Deploy Delegation implementation contract
   const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
-    lidoAddress,
     wethContract,
-    wstEthAddress,
+    locatorAddress,
   ]);
   const delegationAddress = await delegation.getAddress();
 
