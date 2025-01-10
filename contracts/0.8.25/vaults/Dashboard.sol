@@ -1,5 +1,5 @@
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
@@ -456,20 +456,6 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _requestValidatorExit(bytes calldata _validatorPublicKey) internal {
         stakingVault.requestValidatorExit(_validatorPublicKey);
-    }
-
-    /**
-     * @dev Deposits validators to the beacon chain
-     * @param _numberOfDeposits Number of validator deposits
-     * @param _pubkeys Concatenated public keys of the validators
-     * @param _signatures Concatenated signatures of the validators
-     */
-    function _depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) internal {
-        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
     }
 
     /**

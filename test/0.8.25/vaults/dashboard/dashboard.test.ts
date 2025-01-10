@@ -59,8 +59,10 @@ describe("Dashboard", () => {
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
+
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
+
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
     expect(await dashboardImpl.WETH()).to.equal(weth);
@@ -77,11 +79,13 @@ describe("Dashboard", () => {
 
     const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
     expect(vaultCreatedEvents.length).to.equal(1);
+
     const vaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", vaultAddress, vaultOwner);
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);
+
     dashboardAddress = dashboardCreatedEvents[0].args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
     expect(await dashboard.stakingVault()).to.equal(vault);
@@ -273,7 +277,7 @@ describe("Dashboard", () => {
     });
   });
 
-  context("getMintableShares", () => {
+  context("projectedMintableShares", () => {
     it("returns trivial can mint shares", async () => {
       const canMint = await dashboard.projectedMintableShares(0n);
       expect(canMint).to.equal(0n);
@@ -470,15 +474,38 @@ describe("Dashboard", () => {
     });
   });
 
-  context("disconnectFromVaultHub", () => {
+  context("voluntaryDisconnect", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).voluntaryDisconnect())
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
     });
 
-    it("disconnects the staking vault from the vault hub", async () => {
-      await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
+    context("when vault has no debt", () => {
+      it("disconnects the staking vault from the vault hub", async () => {
+        await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
+      });
+    });
+
+    context("when vault has debt", () => {
+      let amount: bigint;
+
+      beforeEach(async () => {
+        amount = ether("1");
+        await dashboard.mintShares(vaultOwner, amount);
+      });
+
+      it("reverts on disconnect attempt", async () => {
+        await expect(dashboard.voluntaryDisconnect()).to.be.reverted;
+      });
+
+      it("succeeds with rebalance when providing sufficient ETH", async () => {
+        await expect(dashboard.voluntaryDisconnect({ value: amount }))
+          .to.emit(hub, "Mock__Rebalanced")
+          .withArgs(amount)
+          .to.emit(hub, "Mock__VaultDisconnected")
+          .withArgs(vault);
+      });
     });
   });
 
@@ -591,7 +618,7 @@ describe("Dashboard", () => {
     });
   });
 
-  context("mint", () => {
+  context("mintShares", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).mintShares(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
@@ -599,7 +626,7 @@ describe("Dashboard", () => {
       );
     });
 
-    it("mints stETH backed by the vault through the vault hub", async () => {
+    it("mints shares backed by the vault through the vault hub", async () => {
       const amount = ether("1");
       await expect(dashboard.mintShares(vaultOwner, amount))
         .to.emit(steth, "Transfer")
@@ -610,7 +637,7 @@ describe("Dashboard", () => {
       expect(await steth.balanceOf(vaultOwner)).to.equal(amount);
     });
 
-    it("funds and mints stETH backed by the vault", async () => {
+    it("funds and mints shares backed by the vault", async () => {
       const amount = ether("1");
       await expect(dashboard.mintShares(vaultOwner, amount, { value: amount }))
         .to.emit(vault, "Funded")
@@ -649,7 +676,7 @@ describe("Dashboard", () => {
     });
   });
 
-  context("burn", () => {
+  context("burnShares", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).burnShares(ether("1"))).to.be.revertedWithCustomError(
         dashboard,
@@ -657,7 +684,7 @@ describe("Dashboard", () => {
       );
     });
 
-    it("burns stETH backed by the vault", async () => {
+    it("burns shares backed by the vault", async () => {
       const amountShares = ether("1");
       await dashboard.mintShares(vaultOwner, amountShares);
       expect(await steth.balanceOf(vaultOwner)).to.equal(amountShares);
@@ -682,7 +709,7 @@ describe("Dashboard", () => {
     const amount = ether("1");
 
     before(async () => {
-      // mint steth to the vault owner for the burn
+      // mint shares to the vault owner for the burn
       await dashboard.mintShares(vaultOwner, amount + amount);
     });
 
@@ -693,7 +720,7 @@ describe("Dashboard", () => {
       );
     });
 
-    it("burns wstETH backed by the vault", async () => {
+    it("burns shares backed by the vault", async () => {
       // approve for wsteth wrap
       await steth.connect(vaultOwner).approve(wsteth, amount);
       // wrap steth to wsteth to get the amount of wsteth for the burn
