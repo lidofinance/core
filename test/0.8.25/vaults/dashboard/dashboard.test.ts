@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { randomBytes } from "crypto";
-import { ZeroAddress } from "ethers";
+import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -136,17 +136,23 @@ describe("Dashboard", () => {
 
   context("initialized state", () => {
     it("post-initialization state is correct", async () => {
+      // vault state
       expect(await vault.owner()).to.equal(dashboard);
       expect(await vault.operator()).to.equal(operator);
+      // dashboard state
       expect(await dashboard.isInitialized()).to.equal(true);
+      // dashboard contracts
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WETH()).to.equal(weth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
+      // dashboard roles
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
+      // dashboard allowance
+      expect(await steth.allowance(dashboard.getAddress(), wsteth.getAddress())).to.equal(MaxUint256);
     });
   });
 
