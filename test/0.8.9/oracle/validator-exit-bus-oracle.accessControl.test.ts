@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOracle } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex, SECONDS_PER_SLOT } from "lib";
+import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
