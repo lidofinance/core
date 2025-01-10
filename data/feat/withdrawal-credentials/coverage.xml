@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3064"  lines-covered="2944"  line-rate="0.9608"  branches-valid="1354"  branches-covered="1278"  branch-rate="0.9439"  timestamp="1735226581544" complexity="0" version="0.1">
+<coverage lines-valid="3064"  lines-covered="2944"  line-rate="0.9608"  branches-valid="1354"  branches-covered="1278"  branch-rate="0.9439"  timestamp="1736508525115" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2416,8 +2416,8 @@
 		</class>
 		<class name="LidoLocator.sol"  filename="contracts/0.8.9/LidoLocator.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="132"  signature="()V" >
-				<lines><line number="55"  hits="132" /></lines>
+			<method name="constructor"  hits="133"  signature="()V" >
+				<lines><line number="55"  hits="133" /></lines>
 			</method>
 			<method name="coreComponents"  hits="1"  signature="()V" >
 				<lines><line number="72"  hits="1" /></lines>
@@ -2425,29 +2425,29 @@
 			<method name="oracleReportComponentsForLido"  hits="29"  signature="()V" >
 				<lines><line number="90"  hits="29" /></lines>
 			</method>
-			<method name="_assertNonZero"  hits="1757"  signature="()V" >
-				<lines><line number="110"  hits="1757" /></lines>
+			<method name="_assertNonZero"  hits="1771"  signature="()V" >
+				<lines><line number="110"  hits="1771" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="56"  hits="132"  branch="false" />
-			<line number="57"  hits="131"  branch="false" />
-			<line number="58"  hits="130"  branch="false" />
-			<line number="59"  hits="129"  branch="false" />
-			<line number="60"  hits="128"  branch="false" />
-			<line number="61"  hits="127"  branch="false" />
-			<line number="62"  hits="126"  branch="false" />
-			<line number="63"  hits="125"  branch="false" />
-			<line number="64"  hits="124"  branch="false" />
-			<line number="65"  hits="123"  branch="false" />
-			<line number="66"  hits="122"  branch="false" />
-			<line number="67"  hits="121"  branch="false" />
-			<line number="68"  hits="120"  branch="false" />
-			<line number="69"  hits="119"  branch="false" />
+			<line number="56"  hits="133"  branch="false" />
+			<line number="57"  hits="132"  branch="false" />
+			<line number="58"  hits="131"  branch="false" />
+			<line number="59"  hits="130"  branch="false" />
+			<line number="60"  hits="129"  branch="false" />
+			<line number="61"  hits="128"  branch="false" />
+			<line number="62"  hits="127"  branch="false" />
+			<line number="63"  hits="126"  branch="false" />
+			<line number="64"  hits="125"  branch="false" />
+			<line number="65"  hits="124"  branch="false" />
+			<line number="66"  hits="123"  branch="false" />
+			<line number="67"  hits="122"  branch="false" />
+			<line number="68"  hits="121"  branch="false" />
+			<line number="69"  hits="120"  branch="false" />
 			<line number="80"  hits="1"  branch="false" />
 			<line number="99"  hits="29"  branch="false" />
-			<line number="111"  hits="1757"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="112"  hits="1743"  branch="false" />
+			<line number="111"  hits="1771"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="112"  hits="1757"  branch="false" />
 		</lines>
 		</class>
 		<class name="OracleDaemonConfig.sol"  filename="contracts/0.8.9/OracleDaemonConfig.sol"  line-rate="1"  branch-rate="1" >
@@ -3606,63 +3606,63 @@
 		<class name="WithdrawalVault.sol"  filename="contracts/0.8.9/WithdrawalVault.sol"  line-rate="0.9309999999999999"  branch-rate="1" >
 		<methods>
 			<method name="constructor"  hits="4"  signature="()V" >
-				<lines><line number="57"  hits="4" /></lines>
+				<lines><line number="58"  hits="4" /></lines>
 			</method>
 			<method name="initialize"  hits="7"  signature="()V" >
-				<lines><line number="71"  hits="7" /></lines>
+				<lines><line number="72"  hits="7" /></lines>
 			</method>
 			<method name="finalizeUpgrade_v2"  hits="0"  signature="()V" >
-				<lines><line number="76"  hits="0" /></lines>
+				<lines><line number="77"  hits="0" /></lines>
 			</method>
 			<method name="withdrawWithdrawals"  hits="4"  signature="()V" >
-				<lines><line number="86"  hits="4" /></lines>
+				<lines><line number="87"  hits="4" /></lines>
 			</method>
 			<method name="recoverERC20"  hits="3"  signature="()V" >
-				<lines><line number="109"  hits="3" /></lines>
+				<lines><line number="110"  hits="3" /></lines>
 			</method>
 			<method name="recoverERC721"  hits="2"  signature="()V" >
-				<lines><line number="126"  hits="2" /></lines>
+				<lines><line number="127"  hits="2" /></lines>
 			</method>
 			<method name="addFullWithdrawalRequests"  hits="28"  signature="()V" >
-				<lines><line number="137"  hits="28" /></lines>
+				<lines><line number="138"  hits="28" /></lines>
 			</method>
 			<method name="getWithdrawalRequestFee"  hits="13"  signature="()V" >
-				<lines><line number="147"  hits="13" /></lines>
+				<lines><line number="148"  hits="13" /></lines>
 			</method>
 			<method name="_requireNonZero"  hits="9"  signature="()V" >
-				<lines><line number="151"  hits="9" /></lines>
+				<lines><line number="152"  hits="9" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="58"  hits="4"  branch="false" />
-			<line number="59"  hits="3"  branch="false" />
-			<line number="60"  hits="2"  branch="false" />
-			<line number="62"  hits="1"  branch="false" />
+			<line number="59"  hits="4"  branch="false" />
+			<line number="60"  hits="3"  branch="false" />
+			<line number="61"  hits="2"  branch="false" />
 			<line number="63"  hits="1"  branch="false" />
 			<line number="64"  hits="1"  branch="false" />
-			<line number="72"  hits="7"  branch="false" />
-			<line number="73"  hits="6"  branch="false" />
-			<line number="77"  hits="0"  branch="false" />
+			<line number="65"  hits="1"  branch="false" />
+			<line number="73"  hits="7"  branch="false" />
+			<line number="74"  hits="6"  branch="false" />
 			<line number="78"  hits="0"  branch="false" />
-			<line number="87"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="88"  hits="1"  branch="false" />
-			<line number="90"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="91"  hits="1"  branch="false" />
-			<line number="94"  hits="2"  branch="false" />
-			<line number="95"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="96"  hits="1"  branch="false" />
-			<line number="99"  hits="1"  branch="false" />
-			<line number="110"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="111"  hits="1"  branch="false" />
-			<line number="114"  hits="2"  branch="false" />
-			<line number="116"  hits="2"  branch="false" />
-			<line number="127"  hits="2"  branch="false" />
-			<line number="129"  hits="2"  branch="false" />
-			<line number="140"  hits="28"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="141"  hits="1"  branch="false" />
-			<line number="144"  hits="27"  branch="false" />
-			<line number="148"  hits="13"  branch="false" />
-			<line number="152"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="79"  hits="0"  branch="false" />
+			<line number="88"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="89"  hits="1"  branch="false" />
+			<line number="91"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="92"  hits="1"  branch="false" />
+			<line number="95"  hits="2"  branch="false" />
+			<line number="96"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="97"  hits="1"  branch="false" />
+			<line number="100"  hits="1"  branch="false" />
+			<line number="111"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="112"  hits="1"  branch="false" />
+			<line number="115"  hits="2"  branch="false" />
+			<line number="117"  hits="2"  branch="false" />
+			<line number="128"  hits="2"  branch="false" />
+			<line number="130"  hits="2"  branch="false" />
+			<line number="141"  hits="28"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="142"  hits="1"  branch="false" />
+			<line number="145"  hits="27"  branch="false" />
+			<line number="149"  hits="13"  branch="false" />
+			<line number="153"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 	</classes>
@@ -4821,8 +4821,8 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="120"  signature="()V" >
-				<lines><line number="23"  hits="120" /></lines>
+			<method name="constructor"  hits="121"  signature="()V" >
+				<lines><line number="23"  hits="121" /></lines>
 			</method>
 			<method name="proxy__getAdmin"  hits="3"  signature="()V" >
 				<lines><line number="28"  hits="3" /></lines>
@@ -4850,7 +4850,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="120"  branch="false" />
+			<line number="24"  hits="121"  branch="false" />
 			<line number="29"  hits="3"  branch="false" />
 			<line number="34"  hits="4"  branch="false" />
 			<line number="39"  hits="5"  branch="false" />
