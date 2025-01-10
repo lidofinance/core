@@ -717,11 +717,13 @@ describe("Dashboard", () => {
   context("burnSharesWithPermit", () => {
     const amountShares = ether("1");
     let amountSteth: bigint;
+    let dashboardAddress: string;
 
     before(async () => {
       // mint steth to the vault owner for the burn
       await dashboard.mintShares(vaultOwner, amountShares);
       amountSteth = await steth.getPooledEthByShares(amountShares);
+      dashboardAddress = await dashboard.getAddress();
     });
 
     beforeEach(async () => {
@@ -732,7 +734,7 @@ describe("Dashboard", () => {
     it("reverts if called by a non-admin", async () => {
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: amountSteth,
         nonce: await steth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -780,7 +782,7 @@ describe("Dashboard", () => {
     it("burns shares with permit", async () => {
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: amountSteth,
         nonce: await steth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -849,7 +851,7 @@ describe("Dashboard", () => {
 
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: stethToBurn,
         nonce: await steth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -883,7 +885,7 @@ describe("Dashboard", () => {
 
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: stethToBurn,
         nonce: await steth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -912,6 +914,11 @@ describe("Dashboard", () => {
 
   context("burnWstETHWithPermit", () => {
     const amountShares = ether("1");
+    let dashboardAddress: string;
+
+    before(async () => {
+      dashboardAddress = await dashboard.getAddress();
+    });
 
     beforeEach(async () => {
       // mint steth to the vault owner for the burn
@@ -925,7 +932,7 @@ describe("Dashboard", () => {
     it("reverts if called by a non-admin", async () => {
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: amountShares,
         nonce: await wsteth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -973,7 +980,7 @@ describe("Dashboard", () => {
     it("burns wstETH with permit", async () => {
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: amountShares,
         nonce: await wsteth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -1005,7 +1012,7 @@ describe("Dashboard", () => {
     it("succeeds if has allowance", async () => {
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target), // invalid spender
+        spender: dashboardAddress, // invalid spender
         value: amountShares,
         nonce: (await wsteth.nonces(vaultOwner)) + 1n, // invalid nonce
         deadline: BigInt(await time.latest()) + days(1n),
@@ -1048,7 +1055,7 @@ describe("Dashboard", () => {
 
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: sharesToBurn,
         nonce: await wsteth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
@@ -1084,7 +1091,7 @@ describe("Dashboard", () => {
 
       const permit = {
         owner: vaultOwner.address,
-        spender: String(dashboard.target),
+        spender: dashboardAddress,
         value: sharesToBurn,
         nonce: await wsteth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
