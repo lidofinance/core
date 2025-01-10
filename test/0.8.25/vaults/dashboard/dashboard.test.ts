@@ -10,7 +10,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import {
   Dashboard,
   DepositContract__MockForStakingVault,
-  LidoLocator__HarnessForDashboard,
+  LidoLocator,
   StakingVault,
   StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
@@ -21,6 +21,7 @@ import {
 
 import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstethDomain } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("Dashboard", () => {
@@ -37,7 +38,7 @@ describe("Dashboard", () => {
   let vaultImpl: StakingVault;
   let dashboardImpl: Dashboard;
   let factory: VaultFactory__MockForDashboard;
-  let lidoLocator: LidoLocator__HarnessForDashboard;
+  let lidoLocator: LidoLocator;
 
   let vault: StakingVault;
   let dashboard: Dashboard;
@@ -56,7 +57,7 @@ describe("Dashboard", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
-    lidoLocator = await ethers.deployContract("LidoLocator__HarnessForDashboard", [steth, wsteth]);
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);

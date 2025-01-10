@@ -107,7 +107,8 @@ contract Dashboard is AccessControlEnumerable {
         vaultHub = VaultHub(stakingVault.vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
-        // Allow WSTETH to transfer STETH on behalf of the dashboard
+        // reduces gas cost for `burnWsteth`
+        // dashboard will hold STETH during this tx
         STETH.approve(address(WSTETH), type(uint256).max);
 
         emit Initialized();
@@ -277,7 +278,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of shares to mint
      */
-    function mint(
+    function mintShares(
         address _recipient,
         uint256 _amountOfShares
     ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
@@ -305,7 +306,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Burns stETH shares from the sender backed by the vault
      * @param _amountOfShares Amount of shares to burn
      */
-    function burn(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function burnShares(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         _burn(msg.sender, _amountOfShares);
     }
 
