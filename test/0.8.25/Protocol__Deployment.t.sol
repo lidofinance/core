@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity ^0.8.0;
 
-import "contracts/0.8.9/EIP712StETH.sol";
 import "forge-std/Test.sol";
 
 import {CommonBase} from "forge-std/Base.sol";
-import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 
+import {EIP712StETH} from "contracts/0.8.9/EIP712StETH.sol";
+import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 interface ILido {
     function getTotalShares() external view returns (uint256);
+
+    function getExternalShares() external view returns (uint256);
 
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external;
 
@@ -34,7 +38,12 @@ interface ILido {
 interface IKernel {
     function acl() external view returns (IACL);
 
-    function newAppInstance(bytes32 _appId, address _appBase, bytes calldata _initializePayload, bool _setDefault) external;
+    function newAppInstance(
+        bytes32 _appId,
+        address _appBase,
+        bytes calldata _initializePayload,
+        bool _setDefault
+    ) external;
 }
 
 interface IACL {
@@ -49,7 +58,7 @@ interface IDaoFactory {
     function newDAO(address _root) external returns (IKernel);
 }
 
-contract Protocol__Deployment is Test {
+contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
     IACL private acl;
@@ -62,7 +71,7 @@ contract Protocol__Deployment is Test {
     address public evmScriptRegistryFactory;
     address public daoFactoryAdr;
 
-    function prepareLidoContract(uint256 _startBalance, address _rootAccount, address _userAccount) public {
+    function setUpProtocol(uint256 _startBalance, address _rootAccount, address _userAccount) public {
         rootAccount = _rootAccount;
         userAccount = _userAccount;
 
@@ -93,7 +102,8 @@ contract Protocol__Deployment is Test {
         kernelBase = deployCode("Kernel.sol:Kernel", abi.encode(true));
         aclBase = deployCode("ACL.sol:ACL");
         evmScriptRegistryFactory = deployCode("EVMScriptRegistryFactory.sol:EVMScriptRegistryFactory");
-        daoFactoryAdr = deployCode("DAOFactory.sol:DAOFactory",
+        daoFactoryAdr = deployCode(
+            "DAOFactory.sol:DAOFactory",
             abi.encode(kernelBase, aclBase, evmScriptRegistryFactory)
         );
 
@@ -102,7 +112,7 @@ contract Protocol__Deployment is Test {
         vm.recordLogs();
         daoFactory.newDAO(rootAccount);
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        (address daoAddress) = abi.decode(logs[logs.length - 1].data, (address));
+        address daoAddress = abi.decode(logs[logs.length - 1].data, (address));
 
         IKernel dao = IKernel(address(daoAddress));
         acl = IACL(address(dao.acl()));
@@ -117,29 +127,32 @@ contract Protocol__Deployment is Test {
         dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), lidoImpl, "", false);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        (address lidoProxyAddress) = abi.decode(logs[logs.length - 1].data, (address));
+        address lidoProxyAddress = abi.decode(logs[logs.length - 1].data, (address));
 
         return lidoProxyAddress;
     }
 
     function deployLidoLocator(address lido) private returns (ILidoLocator) {
-        return new LidoLocator(LidoLocator.Config({
-            accountingOracle: makeAddr("dummy-locator:accountingOracle"),
-            depositSecurityModule: makeAddr("dummy-locator:burner"),
-            elRewardsVault: makeAddr("dummy-locator:depositSecurityModule"),
-            legacyOracle: makeAddr("dummy-locator:elRewardsVault"),
-            lido: lido,
-            oracleReportSanityChecker: makeAddr("dummy-locator:lido"),
-            postTokenRebaseReceiver: makeAddr("dummy-locator:oracleDaemonConfig"),
-            burner: makeAddr("dummy-locator:oracleReportSanityChecker"),
-            stakingRouter: makeAddr("dummy-locator:postTokenRebaseReceiver"),
-            treasury: makeAddr("dummy-locator:stakingRouter"),
-            validatorsExitBusOracle: makeAddr("dummy-locator:treasury"),
-            withdrawalQueue: makeAddr("dummy-locator:validatorsExitBusOracle"),
-            withdrawalVault: makeAddr("dummy-locator:withdrawalQueue"),
-            oracleDaemonConfig: makeAddr("dummy-locator:withdrawalVault"),
-            accounting: makeAddr("dummy-locator:accounting"),
-            wstETH: makeAddr("dummy-locator:wstETH")
-        }));
+        return
+            new LidoLocator(
+                LidoLocator.Config({
+                    accountingOracle: makeAddr("dummy-locator:accountingOracle"),
+                    depositSecurityModule: makeAddr("dummy-locator:burner"),
+                    elRewardsVault: makeAddr("dummy-locator:depositSecurityModule"),
+                    legacyOracle: makeAddr("dummy-locator:elRewardsVault"),
+                    lido: lido,
+                    oracleReportSanityChecker: makeAddr("dummy-locator:lido"),
+                    postTokenRebaseReceiver: makeAddr("dummy-locator:oracleDaemonConfig"),
+                    burner: makeAddr("dummy-locator:oracleReportSanityChecker"),
+                    stakingRouter: makeAddr("dummy-locator:postTokenRebaseReceiver"),
+                    treasury: makeAddr("dummy-locator:stakingRouter"),
+                    validatorsExitBusOracle: makeAddr("dummy-locator:treasury"),
+                    withdrawalQueue: makeAddr("dummy-locator:validatorsExitBusOracle"),
+                    withdrawalVault: makeAddr("dummy-locator:withdrawalQueue"),
+                    oracleDaemonConfig: makeAddr("dummy-locator:withdrawalVault"),
+                    accounting: makeAddr("dummy-locator:accounting"),
+                    wstETH: makeAddr("dummy-locator:wstETH")
+                })
+            );
     }
 }
