@@ -1,7 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  ReportProcessor__Mock,
+  ValidatorsExitBusOracle,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -32,6 +37,10 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ad
   const limitsList = [0, 0, 0, 0, maxValidatorExitRequestsPerReport, 0, 0, 0, 0, 0, 0, 0];
 
   return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
+}
+
+async function deployWithdrawalVault() {
+  return await ethers.deployContract("WithdrawalVault__MockForVebo");
 }
 
 export async function deployVEBO(
@@ -72,11 +81,14 @@ export async function deployVEBO(
 
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
+  const withdrawalVault = await deployWithdrawalVault();
+
   return {
     locatorAddr,
     oracle,
     consensus,
     oracleReportSanityChecker,
+    withdrawalVault,
   };
 }
 
@@ -84,6 +96,7 @@ interface VEBOConfig {
   admin: string;
   oracle: ValidatorsExitBusOracle;
   consensus: HashConsensus__Harness;
+  withdrawalVault: WithdrawalVault__MockForVebo;
   dataSubmitter?: string;
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
@@ -94,12 +107,15 @@ export async function initVEBO({
   admin,
   oracle,
   consensus,
+  withdrawalVault,
   dataSubmitter = undefined,
   consensusVersion = CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
+
+  await oracle.finalizeUpgrade_v2(withdrawalVault);
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
