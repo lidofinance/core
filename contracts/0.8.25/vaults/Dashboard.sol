@@ -110,6 +110,8 @@ contract Dashboard is AccessControlEnumerable {
         // reduces gas cost for `burnWsteth`
         // dashboard will hold STETH during this tx
         STETH.approve(address(WSTETH), type(uint256).max);
+        // allows to uncondinitialy use transferFrom in _burn
+        STETH.approve(address(this), type(uint256).max);
 
         emit Initialized();
     }
@@ -472,11 +474,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _amountOfShares Amount of tokens to burn
      */
     function _burn(address _sender, uint256 _amountOfShares) internal {
-        if (_sender == address(this)) {
-            STETH.transferShares(address(vaultHub), _amountOfShares);
-        } else {
-            STETH.transferSharesFrom(_sender, address(vaultHub), _amountOfShares);
-        }
+        STETH.transferSharesFrom(_sender, address(vaultHub), _amountOfShares);
 
         vaultHub.burnSharesBackedByVault(address(stakingVault), _amountOfShares);
     }

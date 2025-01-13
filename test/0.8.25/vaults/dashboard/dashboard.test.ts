@@ -156,7 +156,8 @@ describe("Dashboard", () => {
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
       // dashboard allowance
-      expect(await steth.allowance(dashboard.getAddress(), wsteth.getAddress())).to.equal(MaxUint256);
+      expect(await steth.allowance(dashboardAddress, wsteth.getAddress())).to.equal(MaxUint256);
+      expect(await steth.allowance(dashboardAddress, dashboardAddress)).to.equal(MaxUint256);
     });
   });
 
