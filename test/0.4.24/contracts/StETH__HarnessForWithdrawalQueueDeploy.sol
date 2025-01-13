@@ -40,7 +40,7 @@ contract StETH__HarnessForWithdrawalQueueDeploy is StETH {
         _emitTransferAfterMintingShares(_to, _sharesAmount);
     }
 
-    function mintSteth(address _to) external payable  {
+    function mintSteth(address _to) external payable {
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
         _mintShares(_to, sharesAmount);
         setTotalPooledEther(_getTotalPooledEther().add(msg.value));

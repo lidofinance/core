@@ -11,7 +11,7 @@ contract MinFirstAllocationStrategy__HarnessLegacyVersion {
         uint256[] memory capacities,
         uint256 maxAllocationSize
     ) public pure returns (uint256 allocated, uint256[] memory newAllocations) {
-        (allocated, newAllocations)  = MinFirstAllocationStrategy.allocate(allocations, capacities, maxAllocationSize);
+        (allocated, newAllocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, maxAllocationSize);
     }
 
     function allocateToBestCandidate(
