@@ -25,7 +25,7 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-describe("ValidatorsExitBusOracle.sol:happyPath", () => {
+describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -192,41 +192,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
   });
 
-  it("non-member cannot submit the data", async () => {
-    await expect(oracle.connect(stranger).submitReportData(reportFields, oracleVersion)).to.be.revertedWithCustomError(
-      oracle,
-      "SenderNotAllowed",
-    );
-  });
-
-  it("the data cannot be submitted passing a different contract version", async () => {
-    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion - 1n))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-      .withArgs(oracleVersion, oracleVersion - 1n);
-  });
-
-  it("the data cannot be submitted passing a different consensus version", async () => {
-    const invalidReport = { ...reportFields, consensusVersion: CONSENSUS_VERSION + 1n };
-    await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedConsensusVersion")
-      .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION + 1n);
-  });
-
-  it("a data not matching the consensus hash cannot be submitted", async () => {
-    const invalidReport = {
-      ...reportFields,
-      exitRequestData: {
-        ...reportFields.exitRequestData,
-        requestsCount: reportFields.exitRequestData.requestsCount + 1,
-      },
-    };
-    const invalidReportHash = calcValidatorsExitBusReportDataHash(invalidReport);
-
-    await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
-      .withArgs(reportHash, invalidReportHash);
-  });
-
   it("a committee member submits the report data, exit requests are emitted", async () => {
     const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
@@ -263,10 +228,11 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect([...indices2]).to.have.ordered.members([1n, -1n, -1n]);
   });
 
-  it("no data can be submitted for the same reference slot again", async () => {
-    await expect(oracle.connect(member2).submitReportData(reportFields, oracleVersion)).to.be.revertedWithCustomError(
-      oracle,
-      "RefSlotAlreadyProcessing",
-    );
+  it("someone submitted exit report data and triggered exit", async () => {
+    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 2]);
+
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs([PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]]);
   });
 });
