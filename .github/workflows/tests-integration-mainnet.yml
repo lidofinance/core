@@ -1,4 +1,5 @@
 name: Integration Tests
+
 #on: [push]
 #
 #jobs:
@@ -9,7 +10,7 @@ name: Integration Tests
 #
 #    services:
 #      hardhat-node:
-#        image: ghcr.io/lidofinance/hardhat-node:2.22.16
+#        image: ghcr.io/lidofinance/hardhat-node:2.22.17
 #        ports:
 #          - 8545:8545
 #        env:

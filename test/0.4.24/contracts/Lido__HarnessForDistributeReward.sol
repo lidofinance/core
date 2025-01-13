@@ -10,20 +10,11 @@ import {Lido} from "contracts/0.4.24/Lido.sol";
  */
 contract Lido__HarnessForDistributeReward is Lido {
     bytes32 internal constant ALLOW_TOKEN_POSITION = keccak256("lido.Lido.allowToken");
-    uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(- 1);
+    uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(-1);
     uint256 private totalPooledEther;
 
-    function initialize(
-        address _lidoLocator,
-        address _eip712StETH
-    )
-        public
-        payable
-    {
-        super.initialize(
-            _lidoLocator,
-            _eip712StETH
-        );
+    function initialize(address _lidoLocator, address _eip712StETH) public payable {
+        super.initialize(_lidoLocator, _eip712StETH);
 
         _resume();
         // _bootstrapInitialHolder
@@ -91,5 +82,4 @@ contract Lido__HarnessForDistributeReward is Lido {
     function burnShares(address _account, uint256 _sharesAmount) public {
         _burnShares(_account, _sharesAmount);
     }
-
 }

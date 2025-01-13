@@ -64,7 +64,7 @@ describe("Lido.sol:externalShares", () => {
     });
   });
 
-  context("setMaxExternalBalanceBP", () => {
+  context("setMaxExternalRatioBP", () => {
     context("Reverts", () => {
       it("if caller is not authorized", async () => {
         await expect(lido.connect(whale).setMaxExternalRatioBP(1)).to.be.revertedWith("APP_AUTH_FAILED");
