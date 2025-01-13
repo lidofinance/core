@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "yarn@4.5.3",
+  "packageManager": "yarn@4.6.0",
   "scripts": {
     "compile": "hardhat compile",
     "cleanup": "hardhat clean",
@@ -31,6 +31,7 @@
     "test:integration:scratch:fulltrace": "INTEGRATION_WITH_CSM=off INTEGRATION_WITH_SCRATCH_DEPLOY=on hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
     "test:integration:fork:local": "hardhat test test/integration/**/*.ts --network local",
     "test:integration:fork:mainnet": "hardhat test test/integration/**/*.ts --network mainnet-fork",
+    "test:integration:fork:mainnet:custom": "hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
