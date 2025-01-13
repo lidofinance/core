@@ -315,14 +315,13 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
      * @param _amountOfWstETH Amount of wstETH tokens to burn
+     * @dev The _amountOfWstETH = _amountOfShares by design
      */
     function burnWstETH(uint256 _amountOfWstETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         WSTETH.transferFrom(msg.sender, address(this), _amountOfWstETH);
+        WSTETH.unwrap(_amountOfWstETH);
 
-        uint256 stETHAmount = WSTETH.unwrap(_amountOfWstETH);
-        uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
-
-        _burn(address(this), sharesAmount);
+        _burn(address(this), _amountOfWstETH);
     }
 
     /**
