@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
 pragma solidity ^0.8.0;
 
-import "../../../../contracts/0.8.9/EIP712StETH.sol";
+import "contracts/0.8.9/EIP712StETH.sol";
 import "forge-std/Test.sol";
 
 import {CommonBase} from "forge-std/Base.sol";
-import {LidoLocator} from "../../../../contracts/0.8.9/LidoLocator.sol";
+import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -79,7 +80,7 @@ contract ShareRate is Protocol__Deployment {
         lidoContract.resume();
         vm.stopPrank();
 
-        shareRateHandler = new ShareRateHandler(lidoContract, accounting, userAccount, _maxAmountOfShares);
+        shareRateHandler = new ShareRateHandler(lidoContract, lidoLocator.accounting(), userAccount, _maxAmountOfShares);
         targetContract(address(shareRateHandler));
 
         bytes4[] memory selectors = new bytes4[](2);
