@@ -22,7 +22,7 @@ import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstet
 
 import { Snapshot } from "test/suite";
 
-describe("Dashboard", () => {
+describe("Dashboard.sol", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
