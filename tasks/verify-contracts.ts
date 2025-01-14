@@ -67,6 +67,11 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
   });
 
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
+  if (!contract.contract) {
+    log.warning("Skipping contract without contract name:", contract);
+    return;
+  }
+
   log.splitter();
 
   const contractName = contract.contractName ?? contract.contract.split("/").pop()?.split(".")[0];
