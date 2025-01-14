@@ -11,6 +11,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts-v5.0.2/token/ERC721/IERC721.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -55,6 +56,9 @@ contract Dashboard is AccessControlEnumerable {
 
     /// @notice The wrapped ether token contract
     IWETH9 public immutable WETH;
+
+    /// @notice ETH address convention per EIP-7528
+    address public constant ETH = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
@@ -403,6 +407,41 @@ contract Dashboard is AccessControlEnumerable {
         _rebalanceVault(_ether);
     }
 
+    /**
+     * @notice recovers ERC20 tokens or ether from the dashboard contract to sender
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
+     */
+    function recoverERC20(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 _amount;
+        if (_token == address(0)) revert ZeroArgument("_token");
+
+        if (_token == ETH) {
+            _amount = address(this).balance;
+            payable(msg.sender).transfer(_amount);
+        } else {
+            _amount = IERC20(_token).balanceOf(address(this));
+            bool success = IERC20(_token).transfer(msg.sender, _amount);
+            if (!success) revert("ERC20: Transfer failed");
+        }
+
+        emit ERC20Recovered(msg.sender, _token, _amount);
+    }
+
+    /**
+     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
+     * from the dashboard contract to sender
+     *
+     * @param _token an ERC721-compatible token
+     * @param _tokenId token id to recover
+     */
+    function recoverERC721(address _token, uint256 _tokenId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_token == address(0)) revert ZeroArgument("_token");
+
+        emit ERC721Recovered(msg.sender, _token, _tokenId);
+
+        IERC721(_token).transferFrom(address(this), msg.sender, _tokenId);
+    }
+
     // ==================== Internal Functions ====================
 
     /**
@@ -500,6 +539,18 @@ contract Dashboard is AccessControlEnumerable {
 
     /// @notice Emitted when the contract is initialized
     event Initialized();
+
+    /// @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
+    /// @param to The address of the recovery recipient
+    /// @param token The address of the recovered ERC20 token (zero address for Ether)
+    /// @param amount The amount of the token recovered
+    event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
+
+    /// @notice Emitted when the ERC721-compatible `token` (NFT) recovered  (i.e. transferred)
+    /// @param to The address of the recovery recipient
+    /// @param token The address of the recovered ERC721 token
+    /// @param tokenId id of token recovered
+    event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
 
