@@ -41,12 +41,14 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultDisconnected(vault);
     }
 
-    function mintSharesBackedByVault(address /* vault */, address recipient, uint256 amount) external {
+    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
         steth.mintExternalShares(recipient, amount);
+        vaultSockets[vault].sharesMinted = uint96(vaultSockets[vault].sharesMinted + amount);
     }
 
-    function burnSharesBackedByVault(address /* vault */, uint256 amount) external {
+    function burnSharesBackedByVault(address vault, uint256 amount) external {
         steth.burnExternalShares(amount);
+        vaultSockets[vault].sharesMinted = uint96(vaultSockets[vault].sharesMinted - amount);
     }
 
     function voluntaryDisconnect(address _vault) external {
@@ -54,6 +56,8 @@ contract VaultHub__MockForDashboard {
     }
 
     function rebalance() external payable {
+        vaultSockets[msg.sender].sharesMinted = 0;
+
         emit Mock__Rebalanced(msg.value);
     }
 }

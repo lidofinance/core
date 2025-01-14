@@ -29,10 +29,7 @@ contract WithdrawalQueue__MockForAccounting {
         sharesToBurn = sharesToBurn_;
     }
 
-    function finalize(
-        uint256 _lastRequestIdToBeFinalized,
-        uint256 _maxShareRate
-    ) external payable {
+    function finalize(uint256 _lastRequestIdToBeFinalized, uint256 _maxShareRate) external payable {
         _maxShareRate;
 
         // some random fake event values
