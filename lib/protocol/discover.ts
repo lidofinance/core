@@ -159,10 +159,6 @@ const getWstEthContract = async (
  * Load all required vaults contracts.
  */
 const getVaultsContracts = async (config: ProtocolNetworkConfig) => {
-  console.log("--------GEEEETEETETET VAAAAAAULTSSSS -----");
-
-  console.log(config);
-
   return (await batch({
     stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
     stakingVaultBeacon: loadContract("UpgradeableBeacon", config.get("stakingVaultBeacon")),
