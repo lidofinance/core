@@ -134,10 +134,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     }
 
     /**
-     * @notice Returns the address of the beacon
-     * @return Address of the beacon
+     * @notice Returns the beacon proxy address that controls this contract's implementation
+     * @return address The beacon proxy address
      */
-    function getBeacon() public view returns (address) {
+    function beacon() public view returns (address) {
         return ERC1967Utils.getBeacon();
     }
 
@@ -151,14 +151,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      */
     function vaultHub() external view returns (address) {
         return address(VAULT_HUB);
-    }
-
-    /**
-     * @notice Returns the beacon proxy address that controls this contract's implementation
-     * @return address The beacon proxy address
-     */
-    function beacon() public view returns (address) {
-        return ERC1967Utils.getBeacon();
     }
 
     /**
