@@ -143,22 +143,14 @@ describe("Delegation.sol", () => {
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
-
-      await expect(delegation_.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(delegation.initialize(vault)).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
+      await expect(delegation.initialize()).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
 
-      await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
+      await expect(delegation_.initialize()).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
     });
   });
 

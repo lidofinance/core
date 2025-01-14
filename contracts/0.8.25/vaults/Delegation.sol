@@ -124,18 +124,17 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Initializes the contract:
-     * - sets the address of StakingVault;
+     * - sets the vaultHub from inherit Dashboard `_initialize()` func
      * - sets up the roles;
      * - sets the vote lifetime to 7 days (can be changed later by CURATOR_ROLE and OPERATOR_ROLE).
-     * @param _stakingVault The address of StakingVault.
      * @dev The msg.sender here is VaultFactory. It is given the OPERATOR_ROLE
      * to be able to set initial operatorFee in VaultFactory, because only OPERATOR_ROLE
      * is the admin role for itself. The rest of the roles are also temporarily given to
      * VaultFactory to be able to set initial config in VaultFactory.
      * All the roles are revoked from VaultFactory at the end of the initialization.
      */
-    function initialize(address _stakingVault) external override {
-        _initialize(_stakingVault);
+    function initialize() external override {
+        _initialize();
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
@@ -184,8 +183,8 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault.locked() + curatorDue() + operatorDue();
-        uint256 valuation = stakingVault.valuation();
+        uint256 reserved = stakingVault().locked() + curatorDue() + operatorDue();
+        uint256 valuation = stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
     }
@@ -313,7 +312,7 @@ contract Delegation is Dashboard {
      */
     function claimCuratorDue(address _recipient) external onlyRole(CURATOR_ROLE) {
         uint256 due = curatorDue();
-        curatorDueClaimedReport = stakingVault.latestReport();
+        curatorDueClaimedReport = stakingVault().latestReport();
         _claimDue(_recipient, due);
     }
 
@@ -325,7 +324,7 @@ contract Delegation is Dashboard {
      */
     function claimOperatorDue(address _recipient) external onlyRole(CLAIM_OPERATOR_DUE_ROLE) {
         uint256 due = operatorDue();
-        operatorDueClaimedReport = stakingVault.latestReport();
+        operatorDueClaimedReport = stakingVault().latestReport();
         _claimDue(_recipient, due);
     }
 
@@ -434,7 +433,7 @@ contract Delegation is Dashboard {
         uint256 _fee,
         IStakingVault.Report memory _lastClaimedReport
     ) internal view returns (uint256) {
-        IStakingVault.Report memory latestReport = stakingVault.latestReport();
+        IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta);
