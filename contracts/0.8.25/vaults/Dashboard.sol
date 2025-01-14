@@ -58,7 +58,7 @@ contract Dashboard is AccessControlEnumerable {
     IWETH9 public immutable WETH;
 
     /// @notice ETH address convention per EIP-7528
-    address public constant ETH = address(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee);
+    address public constant ETH = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
