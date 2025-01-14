@@ -108,7 +108,7 @@ contract ShareRateTest is BaseProtocolTest {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_totalShares() public {
+    function invariant_totalShares() public view {
         assertEq(lidoContract.getTotalShares(), shareRateHandler.getTotalShares());
     }
 }

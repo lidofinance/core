@@ -61,7 +61,8 @@ interface IDaoFactory {
 contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
-    IACL private acl;
+    IACL public acl;
+    IKernel private dao;
 
     address private rootAccount;
     address private userAccount;
@@ -76,8 +77,7 @@ contract BaseProtocolTest is Test {
         userAccount = _userAccount;
 
         vm.startPrank(rootAccount);
-
-        (IKernel dao, IACL acl) = createAragonDao();
+        (dao, acl) = createAragonDao();
 
         address impl = deployCode("Lido.sol:Lido");
 
@@ -114,17 +114,17 @@ contract BaseProtocolTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         address daoAddress = abi.decode(logs[logs.length - 1].data, (address));
 
-        IKernel dao = IKernel(address(daoAddress));
-        acl = IACL(address(dao.acl()));
+        IKernel _dao = IKernel(address(daoAddress));
+        IACL _acl = IACL(address(_dao.acl()));
 
-        acl.createPermission(rootAccount, daoAddress, keccak256("APP_MANAGER_ROLE"), rootAccount);
+        _acl.createPermission(rootAccount, daoAddress, keccak256("APP_MANAGER_ROLE"), rootAccount);
 
-        return (dao, acl);
+        return (_dao, _acl);
     }
 
-    function addAragonApp(IKernel dao, address lidoImpl) private returns (address) {
+    function addAragonApp(IKernel _dao, address lidoImpl) private returns (address) {
         vm.recordLogs();
-        dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), lidoImpl, "", false);
+        _dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), lidoImpl, "", false);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         address lidoProxyAddress = abi.decode(logs[logs.length - 1].data, (address));
