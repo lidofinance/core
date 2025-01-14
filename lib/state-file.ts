@@ -85,6 +85,7 @@ export enum Sk {
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
+  minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
   tokenRebaseNotifier = "tokenRebaseNotifier",
   // Vaults
@@ -188,11 +189,14 @@ export function setValueInState(key: Sk, value: unknown): DeploymentState {
   return state;
 }
 
-export function incrementGasUsed(increment: bigint | number) {
+export function incrementGasUsed(increment: bigint | number, useStateFile = true) {
+  if (!useStateFile) {
+    return;
+  }
+
   const state = readNetworkState();
   state[Sk.scratchDeployGasUsed] = (BigInt(state[Sk.scratchDeployGasUsed] || 0) + BigInt(increment)).toString();
   persistNetworkState(state);
-  return state;
 }
 
 export async function resetStateFile(networkName: string = hardhatNetwork.name): Promise<void> {

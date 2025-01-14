@@ -1,27 +1,34 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-interface ILido {
+import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
+
+interface ILido is IERC20, IERC20Permit {
+    function getSharesByPooledEth(uint256) external view returns (uint256);
+
     function getPooledEthByShares(uint256) external view returns (uint256);
 
-    function transferFrom(address, address, uint256) external;
+    function getPooledEthBySharesRoundUp(uint256) external view returns (uint256);
+
+    function transferSharesFrom(address, address, uint256) external returns (uint256);
+
+    function rebalanceExternalEtherToInternal() external payable;
 
     function getTotalPooledEther() external view returns (uint256);
 
     function getExternalEther() external view returns (uint256);
 
+    function getExternalShares() external view returns (uint256);
+
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
 
-    function getMaxExternalEther() external view returns (uint256);
-
     function getTotalShares() external view returns (uint256);
-
-    function getSharesByPooledEth(uint256) external view returns (uint256);
 
     function getBeaconStat()
         external
@@ -32,8 +39,7 @@ interface ILido {
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _postExternalBalance
+        uint256 _reportClBalance
     ) external;
 
     function collectRewardsAndProcessWithdrawals(
@@ -58,6 +64,4 @@ interface ILido {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
-
-    function burnShares(address _account, uint256 _sharesAmount) external;
 }

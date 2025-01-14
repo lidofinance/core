@@ -58,6 +58,7 @@ const defaultEnv = {
   withdrawalQueue: "WITHDRAWAL_QUEUE_ADDRESS",
   withdrawalVault: "WITHDRAWAL_VAULT_ADDRESS",
   oracleDaemonConfig: "ORACLE_DAEMON_CONFIG_ADDRESS",
+  wstETH: "WSTETH_ADDRESS",
   // aragon contracts
   kernel: "ARAGON_KERNEL_ADDRESS",
   acl: "ARAGON_ACL_ADDRESS",
@@ -68,6 +69,7 @@ const defaultEnv = {
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
   // vaults
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
+  stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -85,6 +87,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     votingAddress: config["app:aragon-voting"].proxy.address,
     easyTrackAddress: config["app:aragon-voting"].proxy.address,
     stakingVaultFactory: config["stakingVaultFactory"].address,
+    stakingVaultBeacon: config["stakingVaultBeacon"].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -97,6 +100,7 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
     votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
     stakingVaultFactory: "",
+    stakingVaultBeacon: "",
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }

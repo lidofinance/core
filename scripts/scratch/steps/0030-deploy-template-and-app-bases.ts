@@ -16,7 +16,15 @@ export async function main() {
   // Deploy Lido-specific app implementations
   await deployImplementation(Sk.appLido, "Lido", deployer);
   await deployImplementation(Sk.appOracle, "LegacyOracle", deployer);
-  await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer);
+
+  const minFirstAllocationStrategy = await deployWithoutProxy(
+    Sk.minFirstAllocationStrategy,
+    "MinFirstAllocationStrategy",
+    deployer,
+  );
+  await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
+    libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategy.address },
+  });
 
   // Deploy LidoTemplate and update state with deployment block
   const template = await deployWithoutProxy(Sk.lidoTemplate, "LidoTemplate", state.deployer, [

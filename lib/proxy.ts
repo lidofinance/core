@@ -52,17 +52,22 @@ export async function createVaultProxy(
   _admin: HardhatEthersSigner,
   _owner: HardhatEthersSigner,
   _operator: HardhatEthersSigner,
+  initializationParams: Partial<DelegationInitializationParamsStruct> = {},
 ): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
-  const initializationParams: DelegationInitializationParamsStruct = {
-    managementFeeBP: 100n,
-    performanceFeeBP: 200n,
+  const defaultParams: DelegationInitializationParamsStruct = {
     defaultAdmin: await _admin.getAddress(),
-    manager: await _owner.getAddress(),
+    curatorFee: 100n,
+    operatorFee: 200n,
+    curator: await _owner.getAddress(),
+    staker: await _owner.getAddress(),
+    tokenMaster: await _owner.getAddress(),
     operator: await _operator.getAddress(),
+    claimOperatorDueRole: await _owner.getAddress(),
   };
+  const params = { ...defaultParams, ...initializationParams };
 
-  const tx = await vaultFactory.connect(_owner).createVaultWithDelegation(initializationParams, "0x");
+  const tx = await vaultFactory.connect(_owner).createVaultWithDelegation(params, "0x");
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;

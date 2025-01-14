@@ -29,6 +29,7 @@ contract LidoLocator is ILidoLocator {
         address withdrawalVault;
         address oracleDaemonConfig;
         address accounting;
+        address wstETH;
     }
 
     error ZeroAddress();
@@ -48,6 +49,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
     address public immutable accounting;
+    address public immutable wstETH;
 
     /**
      * @notice declare service locations
@@ -70,6 +72,7 @@ contract LidoLocator is ILidoLocator {
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
         accounting = _assertNonZero(_config.accounting);
+        wstETH = _assertNonZero(_config.wstETH);
     }
 
     function coreComponents() external view returns(

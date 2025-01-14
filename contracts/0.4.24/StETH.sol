@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -17,7 +17,7 @@ import {Pausable} from "./utils/Pausable.sol";
  * the `_getTotalPooledEther` function.
  *
  * StETH balances are dynamic and represent the holder's share in the total amount
- * of Ether controlled by the protocol. Account shares aren't normalized, so the
+ * of ether controlled by the protocol. Account shares aren't normalized, so the
  * contract also stores the sum of all shares to calculate each account's token balance
  * which equals to:
  *
@@ -37,7 +37,7 @@ import {Pausable} from "./utils/Pausable.sol";
  * Since balances of all token holders change when the amount of total pooled Ether
  * changes, this token cannot fully implement ERC20 standard: it only emits `Transfer`
  * events upon explicit transfer between holders. In contrast, when total amount of
- * pooled Ether increases, no `Transfer` events are generated: doing so would require
+ * pooled ether increases, no `Transfer` events are generated: doing so would require
  * emitting an event for each token holder and thus running an unbounded loop.
  *
  * The token inherits from `Pausable` and uses `whenNotStopped` modifier for methods
@@ -55,7 +55,7 @@ contract StETH is IERC20, Pausable {
 
     /**
      * @dev StETH balances are dynamic and are calculated based on the accounts' shares
-     * and the total amount of Ether controlled by the protocol. Account shares aren't
+     * and the total amount of ether controlled by the protocol. Account shares aren't
      * normalized, so the contract also stores the sum of all shares to calculate
      * each account's token balance which equals to:
      *
@@ -142,14 +142,14 @@ contract StETH is IERC20, Pausable {
      * @return the amount of tokens in existence.
      *
      * @dev Always equals to `_getTotalPooledEther()` since token amount
-     * is pegged to the total amount of Ether controlled by the protocol.
+     * is pegged to the total amount of ether controlled by the protocol.
      */
     function totalSupply() external view returns (uint256) {
         return _getTotalPooledEther();
     }
 
     /**
-     * @return the entire amount of Ether controlled by the protocol.
+     * @return the entire amount of ether controlled by the protocol.
      *
      * @dev The sum of all ETH balances in the protocol, equals to the total supply of stETH.
      */
@@ -161,7 +161,7 @@ contract StETH is IERC20, Pausable {
      * @return the amount of tokens owned by the `_account`.
      *
      * @dev Balances are dynamic and equal the `_account`'s share in the amount of the
-     * total Ether controlled by the protocol. See `sharesOf`.
+     * total ether controlled by the protocol. See `sharesOf`.
      */
     function balanceOf(address _account) external view returns (uint256) {
         return getPooledEthByShares(_sharesOf(_account));
@@ -176,7 +176,7 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_recipient` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or the stETH contract itself.
      * - the caller must have a balance of at least `_amount`.
      * - the contract must not be paused.
      *
@@ -200,6 +200,9 @@ contract StETH is IERC20, Pausable {
     /**
      * @notice Sets `_amount` as the allowance of `_spender` over the caller's tokens.
      *
+     * @dev allowance can be set to "infinity" (INFINITE_ALLOWANCE).
+     * In this case allowance is not to be spent on transfer, that can save some gas.
+     *
      * @return a boolean value indicating whether the operation succeeded.
      * Emits an `Approval` event.
      *
@@ -217,17 +220,18 @@ contract StETH is IERC20, Pausable {
     /**
      * @notice Moves `_amount` tokens from `_sender` to `_recipient` using the
      * allowance mechanism. `_amount` is then deducted from the caller's
-     * allowance.
+     * allowance if it's not infinite.
      *
      * @return a boolean value indicating whether the operation succeeded.
      *
      * Emits a `Transfer` event.
      * Emits a `TransferShares` event.
-     * Emits an `Approval` event indicating the updated allowance.
+     * Emits an `Approval` event if the allowance is updated.
      *
      * Requirements:
      *
-     * - `_sender` and `_recipient` cannot be the zero addresses.
+     * - `_sender` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or the stETH contract itself.
      * - `_sender` must have a balance of at least `_amount`.
      * - the caller must have allowance for `_sender`'s tokens of at least `_amount`.
      * - the contract must not be paused.
@@ -304,12 +308,30 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
-     * @return the amount of Ether that corresponds to `_sharesAmount` token shares.
+     * @return the amount of ether that corresponds to `_sharesAmount` token shares.
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
         return _sharesAmount
             .mul(_getTotalPooledEther())
             .div(_getTotalShares());
+    }
+
+    /**
+     * @return the amount of ether that corresponds to `_sharesAmount` token shares.
+     * @dev The result is rounded up. So,
+     *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
+     */
+    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+        uint256 totalEther = _getTotalPooledEther();
+        uint256 totalShares = _getTotalShares();
+
+        etherAmount = _sharesAmount
+            .mul(totalEther)
+            .div(totalShares);
+
+        if (etherAmount.mul(totalShares) != _sharesAmount.mul(totalEther)) {
+            ++etherAmount;
+        }
     }
 
     /**
@@ -321,7 +343,7 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_recipient` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or the stETH contract itself.
      * - the caller must have at least `_sharesAmount` shares.
      * - the contract must not be paused.
      *
@@ -361,7 +383,7 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
-     * @return the total amount (in wei) of Ether controlled by the protocol.
+     * @return the total amount (in wei) of ether controlled by the protocol.
      * @dev This is used for calculating tokens from shares and vice versa.
      * @dev This function is required to be implemented in a derived contract.
      */

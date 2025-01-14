@@ -8,15 +8,10 @@ import { resetStateFile } from "./state-file";
 
 const deployedSteps: string[] = [];
 
-export async function deployScratchProtocol(networkName: string): Promise<void> {
-  const stepsFile = process.env.STEPS_FILE || "scratch/steps.json";
-  const steps = loadSteps(stepsFile);
-
+async function applySteps(steps: string[]) {
   if (steps.every((step) => deployedSteps.includes(step))) {
     return; // All steps have been deployed
   }
-
-  await resetStateFile(networkName);
 
   for (const step of steps) {
     const migrationFile = resolveMigrationFile(step);
@@ -28,17 +23,51 @@ export async function deployScratchProtocol(networkName: string): Promise<void> 
   }
 }
 
+export async function deployUpgrade(networkName: string): Promise<void> {
+  // Hardhat network is a fork of mainnet so we need to use the mainnet-fork steps
+  if (networkName === "hardhat") {
+    networkName = "mainnet-fork";
+  }
+
+  try {
+    const stepsFile = `upgrade/steps-${networkName}.json`;
+    const steps = loadSteps(stepsFile);
+
+    await applySteps(steps);
+  } catch (error) {
+    log.error("Upgrade failed:", (error as Error).message);
+    log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+  }
+}
+
+export async function deployScratchProtocol(networkName: string): Promise<void> {
+  const stepsFile = process.env.STEPS_FILE || "scratch/steps.json";
+  const steps = loadSteps(stepsFile);
+
+  await resetStateFile(networkName);
+  await applySteps(steps);
+}
+
 type StepsFile = {
   steps: string[];
 };
 
 export const loadSteps = (stepsFile: string): string[] => {
   const stepsPath = path.resolve(process.cwd(), `scripts/${stepsFile}`);
+  if (!fs.existsSync(stepsPath)) {
+    throw new Error(`Steps file ${stepsPath} not found!`);
+  }
+
   return (JSON.parse(fs.readFileSync(stepsPath, "utf8")) as StepsFile).steps;
 };
 
 export const resolveMigrationFile = (step: string): string => {
-  return path.resolve(process.cwd(), `scripts/${step}`);
+  const migrationFile = path.resolve(process.cwd(), `scripts/${step}.ts`);
+  if (!fs.existsSync(migrationFile)) {
+    throw new Error(`Migration file ${migrationFile} not found!`);
+  }
+
+  return migrationFile;
 };
 
 /**

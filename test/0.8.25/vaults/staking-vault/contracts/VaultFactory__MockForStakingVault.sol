@@ -3,9 +3,9 @@
 
 pragma solidity ^0.8.0;
 
-import { UpgradeableBeacon } from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
-import { BeaconProxy } from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
-import { IStakingVault } from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract VaultFactory__MockForStakingVault is UpgradeableBeacon {
     event VaultCreated(address indexed vault);
@@ -14,7 +14,7 @@ contract VaultFactory__MockForStakingVault is UpgradeableBeacon {
 
     function createVault(address _owner, address _operator) external {
         IStakingVault vault = IStakingVault(address(new BeaconProxy(address(this), "")));
-        vault.initialize(address(this), _owner, _operator, "");
+        vault.initialize(_owner, _operator, "");
 
         emit VaultCreated(address(vault));
     }
