@@ -58,7 +58,7 @@ contract Dashboard is AccessControlEnumerable {
     IWETH9 public immutable WETH;
 
     /// @notice ETH address convention per EIP-7528
-    address public constant ETH = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+    address public constant ETH = address(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee);
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
@@ -409,7 +409,7 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice recovers ERC20 tokens or ether from the dashboard contract to sender
-     * @param _token Address of the token to recover, 0 for ether
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      */
     function recoverERC20(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 _amount;
