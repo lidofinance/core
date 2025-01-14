@@ -57,6 +57,9 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice The wrapped ether token contract
     IWETH9 public immutable WETH;
 
+    /// @notice ETH address convention per EIP-7528
+    address public constant ETH = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
+
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
 
@@ -410,8 +413,9 @@ contract Dashboard is AccessControlEnumerable {
      */
     function recoverERC20(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 _amount;
+        if (_token == address(0)) revert ZeroArgument("_token");
 
-        if (_token == address(0)) {
+        if (_token == ETH) {
             _amount = address(this).balance;
             payable(msg.sender).transfer(_amount);
         } else {

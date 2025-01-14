@@ -1184,11 +1184,13 @@ describe("Dashboard", () => {
 
       await wethContract.deposit({ value: amount });
 
-      await vaultOwner.sendTransaction({ to: dashboard.getAddress(), value: amount });
-      await wethContract.transfer(dashboard.getAddress(), amount);
+      await vaultOwner.sendTransaction({ to: dashboardAddress, value: amount });
+      await wethContract.transfer(dashboardAddress, amount);
+      await erc721.mint(dashboardAddress, 0);
 
-      expect(await ethers.provider.getBalance(dashboard.getAddress())).to.equal(amount);
-      expect(await wethContract.balanceOf(dashboard.getAddress())).to.equal(amount);
+      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount);
+      expect(await wethContract.balanceOf(dashboardAddress)).to.equal(amount);
+      expect(await erc721.ownerOf(0)).to.equal(dashboardAddress);
     });
 
     it("allows only admin to recover", async () => {
@@ -1202,13 +1204,18 @@ describe("Dashboard", () => {
       );
     });
 
+    it("does not allow zero token address for erc20 recovery", async () => {
+      await expect(dashboard.recoverERC20(ZeroAddress)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+    });
+
     it("recovers all ether", async () => {
+      const ethStub = await dashboard.ETH();
       const preBalance = await ethers.provider.getBalance(vaultOwner);
-      const tx = await dashboard.recoverERC20(ZeroAddress);
+      const tx = await dashboard.recoverERC20(ethStub);
       const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
 
-      await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, zeroAddress(), amount);
-      expect(await ethers.provider.getBalance(dashboard.getAddress())).to.equal(0);
+      await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, ethStub, amount);
+      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(0);
       expect(await ethers.provider.getBalance(vaultOwner)).to.equal(preBalance + amount - gasUsed * gasPrice);
     });
 
@@ -1219,19 +1226,15 @@ describe("Dashboard", () => {
       await expect(tx)
         .to.emit(dashboard, "ERC20Recovered")
         .withArgs(tx.from, await weth.getAddress(), amount);
-      expect(await weth.balanceOf(dashboard.getAddress())).to.equal(0);
+      expect(await weth.balanceOf(dashboardAddress)).to.equal(0);
       expect(await weth.balanceOf(vaultOwner)).to.equal(preBalance + amount);
     });
 
     it("does not allow zero token address for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(zeroAddress(), 0)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      await expect(dashboard.recoverERC721(ZeroAddress, 0)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
     });
 
     it("recovers erc721", async () => {
-      const dashboardAddress = await dashboard.getAddress();
-      await erc721.mint(dashboardAddress, 0);
-      expect(await erc721.ownerOf(0)).to.equal(dashboardAddress);
-
       const tx = await dashboard.recoverERC721(erc721.getAddress(), 0);
 
       await expect(tx)
@@ -1256,8 +1259,9 @@ describe("Dashboard", () => {
     });
 
     it("allows ether to be recieved", async () => {
+      const preBalance = await weth.balanceOf(dashboardAddress);
       await vaultOwner.sendTransaction({ to: dashboardAddress, value: amount });
-      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount);
+      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount + preBalance);
     });
   });
 });
