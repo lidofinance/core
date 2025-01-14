@@ -9,14 +9,12 @@ import {
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
-  LidoLocator,
   WithdrawalsPredeployed_Mock,
-  WithdrawalVault,
+  WithdrawalVault__Harness,
 } from "typechain-types";
 
-import { MAX_UINT256, proxify } from "lib";
+import { MAX_UINT256, proxify, streccak } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { findEip7002TriggerableWithdrawalMockEvents, findEvents } from "./lib/triggerableWithdrawals/findEvents";
@@ -28,28 +26,27 @@ import {
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
+const ADD_FULL_WITHDRAWAL_REQUEST_ROLE = streccak("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+
 describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
-  let user: HardhatEthersSigner;
   let treasury: HardhatEthersSigner;
   let validatorsExitBus: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
 
   let originalState: string;
 
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
 
-  let locator: LidoLocator;
-  let locatorAddress: string;
-
   let withdrawalsPredeployed: WithdrawalsPredeployed_Mock;
 
-  let impl: WithdrawalVault;
-  let vault: WithdrawalVault;
+  let impl: WithdrawalVault__Harness;
+  let vault: WithdrawalVault__Harness;
   let vaultAddress: string;
 
   before(async () => {
-    [owner, user, treasury, validatorsExitBus] = await ethers.getSigners();
+    [owner, treasury, validatorsExitBus, stranger] = await ethers.getSigners();
 
     withdrawalsPredeployed = await deployWithdrawalsPredeployedMock(1n);
 
@@ -58,13 +55,9 @@ describe("WithdrawalVault.sol", () => {
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
 
-    locator = await deployLidoLocator({ lido, validatorsExitBusOracle: validatorsExitBus });
-    locatorAddress = await locator.getAddress();
-
-    impl = await ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, locatorAddress]);
+    impl = await ethers.deployContract("WithdrawalVault__Harness", [lidoAddress, treasury.address], owner);
 
     [vault] = await proxify({ impl, admin: owner });
-
     vaultAddress = await vault.getAddress();
   });
 
@@ -75,26 +68,20 @@ describe("WithdrawalVault.sol", () => {
   context("Constructor", () => {
     it("Reverts if the Lido address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address, validatorsExitBus.address]),
+        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Reverts if the treasury address is zero", async () => {
-      await expect(
-        ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress, validatorsExitBus.address]),
-      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
-    });
-
-    it("Reverts if the validator exit buss address is zero", async () => {
-      await expect(
-        ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, ZeroAddress]),
-      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+      await expect(ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress])).to.be.revertedWithCustomError(
+        vault,
+        "ZeroAddress",
+      );
     });
 
     it("Sets initial properties", async () => {
       expect(await vault.LIDO()).to.equal(lidoAddress, "Lido address");
       expect(await vault.TREASURY()).to.equal(treasury.address, "Treasury address");
-      expect(await vault.LOCATOR()).to.equal(locatorAddress, "Validator exit bus address");
     });
 
     it("Petrifies the implementation", async () => {
@@ -107,26 +94,102 @@ describe("WithdrawalVault.sol", () => {
   });
 
   context("initialize", () => {
-    it("Reverts if the contract is already initialized", async () => {
-      await vault.initialize();
+    it("Should revert if the contract is already initialized", async () => {
+      await vault.initialize(owner);
 
-      await expect(vault.initialize()).to.be.revertedWithCustomError(vault, "NonZeroContractVersionOnInit");
+      await expect(vault.initialize(owner))
+        .to.be.revertedWithCustomError(vault, "UnexpectedContractVersion")
+        .withArgs(2, 0);
     });
 
     it("Initializes the contract", async () => {
-      await expect(vault.initialize())
-        .to.emit(vault, "ContractVersionSet")
-        .withArgs(1)
-        .and.to.emit(vault, "ContractVersionSet")
-        .withArgs(2);
+      await expect(vault.initialize(owner)).to.emit(vault, "ContractVersionSet").withArgs(2);
+    });
+
+    it("Should revert if admin address is zero", async () => {
+      await expect(vault.initialize(ZeroAddress)).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Should set admin role during initialization", async () => {
+      const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+      expect(await vault.getRoleMemberCount(adminRole)).to.equal(0);
+      expect(await vault.hasRole(adminRole, owner)).to.equal(false);
+
+      await vault.initialize(owner);
+
+      expect(await vault.getRoleMemberCount(adminRole)).to.equal(1);
+      expect(await vault.hasRole(adminRole, owner)).to.equal(true);
+      expect(await vault.hasRole(adminRole, stranger)).to.equal(false);
+    });
+  });
+
+  context("finalizeUpgrade_v2()", () => {
+    it("Should revert with UnexpectedContractVersion error when called on implementation", async () => {
+      await expect(impl.finalizeUpgrade_v2(owner))
+        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
+        .withArgs(MAX_UINT256, 1);
+    });
+
+    it("Should revert with UnexpectedContractVersion error when called on deployed from scratch WithdrawalVaultV2", async () => {
+      await vault.initialize(owner);
+
+      await expect(vault.finalizeUpgrade_v2(owner))
+        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
+        .withArgs(2, 1);
+    });
+
+    context("Simulate upgrade from v1", () => {
+      beforeEach(async () => {
+        await vault.harness__initializeContractVersionTo(1);
+      });
+
+      it("Should revert if admin address is zero", async () => {
+        await expect(vault.finalizeUpgrade_v2(ZeroAddress)).to.be.revertedWithCustomError(vault, "ZeroAddress");
+      });
+
+      it("Should set correct contract version", async () => {
+        expect(await vault.getContractVersion()).to.equal(1);
+        await vault.finalizeUpgrade_v2(owner);
+        expect(await vault.getContractVersion()).to.be.equal(2);
+      });
+
+      it("Should set admin role during finalization", async () => {
+        const adminRole = await vault.DEFAULT_ADMIN_ROLE();
+        expect(await vault.getRoleMemberCount(adminRole)).to.equal(0);
+        expect(await vault.hasRole(adminRole, owner)).to.equal(false);
+
+        await vault.finalizeUpgrade_v2(owner);
+
+        expect(await vault.getRoleMemberCount(adminRole)).to.equal(1);
+        expect(await vault.hasRole(adminRole, owner)).to.equal(true);
+        expect(await vault.hasRole(adminRole, stranger)).to.equal(false);
+      });
+    });
+  });
+
+  context("Access control", () => {
+    it("Returns ACL roles", async () => {
+      expect(await vault.ADD_FULL_WITHDRAWAL_REQUEST_ROLE()).to.equal(ADD_FULL_WITHDRAWAL_REQUEST_ROLE);
+    });
+
+    it("Sets up roles", async () => {
+      await vault.initialize(owner);
+
+      expect(await vault.getRoleMemberCount(ADD_FULL_WITHDRAWAL_REQUEST_ROLE)).to.equal(0);
+      expect(await vault.hasRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus)).to.equal(false);
+
+      await vault.connect(owner).grantRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
+
+      expect(await vault.getRoleMemberCount(ADD_FULL_WITHDRAWAL_REQUEST_ROLE)).to.equal(1);
+      expect(await vault.hasRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus)).to.equal(true);
     });
   });
 
   context("withdrawWithdrawals", () => {
-    beforeEach(async () => await vault.initialize());
+    beforeEach(async () => await vault.initialize(owner));
 
     it("Reverts if the caller is not Lido", async () => {
-      await expect(vault.connect(user).withdrawWithdrawals(0)).to.be.revertedWithCustomError(vault, "NotLido");
+      await expect(vault.connect(stranger).withdrawWithdrawals(0)).to.be.revertedWithCustomError(vault, "NotLido");
     });
 
     it("Reverts if amount is 0", async () => {
@@ -242,11 +305,15 @@ describe("WithdrawalVault.sol", () => {
   }
 
   context("add triggerable withdrawal requests", () => {
+    beforeEach(async () => {
+      await vault.initialize(owner);
+      await vault.connect(owner).grantRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
+    });
+
     it("Should revert if the caller is not Validator Exit Bus", async () => {
-      await expect(vault.connect(user).addFullWithdrawalRequests(["0x1234"])).to.be.revertedWithCustomError(
-        vault,
-        "NotValidatorExitBus",
-      );
+      await expect(
+        vault.connect(stranger).addFullWithdrawalRequests(["0x1234"]),
+      ).to.be.revertedWithOZAccessControlError(stranger.address, ADD_FULL_WITHDRAWAL_REQUEST_ROLE);
     });
 
     it("Should revert if empty arrays are provided", async function () {
