@@ -111,11 +111,8 @@ library TriggerableWithdrawals {
         uint256 prevBalance = address(this).balance - totalWithdrawalFee;
 
         for (uint256 i = 0; i < keysCount; ++i) {
-            bytes memory pubkey = pubkeys[i];
-            uint64 amount = amounts[i];
-
-            if(pubkey.length != 48) {
-                revert InvalidPubkeyLength(pubkey);
+            if(pubkeys[i].length != 48) {
+                revert InvalidPubkeyLength(pubkeys[i]);
             }
 
             uint256 feeToSend = feePerRequest;
@@ -124,14 +121,14 @@ library TriggerableWithdrawals {
                 feeToSend += unallocatedFee;
             }
 
-            bytes memory callData = abi.encodePacked(pubkey, amount);
+            bytes memory callData = abi.encodePacked(pubkeys[i], amounts[i]);
             (bool success, ) = WITHDRAWAL_REQUEST.call{value: feeToSend}(callData);
 
             if (!success) {
-                revert WithdrawalRequestAdditionFailed(pubkey, amount);
+                revert WithdrawalRequestAdditionFailed(pubkeys[i], amounts[i]);
             }
 
-            emit WithdrawalRequestAdded(pubkey, amount);
+            emit WithdrawalRequestAdded(pubkeys[i], amounts[i]);
         }
 
         assert(address(this).balance == prevBalance);
