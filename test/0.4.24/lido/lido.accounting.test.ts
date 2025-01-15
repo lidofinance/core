@@ -4,7 +4,6 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  Accounting,
   ACL,
   Burner__MockForAccounting,
   Burner__MockForAccounting__factory,
@@ -12,6 +11,7 @@ import {
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  LidoLocator__factory,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
   PostTokenRebaseReceiver__MockForAccounting__factory,
@@ -33,7 +33,6 @@ describe("Lido:accounting", () => {
 
   let lido: Lido;
   let acl: ACL;
-  let accounting: Accounting;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
 
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
@@ -64,7 +63,7 @@ describe("Lido:accounting", () => {
       new Burner__MockForAccounting__factory(deployer).deploy(),
     ]);
 
-    ({ lido, acl, accounting } = await deployLidoDao({
+    ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
       initialized: true,
       locatorConfig: {
@@ -95,7 +94,8 @@ describe("Lido:accounting", () => {
     });
 
     it("Updates beacon stats", async () => {
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("100.0"));
+      const locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
       lido = lido.connect(accountingSigner);
       await expect(
         lido.processClStateUpdate(
