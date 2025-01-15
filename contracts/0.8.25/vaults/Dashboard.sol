@@ -381,9 +381,9 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Burns stETH tokens (in shares) backed by the vault from the sender using EIP-2612 Permit.
+     * @notice Burns stETH tokens (in shares) backed by the vault from the sender using EIP-2612 Permit (with value in stETH).
      * @param _amountOfShares Amount of stETH shares to burn
-     * @param _permit data required for the stETH.permit() method to set the allowance
+     * @param _permit data required for the stETH.permit() with amount in stETH
      */
     function burnSharesWithPermit(
         uint256 _amountOfShares,
