@@ -275,7 +275,7 @@ contract Delegation is Dashboard {
      * The function will revert if the curator fee is unclaimed.
      * @param _newCuratorFeeBP The new curator fee in basis points.
      */
-    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external onlyRole(CURATOR_ROLE) {
+    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_newCuratorFeeBP + nodeOperatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (curatorUnclaimedFee() > 0) revert CuratorFeeUnclaimed();
         uint256 oldCuratorFeeBP = curatorFeeBP;
@@ -313,8 +313,8 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Claims the node oper ator fee.
-     * Note that the authorized role is NODE_OPERATOR_FEE_CLAIMER_ROLE, not OPERATOR_ROLE,
-     * although OPERATOR_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
+     * Note that the authorized role is NODE_OPERATOR_FEE_CLAIMER_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
+     * although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
      * @param _recipient The address to which the node operator fee will be sent.
      */
     function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIMER_ROLE) {
