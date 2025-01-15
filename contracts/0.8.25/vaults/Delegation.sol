@@ -40,7 +40,9 @@ contract Delegation is Dashboard {
      * - votes operator fee;
      * - votes on vote lifetime;
      * - votes on ownership transfer;
-     * - claims curator due.
+     * - claims curator due;
+     * - pauses deposits to beacon chain;
+     * - resumes deposits to beacon chain.
      */
     bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
 
@@ -344,6 +346,20 @@ contract Delegation is Dashboard {
      */
     function voluntaryDisconnect() external payable override onlyRole(CURATOR_ROLE) fundAndProceed {
         _voluntaryDisconnect();
+    }
+
+    /**
+     * @notice Pauses deposits to beacon chain from the StakingVault.
+     */
+    function pauseBeaconDeposits() external onlyRole(CURATOR_ROLE) {
+        IStakingVault(stakingVault).pauseBeaconDeposits();
+    }
+
+    /**
+     * @notice Resumes deposits to beacon chain from the StakingVault.
+     */
+    function resumeBeaconDeposits() external onlyRole(CURATOR_ROLE) {
+        IStakingVault(stakingVault).resumeBeaconDeposits();
     }
 
     /**

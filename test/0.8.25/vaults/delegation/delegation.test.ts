@@ -623,4 +623,32 @@ describe("Delegation.sol", () => {
       expect(await vault.owner()).to.equal(newOwner);
     });
   });
+
+  context("pauseBeaconDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).pauseBeaconDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("pauses the beacon deposits", async () => {
+      await expect(delegation.connect(curator).pauseBeaconDeposits()).to.emit(vault, "BeaconDepositsPaused");
+      expect(await vault.areBeaconDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).resumeBeaconDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("resumes the beacon deposits", async () => {
+      await expect(delegation.connect(curator).resumeBeaconDeposits()).to.emit(vault, "BeaconDepositsResumed");
+      expect(await vault.areBeaconDepositsPaused()).to.be.false;
+    });
+  });
 });

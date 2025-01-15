@@ -130,6 +130,7 @@ describe("StakingVault", () => {
       );
       expect(await stakingVault.valuation()).to.equal(0n);
       expect(await stakingVault.isBalanced()).to.be.true;
+      expect(await stakingVault.areBeaconDepositsPaused()).to.be.false;
     });
   });
 
@@ -294,6 +295,40 @@ describe("StakingVault", () => {
     });
   });
 
+  context("pauseBeaconDeposits", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).pauseBeaconDeposits())
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
+    });
+
+    it("allows to pause deposits", async () => {
+      await expect(stakingVault.connect(vaultOwner).pauseBeaconDeposits()).to.emit(
+        stakingVault,
+        "BeaconDepositsPaused",
+      );
+      expect(await stakingVault.areBeaconDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconDeposits", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).resumeBeaconDeposits())
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
+    });
+
+    it("allows to resume deposits", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconDeposits();
+
+      await expect(stakingVault.connect(vaultOwner).resumeBeaconDeposits()).to.emit(
+        stakingVault,
+        "BeaconDepositsResumed",
+      );
+      expect(await stakingVault.areBeaconDepositsPaused()).to.be.false;
+    });
+  });
+
   context("depositToBeaconChain", () => {
     it("reverts if called by a non-operator", async () => {
       await expect(stakingVault.connect(stranger).depositToBeaconChain(1, "0x", "0x"))
@@ -312,6 +347,14 @@ describe("StakingVault", () => {
       await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
         stakingVault,
         "Unbalanced",
+      );
+    });
+
+    it("reverts if the deposits are paused", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconDeposits();
+      await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
+        stakingVault,
+        "BeaconChainDepositsNotAllowed",
       );
     });
 
