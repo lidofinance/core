@@ -23,7 +23,7 @@ import {
   WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { ether, getNextBlockTimestamp, impersonate } from "lib";
 
 import { deployLidoDao } from "test/deploy";
 
@@ -34,6 +34,7 @@ describe("Lido:accounting", () => {
   let lido: Lido;
   let acl: ACL;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
+  let locator: LidoLocator;
 
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
@@ -76,6 +77,7 @@ describe("Lido:accounting", () => {
         burner,
       },
     }));
+    locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
 
     await acl.createPermission(deployer, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(deployer, lido, await lido.PAUSE_ROLE(), deployer);
@@ -94,7 +96,6 @@ describe("Lido:accounting", () => {
     });
 
     it("Updates beacon stats", async () => {
-      const locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
       const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
       lido = lido.connect(accountingSigner);
       await expect(
@@ -139,6 +140,48 @@ describe("Lido:accounting", () => {
       await expect(lido.connect(stranger).collectRewardsAndProcessWithdrawals(...args())).to.be.revertedWith(
         "APP_AUTH_FAILED",
       );
+    });
+
+    it("Updates buffered ether", async () => {
+      const initialBufferedEther = await lido.getBufferedEther();
+      const ethToLock = 1n;
+
+      // assert that the buffer has enough eth to lock for withdrawals
+      // should have some eth from the initial 0xdead holder
+      expect(initialBufferedEther).greaterThanOrEqual(ethToLock);
+      await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
+
+      await lido.collectRewardsAndProcessWithdrawals(...args({ etherToLockOnWithdrawalQueue: ethToLock }));
+      expect(await lido.getBufferedEther()).to.equal(initialBufferedEther - ethToLock);
+    });
+
+    it("Emits an `ETHDistributed` event", async () => {
+      const reportTimestamp = await getNextBlockTimestamp();
+      const preClBalance = 0n;
+      const clBalance = 1n;
+      const withdrawals = 0n;
+      const elRewards = 0n;
+      const bufferedEther = await lido.getBufferedEther();
+
+      const totalFee = 1000;
+      const precisionPoints = 10n ** 20n;
+      await stakingRouter.mock__getStakingRewardsDistribution([], [], [], totalFee, precisionPoints);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
+      await expect(
+        lido.collectRewardsAndProcessWithdrawals(
+          ...args({
+            reportTimestamp,
+            reportClBalance: clBalance,
+          }),
+        ),
+      )
+        .to.emit(lido, "ETHDistributed")
+        .withArgs(reportTimestamp, preClBalance, clBalance, withdrawals, elRewards, bufferedEther);
     });
 
     type ArgsTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];

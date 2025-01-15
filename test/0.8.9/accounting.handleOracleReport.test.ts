@@ -170,94 +170,11 @@ describe("Accounting.sol:report", () => {
         .withArgs(isCover, await accounting.getAddress(), steth, sharesToBurn);
     });
 
-    // TODO: This test could be moved to `Lido.sol`
-    // it("Withdraws ether from `ElRewardsVault` if EL rewards are greater than 0 as returned from `smoothenTokenRebase`", async () => {
-
     it("ensures that `Lido.collectRewardsAndProcessWithdrawals` is called from `Accounting`", async () => {
       // `Mock__CollectRewardsAndProcessWithdrawals` event is only emitted on the mock to verify
       // that `Lido.collectRewardsAndProcessWithdrawals` was actually called
       await expect(accounting.handleOracleReport(report())).to.emit(lido, "Mock__CollectRewardsAndProcessWithdrawals");
     });
-
-    // it("Withdraws ether from `WithdrawalVault` if withdrawals are greater than 0 as returned from `smoothenTokenRebase`", async () => {
-    //   const withdrawals = 1n;
-    //   const elRewards = 0n;
-    //   const simulatedSharesToBurn = 0n;
-    //   const sharesToBurn = 0n;
-
-    //   await oracleReportSanityChecker.mock__smoothenTokenRebaseReturn(
-    //     withdrawals,
-    //     elRewards,
-    //     simulatedSharesToBurn,
-    //     sharesToBurn,
-    //   );
-    //   const totalFee = 1000;
-    //   const precisionPoints = 10n ** 20n;
-    //   await stakingRouter.mock__getStakingRewardsDistribution([], [], [], totalFee, precisionPoints);
-
-    //   // `Mock__WithdrawalsWithdrawn` event is only emitted on the mock to verify
-    //   // that `WithdrawalVault.withdrawWithdrawals` was actually called
-    //   await expect(accounting.handleOracleReport(report())).to.emit(withdrawalVault, "Mock__WithdrawalsWithdrawn");
-    // });
-
-    // it("Finalizes withdrawals if there is ether to lock on `WithdrawalQueue` as returned from `prefinalize`", async () => {
-    //   const ethToLock = ether("10.0");
-    //   await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
-    //   // top up buffer via submit
-    //   await lido.submit(ZeroAddress, { value: ethToLock });
-
-    //   await expect(
-    //     accounting.handleOracleReport(
-    //       report({
-    //         withdrawalFinalizationBatches: [1n, 2n],
-    //       }),
-    //     ),
-    //   ).to.emit(withdrawalQueue, "WithdrawalsFinalized");
-    // });
-
-    // it("Updates buffered ether", async () => {
-    //   const initialBufferedEther = await lido.getBufferedEther();
-    //   const ethToLock = 1n;
-
-    //   // assert that the buffer has enough eth to lock for withdrawals
-    //   // should have some eth from the initial 0xdead holder
-    //   expect(initialBufferedEther).greaterThanOrEqual(ethToLock);
-    //   await withdrawalQueue.mock__prefinalizeReturn(ethToLock, 0n);
-
-    //   await expect(
-    //     accounting.handleOracleReport(
-    //       report({
-    //         withdrawalFinalizationBatches: [1n],
-    //       }),
-    //     ),
-    //   ).to.not.be.reverted;
-
-    //   expect(await lido.getBufferedEther()).to.equal(initialBufferedEther - ethToLock);
-    // });
-
-    // it("Emits an `ETHDistributed` event", async () => {
-    //   const reportTimestamp = await getNextBlockTimestamp();
-    //   const preClBalance = 0n;
-    //   const clBalance = 1n;
-    //   const withdrawals = 0n;
-    //   const elRewards = 0n;
-    //   const bufferedEther = await lido.getBufferedEther();
-
-    //   const totalFee = 1000;
-    //   const precisionPoints = 10n ** 20n;
-    //   await stakingRouter.mock__getStakingRewardsDistribution([], [], [], totalFee, precisionPoints);
-
-    //   await expect(
-    //     accounting.handleOracleReport(
-    //       report({
-    //         timestamp: reportTimestamp,
-    //         clBalance,
-    //       }),
-    //     ),
-    //   )
-    //     .to.emit(lido, "ETHDistributed")
-    //     .withArgs(reportTimestamp, preClBalance, clBalance, withdrawals, elRewards, bufferedEther);
-    // });
 
     it("Burns shares if there are shares to burn as returned from `smoothenTokenRebaseReturn`", async () => {
       const sharesRequestedToBurn = 1n;
