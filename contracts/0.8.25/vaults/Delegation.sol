@@ -312,7 +312,7 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Claims the node oper ator fee.
+     * @notice Claims the node operator fee.
      * Note that the authorized role is NODE_OPERATOR_FEE_CLAIMER_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
      * although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
      * @param _recipient The address to which the node operator fee will be sent.
