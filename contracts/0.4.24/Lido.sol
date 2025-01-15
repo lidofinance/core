@@ -196,7 +196,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _eip712StETH eip712 helper contract for StETH
      */
     function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
-        _bootstrapInitialHolder();
+        _bootstrapInitialHolder(); // stone in the elevator
 
         LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
         emit LidoLocatorSet(_lidoLocator);
@@ -958,7 +958,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev the denominator (in shares) of the share rate for StETH conversion between shares and ether and vice versa.
     function _getShareRateDenominator() internal view returns (uint256) {
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
-        uint256 internalShares = _getTotalShares() - externalShares;
+        uint256 internalShares = _getTotalShares() - externalShares; // never 0 because of the stone in the elevator
         return internalShares;
     }
 
