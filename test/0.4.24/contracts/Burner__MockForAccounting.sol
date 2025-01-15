@@ -11,7 +11,7 @@ contract Burner__MockForAccounting {
         uint256 amountOfShares
     );
 
-    event Mock__CommitSharesToBurnWasCalled();
+    event Mock__CommitSharesToBurnWasCalled(uint256 sharesToBurn);
 
     function requestBurnShares(address, uint256 _sharesAmountToBurn) external {
         // imitating share to steth rate 1:2
@@ -22,6 +22,6 @@ contract Burner__MockForAccounting {
     function commitSharesToBurn(uint256 _sharesToBurn) external {
         _sharesToBurn;
 
-        emit Mock__CommitSharesToBurnWasCalled();
+        emit Mock__CommitSharesToBurnWasCalled(_sharesToBurn);
     }
 }
