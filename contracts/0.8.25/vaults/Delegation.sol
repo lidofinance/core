@@ -237,7 +237,7 @@ contract Delegation is Dashboard {
         address _recipient,
         uint256 _amountOfShares
     ) external payable override onlyRole(TOKEN_MASTER_ROLE) fundAndProceed {
-        _mint(_recipient, _amountOfShares);
+        _mintSharesTo(_recipient, _amountOfShares);
     }
 
     /**
@@ -248,7 +248,7 @@ contract Delegation is Dashboard {
      * @param _amountOfShares The amount of shares to burn.
      */
     function burnShares(uint256 _amountOfShares) external override onlyRole(TOKEN_MASTER_ROLE) {
-        _burn(msg.sender, _amountOfShares);
+        _burnSharesFrom(msg.sender, _amountOfShares);
     }
 
     /**

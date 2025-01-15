@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
+import { bigint } from "hardhat/internal/core/params/argumentTypes";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
@@ -54,7 +55,7 @@ describe("Dashboard", () => {
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
-    await steth.mock__setTotalPooledEther(ether("1000000"));
+    await steth.mock__setTotalPooledEther(ether("1400000"));
 
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
@@ -160,7 +161,6 @@ describe("Dashboard", () => {
       expect(await dashboard.getRoleMember(await dashboard.DEFAULT_ADMIN_ROLE(), 0)).to.equal(vaultOwner);
       // dashboard allowance
       expect(await steth.allowance(dashboardAddress, wsteth.getAddress())).to.equal(MaxUint256);
-      expect(await steth.allowance(dashboardAddress, dashboardAddress)).to.equal(MaxUint256);
     });
   });
 
@@ -492,11 +492,15 @@ describe("Dashboard", () => {
     });
 
     context("when vault has debt", () => {
-      let amount: bigint;
+      const amountShares = ether("1");
+      let amountSteth: bigint;
+
+      before(async () => {
+        amountSteth = await steth.getPooledEthByShares(amountShares);
+      });
 
       beforeEach(async () => {
-        amount = ether("1");
-        await dashboard.mintShares(vaultOwner, amount);
+        await dashboard.mintShares(vaultOwner, amountShares);
       });
 
       it("reverts on disconnect attempt", async () => {
@@ -504,9 +508,9 @@ describe("Dashboard", () => {
       });
 
       it("succeeds with rebalance when providing sufficient ETH", async () => {
-        await expect(dashboard.voluntaryDisconnect({ value: amount }))
+        await expect(dashboard.voluntaryDisconnect({ value: amountSteth }))
           .to.emit(hub, "Mock__Rebalanced")
-          .withArgs(amount)
+          .withArgs(amountSteth)
           .to.emit(hub, "Mock__VaultDisconnected")
           .withArgs(vault);
       });
@@ -555,8 +559,9 @@ describe("Dashboard", () => {
     });
 
     it("reverts without approval", async () => {
-      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWith(
-        "ERC20: transfer amount exceeds allowance",
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWithCustomError(
+        dashboard,
+        "Erc20Error",
       );
     });
   });
@@ -623,6 +628,14 @@ describe("Dashboard", () => {
   });
 
   context("mintShares", () => {
+    const amountShares = ether("1");
+    const amountFunded = ether("2");
+    let amountSteth: bigint;
+
+    before(async () => {
+      amountSteth = await steth.getPooledEthByShares(amountShares);
+    });
+
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).mintShares(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
@@ -631,25 +644,60 @@ describe("Dashboard", () => {
     });
 
     it("mints shares backed by the vault through the vault hub", async () => {
-      const amount = ether("1");
-      await expect(dashboard.mintShares(vaultOwner, amount))
+      await expect(dashboard.mintShares(vaultOwner, amountShares))
         .to.emit(steth, "Transfer")
-        .withArgs(ZeroAddress, vaultOwner, amount)
+        .withArgs(ZeroAddress, vaultOwner, amountSteth)
         .and.to.emit(steth, "TransferShares")
-        .withArgs(ZeroAddress, vaultOwner, amount);
+        .withArgs(ZeroAddress, vaultOwner, amountShares);
 
-      expect(await steth.balanceOf(vaultOwner)).to.equal(amount);
+      expect(await steth.balanceOf(vaultOwner)).to.equal(amountSteth);
     });
 
     it("funds and mints shares backed by the vault", async () => {
-      const amount = ether("1");
-      await expect(dashboard.mintShares(vaultOwner, amount, { value: amount }))
+      await expect(dashboard.mintShares(vaultOwner, amountShares, { value: amountFunded }))
         .to.emit(vault, "Funded")
-        .withArgs(dashboard, amount)
+        .withArgs(dashboard, amountFunded)
         .to.emit(steth, "Transfer")
-        .withArgs(ZeroAddress, vaultOwner, amount)
+        .withArgs(ZeroAddress, vaultOwner, amountSteth)
         .and.to.emit(steth, "TransferShares")
-        .withArgs(ZeroAddress, vaultOwner, amount);
+        .withArgs(ZeroAddress, vaultOwner, amountShares);
+    });
+  });
+
+  context("mintSteth", () => {
+    const amountShares = ether("1");
+    const amountFunded = ether("2");
+    let amountSteth: bigint;
+
+    before(async () => {
+      amountSteth = await steth.getPooledEthByShares(amountShares);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).mintStETH(vaultOwner, amountSteth)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("mints steth backed by the vault through the vault hub", async () => {
+      await expect(dashboard.mintStETH(vaultOwner, amountSteth))
+        .to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amountSteth)
+        .and.to.emit(steth, "TransferShares")
+        .withArgs(ZeroAddress, vaultOwner, amountShares);
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(amountSteth);
+    });
+
+    it("funds and mints shares backed by the vault", async () => {
+      await expect(dashboard.mintStETH(vaultOwner, amountSteth, { value: amountFunded }))
+        .to.emit(vault, "Funded")
+        .withArgs(dashboard, amountFunded)
+        .and.to.emit(steth, "Transfer")
+        .withArgs(ZeroAddress, vaultOwner, amountSteth)
+        .and.to.emit(steth, "TransferShares")
+        .withArgs(ZeroAddress, vaultOwner, amountShares);
     });
   });
 
@@ -701,6 +749,41 @@ describe("Dashboard", () => {
       await expect(dashboard.burnShares(amountShares))
         .to.emit(steth, "Transfer") // transfer from owner to hub
         .withArgs(vaultOwner, hub, amountShares)
+        .and.to.emit(steth, "TransferShares") // transfer shares to hub
+        .withArgs(vaultOwner, hub, amountShares)
+        .and.to.emit(steth, "SharesBurnt") // burn
+        .withArgs(hub, amountShares, amountShares, amountShares);
+      expect(await steth.balanceOf(vaultOwner)).to.equal(0);
+    });
+  });
+
+  context("burnStETH", () => {
+    const amount = ether("1");
+    let amountShares: bigint;
+
+    beforeEach(async () => {
+      await dashboard.mintStETH(vaultOwner, amount);
+      amountShares = await steth.getPooledEthByShares(amount);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).burnSteth(amount)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("burns steth backed by the vault", async () => {
+      expect(await steth.balanceOf(vaultOwner)).to.equal(amount);
+
+      await expect(steth.connect(vaultOwner).approve(dashboard, amount))
+        .to.emit(steth, "Approval")
+        .withArgs(vaultOwner, dashboard, amount);
+      expect(await steth.allowance(vaultOwner, dashboard)).to.equal(amount);
+
+      await expect(dashboard.burnSteth(amount))
+        .to.emit(steth, "Transfer") // transfer from owner to hub
+        .withArgs(vaultOwner, hub, amount)
         .and.to.emit(steth, "TransferShares") // transfer shares to hub
         .withArgs(vaultOwner, hub, amountShares)
         .and.to.emit(steth, "SharesBurnt") // burn
@@ -812,7 +895,7 @@ describe("Dashboard", () => {
           r,
           s,
         }),
-      ).to.be.revertedWith("Permit failure");
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
     });
 
     it("burns shares with permit", async () => {
@@ -864,9 +947,9 @@ describe("Dashboard", () => {
         s,
       };
 
-      await expect(dashboard.connect(vaultOwner).burnSharesWithPermit(amountShares, permitData)).to.be.revertedWith(
-        "Permit failure",
-      );
+      await expect(
+        dashboard.connect(vaultOwner).burnSharesWithPermit(amountShares, permitData),
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
 
       await steth.connect(vaultOwner).approve(dashboard, amountShares);
 
@@ -948,6 +1031,202 @@ describe("Dashboard", () => {
     });
   });
 
+  context("burnStETHWithPermit", () => {
+    const amountShares = ether("1");
+    let amountSteth: bigint;
+
+    before(async () => {
+      // mint steth to the vault owner for the burn
+      await dashboard.mintShares(vaultOwner, amountShares);
+      amountSteth = await steth.getPooledEthByShares(amountShares);
+    });
+
+    beforeEach(async () => {
+      const eip712helper = await ethers.deployContract("EIP712StETH", [steth]);
+      await steth.initializeEIP712StETH(eip712helper);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      const permit = {
+        owner: vaultOwner.address,
+        spender: dashboardAddress,
+        value: amountSteth,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(stranger).burnStethWithPermit(amountSteth, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if the permit is invalid", async () => {
+      const permit = {
+        owner: vaultOwner.address,
+        spender: stranger.address, // invalid spender
+        value: amountSteth,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      await expect(
+        dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, {
+          value,
+          deadline,
+          v,
+          r,
+          s,
+        }),
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+    });
+
+    it("burns shares with permit", async () => {
+      const permit = {
+        owner: vaultOwner.address,
+        spender: dashboardAddress,
+        value: amountSteth,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      });
+
+      await expect(result).to.emit(steth, "Approval").withArgs(vaultOwner, dashboard, amountShares); // approve steth from vault owner to dashboard
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, amountShares); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountShares, amountShares, amountShares); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - amountShares);
+    });
+
+    it("succeeds if has allowance", async () => {
+      const permit = {
+        owner: vaultOwner.address,
+        spender: stranger.address, // invalid spender
+        value: amountShares,
+        nonce: (await steth.nonces(vaultOwner)) + 1n, // invalid nonce
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+      const permitData = {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      await expect(
+        dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, permitData),
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+
+      await steth.connect(vaultOwner).approve(dashboard, amountShares);
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, permitData);
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, amountShares); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountShares, amountShares, amountShares); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - amountShares);
+    });
+
+    it("succeeds with rebalanced shares - 1 share = 0.5 steth", async () => {
+      await steth.mock__setTotalShares(ether("1000000"));
+      await steth.mock__setTotalPooledEther(ether("500000"));
+      const sharesToBurn = ether("1");
+      const stethToBurn = sharesToBurn / 2n; // 1 share = 0.5 steth
+
+      const permit = {
+        owner: vaultOwner.address,
+        spender: dashboardAddress,
+        value: stethToBurn,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+      const permitData = {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(stethToBurn, permitData);
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, stethToBurn); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - stethToBurn);
+    });
+
+    it("succeeds with rebalanced shares - 1 share = 2 stETH", async () => {
+      await steth.mock__setTotalShares(ether("500000"));
+      await steth.mock__setTotalPooledEther(ether("1000000"));
+      const sharesToBurn = ether("1");
+      const stethToBurn = sharesToBurn * 2n; // 1 share = 2 steth
+
+      const permit = {
+        owner: vaultOwner.address,
+        spender: dashboardAddress,
+        value: stethToBurn,
+        nonce: await steth.nonces(vaultOwner),
+        deadline: BigInt(await time.latest()) + days(1n),
+      };
+
+      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const { deadline, value } = permit;
+      const { v, r, s } = signature;
+      const permitData = {
+        value,
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      const balanceBefore = await steth.balanceOf(vaultOwner);
+      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(stethToBurn, permitData);
+
+      await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, stethToBurn); // transfer steth to hub
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
+
+      expect(await steth.balanceOf(vaultOwner)).to.equal(balanceBefore - stethToBurn);
+    });
+  });
+
   context("burnWstETHWithPermit", () => {
     const amountShares = ether("1");
 
@@ -1005,7 +1284,7 @@ describe("Dashboard", () => {
           r,
           s,
         }),
-      ).to.be.revertedWith("Permit failure");
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
     });
 
     it("burns wstETH with permit", async () => {
@@ -1060,9 +1339,9 @@ describe("Dashboard", () => {
         s,
       };
 
-      await expect(dashboard.connect(vaultOwner).burnWstETHWithPermit(amountShares, permitData)).to.be.revertedWith(
-        "Permit failure",
-      );
+      await expect(
+        dashboard.connect(vaultOwner).burnWstETHWithPermit(amountShares, permitData),
+      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
 
       await wsteth.connect(vaultOwner).approve(dashboard, amountShares);
 
