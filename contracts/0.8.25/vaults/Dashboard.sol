@@ -41,8 +41,8 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;
-    /// @dev basis points base
-    uint256 private constant TOTAL_BASIS_POINTS = 100_00;
+    /// @notice Total basis points for fee calculations; equals to 100%.
+    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
     /// @notice Indicates whether the contract has been initialized
     bool public isInitialized;

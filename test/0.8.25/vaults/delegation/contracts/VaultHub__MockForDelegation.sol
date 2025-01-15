@@ -3,16 +3,38 @@
 
 pragma solidity 0.8.25;
 
-import { VaultHub } from "contracts/0.8.25/vaults/VaultHub.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {StETH__MockForDelegation} from "./StETH__MockForDelegation.sol";
 
 contract VaultHub__MockForDelegation {
-    mapping(address => VaultHub.VaultSocket) public vaultSockets;
+    StETH__MockForDelegation public immutable steth;
 
-    function mock__setVaultSocket(address vault, VaultHub.VaultSocket memory socket) external {
-        vaultSockets[vault] = socket;
+    constructor(StETH__MockForDelegation _steth) {
+        steth = _steth;
     }
 
-    function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
-        return vaultSockets[vault];
+    event Mock__VaultDisconnected(address vault);
+    event Mock__Rebalanced(uint256 amount);
+
+    function disconnectVault(address vault) external {
+        emit Mock__VaultDisconnected(vault);
+    }
+
+    // solhint-disable-next-line no-unused-vars
+    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
+        steth.mint(recipient, amount);
+    }
+
+    // solhint-disable-next-line no-unused-vars
+    function burnSharesBackedByVault(address vault, uint256 amount) external {
+        steth.burn(amount);
+    }
+
+    function voluntaryDisconnect(address _vault) external {
+        emit Mock__VaultDisconnected(_vault);
+    }
+
+    function rebalance() external payable {
+        emit Mock__Rebalanced(msg.value);
     }
 }

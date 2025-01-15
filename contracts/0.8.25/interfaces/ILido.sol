@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -27,8 +27,6 @@ interface ILido is IERC20, IERC20Permit {
     function mintExternalShares(address, uint256) external;
 
     function burnExternalShares(uint256) external;
-
-    function getMaxMintableExternalShares() external view returns (uint256);
 
     function getTotalShares() external view returns (uint256);
 
@@ -66,6 +64,4 @@ interface ILido is IERC20, IERC20Permit {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
-
-    function burnShares(address _account, uint256 _sharesAmount) external;
 }
