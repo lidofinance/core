@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
+import * as process from "node:process";
 
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
@@ -12,41 +11,15 @@ import "hardhat-tracer";
 import "hardhat-watcher";
 import "hardhat-ignore-warnings";
 import "hardhat-contract-sizer";
-import { globSync } from "glob";
-import { TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS } from "hardhat/builtin-tasks/task-names";
-import { HardhatUserConfig, subtask } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
 
 import { mochaRootHooks } from "test/hooks";
 
 import "./tasks";
 
+import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
+
 const RPC_URL: string = process.env.RPC_URL || "";
-const ACCOUNTS_PATH = "./accounts.json";
-
-const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
-
-const INTEGRATION_WITH_SCRATCH_DEPLOY = process.env.INTEGRATION_WITH_SCRATCH_DEPLOY || "off";
-
-/* Determines the forking configuration for Hardhat */
-function getHardhatForkingConfig() {
-  if (INTEGRATION_WITH_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL) {
-    return undefined;
-  }
-  return { url: HARDHAT_FORKING_URL };
-}
-
-function loadAccounts(networkName: string) {
-  // TODO: this plaintext accounts.json private keys management is a subject
-  //       of rework to a solution with the keys stored encrypted
-  if (!existsSync(ACCOUNTS_PATH)) {
-    return [];
-  }
-  const content = JSON.parse(readFileSync(ACCOUNTS_PATH, "utf-8"));
-  if (!content.eth) {
-    return [];
-  }
-  return content.eth[networkName] || [];
-}
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
@@ -184,17 +157,5 @@ const config: HardhatUserConfig = {
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };
-
-// a workaround for having an additional source directory for compilation
-// see, https://github.com/NomicFoundation/hardhat/issues/776#issuecomment-1713584386
-subtask(TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS).setAction(async (_, hre, runSuper) => {
-  const paths = await runSuper();
-
-  const otherDirectoryGlob = path.join(hre.config.paths.root, "test", "**", "*.sol");
-  // Don't need to compile test, helper and script files that are not part of the contracts for Hardhat.
-  const otherPaths = globSync(otherDirectoryGlob).filter((x) => !/\.([ths]\.sol)$/.test(x));
-
-  return [...paths, ...otherPaths];
-});
 
 export default config;
