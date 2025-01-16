@@ -37,17 +37,15 @@ contract Lido__MockForAccounting {
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
     {
         depositedValidators = depositedValidatorsValue;
-        beaconValidators = 0;
+        beaconValidators = reportClValidators;
         beaconBalance = 0;
     }
 
     function getTotalPooledEther() external view returns (uint256) {
-        // return 1 ether;
         return 3201000000000000000000;
     }
 
     function getTotalShares() external view returns (uint256) {
-        // return 1 ether;
         return 1000000000000000000;
     }
 

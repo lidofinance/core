@@ -80,7 +80,7 @@ describe("Accounting.sol:report", () => {
 
   context("handleOracleReport", () => {
     it("Update CL validators count if reported more", async () => {
-      const depositedValidators = 100n;
+      let depositedValidators = 100n;
       await lido.setMockedDepositedValidators(depositedValidators);
 
       // second report, 101 validators
@@ -89,6 +89,16 @@ describe("Accounting.sol:report", () => {
           clValidators: depositedValidators,
         }),
       );
+      // first report, 100 validators
+      await accounting.handleOracleReport(
+        report({
+          clValidators: depositedValidators,
+        }),
+      );
+      expect(await lido.reportClValidators()).to.equal(depositedValidators);
+
+      depositedValidators = 101n;
+      await lido.setMockedDepositedValidators(depositedValidators);
     });
 
     it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
