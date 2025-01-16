@@ -5,12 +5,13 @@
 pragma solidity 0.8.25;
 
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+
+import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -19,7 +20,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 /// It also allows to force rebalance of the vaults
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
-abstract contract VaultHub is AccessControlEnumerableUpgradeable {
+abstract contract VaultHub is PausableUntilWithRoles {
     /// @custom:storage-location erc7201:VaultHub
     struct VaultHubStorage {
         /// @notice vault sockets with vaults connected to the hub
@@ -217,7 +218,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `mintedShares` should be zero
-    function voluntaryDisconnect(address _vault) external {
+    function voluntaryDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _vaultAuth(_vault, "disconnect");
 
@@ -229,7 +230,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external {
+    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
@@ -268,7 +269,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
     /// @dev VaultHub must have all the stETH on its balance
-    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public {
+    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         _vaultAuth(_vault, "burn");
@@ -334,7 +335,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice rebalances the vault by writing off the amount of ether equal
     ///     to `msg.value` from the vault's minted stETH
     /// @dev msg.sender should be vault's contract
-    function rebalance() external payable {
+    function rebalance() external payable whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         VaultSocket storage socket = _connectedSocket(msg.sender);
