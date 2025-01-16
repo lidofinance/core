@@ -313,7 +313,7 @@ contract Dashboard is AccessControlEnumerable {
     ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
         _mintSharesTo(address(this), _amountOfWstETH);
 
-        uint256 stETHAmount = STETH.getPooledEthByShares(_amountOfWstETH);
+        uint256 stETHAmount = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
         uint256 wstETHAmount = WSTETH.wrap(stETHAmount);
         WSTETH.transfer(_recipient, wstETHAmount);
