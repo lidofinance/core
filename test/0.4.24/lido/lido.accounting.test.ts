@@ -11,6 +11,7 @@ import {
   Lido,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting,
   LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  LidoLocator,
   LidoLocator__factory,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
