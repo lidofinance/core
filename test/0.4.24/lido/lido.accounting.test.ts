@@ -7,21 +7,13 @@ import {
   ACL,
   Burner__MockForAccounting,
   Burner__MockForAccounting__factory,
-  IPostTokenRebaseReceiver,
   Lido,
-  LidoExecutionLayerRewardsVault__MockForLidoAccounting,
-  LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
   LidoLocator,
   LidoLocator__factory,
-  OracleReportSanityChecker__MockForAccounting,
-  OracleReportSanityChecker__MockForAccounting__factory,
-  PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalQueue__MockForAccounting,
   WithdrawalQueue__MockForAccounting__factory,
-  WithdrawalVault__MockForLidoAccounting,
-  WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 
 import { ether, getNextBlockTimestamp, impersonate } from "lib";
@@ -34,33 +26,17 @@ describe("Lido:accounting", () => {
 
   let lido: Lido;
   let acl: ACL;
-  let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   let locator: LidoLocator;
 
-  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
-  let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
-  let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
   let burner: Burner__MockForAccounting;
 
   beforeEach(async () => {
     [deployer, stranger] = await ethers.getSigners();
 
-    [
-      elRewardsVault,
-      stakingRouter,
-      withdrawalVault,
-      oracleReportSanityChecker,
-      postTokenRebaseReceiver,
-      withdrawalQueue,
-      burner,
-    ] = await Promise.all([
-      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
+    [stakingRouter, withdrawalQueue, burner] = await Promise.all([
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
-      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
-      new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
       new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
       new Burner__MockForAccounting__factory(deployer).deploy(),
     ]);
@@ -70,11 +46,7 @@ describe("Lido:accounting", () => {
       initialized: true,
       locatorConfig: {
         withdrawalQueue,
-        elRewardsVault,
-        withdrawalVault,
         stakingRouter,
-        oracleReportSanityChecker,
-        postTokenRebaseReceiver,
         burner,
       },
     }));
