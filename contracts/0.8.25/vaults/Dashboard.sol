@@ -409,6 +409,20 @@ contract Dashboard is AccessControlEnumerable {
         _rebalanceVault(_ether);
     }
 
+    /**
+     * @notice Pauses beacon chain deposits on the staking vault.
+     */
+    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Resumes beacon chain deposits on the staking vault.
+     */
+    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        stakingVault.resumeBeaconChainDeposits();
+    }
+
     // ==================== Internal Functions ====================
 
     /**
@@ -512,6 +526,20 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _rebalanceVault(uint256 _ether) internal {
         stakingVault.rebalance(_ether);
+    }
+
+    /**
+     * @dev Pauses beacon chain deposits on the staking vault.
+     */
+    function _pauseBeaconChainDeposits() internal {
+        stakingVault.pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @dev Resumes beacon chain deposits on the staking vault.
+     */
+    function _resumeBeaconChainDeposits() internal {
+        stakingVault.resumeBeaconChainDeposits();
     }
 
     // ==================== Events ====================

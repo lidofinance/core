@@ -345,15 +345,15 @@ contract Delegation is Dashboard {
     /**
      * @notice Pauses deposits to beacon chain from the StakingVault.
      */
-    function pauseBeaconChainDeposits() external onlyRole(CURATOR_ROLE) {
-        IStakingVault(stakingVault).pauseBeaconChainDeposits();
+    function pauseBeaconChainDeposits() external override onlyRole(CURATOR_ROLE) {
+        _pauseBeaconChainDeposits();
     }
 
     /**
      * @notice Resumes deposits to beacon chain from the StakingVault.
      */
-    function resumeBeaconChainDeposits() external onlyRole(CURATOR_ROLE) {
-        IStakingVault(stakingVault).resumeBeaconChainDeposits();
+    function resumeBeaconChainDeposits() external override onlyRole(CURATOR_ROLE) {
+        _resumeBeaconChainDeposits();
     }
 
     /**
