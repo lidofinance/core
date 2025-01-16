@@ -1617,6 +1617,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@openzeppelin/contracts-v5.2.0@npm:@openzeppelin/contracts@5.2.0":
+  version: 5.2.0
+  resolution: "@openzeppelin/contracts@npm:5.2.0"
+  checksum: 10c0/6e2d8c6daaeb8e111d49a82c30997a6c5d4e512338b55500db7fd4340f29c1cbf35f9dcfa0dbc672e417bc84e99f5441a105cb585cd4680ad70cbcf9a24094fc
+  languageName: node
+  linkType: hard
+
 "@openzeppelin/contracts@npm:3.4.0":
   version: 3.4.0
   resolution: "@openzeppelin/contracts@npm:3.4.0"
@@ -8064,6 +8071,7 @@ __metadata:
     "@openzeppelin/contracts": "npm:3.4.0"
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1"
     "@openzeppelin/contracts-v5.0.2": "npm:@openzeppelin/contracts@5.0.2"
+    "@openzeppelin/contracts-v5.2.0": "npm:@openzeppelin/contracts@5.2.0"
     "@typechain/ethers-v6": "npm:0.5.1"
     "@typechain/hardhat": "npm:9.1.0"
     "@types/chai": "npm:4.3.20"
