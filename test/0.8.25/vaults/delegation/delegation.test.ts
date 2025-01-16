@@ -97,7 +97,6 @@ describe("Delegation.sol", () => {
 
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
-    expect(await vault.beacon()).to.equal(beacon);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);

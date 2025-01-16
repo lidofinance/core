@@ -140,7 +140,7 @@ describe("Dashboard.sol", () => {
     it("post-initialization state is correct", async () => {
       expect(await vault.owner()).to.equal(dashboard);
       expect(await vault.operator()).to.equal(operator);
-      expect(await dashboard.isInitialized()).to.equal(true);
+      expect(await dashboard.initialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);

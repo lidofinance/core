@@ -9,9 +9,6 @@ import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 /**
  * @title StakingVault
@@ -52,7 +49,7 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault is IStakingVault, BeaconChainDepositLogistics, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -131,14 +128,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      */
     function version() external pure returns (uint64) {
         return _VERSION;
-    }
-
-    /**
-     * @notice Returns the beacon proxy address that controls this contract's implementation
-     * @return address The beacon proxy address
-     */
-    function beacon() public view returns (address) {
-        return ERC1967Utils.getBeacon();
     }
 
     // * * * * * * * * * * * * * * * * * * * *  //

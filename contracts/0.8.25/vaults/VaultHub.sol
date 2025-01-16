@@ -10,7 +10,6 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/acces
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -29,9 +28,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         /// @dev if vault is not connected to the hub, its index is zero
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
-        mapping(address => bool) vaultBeacons;
-        /// @notice allowed vault implementation addresses
-        mapping(address => bool) vaultImpl;
+        mapping(bytes32 => bool) vaultProxyCodehash;
     }
 
     struct VaultSocket {
@@ -91,26 +88,15 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice added beacon address to allowed list
-    /// @param beacon beacon address
-    function addBeacon(address beacon) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (beacon == address(0)) revert ZeroArgument("beacon");
+    /// @notice added vault proxy codehash to allowed list
+    /// @param codehash vault proxy codehash
+    function addVaultProxyCodehash(bytes32 codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        if (codehash == bytes32(0)) revert ZeroArgument("codehash");
 
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultBeacons[beacon]) revert AlreadyExists(beacon);
-        $.vaultBeacons[beacon] = true;
-        emit VaultBeaconAdded(beacon);
-    }
-
-    /// @notice added vault implementation address to allowed list
-    /// @param impl vault implementation address
-    function addVaultImpl(address impl) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (impl == address(0)) revert ZeroArgument("impl");
-
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultImpl[impl]) revert AlreadyExists(impl);
-        $.vaultImpl[impl] = true;
-        emit VaultImplAdded(impl);
+        if ($.vaultProxyCodehash[codehash]) revert AlreadyExists(codehash);
+        $.vaultProxyCodehash[codehash] = true;
+        emit VaultProxyCodehashAdded(codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -163,11 +149,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
-        address vaultBeacon = IBeaconProxy(address (_vault)).beacon();
-        if (!$.vaultBeacons[vaultBeacon]) revert BeaconNotAllowed(vaultBeacon);
-
-        address impl = IBeacon(vaultBeacon).implementation();
-        if (!$.vaultImpl[impl]) revert ImplNotAllowed(impl);
+        bytes32 vaultProxyCodehash = address(_vault).codehash;
+        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
         VaultSocket memory vr = VaultSocket(
             _vault,
@@ -524,8 +507,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
-    event VaultImplAdded(address indexed impl);
-    event VaultBeaconAdded(address indexed beacon);
+    event VaultProxyCodehashAdded(bytes32 indexed codehash);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -543,8 +525,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
-    error AlreadyExists(address addr);
-    error ImplNotAllowed(address impl);
+    error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
-    error BeaconNotAllowed(address beacon);
+    error VaultProxyNotAllowed(address beacon);
 }

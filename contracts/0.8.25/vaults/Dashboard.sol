@@ -44,9 +44,6 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice Indicates whether the contract has been initialized
-    bool public isInitialized;
-
     /// @notice The stETH token contract
     IStETH public immutable STETH;
 
@@ -55,6 +52,9 @@ contract Dashboard is AccessControlEnumerable {
 
     /// @notice The wrapped ether token contract
     IWeth public immutable WETH;
+
+    /// @notice Indicates whether the contract has been initialized
+    bool public initialized;
 
     /// @notice The underlying `StakingVault` contract
     IStakingVault public stakingVault;
@@ -101,10 +101,10 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _initialize(address _stakingVault) internal {
         if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
-        if (isInitialized) revert AlreadyInitialized();
+        if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
-        isInitialized = true;
+        initialized = true;
         stakingVault = IStakingVault(_stakingVault);
         vaultHub = VaultHub(stakingVault.vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);

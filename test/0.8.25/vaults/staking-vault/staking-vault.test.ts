@@ -26,7 +26,6 @@ describe("StakingVault.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let beaconSigner: HardhatEthersSigner;
   let elRewardsSender: HardhatEthersSigner;
   let vaultHubSigner: HardhatEthersSigner;
 
@@ -34,21 +33,18 @@ describe("StakingVault.sol", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
-  let vaultFactory: VaultFactory__MockForStakingVault;
   let ethRejector: EthRejector;
 
   let vaultOwnerAddress: string;
   let stakingVaultAddress: string;
   let vaultHubAddress: string;
-  let vaultFactoryAddress: string;
   let depositContractAddress: string;
-  let beaconAddress: string;
   let ethRejectorAddress: string;
   let originalState: string;
 
   before(async () => {
     [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
-    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract] =
+    [stakingVault, vaultHub /* vaultFactory */, , stakingVaultImplementation, depositContract] =
       await deployStakingVaultBehindBeaconProxy();
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -56,11 +52,8 @@ describe("StakingVault.sol", () => {
     stakingVaultAddress = await stakingVault.getAddress();
     vaultHubAddress = await vaultHub.getAddress();
     depositContractAddress = await depositContract.getAddress();
-    beaconAddress = await stakingVaultImplementation.beacon();
-    vaultFactoryAddress = await vaultFactory.getAddress();
     ethRejectorAddress = await ethRejector.getAddress();
 
-    beaconSigner = await impersonate(beaconAddress, ether("10"));
     vaultHubSigner = await impersonate(vaultHubAddress, ether("10"));
   });
 
@@ -101,7 +94,7 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(beaconSigner).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
   });
@@ -112,7 +105,6 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
-      expect(await stakingVault.beacon()).to.equal(vaultFactoryAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
       expect(await stakingVault.operator()).to.equal(operator);
 
