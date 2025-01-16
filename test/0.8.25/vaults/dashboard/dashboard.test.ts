@@ -725,6 +725,24 @@ describe("Dashboard", () => {
 
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore + amountWsteth);
     });
+
+    it("reverts on zero mint", async () => {
+      await expect(dashboard.mintWstETH(vaultOwner, 0n)).to.be.revertedWith("wstETH: can't wrap zero stETH");
+    });
+
+    for (let weiWsteth = 1n; weiWsteth <= 10n; weiWsteth++) {
+      it(`mints ${weiWsteth} wei wsteth`, async () => {
+        const weiSteth = await steth.getPooledEthBySharesRoundUp(weiWsteth);
+        const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+
+        const result = await dashboard.mintWstETH(vaultOwner, weiWsteth);
+
+        await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, wsteth, weiSteth);
+        await expect(result).to.emit(wsteth, "Transfer").withArgs(ZeroAddress, dashboard, weiWsteth);
+
+        expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore + weiWsteth);
+      });
+    }
   });
 
   context("burnShares", () => {
