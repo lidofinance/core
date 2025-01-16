@@ -328,7 +328,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
         if (msg.sender != _getStorage().nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if (_getStorage().beaconChainDepositsPaused) revert BeaconChainDepositsIsPaused();
+        if (_getStorage().beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
@@ -406,10 +406,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @dev Can only be called by the vault owner
      */
     function pauseBeaconChainDeposits() external onlyOwner {
-        bool paused = _getStorage().beaconChainDepositsPaused;
-        if (paused) {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.beaconChainDepositsPaused) {
             revert BeaconChainDepositsResumeExpected();
         }
+
+        $.beaconChainDepositsPaused = true;
 
         emit BeaconChainDepositsPaused();
     }
@@ -419,10 +421,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @dev Can only be called by the vault owner
      */
     function resumeBeaconChainDeposits() external onlyOwner {
-        bool paused = _getStorage().beaconChainDepositsPaused;
-        if (!paused) {
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.beaconChainDepositsPaused) {
             revert BeaconChainDepositsPauseExpected();
         }
+
+        $.beaconChainDepositsPaused = false;
 
         emit BeaconChainDepositsResumed();
     }
@@ -573,5 +577,5 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     /**
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
-    error BeaconChainDepositsIsPaused();
+    error BeaconChainDepositsArePaused();
 }

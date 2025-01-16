@@ -302,9 +302,11 @@ describe("StakingVault", () => {
     });
 
     it("reverts if the beacon deposits are already paused", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
+
       await expect(stakingVault.connect(vaultOwner).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
         stakingVault,
-        "BeaconChainDepositsPauseExpected",
+        "BeaconChainDepositsResumeExpected",
       );
     });
 
@@ -327,7 +329,7 @@ describe("StakingVault", () => {
     it("reverts if the beacon deposits are already resumed", async () => {
       await expect(stakingVault.connect(vaultOwner).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
         stakingVault,
-        "BeaconChainDepositsResumeExpected",
+        "BeaconChainDepositsPauseExpected",
       );
     });
 
@@ -367,7 +369,7 @@ describe("StakingVault", () => {
       await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
       await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
         stakingVault,
-        "BeaconChainDepositsNotAllowed",
+        "BeaconChainDepositsArePaused",
       );
     });
 

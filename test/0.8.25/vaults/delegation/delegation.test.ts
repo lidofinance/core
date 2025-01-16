@@ -666,9 +666,11 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the beacon deposits are already paused", async () => {
+      await delegation.connect(curator).pauseBeaconChainDeposits();
+
       await expect(delegation.connect(curator).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
-        delegation,
-        "BeaconChainDepositsPauseExpected",
+        vault,
+        "BeaconChainDepositsResumeExpected",
       );
     });
 
@@ -688,12 +690,14 @@ describe("Delegation.sol", () => {
 
     it("reverts if the beacon deposits are already resumed", async () => {
       await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
-        delegation,
-        "BeaconChainDepositsResumeExpected",
+        vault,
+        "BeaconChainDepositsPauseExpected",
       );
     });
 
     it("resumes the beacon deposits", async () => {
+      await delegation.connect(curator).pauseBeaconChainDeposits();
+
       await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.emit(
         vault,
         "BeaconChainDepositsResumed",
