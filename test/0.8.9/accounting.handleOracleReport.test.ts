@@ -94,7 +94,11 @@ describe("Accounting.sol:report", () => {
     it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
       await oracleReportSanityChecker.mock__checkAccountingOracleReportReverts(true);
 
-      await expect(accounting.handleOracleReport(report())).to.be.reverted;
+      await expect(accounting.handleOracleReport(report())).to.be.revertedWithCustomError(
+        oracleReportSanityChecker,
+        "CheckAccountingOracleReportReverts",
+      );
+      expect(await lido.reportClValidators()).to.equal(depositedValidators);
     });
 
     it("Reverts if the `checkWithdrawalQueueOracleReport` sanity check fails", async () => {
@@ -105,7 +109,7 @@ describe("Accounting.sol:report", () => {
             withdrawalFinalizationBatches: [1n],
           }),
         ),
-      ).to.be.reverted;
+      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "CheckWithdrawalQueueOracleReportReverts");
     });
 
     it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but no withdrawal batches were reported", async () => {
@@ -287,11 +291,6 @@ describe("Accounting.sol:report", () => {
 
       const expectedModuleRewardInShares = expectedSharesToMint / (totalFee / stakingModule.fee);
       const expectedTreasuryCutInShares = expectedSharesToMint - expectedModuleRewardInShares;
-
-      console.log("expectedModuleRewardInShares", expectedModuleRewardInShares);
-      console.log("expectedTreasuryCutInShares", expectedTreasuryCutInShares);
-      console.log("stakingModule.address", stakingModule.address);
-      console.log("await locator.treasury()", await locator.treasury());
 
       await expect(
         accounting.handleOracleReport(
