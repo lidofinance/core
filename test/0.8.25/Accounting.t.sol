@@ -12,10 +12,6 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
 
-interface ILido {
-    function getTotalShares() external view returns (uint256);
-}
-
 interface IAccounting {
     function initialize(address _admin) external;
 
@@ -24,15 +20,20 @@ interface IAccounting {
     function simulateOracleReport(ReportValues memory _report, uint256 _withdrawalShareRate) external;
 }
 
+interface ILido {
+    function getTotalShares() external view returns (uint256);
+}
+
 contract AccountingHandler is CommonBase, StdCheats, StdUtils {
     IAccounting private accounting;
     ILido private lido;
+
     ReportValues[] public reports;
     address private accountingOracle;
 
-    constructor(address _lido, address _accounting, address _accountingOracle, ReportValues memory _refReport) {
-        lido = ILido(_lido);
+    constructor(address _accounting, address _lido, address _accountingOracle, ReportValues memory _refReport) {
         accounting = IAccounting(_accounting);
+        lido = ILido(_lido);
         reports.push(_refReport);
         accountingOracle = _accountingOracle;
     }
@@ -45,8 +46,6 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         uint256 _clValidators,
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
-        // TODO When adding lido.accounting contract - to use this limitation
-        // sharesRequestedToBurn - [0, lido.getTotalShares()]
         uint256 _sharesRequestedToBurn
     ) external {
         ReportValues memory lastReport = reports[reports.length - 1];
@@ -57,10 +56,9 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         _clValidators = bound(_clValidators, lastReport.clValidators, type(uint32).max);
         _withdrawalVaultBalance = bound(_withdrawalVaultBalance, 0, type(uint32).max);
         _elRewardsVaultBalance = bound(_elRewardsVaultBalance, 0, type(uint32).max);
+        _sharesRequestedToBurn = bound(_sharesRequestedToBurn, 0, lido.getTotalShares());
         // _clValidators = Math.floor(_clValidators);
         uint256 clBalance = _clValidators * 32 ether;
-
-        _sharesRequestedToBurn = bound(_sharesRequestedToBurn, 0, lido.getTotalShares());
 
         ReportValues memory currentReport = ReportValues({
             timestamp: _timestamp,
@@ -112,9 +110,16 @@ contract AccountingTest is BaseProtocolTest {
             "Accounting.sol:Accounting",
             abi.encode([address(lidoLocator), lidoLocator.lido()])
         );
+
+        deployCodeTo(
+            "OssifiableProxy.sol:OssifiableProxy",
+            abi.encode(accountingImpl, rootAccount, new bytes(0)),
+            lidoLocator.accounting()
+        );
+
         accountingHandler = new AccountingHandler(
-            address(lidoContract),
-            accountingImpl,
+            lidoLocator.accounting(),
+            lidoLocator.lido(),
             lidoLocator.accountingOracle(),
             refReport
         );
@@ -130,11 +135,7 @@ contract AccountingTest is BaseProtocolTest {
             lidoLocator.accountingOracle()
         );
 
-        deployCodeTo(
-            "OssifiableProxy.sol:OssifiableProxy",
-            abi.encode(accountingHandler, rootAccount, new bytes(0)),
-            lidoLocator.accounting()
-        );
+        IAccounting(lidoLocator.accounting()).initialize(rootAccount);
 
         // Add burner contract to the protocol
         deployCodeTo(
@@ -170,6 +171,6 @@ contract AccountingTest is BaseProtocolTest {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_fuzzTotalShares() public {
-        assertEq(accountingHandler.length(), 1); // TODO: add real invariant, this is just a placeholder
+        assertGt(accountingHandler.length(), 0); // TODO: add real invariant, this is just a placeholder
     }
 }
