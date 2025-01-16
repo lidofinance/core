@@ -12,6 +12,10 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
 
+interface ILido {
+    function getTotalShares() external view returns (uint256);
+}
+
 interface IAccounting {
     function initialize(address _admin) external;
 
@@ -22,10 +26,12 @@ interface IAccounting {
 
 contract AccountingHandler is CommonBase, StdCheats, StdUtils {
     IAccounting private accounting;
+    ILido private lido;
     ReportValues[] public reports;
     address private accountingOracle;
 
-    constructor(address _accounting, address _accountingOracle, ReportValues memory _refReport) {
+    constructor(address _lido, address _accounting, address _accountingOracle, ReportValues memory _refReport) {
+        lido = ILido(_lido);
         accounting = IAccounting(_accounting);
         reports.push(_refReport);
         accountingOracle = _accountingOracle;
@@ -53,6 +59,8 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         _elRewardsVaultBalance = bound(_elRewardsVaultBalance, 0, type(uint32).max);
         // _clValidators = Math.floor(_clValidators);
         uint256 clBalance = _clValidators * 32 ether;
+
+        _sharesRequestedToBurn = bound(_sharesRequestedToBurn, 0, lido.getTotalShares());
 
         ReportValues memory currentReport = ReportValues({
             timestamp: _timestamp,
@@ -104,7 +112,12 @@ contract AccountingTest is BaseProtocolTest {
             "Accounting.sol:Accounting",
             abi.encode([address(lidoLocator), lidoLocator.lido()])
         );
-        accountingHandler = new AccountingHandler(accountingImpl, lidoLocator.accountingOracle(), refReport);
+        accountingHandler = new AccountingHandler(
+            address(lidoContract),
+            accountingImpl,
+            lidoLocator.accountingOracle(),
+            refReport
+        );
 
         deployCodeTo(
             "AccountingOracle.sol:AccountingOracle",
