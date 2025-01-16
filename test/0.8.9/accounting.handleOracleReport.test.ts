@@ -83,12 +83,6 @@ describe("Accounting.sol:report", () => {
       let depositedValidators = 100n;
       await lido.setMockedDepositedValidators(depositedValidators);
 
-      // second report, 101 validators
-      await accounting.handleOracleReport(
-        report({
-          clValidators: depositedValidators,
-        }),
-      );
       // first report, 100 validators
       await accounting.handleOracleReport(
         report({
@@ -99,6 +93,14 @@ describe("Accounting.sol:report", () => {
 
       depositedValidators = 101n;
       await lido.setMockedDepositedValidators(depositedValidators);
+
+      // second report, 101 validators
+      await accounting.handleOracleReport(
+        report({
+          clValidators: depositedValidators,
+        }),
+      );
+      expect(await lido.reportClValidators()).to.equal(depositedValidators);
     });
 
     it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
@@ -108,7 +110,6 @@ describe("Accounting.sol:report", () => {
         oracleReportSanityChecker,
         "CheckAccountingOracleReportReverts",
       );
-      expect(await lido.reportClValidators()).to.equal(depositedValidators);
     });
 
     it("Reverts if the `checkWithdrawalQueueOracleReport` sanity check fails", async () => {
