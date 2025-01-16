@@ -16,7 +16,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
         IStakingVault.Report report;
         uint128 locked;
         int128 inOutDelta;
-        address operator;
+        address nodeOperator;
     }
 
     uint64 private constant _version = 2;
@@ -38,18 +38,18 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
         _disableInitializers();
     }
 
-    /// @notice Initialize the contract storage explicitly. Only new contracts can be initialized here.
-    /// @param _owner owner address
-    /// @param _operator address of the account that can make deposits to the beacon chain
-    /// @param _params the calldata for initialize contract after upgrades
-    function initialize(address _owner, address _operator, bytes calldata _params) external reinitializer(_version) {
+    function initialize(
+        address _owner,
+        address _nodeOperator,
+        bytes calldata _params
+    ) external reinitializer(_version) {
         if (owner() != address(0)) {
             revert VaultAlreadyInitialized();
         }
 
         __StakingVault_init_v2();
         __Ownable_init(_owner);
-        _getVaultStorage().operator = _operator;
+        _getVaultStorage().nodeOperator = _nodeOperator;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {
@@ -92,8 +92,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
     function isBalanced() external view returns (bool) {
         return true;
     }
-    function operator() external view returns (address) {
-        return _getVaultStorage().operator;
+    function nodeOperator() external view returns (address) {
+        return _getVaultStorage().nodeOperator;
     }
     function rebalance(uint256 _ether) external {}
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}

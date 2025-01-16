@@ -106,8 +106,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
-      expect(await stakingVault.operator()).to.equal(operator);
-
+      expect(await stakingVault.nodeOperator()).to.equal(operator);
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
