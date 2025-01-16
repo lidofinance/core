@@ -21,9 +21,10 @@ interface IStakingVault {
     }
 
     function initialize(address _owner, address _operator, bytes calldata _params) external;
+    function version() external pure returns(uint64);
     function getInitializedVersion() external view returns (uint64);
     function vaultHub() external view returns (address);
-    function operator() external view returns (address);
+    function nodeOperator() external view returns (address);
     function locked() external view returns (uint256);
     function valuation() external view returns (uint256);
     function isBalanced() external view returns (bool);

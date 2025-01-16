@@ -9,9 +9,6 @@ import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 /**
  * @title StakingVault
@@ -52,20 +49,20 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault is IStakingVault, BeaconChainDepositLogistics, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
      * @custom:report Latest report containing valuation and inOutDelta
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
-     * @custom:operator Address of the node operator
+     * @custom:nodeOperator Address of the node operator
      */
     struct ERC7201Storage {
         Report report;
         uint128 locked;
         int128 inOutDelta;
-        address operator;
+        address nodeOperator;
     }
 
     /**
@@ -107,14 +104,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     }
 
     /**
-     * @notice Initializes `StakingVault` with an owner, operator, and optional parameters
+     * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
-     * @param _operator Address of the node operator
+     * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _operator, bytes calldata /* _params */ ) external initializer {
+    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */ ) external initializer {
         __Ownable_init(_owner);
-        _getStorage().operator = _operator;
+        _getStorage().nodeOperator = _nodeOperator;
     }
 
     /**
@@ -133,14 +130,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         return _VERSION;
     }
 
-    /**
-     * @notice Returns the beacon proxy address that controls this contract's implementation
-     * @return address The beacon proxy address
-     */
-    function beacon() public view returns (address) {
-        return ERC1967Utils.getBeacon();
-    }
-
     // * * * * * * * * * * * * * * * * * * * *  //
     // * * * STAKING VAULT BUSINESS LOGIC * * * //
     // * * * * * * * * * * * * * * * * * * * *  //
@@ -154,10 +143,9 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     }
 
     /**
-     * @notice Returns the valuation of the vault
-     * @return uint256 total valuation in ETH
-     * @dev Calculated as:
-     *  latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
+     * @notice Returns the total valuation of `StakingVault`
+     * @return Total valuation in ether
+     * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
     function valuation() public view returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
@@ -235,8 +223,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      *         Node operator address is set in the initialization and can never be changed.
      * @return Address of the node operator
      */
-    function operator() external view returns (address) {
-        return _getStorage().operator;
+    function nodeOperator() external view returns (address) {
+        return _getStorage().nodeOperator;
     }
 
     /**
@@ -309,7 +297,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     ) external {
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
-        if (msg.sender != _getStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != _getStorage().nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
@@ -318,7 +306,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     /**
      * @notice Requests validator exit from the beacon chain
      * @param _pubkeys Concatenated validator public keys
-     * @dev Signals the operator to eject the specified validators from the beacon chain
+     * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
     function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
         emit ValidatorsExitRequest(msg.sender, _pubkeys);
@@ -415,7 +403,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
 
     /**
      * @notice Emitted when a validator exit request is made
-     * @dev Signals `operator` to exit the validator
+     * @dev Signals `nodeOperator` to exit the validator
      * @param sender Address that requested the validator exit
      * @param pubkey Public key of the validator requested to exit
      */

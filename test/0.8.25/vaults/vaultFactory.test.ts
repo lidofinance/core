@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { keccak256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting,
+  BeaconProxy,
   Delegation,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
@@ -49,6 +50,9 @@ describe("VaultFactory.sol", () => {
 
   let locator: LidoLocator;
 
+  let vaultBeaconProxy: BeaconProxy;
+  let vaultBeaconProxyCode: string;
+
   let originalState: string;
 
   before(async () => {
@@ -77,6 +81,9 @@ describe("VaultFactory.sol", () => {
 
     //beacon
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
+
+    vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beacon, "0x"]);
+    vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
@@ -164,7 +171,6 @@ describe("VaultFactory.sol", () => {
         .withArgs(await admin.getAddress(), await delegation_.getAddress());
 
       expect(await delegation_.getAddress()).to.eq(await vault.owner());
-      expect(await vault.beacon()).to.eq(await beacon.getAddress());
     });
 
     it("check `version()`", async () => {
@@ -212,7 +218,7 @@ describe("VaultFactory.sol", () => {
       expect(await delegator1.getAddress()).to.eq(await vault1.owner());
       expect(await delegator2.getAddress()).to.eq(await vault2.owner());
 
-      //attempting to add a vault without adding a beacon to the allowed list
+      //attempting to add a vault without adding a proxy bytecode to the allowed list
       await expect(
         accounting
           .connect(admin)
@@ -223,26 +229,12 @@ describe("VaultFactory.sol", () => {
             config1.thresholdReserveRatioBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(accounting, "BeaconNotAllowed");
+      ).to.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
 
-      //add beacon to whitelist
-      await accounting.connect(admin).addBeacon(beacon);
+      const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
-      //attempting to add a vault without adding a implementation to the allowed list
-      await expect(
-        accounting
-          .connect(admin)
-          .connectVault(
-            await vault1.getAddress(),
-            config1.shareLimit,
-            config1.minReserveRatioBP,
-            config1.thresholdReserveRatioBP,
-            config1.treasuryFeeBP,
-          ),
-      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
-
-      //add impl to whitelist
-      await accounting.connect(admin).addVaultImpl(implOld);
+      //add proxy code hash to whitelist
+      await accounting.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
 
       //connect vault 1 to VaultHub
       await accounting
@@ -273,7 +265,7 @@ describe("VaultFactory.sol", () => {
       //create new vault with new implementation
       const { vault: vault3 } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
 
-      //we upgrade implementation and do not add it to whitelist
+      //we upgrade implementation - we do not check implementation, just proxy bytecode
       await expect(
         accounting
           .connect(admin)
@@ -284,7 +276,7 @@ describe("VaultFactory.sol", () => {
             config2.thresholdReserveRatioBP,
             config2.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(accounting, "ImplNotAllowed");
+      ).to.not.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);

@@ -43,10 +43,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   let ethHolder: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
+  let funderWithdrawer: HardhatEthersSigner;
+  let minterBurner: HardhatEthersSigner;
 
   let depositContract: string;
 
@@ -70,7 +70,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, operator, curator, staker, tokenMaster] = await ethers.getSigners();
+    [ethHolder, owner, nodeOperator, curator, funderWithdrawer, minterBurner] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -161,13 +161,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
         defaultAdmin: owner,
-        operatorFee: VAULT_OWNER_FEE,
-        curatorFee: VAULT_NODE_OPERATOR_FEE,
         curator: curator,
-        operator: operator,
-        staker: staker,
-        tokenMaster: tokenMaster,
-        claimOperatorDueRole: operator,
+        nodeOperatorManager: nodeOperator,
+        funderWithdrawer: funderWithdrawer,
+        minterBurner: minterBurner,
+        nodeOperatorFeeClaimer: nodeOperator,
+        nodeOperatorFeeBP: VAULT_OWNER_FEE,
+        curatorFeeBP: VAULT_NODE_OPERATOR_FEE,
       },
       "0x",
     );
@@ -186,28 +186,28 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await delegation.getRoleMemberCount(await delegation.CURATOR_ROLE())).to.be.equal(1n);
     expect(await delegation.hasRole(await delegation.CURATOR_ROLE(), curator)).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.OPERATOR_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
+    expect(await delegation.getRoleMemberCount(await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.NODE_OPERATOR_MANAGER_ROLE(), nodeOperator)).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.CLAIM_OPERATOR_DUE_ROLE(), operator)).to.be.true;
-    expect(await delegation.getRoleAdmin(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(
-      await delegation.OPERATOR_ROLE(),
+    expect(await delegation.getRoleMemberCount(await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), nodeOperator)).to.be.true;
+    expect(await delegation.getRoleAdmin(await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.be.equal(
+      await delegation.NODE_OPERATOR_MANAGER_ROLE(),
     );
 
-    expect(await delegation.getRoleMemberCount(await delegation.TOKEN_MASTER_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
+    expect(await delegation.getRoleMemberCount(await delegation.MINT_BURN_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.MINT_BURN_ROLE(), minterBurner)).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.STAKER_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
+    expect(await delegation.getRoleMemberCount(await delegation.FUND_WITHDRAW_ROLE())).to.be.equal(1n);
+    expect(await delegation.hasRole(await delegation.FUND_WITHDRAW_ROLE(), funderWithdrawer)).to.be.true;
   });
 
   it("Should allow Owner to assign Staker and Token Master roles", async () => {
-    await delegation.connect(owner).grantRole(await delegation.STAKER_ROLE(), staker);
-    await delegation.connect(owner).grantRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster);
+    await delegation.connect(owner).grantRole(await delegation.FUND_WITHDRAW_ROLE(), funderWithdrawer);
+    await delegation.connect(owner).grantRole(await delegation.MINT_BURN_ROLE(), minterBurner);
 
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
+    expect(await delegation.hasRole(await delegation.FUND_WITHDRAW_ROLE(), funderWithdrawer)).to.be.true;
+    expect(await delegation.hasRole(await delegation.MINT_BURN_ROLE(), minterBurner)).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -232,7 +232,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Staker to fund vault via delegation contract", async () => {
-    const depositTx = await delegation.connect(staker).fund({ value: VAULT_DEPOSIT });
+    const depositTx = await delegation.connect(funderWithdrawer).fund({ value: VAULT_DEPOSIT });
     await trace("delegation.fund", depositTx);
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
@@ -246,7 +246,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault.connect(operator).depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const topUpTx = await stakingVault
+      .connect(nodeOperator)
+      .depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
 
     await trace("stakingVault.depositToBeaconChain", topUpTx);
 
@@ -273,12 +275,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     // Validate minting with the cap
-    const mintOverLimitTx = delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMaxMintingShares + 1n);
+    const mintOverLimitTx = delegation.connect(minterBurner).mint(minterBurner, stakingVaultMaxMintingShares + 1n);
     await expect(mintOverLimitTx)
       .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
       .withArgs(stakingVault, stakingVault.valuation());
 
-    const mintTx = await delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMaxMintingShares);
+    const mintTx = await delegation.connect(minterBurner).mint(minterBurner, stakingVaultMaxMintingShares);
     const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
@@ -325,25 +327,25 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
 
-    expect(await delegation.curatorDue()).to.be.gt(0n);
-    expect(await delegation.operatorDue()).to.be.gt(0n);
+    expect(await delegation.curatorUnclaimedFee()).to.be.gt(0n);
+    expect(await delegation.nodeOperatorUnclaimedFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await delegation.operatorDue();
+    const performanceFee = await delegation.nodeOperatorUnclaimedFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
-    const operatorBalanceBefore = await ethers.provider.getBalance(operator);
+    const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
-    const claimPerformanceFeesTx = await delegation.connect(operator).claimOperatorDue(operator);
+    const claimPerformanceFeesTx = await delegation.connect(nodeOperator).claimNodeOperatorFee(nodeOperator);
     const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimOperatorDue",
+      "delegation.claimNodeOperatorFee",
       claimPerformanceFeesTx,
     );
 
-    const operatorBalanceAfter = await ethers.provider.getBalance(operator);
+    const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);
     const gasFee = claimPerformanceFeesTxReceipt.gasPrice * claimPerformanceFeesTxReceipt.cumulativeGasUsed;
 
     log.debug("Operator's StETH balance", {
@@ -376,7 +378,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to claim manager rewards in ETH after rebase with exited validator", async () => {
-    const feesToClaim = await delegation.curatorDue();
+    const feesToClaim = await delegation.curatorUnclaimedFee();
 
     log.debug("Staking Vault stats after operator exit", {
       "Staking Vault management fee": ethers.formatEther(feesToClaim),
@@ -385,8 +387,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const managerBalanceBefore = await ethers.provider.getBalance(curator);
 
-    const claimEthTx = await delegation.connect(curator).claimCuratorDue(curator);
-    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorDue", claimEthTx);
+    const claimEthTx = await delegation.connect(curator).claimCuratorFee(curator);
+    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorFee", claimEthTx);
 
     const managerBalanceAfter = await ethers.provider.getBalance(curator);
     const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
@@ -407,11 +409,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Token master can approve the vault to burn the shares
     const approveVaultTx = await lido
-      .connect(tokenMaster)
+      .connect(minterBurner)
       .approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
     await trace("lido.approve", approveVaultTx);
 
-    const burnTx = await delegation.connect(tokenMaster).burn(stakingVaultMaxMintingShares);
+    const burnTx = await delegation.connect(minterBurner).burn(stakingVaultMaxMintingShares);
     await trace("delegation.burn", burnTx);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();

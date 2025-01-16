@@ -12,9 +12,7 @@ import {Clones} from "@openzeppelin/contracts-v5.2.0/proxy/Clones.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-
 import {VaultHub} from "./VaultHub.sol";
-
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
@@ -47,9 +45,6 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice Indicates whether the contract has been initialized
-    bool public isInitialized;
-
     /// @notice The stETH token contract
     IStETH public immutable STETH;
 
@@ -58,6 +53,9 @@ contract Dashboard is AccessControlEnumerable {
 
     /// @notice The wrapped ether token contract
     IWeth public immutable WETH;
+
+    /// @notice Indicates whether the contract has been initialized
+    bool public initialized;
 
     /// @notice The `VaultHub` contract
     VaultHub public vaultHub;
@@ -99,10 +97,10 @@ contract Dashboard is AccessControlEnumerable {
      * @dev Internal initialize function.
      */
     function _initialize() internal {
-        if (isInitialized) revert AlreadyInitialized();
+        if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
-        isInitialized = true;
+        initialized = true;
         vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 

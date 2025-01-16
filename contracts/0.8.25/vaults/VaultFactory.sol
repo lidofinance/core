@@ -14,31 +14,31 @@ interface IDelegation {
     struct InitialState {
         address defaultAdmin;
         address curator;
-        address staker;
-        address tokenMaster;
-        address operator;
-        address claimOperatorDueRole;
-        uint256 curatorFee;
-        uint256 operatorFee;
+        address minterBurner;
+        address funderWithdrawer;
+        address nodeOperatorManager;
+        address nodeOperatorFeeClaimer;
+        uint256 curatorFeeBP;
+        uint256 nodeOperatorFeeBP;
     }
 
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
     function CURATOR_ROLE() external view returns (bytes32);
 
-    function STAKER_ROLE() external view returns (bytes32);
+    function FUND_WITHDRAW_ROLE() external view returns (bytes32);
 
-    function TOKEN_MASTER_ROLE() external view returns (bytes32);
+    function MINT_BURN_ROLE() external view returns (bytes32);
 
-    function OPERATOR_ROLE() external view returns (bytes32);
+    function NODE_OPERATOR_MANAGER_ROLE() external view returns (bytes32);
 
-    function CLAIM_OPERATOR_DUE_ROLE() external view returns (bytes32);
+    function NODE_OPERATOR_FEE_CLAIMER_ROLE() external view returns (bytes32);
 
     function initialize() external;
 
-    function setCuratorFee(uint256 _newCuratorFee) external;
+    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external;
 
-    function setOperatorFee(uint256 _newOperatorFee) external;
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFee) external;
 
     function grantRole(bytes32 role, address account) external;
 
@@ -80,7 +80,7 @@ contract VaultFactory {
         // initialize StakingVault
         vault.initialize(
             address(delegation),
-            _delegationInitialState.operator,
+            _delegationInitialState.nodeOperatorManager,
             _stakingVaultInitializerExtraParams
         );
         // initialize Delegation
@@ -89,21 +89,21 @@ contract VaultFactory {
         // grant roles to defaultAdmin, owner, manager, operator
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationInitialState.defaultAdmin);
         delegation.grantRole(delegation.CURATOR_ROLE(), _delegationInitialState.curator);
-        delegation.grantRole(delegation.STAKER_ROLE(), _delegationInitialState.staker);
-        delegation.grantRole(delegation.TOKEN_MASTER_ROLE(), _delegationInitialState.tokenMaster);
-        delegation.grantRole(delegation.OPERATOR_ROLE(), _delegationInitialState.operator);
-        delegation.grantRole(delegation.CLAIM_OPERATOR_DUE_ROLE(), _delegationInitialState.claimOperatorDueRole);
+        delegation.grantRole(delegation.FUND_WITHDRAW_ROLE(), _delegationInitialState.funderWithdrawer);
+        delegation.grantRole(delegation.MINT_BURN_ROLE(), _delegationInitialState.minterBurner);
+        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationInitialState.nodeOperatorManager);
+        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationInitialState.nodeOperatorFeeClaimer);
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
-        delegation.grantRole(delegation.OPERATOR_ROLE(), address(this));
+        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
         // set fees
-        delegation.setCuratorFee(_delegationInitialState.curatorFee);
-        delegation.setOperatorFee(_delegationInitialState.operatorFee);
+        delegation.setCuratorFeeBP(_delegationInitialState.curatorFeeBP);
+        delegation.setNodeOperatorFeeBP(_delegationInitialState.nodeOperatorFeeBP);
 
         // revoke temporary roles from factory
         delegation.revokeRole(delegation.CURATOR_ROLE(), address(this));
-        delegation.revokeRole(delegation.OPERATOR_ROLE(), address(this));
+        delegation.revokeRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 
         emit VaultCreated(address(delegation), address(vault));

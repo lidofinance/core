@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "yarn@4.5.3",
+  "packageManager": "yarn@4.6.0",
   "scripts": {
     "compile": "hardhat compile",
     "cleanup": "hardhat clean",
@@ -22,7 +22,7 @@
     "test:sequential": "hardhat test test/**/*.test.ts",
     "test:trace": "hardhat test test/**/*.test.ts --trace --disabletracer",
     "test:fulltrace": "hardhat test test/**/*.test.ts --fulltrace --disabletracer",
-    "test:watch": "hardhat watch test",
+    "test:watch": "SKIP_GAS_REPORT=true SKIP_CONTRACT_SIZE=true hardhat watch test",
     "test:integration": "hardhat test test/integration/**/*.ts",
     "test:integration:trace": "hardhat test test/integration/**/*.ts --trace --disabletracer",
     "test:integration:fulltrace": "hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
@@ -31,6 +31,7 @@
     "test:integration:scratch:fulltrace": "INTEGRATION_WITH_CSM=off INTEGRATION_WITH_SCRATCH_DEPLOY=on hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
     "test:integration:fork:local": "hardhat test test/integration/**/*.ts --network local",
     "test:integration:fork:mainnet": "hardhat test test/integration/**/*.ts --network mainnet-fork",
+    "test:integration:fork:mainnet:custom": "hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
@@ -90,7 +91,7 @@
     "lint-staged": "15.2.10",
     "prettier": "3.4.1",
     "prettier-plugin-solidity": "1.4.1",
-    "solhint": "5.0.3",
+    "solhint": "5.0.4",
     "solhint-plugin-lido": "0.0.4",
     "solidity-coverage": "0.8.14",
     "ts-node": "10.9.2",

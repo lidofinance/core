@@ -5,12 +5,12 @@
 pragma solidity 0.8.25;
 
 import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
+
+import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -19,7 +19,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 /// It also allows to force rebalance of the vaults
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
-abstract contract VaultHub is AccessControlEnumerableUpgradeable {
+abstract contract VaultHub is PausableUntilWithRoles {
     /// @custom:storage-location erc7201:VaultHub
     struct VaultHubStorage {
         /// @notice vault sockets with vaults connected to the hub
@@ -29,9 +29,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         /// @dev if vault is not connected to the hub, its index is zero
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
-        mapping(address => bool) vaultBeacons;
-        /// @notice allowed vault implementation addresses
-        mapping(address => bool) vaultImpl;
+        mapping(bytes32 => bool) vaultProxyCodehash;
     }
 
     struct VaultSocket {
@@ -91,26 +89,15 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice added beacon address to allowed list
-    /// @param beacon beacon address
-    function addBeacon(address beacon) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (beacon == address(0)) revert ZeroArgument("beacon");
+    /// @notice added vault proxy codehash to allowed list
+    /// @param codehash vault proxy codehash
+    function addVaultProxyCodehash(bytes32 codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        if (codehash == bytes32(0)) revert ZeroArgument("codehash");
 
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultBeacons[beacon]) revert AlreadyExists(beacon);
-        $.vaultBeacons[beacon] = true;
-        emit VaultBeaconAdded(beacon);
-    }
-
-    /// @notice added vault implementation address to allowed list
-    /// @param impl vault implementation address
-    function addVaultImpl(address impl) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (impl == address(0)) revert ZeroArgument("impl");
-
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultImpl[impl]) revert AlreadyExists(impl);
-        $.vaultImpl[impl] = true;
-        emit VaultImplAdded(impl);
+        if ($.vaultProxyCodehash[codehash]) revert AlreadyExists(codehash);
+        $.vaultProxyCodehash[codehash] = true;
+        emit VaultProxyCodehashAdded(codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -163,11 +150,8 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
-        address vaultBeacon = IBeaconProxy(address (_vault)).beacon();
-        if (!$.vaultBeacons[vaultBeacon]) revert BeaconNotAllowed(vaultBeacon);
-
-        address impl = IBeacon(vaultBeacon).implementation();
-        if (!$.vaultImpl[impl]) revert ImplNotAllowed(impl);
+        bytes32 vaultProxyCodehash = address(_vault).codehash;
+        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
         VaultSocket memory vr = VaultSocket(
             _vault,
@@ -217,7 +201,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `mintedShares` should be zero
-    function voluntaryDisconnect(address _vault) external {
+    function voluntaryDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _vaultAuth(_vault, "disconnect");
 
@@ -229,7 +213,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external {
+    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
@@ -268,7 +252,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
     /// @dev VaultHub must have all the stETH on its balance
-    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public {
+    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         _vaultAuth(_vault, "burn");
@@ -334,7 +318,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     /// @notice rebalances the vault by writing off the amount of ether equal
     ///     to `msg.value` from the vault's minted stETH
     /// @dev msg.sender should be vault's contract
-    function rebalance() external payable {
+    function rebalance() external payable whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         VaultSocket storage socket = _connectedSocket(msg.sender);
@@ -524,8 +508,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
-    event VaultImplAdded(address indexed impl);
-    event VaultBeaconAdded(address indexed beacon);
+    event VaultProxyCodehashAdded(bytes32 indexed codehash);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -543,8 +526,7 @@ abstract contract VaultHub is AccessControlEnumerableUpgradeable {
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
-    error AlreadyExists(address addr);
-    error ImplNotAllowed(address impl);
+    error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
-    error BeaconNotAllowed(address beacon);
+    error VaultProxyNotAllowed(address beacon);
 }
