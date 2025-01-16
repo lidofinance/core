@@ -11,8 +11,6 @@ import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {EIP712StETH} from "contracts/0.8.9/EIP712StETH.sol";
-import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 interface ILido {
@@ -58,6 +56,25 @@ interface IDaoFactory {
     function newDAO(address _root) external returns (IKernel);
 }
 
+struct LidoLocatorConfig {
+    address accountingOracle;
+    address depositSecurityModule;
+    address elRewardsVault;
+    address legacyOracle;
+    address lido;
+    address oracleReportSanityChecker;
+    address postTokenRebaseReceiver;
+    address burner;
+    address stakingRouter;
+    address treasury;
+    address validatorsExitBusOracle;
+    address withdrawalQueue;
+    address withdrawalVault;
+    address oracleDaemonConfig;
+    address accounting;
+    address wstETH;
+}
+
 contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
@@ -76,28 +93,34 @@ contract BaseProtocolTest is Test {
         rootAccount = _rootAccount;
         userAccount = _userAccount;
 
-        vm.startPrank(rootAccount);
-        (dao, acl) = createAragonDao();
-
         address impl = deployCode("Lido.sol:Lido");
 
+        vm.startPrank(rootAccount);
+        (dao, acl) = createAragonDao();
         address lidoProxyAddress = addAragonApp(dao, impl);
 
         lidoContract = ILido(lidoProxyAddress);
 
-        acl.createPermission(userAccount, address(lidoContract), keccak256("STAKING_CONTROL_ROLE"), rootAccount);
-        acl.createPermission(userAccount, address(lidoContract), keccak256("STAKING_PAUSE_ROLE"), rootAccount);
-        acl.createPermission(userAccount, address(lidoContract), keccak256("RESUME_ROLE"), rootAccount);
-        acl.createPermission(userAccount, address(lidoContract), keccak256("PAUSE_ROLE"), rootAccount);
+        /// @dev deal lido contract with start balance
+        vm.deal(lidoProxyAddress, _startBalance);
 
-        lidoLocator = deployLidoLocator(address(lidoContract));
-        EIP712StETH eip712steth = new EIP712StETH(address(lidoContract));
+        acl.createPermission(userAccount, lidoProxyAddress, keccak256("STAKING_CONTROL_ROLE"), rootAccount);
+        acl.createPermission(userAccount, lidoProxyAddress, keccak256("STAKING_PAUSE_ROLE"), rootAccount);
+        acl.createPermission(userAccount, lidoProxyAddress, keccak256("RESUME_ROLE"), rootAccount);
+        acl.createPermission(userAccount, lidoProxyAddress, keccak256("PAUSE_ROLE"), rootAccount);
 
-        vm.deal(address(lidoContract), _startBalance);
+        /// @dev deploy lido locator with dummy default values
+        lidoLocator = _deployLidoLocator(lidoProxyAddress);
+
+        /// @dev deploy eip712steth
+        address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
+
         lidoContract.initialize(address(lidoLocator), address(eip712steth));
+
         vm.stopPrank();
     }
 
+    /// @dev create aragon dao and return kernel and acl
     function createAragonDao() private returns (IKernel, IACL) {
         kernelBase = deployCode("Kernel.sol:Kernel", abi.encode(true));
         aclBase = deployCode("ACL.sol:ACL");
@@ -122,37 +145,38 @@ contract BaseProtocolTest is Test {
         return (_dao, _acl);
     }
 
-    function addAragonApp(IKernel _dao, address lidoImpl) private returns (address) {
+    /// @dev add aragon app to dao and return proxy address
+    function addAragonApp(IKernel _dao, address _impl) private returns (address) {
         vm.recordLogs();
-        _dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), lidoImpl, "", false);
+        _dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), _impl, "", false);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        address lidoProxyAddress = abi.decode(logs[logs.length - 1].data, (address));
+        address proxyAddress = abi.decode(logs[logs.length - 1].data, (address));
 
-        return lidoProxyAddress;
+        return proxyAddress;
     }
 
-    function deployLidoLocator(address lido) private returns (ILidoLocator) {
-        return
-            new LidoLocator(
-                LidoLocator.Config({
-                    accountingOracle: makeAddr("dummy-locator:accountingOracle"),
-                    depositSecurityModule: makeAddr("dummy-locator:burner"),
-                    elRewardsVault: makeAddr("dummy-locator:depositSecurityModule"),
-                    legacyOracle: makeAddr("dummy-locator:elRewardsVault"),
-                    lido: lido,
-                    oracleReportSanityChecker: makeAddr("dummy-locator:lido"),
-                    postTokenRebaseReceiver: makeAddr("dummy-locator:oracleDaemonConfig"),
-                    burner: makeAddr("dummy-locator:oracleReportSanityChecker"),
-                    stakingRouter: makeAddr("dummy-locator:postTokenRebaseReceiver"),
-                    treasury: makeAddr("dummy-locator:stakingRouter"),
-                    validatorsExitBusOracle: makeAddr("dummy-locator:treasury"),
-                    withdrawalQueue: makeAddr("dummy-locator:validatorsExitBusOracle"),
-                    withdrawalVault: makeAddr("dummy-locator:withdrawalQueue"),
-                    oracleDaemonConfig: makeAddr("dummy-locator:withdrawalVault"),
-                    accounting: makeAddr("dummy-locator:accounting"),
-                    wstETH: makeAddr("dummy-locator:wstETH")
-                })
-            );
+    /// @dev deploy lido locator with dummy default values
+    function _deployLidoLocator(address lido) internal returns (ILidoLocator) {
+        LidoLocatorConfig memory config = LidoLocatorConfig({
+            accountingOracle: makeAddr("dummy-locator:accountingOracle"),
+            depositSecurityModule: makeAddr("dummy-locator:depositSecurityModule"),
+            elRewardsVault: makeAddr("dummy-locator:elRewardsVault"),
+            legacyOracle: makeAddr("dummy-locator:legacyOracle"),
+            lido: lido,
+            oracleReportSanityChecker: makeAddr("dummy-locator:oracleReportSanityChecker"),
+            postTokenRebaseReceiver: address(0),
+            burner: makeAddr("dummy-locator:burner"),
+            stakingRouter: makeAddr("dummy-locator:stakingRouter"),
+            treasury: makeAddr("dummy-locator:treasury"),
+            validatorsExitBusOracle: makeAddr("dummy-locator:validatorsExitBusOracle"),
+            withdrawalQueue: makeAddr("dummy-locator:withdrawalQueue"),
+            withdrawalVault: makeAddr("dummy-locator:withdrawalVault"),
+            oracleDaemonConfig: makeAddr("dummy-locator:oracleDaemonConfig"),
+            accounting: makeAddr("dummy-locator:accounting"),
+            wstETH: makeAddr("dummy-locator:wstETH")
+        });
+
+        return ILidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
     }
 }
