@@ -11,8 +11,6 @@ import {
   IPostTokenRebaseReceiver,
   Lido__MockForAccounting,
   Lido__MockForAccounting__factory,
-  LidoExecutionLayerRewardsVault__MockForLidoAccounting,
-  LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
   LidoLocator,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
@@ -21,8 +19,6 @@ import {
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalQueue__MockForAccounting,
   WithdrawalQueue__MockForAccounting__factory,
-  WithdrawalVault__MockForLidoAccounting,
-  WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
@@ -38,8 +34,6 @@ describe("Accounting.sol:report", () => {
   let locator: LidoLocator;
 
   let lido: Lido__MockForAccounting;
-  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
-  let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
   let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
@@ -48,31 +42,19 @@ describe("Accounting.sol:report", () => {
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();
 
-    [
-      lido,
-      elRewardsVault,
-      stakingRouter,
-      withdrawalVault,
-      oracleReportSanityChecker,
-      postTokenRebaseReceiver,
-      withdrawalQueue,
-      burner,
-    ] = await Promise.all([
-      new Lido__MockForAccounting__factory(deployer).deploy(),
-      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
-      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
-      new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
-      new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
-      new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
-      new Burner__MockForAccounting__factory(deployer).deploy(),
-    ]);
+    [lido, stakingRouter, oracleReportSanityChecker, postTokenRebaseReceiver, withdrawalQueue, burner] =
+      await Promise.all([
+        new Lido__MockForAccounting__factory(deployer).deploy(),
+        new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
+        new OracleReportSanityChecker__MockForAccounting__factory(deployer).deploy(),
+        new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
+        new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
+        new Burner__MockForAccounting__factory(deployer).deploy(),
+      ]);
 
     locator = await deployLidoLocator(
       {
         lido,
-        elRewardsVault,
-        withdrawalVault,
         stakingRouter,
         oracleReportSanityChecker,
         postTokenRebaseReceiver,
@@ -149,7 +131,7 @@ describe("Accounting.sol:report", () => {
             withdrawalFinalizationBatches: [1n],
           }),
         ),
-      ).not.to.emit(burner, "StETHBurnRequested");
+      ).not.to.emit(burner, "Mock__StETHBurnRequested");
     });
 
     it("Emits `StETHBurnRequested` if there are shares to burn", async () => {
@@ -166,7 +148,7 @@ describe("Accounting.sol:report", () => {
           }),
         ),
       )
-        .to.emit(burner, "StETHBurnRequested")
+        .to.emit(burner, "Mock__StETHBurnRequested")
         .withArgs(isCover, await accounting.getAddress(), steth, sharesToBurn);
     });
 
