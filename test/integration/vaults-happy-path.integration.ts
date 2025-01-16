@@ -307,7 +307,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     const { reportTx } = (await report(ctx, params)) as {
@@ -370,7 +370,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutdeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     await report(ctx, params);
@@ -422,7 +422,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutdeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     const { reportTx } = (await report(ctx, params)) as {
