@@ -2,7 +2,6 @@ import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
-import { bigint } from "hardhat/internal/core/params/argumentTypes";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
@@ -835,6 +834,48 @@ describe("Dashboard", () => {
       expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amountWsteth);
     });
+
+    it("reverts on zero burn", async () => {
+      await expect(dashboard.burnWstETH(0n)).to.be.revertedWith("wstETH: zero amount unwrap not allowed");
+    });
+
+    for (let weiWsteth = 1n; weiWsteth <= 10n; weiWsteth++) {
+      it(`burns ${weiWsteth} wei wsteth`, async () => {
+        const weiStethUp = await steth.getPooledEthBySharesRoundUp(weiWsteth);
+        const weiStethDown = await steth.getPooledEthByShares(weiWsteth);
+        // !!! weird
+        const weiWstethDown = await steth.getSharesByPooledEth(weiStethDown);
+
+        // approve for wsteth wrap
+        await steth.connect(vaultOwner).approve(wsteth, weiStethUp);
+        // wrap steth to wsteth to get the amount of wsteth for the burn
+        await wsteth.connect(vaultOwner).wrap(weiStethUp);
+
+        const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
+        expect(wstethBalanceBefore).to.equal(weiWsteth);
+        const stethBalanceBefore = await steth.balanceOf(vaultOwner);
+
+        // approve wsteth to dashboard contract
+        await wsteth.connect(vaultOwner).approve(dashboard, weiWsteth);
+
+        const result = await dashboard.burnWstETH(weiWsteth);
+
+        await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, weiWsteth); // transfer wsteth to dashboard
+        await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, weiStethDown); // unwrap wsteth to steth
+        await expect(result).to.emit(wsteth, "Transfer").withArgs(dashboard, ZeroAddress, weiWsteth); // burn wsteth
+
+        // TODO: weird steth value
+        //await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, hub, stethRoundDown);
+        await expect(result).to.emit(steth, "TransferShares").withArgs(dashboard, hub, weiWstethDown); // transfer shares to hub
+        // TODO: weird everything
+        // await expect(result)
+        //   .to.emit(steth, "SharesBurnt")
+        //   .withArgs(hub, stethRoundDown, stethRoundDown, weiWstethRoundDown); // burn steth (mocked event data)
+
+        expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
+        expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - weiWsteth);
+      });
+    }
   });
 
   context("burnSharesWithPermit", () => {

@@ -332,7 +332,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _amountOfStETH Amount of stETH shares to burn
      */
     function burnSteth(uint256 _amountOfStETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _burnSharesFrom(msg.sender, STETH.getSharesByPooledEth(_amountOfStETH));
+        _burnStETH(_amountOfStETH);
     }
 
     /**
@@ -341,10 +341,7 @@ contract Dashboard is AccessControlEnumerable {
      * @dev The _amountOfWstETH = _amountOfShares by design
      */
     function burnWstETH(uint256 _amountOfWstETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        WSTETH.transferFrom(msg.sender, address(this), _amountOfWstETH);
-        WSTETH.unwrap(_amountOfWstETH);
-
-        _burnSharesFrom(address(this), _amountOfWstETH);
+        _burnWstETH(_amountOfWstETH);
     }
 
     /**
@@ -401,7 +398,7 @@ contract Dashboard is AccessControlEnumerable {
         uint256 _amountOfStETH,
         PermitInput calldata _permit
     ) external virtual onlyRole(DEFAULT_ADMIN_ROLE) safePermit(address(STETH), msg.sender, address(this), _permit) {
-        _burnSharesFrom(msg.sender, STETH.getSharesByPooledEth(_amountOfStETH));
+        _burnStETH(_amountOfStETH);
     }
 
     /**
@@ -413,11 +410,7 @@ contract Dashboard is AccessControlEnumerable {
         uint256 _amountOfWstETH,
         PermitInput calldata _permit
     ) external virtual onlyRole(DEFAULT_ADMIN_ROLE) safePermit(address(WSTETH), msg.sender, address(this), _permit) {
-        WSTETH.transferFrom(msg.sender, address(this), _amountOfWstETH);
-        uint256 stETHAmount = WSTETH.unwrap(_amountOfWstETH);
-        uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
-
-        _burnSharesFrom(address(this), sharesAmount);
+        _burnWstETH(_amountOfWstETH);
     }
 
     /**
@@ -527,6 +520,26 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _mintSharesTo(address _recipient, uint256 _amountOfShares) internal {
         vaultHub.mintSharesBackedByVault(address(stakingVault), _recipient, _amountOfShares);
+    }
+
+    /**
+     * @dev Burns stETH tokens from the sender backed by the vault
+     * @param _amountOfStETH Amount of tokens to burn
+     */
+    function _burnStETH(uint256 _amountOfStETH) internal {
+        _burnSharesFrom(msg.sender, STETH.getSharesByPooledEth(_amountOfStETH));
+    }
+
+    /**
+     * @dev Burns wstETH tokens from the sender backed by the vault
+     * @param _amountOfWstETH Amount of tokens to burn
+     */
+    function _burnWstETH(uint256 _amountOfWstETH) internal {
+        WSTETH.transferFrom(msg.sender, address(this), _amountOfWstETH);
+        uint256 stETHAmount = WSTETH.unwrap(_amountOfWstETH);
+        uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
+
+        _burnSharesFrom(address(this), sharesAmount);
     }
 
     /**
