@@ -21,12 +21,12 @@ contract VaultHub__MockForDelegation {
     }
 
     // solhint-disable-next-line no-unused-vars
-    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
+    function mintSharesBackedByVault(address, address recipient, uint256 amount) external {
         steth.mint(recipient, amount);
     }
 
     // solhint-disable-next-line no-unused-vars
-    function burnSharesBackedByVault(address vault, uint256 amount) external {
+    function burnSharesBackedByVault(address, uint256 amount) external {
         steth.burn(amount);
     }
 
