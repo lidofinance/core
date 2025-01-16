@@ -20,6 +20,12 @@ contract Lido__MockForAccounting {
         uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     );
+    /**
+     * @notice An executed shares transfer from `sender` to `recipient`.
+     *
+     * @dev emitted in pair with an ERC20-defined `Transfer` event.
+     */
+    event TransferShares(address indexed from, address indexed to, uint256 sharesValue);
 
     function setMockedDepositedValidators(uint256 _amount) external {
         depositedValidatorsValue = _amount;
@@ -103,5 +109,9 @@ contract Lido__MockForAccounting {
         reportClBalance = _reportClBalance;
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
+    }
+
+    function mintShares(address _recipient, uint256 _sharesAmount) external {
+        emit TransferShares(address(0), _recipient, _sharesAmount);
     }
 }

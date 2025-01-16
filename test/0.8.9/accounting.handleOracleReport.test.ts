@@ -279,119 +279,90 @@ describe("Accounting.sol:report", () => {
       ).not.to.emit(stakingRouter, "Mock__MintedRewardsReported");
     });
 
-    // it("Mints shares to itself and then transfers them to recipients if there are fees to distribute as returned from `StakingRouter.getStakingRewardsDistribution`", async () => {
-    //   // initially, before any rebases, one share costs one steth
-    //   expect(await lido.getPooledEthByShares(ether("1.0"))).to.equal(ether("1.0"));
-    //   // thus, the total supply of steth should equal the total number of shares
-    //   expect(await lido.getTotalPooledEther()).to.equal(await lido.getTotalShares());
+    it("Mints shares to itself and then transfers them to recipients if there are fees to distribute as returned from `StakingRouter.getStakingRewardsDistribution`", async () => {
+      // mock a single staking module with 5% fee with the total protocol fee of 10%
+      const stakingModule = {
+        address: certainAddress("lido:handleOracleReport:staking-module"),
+        id: 1n,
+        fee: 5n * 10n ** 18n, // 5%
+      };
 
-    //   // mock a single staking module with 5% fee with the total protocol fee of 10%
-    //   const stakingModule = {
-    //     address: certainAddress("lido:handleOracleReport:staking-module"),
-    //     id: 1n,
-    //     fee: 5n * 10n ** 18n, // 5%
-    //   };
+      const totalFee = 10n * 10n ** 18n; // 10%
+      const precisionPoints = 100n * 10n ** 18n; // 100%
 
-    //   const totalFee = 10n * 10n ** 18n; // 10%
-    //   const precisionPoints = 100n * 10n ** 18n; // 100%
+      await stakingRouter.mock__getStakingRewardsDistribution(
+        [stakingModule.address],
+        [stakingModule.id],
+        [stakingModule.fee],
+        totalFee,
+        precisionPoints,
+      );
 
-    //   await stakingRouter.mock__getStakingRewardsDistribution(
-    //     [stakingModule.address],
-    //     [stakingModule.id],
-    //     [stakingModule.fee],
-    //     totalFee,
-    //     precisionPoints,
-    //   );
+      const clBalance = ether("1.0");
+      const expectedSharesToMint =
+        (clBalance * totalFee * (await lido.getTotalShares())) /
+        (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
 
-    //   const clBalance = ether("1.0");
+      const expectedModuleRewardInShares = expectedSharesToMint / (totalFee / stakingModule.fee);
+      const expectedTreasuryCutInShares = expectedSharesToMint - expectedModuleRewardInShares;
 
-    //   const expectedSharesToMint =
-    //     (clBalance * totalFee * (await lido.getTotalShares())) /
-    //     (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
+      console.log("expectedModuleRewardInShares", expectedModuleRewardInShares);
+      console.log("expectedTreasuryCutInShares", expectedTreasuryCutInShares);
+      console.log("stakingModule.address", stakingModule.address);
+      console.log("await locator.treasury()", await locator.treasury());
 
-    //   const expectedModuleRewardInShares = expectedSharesToMint / (totalFee / stakingModule.fee);
-    //   const expectedTreasuryCutInShares = expectedSharesToMint - expectedModuleRewardInShares;
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            clBalance: ether("1.0"), // 1 ether of profit
+          }),
+        ),
+      )
+        .to.emit(lido, "TransferShares")
+        .withArgs(ZeroAddress, stakingModule.address, expectedModuleRewardInShares)
+        .and.to.emit(lido, "TransferShares")
+        .withArgs(ZeroAddress, await locator.treasury(), expectedTreasuryCutInShares)
+        .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
+    });
 
-    //   await expect(
-    //     accounting.handleOracleReport(
-    //       report({
-    //         clBalance: ether("1.0"), // 1 ether of profit
-    //       }),
-    //     ),
-    //   )
-    //     .to.emit(lido, "TransferShares")
-    //     .withArgs(ZeroAddress, stakingModule.address, expectedModuleRewardInShares)
-    //     .and.to.emit(lido, "TransferShares")
-    //     .withArgs(ZeroAddress, await lido.getTreasury(), expectedTreasuryCutInShares)
-    //     .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
+    it("Transfers all new shares to treasury if the module fee is zero as returned `StakingRouter.getStakingRewardsDistribution`", async () => {
+      // mock a single staking module with 0% fee with the total protocol fee of 10%
+      const stakingModule = {
+        address: certainAddress("lido:handleOracleReport:staking-module"),
+        id: 1n,
+        fee: 0n,
+      };
 
-    //   expect(await lido.balanceOf(stakingModule.address)).to.equal(
-    //     await lido.getPooledEthByShares(expectedModuleRewardInShares),
-    //   );
+      const totalFee = 10n * 10n ** 18n; // 10%
+      const precisionPoints = 100n * 10n ** 18n; // 100%
 
-    //   expect(await lido.balanceOf(await lido.getTreasury())).to.equal(
-    //     await lido.getPooledEthByShares(expectedTreasuryCutInShares),
-    //   );
+      await stakingRouter.mock__getStakingRewardsDistribution(
+        [stakingModule.address],
+        [stakingModule.id],
+        [stakingModule.fee],
+        totalFee,
+        precisionPoints,
+      );
 
-    //   // now one share should cost 1.9 steth (10% was distributed as rewards)
-    //   expect(await lido.getPooledEthByShares(ether("1.0"))).to.equal(ether("1.9"));
-    // });
+      const clBalance = ether("1.0");
 
-    // it("Transfers all new shares to treasury if the module fee is zero as returned `StakingRouter.getStakingRewardsDistribution`", async () => {
-    //   // initially, before any rebases, one share costs one steth
-    //   expect(await lido.getPooledEthByShares(ether("1.0"))).to.equal(ether("1.0"));
-    //   // thus, the total supply of steth should equal the total number of shares
-    //   expect(await lido.getTotalPooledEther()).to.equal(await lido.getTotalShares());
+      const expectedSharesToMint =
+        (clBalance * totalFee * (await lido.getTotalShares())) /
+        (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
 
-    //   // mock a single staking module with 0% fee with the total protocol fee of 10%
-    //   const stakingModule = {
-    //     address: certainAddress("lido:handleOracleReport:staking-module"),
-    //     id: 1n,
-    //     fee: 0n,
-    //   };
+      const expectedTreasuryCutInShares = expectedSharesToMint;
 
-    //   const totalFee = 10n * 10n ** 18n; // 10%
-    //   const precisionPoints = 100n * 10n ** 18n; // 100%
-
-    //   await stakingRouter.mock__getStakingRewardsDistribution(
-    //     [stakingModule.address],
-    //     [stakingModule.id],
-    //     [stakingModule.fee],
-    //     totalFee,
-    //     precisionPoints,
-    //   );
-
-    //   const clBalance = ether("1.0");
-
-    //   const expectedSharesToMint =
-    //     (clBalance * totalFee * (await lido.getTotalShares())) /
-    //     (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
-
-    //   const expectedModuleRewardInShares = 0n;
-    //   const expectedTreasuryCutInShares = expectedSharesToMint;
-
-    //   await expect(
-    //     accounting.handleOracleReport(
-    //       report({
-    //         clBalance: ether("1.0"), // 1 ether of profit
-    //       }),
-    //     ),
-    //   )
-    //     .and.to.emit(lido, "TransferShares")
-    //     .withArgs(ZeroAddress, await lido.getTreasury(), expectedTreasuryCutInShares)
-    //     .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
-
-    //   expect(await lido.balanceOf(stakingModule.address)).to.equal(
-    //     await lido.getPooledEthByShares(expectedModuleRewardInShares),
-    //   );
-
-    //   expect(await lido.balanceOf(await lido.getTreasury())).to.equal(
-    //     await lido.getPooledEthByShares(expectedTreasuryCutInShares),
-    //   );
-
-    //   // now one share should cost 1.9 steth (10% was distributed as rewards)
-    //   expect(await lido.getPooledEthByShares(ether("1.0"))).to.equal(ether("1.9"));
-    // });
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            clBalance: ether("1.0"), // 1 ether of profit
+          }),
+        ),
+      )
+        .and.to.emit(lido, "TransferShares")
+        .withArgs(ZeroAddress, await locator.treasury(), expectedTreasuryCutInShares)
+        .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
+    });
 
     it("Relays the report data to `PostTokenRebaseReceiver`", async () => {
       await expect(accounting.handleOracleReport(report())).to.emit(
