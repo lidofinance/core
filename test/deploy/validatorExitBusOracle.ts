@@ -67,9 +67,12 @@ export async function deployVEBO(
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
+  const withdrawalVault = await deployWithdrawalVault();
+
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: await ao.getAddress(),
+    withdrawalVault,
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
@@ -80,8 +83,6 @@ export async function deployVEBO(
   });
 
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
-
-  const withdrawalVault = await deployWithdrawalVault();
 
   return {
     locatorAddr,
@@ -107,7 +108,6 @@ export async function initVEBO({
   admin,
   oracle,
   consensus,
-  withdrawalVault,
   dataSubmitter = undefined,
   consensusVersion = CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
@@ -115,7 +115,7 @@ export async function initVEBO({
 }: VEBOConfig) {
   const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
 
-  await oracle.finalizeUpgrade_v2(withdrawalVault);
+  await oracle.finalizeUpgrade_v2();
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);

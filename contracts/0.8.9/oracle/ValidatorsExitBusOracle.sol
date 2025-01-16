@@ -110,10 +110,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
     }
 
-    // TODO: replace with locator
-    function finalizeUpgrade_v2(address withdrawalVaultAddress) external {
+    function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
-        _initialize_v2(withdrawalVaultAddress);
+        _initialize_v2(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
@@ -420,7 +419,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
         mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
-        // if (hashes[hash].itemsCount > 0 ) revert DuplicateExitRequest();
 
         RequestStatus storage request = hashes[exitRequestHash];
         request.totalItemsCount = report.exitRequestData.requestsCount;

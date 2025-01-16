@@ -7,4 +7,8 @@ contract WithdrawalVault__MockForVebo {
     function addFullWithdrawalRequests(bytes[] calldata pubkeys) external {
         emit AddFullWithdrawalRequestsCalled(pubkeys);
     }
+
+    function getWithdrawalRequestFee() external view returns (uint256) {
+        return 1;
+    }
 }

@@ -4,15 +4,22 @@ pragma solidity 0.8.9;
 
 import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
-import { IWithdrawalVault } from "./IWithdrawalVault.sol";
+import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
+
+interface IWithdrawalVault {
+    function addFullWithdrawalRequests(bytes[] calldata pubkeys) external payable;
+
+    function getWithdrawalRequestFee() external view returns (uint256);
+}
+
 
 contract ValidatorsExitBus is AccessControlEnumerable {
     using UnstructuredStorage for bytes32;
 
     /// @dev Errors
-    // error DuplicateExitRequest();
     error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
     error ZeroAddress();
+    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 msgValue);
 
     /// Part of report data
     struct ExitRequestData {
@@ -71,26 +78,32 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION =
         keccak256("lido.ValidatorsExitBus.reportHashes");
 
-     /// @dev Storage slot: address withdrawalVaultContract
-    bytes32 internal constant WITHDRAWAL_VAULT_CONTRACT_POSITION =
-        keccak256("lido.ValidatorsExitBus.withdrawalVaultContract");
+    bytes32 private constant LOCATOR_CONTRACT_POSITION = keccak256("lido.ValidatorsExitBus.locatorContract");
 
-    // ILidoLocator internal immutable LOCATOR;
-
-    // TODO: read WV via locator
-    function _initialize_v2(address withdrawalVaultAddr) internal {
-      _setWithdrawalVault(withdrawalVaultAddr);
+    function _initialize_v2(address locatorAddr) internal {
+      _setLocatorAddress(locatorAddr);
     }
 
-    function _setWithdrawalVault(address addr) internal {
+    function _setLocatorAddress(address addr) internal {
         if (addr == address(0)) revert ZeroAddress();
 
-        WITHDRAWAL_VAULT_CONTRACT_POSITION.setStorageAddress(addr);
+        LOCATOR_CONTRACT_POSITION.setStorageAddress(addr);
     }
 
     function triggerExitHashVerify(ExitRequestData calldata exitRequestData, uint256[] calldata keyIndexes) external payable {
         bytes32 dataHash = keccak256(abi.encode(exitRequestData));
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[dataHash];
+
+        address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
+        address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
+        uint256 fee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
+        uint requestsFee = keyIndexes.length * fee;
+
+        if (msg.value < requestsFee) {
+           revert FeeNotEnough(fee, keyIndexes.length, msg.value);
+        }
+
+        uint256 refund = msg.value - requestsFee;
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
@@ -118,8 +131,13 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         }
 
-        address withdrawalVaultAddr = WITHDRAWAL_VAULT_CONTRACT_POSITION.getStorageAddress();
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests(pubkeys);
+
+        if (refund > 0) {
+          (bool success, ) = msg.sender.call{value: refund}("");
+          require(success, "Refund failed");
+        }
+
     }
 
     /// Storage helpers

@@ -39,7 +39,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
 
   const LAST_PROCESSING_REF_SLOT = 1;
 
@@ -108,7 +107,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   };
 
   before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+    [admin, member1, member2, member3] = await ethers.getSigners();
 
     await deploy();
   });
@@ -229,10 +228,16 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   });
 
   it("someone submitted exit report data and triggered exit", async () => {
-    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 2]);
+    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 2], { value: 3 });
 
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
       .withArgs([PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]]);
+  });
+
+  it("someone submitted exit report data and triggered exit again", async () => {
+    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1], { value: 2 });
+
+    await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs([PUBKEYS[0], PUBKEYS[1]]);
   });
 });
