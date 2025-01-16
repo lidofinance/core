@@ -36,8 +36,8 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
  *   - `withdraw()`
  *   - `requestValidatorExit()`
  *   - `rebalance()`
- *   - `pauseDeposits()`
- *   - `resumeDeposits()`
+ *   - `pauseBeaconChainDeposits()`
+ *   - `resumeBeaconChainDeposits()`
  * - Operator:
  *   - `depositToBeaconChain()`
  * - VaultHub:
@@ -62,14 +62,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:operator Address of the node operator
-     * @custom:depositsPaused Whether beacon deposits are paused by the vault owner
+     * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
         Report report;
         uint128 locked;
         int128 inOutDelta;
         address operator;
-        bool depositsPaused;
+        bool beaconChainDepositsPaused;
     }
 
     /**
@@ -228,8 +228,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Returns whether deposits are paused by the vault owner
      * @return True if deposits are paused
      */
-    function areBeaconDepositsPaused() external view returns (bool) {
-        return _getStorage().depositsPaused;
+    function beaconChainDepositsPaused() external view returns (bool) {
+        return _getStorage().beaconChainDepositsPaused;
     }
 
     /**
@@ -328,7 +328,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
         if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
         if (!isBalanced()) revert Unbalanced();
         if (msg.sender != _getStorage().operator) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if (_getStorage().depositsPaused) revert BeaconChainDepositsNotAllowed();
+        if (_getStorage().beaconChainDepositsPaused) revert BeaconChainDepositsIsPaused();
 
         _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
         emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
@@ -405,20 +405,26 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Pauses deposits to beacon chain
      * @dev Can only be called by the vault owner
      */
-    function pauseBeaconDeposits() external onlyOwner {
-        _getStorage().depositsPaused = true;
+    function pauseBeaconChainDeposits() external onlyOwner {
+        bool paused = _getStorage().beaconChainDepositsPaused;
+        if (paused) {
+            revert BeaconChainDepositsResumeExpected();
+        }
 
-        emit BeaconDepositsPaused();
+        emit BeaconChainDepositsPaused();
     }
 
     /**
      * @notice Resumes deposits to beacon chain
      * @dev Can only be called by the vault owner
      */
-    function resumeBeaconDeposits() external onlyOwner {
-        _getStorage().depositsPaused = false;
+    function resumeBeaconChainDeposits() external onlyOwner {
+        bool paused = _getStorage().beaconChainDepositsPaused;
+        if (!paused) {
+            revert BeaconChainDepositsPauseExpected();
+        }
 
-        emit BeaconDepositsResumed();
+        emit BeaconChainDepositsResumed();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -484,12 +490,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     /**
      * @notice Emitted when deposits to beacon chain are paused
      */
-    event BeaconDepositsPaused();
+    event BeaconChainDepositsPaused();
 
     /**
      * @notice Emitted when deposits to beacon chain are resumed
      */
-    event BeaconDepositsResumed();
+    event BeaconChainDepositsResumed();
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -555,7 +561,17 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     error UnrecoverableError();
 
     /**
+     * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
+     */
+    error BeaconChainDepositsPauseExpected();
+
+    /**
+     * @notice Thrown when trying to resume deposits to beacon chain while deposits are already resumed
+     */
+    error BeaconChainDepositsResumeExpected();
+
+    /**
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
-    error BeaconChainDepositsNotAllowed();
+    error BeaconChainDepositsIsPaused();
 }
