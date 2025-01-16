@@ -54,13 +54,13 @@ export async function createVaultProxy(
 ): Promise<CreateVaultResponse> {
   // Define the parameters for the struct
   const initializationParams: DelegationInitializationParamsStruct = {
-    curatorFee: 100n,
-    operatorFee: 200n,
+    curatorFeeBP: 100n,
+    nodeOperatorFeeBP: 200n,
     curator: await _owner.getAddress(),
-    staker: await _owner.getAddress(),
-    tokenMaster: await _owner.getAddress(),
-    operator: await _operator.getAddress(),
-    claimOperatorDueRole: await _owner.getAddress(),
+    funderWithdrawer: await _owner.getAddress(),
+    minterBurner: await _owner.getAddress(),
+    nodeOperatorManager: await _operator.getAddress(),
+    nodeOperatorFeeClaimer: await _owner.getAddress(),
   };
 
   const tx = await vaultFactory.connect(_owner).createVault(initializationParams, "0x");

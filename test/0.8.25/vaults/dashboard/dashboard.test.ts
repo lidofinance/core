@@ -25,7 +25,7 @@ import { Snapshot } from "test/suite";
 describe("Dashboard", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
@@ -45,7 +45,7 @@ describe("Dashboard", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
+    [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
@@ -67,7 +67,7 @@ describe("Dashboard", () => {
     expect(await factory.implementation()).to.equal(vaultImpl);
     expect(await factory.dashboardImpl()).to.equal(dashboardImpl);
 
-    const createVaultTx = await factory.connect(vaultOwner).createVault(operator);
+    const createVaultTx = await factory.connect(vaultOwner).createVault(nodeOperator);
     const createVaultReceipt = await createVaultTx.wait();
     if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
 
@@ -139,7 +139,7 @@ describe("Dashboard", () => {
   context("initialized state", () => {
     it("post-initialization state is correct", async () => {
       expect(await vault.owner()).to.equal(dashboard);
-      expect(await vault.operator()).to.equal(operator);
+      expect(await vault.nodeOperator()).to.equal(nodeOperator);
       expect(await dashboard.isInitialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
