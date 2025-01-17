@@ -336,9 +336,9 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Burns wstETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
+     * @notice Burns wstETH tokens from the sender backed by the vault.   Approvals for the passed amounts should be done before.
      * @param _amountOfWstETH Amount of wstETH tokens to burn
-     * @dev The _amountOfWstETH = _amountOfShares by design
+     * @dev  Will fail on ~1 wei (depending on current share rate) wstETH due to rounding error inside wstETH
      */
     function burnWstETH(uint256 _amountOfWstETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         _burnWstETH(_amountOfWstETH);
@@ -405,6 +405,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Burns wstETH tokens backed by the vault from the sender using EIP-2612 Permit.
      * @param _amountOfWstETH Amount of wstETH tokens to burn
      * @param _permit data required for the wstETH.permit() method to set the allowance
+     * @dev  Will fail on 1 wei (depending on current share rate) wstETH due to rounding error inside wstETH
      */
     function burnWstETHWithPermit(
         uint256 _amountOfWstETH,
