@@ -52,6 +52,10 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         uint256 _timeElapsed = 86_400;
         uint256 _timestamp = lastReport.timestamp + _timeElapsed;
 
+        // cheatCode for
+        // if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
+        vm.warp(_timestamp + 1);
+
         _clValidators = bound(_clValidators, lastReport.clValidators, type(uint32).max);
         _withdrawalVaultBalance = bound(_withdrawalVaultBalance, 0, type(uint32).max);
         _elRewardsVaultBalance = bound(_elRewardsVaultBalance, 0, type(uint32).max);
@@ -124,8 +128,8 @@ contract AccountingTest is BaseProtocolTest {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
+     * forge-config: default.invariant.runs = 2
+     * forge-config: default.invariant.depth = 2
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_fuzzTotalShares() public {

@@ -12,6 +12,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
@@ -93,7 +94,7 @@ contract BaseProtocolTest is Test {
     address public evmScriptRegistryFactory;
     address public daoFactoryAdr;
 
-    uint256 public genesisTimestamp = 1695902400;
+    uint256 public genesisTimestamp = 1_695_902_400;
     address private depositContract = address(0x4242424242424242424242424242424242424242);
 
     function setUpProtocol(uint256 _startBalance, address _rootAccount, address _userAccount) public {
