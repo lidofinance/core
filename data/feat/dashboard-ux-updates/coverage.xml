@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3557"  lines-covered="3147"  line-rate="0.8847"  branches-valid="1680"  branches-covered="1420"  branch-rate="0.8452"  timestamp="1737114586041" complexity="0" version="0.1">
+<coverage lines-valid="3557"  lines-covered="3147"  line-rate="0.8847"  branches-valid="1680"  branches-covered="1420"  branch-rate="0.8452"  timestamp="1737115009401" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2150,52 +2150,52 @@
 				<lines><line number="400"  hits="4" /></lines>
 			</method>
 			<method name="burnWstETHWithPermit"  hits="4"  signature="()V" >
-				<lines><line number="412"  hits="4" /></lines>
+				<lines><line number="413"  hits="4" /></lines>
 			</method>
 			<method name="rebalanceVault"  hits="2"  signature="()V" >
-				<lines><line number="420"  hits="2" /></lines>
+				<lines><line number="421"  hits="2" /></lines>
 			</method>
 			<method name="recoverERC20"  hits="3"  signature="()V" >
-				<lines><line number="428"  hits="3" /></lines>
+				<lines><line number="429"  hits="3" /></lines>
 			</method>
 			<method name="recoverERC721"  hits="2"  signature="()V" >
-				<lines><line number="452"  hits="2" /></lines>
+				<lines><line number="453"  hits="2" /></lines>
 			</method>
 			<method name="fundAndProceed"  hits="39"  signature="()V" >
-				<lines><line number="465"  hits="39" /></lines>
+				<lines><line number="466"  hits="39" /></lines>
 			</method>
 			<method name="_transferStVaultOwnership"  hits="2"  signature="()V" >
-				<lines><line number="476"  hits="2" /></lines>
+				<lines><line number="477"  hits="2" /></lines>
 			</method>
 			<method name="_voluntaryDisconnect"  hits="3"  signature="()V" >
-				<lines><line number="483"  hits="3" /></lines>
+				<lines><line number="484"  hits="3" /></lines>
 			</method>
 			<method name="_fund"  hits="27"  signature="()V" >
-				<lines><line number="495"  hits="27" /></lines>
+				<lines><line number="496"  hits="27" /></lines>
 			</method>
 			<method name="_withdraw"  hits="5"  signature="()V" >
-				<lines><line number="504"  hits="5" /></lines>
+				<lines><line number="505"  hits="5" /></lines>
 			</method>
 			<method name="_requestValidatorExit"  hits="1"  signature="()V" >
-				<lines><line number="512"  hits="1" /></lines>
+				<lines><line number="513"  hits="1" /></lines>
 			</method>
 			<method name="_mintSharesTo"  hits="32"  signature="()V" >
-				<lines><line number="521"  hits="32" /></lines>
+				<lines><line number="522"  hits="32" /></lines>
 			</method>
 			<method name="_burnStETH"  hits="5"  signature="()V" >
-				<lines><line number="529"  hits="5" /></lines>
+				<lines><line number="530"  hits="5" /></lines>
 			</method>
 			<method name="_burnWstETH"  hits="226"  signature="()V" >
-				<lines><line number="537"  hits="226" /></lines>
+				<lines><line number="538"  hits="226" /></lines>
 			</method>
 			<method name="_burnSharesFrom"  hits="236"  signature="()V" >
-				<lines><line number="549"  hits="236" /></lines>
+				<lines><line number="550"  hits="236" /></lines>
 			</method>
 			<method name="_totalMintableShares"  hits="17"  signature="()V" >
-				<lines><line number="563"  hits="17" /></lines>
+				<lines><line number="564"  hits="17" /></lines>
 			</method>
 			<method name="_rebalanceVault"  hits="6"  signature="()V" >
-				<lines><line number="573"  hits="6" /></lines>
+				<lines><line number="574"  hits="6" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2260,44 +2260,44 @@
 			<line number="377"  hits="6"  branch="false" />
 			<line number="389"  hits="4"  branch="false" />
 			<line number="401"  hits="4"  branch="false" />
-			<line number="413"  hits="4"  branch="false" />
-			<line number="421"  hits="2"  branch="false" />
-			<line number="429"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="431"  hits="2"  branch="false" />
-			<line number="433"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="434"  hits="1"  branch="false" />
+			<line number="414"  hits="4"  branch="false" />
+			<line number="422"  hits="2"  branch="false" />
+			<line number="430"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="432"  hits="2"  branch="false" />
+			<line number="434"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="435"  hits="1"  branch="false" />
-			<line number="437"  hits="1"  branch="false" />
+			<line number="436"  hits="1"  branch="false" />
 			<line number="438"  hits="1"  branch="false" />
-			<line number="439"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="442"  hits="2"  branch="false" />
-			<line number="453"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="455"  hits="1"  branch="false" />
-			<line number="457"  hits="1"  branch="false" />
-			<line number="466"  hits="39"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="467"  hits="5"  branch="false" />
-			<line number="469"  hits="39"  branch="false" />
-			<line number="477"  hits="2"  branch="false" />
-			<line number="484"  hits="3"  branch="false" />
-			<line number="485"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="486"  hits="2"  branch="false" />
-			<line number="489"  hits="2"  branch="false" />
-			<line number="496"  hits="27"  branch="false" />
-			<line number="505"  hits="5"  branch="false" />
-			<line number="513"  hits="1"  branch="false" />
-			<line number="522"  hits="32"  branch="false" />
-			<line number="530"  hits="5"  branch="false" />
-			<line number="538"  hits="226"  branch="false" />
+			<line number="439"  hits="1"  branch="false" />
+			<line number="440"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="443"  hits="2"  branch="false" />
+			<line number="454"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="456"  hits="1"  branch="false" />
+			<line number="458"  hits="1"  branch="false" />
+			<line number="467"  hits="39"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="468"  hits="5"  branch="false" />
+			<line number="470"  hits="39"  branch="false" />
+			<line number="478"  hits="2"  branch="false" />
+			<line number="485"  hits="3"  branch="false" />
+			<line number="486"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="487"  hits="2"  branch="false" />
+			<line number="490"  hits="2"  branch="false" />
+			<line number="497"  hits="27"  branch="false" />
+			<line number="506"  hits="5"  branch="false" />
+			<line number="514"  hits="1"  branch="false" />
+			<line number="523"  hits="32"  branch="false" />
+			<line number="531"  hits="5"  branch="false" />
 			<line number="539"  hits="226"  branch="false" />
-			<line number="540"  hits="225"  branch="false" />
-			<line number="542"  hits="225"  branch="false" />
-			<line number="550"  hits="236"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="551"  hits="225"  branch="false" />
-			<line number="553"  hits="11"  branch="false" />
-			<line number="556"  hits="236"  branch="false" />
-			<line number="564"  hits="17"  branch="false" />
-			<line number="566"  hits="17"  branch="false" />
-			<line number="574"  hits="6"  branch="false" />
+			<line number="540"  hits="226"  branch="false" />
+			<line number="541"  hits="225"  branch="false" />
+			<line number="543"  hits="225"  branch="false" />
+			<line number="551"  hits="236"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="552"  hits="225"  branch="false" />
+			<line number="554"  hits="11"  branch="false" />
+			<line number="557"  hits="236"  branch="false" />
+			<line number="565"  hits="17"  branch="false" />
+			<line number="567"  hits="17"  branch="false" />
+			<line number="575"  hits="6"  branch="false" />
 		</lines>
 		</class>
 		<class name="Delegation.sol"  filename="contracts/0.8.25/vaults/Delegation.sol"  line-rate="0.9863"  branch-rate="0.9031999999999999" >
