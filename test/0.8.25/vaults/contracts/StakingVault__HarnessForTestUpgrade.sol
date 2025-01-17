@@ -10,9 +10,8 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "contracts/0.8.25/vaults/interfaces/IBeaconProxy.sol";
-import {BeaconChainDepositLogistics} from "contracts/0.8.25/vaults/BeaconChainDepositLogistics.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         uint128 reportValuation;
@@ -24,18 +23,18 @@ contract StakingVault__HarnessForTestUpgrade is IBeaconProxy, BeaconChainDeposit
 
     uint64 private constant _version = 2;
     VaultHub public immutable vaultHub;
+    address public immutable beaconChainDepositContract;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
-    constructor(
-        address _vaultHub,
-        address _beaconChainDepositContract
-    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         vaultHub = VaultHub(_vaultHub);
+        beaconChainDepositContract = _beaconChainDepositContract;
     }
 
     modifier onlyBeacon() {

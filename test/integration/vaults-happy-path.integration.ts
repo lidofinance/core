@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, keccak256, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { impersonate, log, trace, updateBalance } from "lib";
+import { impersonate, log, streccak, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -148,7 +148,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
 
     expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
+    expect(await vaultImpl.depositContract()).to.equal(depositContract);
     expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
@@ -245,9 +245,24 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault
-      .connect(nodeOperator)
-      .depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const deposits = [];
+
+    for (let i = 0; i < keysToAdd; i++) {
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
+      const signature = hexlify(
+        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
+      );
+
+      deposits.push({
+        pubkey: pubkey,
+        signature: signature,
+        amount: VALIDATOR_DEPOSIT_SIZE,
+        depositDataRoot: getRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
+      });
+    }
+
+    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     await trace("stakingVault.depositToBeaconChain", topUpTx);
 
@@ -460,3 +475,27 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.locked()).to.equal(0);
   });
 });
+
+function getRoot(creds: string, pubkey: string, signature: string, size: bigint) {
+  // strip everything of the 0x prefix to make 0x explicit when slicing
+  creds = creds.slice(2);
+  pubkey = pubkey.slice(2);
+  signature = signature.slice(2);
+  const sizeHex = size.toString(16);
+
+  const pubkeyRoot = keccak256("0x" + pubkey + "00".repeat(16)).slice(2);
+  const sigSlice1root = keccak256("0x" + signature.slice(0, 128)).slice(2);
+  const sigSlice2root = keccak256("0x" + signature.slice(128, signature.length) + "00".repeat(32)).slice(2);
+  const sigRoot = keccak256("0x" + sigSlice1root + sigSlice2root).slice(2);
+  const sizeInGweiLE64 = toLittleEndian(sizeHex);
+
+  const pubkeyCredsRoot = keccak256("0x" + pubkeyRoot + creds).slice(2);
+  const sizeSigRoot = keccak256("0x" + sizeInGweiLE64 + "00".repeat(24) + sigRoot).slice(2);
+
+  return keccak256("0x" + pubkeyCredsRoot + sizeSigRoot);
+}
+
+function toLittleEndian(value: string) {
+  const bytes = Buffer.from(value, "hex");
+  return bytes.reverse().toString("hex");
+}

@@ -5,13 +5,13 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {BeaconChainDepositLogistics} from "./BeaconChainDepositLogistics.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+
+import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
-
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
 
 /**
  * @title StakingVault
@@ -52,7 +52,7 @@ import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -81,6 +81,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
     VaultHub private immutable VAULT_HUB;
 
     /**
+     * @notice Address of `BeaconChainDepositContract`
+     *         Set immutably in the constructor to avoid storage costs
+     */
+    IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
+
+    /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
@@ -94,13 +100,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(
-        address _vaultHub,
-        address _beaconChainDepositContract
-    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
+        BEACON_CHAIN_DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -120,7 +125,11 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */ ) external onlyBeacon initializer {
+    function initialize(
+        address _owner,
+        address _nodeOperator,
+        bytes calldata /* _params */
+    ) external onlyBeacon initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
     }
@@ -159,6 +168,14 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      */
     function vaultHub() external view returns (address) {
         return address(VAULT_HUB);
+    }
+
+    /**
+     * @notice Returns the address of `BeaconChainDepositContract`
+     * @return Address of `BeaconChainDepositContract`
+     */
+    function depositContract() external view returns (address) {
+        return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
     /**
@@ -304,22 +321,26 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
 
     /**
      * @notice Performs a deposit to the beacon chain deposit contract
-     * @param _numberOfDeposits Number of deposits to make
-     * @param _pubkeys Concatenated validator public keys
-     * @param _signatures Concatenated deposit data signatures
+     * @param _deposits Array of deposit structs
      * @dev Includes a check to ensure StakingVault is balanced before making deposits
      */
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external {
-        if (_numberOfDeposits == 0) revert ZeroArgument("_numberOfDeposits");
-        if (!isBalanced()) revert Unbalanced();
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+        if (_deposits.length == 0) revert ZeroArgument("_deposits");
         if (msg.sender != _getStorage().nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (!isBalanced()) revert Unbalanced();
 
-        _makeBeaconChainDeposits32ETH(_numberOfDeposits, bytes.concat(withdrawalCredentials()), _pubkeys, _signatures);
-        emit DepositedToBeaconChain(msg.sender, _numberOfDeposits, _numberOfDeposits * 32 ether);
+        uint256 numberOfDeposits = _deposits.length;
+        for (uint256 i = 0; i < numberOfDeposits; i++) {
+            Deposit calldata deposit = _deposits[i];
+            BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
+                deposit.pubkey,
+                bytes.concat(withdrawalCredentials()),
+                deposit.signature,
+                deposit.depositDataRoot
+            );
+        }
+
+        emit DepositedToBeaconChain(msg.sender, numberOfDeposits);
     }
 
     /**
@@ -416,9 +437,8 @@ contract StakingVault is IStakingVault, IBeaconProxy, BeaconChainDepositLogistic
      * @notice Emitted when ether is deposited to `DepositContract`
      * @param sender Address that initiated the deposit
      * @param deposits Number of validator deposits made
-     * @param amount Total amount of ether deposited
      */
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 amount);
+    event DepositedToBeaconChain(address indexed sender, uint256 deposits);
 
     /**
      * @notice Emitted when a validator exit request is made
