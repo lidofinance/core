@@ -303,7 +303,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Mints wstETH tokens backed by the vault to a recipient. Approvals for the passed amounts should be done before.
+     * @notice Mints wstETH tokens backed by the vault to a recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfWstETH Amount of tokens to mint
      */
@@ -320,7 +320,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault
+     * @notice Burns stETH shares from the sender backed by the vault. Approvals for the passed amounts should be done before.
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -328,7 +328,7 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault
+     * @notice Burns stETH shares from the sender backed by the vault. Approvals for the passed amounts should be done before.
      * @param _amountOfStETH Amount of stETH shares to burn
      */
     function burnSteth(uint256 _amountOfStETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
