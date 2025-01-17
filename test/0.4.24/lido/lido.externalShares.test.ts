@@ -46,12 +46,12 @@ describe("Lido.sol:externalShares", () => {
     accountingSigner = await impersonate(await locator.accounting(), ether("1"));
 
     // Add some ether to the protocol
-    await lido.connect(whale).submit(ZeroAddress, { value: 1000n });
+    await lido.connect(whale).submit(ZeroAddress, { value: ether("1000") });
 
     // Burn some shares to make share rate fractional
     const burner = await impersonate(await locator.burner(), ether("1"));
-    await lido.connect(whale).transfer(burner, 500n);
-    await lido.connect(burner).burnShares(500n);
+    await lido.connect(whale).transfer(burner, ether("500"));
+    await lido.connect(burner).burnShares(ether("500"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -199,16 +199,16 @@ describe("Lido.sol:externalShares", () => {
       // Increase the external ether limit to 10%
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
-      const amountToMint = await lido.getMaxMintableExternalShares();
-      const etherToMint = await lido.getPooledEthByShares(amountToMint);
+      const sharesToMint = 1n;
+      const etherToMint = await lido.getPooledEthByShares(sharesToMint);
 
-      await expect(lido.connect(accountingSigner).mintExternalShares(whale, amountToMint))
+      await expect(lido.connect(accountingSigner).mintExternalShares(whale, sharesToMint))
         .to.emit(lido, "Transfer")
         .withArgs(ZeroAddress, whale, etherToMint)
         .to.emit(lido, "TransferShares")
-        .withArgs(ZeroAddress, whale, amountToMint)
+        .withArgs(ZeroAddress, whale, sharesToMint)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, amountToMint, etherToMint);
+        .withArgs(whale, sharesToMint, etherToMint);
 
       // Verify external balance was increased
       const externalEther = await lido.getExternalEther();
@@ -280,11 +280,11 @@ describe("Lido.sol:externalShares", () => {
 
       // Burn partial amount
       await lido.connect(accountingSigner).burnExternalShares(150n);
-      expect(await lido.getExternalEther()).to.equal(150n);
+      expect(await lido.getExternalShares()).to.equal(150n);
 
       // Burn remaining
       await lido.connect(accountingSigner).burnExternalShares(150n);
-      expect(await lido.getExternalEther()).to.equal(0n);
+      expect(await lido.getExternalShares()).to.equal(0n);
     });
   });
 
