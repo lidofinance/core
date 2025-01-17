@@ -52,6 +52,8 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
 
+    error InsufficientTriggerableWithdrawalFee(uint256 providedTotalFee, uint256 requiredTotalFee, uint256 requestCount);
+
     /**
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
@@ -144,7 +146,23 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     function addFullWithdrawalRequests(
         bytes[] calldata pubkeys
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) {
-        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, msg.value);
+        uint256 prevBalance = address(this).balance - msg.value;
+
+        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        uint256 totalFee = pubkeys.length * minFeePerRequest;
+
+        if(totalFee > msg.value) {
+            revert InsufficientTriggerableWithdrawalFee(msg.value, totalFee, pubkeys.length);
+        }
+
+        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, minFeePerRequest);
+
+        uint256 refund = msg.value - totalFee;
+        if (refund > 0) {
+            msg.sender.call{value: refund}("");
+        }
+
+        assert(address(this).balance == prevBalance);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {

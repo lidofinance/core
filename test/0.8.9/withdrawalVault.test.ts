@@ -288,10 +288,10 @@ describe("WithdrawalVault.sol", () => {
     });
   });
 
-  async function getFee(requestsCount: number): Promise<bigint> {
+  async function getFee(): Promise<bigint> {
     const fee = await vault.getWithdrawalRequestFee();
 
-    return ethers.parseUnits((fee * BigInt(requestsCount)).toString(), "wei");
+    return ethers.parseUnits(fee.toString(), "wei");
   }
 
   async function getWithdrawalCredentialsContractBalance(): Promise<bigint> {
@@ -328,23 +328,22 @@ describe("WithdrawalVault.sol", () => {
       await withdrawalsPredeployed.setFee(3n); // Set fee to 3 gwei
 
       // 1. Should revert if no fee is sent
-      await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys)).to.be.revertedWithCustomError(
-        vault,
-        "FeeNotEnough",
-      );
+      await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys))
+        .to.be.revertedWithCustomError(vault, "InsufficientTriggerableWithdrawalFee")
+        .withArgs(0, 3n, 1);
 
       // 2. Should revert if fee is less than required
       const insufficientFee = 2n;
-      await expect(
-        vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: insufficientFee }),
-      ).to.be.revertedWithCustomError(vault, "FeeNotEnough");
+      await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: insufficientFee }))
+        .to.be.revertedWithCustomError(vault, "InsufficientTriggerableWithdrawalFee")
+        .withArgs(2n, 3n, 1);
     });
 
     it("Should revert if any pubkey is not 48 bytes", async function () {
       // Invalid pubkey (only 2 bytes)
       const pubkeys = ["0x1234"];
 
-      const fee = await getFee(pubkeys.length);
+      const fee = await getFee();
 
       await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: fee }))
         .to.be.revertedWithCustomError(vault, "InvalidPubkeyLength")
@@ -353,7 +352,7 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
       const { pubkeys } = generateWithdrawalRequestPayload(1);
-      const fee = await getFee(pubkeys.length);
+      const fee = await getFee();
 
       // Set mock to fail on add
       await withdrawalsPredeployed.setFailOnAddRequest(true);
@@ -379,15 +378,17 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeys } = generateWithdrawalRequestPayload(requestCount);
 
       await withdrawalsPredeployed.setFee(3n);
-      const totalWithdrawalFee = 9n;
+      const expectedTotalWithdrawalFee = 9n;
 
-      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: totalWithdrawalFee });
+      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: expectedTotalWithdrawalFee });
 
       // Check extremely high fee
       await withdrawalsPredeployed.setFee(ethers.parseEther("10"));
-      const largeTotalWithdrawalFee = ethers.parseEther("30");
+      const expectedLargeTotalWithdrawalFee = ethers.parseEther("30");
 
-      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: largeTotalWithdrawalFee });
+      await vault
+        .connect(validatorsExitBus)
+        .addFullWithdrawalRequests(pubkeys, { value: expectedLargeTotalWithdrawalFee });
     });
 
     it("Should accept withdrawal requests when the provided fee exceeds the required amount", async function () {
@@ -405,28 +406,40 @@ describe("WithdrawalVault.sol", () => {
       await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: largeTotalWithdrawalFee });
     });
 
-    it("Should correctly deduct the exact fee amount from the contract balance", async function () {
+    it("Should not affect contract balance", async function () {
       const requestCount = 3;
       const { pubkeys } = generateWithdrawalRequestPayload(requestCount);
 
       await withdrawalsPredeployed.setFee(3n);
-      const fee = 9n + 1n; // 3 requests * 3 gwei (fee) + 1 gwei (extra fee) = 10 gwei
+      const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
 
       const initialBalance = await getWithdrawalCredentialsContractBalance();
-      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: fee });
+      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: expectedTotalWithdrawalFee });
+      expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
+
+      const excessTotalWithdrawalFee = 9n + 1n; // 3 requests * 3 gwei (fee) + 1 gwei (extra fee) = 10 gwei
+      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: excessTotalWithdrawalFee });
       expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
     });
+
+    // ToDo: should return back the excess fee
 
     it("Should transfer the total calculated fee to the EIP-7002 withdrawal contract", async function () {
       const requestCount = 3;
       const { pubkeys } = generateWithdrawalRequestPayload(requestCount);
 
       await withdrawalsPredeployed.setFee(3n);
-      const totalWithdrawalFee = 9n + 1n;
+      const expectedTotalWithdrawalFee = 9n;
+      const excessTotalWithdrawalFee = 9n + 1n;
 
-      const initialBalance = await getWithdrawalsPredeployedContractBalance();
-      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: totalWithdrawalFee });
-      expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + totalWithdrawalFee);
+      let initialBalance = await getWithdrawalsPredeployedContractBalance();
+      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: expectedTotalWithdrawalFee });
+      expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
+
+      initialBalance = await getWithdrawalsPredeployedContractBalance();
+      await vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeys, { value: excessTotalWithdrawalFee });
+      // Only the expected fee should be transferred
+      expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
     });
 
     it("Should emit a 'WithdrawalRequestAdded' event when a new withdrawal request is added", async function () {
@@ -447,12 +460,13 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Should verify correct fee distribution among requests", async function () {
-      await withdrawalsPredeployed.setFee(2n);
+      const withdrawalFee = 2n;
+      await withdrawalsPredeployed.setFee(withdrawalFee);
 
       const requestCount = 5;
       const { pubkeys } = generateWithdrawalRequestPayload(requestCount);
 
-      const testFeeDistribution = async (totalWithdrawalFee: bigint, expectedFeePerRequest: bigint[]) => {
+      const testFeeDistribution = async (totalWithdrawalFee: bigint) => {
         const tx = await vault
           .connect(validatorsExitBus)
           .addFullWithdrawalRequests(pubkeys, { value: totalWithdrawalFee });
@@ -462,14 +476,13 @@ describe("WithdrawalVault.sol", () => {
         expect(events.length).to.equal(requestCount);
 
         for (let i = 0; i < requestCount; i++) {
-          expect(events[i].args[1]).to.equal(expectedFeePerRequest[i]);
+          expect(events[i].args[1]).to.equal(withdrawalFee);
         }
       };
 
-      await testFeeDistribution(10n, [2n, 2n, 2n, 2n, 2n]);
-      await testFeeDistribution(11n, [2n, 2n, 2n, 2n, 3n]);
-      await testFeeDistribution(14n, [2n, 2n, 2n, 2n, 6n]);
-      await testFeeDistribution(15n, [3n, 3n, 3n, 3n, 3n]);
+      await testFeeDistribution(10n);
+      await testFeeDistribution(11n);
+      await testFeeDistribution(14n);
     });
 
     it("Should ensure withdrawal requests are encoded as expected with a 48-byte pubkey and 8-byte amount", async function () {
@@ -499,27 +512,28 @@ describe("WithdrawalVault.sol", () => {
     });
 
     const testCasesForWithdrawalRequests = [
-      { requestCount: 1, extraFee: 0n },
-      { requestCount: 1, extraFee: 100n },
-      { requestCount: 1, extraFee: 100_000_000_000n },
-      { requestCount: 3, extraFee: 0n },
-      { requestCount: 3, extraFee: 1n },
-      { requestCount: 7, extraFee: 3n },
-      { requestCount: 10, extraFee: 0n },
-      { requestCount: 10, extraFee: 100_000_000_000n },
-      { requestCount: 100, extraFee: 0n },
+      { requestCount: 1, fee: 0n },
+      { requestCount: 1, fee: 100n },
+      { requestCount: 1, fee: 100_000_000_000n },
+      { requestCount: 3, fee: 0n },
+      { requestCount: 3, fee: 1n },
+      { requestCount: 7, fee: 3n },
+      { requestCount: 10, fee: 0n },
+      { requestCount: 10, fee: 100_000_000_000n },
+      { requestCount: 100, fee: 0n },
     ];
 
-    testCasesForWithdrawalRequests.forEach(({ requestCount, extraFee }) => {
-      it(`Should successfully add ${requestCount} requests with extra fee ${extraFee} and emit events`, async () => {
+    testCasesForWithdrawalRequests.forEach(({ requestCount, fee }) => {
+      it(`Should successfully add ${requestCount} requests with extra fee ${fee} and emit events`, async () => {
         const { pubkeys } = generateWithdrawalRequestPayload(requestCount);
-        const totalWithdrawalFee = (await getFee(pubkeys.length)) + extraFee;
+        const requestFee = fee == 0n ? await getFee() : fee;
+        const expectedTotalWithdrawalFee = requestFee * BigInt(requestCount);
 
         const initialBalance = await getWithdrawalCredentialsContractBalance();
 
         const tx = await vault
           .connect(validatorsExitBus)
-          .addFullWithdrawalRequests(pubkeys, { value: totalWithdrawalFee });
+          .addFullWithdrawalRequests(pubkeys, { value: expectedTotalWithdrawalFee });
 
         expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
 

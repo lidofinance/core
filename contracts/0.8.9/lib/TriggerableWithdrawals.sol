@@ -8,7 +8,7 @@ library TriggerableWithdrawals {
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
     error InsufficientBalance(uint256 balance, uint256 totalWithdrawalFee);
-    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 providedTotalFee);
+    error InsufficientRequestFee(uint256 feePerRequest, uint256 minFeePerRequest);
 
     error WithdrawalRequestFeeReadFailed();
     error InvalidPubkeyLength(bytes pubkey);
@@ -25,10 +25,10 @@ library TriggerableWithdrawals {
      */
     function addFullWithdrawalRequests(
         bytes[] calldata pubkeys,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
         uint64[] memory amounts = new uint64[](pubkeys.length);
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        _addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
     /**
@@ -43,7 +43,7 @@ library TriggerableWithdrawals {
     function addPartialWithdrawalRequests(
         bytes[] calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
         _requireArrayLengthsMatch(pubkeys, amounts);
 
@@ -53,7 +53,7 @@ library TriggerableWithdrawals {
             }
         }
 
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        _addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
         /**
@@ -67,10 +67,10 @@ library TriggerableWithdrawals {
     function addWithdrawalRequests(
         bytes[] calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
         _requireArrayLengthsMatch(pubkeys, amounts);
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        _addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
     /**
@@ -90,39 +90,36 @@ library TriggerableWithdrawals {
     function _addWithdrawalRequests(
         bytes[] calldata pubkeys,
         uint64[] memory amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
         uint256 keysCount = pubkeys.length;
         if (keysCount == 0) {
             revert NoWithdrawalRequests();
         }
 
+        uint256 minFeePerRequest = getWithdrawalRequestFee();
+
+        if (feePerRequest == 0) {
+            feePerRequest = minFeePerRequest;
+        }
+
+        if (feePerRequest < minFeePerRequest) {
+            revert InsufficientRequestFee(feePerRequest, minFeePerRequest);
+        }
+
+        uint256 totalWithdrawalFee = feePerRequest * keysCount;
+
         if(address(this).balance < totalWithdrawalFee) {
             revert InsufficientBalance(address(this).balance, totalWithdrawalFee);
         }
-
-        uint256 minFeePerRequest = getWithdrawalRequestFee();
-        if (minFeePerRequest * keysCount > totalWithdrawalFee) {
-            revert FeeNotEnough(minFeePerRequest, keysCount, totalWithdrawalFee);
-        }
-
-        uint256 feePerRequest = totalWithdrawalFee / keysCount;
-        uint256 unallocatedFee = totalWithdrawalFee % keysCount;
-        uint256 prevBalance = address(this).balance - totalWithdrawalFee;
 
         for (uint256 i = 0; i < keysCount; ++i) {
             if(pubkeys[i].length != 48) {
                 revert InvalidPubkeyLength(pubkeys[i]);
             }
 
-            uint256 feeToSend = feePerRequest;
-
-            if (i == keysCount - 1) {
-                feeToSend += unallocatedFee;
-            }
-
             bytes memory callData = abi.encodePacked(pubkeys[i], amounts[i]);
-            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feeToSend}(callData);
+            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
             if (!success) {
                 revert WithdrawalRequestAdditionFailed(pubkeys[i], amounts[i]);
@@ -130,8 +127,6 @@ library TriggerableWithdrawals {
 
             emit WithdrawalRequestAdded(pubkeys[i], amounts[i]);
         }
-
-        assert(address(this).balance == prevBalance);
     }
 
     function _requireArrayLengthsMatch(
