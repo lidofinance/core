@@ -13,6 +13,10 @@ import {console2} from "forge-std/console2.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
+interface IAccounting {
+    function initialize(address _admin) external;
+}
+
 interface ILido {
     function getTotalShares() external view returns (uint256);
 
@@ -89,6 +93,9 @@ contract BaseProtocolTest is Test {
     address public evmScriptRegistryFactory;
     address public daoFactoryAdr;
 
+    uint256 public genesisTimestamp = 1695902400;
+    address private depositContract = address(0x4242424242424242424242424242424242424242);
+
     function setUpProtocol(uint256 _startBalance, address _rootAccount, address _userAccount) public {
         rootAccount = _rootAccount;
         userAccount = _userAccount;
@@ -111,6 +118,48 @@ contract BaseProtocolTest is Test {
 
         /// @dev deploy lido locator with dummy default values
         lidoLocator = _deployLidoLocator(lidoProxyAddress);
+
+        // Add accounting contract with handler to the protocol
+        address accountingImpl = deployCode(
+            "Accounting.sol:Accounting",
+            abi.encode([address(lidoLocator), lidoProxyAddress])
+        );
+
+        deployCodeTo(
+            "OssifiableProxy.sol:OssifiableProxy",
+            abi.encode(accountingImpl, rootAccount, new bytes(0)),
+            lidoLocator.accounting()
+        );
+
+        deployCodeTo(
+            "AccountingOracle.sol:AccountingOracle",
+            abi.encode(
+                address(lidoLocator),
+                lidoLocator.legacyOracle(),
+                12, // secondsPerSlot
+                genesisTimestamp
+            ),
+            lidoLocator.accountingOracle()
+        );
+
+        // Add burner contract to the protocol
+        deployCodeTo(
+            "Burner.sol:Burner",
+            abi.encode(rootAccount, address(lidoLocator), lidoProxyAddress, 0, 0),
+            lidoLocator.burner()
+        );
+
+        // Add staking router contract to the protocol
+        deployCodeTo("StakingRouter.sol:StakingRouter", abi.encode(depositContract), lidoLocator.stakingRouter());
+
+        // Add oracle report sanity checker contract to the protocol
+        deployCodeTo(
+            "OracleReportSanityChecker.sol:OracleReportSanityChecker",
+            abi.encode(address(lidoLocator), rootAccount, [1500, 1500, 1000, 2000, 8, 24, 128, 5000000, 1000, 101, 50]),
+            lidoLocator.oracleReportSanityChecker()
+        );
+
+        IAccounting(lidoLocator.accounting()).initialize(rootAccount);
 
         /// @dev deploy eip712steth
         address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));

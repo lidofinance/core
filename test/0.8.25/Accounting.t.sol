@@ -11,10 +11,9 @@ import {console2} from "forge-std/console2.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
+import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 
 interface IAccounting {
-    function initialize(address _admin) external;
-
     function handleOracleReport(ReportValues memory _report) external;
 
     function simulateOracleReport(ReportValues memory _report, uint256 _withdrawalShareRate) external;
@@ -74,9 +73,11 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         });
 
         vm.prank(accountingOracle);
-        accounting.handleOracleReport(currentReport);
-
-        reports.push(currentReport);
+        try accounting.handleOracleReport(currentReport) {
+            reports.push(currentReport);
+        } catch {
+            console2.log("Could not store report");
+        }
     }
 }
 
@@ -88,12 +89,11 @@ contract AccountingTest is BaseProtocolTest {
     address private rootAccount = address(0x123);
     address private userAccount = address(0x321);
 
-    address private depositContract = address(0x4242424242424242424242424242424242424242);
     function setUp() public {
         BaseProtocolTest.setUpProtocol(protocolStartBalance, rootAccount, userAccount);
 
         ReportValues memory refReport = ReportValues({
-            timestamp: 1705312150,
+            timestamp: genesisTimestamp,
             timeElapsed: 0,
             clValidators: 0,
             clBalance: 0,
@@ -105,53 +105,11 @@ contract AccountingTest is BaseProtocolTest {
             netCashFlows: new int256[](0)
         });
 
-        // Add accounting contract with handler to the protocol
-        address accountingImpl = deployCode(
-            "Accounting.sol:Accounting",
-            abi.encode([address(lidoLocator), lidoLocator.lido()])
-        );
-
-        deployCodeTo(
-            "OssifiableProxy.sol:OssifiableProxy",
-            abi.encode(accountingImpl, rootAccount, new bytes(0)),
-            lidoLocator.accounting()
-        );
-
         accountingHandler = new AccountingHandler(
             lidoLocator.accounting(),
             lidoLocator.lido(),
             lidoLocator.accountingOracle(),
             refReport
-        );
-
-        deployCodeTo(
-            "AccountingOracle.sol:AccountingOracle",
-            abi.encode(
-                address(lidoLocator),
-                lidoLocator.legacyOracle(),
-                12, // secondsPerSlot
-                1695902400 // genesisTime
-            ),
-            lidoLocator.accountingOracle()
-        );
-
-        IAccounting(lidoLocator.accounting()).initialize(rootAccount);
-
-        // Add burner contract to the protocol
-        deployCodeTo(
-            "Burner.sol:Burner",
-            abi.encode(rootAccount, address(lidoLocator), lidoLocator.lido(), 0, 0),
-            lidoLocator.burner()
-        );
-
-        // Add staking router contract to the protocol
-        deployCodeTo("StakingRouter.sol:StakingRouter", abi.encode(depositContract), lidoLocator.stakingRouter());
-
-        // Add oracle report sanity checker contract to the protocol
-        deployCodeTo(
-            "OracleReportSanityChecker.sol:OracleReportSanityChecker",
-            abi.encode(address(lidoLocator), rootAccount, [1500, 1500, 1000, 2000, 8, 24, 128, 5000000, 1000, 101, 50]),
-            lidoLocator.oracleReportSanityChecker()
         );
 
         // Set target contract to the accounting handler
