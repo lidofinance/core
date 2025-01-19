@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -22,12 +22,12 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let originalState: string;
+  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let initTx: ContractTransactionResponse;
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
   let reportFields: ReportFields;
-  let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -42,22 +42,29 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     valIndex: number;
     valPubkey: string;
   }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
+  interface ExitRequestData {
     requestsCount: number;
     dataFormat: number;
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
+  interface ReportFields {
+    consensusVersion: bigint;
+    refSlot: bigint;
+    exitRequestData: ExitRequestData;
+  }
 
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const exitRequestItems = [
+      items.exitRequestData.requestsCount,
+      items.exitRequestData.dataFormat,
+      items.exitRequestData.data,
+    ];
+    const exitRequestData = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes)"], [exitRequestItems]);
+    const dataHash = ethers.keccak256(exitRequestData);
+    const oracleReportItems = [items.consensusVersion, items.refSlot, dataHash];
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes32)"], [oracleReportItems]);
+    return ethers.keccak256(data);
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -74,8 +81,9 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    withdrawalVault = deployed.withdrawalVault;
 
-    initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
+    initTx = await initVEBO({ admin: admin.address, oracle, consensus, withdrawalVault, resumeAfterDeploy: true });
 
     oracleVersion = await oracle.getContractVersion();
 
@@ -92,14 +100,16 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     reportFields = {
       consensusVersion: CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST,
       refSlot: refSlot,
-      requestsCount: exitRequests.length,
-      data: encodeExitRequestsDataList(exitRequests),
+      exitRequestData: {
+        dataFormat: DATA_FORMAT_LIST,
+        requestsCount: exitRequests.length,
+        data: encodeExitRequestsDataList(exitRequests),
+      },
     };
 
-    reportItems = getValidatorsExitBusReportDataItems(reportFields);
-    reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+    // reportItems = getValidatorsExitBusReportDataItems(reportFields);
+    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
     await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
     await consensus.connect(member3).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
@@ -123,7 +133,6 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       expect(oracleVersion).to.be.not.null;
       expect(exitRequests).to.be.not.null;
       expect(reportFields).to.be.not.null;
-      expect(reportItems).to.be.not.null;
       expect(reportHash).to.be.not.null;
     });
   });

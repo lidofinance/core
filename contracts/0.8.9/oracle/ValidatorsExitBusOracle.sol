@@ -418,6 +418,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
+        if (report.exitRequestData.requestsCount == 0) {
+            return;
+        }
+
         mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
 
         RequestStatus storage request = hashes[exitRequestHash];

@@ -4,7 +4,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  OracleReportSanityChecker,
+  ValidatorsExitBus__Harness,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -25,6 +30,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let oracleReportSanityChecker: OracleReportSanityChecker;
+  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let oracleVersion: bigint;
 
@@ -41,22 +47,29 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     valIndex: number;
     valPubkey: string;
   }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
+  interface ExitRequestData {
     requestsCount: number;
     dataFormat: number;
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
+  interface ReportFields {
+    consensusVersion: bigint;
+    refSlot: bigint;
+    exitRequestData: ExitRequestData;
+  }
 
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const exitRequestItems = [
+      items.exitRequestData.requestsCount,
+      items.exitRequestData.dataFormat,
+      items.exitRequestData.data,
+    ];
+    const exitRequestData = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes)"], [exitRequestItems]);
+    const dataHash = ethers.keccak256(exitRequestData);
+    const oracleReportItems = [items.consensusVersion, items.refSlot, dataHash];
+    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes32)"], [oracleReportItems]);
+    return ethers.keccak256(data);
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -78,25 +91,27 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
   const prepareReportAndSubmitHash = async (
     requests = [{ moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[2] }],
-    options = { reportFields: {} },
+    options?: Partial<Omit<ReportFields, "exitRequestData">> & {
+      exitRequestData?: Partial<ExitRequestData>;
+    },
   ) => {
     const { refSlot } = await consensus.getCurrentFrame();
-
     const reportData = {
-      consensusVersion: CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST,
-      refSlot,
-      requestsCount: requests.length,
-      data: encodeExitRequestsDataList(requests),
-      ...options.reportFields,
+      consensusVersion: options?.consensusVersion || CONSENSUS_VERSION,
+      refSlot: options?.refSlot || refSlot,
+      exitRequestData: {
+        requestsCount: requests.length,
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(requests),
+        ...options?.exitRequestData,
+      },
     };
 
-    const reportItems = getValidatorsExitBusReportDataItems(reportData);
-    const reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+    const reportHash = calcValidatorsExitBusReportDataHash(reportData);
 
     await triggerConsensusOnHash(reportHash);
 
-    return { reportData, reportHash, reportItems };
+    return { reportData, reportHash };
   };
 
   async function getLastRequestedValidatorIndex(moduleId: number, nodeOpId: number) {
@@ -108,11 +123,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
+    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
+      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -182,7 +199,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const dataFormatUnsupported = 0;
         const { reportData } = await prepareReportAndSubmitHash(
           [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] }],
-          { reportFields: { dataFormat: dataFormatUnsupported } },
+          { exitRequestData: { dataFormat: dataFormatUnsupported } },
         );
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
@@ -194,7 +211,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const dataFormatUnsupported = 2;
         const { reportData } = await prepareReportAndSubmitHash(
           [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] }],
-          { reportFields: { dataFormat: dataFormatUnsupported } },
+          { exitRequestData: { dataFormat: dataFormatUnsupported } },
         );
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
@@ -215,7 +232,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const { refSlot } = await consensus.getCurrentFrame();
         const exitRequests = [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] }];
         const { reportData } = await prepareReportAndSubmitHash(exitRequests, {
-          reportFields: { data: encodeExitRequestsDataList(exitRequests) + "aaaaaaaaaaaaaaaaaa", refSlot },
+          exitRequestData: { data: encodeExitRequestsDataList(exitRequests) + "aaaaaaaaaaaaaaaaaa" },
+          refSlot,
         });
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
@@ -230,10 +248,10 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         const data = encodeExitRequestsDataList(exitRequests);
 
         const { reportData } = await prepareReportAndSubmitHash(exitRequests, {
-          reportFields: {
+          exitRequestData: {
             data: data.slice(0, data.length - 18),
-            refSlot,
           },
+          refSlot,
         });
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
@@ -283,7 +301,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       it("reverts if requestsCount does not match with encoded data size", async () => {
         const { reportData } = await prepareReportAndSubmitHash(
           [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] }],
-          { reportFields: { requestsCount: 2 } },
+          { exitRequestData: { requestsCount: 2 } },
         );
 
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
@@ -375,6 +393,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const requestsStep3: ExitRequest[] = [];
       const { reportData: reportStep3 } = await prepareReportAndSubmitHash(requestsStep3);
       await oracle.connect(member1).submitReportData(reportStep3, oracleVersion);
+
       const countStep3 = await oracle.getTotalRequestsProcessed();
       currentCount += requestsStep3.length;
       expect(countStep3).to.equal(currentCount);
@@ -493,7 +512,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
     it("reverts on stranger", async () => {
       const { reportData } = await prepareReportAndSubmitHash();
-
       await expect(oracle.connect(stranger).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
         oracle,
         "SenderNotAllowed",
@@ -519,7 +537,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const PAUSE_INFINITELY = await oracle.PAUSE_INFINITELY();
       await oracle.pauseFor(PAUSE_INFINITELY, { from: admin });
       const { reportData } = await prepareReportAndSubmitHash();
-
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
         oracle,
         "ResumedExpected",
@@ -554,14 +571,15 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       // change pubkey
       const reportData = {
         consensusVersion: CONSENSUS_VERSION,
-        dataFormat: DATA_FORMAT_LIST,
         refSlot,
-        requestsCount: newRequests.length,
-        data: encodeExitRequestsDataList(newRequests),
+        exitRequestData: {
+          requestsCount: requests.length,
+          dataFormat: DATA_FORMAT_LIST,
+          data: encodeExitRequestsDataList(newRequests),
+        },
       };
 
-      const reportItems = getValidatorsExitBusReportDataItems(reportData);
-      const changedReportHash = calcValidatorsExitBusReportDataHash(reportItems);
+      const changedReportHash = calcValidatorsExitBusReportDataHash(reportData);
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
         .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")

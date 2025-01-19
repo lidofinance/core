@@ -41,6 +41,8 @@ contract ValidatorsExitBus is AccessControlEnumerable {
       uint256 blockNumber;
       /// @dev Key index in exit request array
       uint256 lastDeliveredKeyIndex;
+
+      // TODO: timestamp
     }
     // TODO: make type optimization
     struct RequestStatus {
