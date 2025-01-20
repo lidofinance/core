@@ -4,11 +4,11 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
-import {Clones} from "@openzeppelin/contracts-v5.2.0/proxy/Clones.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 

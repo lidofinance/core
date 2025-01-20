@@ -3,8 +3,8 @@
 
 pragma solidity ^0.8.0;
 
-import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2.0/proxy/beacon/UpgradeableBeacon.sol";
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2.0/proxy/beacon/BeaconProxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract VaultFactory__MockForStakingVault is UpgradeableBeacon {

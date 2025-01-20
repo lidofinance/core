@@ -4,8 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2.0/proxy/beacon/BeaconProxy.sol";
-import {Clones} from "@openzeppelin/contracts-v5.2.0/proxy/Clones.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
