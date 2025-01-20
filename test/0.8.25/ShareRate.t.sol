@@ -93,6 +93,10 @@ contract ShareRateTest is BaseProtocolTest {
         bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = shareRateHandler.mintExternalShares.selector;
         selectors[1] = shareRateHandler.burnExternalShares.selector;
+        // TODO: transfers
+        // TODO: submit
+        // TODO: withdrawals request
+        // TODO: claim
 
         targetSelector(FuzzSelector({addr: address(shareRateHandler), selectors: selectors}));
 

@@ -11,7 +11,6 @@ import {console2} from "forge-std/console2.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 
 interface IAccounting {
     function handleOracleReport(ReportValues memory _report) external;
@@ -133,6 +132,11 @@ contract AccountingTest is BaseProtocolTest {
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_fuzzTotalShares() public {
+        // - 0 OR 10% OF PROTOCOL FEES SHOULD BE REPORTED (Collect total fees from reports in handler)
+        // - user tokens must not be used except burner contract (from Zero / to Zero)
+        // - should not be able to decrease validator number
+        // - solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
+        // - vault params do not affect protocol share rate
         assertGt(accountingHandler.length(), 0); // TODO: add real invariant, this is just a placeholder
     }
 }
