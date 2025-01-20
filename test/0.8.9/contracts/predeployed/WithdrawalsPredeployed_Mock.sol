@@ -9,7 +9,7 @@ contract WithdrawalsPredeployed_Mock {
     bool public failOnAddRequest;
     bool public failOnGetFee;
 
-    event eip7002WithdrawalRequestAdded(bytes request, uint256 fee);
+    event eip7002MockRequestAdded(bytes request, uint256 fee);
 
     function setFailOnAddRequest(bool _failOnAddRequest) external {
         failOnAddRequest = _failOnAddRequest;
@@ -36,7 +36,7 @@ contract WithdrawalsPredeployed_Mock {
 
         require(input.length == 56, "Invalid callData length");
 
-        emit eip7002WithdrawalRequestAdded(
+        emit eip7002MockRequestAdded(
             input,
             msg.value
         );

@@ -4,26 +4,26 @@ import {TriggerableWithdrawals} from "contracts/0.8.9/lib/TriggerableWithdrawals
 
 contract TriggerableWithdrawals_Harness {
     function addFullWithdrawalRequests(
-        bytes[] calldata pubkeys,
-        uint256 totalWithdrawalFee
+        bytes calldata pubkeys,
+        uint256 feePerRequest
     ) external {
-        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, totalWithdrawalFee);
+        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, feePerRequest);
     }
 
     function addPartialWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) external {
-        TriggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        TriggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
     function addWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) external {
-        TriggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        TriggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
     function getWithdrawalRequestFee() external view returns (uint256) {

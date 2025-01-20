@@ -2,21 +2,21 @@
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.8.9;
-
 library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
+    uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
+    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    uint256 internal constant WITHDRAWAL_AMOUNT_LENGTH = 8;
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
     error InsufficientBalance(uint256 balance, uint256 totalWithdrawalFee);
-    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 providedTotalFee);
+    error InsufficientRequestFee(uint256 feePerRequest, uint256 minFeePerRequest);
 
     error WithdrawalRequestFeeReadFailed();
-    error InvalidPubkeyLength(bytes pubkey);
-    error WithdrawalRequestAdditionFailed(bytes pubkey, uint256 amount);
+    error WithdrawalRequestAdditionFailed(bytes callData);
     error NoWithdrawalRequests();
-    error PartialWithdrawalRequired(bytes pubkey);
-
-    event WithdrawalRequestAdded(bytes pubkey, uint256 amount);
+    error PartialWithdrawalRequired(uint256 index);
+    error InvalidPublicKeyLength();
 
     /**
      * @dev Adds full withdrawal requests for the provided public keys.
@@ -24,11 +24,23 @@ library TriggerableWithdrawals {
      * @param pubkeys An array of public keys for the validators requesting full withdrawals.
      */
     function addFullWithdrawalRequests(
-        bytes[] calldata pubkeys,
-        uint256 totalWithdrawalFee
+        bytes calldata pubkeys,
+        uint256 feePerRequest
     ) internal {
-        uint64[] memory amounts = new uint64[](pubkeys.length);
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        uint256 keysCount = _validateAndCountPubkeys(pubkeys);
+        feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
+
+        bytes memory callData = new bytes(56);
+
+        for (uint256 i = 0; i < keysCount; i++) {
+            _copyPubkeyToMemory(pubkeys, callData, i);
+
+            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+
+            if (!success) {
+                revert WithdrawalRequestAdditionFailed(callData);
+            }
+        }
     }
 
     /**
@@ -41,22 +53,20 @@ library TriggerableWithdrawals {
      * @param amounts An array of corresponding withdrawal amounts for each public key.
      */
     function addPartialWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
-        _requireArrayLengthsMatch(pubkeys, amounts);
-
         for (uint256 i = 0; i < amounts.length; i++) {
             if (amounts[i] == 0) {
-                revert PartialWithdrawalRequired(pubkeys[i]);
+                revert PartialWithdrawalRequired(i);
             }
         }
 
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
-        /**
+    /**
      * @dev Adds partial or full withdrawal requests for the provided public keys with corresponding amounts.
      *      A partial withdrawal is any withdrawal where the amount is greater than zero.
      *      This allows withdrawal of any balance exceeding 32 ETH (e.g., if a validator has 35 ETH, up to 3 ETH can be withdrawn).
@@ -65,12 +75,29 @@ library TriggerableWithdrawals {
      * @param amounts An array of corresponding withdrawal amounts for each public key.
      */
     function addWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
-        uint256 totalWithdrawalFee
+        uint256 feePerRequest
     ) internal {
-        _requireArrayLengthsMatch(pubkeys, amounts);
-        _addWithdrawalRequests(pubkeys, amounts, totalWithdrawalFee);
+        uint256 keysCount = _validateAndCountPubkeys(pubkeys);
+
+        if (keysCount != amounts.length) {
+            revert MismatchedArrayLengths(keysCount, amounts.length);
+        }
+
+        feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
+
+        bytes memory callData = new bytes(56);
+        for (uint256 i = 0; i < keysCount; i++) {
+            _copyPubkeyToMemory(pubkeys, callData, i);
+            _copyAmountToMemory(callData, amounts[i]);
+
+            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+
+            if (!success) {
+                revert WithdrawalRequestAdditionFailed(callData);
+            }
+        }
     }
 
     /**
@@ -87,62 +114,50 @@ library TriggerableWithdrawals {
         return abi.decode(feeData, (uint256));
     }
 
-    function _addWithdrawalRequests(
-        bytes[] calldata pubkeys,
-        uint64[] memory amounts,
-        uint256 totalWithdrawalFee
-    ) internal {
-        uint256 keysCount = pubkeys.length;
+    function _copyPubkeyToMemory(bytes calldata pubkeys, bytes memory target, uint256 keyIndex) private pure {
+        assembly {
+            calldatacopy(
+                add(target, 32),
+                add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)),
+                PUBLIC_KEY_LENGTH
+            )
+        }
+    }
+
+    function _copyAmountToMemory(bytes memory target, uint64 amount) private pure {
+        assembly {
+            mstore(add(target, 80), shl(192, amount))
+        }
+    }
+
+    function _validateAndCountPubkeys(bytes calldata pubkeys) private pure returns (uint256) {
+        if(pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+            revert InvalidPublicKeyLength();
+        }
+
+        uint256 keysCount = pubkeys.length / PUBLIC_KEY_LENGTH;
         if (keysCount == 0) {
             revert NoWithdrawalRequests();
         }
 
-        if(address(this).balance < totalWithdrawalFee) {
-            revert InsufficientBalance(address(this).balance, totalWithdrawalFee);
-        }
-
-        uint256 minFeePerRequest = getWithdrawalRequestFee();
-        if (minFeePerRequest * keysCount > totalWithdrawalFee) {
-            revert FeeNotEnough(minFeePerRequest, keysCount, totalWithdrawalFee);
-        }
-
-        uint256 feePerRequest = totalWithdrawalFee / keysCount;
-        uint256 unallocatedFee = totalWithdrawalFee % keysCount;
-        uint256 prevBalance = address(this).balance - totalWithdrawalFee;
-
-        for (uint256 i = 0; i < keysCount; ++i) {
-            bytes memory pubkey = pubkeys[i];
-            uint64 amount = amounts[i];
-
-            if(pubkey.length != 48) {
-                revert InvalidPubkeyLength(pubkey);
-            }
-
-            uint256 feeToSend = feePerRequest;
-
-            if (i == keysCount - 1) {
-                feeToSend += unallocatedFee;
-            }
-
-            bytes memory callData = abi.encodePacked(pubkey, amount);
-            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feeToSend}(callData);
-
-            if (!success) {
-                revert WithdrawalRequestAdditionFailed(pubkey, amount);
-            }
-
-            emit WithdrawalRequestAdded(pubkey, amount);
-        }
-
-        assert(address(this).balance == prevBalance);
+        return keysCount;
     }
 
-    function _requireArrayLengthsMatch(
-        bytes[] calldata pubkeys,
-        uint64[] calldata amounts
-    ) internal pure {
-        if (pubkeys.length != amounts.length) {
-            revert MismatchedArrayLengths(pubkeys.length, amounts.length);
+    function _validateAndAdjustFee(uint256 feePerRequest, uint256 keysCount) private view returns (uint256) {
+        uint256 minFeePerRequest = getWithdrawalRequestFee();
+
+        if (feePerRequest == 0) {
+            feePerRequest = minFeePerRequest;
         }
+
+        if (feePerRequest < minFeePerRequest) {
+            revert InsufficientRequestFee(feePerRequest, minFeePerRequest);
+        }
+
+        if(address(this).balance < feePerRequest * keysCount) {
+            revert InsufficientBalance(address(this).balance, feePerRequest * keysCount);
+        }
+
+        return feePerRequest;
     }
 }
