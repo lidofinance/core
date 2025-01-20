@@ -22,10 +22,10 @@ export async function deployWithdrawalsPredeployedMock(
 
 function toValidatorPubKey(num: number): string {
   if (num < 0 || num > 0xffff) {
-    throw new Error("Number is out of the 2-byte range (0x0000 - 0xFFFF).");
+    throw new Error("Number is out of the 2-byte range (0x0000 - 0xffff).");
   }
 
-  return `0x${num.toString(16).padStart(4, "0").repeat(24)}`;
+  return `${num.toString(16).padStart(4, "0").toLocaleLowerCase().repeat(24)}`;
 }
 
 const convertEthToGwei = (ethAmount: string | number): bigint => {
@@ -47,5 +47,11 @@ export function generateWithdrawalRequestPayload(numberOfRequests: number) {
     mixedWithdrawalAmounts.push(i % 2 === 0 ? 0n : convertEthToGwei(i));
   }
 
-  return { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts };
+  return {
+    pubkeysHexString: `0x${pubkeys.join("")}`,
+    pubkeys,
+    fullWithdrawalAmounts,
+    partialWithdrawalAmounts,
+    mixedWithdrawalAmounts,
+  };
 }

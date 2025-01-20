@@ -51,8 +51,8 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     error NotLido();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
-
     error InsufficientTriggerableWithdrawalFee(uint256 providedTotalFee, uint256 requiredTotalFee, uint256 requestCount);
+    error TriggerableWithdrawalRefundFailed();
 
     /**
      * @param _lido the Lido token (stETH) address
@@ -144,22 +144,30 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
      * @param pubkeys An array of public keys for the validators requesting full withdrawals.
      */
     function addFullWithdrawalRequests(
-        bytes[] calldata pubkeys
+        bytes calldata pubkeys
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) {
         uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = pubkeys.length * minFeePerRequest;
+        uint256 totalFee = pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH  * minFeePerRequest;
 
         if(totalFee > msg.value) {
-            revert InsufficientTriggerableWithdrawalFee(msg.value, totalFee, pubkeys.length);
+            revert InsufficientTriggerableWithdrawalFee(
+                msg.value,
+                totalFee,
+                pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH
+            );
         }
 
         TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, minFeePerRequest);
 
         uint256 refund = msg.value - totalFee;
         if (refund > 0) {
-            msg.sender.call{value: refund}("");
+            (bool success, ) = msg.sender.call{value: refund}("");
+
+            if (!success) {
+                revert TriggerableWithdrawalRefundFailed();
+            }
         }
 
         assert(address(this).balance == prevBalance);

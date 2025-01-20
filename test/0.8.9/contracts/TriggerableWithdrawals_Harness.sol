@@ -4,14 +4,14 @@ import {TriggerableWithdrawals} from "contracts/0.8.9/lib/TriggerableWithdrawals
 
 contract TriggerableWithdrawals_Harness {
     function addFullWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint256 feePerRequest
     ) external {
         TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, feePerRequest);
     }
 
     function addPartialWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
         uint256 feePerRequest
     ) external {
@@ -19,7 +19,7 @@ contract TriggerableWithdrawals_Harness {
     }
 
     function addWithdrawalRequests(
-        bytes[] calldata pubkeys,
+        bytes calldata pubkeys,
         uint64[] calldata amounts,
         uint256 feePerRequest
     ) external {
