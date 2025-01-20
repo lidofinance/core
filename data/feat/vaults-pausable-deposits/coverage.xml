@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3560"  lines-covered="3147"  line-rate="0.884"  branches-valid="1676"  branches-covered="1416"  branch-rate="0.8449"  timestamp="1737048164599" complexity="0" version="0.1">
+<coverage lines-valid="3560"  lines-covered="3147"  line-rate="0.884"  branches-valid="1676"  branches-covered="1416"  branch-rate="0.8449"  timestamp="1737369759831" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2188,8 +2188,8 @@
 			<method name="_pauseBeaconChainDeposits"  hits="8"  signature="()V" >
 				<lines><line number="534"  hits="8" /></lines>
 			</method>
-			<method name="_resumeBeaconChainDeposits"  hits="2"  signature="()V" >
-				<lines><line number="541"  hits="2" /></lines>
+			<method name="_resumeBeaconChainDeposits"  hits="4"  signature="()V" >
+				<lines><line number="541"  hits="4" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2281,7 +2281,7 @@
 			<line number="520"  hits="17"  branch="false" />
 			<line number="528"  hits="4"  branch="false" />
 			<line number="535"  hits="8"  branch="false" />
-			<line number="542"  hits="2"  branch="false" />
+			<line number="542"  hits="4"  branch="false" />
 		</lines>
 		</class>
 		<class name="Delegation.sol"  filename="contracts/0.8.25/vaults/Delegation.sol"  line-rate="0.9867"  branch-rate="0.9091" >
