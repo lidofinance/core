@@ -420,7 +420,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Resumes beacon chain deposits on the staking vault.
      */
     function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        stakingVault.resumeBeaconChainDeposits();
+        _resumeBeaconChainDeposits();
     }
 
     // ==================== Internal Functions ====================
