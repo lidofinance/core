@@ -1,7 +1,7 @@
-import { sha256 } from "ethers";
-import { ONE_GWEI } from "./constants";
 import { bigintToHex } from "bigint-conversion";
-import { intToHex } from "ethereumjs-util";
+import { sha256 } from "ethers";
+
+import { ONE_GWEI } from "./constants";
 
 export function computeDepositDataRoot(creds: string, pubkey: string, signature: string, amount: bigint) {
   // strip everything of the 0x prefix to make 0x explicit when slicing
@@ -24,6 +24,6 @@ export function computeDepositDataRoot(creds: string, pubkey: string, signature:
 
 export function formatAmount(amount: bigint) {
   const gweiAmount = amount / ONE_GWEI;
-  let bytes = bigintToHex(gweiAmount, false, 8);
+  const bytes = bigintToHex(gweiAmount, false, 8);
   return Buffer.from(bytes, "hex").reverse().toString("hex");
 }
