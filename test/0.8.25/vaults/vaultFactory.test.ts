@@ -25,6 +25,8 @@ import { createVaultProxy, ether } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
+import { IDelegation } from "../../../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
+
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -54,6 +56,8 @@ describe("VaultFactory.sol", () => {
   let vaultBeaconProxyCode: string;
 
   let originalState: string;
+
+  let delegationParams: IDelegation.InitialStateStruct;
 
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
@@ -98,13 +102,22 @@ describe("VaultFactory.sol", () => {
       implOld,
       "InvalidInitialization",
     );
+
+    delegationParams = {
+      defaultAdmin: await admin.getAddress(),
+      curator: await vaultOwner1.getAddress(),
+      minterBurner: await vaultOwner1.getAddress(),
+      funderWithdrawer: await vaultOwner1.getAddress(),
+      nodeOperatorManager: await operator.getAddress(),
+      nodeOperatorFeeClaimer: await vaultOwner1.getAddress(),
+      curatorFeeBP: 100n,
+      nodeOperatorFeeBP: 200n,
+    };
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
-
-  context("beacon.constructor", () => {});
 
   context("constructor", () => {
     it("reverts if `_owner` is zero address", async () => {
@@ -131,12 +144,6 @@ describe("VaultFactory.sol", () => {
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
-      // const beacon = await ethers.deployContract(
-      //   "VaultFactory",
-      //   [await implOld.getAddress(), await steth.getAddress()],
-      //   { from: deployer },
-      // );
-
       const tx = beacon.deploymentTransaction();
 
       await expect(tx)
@@ -150,17 +157,21 @@ describe("VaultFactory.sol", () => {
 
   context("createVaultWithDelegation", () => {
     it("reverts if `curator` is zero address", async () => {
-      await expect(
-        createVaultProxy(vaultFactory, admin, vaultOwner1, operator, {
-          curator: ZeroAddress,
-        }),
-      )
+      const params = { ...delegationParams, curator: ZeroAddress };
+      await expect(createVaultProxy(vaultOwner1, vaultFactory, params))
         .to.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("curator");
     });
 
     it("works with empty `params`", async () => {
-      const { tx, vault, delegation: delegation_ } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
+      console.log({
+        delegationParams,
+      });
+      const {
+        tx,
+        vault,
+        delegation: delegation_,
+      } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
@@ -174,15 +185,12 @@ describe("VaultFactory.sol", () => {
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
       expect(await vault.version()).to.eq(1);
     });
-
-    it.skip("works with non-empty `params`", async () => {});
   });
 
   context("connect", () => {
-    it("create vault ", async () => {});
     it("connect ", async () => {
       const vaultsBefore = await accounting.vaultsCount();
       expect(vaultsBefore).to.eq(0);
@@ -202,16 +210,14 @@ describe("VaultFactory.sol", () => {
 
       //create vaults
       const { vault: vault1, delegation: delegator1 } = await createVaultProxy(
-        vaultFactory,
-        admin,
         vaultOwner1,
-        operator,
+        vaultFactory,
+        delegationParams,
       );
       const { vault: vault2, delegation: delegator2 } = await createVaultProxy(
-        vaultFactory,
-        admin,
         vaultOwner2,
-        operator,
+        vaultFactory,
+        delegationParams,
       );
 
       //owner of vault is delegator
@@ -263,7 +269,7 @@ describe("VaultFactory.sol", () => {
       expect(implAfter).to.eq(await implNew.getAddress());
 
       //create new vault with new implementation
-      const { vault: vault3 } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
+      const { vault: vault3 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
       //we upgrade implementation - we do not check implementation, just proxy bytecode
       await expect(
@@ -317,7 +323,7 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
-      const { vault: vault1 } = await createVaultProxy(vaultFactory, admin, vaultOwner1, operator);
+      const { vault: vault1 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
       await beacon.connect(admin).upgradeTo(implNew);
 
@@ -333,7 +339,7 @@ describe("VaultFactory.sol", () => {
     it("new vaults - init works, finalize not works ", async () => {
       await beacon.connect(admin).upgradeTo(implNew);
 
-      const { vault: vault2 } = await createVaultProxy(vaultFactory, admin, vaultOwner2, operator);
+      const { vault: vault2 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 

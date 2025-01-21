@@ -15,7 +15,6 @@ import {
 import { findEventsWithInterfaces } from "lib";
 
 import { IDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
-import DelegationInitializationParamsStruct = IDelegation.InitialStateStruct;
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -48,26 +47,14 @@ interface CreateVaultResponse {
 }
 
 export async function createVaultProxy(
+  caller: HardhatEthersSigner,
   vaultFactory: VaultFactory,
-  _admin: HardhatEthersSigner,
-  _owner: HardhatEthersSigner,
-  _operator: HardhatEthersSigner,
-  initializationParams: Partial<DelegationInitializationParamsStruct> = {},
+  delegationParams: IDelegation.InitialStateStruct,
+  stakingVaultInitializerExtraParams: BytesLike = "0x",
 ): Promise<CreateVaultResponse> {
-  // Define the parameters for the struct
-  const defaultParams: DelegationInitializationParamsStruct = {
-    defaultAdmin: await _admin.getAddress(),
-    curator: await _owner.getAddress(),
-    funderWithdrawer: await _owner.getAddress(),
-    minterBurner: await _owner.getAddress(),
-    nodeOperatorManager: await _operator.getAddress(),
-    nodeOperatorFeeClaimer: await _owner.getAddress(),
-    curatorFeeBP: 100n,
-    nodeOperatorFeeBP: 200n,
-  };
-  const params = { ...defaultParams, ...initializationParams };
-
-  const tx = await vaultFactory.connect(_owner).createVaultWithDelegation(params, "0x");
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDelegation(delegationParams, stakingVaultInitializerExtraParams);
 
   // Get the receipt manually
   const receipt = (await tx.wait())!;
@@ -84,9 +71,9 @@ export async function createVaultProxy(
 
   const { delegation: delegationAddress } = delegationEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("BeaconProxy", vault, _owner)) as BeaconProxy;
-  const stakingVault = (await ethers.getContractAt("StakingVault", vault, _owner)) as StakingVault;
-  const delegation = (await ethers.getContractAt("Delegation", delegationAddress, _owner)) as Delegation;
+  const proxy = (await ethers.getContractAt("BeaconProxy", vault, caller)) as BeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
 
   return {
     tx,

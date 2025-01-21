@@ -142,14 +142,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
     const implAddress = await stakingVaultBeacon.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.DELEGATION_IMPL();
+    const delegationAddress = await stakingVaultFactory.DELEGATION_IMPL();
 
-    const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
-    const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
+    const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
+    const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
+    expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
+    expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
+    expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
