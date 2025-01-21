@@ -11,9 +11,9 @@ For the `wstETH` contract, we use `solc 0.6.12`, as it is non-upgradeable and bo
 
 For the other contracts, newer compiler versions are used.
 
-The 0.8.25 version of the compiler was introduced for Lido Vaults to be able to support [OpenZeppelin v5.0.2](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.0.2) dependencies (under the "@openzeppelin/contracts-v5.0.2" alias).
+The 0.8.25 version of the compiler was introduced for Lido Vaults to be able to support [OpenZeppelin v5.2.0](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.2.0) dependencies (under the "@openzeppelin/contracts-v5.2" alias).
 
-The OpenZeppelin 5.0.2 upgradeable contracts are copied locally in this repository (`contracts/openzeppelin/5.0.2`) instead of being imported from npm. This is because the original upgradeable contracts import from "@openzeppelin/contracts", but we use a custom alias "@openzeppelin/contracts-v5.0.2" to manage multiple OpenZeppelin versions. To resolve these import conflicts, we maintain local copies of the upgradeable contracts with corrected import paths that reference our aliased version.
+The OpenZeppelin 5.2.0 upgradeable contracts are copied locally in this repository (`contracts/openzeppelin/5.2`) instead of being imported from npm. This is because the original upgradeable contracts import from "@openzeppelin/contracts", but we use a custom alias "@openzeppelin/contracts-v5.2" to manage multiple OpenZeppelin versions. To resolve these import conflicts, we maintain local copies of the upgradeable contracts with corrected import paths that reference our aliased version.
 
 
 # Compilation Instructions

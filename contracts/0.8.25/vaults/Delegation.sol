@@ -120,16 +120,14 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Initializes the contract:
-     * - sets the address of StakingVault;
      * - sets up the roles;
      * - sets the vote lifetime to 7 days (can be changed later by CURATOR_ROLE and NODE_OPERATOR_MANAGER_ROLE).
-     * @param _stakingVault The address of StakingVault.
      * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
      */
-    function initialize(address _stakingVault) external override {
-        _initialize(_stakingVault);
+    function initialize() external override {
+        _initialize();
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
@@ -178,8 +176,8 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault.locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
-        uint256 valuation = stakingVault.valuation();
+        uint256 reserved = stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
+        uint256 valuation = stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
     }
@@ -307,7 +305,7 @@ contract Delegation is Dashboard {
      */
     function claimCuratorFee(address _recipient) external onlyRole(CURATOR_ROLE) {
         uint256 fee = curatorUnclaimedFee();
-        curatorFeeClaimedReport = stakingVault.latestReport();
+        curatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -319,7 +317,7 @@ contract Delegation is Dashboard {
      */
     function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIMER_ROLE) {
         uint256 fee = nodeOperatorUnclaimedFee();
-        nodeOperatorFeeClaimedReport = stakingVault.latestReport();
+        nodeOperatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -428,7 +426,7 @@ contract Delegation is Dashboard {
         uint256 _feeBP,
         IStakingVault.Report memory _lastClaimedReport
     ) internal view returns (uint256) {
-        IStakingVault.Report memory latestReport = stakingVault.latestReport();
+        IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta);

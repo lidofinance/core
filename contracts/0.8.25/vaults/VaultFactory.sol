@@ -4,8 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
-import {Clones} from "@openzeppelin/contracts-v5.0.2/proxy/Clones.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
@@ -34,7 +34,7 @@ interface IDelegation {
 
     function NODE_OPERATOR_FEE_CLAIMER_ROLE() external view returns (bytes32);
 
-    function initialize(address _stakingVault) external;
+    function initialize() external;
 
     function setCuratorFeeBP(uint256 _newCuratorFeeBP) external;
 
@@ -74,7 +74,8 @@ contract VaultFactory {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
         // create Delegation
-        delegation = IDelegation(Clones.clone(DELEGATION_IMPL));
+        bytes memory immutableArgs = abi.encode(vault);
+        delegation = IDelegation(Clones.cloneWithImmutableArgs(DELEGATION_IMPL, immutableArgs));
 
         // initialize StakingVault
         vault.initialize(
@@ -83,7 +84,7 @@ contract VaultFactory {
             _stakingVaultInitializerExtraParams
         );
         // initialize Delegation
-        delegation.initialize(address(vault));
+        delegation.initialize();
 
         // grant roles to defaultAdmin, owner, manager, operator
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationInitialState.defaultAdmin);

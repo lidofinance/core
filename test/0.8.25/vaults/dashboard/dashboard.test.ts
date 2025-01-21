@@ -119,20 +119,14 @@ describe("Dashboard.sol", () => {
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      await expect(dashboard.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vault)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
+      await expect(dashboard.initialize()).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
 
-      await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
+      await expect(dashboard_.initialize()).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
   });
 
