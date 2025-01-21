@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 /**
  * @title PausableUntilWithRoles

@@ -4,12 +4,11 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/IBeacon.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
+import {IBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/IBeacon.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
@@ -29,10 +28,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
         /// @notice mapping from vault address to its socket
         /// @dev if vault is not connected to the hub, its index is zero
         mapping(address => uint256) vaultIndex;
-        /// @notice allowed factory addresses
-        mapping(address => bool) vaultFactories;
-        /// @notice allowed vault implementation addresses
-        mapping(address => bool) vaultImpl;
+        /// @notice allowed beacon addresses
+        mapping(bytes32 => bool) vaultProxyCodehash;
     }
 
     struct VaultSocket {
@@ -92,26 +89,15 @@ abstract contract VaultHub is PausableUntilWithRoles {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice added factory address to allowed list
-    /// @param factory factory address
-    function addFactory(address factory) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (factory == address(0)) revert ZeroArgument("factory");
+    /// @notice added vault proxy codehash to allowed list
+    /// @param codehash vault proxy codehash
+    function addVaultProxyCodehash(bytes32 codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        if (codehash == bytes32(0)) revert ZeroArgument("codehash");
 
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultFactories[factory]) revert AlreadyExists(factory);
-        $.vaultFactories[factory] = true;
-        emit VaultFactoryAdded(factory);
-    }
-
-    /// @notice added vault implementation address to allowed list
-    /// @param impl vault implementation address
-    function addVaultImpl(address impl) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (impl == address(0)) revert ZeroArgument("impl");
-
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultImpl[impl]) revert AlreadyExists(impl);
-        $.vaultImpl[impl] = true;
-        emit VaultImplAdded(impl);
+        if ($.vaultProxyCodehash[codehash]) revert AlreadyExists(codehash);
+        $.vaultProxyCodehash[codehash] = true;
+        emit VaultProxyCodehashAdded(codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -164,11 +150,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
-        address factory = IBeaconProxy(_vault).getBeacon();
-        if (!$.vaultFactories[factory]) revert FactoryNotAllowed(factory);
-
-        address vaultProxyImplementation = IBeacon(factory).implementation();
-        if (!$.vaultImpl[vaultProxyImplementation]) revert ImplNotAllowed(vaultProxyImplementation);
+        bytes32 vaultProxyCodehash = address(_vault).codehash;
+        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
         VaultSocket memory vr = VaultSocket(
             _vault,
@@ -525,8 +508,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
-    event VaultImplAdded(address indexed impl);
-    event VaultFactoryAdded(address indexed factory);
+    event VaultProxyCodehashAdded(bytes32 indexed codehash);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -544,8 +526,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
-    error AlreadyExists(address addr);
-    error FactoryNotAllowed(address beacon);
-    error ImplNotAllowed(address impl);
+    error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
+    error VaultProxyNotAllowed(address beacon);
 }
