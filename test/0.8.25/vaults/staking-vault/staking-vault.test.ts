@@ -14,7 +14,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { de0x, ether, findEvents, impersonate, streccak } from "lib";
+import { computeDepositDataRoot, de0x, ether, findEvents, impersonate, streccak } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -329,7 +329,7 @@ describe("StakingVault", () => {
       const signature = "0x" + "ef".repeat(96);
       const amount = ether("32");
       const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-      const depositDataRoot = getRoot(withdrawalCredentials, pubkey, signature, amount);
+      const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
 
       await expect(
         stakingVault.connect(operator).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
@@ -499,27 +499,3 @@ describe("StakingVault", () => {
     return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_];
   }
 });
-
-function getRoot(creds: string, pubkey: string, signature: string, size: bigint) {
-  // strip everything of the 0x prefix to make 0x explicit when slicing
-  creds = creds.slice(2);
-  pubkey = pubkey.slice(2);
-  signature = signature.slice(2);
-  const sizeHex = size.toString(16);
-
-  const pubkeyRoot = keccak256("0x" + pubkey + "00".repeat(16)).slice(2);
-  const sigSlice1root = keccak256("0x" + signature.slice(0, 128)).slice(2);
-  const sigSlice2root = keccak256("0x" + signature.slice(128, signature.length) + "00".repeat(32)).slice(2);
-  const sigRoot = keccak256("0x" + sigSlice1root + sigSlice2root).slice(2);
-  const sizeInGweiLE64 = toLittleEndian(sizeHex);
-
-  const pubkeyCredsRoot = keccak256("0x" + pubkeyRoot + creds).slice(2);
-  const sizeSigRoot = keccak256("0x" + sizeInGweiLE64 + "00".repeat(24) + sigRoot).slice(2);
-
-  return keccak256("0x" + pubkeyCredsRoot + sizeSigRoot);
-}
-
-function toLittleEndian(value: string) {
-  const bytes = Buffer.from(value, "hex");
-  return bytes.reverse().toString("hex");
-}
