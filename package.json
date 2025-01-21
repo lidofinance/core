@@ -35,7 +35,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
-    "verify:deployed": "hardhat verify:deployed"
+    "verify:deployed": "hardhat verify:deployed",
+    "postinstall": "husky"
   },
   "lint-staged": {
     "./**/*.ts": [
