@@ -461,20 +461,6 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @dev Deposits validators to the beacon chain
-     * @param _numberOfDeposits Number of validator deposits
-     * @param _pubkeys Concatenated public keys of the validators
-     * @param _signatures Concatenated signatures of the validators
-     */
-    function _depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) internal {
-        stakingVault().depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
-    }
-
-    /**
      * @dev Mints stETH tokens backed by the vault to a recipient
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of tokens to mint

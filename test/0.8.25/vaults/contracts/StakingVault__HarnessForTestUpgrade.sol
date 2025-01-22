@@ -8,9 +8,8 @@ import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
-import {BeaconChainDepositLogistics} from "contracts/0.8.25/vaults/BeaconChainDepositLogistics.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDepositLogistics, OwnableUpgradeable {
+contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct VaultStorage {
         IStakingVault.Report report;
@@ -20,18 +19,18 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
     }
 
     uint64 private constant _version = 2;
+    address public immutable beaconChainDepositContract;
     VaultHub private immutable VAULT_HUB;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
-    constructor(
-        address _vaultHub,
-        address _beaconChainDepositContract
-    ) BeaconChainDepositLogistics(_beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
+        beaconChainDepositContract = _beaconChainDepositContract;
         VAULT_HUB = VaultHub(_vaultHub);
 
         // Prevents reinitialization of the implementation
@@ -69,6 +68,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
         return _version;
     }
 
+    function depositContract() external view returns (address) {
+        return beaconChainDepositContract;
+    }
+
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
         return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
@@ -80,11 +83,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, BeaconChainDeposi
         }
     }
 
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external {}
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {}
     function fund() external payable {}
     function inOutDelta() external view returns (int256) {
         return -1;

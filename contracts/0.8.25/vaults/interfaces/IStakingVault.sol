@@ -20,10 +20,18 @@ interface IStakingVault {
         int128 inOutDelta;
     }
 
+    struct Deposit {
+        bytes pubkey;
+        bytes signature;
+        uint256 amount;
+        bytes32 depositDataRoot;
+    }
+
     function initialize(address _owner, address _operator, bytes calldata _params) external;
     function version() external pure returns(uint64);
     function getInitializedVersion() external view returns (uint64);
     function vaultHub() external view returns (address);
+    function depositContract() external view returns (address);
     function nodeOperator() external view returns (address);
     function locked() external view returns (uint256);
     function valuation() external view returns (uint256);
@@ -33,11 +41,7 @@ interface IStakingVault {
     function withdrawalCredentials() external view returns (bytes32);
     function fund() external payable;
     function withdraw(address _recipient, uint256 _ether) external;
-    function depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) external;
+    function depositToBeaconChain(Deposit[] calldata _deposits) external;
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
