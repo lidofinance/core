@@ -329,6 +329,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
         if (msg.sender != _getStorage().nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if (!isBalanced()) revert Unbalanced();
 
+        uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
@@ -338,9 +339,10 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
                 deposit.signature,
                 deposit.depositDataRoot
             );
+            totalAmount += deposit.amount;
         }
 
-        emit DepositedToBeaconChain(msg.sender, numberOfDeposits);
+        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
     /**
@@ -438,7 +440,7 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
      * @param sender Address that initiated the deposit
      * @param deposits Number of validator deposits made
      */
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits);
+    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 totalAmount);
 
     /**
      * @notice Emitted when a validator exit request is made

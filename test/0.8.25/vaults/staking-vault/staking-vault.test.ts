@@ -22,7 +22,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault", () => {
+describe.only("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -335,7 +335,7 @@ describe("StakingVault", () => {
         stakingVault.connect(operator).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
       )
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 1);
+        .withArgs(operator, 1, amount);
     });
   });
 
