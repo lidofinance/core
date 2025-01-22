@@ -10,6 +10,7 @@ import {
   LidoLocator,
   StakingVault,
   StETH__MockForDelegation,
+  UpgradeableBeacon,
   VaultFactory,
   VaultHub__MockForDelegation,
   WETH9__MockForVault,
@@ -32,7 +33,7 @@ describe("Delegation.sol", () => {
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let factoryOwner: HardhatEthersSigner;
+  let beaconOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
   let rewarder: HardhatEthersSigner;
   const recipient = certainAddress("some-recipient");
@@ -48,6 +49,7 @@ describe("Delegation.sol", () => {
   let factory: VaultFactory;
   let vault: StakingVault;
   let delegation: Delegation;
+  let beacon: UpgradeableBeacon;
 
   let originalState: string;
 
@@ -60,7 +62,7 @@ describe("Delegation.sol", () => {
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       stranger,
-      factoryOwner,
+      beaconOwner,
       rewarder,
     ] = await ethers.getSigners();
 
@@ -79,16 +81,16 @@ describe("Delegation.sol", () => {
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
-    factory = await ethers.deployContract("VaultFactory", [
-      factoryOwner,
-      vaultImpl.getAddress(),
-      delegationImpl.getAddress(),
-    ]);
-    expect(await factory.implementation()).to.equal(vaultImpl);
-    expect(await factory.delegationImpl()).to.equal(delegationImpl);
+    beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    const vaultCreationTx = await factory.connect(vaultOwner).createVault(
+    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    expect(await beacon.implementation()).to.equal(vaultImpl);
+    expect(await factory.BEACON()).to.equal(beacon);
+    expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+
+    const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
+        defaultAdmin: vaultOwner,
         curator,
         funderWithdrawer,
         minterBurner,
@@ -108,7 +110,6 @@ describe("Delegation.sol", () => {
 
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
-    expect(await vault.getBeacon()).to.equal(factory);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);
@@ -150,22 +151,14 @@ describe("Delegation.sol", () => {
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
-
-      await expect(delegation_.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(delegation.initialize(vault)).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
+      await expect(delegation.initialize()).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
-      await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
+      await expect(delegation_.initialize()).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
     });
   });
 

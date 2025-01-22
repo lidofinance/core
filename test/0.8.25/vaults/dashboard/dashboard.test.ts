@@ -24,7 +24,7 @@ import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstet
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("Dashboard", () => {
+describe("Dashboard.sol", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -124,20 +124,14 @@ describe("Dashboard", () => {
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      await expect(dashboard.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vault)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
+      await expect(dashboard.initialize()).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
 
-      await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
+      await expect(dashboard_.initialize()).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
   });
 
@@ -146,8 +140,7 @@ describe("Dashboard", () => {
       // vault state
       expect(await vault.owner()).to.equal(dashboard);
       expect(await vault.nodeOperator()).to.equal(nodeOperator);
-      expect(await dashboard.isInitialized()).to.equal(true);
-      // dashboard contracts
+      expect(await dashboard.initialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
