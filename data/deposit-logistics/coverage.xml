@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3540"  lines-covered="3227"  line-rate="0.9116"  branches-valid="1642"  branches-covered="1418"  branch-rate="0.8636"  timestamp="1737534282786" complexity="0" version="0.1">
+<coverage lines-valid="3540"  lines-covered="3227"  line-rate="0.9116"  branches-valid="1642"  branches-covered="1418"  branch-rate="0.8636"  timestamp="1737534385691" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2144,10 +2144,10 @@
 				<lines><line number="485"  hits="17" /></lines>
 			</method>
 			<method name="_rebalanceVault"  hits="4"  signature="()V" >
-				<lines><line number="495"  hits="4" /></lines>
+				<lines><line number="494"  hits="4" /></lines>
 			</method>
 			<method name="stakingVault"  hits="220"  signature="()V" >
-				<lines><line number="500"  hits="220" /></lines>
+				<lines><line number="499"  hits="220" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2231,12 +2231,12 @@
 			<line number="477"  hits="4"  branch="false" />
 			<line number="478"  hits="4"  branch="false" />
 			<line number="486"  hits="17"  branch="false" />
-			<line number="488"  hits="17"  branch="false" />
-			<line number="496"  hits="4"  branch="false" />
+			<line number="487"  hits="17"  branch="false" />
+			<line number="495"  hits="4"  branch="false" />
+			<line number="500"  hits="220"  branch="false" />
 			<line number="501"  hits="220"  branch="false" />
 			<line number="502"  hits="220"  branch="false" />
-			<line number="503"  hits="220"  branch="false" />
-			<line number="506"  hits="220"  branch="false" />
+			<line number="505"  hits="220"  branch="false" />
 		</lines>
 		</class>
 		<class name="Delegation.sol"  filename="contracts/0.8.25/vaults/Delegation.sol"  line-rate="0.9863"  branch-rate="0.9031999999999999" >
