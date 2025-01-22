@@ -1,3 +1,4 @@
+import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { Accounting } from "typechain-types";
@@ -32,13 +33,21 @@ export async function main() {
   ]);
   const delegationAddress = await delegation.getAddress();
 
+  // Deploy Delegation implementation contract
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
+  const beaconAddress = await beacon.getAddress();
+
+  // Deploy BeaconProxy to get bytecode and add it to whitelist
+  const vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beaconAddress, "0x"]);
+  const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
+  const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
+
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
-    deployer,
-    impAddress,
+    beaconAddress,
     delegationAddress,
   ]);
-  const factoryAddress = await factory.getAddress();
+  console.log("Factory address", await factory.getAddress());
 
   // Add VaultFactory and Vault implementation to the Accounting contract
   const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
@@ -50,8 +59,7 @@ export async function main() {
   await makeTx(accounting, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(accounting, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
 
-  await makeTx(accounting, "addFactory", [factoryAddress], { from: deployer });
-  await makeTx(accounting, "addVaultImpl", [impAddress], { from: deployer });
+  await makeTx(accounting, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
 
   await makeTx(accounting, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(accounting, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });

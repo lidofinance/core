@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {ERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/ERC20.sol";
+import {ERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/ERC20.sol";
 
 contract StETH__MockForDelegation is ERC20 {
     constructor() ERC20("Staked Ether", "stETH") {}

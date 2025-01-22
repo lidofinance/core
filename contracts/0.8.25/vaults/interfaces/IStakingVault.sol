@@ -28,6 +28,7 @@ interface IStakingVault {
     }
 
     function initialize(address _owner, address _operator, bytes calldata _params) external;
+    function version() external pure returns(uint64);
     function getInitializedVersion() external view returns (uint64);
     function vaultHub() external view returns (address);
     function depositContract() external view returns (address);

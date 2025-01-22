@@ -4,14 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts-v5.0.2/proxy/ERC1967/ERC1967Utils.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
 
 /**
  * @title StakingVault
@@ -52,7 +50,7 @@ import {IBeaconProxy} from "./interfaces/IBeaconProxy.sol";
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
+contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -112,24 +110,12 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
     }
 
     /**
-     * @notice Ensures the function can only be called by the beacon
-     */
-    modifier onlyBeacon() {
-        if (msg.sender != getBeacon()) revert SenderNotBeacon(msg.sender, getBeacon());
-        _;
-    }
-
-    /**
      * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
      * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(
-        address _owner,
-        address _nodeOperator,
-        bytes calldata /* _params */
-    ) external onlyBeacon initializer {
+    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
     }
@@ -148,14 +134,6 @@ contract StakingVault is IStakingVault, IBeaconProxy, OwnableUpgradeable {
      */
     function version() external pure returns (uint64) {
         return _VERSION;
-    }
-
-    /**
-     * @notice Returns the address of the beacon
-     * @return Address of the beacon
-     */
-    function getBeacon() public view returns (address) {
-        return ERC1967Utils.getBeacon();
     }
 
     // * * * * * * * * * * * * * * * * * * * *  //
