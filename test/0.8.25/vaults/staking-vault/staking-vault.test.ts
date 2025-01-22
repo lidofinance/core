@@ -22,7 +22,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe.only("StakingVault", () => {
+describe("StakingVault", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -459,6 +459,24 @@ describe.only("StakingVault", () => {
         .withArgs(ether("1"), ether("2"), ether("3"));
       expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
+    });
+  });
+
+  context("computeDepositDataRoot", () => {
+    it("computes the deposit data root", async () => {
+      const pubkey =
+        "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
+      const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
+      const signature =
+        "0xab95e358d002fd79bc08564a2db057dd5164af173915eba9e3e9da233d404c0eb0058760bc30cb89abbc55cf57f0c5a6018cdb17df73ca39ddc80a323a13c2e7ba942faa86757b26120b3a58dcce5d89e95ea1ee8fa3276ffac0f0ad9313211d";
+      const amount = ether("32");
+      const expectedDepositDataRoot = "0xb28f86815813d7da8132a2979836b326094a350e7aa301ba611163d4b7ca77be";
+
+      computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+
+      expect(await stakingVault.computeDepositDataRoot(pubkey, withdrawalCredentials, signature, amount)).to.equal(
+        expectedDepositDataRoot,
+      );
     });
   });
 
