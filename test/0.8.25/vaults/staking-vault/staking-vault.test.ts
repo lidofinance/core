@@ -450,6 +450,7 @@ describe("StakingVault.sol", () => {
 
   context("computeDepositDataRoot", () => {
     it("computes the deposit data root", async () => {
+      // sample tx data: https://etherscan.io/tx/0x02980d44c119b0a8e3ca0d31c288e9f177c76fb4d7ab616563e399dd9c7c6507
       const pubkey =
         "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
       const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
