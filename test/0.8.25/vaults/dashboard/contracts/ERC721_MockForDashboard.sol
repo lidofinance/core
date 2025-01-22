@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {ERC721} from "@openzeppelin/contracts-v5.0.2/token/ERC721/ERC721.sol";
+import {ERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/ERC721.sol";
 
 contract ERC721_MockForDashboard is ERC721 {
     constructor() ERC721("MockERC721", "M721") {}
