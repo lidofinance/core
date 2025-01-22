@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { impersonate, log, trace, updateBalance } from "lib";
+import { computeDepositDataRoot, impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -139,17 +139,17 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
-    const implAddress = await stakingVaultFactory.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.delegationImpl();
+    const implAddress = await stakingVaultBeacon.implementation();
+    const delegationAddress = await stakingVaultFactory.DELEGATION_IMPL();
 
-    const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
-    const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
+    const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
+    const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
+    expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
+    expect(await _stakingVault.depositContract()).to.equal(depositContract);
+    expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
@@ -158,15 +158,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVault(
+    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
-        nodeOperatorFeeBP: VAULT_OWNER_FEE,
-        curatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+        defaultAdmin: owner,
         curator: curator,
         nodeOperatorManager: nodeOperator,
         funderWithdrawer: funderWithdrawer,
         minterBurner: minterBurner,
         nodeOperatorFeeClaimer: nodeOperator,
+        nodeOperatorFeeBP: VAULT_OWNER_FEE,
+        curatorFeeBP: VAULT_NODE_OPERATOR_FEE,
       },
       "0x",
     );
@@ -245,9 +246,24 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault
-      .connect(nodeOperator)
-      .depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const deposits = [];
+
+    for (let i = 0; i < keysToAdd; i++) {
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
+      const signature = hexlify(
+        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
+      );
+
+      deposits.push({
+        pubkey: pubkey,
+        signature: signature,
+        amount: VALIDATOR_DEPOSIT_SIZE,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
+      });
+    }
+
+    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     await trace("stakingVault.depositToBeaconChain", topUpTx);
 

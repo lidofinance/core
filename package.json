@@ -35,7 +35,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
-    "verify:deployed": "hardhat verify:deployed"
+    "verify:deployed": "hardhat verify:deployed",
+    "postinstall": "husky"
   },
   "lint-staged": {
     "./**/*.ts": [
@@ -110,7 +111,7 @@
     "@aragon/os": "4.4.0",
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
-    "@openzeppelin/contracts-v5.0.2": "npm:@openzeppelin/contracts@5.0.2",
+    "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0",
     "openzeppelin-solidity": "2.0.0"
   }
 }

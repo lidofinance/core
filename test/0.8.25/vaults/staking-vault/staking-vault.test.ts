@@ -14,7 +14,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { de0x, ether, findEvents, impersonate } from "lib";
+import { computeDepositDataRoot, de0x, ether, findEvents, impersonate, streccak } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -22,11 +22,10 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault", () => {
+describe("StakingVault.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let beaconSigner: HardhatEthersSigner;
   let elRewardsSender: HardhatEthersSigner;
   let vaultHubSigner: HardhatEthersSigner;
 
@@ -34,21 +33,18 @@ describe("StakingVault", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
-  let vaultFactory: VaultFactory__MockForStakingVault;
   let ethRejector: EthRejector;
 
   let vaultOwnerAddress: string;
   let stakingVaultAddress: string;
   let vaultHubAddress: string;
-  let vaultFactoryAddress: string;
   let depositContractAddress: string;
-  let beaconAddress: string;
   let ethRejectorAddress: string;
   let originalState: string;
 
   before(async () => {
     [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
-    [stakingVault, vaultHub, vaultFactory, stakingVaultImplementation, depositContract] =
+    [stakingVault, vaultHub /* vaultFactory */, , stakingVaultImplementation, depositContract] =
       await deployStakingVaultBehindBeaconProxy();
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -56,11 +52,8 @@ describe("StakingVault", () => {
     stakingVaultAddress = await stakingVault.getAddress();
     vaultHubAddress = await vaultHub.getAddress();
     depositContractAddress = await depositContract.getAddress();
-    beaconAddress = await stakingVaultImplementation.getBeacon();
-    vaultFactoryAddress = await vaultFactory.getAddress();
     ethRejectorAddress = await ethRejector.getAddress();
 
-    beaconSigner = await impersonate(beaconAddress, ether("10"));
     vaultHubSigner = await impersonate(vaultHubAddress, ether("10"));
   });
 
@@ -78,7 +71,7 @@ describe("StakingVault", () => {
     });
 
     it("sets the deposit contract address in the implementation", async () => {
-      expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
+      expect(await stakingVaultImplementation.depositContract()).to.equal(depositContractAddress);
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
@@ -88,10 +81,9 @@ describe("StakingVault", () => {
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress])).to.be.revertedWithCustomError(
-        stakingVaultImplementation,
-        "DepositContractZeroAddress",
-      );
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_beaconChainDepositContract");
     });
 
     it("petrifies the implementation by setting the initialized version to 2^64 - 1", async () => {
@@ -101,14 +93,8 @@ describe("StakingVault", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(beaconSigner).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
-    });
-
-    it("reverts on initialization if the caller is not the beacon", async () => {
-      await expect(stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "SenderNotBeacon")
-        .withArgs(stranger, await stakingVaultImplementation.getBeacon());
     });
   });
 
@@ -117,8 +103,7 @@ describe("StakingVault", () => {
       expect(await stakingVault.version()).to.equal(1n);
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
-      expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
-      expect(await stakingVault.getBeacon()).to.equal(vaultFactoryAddress);
+      expect(await stakingVault.depositContract()).to.equal(depositContractAddress);
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
       expect(await stakingVault.nodeOperator()).to.equal(operator);
       expect(await stakingVault.locked()).to.equal(0n);
@@ -346,23 +331,32 @@ describe("StakingVault", () => {
 
   context("depositToBeaconChain", () => {
     it("reverts if called by a non-operator", async () => {
-      await expect(stakingVault.connect(stranger).depositToBeaconChain(1, "0x", "0x"))
+      await expect(
+        stakingVault
+          .connect(stranger)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("depositToBeaconChain", stranger);
     });
 
     it("reverts if the number of deposits is zero", async () => {
-      await expect(stakingVault.depositToBeaconChain(0, "0x", "0x"))
+      await expect(stakingVault.depositToBeaconChain([]))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_numberOfDeposits");
+        .withArgs("_deposits");
     });
 
     it("reverts if the vault is not balanced", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
-        stakingVault,
-        "Unbalanced",
-      );
+      await expect(
+        stakingVault
+          .connect(operator)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
     });
 
     it("reverts if the deposits are paused", async () => {
@@ -378,9 +372,15 @@ describe("StakingVault", () => {
 
       const pubkey = "0x" + "ab".repeat(48);
       const signature = "0x" + "ef".repeat(96);
-      await expect(stakingVault.connect(operator).depositToBeaconChain(1, pubkey, signature))
+      const amount = ether("32");
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+
+      await expect(
+        stakingVault.connect(operator).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
+      )
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 1, ether("32"));
+        .withArgs(operator, 1, amount);
     });
   });
 
@@ -504,6 +504,25 @@ describe("StakingVault", () => {
         .withArgs(ether("1"), ether("2"), ether("3"));
       expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
+    });
+  });
+
+  context("computeDepositDataRoot", () => {
+    it("computes the deposit data root", async () => {
+      // sample tx data: https://etherscan.io/tx/0x02980d44c119b0a8e3ca0d31c288e9f177c76fb4d7ab616563e399dd9c7c6507
+      const pubkey =
+        "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
+      const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
+      const signature =
+        "0xab95e358d002fd79bc08564a2db057dd5164af173915eba9e3e9da233d404c0eb0058760bc30cb89abbc55cf57f0c5a6018cdb17df73ca39ddc80a323a13c2e7ba942faa86757b26120b3a58dcce5d89e95ea1ee8fa3276ffac0f0ad9313211d";
+      const amount = ether("32");
+      const expectedDepositDataRoot = "0xb28f86815813d7da8132a2979836b326094a350e7aa301ba611163d4b7ca77be";
+
+      computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+
+      expect(await stakingVault.computeDepositDataRoot(pubkey, withdrawalCredentials, signature, amount)).to.equal(
+        expectedDepositDataRoot,
+      );
     });
   });
 

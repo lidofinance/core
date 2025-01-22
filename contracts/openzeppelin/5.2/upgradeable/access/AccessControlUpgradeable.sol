@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.20;
 
-import {IAccessControl} from "@openzeppelin/contracts-v5.0.2/access/IAccessControl.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {ContextUpgradeable} from "../utils/ContextUpgradeable.sol";
 import {ERC165Upgradeable} from "../utils/introspection/ERC165Upgradeable.sol";
 import {Initializable} from "../proxy/utils/Initializable.sol";
@@ -55,14 +55,14 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable,
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
+
     /// @custom:storage-location erc7201:openzeppelin.storage.AccessControl
     struct AccessControlStorage {
         mapping(bytes32 role => RoleData) _roles;
     }
 
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.AccessControl")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant AccessControlStorageLocation =
-        0x02dd7bc7dec4dceedda775e58dd541e08a116c6c53815c0bd028192f7b626800;
+    bytes32 private constant AccessControlStorageLocation = 0x02dd7bc7dec4dceedda775e58dd541e08a116c6c53815c0bd028192f7b626800;
 
     function _getAccessControlStorage() private pure returns (AccessControlStorage storage $) {
         assembly {
@@ -79,10 +79,11 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable,
         _;
     }
 
-    function __AccessControl_init() internal onlyInitializing {}
+    function __AccessControl_init() internal onlyInitializing {
+    }
 
-    function __AccessControl_init_unchained() internal onlyInitializing {}
-
+    function __AccessControl_init_unchained() internal onlyInitializing {
+    }
     /**
      * @dev See {IERC165-supportsInterface}.
      */
@@ -213,7 +214,7 @@ abstract contract AccessControlUpgradeable is Initializable, ContextUpgradeable,
     }
 
     /**
-     * @dev Attempts to revoke `role` to `account` and returns a boolean indicating if `role` was revoked.
+     * @dev Attempts to revoke `role` from `account` and returns a boolean indicating if `role` was revoked.
      *
      * Internal function without access restriction.
      *
