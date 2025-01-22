@@ -38,6 +38,7 @@ interface IStakingVault {
     function isBalanced() external view returns (bool);
     function unlocked() external view returns (uint256);
     function inOutDelta() external view returns (int256);
+    function beaconChainDepositsPaused() external view returns (bool);
     function withdrawalCredentials() external view returns (bytes32);
     function fund() external payable;
     function withdraw(address _recipient, uint256 _ether) external;
@@ -45,6 +46,8 @@ interface IStakingVault {
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
+    function pauseBeaconChainDeposits() external;
+    function resumeBeaconChainDeposits() external;
     function latestReport() external view returns (Report memory);
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
 }

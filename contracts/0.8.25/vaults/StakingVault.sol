@@ -34,6 +34,8 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `withdraw()`
  *   - `requestValidatorExit()`
  *   - `rebalance()`
+ *   - `pauseBeaconChainDeposits()`
+ *   - `resumeBeaconChainDeposits()`
  * - Operator:
  *   - `depositToBeaconChain()`
  * - VaultHub:
@@ -58,12 +60,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
+     * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
         Report report;
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        bool beaconChainDepositsPaused;
     }
 
     /**
@@ -212,8 +216,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @return Report struct containing valuation and inOutDelta from last report
      */
     function latestReport() external view returns (IStakingVault.Report memory) {
-        ERC7201Storage storage $ = _getStorage();
-        return $.report;
+        return _getStorage().report;
+    }
+
+    /**
+     * @notice Returns whether deposits are paused by the vault owner
+     * @return True if deposits are paused
+     */
+    function beaconChainDepositsPaused() external view returns (bool) {
+        return _getStorage().beaconChainDepositsPaused;
     }
 
     /**
@@ -304,7 +315,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        if (msg.sender != _getStorage().nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        ERC7201Storage storage $ = _getStorage();
+
+        if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (!isBalanced()) revert Unbalanced();
 
         uint256 totalAmount = 0;
@@ -441,6 +455,36 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return depositDataRoot;
     }
 
+    /**
+     * @notice Pauses deposits to beacon chain
+     * @dev Can only be called by the vault owner
+     */
+    function pauseBeaconChainDeposits() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.beaconChainDepositsPaused) {
+            revert BeaconChainDepositsResumeExpected();
+        }
+
+        $.beaconChainDepositsPaused = true;
+
+        emit BeaconChainDepositsPaused();
+    }
+
+    /**
+     * @notice Resumes deposits to beacon chain
+     * @dev Can only be called by the vault owner
+     */
+    function resumeBeaconChainDeposits() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.beaconChainDepositsPaused) {
+            revert BeaconChainDepositsPauseExpected();
+        }
+
+        $.beaconChainDepositsPaused = false;
+
+        emit BeaconChainDepositsResumed();
+    }
+
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC721_STORAGE_LOCATION
@@ -499,6 +543,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param reason Revert data from `onReport` hook
      */
     event OnReportFailed(bytes reason);
+
+    /**
+     * @notice Emitted when deposits to beacon chain are paused
+     */
+    event BeaconChainDepositsPaused();
+
+    /**
+     * @notice Emitted when deposits to beacon chain are resumed
+     */
+    event BeaconChainDepositsResumed();
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -562,4 +616,19 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the onReport() hook reverts with an Out of Gas error
      */
     error UnrecoverableError();
+
+    /**
+     * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
+     */
+    error BeaconChainDepositsPauseExpected();
+
+    /**
+     * @notice Thrown when trying to resume deposits to beacon chain while deposits are already resumed
+     */
+    error BeaconChainDepositsResumeExpected();
+
+    /**
+     * @notice Thrown when trying to deposit to beacon chain while deposits are paused
+     */
+    error BeaconChainDepositsArePaused();
 }
