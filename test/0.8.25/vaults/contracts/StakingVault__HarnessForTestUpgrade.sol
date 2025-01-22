@@ -120,6 +120,13 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
+    function beaconChainDepositsPaused() external view returns (bool) {
+        return false;
+    }
+
+    function pauseBeaconChainDeposits() external {}
+    function resumeBeaconChainDeposits() external {}
+
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 }

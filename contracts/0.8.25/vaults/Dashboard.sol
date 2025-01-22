@@ -523,14 +523,14 @@ contract Dashboard is AccessControlEnumerable {
      * @dev Pauses beacon chain deposits on the staking vault.
      */
     function _pauseBeaconChainDeposits() internal {
-        stakingVault.pauseBeaconChainDeposits();
+        stakingVault().pauseBeaconChainDeposits();
     }
 
     /**
      * @dev Resumes beacon chain deposits on the staking vault.
      */
     function _resumeBeaconChainDeposits() internal {
-        stakingVault.resumeBeaconChainDeposits();
+        stakingVault().resumeBeaconChainDeposits();
     }
 
     // ==================== Events ====================

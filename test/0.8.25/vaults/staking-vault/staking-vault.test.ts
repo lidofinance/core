@@ -361,10 +361,13 @@ describe("StakingVault.sol", () => {
 
     it("reverts if the deposits are paused", async () => {
       await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
-      await expect(stakingVault.connect(operator).depositToBeaconChain(1, "0x", "0x")).to.be.revertedWithCustomError(
-        stakingVault,
-        "BeaconChainDepositsArePaused",
-      );
+      await expect(
+        stakingVault
+          .connect(operator)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsArePaused");
     });
 
     it("makes deposits to the beacon chain and emits the DepositedToBeaconChain event", async () => {
