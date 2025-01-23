@@ -1646,6 +1646,7 @@ describe("Dashboard.sol", () => {
       expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount + preBalance);
     });
   });
+
   context("pauseBeaconChainDeposits", () => {
     it("reverts if the caller is not a curator", async () => {
       await expect(dashboard.connect(stranger).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
