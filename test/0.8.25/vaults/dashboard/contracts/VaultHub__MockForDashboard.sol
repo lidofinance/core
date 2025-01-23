@@ -42,6 +42,10 @@ contract VaultHub__MockForDashboard {
     }
 
     function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
+        if (vault == address(0)) revert ZeroArgument("_vault");
+        if (recipient == address(0)) revert ZeroArgument("recipient");
+        if (amount == 0) revert ZeroArgument("amount");
+
         steth.mintExternalShares(recipient, amount);
         vaultSockets[vault].sharesMinted = uint96(vaultSockets[vault].sharesMinted + amount);
     }

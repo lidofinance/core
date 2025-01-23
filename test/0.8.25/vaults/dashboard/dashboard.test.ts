@@ -272,9 +272,9 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("projectedMintableShares", () => {
+  context("projectedNewMintableShares", () => {
     it("returns trivial can mint shares", async () => {
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(0n);
     });
 
@@ -292,13 +292,13 @@ describe("Dashboard.sol", () => {
 
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.projectedMintableShares(funding);
+      const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
 
       await dashboard.fund({ value: funding });
 
       const availableMintableShares = await dashboard.totalMintableShares();
 
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(availableMintableShares);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -316,11 +316,11 @@ describe("Dashboard.sol", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.projectedMintableShares(funding);
+      const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
 
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(0n); // 1000 - 10% - 900 = 0
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -337,10 +337,10 @@ describe("Dashboard.sol", () => {
       };
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
-      const preFundCanMint = await dashboard.projectedMintableShares(funding);
+      const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -358,12 +358,12 @@ describe("Dashboard.sol", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
 
-      const preFundCanMint = await dashboard.projectedMintableShares(funding);
+      const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
       await dashboard.fund({ value: funding });
 
       const sharesFunded = await steth.getSharesByPooledEth((funding * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE);
 
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(sharesFunded - sockets.sharesMinted);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -381,10 +381,10 @@ describe("Dashboard.sol", () => {
 
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
-      const preFundCanMint = await dashboard.projectedMintableShares(funding);
+      const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
       await dashboard.fund({ value: funding });
 
-      const canMint = await dashboard.projectedMintableShares(0n);
+      const canMint = await dashboard.projectedNewMintableShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -550,10 +550,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts without approval", async () => {
-      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWithCustomError(
-        dashboard,
-        "Erc20Error",
-      );
+      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWithoutReason();
     });
   });
 
@@ -690,6 +687,10 @@ describe("Dashboard.sol", () => {
         .and.to.emit(steth, "TransferShares")
         .withArgs(ZeroAddress, vaultOwner, amountShares);
     });
+
+    it("cannot mint less stETH than 1 share", async () => {
+      await expect(dashboard.mintStETH(vaultOwner, 1n)).to.be.revertedWithCustomError(hub, "ZeroArgument");
+    });
   });
 
   context("mintWstETH", () => {
@@ -732,6 +733,7 @@ describe("Dashboard.sol", () => {
         await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, wsteth, weiSteth);
         await expect(result).to.emit(wsteth, "Transfer").withArgs(ZeroAddress, dashboard, weiWsteth);
 
+        expect(await wsteth.balanceOf(dashboard)).to.equal(0n);
         expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore + weiWsteth);
       });
     }
@@ -799,6 +801,10 @@ describe("Dashboard.sol", () => {
         .and.to.emit(steth, "SharesBurnt") // burn
         .withArgs(hub, amountSteth, amountSteth, amountShares);
       expect(await steth.balanceOf(vaultOwner)).to.equal(0);
+    });
+
+    it("does not allow to burn 1 wei stETH", async () => {
+      await expect(dashboard.burnSteth(1n)).to.be.revertedWithCustomError(hub, "ZeroArgument");
     });
   });
 
@@ -885,7 +891,8 @@ describe("Dashboard.sol", () => {
           await wstethContract.approve(dashboard, weiShare);
 
           // reverts when rounding to zero
-          if (weiShareDown === 0n) {
+          // this condition is excessive but illustrative
+          if (weiShareDown === 0n && weiShare == 1n) {
             await expect(dashboard.burnWstETH(weiShare)).to.be.revertedWithCustomError(hub, "ZeroArgument");
             // clean up wsteth
             await wstethContract.transfer(stranger, await wstethContract.balanceOf(vaultOwner));
@@ -976,7 +983,7 @@ describe("Dashboard.sol", () => {
           r,
           s,
         }),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
     });
 
     it("burns shares with permit", async () => {
@@ -1030,7 +1037,7 @@ describe("Dashboard.sol", () => {
 
       await expect(
         dashboard.connect(vaultOwner).burnSharesWithPermit(amountShares, permitData),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
 
       await steth.connect(vaultOwner).approve(dashboard, amountSteth);
 
@@ -1172,7 +1179,7 @@ describe("Dashboard.sol", () => {
           r,
           s,
         }),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
     });
 
     it("burns shares with permit", async () => {
@@ -1226,7 +1233,7 @@ describe("Dashboard.sol", () => {
 
       await expect(
         dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, permitData),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
 
       await steth.connect(vaultOwner).approve(dashboard, amountSteth);
 
@@ -1367,7 +1374,7 @@ describe("Dashboard.sol", () => {
           r,
           s,
         }),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
     });
 
     it("burns wstETH with permit", async () => {
@@ -1425,7 +1432,7 @@ describe("Dashboard.sol", () => {
 
       await expect(
         dashboard.connect(vaultOwner).burnWstETHWithPermit(amountShares, permitData),
-      ).to.be.revertedWithCustomError(dashboard, "Erc20Error");
+      ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
 
       await wsteth.connect(vaultOwner).approve(dashboard, amountShares);
 
@@ -1557,24 +1564,38 @@ describe("Dashboard.sol", () => {
     });
 
     it("allows only admin to recover", async () => {
-      await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
-      await expect(dashboard.connect(stranger).recoverERC721(erc721.getAddress(), 0)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
+      await expect(
+        dashboard.connect(stranger).recoverERC721(erc721.getAddress(), 0, vaultOwner),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
     it("does not allow zero token address for erc20 recovery", async () => {
-      await expect(dashboard.recoverERC20(ZeroAddress)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroArgument",
+      );
+      await expect(dashboard.recoverERC20(weth, ZeroAddress)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
     });
 
     it("recovers all ether", async () => {
       const ethStub = await dashboard.ETH();
       const preBalance = await ethers.provider.getBalance(vaultOwner);
-      const tx = await dashboard.recoverERC20(ethStub);
+      const tx = await dashboard.recoverERC20(ethStub, vaultOwner);
+      const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
+
+      await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, ethStub, amount);
+      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(0);
+      expect(await ethers.provider.getBalance(vaultOwner)).to.equal(preBalance + amount - gasUsed * gasPrice);
+    });
+
+    it("recovers all ether", async () => {
+      const ethStub = await dashboard.ETH();
+      const preBalance = await ethers.provider.getBalance(vaultOwner);
+      const tx = await dashboard.recoverERC20(ethStub, vaultOwner);
       const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
 
       await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, ethStub, amount);
@@ -1584,7 +1605,7 @@ describe("Dashboard.sol", () => {
 
     it("recovers all weth", async () => {
       const preBalance = await weth.balanceOf(vaultOwner);
-      const tx = await dashboard.recoverERC20(weth.getAddress());
+      const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner);
 
       await expect(tx)
         .to.emit(dashboard, "ERC20Recovered")
@@ -1594,11 +1615,14 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow zero token address for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, 0)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      await expect(dashboard.recoverERC721(ZeroAddress, 0, vaultOwner)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroArgument",
+      );
     });
 
     it("recovers erc721", async () => {
-      const tx = await dashboard.recoverERC721(erc721.getAddress(), 0);
+      const tx = await dashboard.recoverERC721(erc721.getAddress(), 0, vaultOwner);
 
       await expect(tx)
         .to.emit(dashboard, "ERC721Recovered")
@@ -1610,11 +1634,6 @@ describe("Dashboard.sol", () => {
 
   context("fallback behavior", () => {
     const amount = ether("1");
-
-    it("reverts on zero value sent", async () => {
-      const tx = vaultOwner.sendTransaction({ to: dashboardAddress, value: 0 });
-      await expect(tx).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
-    });
 
     it("does not allow fallback behavior", async () => {
       const tx = vaultOwner.sendTransaction({ to: dashboardAddress, data: "0x111111111111", value: amount });
