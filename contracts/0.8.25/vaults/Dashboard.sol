@@ -4,10 +4,11 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.0.2/access/extensions/AccessControlEnumerable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.0.2/upgradeable/access/OwnableUpgradeable.sol";
-import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -44,9 +45,6 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice Indicates whether the contract has been initialized
-    bool public isInitialized;
-
     /// @notice The stETH token contract
     IStETH public immutable STETH;
 
@@ -56,8 +54,8 @@ contract Dashboard is AccessControlEnumerable {
     /// @notice The wrapped ether token contract
     IWeth public immutable WETH;
 
-    /// @notice The underlying `StakingVault` contract
-    IStakingVault public stakingVault;
+    /// @notice Indicates whether the contract has been initialized
+    bool public initialized;
 
     /// @notice The `VaultHub` contract
     VaultHub public vaultHub;
@@ -88,25 +86,22 @@ contract Dashboard is AccessControlEnumerable {
     }
 
     /**
-     * @notice Initializes the contract with the default admin and `StakingVault` address.
-     * @param _stakingVault Address of the `StakingVault` contract.
+     * @notice Initializes the contract with the default admin
+     *         and `vaultHub` address
      */
-    function initialize(address _stakingVault) external virtual {
-        _initialize(_stakingVault);
+    function initialize() external virtual {
+        _initialize();
     }
 
     /**
      * @dev Internal initialize function.
-     * @param _stakingVault Address of the `StakingVault` contract.
      */
-    function _initialize(address _stakingVault) internal {
-        if (_stakingVault == address(0)) revert ZeroArgument("_stakingVault");
-        if (isInitialized) revert AlreadyInitialized();
+    function _initialize() internal {
+        if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
-        isInitialized = true;
-        stakingVault = IStakingVault(_stakingVault);
-        vaultHub = VaultHub(stakingVault.vaultHub());
+        initialized = true;
+        vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         emit Initialized();
@@ -119,7 +114,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(address(stakingVault));
+        return vaultHub.vaultSocket(address(stakingVault()));
     }
 
     /**
@@ -167,7 +162,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The valuation as a uint256.
      */
     function valuation() external view returns (uint256) {
-        return stakingVault.valuation();
+        return stakingVault().valuation();
     }
 
     /**
@@ -175,7 +170,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The maximum number of stETH shares as a uint256.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(stakingVault.valuation());
+        return _totalMintableShares(stakingVault().valuation());
     }
 
     /**
@@ -184,7 +179,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return the maximum number of shares that can be minted by ether
      */
     function getMintableShares(uint256 _ether) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(stakingVault.valuation() + _ether);
+        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _ether);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -196,7 +191,7 @@ contract Dashboard is AccessControlEnumerable {
      * @return The amount of ether that can be withdrawn.
      */
     function getWithdrawableEther() external view returns (uint256) {
-        return Math256.min(address(stakingVault).balance, stakingVault.unlocked());
+        return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
     }
 
     // TODO: add preview view methods for minting and burning
@@ -244,7 +239,7 @@ contract Dashboard is AccessControlEnumerable {
         WETH.withdraw(_wethAmount);
 
         // TODO: find way to use _fund() instead of stakingVault directly
-        stakingVault.fund{value: _wethAmount}();
+        stakingVault().fund{value: _wethAmount}();
     }
 
     /**
@@ -324,7 +319,7 @@ contract Dashboard is AccessControlEnumerable {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        vaultHub.burnSharesBackedByVault(address(stakingVault), sharesAmount);
+        vaultHub.burnSharesBackedByVault(address(stakingVault()), sharesAmount);
     }
 
     /**
@@ -398,7 +393,7 @@ contract Dashboard is AccessControlEnumerable {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        vaultHub.burnSharesBackedByVault(address(stakingVault), sharesAmount);
+        vaultHub.burnSharesBackedByVault(address(stakingVault()), sharesAmount);
     }
 
     /**
@@ -407,6 +402,20 @@ contract Dashboard is AccessControlEnumerable {
      */
     function rebalanceVault(uint256 _ether) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
+    }
+
+    /**
+     * @notice Pauses beacon chain deposits on the staking vault.
+     */
+    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Resumes beacon chain deposits on the staking vault.
+     */
+    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _resumeBeaconChainDeposits();
     }
 
     // ==================== Internal Functions ====================
@@ -426,7 +435,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _newOwner Address of the new owner
      */
     function _transferStVaultOwnership(address _newOwner) internal {
-        OwnableUpgradeable(address(stakingVault)).transferOwnership(_newOwner);
+        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
     /**
@@ -438,14 +447,14 @@ contract Dashboard is AccessControlEnumerable {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
         }
 
-        vaultHub.voluntaryDisconnect(address(stakingVault));
+        vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
     /**
      * @dev Funds the staking vault with the ether sent in the transaction
      */
     function _fund() internal {
-        stakingVault.fund{value: msg.value}();
+        stakingVault().fund{value: msg.value}();
     }
 
     /**
@@ -454,7 +463,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _ether Amount of ether to withdraw
      */
     function _withdraw(address _recipient, uint256 _ether) internal {
-        stakingVault.withdraw(_recipient, _ether);
+        stakingVault().withdraw(_recipient, _ether);
     }
 
     /**
@@ -462,21 +471,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _validatorPublicKey Public key of the validator to exit
      */
     function _requestValidatorExit(bytes calldata _validatorPublicKey) internal {
-        stakingVault.requestValidatorExit(_validatorPublicKey);
-    }
-
-    /**
-     * @dev Deposits validators to the beacon chain
-     * @param _numberOfDeposits Number of validator deposits
-     * @param _pubkeys Concatenated public keys of the validators
-     * @param _signatures Concatenated signatures of the validators
-     */
-    function _depositToBeaconChain(
-        uint256 _numberOfDeposits,
-        bytes calldata _pubkeys,
-        bytes calldata _signatures
-    ) internal {
-        stakingVault.depositToBeaconChain(_numberOfDeposits, _pubkeys, _signatures);
+        stakingVault().requestValidatorExit(_validatorPublicKey);
     }
 
     /**
@@ -485,7 +480,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _amountOfShares Amount of tokens to mint
      */
     function _mint(address _recipient, uint256 _amountOfShares) internal {
-        vaultHub.mintSharesBackedByVault(address(stakingVault), _recipient, _amountOfShares);
+        vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _amountOfShares);
     }
 
     /**
@@ -494,7 +489,7 @@ contract Dashboard is AccessControlEnumerable {
      */
     function _burn(uint256 _amountOfShares) internal {
         STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
-        vaultHub.burnSharesBackedByVault(address(stakingVault), _amountOfShares);
+        vaultHub.burnSharesBackedByVault(address(stakingVault()), _amountOfShares);
     }
 
     /**
@@ -511,7 +506,31 @@ contract Dashboard is AccessControlEnumerable {
      * @param _ether Amount of ether to rebalance
      */
     function _rebalanceVault(uint256 _ether) internal {
-        stakingVault.rebalance(_ether);
+        stakingVault().rebalance(_ether);
+    }
+
+    /// @notice The underlying `StakingVault` contract
+    function stakingVault() public view returns (IStakingVault) {
+        bytes memory args = Clones.fetchCloneArgs(address(this));
+        address addr;
+        assembly {
+            addr := mload(add(args, 32))
+        }
+        return IStakingVault(addr);
+    }
+
+    /**
+     * @dev Pauses beacon chain deposits on the staking vault.
+     */
+    function _pauseBeaconChainDeposits() internal {
+        stakingVault().pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @dev Resumes beacon chain deposits on the staking vault.
+     */
+    function _resumeBeaconChainDeposits() internal {
+        stakingVault().resumeBeaconChainDeposits();
     }
 
     // ==================== Events ====================

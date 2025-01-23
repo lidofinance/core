@@ -22,7 +22,7 @@
     "test:sequential": "hardhat test test/**/*.test.ts",
     "test:trace": "hardhat test test/**/*.test.ts --trace --disabletracer",
     "test:fulltrace": "hardhat test test/**/*.test.ts --fulltrace --disabletracer",
-    "test:watch": "hardhat watch test",
+    "test:watch": "SKIP_GAS_REPORT=true SKIP_CONTRACT_SIZE=true hardhat watch test",
     "test:integration": "hardhat test test/integration/**/*.ts",
     "test:integration:trace": "hardhat test test/integration/**/*.ts --trace --disabletracer",
     "test:integration:fulltrace": "hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
@@ -35,7 +35,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
-    "verify:deployed": "hardhat verify:deployed"
+    "verify:deployed": "hardhat verify:deployed",
+    "postinstall": "husky"
   },
   "lint-staged": {
     "./**/*.ts": [
@@ -91,7 +92,7 @@
     "lint-staged": "15.2.10",
     "prettier": "3.4.1",
     "prettier-plugin-solidity": "1.4.1",
-    "solhint": "5.0.3",
+    "solhint": "5.0.4",
     "solhint-plugin-lido": "0.0.4",
     "solidity-coverage": "0.8.14",
     "ts-node": "10.9.2",
@@ -110,7 +111,7 @@
     "@aragon/os": "4.4.0",
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
-    "@openzeppelin/contracts-v5.0.2": "npm:@openzeppelin/contracts@5.0.2",
+    "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0",
     "openzeppelin-solidity": "2.0.0"
   }
 }

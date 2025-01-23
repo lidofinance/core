@@ -4,8 +4,7 @@ import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -22,10 +21,10 @@ import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstet
 
 import { Snapshot } from "test/suite";
 
-describe("Dashboard", () => {
+describe("Dashboard.sol", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
@@ -45,7 +44,7 @@ describe("Dashboard", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [factoryOwner, vaultOwner, operator, stranger] = await ethers.getSigners();
+    [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
@@ -67,7 +66,7 @@ describe("Dashboard", () => {
     expect(await factory.implementation()).to.equal(vaultImpl);
     expect(await factory.dashboardImpl()).to.equal(dashboardImpl);
 
-    const createVaultTx = await factory.connect(vaultOwner).createVault(operator);
+    const createVaultTx = await factory.connect(vaultOwner).createVault(nodeOperator);
     const createVaultReceipt = await createVaultTx.wait();
     if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
 
@@ -119,28 +118,22 @@ describe("Dashboard", () => {
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      await expect(dashboard.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vault)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
+      await expect(dashboard.initialize()).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth, weth, wsteth]);
 
-      await expect(dashboard_.initialize(vault)).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
+      await expect(dashboard_.initialize()).to.be.revertedWithCustomError(dashboard_, "NonProxyCallsForbidden");
     });
   });
 
   context("initialized state", () => {
     it("post-initialization state is correct", async () => {
       expect(await vault.owner()).to.equal(dashboard);
-      expect(await vault.operator()).to.equal(operator);
-      expect(await dashboard.isInitialized()).to.equal(true);
+      expect(await vault.nodeOperator()).to.equal(nodeOperator);
+      expect(await dashboard.initialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
       expect(await dashboard.vaultHub()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
@@ -990,6 +983,52 @@ describe("Dashboard", () => {
         .withArgs(dashboard, amount)
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
+    });
+  });
+
+  context("pauseBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(dashboard.connect(stranger).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already paused", async () => {
+      await dashboard.pauseBeaconChainDeposits();
+
+      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsResumeExpected",
+      );
+    });
+
+    it("pauses the beacon deposits", async () => {
+      await expect(dashboard.pauseBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsPaused");
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(dashboard.connect(stranger).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already resumed", async () => {
+      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
+
+    it("resumes the beacon deposits", async () => {
+      await dashboard.pauseBeaconChainDeposits();
+
+      await expect(dashboard.resumeBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsResumed");
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
   });
 });

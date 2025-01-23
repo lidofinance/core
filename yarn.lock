@@ -1610,10 +1610,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@openzeppelin/contracts-v5.0.2@npm:@openzeppelin/contracts@5.0.2":
-  version: 5.0.2
-  resolution: "@openzeppelin/contracts@npm:5.0.2"
-  checksum: 10c0/d042661db7bb2f3a4b9ef30bba332e86ac20907d171f2ebfccdc9255cc69b62786fead8d6904b8148a8f26946bc7c15eead91b95f75db0c193a99d52e528663e
+"@openzeppelin/contracts-v5.2@npm:@openzeppelin/contracts@5.2.0":
+  version: 5.2.0
+  resolution: "@openzeppelin/contracts@npm:5.2.0"
+  checksum: 10c0/6e2d8c6daaeb8e111d49a82c30997a6c5d4e512338b55500db7fd4340f29c1cbf35f9dcfa0dbc672e417bc84e99f5441a105cb585cd4680ad70cbcf9a24094fc
   languageName: node
   linkType: hard
 
@@ -8063,7 +8063,7 @@ __metadata:
     "@nomicfoundation/ignition-core": "npm:0.15.8"
     "@openzeppelin/contracts": "npm:3.4.0"
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1"
-    "@openzeppelin/contracts-v5.0.2": "npm:@openzeppelin/contracts@5.0.2"
+    "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0"
     "@typechain/ethers-v6": "npm:0.5.1"
     "@typechain/hardhat": "npm:9.1.0"
     "@types/chai": "npm:4.3.20"
@@ -8095,7 +8095,7 @@ __metadata:
     openzeppelin-solidity: "npm:2.0.0"
     prettier: "npm:3.4.1"
     prettier-plugin-solidity: "npm:1.4.1"
-    solhint: "npm:5.0.3"
+    solhint: "npm:5.0.4"
     solhint-plugin-lido: "npm:0.0.4"
     solidity-coverage: "npm:0.8.14"
     ts-node: "npm:10.9.2"
@@ -10638,11 +10638,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"solhint@npm:5.0.3":
-  version: 5.0.3
-  resolution: "solhint@npm:5.0.3"
+"solhint@npm:5.0.4":
+  version: 5.0.4
+  resolution: "solhint@npm:5.0.4"
   dependencies:
-    "@solidity-parser/parser": "npm:^0.18.0"
+    "@solidity-parser/parser": "npm:^0.19.0"
     ajv: "npm:^6.12.6"
     antlr4: "npm:^4.13.1-patch-1"
     ast-parents: "npm:^0.0.1"
@@ -10666,7 +10666,7 @@ __metadata:
       optional: true
   bin:
     solhint: solhint.js
-  checksum: 10c0/262e86a8932d7d4d6ebae2a9d7317749e5068092e7cdf4caf07ac39fc72bd2c94f3907daaedcad37592ec001b57caed6dc5ed7c3fd6cd18b6443182f38c1715e
+  checksum: 10c0/70058b23c8746762fc88d48b571c4571719913ca7f3c582a55c123ad9ba38976a2338782025fbb9643bb75bfad18bf3dce1b71e500df6d99589e9814fbcce1d7
   languageName: node
   linkType: hard
 
