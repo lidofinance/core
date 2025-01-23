@@ -43,20 +43,6 @@ contract Delegation is Dashboard {
     bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
 
     /**
-     * @notice Mint/burn role:
-     * - mints shares of stETH;
-     * - burns shares of stETH.
-     */
-    bytes32 public constant MINT_BURN_ROLE = keccak256("Vault.Delegation.MintBurnRole");
-
-    /**
-     * @notice Fund/withdraw role:
-     * - funds StakingVault;
-     * - withdraws from StakingVault.
-     */
-    bytes32 public constant FUND_WITHDRAW_ROLE = keccak256("Vault.Delegation.FundWithdrawRole");
-
-    /**
      * @notice Node operator manager role:
      * - votes on vote lifetime;
      * - votes on node operator fee;
@@ -180,64 +166,6 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Funds the StakingVault with ether.
-     */
-    function fund() external payable override onlyRole(FUND_WITHDRAW_ROLE) {
-        _fund();
-    }
-
-    /**
-     * @notice Withdraws ether from the StakingVault.
-     * Cannot withdraw more than the unreserved amount: which is the amount of ether
-     * that is not locked in the StakingVault and not reserved for curator and node operator fees.
-     * Does not include a check for the balance of the StakingVault, this check is present
-     * on the StakingVault itself.
-     * @param _recipient The address to which the ether will be sent.
-     * @param _ether The amount of ether to withdraw.
-     */
-    function withdraw(address _recipient, uint256 _ether) external override onlyRole(FUND_WITHDRAW_ROLE) {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_ether == 0) revert ZeroArgument("_ether");
-        uint256 withdrawable = unreserved();
-        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
-
-        _withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @notice Mints shares for a given recipient.
-     * This function works with shares of StETH, not the tokens.
-     * For conversion rates, please refer to the official documentation: docs.lido.fi.
-     * @param _recipient The address to which the shares will be minted.
-     * @param _amountOfShares The amount of shares to mint.
-     */
-    function mint(
-        address _recipient,
-        uint256 _amountOfShares
-    ) external payable override onlyRole(MINT_BURN_ROLE) fundAndProceed {
-        _mint(_recipient, _amountOfShares);
-    }
-
-    /**
-     * @notice Burns shares for a given recipient.
-     * This function works with shares of StETH, not the tokens.
-     * For conversion rates, please refer to the official documentation: docs.lido.fi.
-     * NB: Delegation contract must have ERC-20 approved allowance to burn sender's shares.
-     * @param _amountOfShares The amount of shares to burn.
-     */
-    function burn(uint256 _amountOfShares) external override onlyRole(MINT_BURN_ROLE) {
-        _burn(_amountOfShares);
-    }
-
-    /**
-     * @notice Rebalances the StakingVault with a given amount of ether.
-     * @param _ether The amount of ether to rebalance with.
-     */
-    function rebalanceVault(uint256 _ether) external payable override onlyRole(CURATOR_ROLE) fundAndProceed {
-        _rebalanceVault(_ether);
-    }
-
-    /**
      * @notice Sets the vote lifetime.
      * Vote lifetime is a period during which the vote is counted. Once the period is over,
      * the vote is considered expired, no longer counts and must be recasted for the voting to go through.
@@ -303,23 +231,6 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Transfers the ownership of the StakingVault.
-     * This function transfers the ownership of the StakingVault to a new owner which can be an entirely new owner
-     * or the same underlying owner (DEFAULT_ADMIN_ROLE) but a different Delegation contract.
-     * @param _newOwner The address to which the ownership will be transferred.
-     */
-    function transferStVaultOwnership(address _newOwner) public override onlyIfVotedBy(votingCommittee()) {
-        _transferStVaultOwnership(_newOwner);
-    }
-
-    /**
-     * @notice Voluntarily disconnects the StakingVault from VaultHub.
-     */
-    function voluntaryDisconnect() external payable override onlyRole(CURATOR_ROLE) fundAndProceed {
-        _voluntaryDisconnect();
-    }
-
-    /**
      * @dev Calculates the curator/node operator fee amount based on the fee and the last claimed report.
      * @param _feeBP The fee in basis points.
      * @param _lastClaimedReport The last claimed report.
@@ -347,6 +258,29 @@ contract Delegation is Dashboard {
         if (_fee == 0) revert ZeroArgument("_fee");
 
         _withdraw(_recipient, _fee);
+    }
+
+    /**
+     * @dev Overrides the Dashboard's internal authorization function to add a voting requirement.
+     */
+    function _authTransferOwnership() internal override onlyIfVotedBy(votingCommittee()) {}
+
+    /**
+     * @dev Overrides the Dashboard's internal withdraw function to add a check for the unreserved amount.
+     * Cannot withdraw more than the unreserved amount: which is the amount of ether
+     * that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * Does not include a check for the balance of the StakingVault, this check is present
+     * on the StakingVault itself.
+     * @param _recipient The address to which the ether will be sent.
+     * @param _ether The amount of ether to withdraw.
+     */
+    function _withdraw(address _recipient, uint256 _ether) internal override {
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_ether == 0) revert ZeroArgument("_ether");
+        uint256 withdrawable = unreserved();
+        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
+
+        super._withdraw(_recipient, _ether);
     }
 
     /**

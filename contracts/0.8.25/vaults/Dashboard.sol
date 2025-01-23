@@ -45,6 +45,15 @@ contract Dashboard is AccessControlVoteable {
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
+    bytes32 public constant TRANSFER_OWNERSHIP_ROLE = keccak256("Dashboard.AccessControl.TransferOwnership");
+    bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("Dashboard.AccessControl.VoluntaryDisconnect");
+    bytes32 public constant FUND_ROLE = keccak256("Dashboard.AccessControl.Fund");
+    bytes32 public constant WITHDRAW_ROLE = keccak256("Dashboard.AccessControl.Withdraw");
+    bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("Dashboard.AccessControl.RequestValidatorExit");
+    bytes32 public constant MINT_ROLE = keccak256("Dashboard.AccessControl.Mint");
+    bytes32 public constant BURN_ROLE = keccak256("Dashboard.AccessControl.Burn");
+    bytes32 public constant REBALANCE_ROLE = keccak256("Dashboard.AccessControl.Rebalance");
+
     /// @notice The stETH token contract
     IStETH public immutable STETH;
 
@@ -210,21 +219,28 @@ contract Dashboard is AccessControlVoteable {
      * @notice Transfers ownership of the staking vault to a new owner.
      * @param _newOwner Address of the new owner.
      */
-    function transferStVaultOwnership(address _newOwner) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _transferStVaultOwnership(_newOwner);
+    function transferOwnership(address _newOwner) external virtual {
+        _authTransferOwnership();
+
+        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
-        _voluntaryDisconnect();
+    function voluntaryDisconnect() external payable virtual onlyRole(VOLUNTARY_DISCONNECT_ROLE) fundAndProceed {
+        uint256 shares = sharesMinted();
+        if (shares > 0) {
+            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
+        }
+
+        vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
     /**
      * @notice Funds the staking vault with ether
      */
-    function fund() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function fund() external payable virtual onlyRole(FUND_ROLE) {
         _fund();
     }
 
@@ -232,7 +248,7 @@ contract Dashboard is AccessControlVoteable {
      * @notice Funds the staking vault with wrapped ether. Approvals for the passed amounts should be done before.
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
-    function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function fundByWeth(uint256 _wethAmount) external virtual onlyRole(FUND_ROLE) {
         if (WETH.allowance(msg.sender, address(this)) < _wethAmount) revert("ERC20: transfer amount exceeds allowance");
 
         WETH.transferFrom(msg.sender, address(this), _wethAmount);
@@ -247,7 +263,7 @@ contract Dashboard is AccessControlVoteable {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function withdraw(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external virtual onlyRole(WITHDRAW_ROLE) {
         _withdraw(_recipient, _ether);
     }
 
@@ -256,7 +272,7 @@ contract Dashboard is AccessControlVoteable {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(WITHDRAW_ROLE) {
         _withdraw(address(this), _ether);
         WETH.deposit{value: _ether}();
         WETH.transfer(_recipient, _ether);
@@ -266,7 +282,7 @@ contract Dashboard is AccessControlVoteable {
      * @notice Requests the exit of a validator from the staking vault
      * @param _validatorPublicKey Public key of the validator to exit
      */
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
         _requestValidatorExit(_validatorPublicKey);
     }
 
@@ -278,7 +294,7 @@ contract Dashboard is AccessControlVoteable {
     function mint(
         address _recipient,
         uint256 _amountOfShares
-    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    ) external payable virtual onlyRole(MINT_ROLE) fundAndProceed {
         _mint(_recipient, _amountOfShares);
     }
 
@@ -290,7 +306,7 @@ contract Dashboard is AccessControlVoteable {
     function mintWstETH(
         address _recipient,
         uint256 _tokens
-    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    ) external payable virtual onlyRole(MINT_ROLE) fundAndProceed {
         _mint(address(this), _tokens);
 
         STETH.approve(address(WSTETH), _tokens);
@@ -302,7 +318,7 @@ contract Dashboard is AccessControlVoteable {
      * @notice Burns stETH shares from the sender backed by the vault
      * @param _amountOfShares Amount of shares to burn
      */
-    function burn(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function burn(uint256 _amountOfShares) external virtual onlyRole(BURN_ROLE) {
         _burn(_amountOfShares);
     }
 
@@ -310,7 +326,7 @@ contract Dashboard is AccessControlVoteable {
      * @notice Burns wstETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
      * @param _tokens Amount of wstETH tokens to burn
      */
-    function burnWstETH(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function burnWstETH(uint256 _tokens) external virtual onlyRole(BURN_ROLE) {
         WSTETH.transferFrom(msg.sender, address(this), _tokens);
 
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
@@ -363,12 +379,7 @@ contract Dashboard is AccessControlVoteable {
     function burnWithPermit(
         uint256 _tokens,
         PermitInput calldata _permit
-    )
-        external
-        virtual
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        trustlessPermit(address(STETH), msg.sender, address(this), _permit)
-    {
+    ) external virtual onlyRole(BURN_ROLE) trustlessPermit(address(STETH), msg.sender, address(this), _permit) {
         _burn(_tokens);
     }
 
@@ -380,12 +391,7 @@ contract Dashboard is AccessControlVoteable {
     function burnWstETHWithPermit(
         uint256 _tokens,
         PermitInput calldata _permit
-    )
-        external
-        virtual
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        trustlessPermit(address(WSTETH), msg.sender, address(this), _permit)
-    {
+    ) external virtual onlyRole(BURN_ROLE) trustlessPermit(address(WSTETH), msg.sender, address(this), _permit) {
         WSTETH.transferFrom(msg.sender, address(this), _tokens);
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
 
@@ -400,7 +406,7 @@ contract Dashboard is AccessControlVoteable {
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function rebalanceVault(uint256 _ether) external payable virtual onlyRole(REBALANCE_ROLE) fundAndProceed {
         _rebalanceVault(_ether);
     }
 
@@ -416,25 +422,7 @@ contract Dashboard is AccessControlVoteable {
         _;
     }
 
-    /**
-     * @dev Transfers ownership of the staking vault to a new owner
-     * @param _newOwner Address of the new owner
-     */
-    function _transferStVaultOwnership(address _newOwner) internal {
-        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
-    }
-
-    /**
-     * @dev Disconnects the staking vault from the vault hub
-     */
-    function _voluntaryDisconnect() internal {
-        uint256 shares = sharesMinted();
-        if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
-        }
-
-        vaultHub.voluntaryDisconnect(address(stakingVault()));
-    }
+    function _authTransferOwnership() internal virtual onlyRole(TRANSFER_OWNERSHIP_ROLE) {}
 
     /**
      * @dev Funds the staking vault with the ether sent in the transaction
@@ -448,7 +436,7 @@ contract Dashboard is AccessControlVoteable {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function _withdraw(address _recipient, uint256 _ether) internal {
+    function _withdraw(address _recipient, uint256 _ether) internal virtual {
         stakingVault().withdraw(_recipient, _ether);
     }
 
