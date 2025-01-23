@@ -197,7 +197,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
      * @return The amount of ether that can be withdrawn.
      */
-    function getWithdrawableEther() external view returns (uint256) {
+    function withdrawableEther() external view returns (uint256) {
         return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
     }
 
@@ -234,7 +234,7 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Funds the staking vault with wrapped ether. Expects WETH amount apporved to this contract.
      * @param _amountWETH Amount of wrapped ether to fund the staking vault with
      */
-    function fundByWeth(uint256 _amountWETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function fundWeth(uint256 _amountWETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
         SafeERC20.safeTransferFrom(WETH, msg.sender, address(this), _amountWETH);
         WETH.withdraw(_amountWETH);
 
@@ -253,12 +253,12 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @notice Withdraws stETH tokens from the staking vault to wrapped ether.
      * @param _recipient Address of the recipient
-     * @param _ether Amount of ether to withdraw
+     * @param _amountWETH Amount of WETH to withdraw
      */
-    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _withdraw(address(this), _ether);
-        WETH.deposit{value: _ether}();
-        SafeERC20.safeTransfer(WETH, _recipient, _ether);
+    function withdrawWeth(address _recipient, uint256 _amountWETH) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _withdraw(address(this), _amountWETH);
+        WETH.deposit{value: _amountWETH}();
+        SafeERC20.safeTransfer(WETH, _recipient, _amountWETH);
     }
 
     /**

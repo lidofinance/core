@@ -390,10 +390,10 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("getWithdrawableEther", () => {
+  context("withdrawableEther", () => {
     it("returns the trivial amount can withdraw ether", async () => {
-      const getWithdrawableEther = await dashboard.getWithdrawableEther();
-      expect(getWithdrawableEther).to.equal(0n);
+      const withdrawableEther = await dashboard.withdrawableEther();
+      expect(withdrawableEther).to.equal(0n);
     });
 
     it("funds and returns the correct can withdraw ether", async () => {
@@ -401,15 +401,15 @@ describe("Dashboard.sol", () => {
 
       await dashboard.fund({ value: amount });
 
-      const getWithdrawableEther = await dashboard.getWithdrawableEther();
-      expect(getWithdrawableEther).to.equal(amount);
+      const withdrawableEther = await dashboard.withdrawableEther();
+      expect(withdrawableEther).to.equal(amount);
     });
 
     it("funds and recieves external but and can only withdraw unlocked", async () => {
       const amount = ether("1");
       await dashboard.fund({ value: amount });
       await vaultOwner.sendTransaction({ to: vault.getAddress(), value: amount });
-      expect(await dashboard.getWithdrawableEther()).to.equal(amount);
+      expect(await dashboard.withdrawableEther()).to.equal(amount);
     });
 
     it("funds and get all ether locked and can not withdraw", async () => {
@@ -418,7 +418,7 @@ describe("Dashboard.sol", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount);
 
-      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+      expect(await dashboard.withdrawableEther()).to.equal(0n);
     });
 
     it("funds and get all ether locked and can not withdraw", async () => {
@@ -427,7 +427,7 @@ describe("Dashboard.sol", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount);
 
-      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+      expect(await dashboard.withdrawableEther()).to.equal(0n);
     });
 
     it("funds and get all half locked and can only half withdraw", async () => {
@@ -436,7 +436,7 @@ describe("Dashboard.sol", () => {
 
       await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
 
-      expect(await dashboard.getWithdrawableEther()).to.equal(amount / 2n);
+      expect(await dashboard.withdrawableEther()).to.equal(amount / 2n);
     });
 
     it("funds and get all half locked, but no balance and can not withdraw", async () => {
@@ -447,7 +447,7 @@ describe("Dashboard.sol", () => {
 
       await setBalance(await vault.getAddress(), 0n);
 
-      expect(await dashboard.getWithdrawableEther()).to.equal(0n);
+      expect(await dashboard.withdrawableEther()).to.equal(0n);
     });
 
     // TODO: add more tests when the vault params are change
@@ -526,7 +526,7 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("fundByWeth", () => {
+  context("fundWeth", () => {
     const amount = ether("1");
 
     beforeEach(async () => {
@@ -534,7 +534,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).fundByWeth(ether("1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).fundWeth(ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -543,14 +543,14 @@ describe("Dashboard.sol", () => {
     it("funds by weth", async () => {
       await weth.connect(vaultOwner).approve(dashboard, amount);
 
-      await expect(dashboard.fundByWeth(amount, { from: vaultOwner }))
+      await expect(dashboard.fundWeth(amount, { from: vaultOwner }))
         .to.emit(vault, "Funded")
         .withArgs(dashboard, amount);
       expect(await ethers.provider.getBalance(vault)).to.equal(amount);
     });
 
     it("reverts without approval", async () => {
-      await expect(dashboard.fundByWeth(amount, { from: vaultOwner })).to.be.revertedWithoutReason();
+      await expect(dashboard.fundWeth(amount, { from: vaultOwner })).to.be.revertedWithoutReason();
     });
   });
 
@@ -575,11 +575,11 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("withdrawToWeth", () => {
+  context("withdrawWeth", () => {
     const amount = ether("1");
 
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).withdrawToWeth(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).withdrawWeth(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -589,7 +589,7 @@ describe("Dashboard.sol", () => {
       await dashboard.fund({ value: amount });
       const previousBalance = await ethers.provider.getBalance(stranger);
 
-      await expect(dashboard.withdrawToWeth(stranger, amount))
+      await expect(dashboard.withdrawWeth(stranger, amount))
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, dashboard, amount);
 
@@ -720,7 +720,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts on zero mint", async () => {
-      await expect(dashboard.mintWstETH(vaultOwner, 0n)).to.be.revertedWith("wstETH: can't wrap zero stETH");
+      await expect(dashboard.mintWstETH(vaultOwner, 0n)).to.be.revertedWithCustomError(hub, "ZeroArgument");
     });
 
     for (let weiWsteth = 1n; weiWsteth <= 10n; weiWsteth++) {
