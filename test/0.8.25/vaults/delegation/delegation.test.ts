@@ -649,4 +649,53 @@ describe("Delegation.sol", () => {
       expect(await vault.owner()).to.equal(newOwner);
     });
   });
+
+  context("pauseBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already paused", async () => {
+      await delegation.connect(curator).pauseBeaconChainDeposits();
+
+      await expect(delegation.connect(curator).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsResumeExpected",
+      );
+    });
+
+    it("pauses the beacon deposits", async () => {
+      await expect(delegation.connect(curator).pauseBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsPaused");
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already resumed", async () => {
+      await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
+
+    it("resumes the beacon deposits", async () => {
+      await delegation.connect(curator).pauseBeaconChainDeposits();
+
+      await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.emit(
+        vault,
+        "BeaconChainDepositsResumed",
+      );
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
 });

@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { impersonate, log, trace, updateBalance } from "lib";
+import { computeDepositDataRoot, impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -148,7 +148,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
     expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
+    expect(await _stakingVault.depositContract()).to.equal(depositContract);
     expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
@@ -246,9 +246,24 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault
-      .connect(nodeOperator)
-      .depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const deposits = [];
+
+    for (let i = 0; i < keysToAdd; i++) {
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
+      const signature = hexlify(
+        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
+      );
+
+      deposits.push({
+        pubkey: pubkey,
+        signature: signature,
+        amount: VALIDATOR_DEPOSIT_SIZE,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
+      });
+    }
+
+    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     await trace("stakingVault.depositToBeaconChain", topUpTx);
 

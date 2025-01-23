@@ -1646,4 +1646,49 @@ describe("Dashboard.sol", () => {
       expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount + preBalance);
     });
   });
+  context("pauseBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(dashboard.connect(stranger).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already paused", async () => {
+      await dashboard.pauseBeaconChainDeposits();
+
+      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsResumeExpected",
+      );
+    });
+
+    it("pauses the beacon deposits", async () => {
+      await expect(dashboard.pauseBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsPaused");
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(dashboard.connect(stranger).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already resumed", async () => {
+      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
+
+    it("resumes the beacon deposits", async () => {
+      await dashboard.pauseBeaconChainDeposits();
+
+      await expect(dashboard.resumeBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsResumed");
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
 });

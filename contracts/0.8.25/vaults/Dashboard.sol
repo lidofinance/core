@@ -457,6 +457,20 @@ contract Dashboard is AccessControlEnumerable {
         emit ERC721Recovered(_recipient, _token, _tokenId);
     }
 
+    /**
+     * @notice Pauses beacon chain deposits on the staking vault.
+     */
+    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Resumes beacon chain deposits on the staking vault.
+     */
+    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _resumeBeaconChainDeposits();
+    }
+
     // ==================== Internal Functions ====================
 
     /**
@@ -582,6 +596,20 @@ contract Dashboard is AccessControlEnumerable {
             addr := mload(add(args, 32))
         }
         return IStakingVault(addr);
+    }
+
+    /**
+     * @dev Pauses beacon chain deposits on the staking vault.
+     */
+    function _pauseBeaconChainDeposits() internal {
+        stakingVault().pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @dev Resumes beacon chain deposits on the staking vault.
+     */
+    function _resumeBeaconChainDeposits() internal {
+        stakingVault().resumeBeaconChainDeposits();
     }
 
     // ==================== Events ====================
