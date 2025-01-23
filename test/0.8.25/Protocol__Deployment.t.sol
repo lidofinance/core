@@ -4,7 +4,6 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
@@ -12,7 +11,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
+import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
@@ -97,6 +96,21 @@ contract BaseProtocolTest is Test {
     uint256 public genesisTimestamp = 1_695_902_400;
     address private depositContract = address(0x4242424242424242424242424242424242424242);
 
+    LimitsList public limitList =
+        LimitsList({
+            exitedValidatorsPerDayLimit: 9000,
+            appearedValidatorsPerDayLimit: 43200,
+            annualBalanceIncreaseBPLimit: 10_00,
+            maxValidatorExitRequestsPerReport: 600,
+            maxItemsPerExtraDataTransaction: 8,
+            maxNodeOperatorsPerExtraDataItem: 24,
+            requestTimestampMargin: 7680,
+            maxPositiveTokenRebase: 750000,
+            initialSlashingAmountPWei: 1000,
+            inactivityPenaltiesAmountPWei: 101,
+            clBalanceOraclesErrorUpperBPLimit: 50
+        });
+
     function setUpProtocol(uint256 _startBalance, address _rootAccount, address _userAccount) public {
         rootAccount = _rootAccount;
         userAccount = _userAccount;
@@ -156,8 +170,31 @@ contract BaseProtocolTest is Test {
         // Add oracle report sanity checker contract to the protocol
         deployCodeTo(
             "OracleReportSanityChecker.sol:OracleReportSanityChecker",
-            abi.encode(address(lidoLocator), rootAccount, [1500, 1500, 1000, 2000, 8, 24, 128, 5000000, 1000, 101, 50]),
+            abi.encode(
+                address(lidoLocator),
+                rootAccount,
+                [
+                    limitList.exitedValidatorsPerDayLimit,
+                    limitList.appearedValidatorsPerDayLimit,
+                    limitList.annualBalanceIncreaseBPLimit,
+                    limitList.maxValidatorExitRequestsPerReport,
+                    limitList.maxItemsPerExtraDataTransaction,
+                    limitList.maxNodeOperatorsPerExtraDataItem,
+                    limitList.requestTimestampMargin,
+                    limitList.maxPositiveTokenRebase,
+                    limitList.initialSlashingAmountPWei,
+                    limitList.inactivityPenaltiesAmountPWei,
+                    limitList.clBalanceOraclesErrorUpperBPLimit
+                ]
+            ),
             lidoLocator.oracleReportSanityChecker()
+        );
+
+        address secondOpinionOracle = makeAddr("dummy-OracleReportSanityChecker:secondOpinionOracle");
+        vm.store(
+            lidoLocator.oracleReportSanityChecker(),
+            bytes32(uint256(2)),
+            bytes32(uint256(uint160(secondOpinionOracle)))
         );
 
         IAccounting(lidoLocator.accounting()).initialize(rootAccount);
