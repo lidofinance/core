@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {AccessControlVoteable} from "contracts/0.8.25/utils/AccessControlVoteable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
@@ -38,7 +38,7 @@ interface IWstETH is IERC20, IERC20Permit {
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
  * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
-contract Dashboard is AccessControlEnumerable {
+contract Dashboard is AccessControlVoteable {
     /// @notice Address of the implementation contract
     /// @dev Used to prevent initialization in the implementation
     address private immutable _SELF;
@@ -497,7 +497,8 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
+            TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 

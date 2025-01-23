@@ -22,10 +22,6 @@ abstract contract AccessControlVoteable is AccessControlEnumerable {
      */
     uint256 public voteLifetime;
 
-    constructor(uint256 _voteLifetime) {
-        _setVoteLifetime(_voteLifetime);
-    }
-
     /**
      * @dev Modifier that implements a mechanism for multi-role committee approval.
      * Each unique function call (identified by msg.data: selector + arguments) requires
@@ -65,6 +61,8 @@ abstract contract AccessControlVoteable is AccessControlEnumerable {
      * @custom:security-note Each unique function call (including parameters) requires its own set of votes
      */
     modifier onlyIfVotedBy(bytes32[] memory _committee) {
+        if (voteLifetime == 0) revert VoteLifetimeNotSet();
+
         bytes32 callId = keccak256(msg.data);
         uint256 committeeSize = _committee.length;
         uint256 votingStart = block.timestamp - voteLifetime;
@@ -139,6 +137,11 @@ abstract contract AccessControlVoteable is AccessControlEnumerable {
      * @dev Thrown when attempting to set vote lifetime to zero.
      */
     error VoteLifetimeCannotBeZero();
+
+    /**
+     * @dev Thrown when attempting to vote when the vote lifetime is zero.
+     */
+    error VoteLifetimeNotSet();
 
     /**
      * @dev Thrown when a caller without a required role attempts to vote.
