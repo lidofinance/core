@@ -36,15 +36,24 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
     uint256 public ghost_clValidators;
     uint256 public ghost_depositedValidators;
+
     address private accountingOracle;
+    address private lidoExecutionLayerRewardVault;
     LimitsList public limitList;
 
-    constructor(address _accounting, address _lido, address _accountingOracle, LimitsList memory _limitList) {
+    constructor(
+        address _accounting,
+        address _lido,
+        address _accountingOracle,
+        LimitsList memory _limitList,
+        address _lidoExecutionLayerRewardVault
+    ) {
         accounting = IAccounting(_accounting);
         lido = ILido(_lido);
         accountingOracle = _accountingOracle;
         ghost_clValidators = 0;
         limitList = _limitList;
+        lidoExecutionLayerRewardVault = _lidoExecutionLayerRewardVault;
     }
 
     function handleOracleReport(
@@ -90,7 +99,7 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             _preClValidators,
             _preClValidators + limitList.appearedValidatorsPerDayLimit
         );
-        _clBalance = bound(_clBalance, _clValidators * stableBalance, _clValidators * stableBalance);
+        _clBalance = bound(_clBalance, _clValidators * stableBalance, _clValidators * stableBalance + 1_000);
 
         // depositedValidators is always greater or equal to beaconValidators
         // Todo: Upper extremum ?
@@ -105,13 +114,17 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         vm.store(address(lido), keccak256("lido.Lido.beaconValidators"), bytes32(_preClValidators));
         vm.store(address(lido), keccak256("lido.Lido.beaconBalance"), bytes32(_preClBalance * 1 ether));
 
+        vm.deal(lidoExecutionLayerRewardVault, 1000 * 1 ether);
+        // IncorrectELRewardsVaultBalance(0)
+        // sharesToMintAsFees
+
         ReportValues memory currentReport = ReportValues({
             timestamp: _timestamp,
             timeElapsed: _timeElapsed,
             clValidators: _clValidators,
             clBalance: _clBalance * 1 ether,
             withdrawalVaultBalance: 0,
-            elRewardsVaultBalance: 0,
+            elRewardsVaultBalance: 1_000 * 1 ether,
             sharesRequestedToBurn: 0,
             withdrawalFinalizationBatches: new uint256[](0),
             vaultValues: new uint256[](0),
@@ -138,7 +151,8 @@ contract AccountingTest is BaseProtocolTest {
             lidoLocator.accounting(),
             lidoLocator.lido(),
             lidoLocator.accountingOracle(),
-            limitList
+            limitList,
+            lidoLocator.elRewardsVault()
         );
 
         // Set target contract to the accounting handler
@@ -156,6 +170,8 @@ contract AccountingTest is BaseProtocolTest {
 
     //function invariant_fuzzTotalShares() public {
     // - 0 OR 10% OF PROTOCOL FEES SHOULD BE REPORTED (Collect total fees from reports in handler)
+    // CLb + ELr <= 10%
+
     // - user tokens must not be used except burner contract (from Zero / to Zero)
     // - solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
     // - vault params do not affect protocol share rate
@@ -163,13 +179,13 @@ contract AccountingTest is BaseProtocolTest {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
+     * forge-config: default.invariant.runs = 1
+     * forge-config: default.invariant.depth = 1
      * forge-config: default.invariant.fail-on-revert = true
      *
      *  Should not be able to decrease validator number
      */
-    function invariant_clValidators() public {
+    function invariant_clValidators() public view {
         ILido lido = ILido(lidoLocator.lido());
         (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
 

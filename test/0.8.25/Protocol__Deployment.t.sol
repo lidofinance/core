@@ -95,6 +95,7 @@ contract BaseProtocolTest is Test {
 
     uint256 public genesisTimestamp = 1_695_902_400;
     address private depositContract = address(0x4242424242424242424242424242424242424242);
+    address public lidoTreasury = makeAddr("dummy-lido:treasury");
 
     LimitsList public limitList =
         LimitsList({
@@ -164,6 +165,13 @@ contract BaseProtocolTest is Test {
             lidoLocator.burner()
         );
 
+        // Add burner contract to the protocol
+        deployCodeTo(
+            "LidoExecutionLayerRewardsVault.sol:LidoExecutionLayerRewardsVault",
+            abi.encode(rootAccount, lidoProxyAddress, lidoTreasury),
+            lidoLocator.elRewardsVault()
+        );
+
         // Add staking router contract to the protocol
         deployCodeTo("StakingRouter.sol:StakingRouter", abi.encode(depositContract), lidoLocator.stakingRouter());
 
@@ -198,6 +206,8 @@ contract BaseProtocolTest is Test {
         );
 
         IAccounting(lidoLocator.accounting()).initialize(rootAccount);
+
+        // contracts/0.8.9/LidoExecutionLayerRewardsVault.sol
 
         /// @dev deploy eip712steth
         address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
