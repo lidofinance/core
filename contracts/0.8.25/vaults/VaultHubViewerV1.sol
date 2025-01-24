@@ -74,6 +74,75 @@ contract VaultHubViewerV1 {
     /// @param _owner Address of the owner
     /// @return An array of vaults owned by the given address
     function vaultsByOwner(address _owner) public view returns (IVault[] memory) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsByOwner(_owner);
+
+        return _filterNonZeroVaults(vaults, 0, valid);
+    }
+
+    /// @notice Returns all vaults owned by a given address
+    /// @param _owner Address of the owner
+    /// @param _from Index to start from inclisive
+    /// @param _to Index to end at non-inculsive
+    /// @return array of vaults owned by the given address
+    /// @return number of leftover vaults in range
+    function vaultsByOwnerBound(
+        address _owner,
+        uint256 _from,
+        uint256 _to
+    ) public view returns (IVault[] memory, uint256) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsByOwner(_owner);
+
+        return (_filterNonZeroVaults(vaults, _from, _to), valid > _to ? valid - _to : 0);
+    }
+
+    /// @notice Returns all vaults with a given role on a given address
+    /// @param _role Role to check
+    /// @param _member Address to check
+    /// @return An array of vaults with the given role on the given address
+    function vaultsByRole(bytes32 _role, address _member) public view returns (IVault[] memory) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsByRole(_role, _member);
+
+        return _filterNonZeroVaults(vaults, 0, valid);
+    }
+
+    /// @notice Returns all vaults with a given role on a given address
+    /// @param _role Role to check
+    /// @param _member Address to check
+    /// @param _from Index to start from inclisive
+    /// @param _to Index to end at non-inculsive
+    /// @return array of vaults in range with the given role on the given address
+    /// @return number of leftover vaults
+    function vaultsByRoleBound(
+        bytes32 _role,
+        address _member,
+        uint256 _from,
+        uint256 _to
+    ) public view returns (IVault[] memory, uint256) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsByRole(_role, _member);
+
+        return (_filterNonZeroVaults(vaults, _from, _to), valid - _to);
+    }
+
+    // ==================== Internal Functions ====================
+
+    /// @dev common logic for vaultsByRole and vaultsByRoleBound
+    function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
+        uint256 count = vaultHub.vaultsCount();
+        IVault[] memory vaults = new IVault[](count);
+
+        uint256 valid = 0;
+        for (uint256 i = 0; i < count; i++) {
+            if (hasRole(vaultHub.vault(i), _member, _role)) {
+                vaults[valid] = vaultHub.vault(i);
+                valid++;
+            }
+        }
+
+        return (vaults, valid);
+    }
+
+    /// @dev common logic for vaultsByOwner and vaultsByOwnerBound
+    function _vaultsByOwner(address _owner) internal view returns (IVault[] memory, uint256) {
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -88,27 +157,7 @@ contract VaultHubViewerV1 {
                 valid++;
             }
         }
-
-        return _filterNonZeroVaults(vaults, valid);
-    }
-
-    /// @notice Returns all vaults with a given role on a given address
-    /// @param _role Role to check
-    /// @param _member Address to check
-    /// @return An array of vaults with the given role on the given address
-    function vaultsByRole(bytes32 _role, address _member) public view returns (IVault[] memory) {
-        uint256 count = vaultHub.vaultsCount();
-        IVault[] memory vaults = new IVault[](count);
-
-        uint256 valid = 0;
-        for (uint256 i = 0; i < count; i++) {
-            if (hasRole(vaultHub.vault(i), _member, _role)) {
-                vaults[valid] = vaultHub.vault(i);
-                valid++;
-            }
-        }
-
-        return _filterNonZeroVaults(vaults, valid);
+        return (vaults, valid);
     }
 
     /// @notice safely returns if role member has given role
@@ -130,17 +179,20 @@ contract VaultHubViewerV1 {
 
     /// @notice Filters out zero address vaults from an array
     /// @param _vaults Array of vaults to filter
-    /// @param _validCount number of non-zero vaults
     /// @return filtered An array of non-zero vaults
     function _filterNonZeroVaults(
         IVault[] memory _vaults,
-        uint256 _validCount
+        uint256 _from,
+        uint256 _to
     ) internal pure returns (IVault[] memory filtered) {
-        filtered = new IVault[](_validCount);
-        for (uint256 i = 0; i < _validCount; i++) {
+        uint256 count = _to - _from;
+        filtered = new IVault[](count);
+        for (uint256 i = _from; i < _to; i++) {
             filtered[i] = _vaults[i];
         }
     }
+
+    // ==================== Errors ====================
 
     /// @notice Error for zero address arguments
     /// @param argName Name of the argument that is zero
