@@ -1,6 +1,6 @@
 pragma solidity 0.8.9;
 
-import {TriggerableWithdrawals} from "contracts/0.8.9/lib/TriggerableWithdrawals.sol";
+import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
 contract TriggerableWithdrawals_Harness {
     function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) external {

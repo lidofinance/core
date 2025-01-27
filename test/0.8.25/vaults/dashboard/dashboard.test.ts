@@ -556,20 +556,19 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("requestValidatorExit", () => {
+  context("requestValidatorsExit", () => {
     it("reverts if called by a non-admin", async () => {
-      const validatorPublicKey = "0x" + randomBytes(48).toString("hex");
-      await expect(dashboard.connect(stranger).requestValidatorExit(validatorPublicKey)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      await expect(
+        dashboard.connect(stranger).requestValidatorsExit(validatorPublicKeys),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
     it("requests the exit of a validator", async () => {
-      const validatorPublicKey = "0x" + randomBytes(48).toString("hex");
-      await expect(dashboard.requestValidatorExit(validatorPublicKey))
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      await expect(dashboard.requestValidatorsExit(validatorPublicKeys))
         .to.emit(vault, "ValidatorsExitRequest")
-        .withArgs(dashboard, validatorPublicKey);
+        .withArgs(dashboard, validatorPublicKeys);
     });
   });
 

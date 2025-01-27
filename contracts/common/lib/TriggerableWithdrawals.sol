@@ -1,7 +1,10 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.9;
+/* See contracts/COMPILERS.md */
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.9;
+
 library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
     uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
@@ -35,7 +38,7 @@ library TriggerableWithdrawals {
         for (uint256 i = 0; i < keysCount; i++) {
             _copyPubkeyToMemory(pubkeys, callData, i);
 
-            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+            (bool success,) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
             if (!success) {
                 revert WithdrawalRequestAdditionFailed(callData);
@@ -92,7 +95,7 @@ library TriggerableWithdrawals {
             _copyPubkeyToMemory(pubkeys, callData, i);
             _copyAmountToMemory(callData, amounts[i]);
 
-            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+            (bool success,) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
             if (!success) {
                 revert WithdrawalRequestAdditionFailed(callData);
@@ -131,7 +134,7 @@ library TriggerableWithdrawals {
     }
 
     function _validateAndCountPubkeys(bytes calldata pubkeys) private pure returns (uint256) {
-        if(pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+        if (pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
             revert InvalidPublicKeyLength();
         }
 
@@ -154,7 +157,7 @@ library TriggerableWithdrawals {
             revert InsufficientRequestFee(feePerRequest, minFeePerRequest);
         }
 
-        if(address(this).balance < feePerRequest * keysCount) {
+        if (address(this).balance < feePerRequest * keysCount) {
             revert InsufficientBalance(address(this).balance, feePerRequest * keysCount);
         }
 

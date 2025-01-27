@@ -7,8 +7,8 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+import {VaultValidatorsManager} from "./VaultValidatorsManager.sol";
 
-import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -32,18 +32,20 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * - Owner:
  *   - `fund()`
  *   - `withdraw()`
- *   - `requestValidatorExit()`
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
+ *   - `requestValidatorsExit()`
  * - Operator:
  *   - `depositToBeaconChain()`
+ *   - `requestValidatorsExit()`
  * - VaultHub:
  *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
+ *   - `requestValidatorsExit()` if the vault is unbalanced for more than EXIT_TIMELOCK_DURATION days
  *
  * BeaconProxy
  * The contract is designed as a beacon proxy implementation, allowing all StakingVault instances
@@ -52,7 +54,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, OwnableUpgradeable {
+contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -67,7 +69,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        /// Status variables
         bool beaconChainDepositsPaused;
+        uint256 unbalancedSince;
     }
 
     /**
@@ -83,12 +87,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     VaultHub private immutable VAULT_HUB;
 
     /**
-     * @notice Address of `BeaconChainDepositContract`
-     *         Set immutably in the constructor to avoid storage costs
-     */
-    IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
-
-    /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
@@ -97,17 +95,23 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     /**
+     * @notice Update constant for exit timelock duration to 3 days
+     */
+    uint256 private constant EXIT_TIMELOCK_DURATION = 3 days;
+
+    /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _vaultHub, address _beaconChainDepositContract) {
+    constructor(
+        address _vaultHub,
+        address _beaconChainDepositContract
+    ) VaultValidatorsManager(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
-        BEACON_CHAIN_DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -150,14 +154,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function vaultHub() external view returns (address) {
         return address(VAULT_HUB);
-    }
-
-    /**
-     * @notice Returns the address of `BeaconChainDepositContract`
-     * @return Address of `BeaconChainDepositContract`
-     */
-    function depositContract() external view returns (address) {
-        return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
     /**
@@ -220,14 +216,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns whether deposits are paused by the vault owner
-     * @return True if deposits are paused
-     */
-    function beaconChainDepositsPaused() external view returns (bool) {
-        return _getStorage().beaconChainDepositsPaused;
-    }
-
-    /**
      * @notice Returns whether `StakingVault` is balanced, i.e. its valuation is greater than the locked amount
      * @return True if `StakingVault` is balanced
      * @dev Not to be confused with the ether balance of the contract (`address(this).balance`).
@@ -241,24 +229,24 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Returns the timestamp when `StakingVault` became unbalanced
+     * @return Timestamp when `StakingVault` became unbalanced
+     * @dev If `StakingVault` is balanced, returns 0
+     */
+    function unbalancedSince() external view returns (uint256) {
+        return _getStorage().unbalancedSince;
+    }
+
+    /**
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
      *         In the context of this contract, the node operator performs deposits to the beacon chain
-     *         and processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
+     *         and processes validator exit requests submitted by `owner` through `requestValidatorsExit()`.
      *         Node operator address is set in the initialization and can never be changed.
      * @return Address of the node operator
      */
     function nodeOperator() external view returns (address) {
         return _getStorage().nodeOperator;
-    }
-
-    /**
-     * @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this `StakingVault`
-     *         All CL rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported for now.
-     * @return Withdrawal credentials as bytes32
-     */
-    function withdrawalCredentials() public view returns (bytes32) {
-        return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
     /**
@@ -278,6 +266,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         $.inOutDelta += int128(int256(msg.value));
+
+        if (isBalanced()) {
+            $.unbalancedSince = 0;
+        }
 
         emit Funded(msg.sender, msg.value);
     }
@@ -309,44 +301,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Performs a deposit to the beacon chain deposit contract
-     * @param _deposits Array of deposit structs
-     * @dev Includes a check to ensure StakingVault is balanced before making deposits
-     */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
-        if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        ERC7201Storage storage $ = _getStorage();
-
-        if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (!isBalanced()) revert Unbalanced();
-
-        uint256 totalAmount = 0;
-        uint256 numberOfDeposits = _deposits.length;
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
-            BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
-                deposit.pubkey,
-                bytes.concat(withdrawalCredentials()),
-                deposit.signature,
-                deposit.depositDataRoot
-            );
-            totalAmount += deposit.amount;
-        }
-
-        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
-    }
-
-    /**
-     * @notice Requests validator exit from the beacon chain
-     * @param _pubkeys Concatenated validator public keys
-     * @dev Signals the node operator to eject the specified validators from the beacon chain
-     */
-    function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
-        emit ValidatorsExitRequest(msg.sender, _pubkeys);
-    }
-
-    /**
      * @notice Locks ether in StakingVault
      * @dev Can only be called by VaultHub; locked amount can only be increased
      * @param _locked New amount to lock
@@ -358,6 +312,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
 
         $.locked = uint128(_locked);
+
+        if (!isBalanced()) {
+            $.unbalancedSince = block.timestamp;
+        }
 
         emit LockedIncreased(_locked);
     }
@@ -401,58 +359,42 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
 
+        if (isBalanced()) {
+            $.unbalancedSince = 0;
+        } else {
+            $.unbalancedSince = block.timestamp;
+        }
+
         emit Reported(_valuation, _inOutDelta, _locked);
     }
 
+    // * * * * * * * * * * * * * * * * * * * * * //
+    // * * * BEACON CHAIN DEPOSITS LOGIC * * * * //
+    // * * * * * * * * * * * * * * * * * * * * * //
+
     /**
-     * @notice Computes the deposit data root for a validator deposit
-     * @param _pubkey Validator public key, 48 bytes
-     * @param _withdrawalCredentials Withdrawal credentials, 32 bytes
-     * @param _signature Signature of the deposit, 96 bytes
-     * @param _amount Amount of ether to deposit, in wei
-     * @return Deposit data root as bytes32
-     * @dev This function computes the deposit data root according to the deposit contract's specification.
-     *      The deposit data root is check upon deposit to the deposit contract as a protection against malformed deposit data.
-     *      See more: https://etherscan.io/address/0x00000000219ab540356cbb839cbe05303d7705fa#code
-     *
+     * @notice Returns the address of `BeaconChainDepositContract`
+     * @return Address of `BeaconChainDepositContract`
      */
-    function computeDepositDataRoot(
-        bytes calldata _pubkey,
-        bytes calldata _withdrawalCredentials,
-        bytes calldata _signature,
-        uint256 _amount
-    ) external view returns (bytes32) {
-        // Step 1. Convert the deposit amount in wei to gwei in 64-bit bytes
-        bytes memory amountBE64 = abi.encodePacked(uint64(_amount / 1 gwei));
+    function depositContract() external view returns (address) {
+        return _depositContract();
+    }
 
-        // Step 2. Convert the amount to little-endian format by flipping the bytes 🧠
-        bytes memory amountLE64 = new bytes(8);
-        amountLE64[0] = amountBE64[7];
-        amountLE64[1] = amountBE64[6];
-        amountLE64[2] = amountBE64[5];
-        amountLE64[3] = amountBE64[4];
-        amountLE64[4] = amountBE64[3];
-        amountLE64[5] = amountBE64[2];
-        amountLE64[6] = amountBE64[1];
-        amountLE64[7] = amountBE64[0];
+    /**
+     * @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this `StakingVault`
+     *         All CL rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported for now.
+     * @return Withdrawal credentials as bytes32
+     */
+    function withdrawalCredentials() external view returns (bytes32) {
+        return _withdrawalCredentials();
+    }
 
-        // Step 3. Compute the root of the pubkey
-        bytes32 pubkeyRoot = sha256(abi.encodePacked(_pubkey, bytes16(0)));
-
-        // Step 4. Compute the root of the signature
-        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0:64]));
-        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64:], bytes32(0)));
-        bytes32 signatureRoot = sha256(abi.encodePacked(sigSlice1Root, sigSlice2Root));
-
-        // Step 5. Compute the root-toot-toorootoo of the deposit data
-        bytes32 depositDataRoot = sha256(
-            abi.encodePacked(
-                sha256(abi.encodePacked(pubkeyRoot, _withdrawalCredentials)),
-                sha256(abi.encodePacked(amountLE64, bytes24(0), signatureRoot))
-            )
-        );
-
-        return depositDataRoot;
+    /**
+     * @notice Returns whether deposits are paused by the vault owner
+     * @return True if deposits are paused
+     */
+    function beaconChainDepositsPaused() external view returns (bool) {
+        return _getStorage().beaconChainDepositsPaused;
     }
 
     /**
@@ -485,11 +427,79 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit BeaconChainDepositsResumed();
     }
 
+    /**
+     * @notice Performs a deposit to the beacon chain deposit contract
+     * @param _deposits Array of deposit structs
+     * @dev Includes a check to ensure StakingVault is balanced before making deposits
+     */
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+        if (_deposits.length == 0) revert ZeroArgument("_deposits");
+        ERC7201Storage storage $ = _getStorage();
+
+        if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
+        if (!isBalanced()) revert Unbalanced();
+
+        _depositToBeaconChain(_deposits);
+    }
+
+    /**
+     * @notice Requests validators exit from the beacon chain
+     * @param _pubkeys Concatenated validators public keys
+     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     */
+    function requestValidatorsExit(bytes calldata _pubkeys) external {
+        ERC7201Storage storage $ = _getStorage();
+
+        /// @dev in case of balanced vault, validators can be exited only by the vault owner or the node operator
+        if (isBalanced()) {
+            if (msg.sender != owner() && msg.sender != $.nodeOperator) {
+                revert OwnableUnauthorizedAccount(msg.sender);
+            }
+        } else {
+            // If unbalancedSince is 0, this is the first time we're unbalanced
+            if ($.unbalancedSince == 0) {
+                $.unbalancedSince = block.timestamp;
+            }
+
+            // Check if timelock period has elapsed
+            if (block.timestamp < $.unbalancedSince + EXIT_TIMELOCK_DURATION) {
+                revert ExitTimelockNotElapsed($.unbalancedSince + EXIT_TIMELOCK_DURATION);
+            }
+        }
+
+        emit ValidatorsExitRequest(msg.sender, _pubkeys);
+
+        _requestValidatorsExit(_pubkeys);
+    }
+
+    /**
+     * @notice Computes the deposit data root for a validator deposit
+     * @param _pubkey Validator public key, 48 bytes
+     * @param _withdrawalCredentials Withdrawal credentials, 32 bytes
+     * @param _signature Signature of the deposit, 96 bytes
+     * @param _amount Amount of ether to deposit, in wei
+     * @return Deposit data root as bytes32
+     * @dev This function computes the deposit data root according to the deposit contract's specification.
+     *      The deposit data root is check upon deposit to the deposit contract as a protection against malformed deposit data.
+     *      See more: https://etherscan.io/address/0x00000000219ab540356cbb839cbe05303d7705fa#code
+     */
+    function computeDepositDataRoot(
+        bytes calldata _pubkey,
+        bytes calldata _withdrawalCredentials,
+        bytes calldata _signature,
+        uint256 _amount
+    ) external pure returns (bytes32) {
+        return _computeDepositDataRoot(_pubkey, _withdrawalCredentials, _signature, _amount);
+    }
+
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC721_STORAGE_LOCATION
         }
     }
+
+    /// Events
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
@@ -507,13 +517,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param amount Amount of ether withdrawn
      */
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
-
-    /**
-     * @notice Emitted when ether is deposited to `DepositContract`
-     * @param sender Address that initiated the deposit
-     * @param deposits Number of validator deposits made
-     */
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 totalAmount);
 
     /**
      * @notice Emitted when a validator exit request is made
@@ -554,11 +557,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     event BeaconChainDepositsResumed();
 
-    /**
-     * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
-     */
-    error ZeroArgument(string name);
+    /// Errors
 
     /**
      * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
@@ -631,4 +630,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
     error BeaconChainDepositsArePaused();
+
+    /**
+     * @notice Emitted when the exit timelock has not elapsed
+     * @param timelockedUntil Timestamp when the exit timelock will end
+     */
+    error ExitTimelockNotElapsed(uint256 timelockedUntil);
 }

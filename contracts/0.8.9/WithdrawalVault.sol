@@ -10,8 +10,8 @@ import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {TriggerableWithdrawals} from "./lib/TriggerableWithdrawals.sol";
-import { ILidoLocator } from "../common/interfaces/ILidoLocator.sol";
+import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
 interface ILido {
     /**
@@ -149,9 +149,9 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH  * minFeePerRequest;
+        uint256 totalFee = pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH * minFeePerRequest;
 
-        if(totalFee > msg.value) {
+        if (totalFee > msg.value) {
             revert InsufficientTriggerableWithdrawalFee(
                 msg.value,
                 totalFee,
@@ -163,7 +163,7 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
 
         uint256 refund = msg.value - totalFee;
         if (refund > 0) {
-            (bool success, ) = msg.sender.call{value: refund}("");
+            (bool success,) = msg.sender.call{value: refund}("");
 
             if (!success) {
                 revert TriggerableWithdrawalRefundFailed();

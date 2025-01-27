@@ -264,10 +264,10 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKey Public key of the validator to exit
+     * @param _validatorPublicKeys Public keys of the validators to exit
      */
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _requestValidatorExit(_validatorPublicKey);
+    function requestValidatorsExit(bytes calldata _validatorPublicKeys) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _requestValidatorsExit(_validatorPublicKeys);
     }
 
     /**
@@ -468,10 +468,10 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @dev Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKey Public key of the validator to exit
+     * @param _validatorPublicKeys Public key of the validator to exit
      */
-    function _requestValidatorExit(bytes calldata _validatorPublicKey) internal {
-        stakingVault().requestValidatorExit(_validatorPublicKey);
+    function _requestValidatorsExit(bytes calldata _validatorPublicKeys) internal {
+        stakingVault().requestValidatorsExit(_validatorPublicKeys);
     }
 
     /**

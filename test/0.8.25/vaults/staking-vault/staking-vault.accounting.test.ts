@@ -9,20 +9,19 @@ import {
   DepositContract__MockForStakingVault,
   EthRejector,
   StakingVault,
-  StakingVault__factory,
-  VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { computeDepositDataRoot, de0x, ether, findEvents, impersonate, streccak } from "lib";
+import { de0x, ether, impersonate } from "lib";
 
+import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault.sol", () => {
+describe("StakingVault.sol:Accounting", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -44,8 +43,9 @@ describe("StakingVault.sol", () => {
 
   before(async () => {
     [vaultOwner, operator, elRewardsSender, stranger] = await ethers.getSigners();
-    [stakingVault, vaultHub /* vaultFactory */, , stakingVaultImplementation, depositContract] =
-      await deployStakingVaultBehindBeaconProxy();
+    ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
+      await deployStakingVaultBehindBeaconProxy(vaultOwner, operator));
+
     ethRejector = await ethers.deployContract("EthRejector");
 
     vaultOwnerAddress = await vaultOwner.getAddress();
@@ -143,6 +143,30 @@ describe("StakingVault.sol", () => {
     });
   });
 
+  context("isBalanced", () => {
+    it("returns true if valuation is greater than or equal to locked", async () => {
+      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("0"));
+      expect(await stakingVault.isBalanced()).to.be.true;
+    });
+
+    it("returns false if valuation is less than locked", async () => {
+      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      expect(await stakingVault.isBalanced()).to.be.false;
+    });
+  });
+
+  context("unbalancedSince", () => {
+    it("returns the timestamp when the vault became unbalanced", async () => {
+      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      expect(await stakingVault.unbalancedSince()).to.be.greaterThan(0n);
+    });
+
+    it("returns 0 if the vault is balanced", async () => {
+      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("0"));
+      expect(await stakingVault.unbalancedSince()).to.equal(0n);
+    });
+  });
+
   context("receive", () => {
     it("reverts if msg.value is zero", async () => {
       await expect(vaultOwner.sendTransaction({ to: stakingVaultAddress, value: 0n }))
@@ -187,6 +211,14 @@ describe("StakingVault.sol", () => {
       const bigBalance = maxInOutDelta + forGas;
       await setBalance(vaultOwnerAddress, bigBalance);
       await expect(stakingVault.fund({ value: maxInOutDelta })).to.not.be.reverted;
+    });
+
+    it("restores the vault to a balanced state if the vault was unbalanced", async () => {
+      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      expect(await stakingVault.isBalanced()).to.be.false;
+
+      await stakingVault.fund({ value: ether("1") });
+      expect(await stakingVault.isBalanced()).to.be.true;
     });
   });
 
@@ -279,129 +311,6 @@ describe("StakingVault.sol", () => {
     });
   });
 
-  context("pauseBeaconChainDeposits", () => {
-    it("reverts if called by a non-owner", async () => {
-      await expect(stakingVault.connect(stranger).pauseBeaconChainDeposits())
-        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
-        .withArgs(await stranger.getAddress());
-    });
-
-    it("reverts if the beacon deposits are already paused", async () => {
-      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
-
-      await expect(stakingVault.connect(vaultOwner).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
-        stakingVault,
-        "BeaconChainDepositsResumeExpected",
-      );
-    });
-
-    it("allows to pause deposits", async () => {
-      await expect(stakingVault.connect(vaultOwner).pauseBeaconChainDeposits()).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-    });
-  });
-
-  context("resumeBeaconChainDeposits", () => {
-    it("reverts if called by a non-owner", async () => {
-      await expect(stakingVault.connect(stranger).resumeBeaconChainDeposits())
-        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
-        .withArgs(await stranger.getAddress());
-    });
-
-    it("reverts if the beacon deposits are already resumed", async () => {
-      await expect(stakingVault.connect(vaultOwner).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
-        stakingVault,
-        "BeaconChainDepositsPauseExpected",
-      );
-    });
-
-    it("allows to resume deposits", async () => {
-      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
-
-      await expect(stakingVault.connect(vaultOwner).resumeBeaconChainDeposits()).to.emit(
-        stakingVault,
-        "BeaconChainDepositsResumed",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
-    });
-  });
-
-  context("depositToBeaconChain", () => {
-    it("reverts if called by a non-operator", async () => {
-      await expect(
-        stakingVault
-          .connect(stranger)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
-          ]),
-      )
-        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("depositToBeaconChain", stranger);
-    });
-
-    it("reverts if the number of deposits is zero", async () => {
-      await expect(stakingVault.depositToBeaconChain([]))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_deposits");
-    });
-
-    it("reverts if the vault is not balanced", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(
-        stakingVault
-          .connect(operator)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
-          ]),
-      ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
-    });
-
-    it("reverts if the deposits are paused", async () => {
-      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
-      await expect(
-        stakingVault
-          .connect(operator)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
-          ]),
-      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsArePaused");
-    });
-
-    it("makes deposits to the beacon chain and emits the DepositedToBeaconChain event", async () => {
-      await stakingVault.fund({ value: ether("32") });
-
-      const pubkey = "0x" + "ab".repeat(48);
-      const signature = "0x" + "ef".repeat(96);
-      const amount = ether("32");
-      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-      const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
-
-      await expect(
-        stakingVault.connect(operator).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
-      )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 1, amount);
-    });
-  });
-
-  context("requestValidatorExit", () => {
-    it("reverts if called by a non-owner", async () => {
-      await expect(stakingVault.connect(stranger).requestValidatorExit("0x"))
-        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
-        .withArgs(await stranger.getAddress());
-    });
-
-    it("emits the ValidatorsExitRequest event", async () => {
-      const pubkey = "0x" + "ab".repeat(48);
-      await expect(stakingVault.requestValidatorExit(pubkey))
-        .to.emit(stakingVault, "ValidatorsExitRequest")
-        .withArgs(vaultOwnerAddress, pubkey);
-    });
-  });
-
   context("lock", () => {
     it("reverts if the caller is not the vault hub", async () => {
       await expect(stakingVault.connect(vaultOwner).lock(ether("1")))
@@ -434,6 +343,13 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.connect(vaultHubSigner).lock(MAX_UINT128))
         .to.emit(stakingVault, "LockedIncreased")
         .withArgs(MAX_UINT128);
+    });
+
+    it("updates unbalancedSince if the vault becomes unbalanced", async () => {
+      expect(await stakingVault.unbalancedSince()).to.equal(0n);
+
+      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      expect(await stakingVault.unbalancedSince()).to.be.greaterThan(0n);
     });
   });
 
@@ -471,17 +387,19 @@ describe("StakingVault.sol", () => {
     it("can be called by the owner", async () => {
       await stakingVault.fund({ value: ether("2") });
       const inOutDeltaBefore = await stakingVault.inOutDelta();
+
       await expect(stakingVault.rebalance(ether("1")))
         .to.emit(stakingVault, "Withdrawn")
         .withArgs(vaultOwnerAddress, vaultHubAddress, ether("1"))
         .to.emit(vaultHub, "Mock__Rebalanced")
         .withArgs(stakingVaultAddress, ether("1"));
+
       expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore - ether("1"));
     });
 
     it("can be called by the vault hub when the vault is unbalanced", async () => {
       await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
-      expect(await stakingVault.isBalanced()).to.equal(false);
+      expect(await stakingVault.isBalanced()).to.be.false;
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: ether("0.1") });
 
@@ -505,64 +423,21 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "Reported")
         .withArgs(ether("1"), ether("2"), ether("3"));
+
       expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
     });
-  });
 
-  context("computeDepositDataRoot", () => {
-    it("computes the deposit data root", async () => {
-      // sample tx data: https://etherscan.io/tx/0x02980d44c119b0a8e3ca0d31c288e9f177c76fb4d7ab616563e399dd9c7c6507
-      const pubkey =
-        "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
-      const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
-      const signature =
-        "0xab95e358d002fd79bc08564a2db057dd5164af173915eba9e3e9da233d404c0eb0058760bc30cb89abbc55cf57f0c5a6018cdb17df73ca39ddc80a323a13c2e7ba942faa86757b26120b3a58dcce5d89e95ea1ee8fa3276ffac0f0ad9313211d";
-      const amount = ether("32");
-      const expectedDepositDataRoot = "0xb28f86815813d7da8132a2979836b326094a350e7aa301ba611163d4b7ca77be";
+    it("updates unbalancedSince if the vault becomes unbalanced", async () => {
+      expect(await stakingVault.unbalancedSince()).to.equal(0n);
 
-      computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+      // Unbalanced report
+      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
+      expect(await stakingVault.unbalancedSince()).to.be.greaterThan(0n);
 
-      expect(await stakingVault.computeDepositDataRoot(pubkey, withdrawalCredentials, signature, amount)).to.equal(
-        expectedDepositDataRoot,
-      );
+      // Rebalanced report
+      await stakingVault.connect(vaultHubSigner).report(ether("3"), ether("2"), ether("1"));
+      expect(await stakingVault.unbalancedSince()).to.equal(0n);
     });
   });
-
-  async function deployStakingVaultBehindBeaconProxy(): Promise<
-    [
-      StakingVault,
-      VaultHub__MockForStakingVault,
-      VaultFactory__MockForStakingVault,
-      StakingVault,
-      DepositContract__MockForStakingVault,
-    ]
-  > {
-    // deploying implementation
-    const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
-    const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
-      await vaultHub_.getAddress(),
-      await depositContract_.getAddress(),
-    ]);
-
-    // deploying factory/beacon
-    const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
-      await stakingVaultImplementation_.getAddress(),
-    ]);
-
-    // deploying beacon proxy
-    const vaultCreation = await vaultFactory_
-      .createVault(await vaultOwner.getAddress(), await operator.getAddress())
-      .then((tx) => tx.wait());
-    if (!vaultCreation) throw new Error("Vault creation failed");
-    const events = findEvents(vaultCreation, "VaultCreated");
-    if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
-    const vaultCreatedEvent = events[0];
-
-    const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, vaultOwner);
-    expect(await stakingVault_.owner()).to.equal(await vaultOwner.getAddress());
-
-    return [stakingVault_, vaultHub_, vaultFactory_, stakingVaultImplementation_, depositContract_];
-  }
 });

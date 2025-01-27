@@ -376,7 +376,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Owner to trigger validator exit to cover fees", async () => {
     // simulate validator exit
     const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
-    await delegation.connect(owner).requestValidatorExit(secondValidatorKey);
+    await delegation.connect(owner).requestValidatorsExit(secondValidatorKey);
     await updateBalance(stakingVaultAddress, VALIDATOR_DEPOSIT_SIZE);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
