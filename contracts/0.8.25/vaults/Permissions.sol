@@ -4,12 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlVoteable} from "contracts/0.8.25/utils/AccessControlVoteable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
-import {ILido as IStETH} from "../interfaces/ILido.sol";
 
 /**
  * @title Permissions
@@ -52,49 +52,91 @@ abstract contract Permissions is AccessControlVoteable {
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("StakingVault.Permissions.VoluntaryDisconnect");
 
-    function _stakingVault() internal view virtual returns (IStakingVault);
+    /**
+     * @notice Address of the implementation contract
+     * @dev Used to prevent initialization in the implementation
+     */
+    address private immutable _SELF;
 
-    function _vaultHub() internal view virtual returns (VaultHub);
+    /**
+     * @notice Indicates whether the contract has been initialized
+     */
+    bool public initialized;
 
-    function _stETH() internal view virtual returns (IStETH);
+    /**
+     * @notice Address of the VaultHub contract
+     */
+    VaultHub public vaultHub;
 
-    function _votingCommittee() internal pure virtual returns (bytes32[] memory);
+    constructor() {
+        _SELF = address(this);
+    }
+
+    function _initialize(address _defaultAdmin) internal {
+        if (initialized) revert AlreadyInitialized();
+        if (address(this) == _SELF) revert NonProxyCallsForbidden();
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+
+        initialized = true;
+        vaultHub = VaultHub(stakingVault().vaultHub());
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+
+        emit Initialized();
+    }
+
+    function stakingVault() public view returns (IStakingVault) {
+        bytes memory args = Clones.fetchCloneArgs(address(this));
+        address addr;
+        assembly {
+            addr := mload(add(args, 32))
+        }
+        return IStakingVault(addr);
+    }
+
+    function _votingCommittee() internal pure virtual returns (bytes32[] memory) {
+        bytes32[] memory roles = new bytes32[](1);
+        roles[0] = DEFAULT_ADMIN_ROLE;
+        return roles;
+    }
 
     function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
-        _stakingVault().fund{value: _ether}();
+        stakingVault().fund{value: _ether}();
     }
 
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
-        _stakingVault().withdraw(_recipient, _ether);
+        stakingVault().withdraw(_recipient, _ether);
     }
 
     function _mint(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        _vaultHub().mintSharesBackedByVault(address(_stakingVault()), _recipient, _shares);
+        vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _shares);
     }
 
     function _burn(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        _vaultHub().burnSharesBackedByVault(address(_stakingVault()), _shares);
+        vaultHub.burnSharesBackedByVault(address(stakingVault()), _shares);
     }
 
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
-        _stakingVault().rebalance(_ether);
+        stakingVault().rebalance(_ether);
     }
 
     function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        _stakingVault().requestValidatorExit(_pubkey);
+        stakingVault().requestValidatorExit(_pubkey);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        uint256 shares = _vaultHub().vaultSocket(address(_stakingVault())).sharesMinted;
-
-        if (shares > 0) {
-            _rebalanceVault(_stETH().getPooledEthBySharesRoundUp(shares));
-        }
-
-        _vaultHub().voluntaryDisconnect(address(_stakingVault()));
+        vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
-        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
+        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
+
+    /// @notice Emitted when the contract is initialized
+    event Initialized();
+
+    /// @notice Error when direct calls to the implementation are forbidden
+    error NonProxyCallsForbidden();
+
+    /// @notice Error when the contract is already initialized.
+    error AlreadyInitialized();
 }

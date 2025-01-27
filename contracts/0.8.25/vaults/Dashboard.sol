@@ -39,26 +39,17 @@ interface IWstETH is IERC20, IERC20Permit {
  * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
 contract Dashboard is Permissions {
-    /// @notice Address of the implementation contract
-    /// @dev Used to prevent initialization in the implementation
-    address private immutable _SELF;
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice Indicates whether the contract has been initialized
-    bool public initialized;
-
     /// @notice The stETH token contract
-    IStETH private immutable STETH;
+    IStETH public immutable STETH;
 
-    /// @notice The wrapped staked ether token contract
-    IWstETH private immutable WSTETH;
+    /// @notice The wstETH token contract
+    IWstETH public immutable WSTETH;
 
-    /// @notice The wrapped ether token contract
-    IWeth private immutable WETH;
-
-    /// @notice The `VaultHub` contract
-    VaultHub public vaultHub;
+    /// @notice The wETH token contract
+    IWeth public immutable WETH;
 
     struct PermitInput {
         uint256 value;
@@ -70,17 +61,16 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Constructor sets the stETH token address and the implementation contract address.
-     * @param _steth Address of the stETH token contract.
+     * @param _stETH Address of the stETH token contract.
      * @param _weth Address of the weth token contract.
      * @param _wsteth Address of the wstETH token contract.
      */
-    constructor(address _steth, address _weth, address _wsteth) {
-        if (_steth == address(0)) revert ZeroArgument("_steth");
+    constructor(address _stETH, address _weth, address _wsteth) Permissions() {
+        if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_weth == address(0)) revert ZeroArgument("_weth");
         if (_wsteth == address(0)) revert ZeroArgument("_wsteth");
 
-        _SELF = address(this);
-        STETH = IStETH(_steth);
+        STETH = IStETH(_stETH);
         WETH = IWeth(_weth);
         WSTETH = IWstETH(_wsteth);
     }
@@ -90,41 +80,10 @@ contract Dashboard is Permissions {
      *         and `vaultHub` address
      */
     function initialize(address _defaultAdmin) external virtual {
-        _initialize(_defaultAdmin);
-    }
-
-    /**
-     * @dev Internal initialize function.
-     */
-    function _initialize(address _defaultAdmin) internal {
-        if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
-
-        initialized = true;
-        vaultHub = VaultHub(_stakingVault().vaultHub());
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-
-        emit Initialized();
+        super._initialize(_defaultAdmin);
     }
 
     // ==================== View Functions ====================
-
-    /// @notice The underlying `StakingVault` contract
-    function stakingVault() external view returns (address) {
-        return address(_stakingVault());
-    }
-
-    function stETH() external view returns (address) {
-        return address(STETH);
-    }
-
-    function wETH() external view returns (address) {
-        return address(WETH);
-    }
-
-    function wstETH() external view returns (address) {
-        return address(WSTETH);
-    }
 
     function votingCommittee() external pure returns (bytes32[] memory) {
         return _votingCommittee();
@@ -135,7 +94,7 @@ contract Dashboard is Permissions {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(address(_stakingVault()));
+        return vaultHub.vaultSocket(address(stakingVault()));
     }
 
     /**
@@ -183,7 +142,7 @@ contract Dashboard is Permissions {
      * @return The valuation as a uint256.
      */
     function valuation() external view returns (uint256) {
-        return _stakingVault().valuation();
+        return stakingVault().valuation();
     }
 
     /**
@@ -191,7 +150,7 @@ contract Dashboard is Permissions {
      * @return The maximum number of stETH shares as a uint256.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(_stakingVault().valuation());
+        return _totalMintableShares(stakingVault().valuation());
     }
 
     /**
@@ -200,7 +159,7 @@ contract Dashboard is Permissions {
      * @return the maximum number of shares that can be minted by ether
      */
     function getMintableShares(uint256 _ether) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(_stakingVault().valuation() + _ether);
+        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _ether);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -212,7 +171,7 @@ contract Dashboard is Permissions {
      * @return The amount of ether that can be withdrawn.
      */
     function getWithdrawableEther() external view returns (uint256) {
-        return Math256.min(address(_stakingVault()).balance, _stakingVault().unlocked());
+        return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
     }
 
     // TODO: add preview view methods for minting and burning
@@ -239,6 +198,12 @@ contract Dashboard is Permissions {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundAndProceed {
+        uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
+
+        if (shares > 0) {
+            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
+        }
+
         super._voluntaryDisconnect();
     }
 
@@ -317,7 +282,7 @@ contract Dashboard is Permissions {
      * @param _shares Amount of shares to burn
      */
     function burn(uint256 _shares) external {
-        _stETH().transferSharesFrom(msg.sender, address(_vaultHub()), _shares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _shares);
         super._burn(_shares);
     }
 
@@ -411,29 +376,6 @@ contract Dashboard is Permissions {
 
     // ==================== Internal Functions ====================
 
-    function _stakingVault() internal view override returns (IStakingVault) {
-        bytes memory args = Clones.fetchCloneArgs(address(this));
-        address addr;
-        assembly {
-            addr := mload(add(args, 32))
-        }
-        return IStakingVault(addr);
-    }
-
-    function _vaultHub() internal view override returns (VaultHub) {
-        return vaultHub;
-    }
-
-    function _stETH() internal view override returns (IStETH) {
-        return STETH;
-    }
-
-    function _votingCommittee() internal pure virtual override returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](1);
-        roles[0] = DEFAULT_ADMIN_ROLE;
-        return roles;
-    }
-
     /**
      * @dev Modifier to fund the staking vault if msg.value > 0
      */
@@ -454,21 +396,10 @@ contract Dashboard is Permissions {
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
-    // ==================== Events ====================
-
-    /// @notice Emitted when the contract is initialized
-    event Initialized();
-
     // ==================== Errors ====================
 
     /// @notice Error when the withdrawable amount is insufficient.
     /// @param withdrawable The amount that is withdrawable
     /// @param requested The amount requested to withdraw
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
-
-    /// @notice Error when direct calls to the implementation are forbidden
-    error NonProxyCallsForbidden();
-
-    /// @notice Error when the contract is already initialized.
-    error AlreadyInitialized();
 }

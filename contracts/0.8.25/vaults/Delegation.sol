@@ -146,8 +146,8 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = _stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
-        uint256 valuation = _stakingVault().valuation();
+        uint256 reserved = stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
+        uint256 valuation = stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
     }
@@ -201,7 +201,7 @@ contract Delegation is Dashboard {
      */
     function claimCuratorFee(address _recipient) external onlyRole(CURATOR_ROLE) {
         uint256 fee = curatorUnclaimedFee();
-        curatorFeeClaimedReport = _stakingVault().latestReport();
+        curatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -213,7 +213,7 @@ contract Delegation is Dashboard {
      */
     function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIMER_ROLE) {
         uint256 fee = nodeOperatorUnclaimedFee();
-        nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
+        nodeOperatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -227,7 +227,7 @@ contract Delegation is Dashboard {
         uint256 _feeBP,
         IStakingVault.Report memory _lastClaimedReport
     ) internal view returns (uint256) {
-        IStakingVault.Report memory latestReport = _stakingVault().latestReport();
+        IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta);
