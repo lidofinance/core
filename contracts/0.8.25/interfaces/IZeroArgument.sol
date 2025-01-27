@@ -9,8 +9,8 @@ pragma solidity 0.8.25;
  */
 interface IZeroArgument {
     /**
-     * @notice Error thrown for zero address arguments
-     * @param argument Name of the argument that is zero
+     * @notice Error thrown for when a given value cannot be zero
+     * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
 }
