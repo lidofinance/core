@@ -276,7 +276,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(WITHDRAW_ROLE) {
+    function withdrawToWeth(address _recipient, uint256 _ether) external {
         super._withdraw(address(this), _ether);
         WETH.deposit{value: _ether}();
         WETH.transfer(_recipient, _ether);
@@ -286,7 +286,7 @@ contract Dashboard is Permissions {
      * @notice Requests the exit of a validator from the staking vault
      * @param _validatorPublicKey Public key of the validator to exit
      */
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+    function requestValidatorExit(bytes calldata _validatorPublicKey) external {
         super._requestValidatorExit(_validatorPublicKey);
     }
 
@@ -295,10 +295,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of shares to mint
      */
-    function mint(
-        address _recipient,
-        uint256 _amountOfShares
-    ) external payable virtual onlyRole(MINT_ROLE) fundAndProceed {
+    function mint(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
         super._mint(_recipient, _amountOfShares);
     }
 
@@ -307,10 +304,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _tokens Amount of tokens to mint
      */
-    function mintWstETH(
-        address _recipient,
-        uint256 _tokens
-    ) external payable virtual onlyRole(MINT_ROLE) fundAndProceed {
+    function mintWstETH(address _recipient, uint256 _tokens) external payable fundAndProceed {
         super._mint(address(this), _tokens);
 
         STETH.approve(address(WSTETH), _tokens);
@@ -477,7 +471,4 @@ contract Dashboard is Permissions {
 
     /// @notice Error when the contract is already initialized.
     error AlreadyInitialized();
-
-    /// @notice Error when the lengths of the arrays are not equal
-    error UnequalLengths();
 }
