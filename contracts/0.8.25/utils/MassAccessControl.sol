@@ -14,67 +14,34 @@ import {IZeroArgument} from "../interfaces/IZeroArgument.sol";
  * @notice Mass-grants and revokes roles.
  */
 abstract contract MassAccessControl is AccessControlEnumerable, IZeroArgument {
+    struct Ticket {
+        address account;
+        bytes32 role;
+    }
+
     /**
-     * @notice Grants multiple roles to a single account.
-     * @param _account The address to which the roles will be granted.
-     * @param _roles An array of bytes32 role identifiers to be granted.
+     * @notice Mass-grants multiple roles to multiple accounts.
+     * @param _tickets An array of Tickets.
      * @dev Performs the role admin checks internally.
      */
-    function grantRoles(address _account, bytes32[] memory _roles) external {
-        if (_account == address(0)) revert ZeroArgument("_account");
-        if (_roles.length == 0) revert ZeroArgument("_roles");
+    function grantRoles(Ticket[] memory _tickets) external {
+        if (_tickets.length == 0) revert ZeroArgument("_tickets");
 
-        for (uint256 i = 0; i < _roles.length; i++) {
-            grantRole(_roles[i], _account);
+        for (uint256 i = 0; i < _tickets.length; i++) {
+            grantRole(_tickets[i].role, _tickets[i].account);
         }
     }
 
     /**
-     * @notice Mass-grants a single role to a single account.
-     * @param _accounts An array of addresses to which the roles will be granted.
-     * @param _roles An array of bytes32 role identifiers to be granted.
+     * @notice Mass-revokes multiple roles from multiple accounts.
+     * @param _tickets An array of Tickets.
+     * @dev Performs the role admin checks internally.
      */
-    function grantRoles(address[] memory _accounts, bytes32[] memory _roles) external {
-        if (_accounts.length == 0) revert ZeroArgument("_accounts");
-        if (_roles.length == 0) revert ZeroArgument("_roles");
-        if (_accounts.length != _roles.length) revert LengthMismatch();
+    function revokeRoles(Ticket[] memory _tickets) external {
+        if (_tickets.length == 0) revert ZeroArgument("_tickets");
 
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            grantRole(_roles[i], _accounts[i]);
+        for (uint256 i = 0; i < _tickets.length; i++) {
+            revokeRole(_tickets[i].role, _tickets[i].account);
         }
     }
-
-    /**
-     * @notice Revokes multiple roles from a single account.
-     * @param _account The address from which the roles will be revoked.
-     * @param _roles An array of bytes32 role identifiers to be revoked.
-     */
-    function revokeRoles(address _account, bytes32[] memory _roles) external {
-        if (_account == address(0)) revert ZeroArgument("_account");
-        if (_roles.length == 0) revert ZeroArgument("_roles");
-
-        for (uint256 i = 0; i < _roles.length; i++) {
-            revokeRole(_roles[i], _account);
-        }
-    }
-
-    /**
-     * @notice Mass-revokes a single role from a single account.
-     * @param _accounts An array of addresses from which the roles will be revoked.
-     * @param _roles An array of bytes32 role identifiers to be revoked.
-     */
-    function revokeRoles(address[] memory _accounts, bytes32[] memory _roles) external {
-        if (_accounts.length == 0) revert ZeroArgument("_accounts");
-        if (_roles.length == 0) revert ZeroArgument("_roles");
-        if (_accounts.length != _roles.length) revert LengthMismatch();
-
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            revokeRole(_roles[i], _accounts[i]);
-        }
-    }
-
-    /**
-     * @notice Error thrown when the length of two arrays does not match
-     */
-    error LengthMismatch();
 }
