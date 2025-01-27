@@ -82,11 +82,11 @@ contract Delegation is Dashboard {
     /**
      * @notice Constructs the contract.
      * @dev Stores token addresses in the bytecode to reduce gas costs.
-     * @param _stETH The address of the stETH token.
+     * @param _steth Address of the stETH token contract.
      * @param _weth Address of the weth token contract.
-     * @param _wstETH Address of the wstETH token contract.
+     * @param _wsteth Address of the wstETH token contract.
      */
-    constructor(address _stETH, address _weth, address _wstETH) Dashboard(_stETH, _weth, _wstETH) {}
+    constructor(address _steth, address _weth, address _wsteth) Dashboard(_steth, _weth, _wsteth) {}
 
     /**
      * @notice Initializes the contract:
@@ -146,23 +146,10 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
-        uint256 valuation = stakingVault().valuation();
+        uint256 reserved = _stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
+        uint256 valuation = _stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
-    }
-
-    /**
-     * @notice Returns the committee that can:
-     * - change the vote lifetime;
-     * - set the node operator fee;
-     * - transfer the ownership of the StakingVault.
-     * @return committee is an array of roles that form the voting committee.
-     */
-    function votingCommittee() public pure returns (bytes32[] memory committee) {
-        committee = new bytes32[](2);
-        committee[0] = CURATOR_ROLE;
-        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
     /**
@@ -171,7 +158,7 @@ contract Delegation is Dashboard {
      * the vote is considered expired, no longer counts and must be recasted for the voting to go through.
      * @param _newVoteLifetime The new vote lifetime in seconds.
      */
-    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(votingCommittee()) {
+    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(_votingCommittee()) {
         _setVoteLifetime(_newVoteLifetime);
     }
 
@@ -199,7 +186,7 @@ contract Delegation is Dashboard {
      * which is why the deciding voter must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(votingCommittee()) {
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(_votingCommittee()) {
         if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
@@ -214,7 +201,7 @@ contract Delegation is Dashboard {
      */
     function claimCuratorFee(address _recipient) external onlyRole(CURATOR_ROLE) {
         uint256 fee = curatorUnclaimedFee();
-        curatorFeeClaimedReport = stakingVault().latestReport();
+        curatorFeeClaimedReport = _stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -226,7 +213,7 @@ contract Delegation is Dashboard {
      */
     function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIMER_ROLE) {
         uint256 fee = nodeOperatorUnclaimedFee();
-        nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+        nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
         _claimFee(_recipient, fee);
     }
 
@@ -240,7 +227,7 @@ contract Delegation is Dashboard {
         uint256 _feeBP,
         IStakingVault.Report memory _lastClaimedReport
     ) internal view returns (uint256) {
-        IStakingVault.Report memory latestReport = stakingVault().latestReport();
+        IStakingVault.Report memory latestReport = _stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta);
@@ -261,9 +248,17 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @dev Overrides the Dashboard's internal authorization function to add a voting requirement.
+     * @notice Returns the committee that can:
+     * - change the vote lifetime;
+     * - set the node operator fee;
+     * - transfer the ownership of the StakingVault.
+     * @return committee is an array of roles that form the voting committee.
      */
-    function _authTransferOwnership() internal override onlyIfVotedBy(votingCommittee()) {}
+    function _votingCommittee() internal pure override returns (bytes32[] memory committee) {
+        committee = new bytes32[](2);
+        committee[0] = CURATOR_ROLE;
+        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
+    }
 
     /**
      * @dev Overrides the Dashboard's internal withdraw function to add a check for the unreserved amount.
@@ -275,8 +270,6 @@ contract Delegation is Dashboard {
      * @param _ether The amount of ether to withdraw.
      */
     function _withdraw(address _recipient, uint256 _ether) internal override {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_ether == 0) revert ZeroArgument("_ether");
         uint256 withdrawable = unreserved();
         if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
 

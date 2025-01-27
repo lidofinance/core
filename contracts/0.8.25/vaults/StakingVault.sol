@@ -109,7 +109,7 @@ contract StakingVault is IStakingVault, BeaconChainDepositLogistics, OwnableUpgr
      * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */ ) external initializer {
+    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
     }
