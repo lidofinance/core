@@ -23,10 +23,7 @@ library TriggerableWithdrawals {
      *      The validator will fully withdraw and exit its duties as a validator.
      * @param pubkeys An array of public keys for the validators requesting full withdrawals.
      */
-    function addFullWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint256 feePerRequest
-    ) internal {
+    function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) internal {
         uint256 keysCount = _validateAndCountPubkeys(pubkeys);
         feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
 
@@ -74,11 +71,7 @@ library TriggerableWithdrawals {
      * @param pubkeys An array of public keys for the validators requesting withdrawals.
      * @param amounts An array of corresponding withdrawal amounts for each public key.
      */
-    function addWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint64[] calldata amounts,
-        uint256 feePerRequest
-    ) internal {
+    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts, uint256 feePerRequest) internal {
         uint256 keysCount = _validateAndCountPubkeys(pubkeys);
 
         if (keysCount != amounts.length) {
@@ -116,11 +109,7 @@ library TriggerableWithdrawals {
 
     function _copyPubkeyToMemory(bytes calldata pubkeys, bytes memory target, uint256 keyIndex) private pure {
         assembly {
-            calldatacopy(
-                add(target, 32),
-                add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)),
-                PUBLIC_KEY_LENGTH
-            )
+            calldatacopy(add(target, 32), add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)), PUBLIC_KEY_LENGTH)
         }
     }
 
@@ -131,7 +120,7 @@ library TriggerableWithdrawals {
     }
 
     function _validateAndCountPubkeys(bytes calldata pubkeys) private pure returns (uint256) {
-        if(pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+        if (pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
             revert InvalidPublicKeyLength();
         }
 
@@ -154,7 +143,7 @@ library TriggerableWithdrawals {
             revert InsufficientRequestFee(feePerRequest, minFeePerRequest);
         }
 
-        if(address(this).balance < feePerRequest * keysCount) {
+        if (address(this).balance < feePerRequest * keysCount) {
             revert InsufficientBalance(address(this).balance, feePerRequest * keysCount);
         }
 

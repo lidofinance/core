@@ -11,7 +11,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Versioned} from "./utils/Versioned.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {TriggerableWithdrawals} from "./lib/TriggerableWithdrawals.sol";
-import { ILidoLocator } from "../common/interfaces/ILidoLocator.sol";
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
 interface ILido {
     /**
@@ -51,7 +51,11 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     error NotLido();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
-    error InsufficientTriggerableWithdrawalFee(uint256 providedTotalFee, uint256 requiredTotalFee, uint256 requestCount);
+    error InsufficientTriggerableWithdrawalFee(
+        uint256 providedTotalFee,
+        uint256 requiredTotalFee,
+        uint256 requestCount
+    );
     error TriggerableWithdrawalRefundFailed();
 
     /**
@@ -149,9 +153,9 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH  * minFeePerRequest;
+        uint256 totalFee = (pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH) * minFeePerRequest;
 
-        if(totalFee > msg.value) {
+        if (totalFee > msg.value) {
             revert InsufficientTriggerableWithdrawalFee(
                 msg.value,
                 totalFee,
