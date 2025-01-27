@@ -448,6 +448,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function setDepositGuardian(address _depositGuardian) external onlyOwner {
         if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
 
+        // perhaps, we don't need this check because there can be edge cases, e.g.
+        // account-abstracted addresses or CREATE2-deployed contracts.
         if (
             SignatureUtils._hasCode(_depositGuardian) &&
             !ERC165(_depositGuardian).supportsInterface(type(IERC1271).interfaceId)
