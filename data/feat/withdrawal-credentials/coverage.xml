@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3078"  lines-covered="2959"  line-rate="0.9612999999999999"  branches-valid="1362"  branches-covered="1285"  branch-rate="0.9434999999999999"  timestamp="1737973686749" complexity="0" version="0.1">
+<coverage lines-valid="3035"  lines-covered="2916"  line-rate="0.9608"  branches-valid="1342"  branches-covered="1265"  branch-rate="0.9426000000000001"  timestamp="1737999216559" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3681,7 +3681,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.lib"  line-rate="1"  branch-rate="0.9286" >
+	<package name="0.8.9.lib"  line-rate="1"  branch-rate="0.8636" >
 	<classes>
 		<class name="Math.sol"  filename="contracts/0.8.9/lib/Math.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -3746,79 +3746,6 @@
 			<line number="168"  hits="39"  branch="false" />
 			<line number="169"  hits="39"  branch="false" />
 			<line number="172"  hits="39"  branch="false" />
-		</lines>
-		</class>
-		<class name="TriggerableWithdrawals.sol"  filename="contracts/0.8.9/lib/TriggerableWithdrawals.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-			<method name="addFullWithdrawalRequests"  hits="46"  signature="()V" >
-				<lines><line number="26"  hits="46" /></lines>
-			</method>
-			<method name="addPartialWithdrawalRequests"  hits="28"  signature="()V" >
-				<lines><line number="52"  hits="28" /></lines>
-			</method>
-			<method name="addWithdrawalRequests"  hits="57"  signature="()V" >
-				<lines><line number="74"  hits="57" /></lines>
-			</method>
-			<method name="getWithdrawalRequestFee"  hits="138"  signature="()V" >
-				<lines><line number="100"  hits="138" /></lines>
-			</method>
-			<method name="_copyPubkeyToMemory"  hits="710"  signature="()V" >
-				<lines><line number="110"  hits="710" /></lines>
-			</method>
-			<method name="_copyAmountToMemory"  hits="359"  signature="()V" >
-				<lines><line number="116"  hits="359" /></lines>
-			</method>
-			<method name="_validateAndCountPubkeys"  hits="103"  signature="()V" >
-				<lines><line number="122"  hits="103" /></lines>
-			</method>
-			<method name="_validateAndAdjustFee"  hits="87"  signature="()V" >
-				<lines><line number="135"  hits="87" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="27"  hits="46"  branch="false" />
-			<line number="28"  hits="40"  branch="false" />
-			<line number="30"  hits="37"  branch="false" />
-			<line number="32"  hits="37"  branch="false" />
-			<line number="33"  hits="351"  branch="false" />
-			<line number="35"  hits="351"  branch="false" />
-			<line number="37"  hits="351"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="38"  hits="2"  branch="false" />
-			<line number="57"  hits="28"  branch="false" />
-			<line number="58"  hits="185"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="59"  hits="1"  branch="false" />
-			<line number="63"  hits="27"  branch="false" />
-			<line number="75"  hits="57"  branch="false" />
-			<line number="77"  hits="51"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="78"  hits="4"  branch="false" />
-			<line number="81"  hits="47"  branch="false" />
-			<line number="83"  hits="41"  branch="false" />
-			<line number="84"  hits="41"  branch="false" />
-			<line number="85"  hits="359"  branch="false" />
-			<line number="86"  hits="359"  branch="false" />
-			<line number="88"  hits="359"  branch="false" />
-			<line number="90"  hits="359"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="91"  hits="2"  branch="false" />
-			<line number="101"  hits="138"  branch="false" />
-			<line number="103"  hits="138"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="104"  hits="6"  branch="false" />
-			<line number="107"  hits="132"  branch="false" />
-			<line number="111"  hits="710"  branch="false" />
-			<line number="117"  hits="359"  branch="false" />
-			<line number="123"  hits="103"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="124"  hits="8"  branch="false" />
-			<line number="127"  hits="95"  branch="false" />
-			<line number="128"  hits="95"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="129"  hits="4"  branch="false" />
-			<line number="132"  hits="91"  branch="false" />
-			<line number="136"  hits="87"  branch="false" />
-			<line number="138"  hits="84"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="139"  hits="15"  branch="false" />
-			<line number="142"  hits="84"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="143"  hits="3"  branch="false" />
-			<line number="146"  hits="81"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="147"  hits="3"  branch="false" />
-			<line number="150"  hits="78"  branch="false" />
 		</lines>
 		</class>
 		<class name="UnstructuredRefStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredRefStorage.sol"  line-rate="1"  branch-rate="1" >
