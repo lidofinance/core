@@ -8,44 +8,26 @@ import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IZeroArgument} from "../interfaces/IZeroArgument.sol";
+import {Delegation} from "./Delegation.sol";
 
-/// @notice This interface is strictly intended for connecting to a specific Delegation interface and specific parameters
-interface IDelegation {
-    struct InitialState {
-        address defaultAdmin;
-        address curator;
-        address minterBurner;
-        address funderWithdrawer;
-        address nodeOperatorManager;
-        address nodeOperatorFeeClaimer;
-        uint256 curatorFeeBP;
-        uint256 nodeOperatorFeeBP;
-    }
-
-    function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
-
-    function CURATOR_ROLE() external view returns (bytes32);
-
-    function FUND_WITHDRAW_ROLE() external view returns (bytes32);
-
-    function MINT_BURN_ROLE() external view returns (bytes32);
-
-    function NODE_OPERATOR_MANAGER_ROLE() external view returns (bytes32);
-
-    function NODE_OPERATOR_FEE_CLAIMER_ROLE() external view returns (bytes32);
-
-    function initialize(address _defaultAdmin) external;
-
-    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external;
-
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFee) external;
-
-    function grantRole(bytes32 role, address account) external;
-
-    function revokeRole(bytes32 role, address account) external;
+struct DelegationConfig {
+    address defaultAdmin;
+    address funder;
+    address withdrawer;
+    address minter;
+    address burner;
+    address rebalancer;
+    address exitRequester;
+    address disconnecter;
+    address curator;
+    address nodeOperatorManager;
+    address nodeOperatorFeeClaimer;
+    uint16 curatorFeeBP;
+    uint16 nodeOperatorFeeBP;
 }
 
-contract VaultFactory {
+contract VaultFactory is IZeroArgument {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
 
@@ -60,46 +42,51 @@ contract VaultFactory {
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
-    /// @param _delegationInitialState The params of vault initialization
+    /// @param _delegationConfig The params of delegation initialization
     /// @param _stakingVaultInitializerExtraParams The params of vault initialization
     function createVaultWithDelegation(
-        IDelegation.InitialState calldata _delegationInitialState,
+        DelegationConfig calldata _delegationConfig,
         bytes calldata _stakingVaultInitializerExtraParams
-    ) external returns (IStakingVault vault, IDelegation delegation) {
-        if (_delegationInitialState.curator == address(0)) revert ZeroArgument("curator");
+    ) external returns (IStakingVault vault, Delegation delegation) {
+        if (_delegationConfig.curator == address(0)) revert ZeroArgument("curator");
 
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
+
         // create Delegation
         bytes memory immutableArgs = abi.encode(vault);
-        delegation = IDelegation(Clones.cloneWithImmutableArgs(DELEGATION_IMPL, immutableArgs));
+        delegation = Delegation(payable(Clones.cloneWithImmutableArgs(DELEGATION_IMPL, immutableArgs)));
 
         // initialize StakingVault
         vault.initialize(
             address(delegation),
-            _delegationInitialState.nodeOperatorManager,
+            _delegationConfig.nodeOperatorManager,
             _stakingVaultInitializerExtraParams
         );
+
         // initialize Delegation
         delegation.initialize(address(this));
 
-        // grant roles to defaultAdmin, owner, manager, operator
-        delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationInitialState.defaultAdmin);
-        delegation.grantRole(delegation.CURATOR_ROLE(), _delegationInitialState.curator);
-        delegation.grantRole(delegation.FUND_WITHDRAW_ROLE(), _delegationInitialState.funderWithdrawer);
-        delegation.grantRole(delegation.MINT_BURN_ROLE(), _delegationInitialState.minterBurner);
-        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationInitialState.nodeOperatorManager);
-        delegation.grantRole(
-            delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(),
-            _delegationInitialState.nodeOperatorFeeClaimer
-        );
+        // setup roles
+        delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);
+        delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funder);
+        delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawer);
+        delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minter);
+        delegation.grantRole(delegation.BURN_ROLE(), _delegationConfig.burner);
+        delegation.grantRole(delegation.REBALANCE_ROLE(), _delegationConfig.rebalancer);
+        delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequester);
+        delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecter);
+        delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
+        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
+        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
+
         // set fees
-        delegation.setCuratorFeeBP(_delegationInitialState.curatorFeeBP);
-        delegation.setNodeOperatorFeeBP(_delegationInitialState.nodeOperatorFeeBP);
+        delegation.setCuratorFeeBP(_delegationConfig.curatorFeeBP);
+        delegation.setNodeOperatorFeeBP(_delegationConfig.nodeOperatorFeeBP);
 
         // revoke temporary roles from factory
         delegation.revokeRole(delegation.CURATOR_ROLE(), address(this));
@@ -107,7 +94,7 @@ contract VaultFactory {
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 
         emit VaultCreated(address(delegation), address(vault));
-        emit DelegationCreated(_delegationInitialState.defaultAdmin, address(delegation));
+        emit DelegationCreated(_delegationConfig.defaultAdmin, address(delegation));
     }
 
     /**
@@ -123,6 +110,4 @@ contract VaultFactory {
      * @param delegation The address of the created Delegation
      */
     event DelegationCreated(address indexed admin, address indexed delegation);
-
-    error ZeroArgument(string);
 }
