@@ -231,8 +231,8 @@ contract Dashboard is Permissions {
      * @notice Transfers ownership of the staking vault to a new owner.
      * @param _newOwner Address of the new owner.
      */
-    function transferOwnership(address _newOwner) external {
-        super._transferOwnership(_newOwner);
+    function transferStakingVaultOwnership(address _newOwner) external {
+        super._transferStakingVaultOwnership(_newOwner);
     }
 
     /**

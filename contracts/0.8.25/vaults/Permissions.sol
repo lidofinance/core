@@ -94,7 +94,7 @@ abstract contract Permissions is AccessControlVoteable {
         _vaultHub().voluntaryDisconnect(address(_stakingVault()));
     }
 
-    function _transferOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
+    function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
         OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
     }
 }
