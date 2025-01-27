@@ -261,7 +261,7 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @dev Overrides the Dashboard's internal withdraw function to add a check for the unreserved amount.
+     * @dev Overrides the Permissions' internal withdraw function to add a check for the unreserved amount.
      * Cannot withdraw more than the unreserved amount: which is the amount of ether
      * that is not locked in the StakingVault and not reserved for curator and node operator fees.
      * Does not include a check for the balance of the StakingVault, this check is present
