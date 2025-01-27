@@ -27,27 +27,59 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
+    struct GuardianSignature {
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
     function initialize(address _owner, address _operator, bytes calldata _params) external;
-    function version() external pure returns(uint64);
+
+    function version() external pure returns (uint64);
+
     function getInitializedVersion() external view returns (uint64);
+
     function vaultHub() external view returns (address);
+
     function depositContract() external view returns (address);
+
     function nodeOperator() external view returns (address);
+
     function locked() external view returns (uint256);
+
     function valuation() external view returns (uint256);
+
     function isBalanced() external view returns (bool);
+
     function unlocked() external view returns (uint256);
+
     function inOutDelta() external view returns (int256);
+
     function beaconChainDepositsPaused() external view returns (bool);
+
     function withdrawalCredentials() external view returns (bytes32);
+
     function fund() external payable;
+
     function withdraw(address _recipient, uint256 _ether) external;
-    function depositToBeaconChain(Deposit[] calldata _deposits) external;
+
+    function depositToBeaconChain(
+        Deposit[] calldata _deposits,
+        bytes32 _expectedGlobalDepositRoot,
+        GuardianSignature calldata _guardianSignature
+    ) external;
+
     function requestValidatorExit(bytes calldata _pubkeys) external;
+
     function lock(uint256 _locked) external;
+
     function rebalance(uint256 _ether) external;
+
     function pauseBeaconChainDeposits() external;
+
     function resumeBeaconChainDeposits() external;
+
     function latestReport() external view returns (Report memory);
+
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
 }

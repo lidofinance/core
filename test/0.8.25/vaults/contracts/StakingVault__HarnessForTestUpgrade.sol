@@ -56,6 +56,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     event InitializedV2();
+
     function __StakingVault_init_v2() internal onlyInitializing {
         emit InitializedV2();
     }
@@ -83,25 +84,38 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         }
     }
 
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(
+        Deposit[] calldata _deposits,
+        bytes32 _expectedGlobalDepositRoot,
+        GuardianSignature calldata _guardianSignature
+    ) external {}
+
     function fund() external payable {}
+
     function inOutDelta() external view returns (int256) {
         return -1;
     }
+
     function isBalanced() external view returns (bool) {
         return true;
     }
+
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
+
     function rebalance(uint256 _ether) external {}
+
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+
     function requestValidatorExit(bytes calldata _pubkeys) external {}
+
     function lock(uint256 _locked) external {}
 
     function locked() external view returns (uint256) {
         return 0;
     }
+
     function unlocked() external view returns (uint256) {
         return 0;
     }
@@ -125,6 +139,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function pauseBeaconChainDeposits() external {}
+
     function resumeBeaconChainDeposits() external {}
 
     error ZeroArgument(string name);

@@ -5,8 +5,11 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {ERC165} from "@openzeppelin/contracts-v5.2/utils/introspection/ERC165.sol";
+import {IERC1271} from "@openzeppelin/contracts-v5.2/interfaces/IERC1271.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+import {SignatureUtils} from "contracts/common/lib/SignatureUtils.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -67,6 +70,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address depositGuardian;
         bool beaconChainDepositsPaused;
     }
 
@@ -75,6 +79,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         The implementation is petrified to this version
      */
     uint64 private constant _VERSION = 1;
+
+    bytes32 public constant DEPOSIT_GUARDIAN_MESSAGE_PREFIX = keccak256("StakingVault.DepositGuardianMessagePrefix");
 
     /**
      * @notice Address of `VaultHub`
@@ -122,6 +128,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
+        _getStorage().depositGuardian = _owner;
     }
 
     /**
@@ -313,16 +320,26 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _deposits Array of deposit structs
      * @dev Includes a check to ensure StakingVault is balanced before making deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+    function depositToBeaconChain(
+        Deposit[] calldata _deposits,
+        bytes32 _expectedGlobalDepositRoot,
+        GuardianSignature calldata _signature
+    ) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        ERC7201Storage storage $ = _getStorage();
 
+        bytes32 currentGlobalDepositRoot = BEACON_CHAIN_DEPOSIT_CONTRACT.get_deposit_root();
+        if (_expectedGlobalDepositRoot != currentGlobalDepositRoot)
+            revert GlobalDepositRootMismatch(_expectedGlobalDepositRoot, currentGlobalDepositRoot);
+
+        ERC7201Storage storage $ = _getStorage();
         if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (!isBalanced()) revert Unbalanced();
 
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
+        bytes memory concatenatedDepositDataRoots;
+
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
@@ -331,8 +348,26 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
                 deposit.signature,
                 deposit.depositDataRoot
             );
+
             totalAmount += deposit.amount;
+            concatenatedDepositDataRoots = abi.encodePacked(concatenatedDepositDataRoots, deposit.depositDataRoot);
         }
+
+        if (
+            !SignatureUtils.isValidSignature(
+                $.depositGuardian,
+                keccak256(
+                    abi.encodePacked(
+                        DEPOSIT_GUARDIAN_MESSAGE_PREFIX,
+                        _expectedGlobalDepositRoot,
+                        keccak256(concatenatedDepositDataRoots)
+                    )
+                ),
+                _signature.v,
+                _signature.r,
+                _signature.s
+            )
+        ) revert DepositGuardianSignatureInvalid();
 
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
@@ -402,6 +437,28 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.locked = uint128(_locked);
 
         emit Reported(_valuation, _inOutDelta, _locked);
+    }
+
+    /**
+     * @notice Sets the deposit guardian
+     * @param _depositGuardian The address of the deposit guardian
+     * @dev If the deposit guardian is set to a contract, it must implement EIP-1271,
+     *      even though the function does not check for the interface requirement.
+     */
+    function setDepositGuardian(address _depositGuardian) external onlyOwner {
+        if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
+
+        if (
+            SignatureUtils._hasCode(_depositGuardian) &&
+            !ERC165(_depositGuardian).supportsInterface(type(IERC1271).interfaceId)
+        ) revert DepositGuardianContractDoesNotSupportEIP1271();
+
+        ERC7201Storage storage $ = _getStorage();
+        address oldDepositGuardian = $.depositGuardian;
+
+        $.depositGuardian = _depositGuardian;
+
+        emit DepositGuardianSet(oldDepositGuardian, _depositGuardian);
     }
 
     /**
@@ -555,6 +612,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event BeaconChainDepositsResumed();
 
     /**
+     * @notice Emitted when the deposit guardian is set
+     * @param oldDepositGuardian The address of the old deposit guardian
+     * @param newDepositGuardian The address of the new deposit guardian
+     */
+    event DepositGuardianSet(address oldDepositGuardian, address newDepositGuardian);
+
+    /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
      */
@@ -616,6 +680,21 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the onReport() hook reverts with an Out of Gas error
      */
     error UnrecoverableError();
+
+    /**
+     * @notice Thrown when the global deposit root does not match the expected global deposit root
+     */
+    error GlobalDepositRootMismatch(bytes32 expected, bytes32 actual);
+
+    /**
+     * @notice Thrown when the guardian signature is invalid
+     */
+    error DepositGuardianSignatureInvalid();
+
+    /**
+     * @notice Thrown when the deposit guardian is not an EIP-1271 contract
+     */
+    error DepositGuardianContractDoesNotSupportEIP1271();
 
     /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
