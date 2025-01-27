@@ -1,13 +1,13 @@
 import { ethers } from "hardhat";
 
-import { WithdrawalsPredeployed_Mock } from "typechain-types";
+import { EIP7002WithdrawalRequest_Mock } from "typechain-types";
 
 export const withdrawalsPredeployedHardcodedAddress = "0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA";
 
 export async function deployWithdrawalsPredeployedMock(
   defaultRequestFee: bigint,
-): Promise<WithdrawalsPredeployed_Mock> {
-  const withdrawalsPredeployed = await ethers.deployContract("WithdrawalsPredeployed_Mock");
+): Promise<EIP7002WithdrawalRequest_Mock> {
+  const withdrawalsPredeployed = await ethers.deployContract("EIP7002WithdrawalRequest_Mock");
   const withdrawalsPredeployedAddress = await withdrawalsPredeployed.getAddress();
 
   await ethers.provider.send("hardhat_setCode", [
@@ -15,7 +15,7 @@ export async function deployWithdrawalsPredeployedMock(
     await ethers.provider.getCode(withdrawalsPredeployedAddress),
   ]);
 
-  const contract = await ethers.getContractAt("WithdrawalsPredeployed_Mock", withdrawalsPredeployedHardcodedAddress);
+  const contract = await ethers.getContractAt("EIP7002WithdrawalRequest_Mock", withdrawalsPredeployedHardcodedAddress);
   await contract.setFee(defaultRequestFee);
   return contract;
 }

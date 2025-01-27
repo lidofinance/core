@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -10,7 +10,7 @@ import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {TriggerableWithdrawals} from "./lib/TriggerableWithdrawals.sol";
+import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
 interface ILido {

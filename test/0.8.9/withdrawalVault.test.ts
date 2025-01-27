@@ -6,10 +6,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
+  EIP7002WithdrawalRequest_Mock,
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
-  WithdrawalsPredeployed_Mock,
   WithdrawalVault__Harness,
 } from "typechain-types";
 
@@ -17,12 +17,12 @@ import { MAX_UINT256, proxify, streccak } from "lib";
 
 import { Snapshot } from "test/suite";
 
-import { findEip7002MockEvents, testEip7002Mock } from "./lib/triggerableWithdrawals/eip7002Mock";
+import { findEip7002MockEvents, testEip7002Mock } from "../common/lib/triggerableWithdrawals/eip7002Mock";
 import {
   deployWithdrawalsPredeployedMock,
   generateWithdrawalRequestPayload,
   withdrawalsPredeployedHardcodedAddress,
-} from "./lib/triggerableWithdrawals/utils";
+} from "../common/lib/triggerableWithdrawals/utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -39,7 +39,7 @@ describe("WithdrawalVault.sol", () => {
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
 
-  let withdrawalsPredeployed: WithdrawalsPredeployed_Mock;
+  let withdrawalsPredeployed: EIP7002WithdrawalRequest_Mock;
 
   let impl: WithdrawalVault__Harness;
   let vault: WithdrawalVault__Harness;

@@ -1,7 +1,9 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.9;
+/* See contracts/COMPILERS.md */
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.8.9 <0.9.0;
 library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
     uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;

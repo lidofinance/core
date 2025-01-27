@@ -1,12 +1,15 @@
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
 pragma solidity 0.8.9;
 
-import {TriggerableWithdrawals} from "contracts/0.8.9/lib/TriggerableWithdrawals.sol";
+import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
+/**
+ * @notice This is a harness of TriggerableWithdrawals library.
+ */
 contract TriggerableWithdrawals_Harness {
-    function addFullWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint256 feePerRequest
-    ) external {
+    function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) external {
         TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, feePerRequest);
     }
 
@@ -18,11 +21,7 @@ contract TriggerableWithdrawals_Harness {
         TriggerableWithdrawals.addPartialWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 
-    function addWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint64[] calldata amounts,
-        uint256 feePerRequest
-    ) external {
+    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts, uint256 feePerRequest) external {
         TriggerableWithdrawals.addWithdrawalRequests(pubkeys, amounts, feePerRequest);
     }
 

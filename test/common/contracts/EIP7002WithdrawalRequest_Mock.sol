@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
 pragma solidity 0.8.9;
 
 /**
- * @notice This is an mock of EIP-7002's pre-deploy contract.
+ * @notice This is a mock of EIP-7002's pre-deploy contract.
  */
-contract WithdrawalsPredeployed_Mock {
+contract EIP7002WithdrawalRequest_Mock {
     uint256 public fee;
     bool public failOnAddRequest;
     bool public failOnGetFee;
@@ -24,7 +26,7 @@ contract WithdrawalsPredeployed_Mock {
         fee = _fee;
     }
 
-    fallback(bytes calldata input) external payable returns (bytes memory output){
+    fallback(bytes calldata input) external payable returns (bytes memory output) {
         if (input.length == 0) {
             require(!failOnGetFee, "fail on get fee");
 
@@ -36,9 +38,6 @@ contract WithdrawalsPredeployed_Mock {
 
         require(input.length == 56, "Invalid callData length");
 
-        emit eip7002MockRequestAdded(
-            input,
-            msg.value
-        );
+        emit eip7002MockRequestAdded(input, msg.value);
     }
 }
