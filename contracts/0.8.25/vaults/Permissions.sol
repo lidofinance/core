@@ -43,6 +43,18 @@ abstract contract Permissions is AccessControlVoteable {
     bytes32 public constant REBALANCE_ROLE = keccak256("StakingVault.Permissions.Rebalance");
 
     /**
+     * @notice Permission for pausing beacon chain deposits on the StakingVault.
+     */
+    bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE =
+        keccak256("StakingVault.Permissions.PauseBeaconChainDeposits");
+
+    /**
+     * @notice Permission for resuming beacon chain deposits on the StakingVault.
+     */
+    bytes32 public constant RESUME_BEACON_CHAIN_DEPOSITS_ROLE =
+        keccak256("StakingVault.Permissions.ResumeBeaconChainDeposits");
+
+    /**
      * @notice Permission for requesting validator exit from the StakingVault.
      */
     bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("StakingVault.Permissions.RequestValidatorExit");
@@ -117,6 +129,14 @@ abstract contract Permissions is AccessControlVoteable {
 
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
         stakingVault().rebalance(_ether);
+    }
+
+    function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
+        stakingVault().pauseBeaconChainDeposits();
+    }
+
+    function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
+        stakingVault().resumeBeaconChainDeposits();
     }
 
     function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {

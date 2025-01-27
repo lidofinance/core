@@ -393,6 +393,20 @@ contract Dashboard is Permissions {
         super._rebalanceVault(_ether);
     }
 
+    /**
+     * @notice Pauses beacon chain deposits on the StakingVault.
+     */
+    function pauseBeaconChainDeposits() external {
+        super._pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Resumes beacon chain deposits on the StakingVault.
+     */
+    function resumeBeaconChainDeposits() external {
+        super._resumeBeaconChainDeposits();
+    }
+
     // ==================== Role Management Functions ====================
 
     /**
@@ -419,20 +433,6 @@ contract Dashboard is Permissions {
         for (uint256 i = 0; i < _assignments.length; i++) {
             revokeRole(_assignments[i].role, _assignments[i].account);
         }
-    }
-
-    /**
-     * @notice Pauses beacon chain deposits on the staking vault.
-     */
-    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pauseBeaconChainDeposits();
-    }
-
-    /**
-     * @notice Resumes beacon chain deposits on the staking vault.
-     */
-    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _resumeBeaconChainDeposits();
     }
 
     // ==================== Internal Functions ====================
