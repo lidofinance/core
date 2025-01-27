@@ -8,7 +8,6 @@ import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IZeroArgument} from "../interfaces/IZeroArgument.sol";
 import {Delegation} from "./Delegation.sol";
 
 struct DelegationConfig {
@@ -27,7 +26,7 @@ struct DelegationConfig {
     uint16 nodeOperatorFeeBP;
 }
 
-contract VaultFactory is IZeroArgument {
+contract VaultFactory {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
 
@@ -110,4 +109,10 @@ contract VaultFactory is IZeroArgument {
      * @param delegation The address of the created Delegation
      */
     event DelegationCreated(address indexed admin, address indexed delegation);
+
+    /**
+     * @notice Error thrown for when a given value cannot be zero
+     * @param argument Name of the argument
+     */
+    error ZeroArgument(string argument);
 }

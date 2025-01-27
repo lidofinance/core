@@ -39,6 +39,14 @@ interface IWstETH is IERC20, IERC20Permit {
  * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
 contract Dashboard is Permissions {
+    /**
+     * @notice Struct containing an account and a role for granting/revoking roles.
+     */
+    struct RoleAssignment {
+        address account;
+        bytes32 role;
+    }
+
     /// @notice Total basis points for fee calculations; equals to 100%.
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
@@ -372,6 +380,34 @@ contract Dashboard is Permissions {
      */
     function rebalanceVault(uint256 _ether) external payable fundAndProceed {
         super._rebalanceVault(_ether);
+    }
+
+    // ==================== Role Management Functions ====================
+
+    /**
+     * @notice Mass-grants multiple roles to multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function grantRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            grantRole(_assignments[i].role, _assignments[i].account);
+        }
+    }
+
+    /**
+     * @notice Mass-revokes multiple roles from multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function revokeRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            revokeRole(_assignments[i].role, _assignments[i].account);
+        }
     }
 
     // ==================== Internal Functions ====================

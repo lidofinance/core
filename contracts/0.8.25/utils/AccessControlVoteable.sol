@@ -4,9 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {MassAccessControl} from "./MassAccessControl.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
-abstract contract AccessControlVoteable is MassAccessControl {
+abstract contract AccessControlVoteable is AccessControlEnumerable {
     /**
      * @notice Tracks committee votes
      * - callId: unique identifier for the call, derived as `keccak256(msg.data)`

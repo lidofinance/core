@@ -139,4 +139,10 @@ abstract contract Permissions is AccessControlVoteable {
 
     /// @notice Error when the contract is already initialized.
     error AlreadyInitialized();
+
+    /**
+     * @notice Error thrown for when a given value cannot be zero
+     * @param argument Name of the argument
+     */
+    error ZeroArgument(string argument);
 }
