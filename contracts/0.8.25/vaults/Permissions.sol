@@ -131,13 +131,19 @@ abstract contract Permissions is AccessControlVoteable {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
-    /// @notice Emitted when the contract is initialized
+    /**
+     * @notice Emitted when the contract is initialized
+     */
     event Initialized();
 
-    /// @notice Error when direct calls to the implementation are forbidden
+    /**
+     * @notice Error when direct calls to the implementation are forbidden
+     */
     error NonProxyCallsForbidden();
 
-    /// @notice Error when the contract is already initialized.
+    /**
+     * @notice Error when the contract is already initialized.
+     */
     error AlreadyInitialized();
 
     /**
