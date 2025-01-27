@@ -34,7 +34,7 @@ interface IDelegation {
 
     function NODE_OPERATOR_FEE_CLAIMER_ROLE() external view returns (bytes32);
 
-    function initialize() external;
+    function initialize(address _defaultAdmin) external;
 
     function setCuratorFeeBP(uint256 _newCuratorFeeBP) external;
 
@@ -51,10 +51,7 @@ contract VaultFactory {
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(
-        address _beacon,
-        address _delegationImpl
-    ) {
+    constructor(address _beacon, address _delegationImpl) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
 
@@ -84,7 +81,7 @@ contract VaultFactory {
             _stakingVaultInitializerExtraParams
         );
         // initialize Delegation
-        delegation.initialize();
+        delegation.initialize(address(this));
 
         // grant roles to defaultAdmin, owner, manager, operator
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationInitialState.defaultAdmin);
@@ -92,7 +89,10 @@ contract VaultFactory {
         delegation.grantRole(delegation.FUND_WITHDRAW_ROLE(), _delegationInitialState.funderWithdrawer);
         delegation.grantRole(delegation.MINT_BURN_ROLE(), _delegationInitialState.minterBurner);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationInitialState.nodeOperatorManager);
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationInitialState.nodeOperatorFeeClaimer);
+        delegation.grantRole(
+            delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(),
+            _delegationInitialState.nodeOperatorFeeClaimer
+        );
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));

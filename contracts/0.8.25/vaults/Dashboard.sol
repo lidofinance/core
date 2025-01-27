@@ -89,20 +89,20 @@ contract Dashboard is Permissions {
      * @notice Initializes the contract with the default admin
      *         and `vaultHub` address
      */
-    function initialize() external virtual {
-        _initialize();
+    function initialize(address _defaultAdmin) external virtual {
+        _initialize(_defaultAdmin);
     }
 
     /**
      * @dev Internal initialize function.
      */
-    function _initialize() internal {
+    function _initialize(address _defaultAdmin) internal {
         if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
         initialized = true;
         vaultHub = VaultHub(_stakingVault().vaultHub());
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
         emit Initialized();
     }
