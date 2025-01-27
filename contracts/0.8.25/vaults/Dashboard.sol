@@ -81,17 +81,17 @@ contract Dashboard is Permissions {
     /**
      * @notice Constructor sets the stETH token address and the implementation contract address.
      * @param _stETH Address of the stETH token contract.
-     * @param _weth Address of the weth token contract.
-     * @param _wsteth Address of the wstETH token contract.
+     * @param _wETH Address of the wETH token contract.
+     * @param _wstETH Address of the wstETH token contract.
      */
-    constructor(address _stETH, address _weth, address _wsteth) Permissions() {
+    constructor(address _stETH, address _wETH, address _wstETH) Permissions() {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
-        if (_weth == address(0)) revert ZeroArgument("_weth");
-        if (_wsteth == address(0)) revert ZeroArgument("_wsteth");
+        if (_wETH == address(0)) revert ZeroArgument("_wETH");
+        if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
         STETH = IStETH(_stETH);
-        WETH = IWeth(_weth);
-        WSTETH = IWstETH(_wsteth);
+        WETH = IWeth(_wETH);
+        WSTETH = IWstETH(_wstETH);
     }
 
     /**

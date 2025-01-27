@@ -93,6 +93,8 @@ abstract contract Permissions is AccessControlVoteable {
         vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
+        _setVoteLifetime(7 days);
+
         emit Initialized();
     }
 

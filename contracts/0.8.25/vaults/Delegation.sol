@@ -107,8 +107,6 @@ contract Delegation is Dashboard {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, msg.sender);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIMER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-
-        _setVoteLifetime(7 days);
     }
 
     /**
