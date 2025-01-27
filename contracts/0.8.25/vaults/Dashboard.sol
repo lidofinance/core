@@ -47,18 +47,29 @@ contract Dashboard is Permissions {
         bytes32 role;
     }
 
-    /// @notice Total basis points for fee calculations; equals to 100%.
+    /**
+     * @notice Total basis points for fee calculations; equals to 100%.
+     */
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice The stETH token contract
+    /**
+     * @notice The stETH token contract
+     */
     IStETH public immutable STETH;
 
-    /// @notice The wstETH token contract
+    /**
+     * @notice The wstETH token contract
+     */
     IWstETH public immutable WSTETH;
 
-    /// @notice The wETH token contract
+    /**
+     * @notice The wETH token contract
+     */
     IWeth public immutable WETH;
 
+    /**
+     * @notice Struct containing the permit details.
+     */
     struct PermitInput {
         uint256 value;
         uint256 deadline;
@@ -434,8 +445,10 @@ contract Dashboard is Permissions {
 
     // ==================== Errors ====================
 
-    /// @notice Error when the withdrawable amount is insufficient.
-    /// @param withdrawable The amount that is withdrawable
-    /// @param requested The amount requested to withdraw
+    /**
+     * @notice Error when the withdrawable amount is insufficient.
+     * @param withdrawable The amount that is withdrawable
+     * @param requested The amount requested to withdraw
+     */
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
 }
