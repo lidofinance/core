@@ -24,3 +24,4 @@ export * from "./time";
 export * from "./transaction";
 export * from "./type";
 export * from "./units";
+export * from "./deposit";

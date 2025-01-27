@@ -421,6 +421,20 @@ contract Dashboard is Permissions {
         }
     }
 
+    /**
+     * @notice Pauses beacon chain deposits on the staking vault.
+     */
+    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pauseBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Resumes beacon chain deposits on the staking vault.
+     */
+    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+        _resumeBeaconChainDeposits();
+    }
+
     // ==================== Internal Functions ====================
 
     /**

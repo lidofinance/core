@@ -38,7 +38,9 @@ contract Delegation is Dashboard {
      * - claims curator fee;
      * - votes on vote lifetime;
      * - votes on node operator fee;
-     * - votes on ownership transfer.
+     * - votes on ownership transfer;
+     * - pauses deposits to beacon chain;
+     * - resumes deposits to beacon chain.
      */
     bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
 
