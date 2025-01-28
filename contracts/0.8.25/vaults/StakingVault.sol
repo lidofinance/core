@@ -324,20 +324,42 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bytes calldata _signature
     ) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-
-        bytes32 currentGlobalDepositRoot = BEACON_CHAIN_DEPOSIT_CONTRACT.get_deposit_root();
-        if (_expectedGlobalDepositRoot != currentGlobalDepositRoot)
-            revert GlobalDepositRootMismatch(_expectedGlobalDepositRoot, currentGlobalDepositRoot);
-
-        ERC7201Storage storage $ = _getStorage();
-        if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (!isBalanced()) revert Unbalanced();
 
-        uint256 totalAmount = 0;
+        ERC7201Storage storage $ = _getStorage();
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
+
         uint256 numberOfDeposits = _deposits.length;
-        // XOR is a commutative operation, so the aggregate root will be the same regardless of the order of deposits
-        bytes32 depositDataBatchXorRoot;
+
+        if (msg.sender != $.depositGuardian) {
+            bytes32 currentGlobalDepositRoot = BEACON_CHAIN_DEPOSIT_CONTRACT.get_deposit_root();
+            if (_expectedGlobalDepositRoot != currentGlobalDepositRoot)
+                revert GlobalDepositRootMismatch(_expectedGlobalDepositRoot, currentGlobalDepositRoot);
+
+            bytes32 depositDataBatchXorRoot;
+
+            for (uint256 i = 0; i < numberOfDeposits; i++) {
+                Deposit calldata deposit = _deposits[i];
+
+                depositDataBatchXorRoot ^= keccak256(abi.encodePacked(deposit.depositDataRoot));
+            }
+
+            if (
+                !SignatureChecker.isValidSignatureNow(
+                    $.depositGuardian,
+                    keccak256(
+                        abi.encodePacked(
+                            DEPOSIT_GUARDIAN_MESSAGE_PREFIX,
+                            _expectedGlobalDepositRoot,
+                            depositDataBatchXorRoot
+                        )
+                    ),
+                    _signature
+                )
+            ) revert DepositGuardianSignatureInvalid();
+        }
+
+        uint256 totalAmount = 0;
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
@@ -350,22 +372,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             );
 
             totalAmount += deposit.amount;
-            depositDataBatchXorRoot ^= keccak256(abi.encodePacked(deposit.depositDataRoot));
         }
-
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                $.depositGuardian,
-                keccak256(
-                    abi.encodePacked(
-                        DEPOSIT_GUARDIAN_MESSAGE_PREFIX,
-                        _expectedGlobalDepositRoot,
-                        depositDataBatchXorRoot
-                    )
-                ),
-                _signature
-            )
-        ) revert DepositGuardianSignatureInvalid();
 
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
