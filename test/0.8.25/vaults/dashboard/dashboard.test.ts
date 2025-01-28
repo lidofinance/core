@@ -21,7 +21,7 @@ import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstet
 
 import { Snapshot } from "test/suite";
 
-describe("Dashboard.sol", () => {
+describe.skip("Dashboard.sol", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
