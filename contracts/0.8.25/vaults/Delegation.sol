@@ -218,6 +218,16 @@ contract Delegation is Dashboard {
     }
 
     /**
+     * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
+     * @param _ether The amount of ether to check.
+     */
+    modifier onlyIfUnreserved(uint256 _ether) {
+        uint256 withdrawable = unreserved();
+        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
+        _;
+    }
+
+    /**
      * @dev Calculates the curator/node operator fee amount based on the fee and the last claimed report.
      * @param _feeBP The fee in basis points.
      * @param _lastClaimedReport The last claimed report.
@@ -239,12 +249,13 @@ contract Delegation is Dashboard {
      * @dev Claims the curator/node operator fee amount.
      * @param _recipient The address to which the fee will be sent.
      * @param _fee The accrued fee amount.
+     * @dev Use `Permissions._unsafeWithdraw()` to avoid the `WITHDRAW_ROLE` check.
      */
-    function _claimFee(address _recipient, uint256 _fee) internal {
+    function _claimFee(address _recipient, uint256 _fee) internal onlyIfUnreserved(_fee) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        _withdraw(_recipient, _fee);
+        super._unsafeWithdraw(_recipient, _fee);
     }
 
     /**
@@ -269,10 +280,7 @@ contract Delegation is Dashboard {
      * @param _recipient The address to which the ether will be sent.
      * @param _ether The amount of ether to withdraw.
      */
-    function _withdraw(address _recipient, uint256 _ether) internal override {
-        uint256 withdrawable = unreserved();
-        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
-
+    function _withdraw(address _recipient, uint256 _ether) internal override onlyIfUnreserved(_ether) {
         super._withdraw(_recipient, _ether);
     }
 

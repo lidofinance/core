@@ -118,7 +118,7 @@ abstract contract Permissions is AccessControlVoteable {
     }
 
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
-        stakingVault().withdraw(_recipient, _ether);
+        _unsafeWithdraw(_recipient, _ether);
     }
 
     function _mint(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
@@ -151,6 +151,10 @@ abstract contract Permissions is AccessControlVoteable {
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+    }
+
+    function _unsafeWithdraw(address _recipient, uint256 _ether) internal {
+        stakingVault().withdraw(_recipient, _ether);
     }
 
     /**
