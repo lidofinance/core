@@ -233,15 +233,15 @@ describe("TriggerableWithdrawals.sol", () => {
       await setBalance(await triggerableWithdrawals.getAddress(), balance);
 
       await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientTotalWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientTotalWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientTotalWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
     });
 

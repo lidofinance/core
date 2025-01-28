@@ -20,7 +20,8 @@ abstract contract VaultValidatorsManager {
     IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
 
     constructor(address _beaconChainDepositContract) {
-        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
+        if (_beaconChainDepositContract == address(0)) revert ZeroBeaconChainDepositContract();
+
         BEACON_CHAIN_DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
     }
 
@@ -56,41 +57,65 @@ abstract contract VaultValidatorsManager {
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
+    /// @notice Calculates the total fee required to request validator exits
+    /// @param _numberOfKeys Number of validator keys to exit
+    /// @return totalFee Total fee amount required, calculated as minFeePerRequest * number of keys
+    /// @dev This fee is required by the withdrawal request contract to process validator exits
+    function _calculateExitRequestFee(uint256 _numberOfKeys) internal view returns (uint256) {
+        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        return _numberOfKeys * minFeePerRequest;
+    }
+
     /// @notice Requests validators to exit from the beacon chain
     /// @param _pubkeys Concatenated validator public keys
     function _requestValidatorsExit(bytes calldata _pubkeys) internal {
-        _validateWithdrawalFee(_pubkeys);
+        uint256 totalFee = _validateExitFee(_pubkeys);
 
-        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, TriggerableWithdrawals.getWithdrawalRequestFee());
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, totalFee);
+
+        emit ValidatorsExitRequested(msg.sender, _pubkeys);
+
+        _refundExcessExitFee(totalFee);
     }
 
     /// @notice Requests partial exit of validators from the beacon chain
     /// @param _pubkeys Concatenated validator public keys
-    /// @param _amounts Array of withdrawal amounts for each validator
+    /// @param _amounts Array of exit amounts for each validator
     function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal {
-        _validateWithdrawalFee(_pubkeys);
+        uint256 totalFee = _validateExitFee(_pubkeys);
 
-        TriggerableWithdrawals.addPartialWithdrawalRequests(
-            _pubkeys,
-            _amounts,
-            TriggerableWithdrawals.getWithdrawalRequestFee()
-        );
+        TriggerableWithdrawals.addPartialWithdrawalRequests(_pubkeys, _amounts, totalFee);
+
+        emit ValidatorsPartialExitRequested(msg.sender, _pubkeys, _amounts);
+
+        _refundExcessExitFee(totalFee);
     }
 
-    /// @dev Validates that contract has enough balance to pay withdrawal fee
-    /// @param _pubkeys Concatenated validator public keys
-    function _validateWithdrawalFee(bytes calldata _pubkeys) private view {
-        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 validatorCount = _pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH;
-        uint256 totalFee = validatorCount * minFeePerRequest;
+    /// @notice Refunds excess fee back to the sender
+    /// @param _totalFee Total fee required for the exit request
+    function _refundExcessExitFee(uint256 _totalFee) private {
+        uint256 excess = msg.value - _totalFee;
 
-        if (address(this).balance < totalFee) {
-            revert InsufficientBalanceForWithdrawalFee(
-                address(this).balance,
-                totalFee,
-                validatorCount
-            );
+        if (excess > 0) {
+            (bool success,) = msg.sender.call{value: excess}("");
+            if (!success) {
+                revert ExitFeeRefundFailed(msg.sender, excess);
+            }
+
+            emit ExitFeeRefunded(msg.sender, excess);
         }
+    }
+
+    /// @dev Validates that contract has enough balance to pay exit fee
+    /// @param _pubkeys Concatenated validator public keys
+    function _validateExitFee(bytes calldata _pubkeys) private view returns (uint256) {
+        uint256 totalFee = _calculateExitRequestFee(_pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH);
+
+        if (msg.value < totalFee) {
+            revert InsufficientExitFee(msg.value, totalFee);
+        }
+
+        return totalFee;
     }
 
     /// @notice Computes the deposit data root for a validator deposit
@@ -126,8 +151,8 @@ abstract contract VaultValidatorsManager {
         bytes32 pubkeyRoot = sha256(abi.encodePacked(_pubkey, bytes16(0)));
 
         // Step 4. Compute the root of the signature
-        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0:64]));
-        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64:], bytes32(0)));
+        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0 : 64]));
+        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64 :], bytes32(0)));
         bytes32 signatureRoot = sha256(abi.encodePacked(sigSlice1Root, sigSlice2Root));
 
         // Step 5. Compute the root-toot-toorootoo of the deposit data
@@ -142,6 +167,11 @@ abstract contract VaultValidatorsManager {
     }
 
     /**
+     * @notice Thrown when `BeaconChainDepositContract` is not set
+     */
+    error ZeroBeaconChainDepositContract();
+
+    /**
      * @notice Emitted when ether is deposited to `DepositContract`
      * @param sender Address that initiated the deposit
      * @param deposits Number of validator deposits made
@@ -149,16 +179,40 @@ abstract contract VaultValidatorsManager {
     event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 totalAmount);
 
     /**
-     * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
+     * @notice Emitted when a validator exit request is made
+     * @dev Signals `nodeOperator` to exit the validator
+     * @param sender Address that requested the validator exit
+     * @param pubkey Public key of the validator requested to exit
      */
-    error ZeroArgument(string name);
+    event ValidatorsExitRequested(address indexed sender, bytes pubkey);
 
     /**
-     * @notice Thrown when the balance is insufficient to cover the withdrawal request fee
-     * @param balance Current balance of the contract
-     * @param required Required balance to cover the fee
-     * @param numberOfRequests Number of withdrawal requests
+     * @notice Emitted when a validator partial exit request is made
+     * @dev Signals `nodeOperator` to exit the validator
+     * @param sender Address that requested the validator partial exit
+     * @param pubkey Public key of the validator requested to exit
+     * @param amounts Amounts of ether requested to exit
      */
-    error InsufficientBalanceForWithdrawalFee(uint256 balance, uint256 required, uint256 numberOfRequests);
+    event ValidatorsPartialExitRequested(address indexed sender, bytes pubkey, uint64[] amounts);
+
+    /**
+     * @notice Emitted when an excess fee is refunded back to the sender
+     * @param sender Address that received the refund
+     * @param amount Amount of ether refunded
+     */
+    event ExitFeeRefunded(address indexed sender, uint256 amount);
+
+    /**
+     * @notice Thrown when the balance is insufficient to cover the exit request fee
+     * @param _passed Amount of ether passed to the function
+     * @param _required Amount of ether required to cover the fee
+     */
+    error InsufficientExitFee(uint256 _passed, uint256 _required);
+
+    /**
+     * @notice Thrown when a transfer fails
+     * @param sender Address that initiated the transfer
+     * @param amount Amount of ether to transfer
+     */
+    error ExitFeeRefundFailed(address sender, uint256 amount);
 }

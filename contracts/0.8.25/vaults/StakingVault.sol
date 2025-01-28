@@ -93,7 +93,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
      */
-    bytes32 private constant ERC721_STORAGE_LOCATION =
+    bytes32 private constant ERC7201_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     /**
@@ -446,11 +446,22 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
     }
 
     /**
+     * @notice Returns total fee required for given number of validator keys
+     * @param _numberOfKeys Number of validator keys
+     * @return Total fee amount
+     */
+    function calculateExitRequestFee(uint256 _numberOfKeys) external view returns (uint256) {
+        if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
+
+        return _calculateExitRequestFee(_numberOfKeys);
+    }
+
+    /**
      * @notice Requests validators exit from the beacon chain
      * @param _pubkeys Concatenated validators public keys
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function requestValidatorsExit(bytes calldata _pubkeys) external {
+    function requestValidatorsExit(bytes calldata _pubkeys) external payable {
         // Only owner or node operator can exit validators when vault is balanced
         if (isBalanced()) {
             _onlyOwnerOrNodeOperator();
@@ -463,8 +474,6 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
         }
 
         _requestValidatorsExit(_pubkeys);
-
-        emit ValidatorsExitRequest(msg.sender, _pubkeys);
     }
 
     /**
@@ -473,12 +482,10 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @param _amounts Amounts of ether to exit
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external {
+    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
         _onlyOwnerOrNodeOperator();
 
         _requestValidatorsPartialExit(_pubkeys, _amounts);
-
-        emit ValidatorsPartialExitRequest(msg.sender, _pubkeys, _amounts);
     }
 
     /**
@@ -507,7 +514,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
-            $.slot := ERC721_STORAGE_LOCATION
+            $.slot := ERC7201_STORAGE_LOCATION
         }
     }
 
@@ -535,23 +542,6 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @param amount Amount of ether withdrawn
      */
     event Withdrawn(address indexed sender, address indexed recipient, uint256 amount);
-
-    /**
-     * @notice Emitted when a validator exit request is made
-     * @dev Signals `nodeOperator` to exit the validator
-     * @param sender Address that requested the validator exit
-     * @param pubkey Public key of the validator requested to exit
-     */
-    event ValidatorsExitRequest(address indexed sender, bytes pubkey);
-
-    /**
-     * @notice Emitted when a validator partial exit request is made
-     * @dev Signals `nodeOperator` to exit the validator
-     * @param sender Address that requested the validator partial exit
-     * @param pubkey Public key of the validator requested to exit
-     * @param amounts Amounts of ether requested to exit
-     */
-    event ValidatorsPartialExitRequest(address indexed sender, bytes pubkey, uint64[] amounts);
 
     /**
      * @notice Emitted when the locked amount is increased
@@ -585,6 +575,12 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
     event BeaconChainDepositsResumed();
 
     /// Errors
+
+    /**
+     * @notice Thrown when an invalid zero value is passed
+     * @param name Name of the argument that was zero
+     */
+    error ZeroArgument(string name);
 
     /**
      * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`

@@ -8,7 +8,9 @@ import { StakingVault, VaultHub__MockForStakingVault } from "typechain-types";
 import { computeDepositDataRoot, ether, impersonate, streccak } from "lib";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { Snapshot, Tracing } from "test/suite";
+
+const getValidatorPubkey = (index: number) => "0x" + "ab".repeat(48 * index);
 
 describe("StakingVault.sol:ValidatorsManagement", () => {
   let vaultOwner: HardhatEthersSigner;
@@ -151,31 +153,73 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
     });
   });
 
+  context("calculateExitRequestFee", () => {
+    it("reverts if the number of keys is zero", async () => {
+      await expect(stakingVault.calculateExitRequestFee(0))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_numberOfKeys");
+    });
+
+    it("returns the total fee for given number of validator keys", async () => {
+      const fee = await stakingVault.calculateExitRequestFee(1);
+      expect(fee).to.equal(1);
+    });
+  });
+
   context("requestValidatorsExit", () => {
+    before(async () => {
+      Tracing.enable();
+    });
+
+    after(async () => {
+      Tracing.disable();
+    });
+
     context("vault is balanced", () => {
       it("reverts if called by a non-owner or non-node operator", async () => {
-        await expect(stakingVault.connect(stranger).requestValidatorsExit("0x"))
+        const keys = getValidatorPubkey(1);
+        await expect(stakingVault.connect(stranger).requestValidatorsExit(keys))
           .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
           .withArgs(await stranger.getAddress());
       });
 
-      it("allows owner to request validators exit", async () => {
-        const pubkeys = "0x" + "ab".repeat(48);
-        await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys))
-          .to.emit(stakingVault, "ValidatorsExitRequest")
+      it("reverts if passed fee is less than the required fee", async () => {
+        const numberOfKeys = 4;
+        const pubkeys = getValidatorPubkey(numberOfKeys);
+        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys - 1);
+
+        await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
+          .to.be.revertedWithCustomError(stakingVault, "InsufficientExitFee")
+          .withArgs(fee, numberOfKeys);
+      });
+
+      it("allows owner to request validators exit providing a fee", async () => {
+        const numberOfKeys = 1;
+        const pubkeys = getValidatorPubkey(numberOfKeys);
+        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+
+        await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
+          .to.emit(stakingVault, "ValidatorsExitRequested")
           .withArgs(vaultOwnerAddress, pubkeys);
       });
 
       it("allows node operator to request validators exit", async () => {
-        await expect(stakingVault.connect(operator).requestValidatorsExit("0x"))
-          .to.emit(stakingVault, "ValidatorsExitRequest")
-          .withArgs(operatorAddress, "0x");
+        const numberOfKeys = 1;
+        const pubkeys = getValidatorPubkey(numberOfKeys);
+        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+
+        await expect(stakingVault.connect(operator).requestValidatorsExit(pubkeys, { value: fee }))
+          .to.emit(stakingVault, "ValidatorsExitRequested")
+          .withArgs(operatorAddress, pubkeys);
       });
 
       it("works with multiple pubkeys", async () => {
-        const pubkeys = "0x" + "ab".repeat(48) + "cd".repeat(48);
-        await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys))
-          .to.emit(stakingVault, "ValidatorsExitRequest")
+        const numberOfKeys = 2;
+        const pubkeys = getValidatorPubkey(numberOfKeys);
+        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+
+        await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
+          .to.emit(stakingVault, "ValidatorsExitRequested")
           .withArgs(vaultOwnerAddress, pubkeys);
       });
     });

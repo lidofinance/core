@@ -11,7 +11,7 @@ library TriggerableWithdrawals {
     uint256 internal constant WITHDRAWAL_AMOUNT_LENGTH = 8;
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
-    error InsufficientBalanceForWithdrawalFee(uint256 balance, uint256 totalWithdrawalFee);
+    error InsufficientTotalWithdrawalFee(uint256 balance, uint256 totalWithdrawalFee);
     error InsufficientRequestFee(uint256 feePerRequest, uint256 minFeePerRequest);
 
     error WithdrawalRequestFeeReadFailed();
@@ -146,7 +146,7 @@ library TriggerableWithdrawals {
         }
 
         if (address(this).balance < feePerRequest * keysCount) {
-            revert InsufficientBalanceForWithdrawalFee(address(this).balance, feePerRequest * keysCount);
+            revert InsufficientTotalWithdrawalFee(address(this).balance, feePerRequest * keysCount);
         }
 
         return feePerRequest;
