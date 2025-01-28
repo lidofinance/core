@@ -451,21 +451,14 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
     function requestValidatorsExit(bytes calldata _pubkeys) external {
         ERC7201Storage storage $ = _getStorage();
 
-        /// @dev in case of balanced vault, validators can be exited only by the vault owner or the node operator
-        if (isBalanced()) {
-            if (msg.sender != owner() && msg.sender != $.nodeOperator) {
-                revert OwnableUnauthorizedAccount(msg.sender);
-            }
-        } else {
-            // If unbalancedSince is 0, this is the first time we're unbalanced
-            if ($.unbalancedSince == 0) {
-                $.unbalancedSince = block.timestamp;
-            }
+        // Only owner or node operator can exit validators when vault is balanced
+        if (isBalanced() && msg.sender != owner() && msg.sender != $.nodeOperator) {
+            revert OwnableUnauthorizedAccount(msg.sender);
+        }
 
-            // Check if timelock period has elapsed
-            if (block.timestamp < $.unbalancedSince + EXIT_TIMELOCK_DURATION) {
-                revert ExitTimelockNotElapsed($.unbalancedSince + EXIT_TIMELOCK_DURATION);
-            }
+        // Ensure timelock period has elapsed
+        if (block.timestamp < ($.unbalancedSince + EXIT_TIMELOCK_DURATION)) {
+            revert ExitTimelockNotElapsed($.unbalancedSince + EXIT_TIMELOCK_DURATION);
         }
 
         emit ValidatorsExitRequest(msg.sender, _pubkeys);
@@ -492,6 +485,10 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
     ) external pure returns (bytes32) {
         return _computeDepositDataRoot(_pubkey, _withdrawalCredentials, _signature, _amount);
     }
+
+    // * * * * * * * * * * * * * * * * * * * * *  //
+    // * * * INTERNAL FUNCTIONS * * * * * * * * * //
+    // * * * * * * * * * * * * * * * * * * * * *  //
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
