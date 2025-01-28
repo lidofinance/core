@@ -10,6 +10,7 @@ import {
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
+  RefundFailureTester,
   WithdrawalVault__Harness,
 } from "typechain-types";
 
@@ -389,6 +390,34 @@ describe("WithdrawalVault.sol", () => {
       ).to.be.revertedWithCustomError(vault, "WithdrawalRequestFeeReadFailed");
     });
 
+    it("should revert if refund failed", async function () {
+      const refundFailureTester: RefundFailureTester = await ethers.deployContract("RefundFailureTester", [
+        vaultAddress,
+      ]);
+      const refundFailureTesterAddress = await refundFailureTester.getAddress();
+
+      await vault.connect(owner).grantRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, refundFailureTesterAddress);
+
+      const requestCount = 3;
+      const { pubkeysHexString } = generateWithdrawalRequestPayload(requestCount);
+
+      const fee = 3n;
+      await withdrawalsPredeployed.setFee(fee);
+      const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
+
+      await expect(
+        refundFailureTester
+          .connect(stranger)
+          .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + 1n }),
+      ).to.be.revertedWithCustomError(vault, "TriggerableWithdrawalRefundFailed");
+
+      await expect(
+        refundFailureTester
+          .connect(stranger)
+          .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + ethers.parseEther("1") }),
+      ).to.be.revertedWithCustomError(vault, "TriggerableWithdrawalRefundFailed");
+    });
+
     it("Should accept withdrawal requests when the provided fee matches the exact required amount", async function () {
       const requestCount = 3;
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
@@ -486,7 +515,31 @@ describe("WithdrawalVault.sol", () => {
       expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
     });
 
-    // ToDo: should return back the excess fee
+    it("Should refund excess fee", async function () {
+      const requestCount = 3;
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+
+      const fee = 3n;
+      await withdrawalsPredeployed.setFee(fee);
+      const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
+      const excessFee = 1n;
+
+      const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
+
+      const { receipt } = await testEip7002Mock(
+        () =>
+          vault
+            .connect(validatorsExitBus)
+            .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + excessFee }),
+        pubkeys,
+        fullWithdrawalAmounts,
+        fee,
+      );
+
+      expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
+        vebInitialBalance - expectedTotalWithdrawalFee - receipt.gasUsed * receipt.gasPrice,
+      );
+    });
 
     it("Should transfer the total calculated fee to the EIP-7002 withdrawal contract", async function () {
       const requestCount = 3;
@@ -566,18 +619,25 @@ describe("WithdrawalVault.sol", () => {
       it(`Should successfully add ${requestCount} requests with extra fee ${extraFee}`, async () => {
         const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
         const expectedFee = await getFee();
-        const withdrawalFee = expectedFee * BigInt(requestCount) + extraFee;
+        const expectedTotalWithdrawalFee = expectedFee * BigInt(requestCount);
 
         const initialBalance = await getWithdrawalCredentialsContractBalance();
+        const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
 
-        await testEip7002Mock(
-          () => vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: withdrawalFee }),
+        const { receipt } = await testEip7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + extraFee }),
           pubkeys,
           fullWithdrawalAmounts,
           expectedFee,
         );
 
         expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
+        expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
+          vebInitialBalance - expectedTotalWithdrawalFee - receipt.gasUsed * receipt.gasPrice,
+        );
       });
     });
   });
