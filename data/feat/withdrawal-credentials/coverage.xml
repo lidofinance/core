@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3035"  lines-covered="2916"  line-rate="0.9608"  branches-valid="1342"  branches-covered="1265"  branch-rate="0.9426000000000001"  timestamp="1737999216559" complexity="0" version="0.1">
+<coverage lines-valid="3035"  lines-covered="2916"  line-rate="0.9608"  branches-valid="1342"  branches-covered="1265"  branch-rate="0.9426000000000001"  timestamp="1738053949145" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3629,7 +3629,7 @@
 			<method name="getWithdrawalRequestFee"  hits="14"  signature="()V" >
 				<lines><line number="180"  hits="14" /></lines>
 			</method>
-			<method name="_requireNonZero"  hits="39"  signature="()V" >
+			<method name="_onlyNonZeroAddress"  hits="39"  signature="()V" >
 				<lines><line number="184"  hits="39" /></lines>
 			</method>
 			<method name="_initialize_v2"  hits="34"  signature="()V" >
