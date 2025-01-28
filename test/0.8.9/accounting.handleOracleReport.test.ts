@@ -393,7 +393,7 @@ describe("Accounting.sol:report", () => {
         sharesRequestedToBurn: 0n,
         withdrawalFinalizationBatches: [],
         vaultValues: [],
-        netCashFlows: [],
+        inOutDeltas: [],
         ...overrides,
       };
     }
