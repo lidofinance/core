@@ -63,8 +63,8 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
     constructor(address _lido, address _treasury) {
-        _requireNonZero(_lido);
-        _requireNonZero(_treasury);
+        _onlyNonZeroAddress(_lido);
+        _onlyNonZeroAddress(_treasury);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
@@ -181,12 +181,12 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         return TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
-    function _requireNonZero(address _address) internal pure {
+    function _onlyNonZeroAddress(address _address) internal pure {
         if (_address == address(0)) revert ZeroAddress();
     }
 
     function _initialize_v2(address _admin) internal {
-        _requireNonZero(_admin);
+        _onlyNonZeroAddress(_admin);
         _setupRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 }
