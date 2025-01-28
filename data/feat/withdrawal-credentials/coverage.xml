@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3035"  lines-covered="2917"  line-rate="0.9611"  branches-valid="1342"  branches-covered="1266"  branch-rate="0.9434"  timestamp="1738079406908" complexity="0" version="0.1">
+<coverage lines-valid="3035"  lines-covered="2917"  line-rate="0.9611"  branches-valid="1342"  branches-covered="1266"  branch-rate="0.9434"  timestamp="1738081165500" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3624,16 +3624,16 @@
 				<lines><line number="139"  hits="2" /></lines>
 			</method>
 			<method name="addFullWithdrawalRequests"  hits="28"  signature="()V" >
-				<lines><line number="152"  hits="28" /></lines>
+				<lines><line number="162"  hits="28" /></lines>
 			</method>
 			<method name="getWithdrawalRequestFee"  hits="16"  signature="()V" >
-				<lines><line number="180"  hits="16" /></lines>
+				<lines><line number="194"  hits="16" /></lines>
 			</method>
 			<method name="_onlyNonZeroAddress"  hits="41"  signature="()V" >
-				<lines><line number="184"  hits="41" /></lines>
+				<lines><line number="198"  hits="41" /></lines>
 			</method>
 			<method name="_initialize_v2"  hits="36"  signature="()V" >
-				<lines><line number="188"  hits="36" /></lines>
+				<lines><line number="202"  hits="36" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -3661,22 +3661,22 @@
 			<line number="129"  hits="2"  branch="false" />
 			<line number="140"  hits="2"  branch="false" />
 			<line number="142"  hits="2"  branch="false" />
-			<line number="153"  hits="28"  branch="false" />
-			<line number="155"  hits="28"  branch="false" />
-			<line number="156"  hits="27"  branch="false" />
-			<line number="158"  hits="27"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="159"  hits="2"  branch="false" />
-			<line number="166"  hits="25"  branch="false" />
-			<line number="168"  hits="21"  branch="false" />
-			<line number="169"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="170"  hits="13"  branch="false" />
-			<line number="172"  hits="13"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="173"  hits="2"  branch="false" />
-			<line number="177"  hits="19"  branch="false" />
-			<line number="181"  hits="16"  branch="false" />
-			<line number="185"  hits="41"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="189"  hits="36"  branch="false" />
-			<line number="190"  hits="34"  branch="false" />
+			<line number="163"  hits="28"  branch="false" />
+			<line number="165"  hits="28"  branch="false" />
+			<line number="166"  hits="27"  branch="false" />
+			<line number="168"  hits="27"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="169"  hits="2"  branch="false" />
+			<line number="176"  hits="25"  branch="false" />
+			<line number="178"  hits="21"  branch="false" />
+			<line number="179"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="180"  hits="13"  branch="false" />
+			<line number="182"  hits="13"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="183"  hits="2"  branch="false" />
+			<line number="187"  hits="19"  branch="false" />
+			<line number="195"  hits="16"  branch="false" />
+			<line number="199"  hits="41"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="203"  hits="36"  branch="false" />
+			<line number="204"  hits="34"  branch="false" />
 		</lines>
 		</class>
 	</classes>
