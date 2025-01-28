@@ -3,9 +3,9 @@
 
 pragma solidity 0.8.25;
 
-import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/UpgradeableBeacon.sol";
-import {BeaconProxy} from "@openzeppelin/contracts-v5.0.2/proxy/beacon/BeaconProxy.sol";
-import {Clones} from "@openzeppelin/contracts-v5.0.2/proxy/Clones.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
+import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
 
@@ -25,9 +25,10 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     function createVault(address _operator) external returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
 
-        dashboard = Dashboard(payable(Clones.clone(dashboardImpl)));
+        bytes memory immutableArgs = abi.encode(vault);
+        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(dashboardImpl, immutableArgs)));
 
-        dashboard.initialize(address(vault));
+        dashboard.initialize(msg.sender);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
