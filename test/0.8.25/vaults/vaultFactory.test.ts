@@ -19,13 +19,12 @@ import {
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
+import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { createVaultProxy, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { DelegationConfigStruct } from "../../../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
