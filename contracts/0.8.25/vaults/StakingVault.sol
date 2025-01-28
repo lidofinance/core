@@ -6,8 +6,6 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {SignatureChecker} from "@openzeppelin/contracts-v5.2/utils/cryptography/SignatureChecker.sol";
-import {ERC165} from "@openzeppelin/contracts-v5.2/utils/introspection/ERC165.sol";
-import {IERC1271} from "@openzeppelin/contracts-v5.2/interfaces/IERC1271.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 
