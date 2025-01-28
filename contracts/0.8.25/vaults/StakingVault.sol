@@ -336,7 +336,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
-        // XOR is a commutative operation, so the order of deposits does not matter
+        // XOR is a commutative operation, so the aggregate root will be the same regardless of the order of deposits
         bytes32 depositDataBatchXorRoot;
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
