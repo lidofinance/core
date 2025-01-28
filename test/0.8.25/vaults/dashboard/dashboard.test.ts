@@ -24,7 +24,7 @@ import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstet
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe.skip("Dashboard.sol", () => {
+describe("Dashboard.sol", () => {
   let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -458,9 +458,10 @@ describe.skip("Dashboard.sol", () => {
 
   context("transferStVaultOwnership", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).transferStakingVaultOwnership(vaultOwner))
-        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
+      await expect(dashboard.connect(stranger).transferStakingVaultOwnership(vaultOwner)).to.be.revertedWithCustomError(
+        dashboard,
+        "NotACommitteeMember",
+      );
     });
 
     it("assigns a new owner to the staking vault", async () => {
@@ -476,7 +477,7 @@ describe.skip("Dashboard.sol", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).voluntaryDisconnect())
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
+        .withArgs(stranger, await dashboard.VOLUNTARY_DISCONNECT_ROLE());
     });
 
     context("when vault has no debt", () => {
@@ -537,6 +538,9 @@ describe.skip("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      const strangerWeth = weth.connect(stranger);
+      await strangerWeth.deposit({ value: amount });
+      await strangerWeth.approve(dashboard, amount);
       await expect(dashboard.connect(stranger).fundWeth(ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -744,7 +748,12 @@ describe.skip("Dashboard.sol", () => {
 
   context("burnShares", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).burnShares(ether("1"))).to.be.revertedWithCustomError(
+      const amountShares = ether("1");
+      const amountSteth = await steth.getPooledEthByShares(amountShares);
+      await steth.mintExternalShares(stranger, amountShares);
+      await steth.connect(stranger).approve(dashboard, amountSteth);
+
+      await expect(dashboard.connect(stranger).burnShares(amountShares)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -782,6 +791,9 @@ describe.skip("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await steth.mintExternalShares(stranger, amountShares);
+      await steth.connect(stranger).approve(dashboard, amountSteth);
+
       await expect(dashboard.connect(stranger).burnSteth(amountSteth)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -820,6 +832,14 @@ describe.skip("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      // get steth
+      await steth.mintExternalShares(stranger, amountWsteth + 1000n);
+      const amountSteth = await steth.getPooledEthByShares(amountWsteth);
+      // get wsteth
+      await steth.connect(stranger).approve(wsteth, amountSteth);
+      await wsteth.connect(stranger).wrap(amountSteth);
+      // burn
+      await wsteth.connect(stranger).approve(dashboard, amountWsteth);
       await expect(dashboard.connect(stranger).burnWstETH(amountWsteth)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -1138,15 +1158,17 @@ describe.skip("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await steth.mintExternalShares(stranger, amountShares);
+
       const permit = {
-        owner: vaultOwner.address,
+        owner: stranger.address,
         spender: dashboardAddress,
         value: amountSteth,
-        nonce: await steth.nonces(vaultOwner),
+        nonce: await steth.nonces(stranger),
         deadline: BigInt(await time.latest()) + days(1n),
       };
 
-      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const signature = await signPermit(await stethDomain(steth), permit, stranger);
       const { deadline, value } = permit;
       const { v, r, s } = signature;
 
