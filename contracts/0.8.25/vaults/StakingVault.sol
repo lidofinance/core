@@ -379,7 +379,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @return Address of `BeaconChainDepositContract`
      */
     function depositContract() external view returns (address) {
-        return _depositContract();
+        return _getDepositContract();
     }
 
     /**
@@ -388,7 +388,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @return Withdrawal credentials as bytes32
      */
     function withdrawalCredentials() external view returns (bytes32) {
-        return _withdrawalCredentials();
+        return _getWithdrawalCredentials();
     }
 
     /**
@@ -467,6 +467,12 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
         emit ValidatorsExitRequest(msg.sender, _pubkeys);
     }
 
+    /**
+     * @notice Requests partial exit of validators from the beacon chain
+     * @param _pubkeys Concatenated validators public keys
+     * @param _amounts Amounts of ether to exit
+     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     */
     function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external {
         _onlyOwnerOrNodeOperator();
 

@@ -142,7 +142,11 @@ abstract contract Permissions is AccessControlVoteable {
     }
 
     function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorExit(_pubkey);
+        stakingVault().requestValidatorsExit(_pubkey);
+    }
+
+    function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+        stakingVault().requestValidatorsPartialExit(_pubkeys, _amounts);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {

@@ -26,14 +26,14 @@ abstract contract VaultValidatorsManager {
 
     /// @notice Returns the address of `BeaconChainDepositContract`
     /// @return Address of `BeaconChainDepositContract`
-    function _depositContract() internal view returns (address) {
+    function _getDepositContract() internal view returns (address) {
         return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
     /// @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this `StakingVault`
     ///         All CL rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported for now.
     /// @return Withdrawal credentials as bytes32
-    function _withdrawalCredentials() internal view returns (bytes32) {
+    function _getWithdrawalCredentials() internal view returns (bytes32) {
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
@@ -46,7 +46,7 @@ abstract contract VaultValidatorsManager {
             IStakingVault.Deposit calldata deposit = _deposits[i];
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
-                bytes.concat(_withdrawalCredentials()),
+                bytes.concat(_getWithdrawalCredentials()),
                 deposit.signature,
                 deposit.depositDataRoot
             );

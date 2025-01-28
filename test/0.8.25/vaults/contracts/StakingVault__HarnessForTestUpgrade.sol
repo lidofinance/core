@@ -40,7 +40,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        bytes calldata _params
+        bytes calldata // _params
     ) external reinitializer(_version) {
         if (owner() != address(0)) {
             revert VaultAlreadyInitialized();
@@ -85,12 +85,15 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function depositToBeaconChain(Deposit[] calldata _deposits) external {}
     function fund() external payable {}
-    function inOutDelta() external view returns (int256) {
+
+    function inOutDelta() external pure returns (int256) {
         return -1;
     }
-    function isBalanced() external view returns (bool) {
+
+    function isBalanced() external pure returns (bool) {
         return true;
     }
+
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
@@ -100,14 +103,14 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external {}
     function lock(uint256 _locked) external {}
 
-    function locked() external view returns (uint256) {
+    function locked() external pure returns (uint256) {
         return 0;
     }
-    function unlocked() external view returns (uint256) {
+    function unlocked() external pure returns (uint256) {
         return 0;
     }
 
-    function valuation() external view returns (uint256) {
+    function valuation() external pure returns (uint256) {
         return 0;
     }
 
@@ -121,7 +124,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
-    function beaconChainDepositsPaused() external view returns (bool) {
+    function beaconChainDepositsPaused() external pure returns (bool) {
         return false;
     }
 
