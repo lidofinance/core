@@ -164,9 +164,6 @@ describe("VaultFactory.sol", () => {
     });
 
     it("works with empty `params`", async () => {
-      console.log({
-        delegationParams,
-      });
       const {
         tx,
         vault,
@@ -306,18 +303,15 @@ describe("VaultFactory.sol", () => {
       const version3AfterV2 = await vault3WithNewImpl.getInitializedVersion();
 
       expect(version1Before).to.eq(1);
+      expect(version1After).to.eq(2);
       expect(version1AfterV2).to.eq(2);
 
       expect(version2Before).to.eq(1);
+      expect(version2After).to.eq(2);
       expect(version2AfterV2).to.eq(1);
 
       expect(version3After).to.eq(2);
-
-      const v1 = { version: version1After, getInitializedVersion: version1AfterV2 };
-      const v2 = { version: version2After, getInitializedVersion: version2AfterV2 };
-      const v3 = { version: version3After, getInitializedVersion: version3AfterV2 };
-
-      console.table([v1, v2, v3]);
+      expect(version3AfterV2).to.eq(2);
     });
   });
 

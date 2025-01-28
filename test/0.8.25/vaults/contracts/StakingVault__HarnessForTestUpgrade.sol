@@ -97,6 +97,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function rebalance(uint256 _ether) external {}
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
     function requestValidatorsExit(bytes calldata _pubkeys) external {}
+    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external {}
     function lock(uint256 _locked) external {}
 
     function locked() external view returns (uint256) {

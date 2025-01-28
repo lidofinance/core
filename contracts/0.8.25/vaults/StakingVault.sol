@@ -36,9 +36,11 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorsExit()`
+ *   - `requestValidatorsPartialExit()`
  * - Operator:
  *   - `depositToBeaconChain()`
  *   - `requestValidatorsExit()`
+ *   - `requestValidatorsPartialExit()`
  * - VaultHub:
  *   - `lock()`
  *   - `report()`
@@ -449,21 +451,28 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
     function requestValidatorsExit(bytes calldata _pubkeys) external {
-        ERC7201Storage storage $ = _getStorage();
-
         // Only owner or node operator can exit validators when vault is balanced
-        if (isBalanced() && msg.sender != owner() && msg.sender != $.nodeOperator) {
-            revert OwnableUnauthorizedAccount(msg.sender);
+        if (isBalanced()) {
+            _onlyOwnerOrNodeOperator();
         }
 
         // Ensure timelock period has elapsed
-        if (block.timestamp < ($.unbalancedSince + EXIT_TIMELOCK_DURATION)) {
-            revert ExitTimelockNotElapsed($.unbalancedSince + EXIT_TIMELOCK_DURATION);
+        uint256 exitTimelock = _getStorage().unbalancedSince + EXIT_TIMELOCK_DURATION;
+        if (block.timestamp < exitTimelock) {
+            revert ExitTimelockNotElapsed(exitTimelock);
         }
 
-        emit ValidatorsExitRequest(msg.sender, _pubkeys);
-
         _requestValidatorsExit(_pubkeys);
+
+        emit ValidatorsExitRequest(msg.sender, _pubkeys);
+    }
+
+    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external {
+        _onlyOwnerOrNodeOperator();
+
+        _requestValidatorsPartialExit(_pubkeys, _amounts);
+
+        emit ValidatorsPartialExitRequest(msg.sender, _pubkeys, _amounts);
     }
 
     /**
@@ -496,6 +505,12 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
         }
     }
 
+    function _onlyOwnerOrNodeOperator() internal view {
+        if (msg.sender != owner() && msg.sender != _getStorage().nodeOperator) {
+            revert OwnableUnauthorizedAccount(msg.sender);
+        }
+    }
+
     /// Events
 
     /**
@@ -522,6 +537,15 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @param pubkey Public key of the validator requested to exit
      */
     event ValidatorsExitRequest(address indexed sender, bytes pubkey);
+
+    /**
+     * @notice Emitted when a validator partial exit request is made
+     * @dev Signals `nodeOperator` to exit the validator
+     * @param sender Address that requested the validator partial exit
+     * @param pubkey Public key of the validator requested to exit
+     * @param amounts Amounts of ether requested to exit
+     */
+    event ValidatorsPartialExitRequest(address indexed sender, bytes pubkey, uint64[] amounts);
 
     /**
      * @notice Emitted when the locked amount is increased

@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
+
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
@@ -35,8 +37,8 @@ abstract contract VaultValidatorsManager {
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
-    /// @notice Deposits multiple validators to the beacon chain deposit contract
-    /// @param _deposits Array of validator deposits containing pubkey, signature and deposit data root
+    /// @notice Deposits validators to the beacon chain deposit contract
+    /// @param _deposits Array of validator deposits
     function _depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) internal {
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
@@ -55,9 +57,40 @@ abstract contract VaultValidatorsManager {
     }
 
     /// @notice Requests validators to exit from the beacon chain
-    /// @param _pubkeys Concatenated validator public keys to exit
+    /// @param _pubkeys Concatenated validator public keys
     function _requestValidatorsExit(bytes calldata _pubkeys) internal {
-        // TODO:
+        _validateWithdrawalFee(_pubkeys);
+
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, TriggerableWithdrawals.getWithdrawalRequestFee());
+    }
+
+    /// @notice Requests partial exit of validators from the beacon chain
+    /// @param _pubkeys Concatenated validator public keys
+    /// @param _amounts Array of withdrawal amounts for each validator
+    function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal {
+        _validateWithdrawalFee(_pubkeys);
+
+        TriggerableWithdrawals.addPartialWithdrawalRequests(
+            _pubkeys,
+            _amounts,
+            TriggerableWithdrawals.getWithdrawalRequestFee()
+        );
+    }
+
+    /// @dev Validates that contract has enough balance to pay withdrawal fee
+    /// @param _pubkeys Concatenated validator public keys
+    function _validateWithdrawalFee(bytes calldata _pubkeys) private view {
+        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        uint256 validatorCount = _pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH;
+        uint256 totalFee = validatorCount * minFeePerRequest;
+
+        if (address(this).balance < totalFee) {
+            revert InsufficientBalanceForWithdrawalFee(
+                address(this).balance,
+                totalFee,
+                validatorCount
+            );
+        }
     }
 
     /// @notice Computes the deposit data root for a validator deposit
@@ -120,4 +153,12 @@ abstract contract VaultValidatorsManager {
      * @param name Name of the argument that was zero
      */
     error ZeroArgument(string name);
+
+    /**
+     * @notice Thrown when the balance is insufficient to cover the withdrawal request fee
+     * @param balance Current balance of the contract
+     * @param required Required balance to cover the fee
+     * @param numberOfRequests Number of withdrawal requests
+     */
+    error InsufficientBalanceForWithdrawalFee(uint256 balance, uint256 required, uint256 numberOfRequests);
 }
