@@ -92,7 +92,10 @@ contract VaultHubViewerV1 {
     ) public view returns (IVault[] memory, uint256) {
         (IVault[] memory vaults, uint256 valid) = _vaultsByOwner(_owner);
 
-        return (_filterNonZeroVaults(vaults, _from, _to), valid > _to ? valid - _to : 0);
+        uint256 count = valid > _to ? _to : valid;
+        uint256 leftover = valid > _to ? valid - _to : 0;
+
+        return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
     /// @notice Returns all vaults with a given role on a given address
@@ -120,7 +123,10 @@ contract VaultHubViewerV1 {
     ) public view returns (IVault[] memory, uint256) {
         (IVault[] memory vaults, uint256 valid) = _vaultsByRole(_role, _member);
 
-        return (_filterNonZeroVaults(vaults, _from, _to), valid - _to);
+        uint256 count = valid > _to ? _to : valid;
+        uint256 leftover = valid > _to ? valid - _to : 0;
+
+        return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
     // ==================== Internal Functions ====================
