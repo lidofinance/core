@@ -436,6 +436,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
+
         ERC7201Storage storage $ = _getStorage();
 
         if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
@@ -450,10 +451,10 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
      * @param _numberOfKeys Number of validator keys
      * @return Total fee amount
      */
-    function calculateExitRequestFee(uint256 _numberOfKeys) external view returns (uint256) {
+    function calculateTotalExitRequestFee(uint256 _numberOfKeys) external view returns (uint256) {
         if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
 
-        return _calculateExitRequestFee(_numberOfKeys);
+        return _calculateTotalExitRequestFee(_numberOfKeys);
     }
 
     /**

@@ -8,7 +8,7 @@ import { StakingVault, VaultHub__MockForStakingVault } from "typechain-types";
 import { computeDepositDataRoot, ether, impersonate, streccak } from "lib";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
-import { Snapshot, Tracing } from "test/suite";
+import { Snapshot } from "test/suite";
 
 const getValidatorPubkey = (index: number) => "0x" + "ab".repeat(48 * index);
 
@@ -153,28 +153,20 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
     });
   });
 
-  context("calculateExitRequestFee", () => {
+  context("calculateTotalExitRequestFee", () => {
     it("reverts if the number of keys is zero", async () => {
-      await expect(stakingVault.calculateExitRequestFee(0))
+      await expect(stakingVault.calculateTotalExitRequestFee(0))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_numberOfKeys");
     });
 
     it("returns the total fee for given number of validator keys", async () => {
-      const fee = await stakingVault.calculateExitRequestFee(1);
+      const fee = await stakingVault.calculateTotalExitRequestFee(1);
       expect(fee).to.equal(1);
     });
   });
 
   context("requestValidatorsExit", () => {
-    before(async () => {
-      Tracing.enable();
-    });
-
-    after(async () => {
-      Tracing.disable();
-    });
-
     context("vault is balanced", () => {
       it("reverts if called by a non-owner or non-node operator", async () => {
         const keys = getValidatorPubkey(1);
@@ -186,7 +178,7 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
       it("reverts if passed fee is less than the required fee", async () => {
         const numberOfKeys = 4;
         const pubkeys = getValidatorPubkey(numberOfKeys);
-        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys - 1);
+        const fee = await stakingVault.calculateTotalExitRequestFee(numberOfKeys - 1);
 
         await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
           .to.be.revertedWithCustomError(stakingVault, "InsufficientExitFee")
@@ -196,7 +188,7 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
       it("allows owner to request validators exit providing a fee", async () => {
         const numberOfKeys = 1;
         const pubkeys = getValidatorPubkey(numberOfKeys);
-        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+        const fee = await stakingVault.calculateTotalExitRequestFee(numberOfKeys);
 
         await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
           .to.emit(stakingVault, "ValidatorsExitRequested")
@@ -206,7 +198,7 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
       it("allows node operator to request validators exit", async () => {
         const numberOfKeys = 1;
         const pubkeys = getValidatorPubkey(numberOfKeys);
-        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+        const fee = await stakingVault.calculateTotalExitRequestFee(numberOfKeys);
 
         await expect(stakingVault.connect(operator).requestValidatorsExit(pubkeys, { value: fee }))
           .to.emit(stakingVault, "ValidatorsExitRequested")
@@ -216,7 +208,7 @@ describe("StakingVault.sol:ValidatorsManagement", () => {
       it("works with multiple pubkeys", async () => {
         const numberOfKeys = 2;
         const pubkeys = getValidatorPubkey(numberOfKeys);
-        const fee = await stakingVault.calculateExitRequestFee(numberOfKeys);
+        const fee = await stakingVault.calculateTotalExitRequestFee(numberOfKeys);
 
         await expect(stakingVault.connect(vaultOwner).requestValidatorsExit(pubkeys, { value: fee }))
           .to.emit(stakingVault, "ValidatorsExitRequested")

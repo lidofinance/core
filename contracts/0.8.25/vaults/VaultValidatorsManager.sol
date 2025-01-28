@@ -9,37 +9,35 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
-/// @notice VaultValidatorsManager is a contract that manages validators in the vault
-/// @author tamtamchik
+/// @notice Abstract contract that manages validator deposits and exits for staking vaults
 abstract contract VaultValidatorsManager {
 
-    /**
-     * @notice Address of `BeaconChainDepositContract`
-     *         Set immutably in the constructor to avoid storage costs
-     */
+    /// @notice The Beacon Chain deposit contract used for staking validators
     IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
 
+    /// @notice Constructor that sets the Beacon Chain deposit contract
+    /// @param _beaconChainDepositContract Address of the Beacon Chain deposit contract
     constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroBeaconChainDepositContract();
 
         BEACON_CHAIN_DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
     }
 
-    /// @notice Returns the address of `BeaconChainDepositContract`
-    /// @return Address of `BeaconChainDepositContract`
+    /// @notice Returns the address of the Beacon Chain deposit contract
+    /// @return Address of the Beacon Chain deposit contract
     function _getDepositContract() internal view returns (address) {
         return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
-    /// @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this `StakingVault`
-    ///         All CL rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported for now.
-    /// @return Withdrawal credentials as bytes32
+    /// @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this contract
+    /// @dev    All consensus layer rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported.
+    /// @return bytes32 The withdrawal credentials, with 0x01 prefix followed by this contract's address
     function _getWithdrawalCredentials() internal view returns (bytes32) {
         return bytes32((0x01 << 248) + uint160(address(this)));
     }
 
     /// @notice Deposits validators to the beacon chain deposit contract
-    /// @param _deposits Array of validator deposits
+    /// @param _deposits Array of validator deposits containing pubkey, signature, amount and deposit data root
     function _depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) internal {
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
@@ -57,42 +55,43 @@ abstract contract VaultValidatorsManager {
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
-    /// @notice Calculates the total fee required to request validator exits
-    /// @param _numberOfKeys Number of validator keys to exit
-    /// @return totalFee Total fee amount required, calculated as minFeePerRequest * number of keys
-    /// @dev This fee is required by the withdrawal request contract to process validator exits
-    function _calculateExitRequestFee(uint256 _numberOfKeys) internal view returns (uint256) {
-        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        return _numberOfKeys * minFeePerRequest;
+    /// @notice Calculates the total exit request fee for a given number of validator keys
+    /// @param _numberOfKeys Number of validator keys
+    /// @return Total fee amount
+    function _calculateTotalExitRequestFee(uint256 _numberOfKeys) internal view returns (uint256) {
+        return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
-    /// @notice Requests validators to exit from the beacon chain
-    /// @param _pubkeys Concatenated validator public keys
+    /// @notice Requests full exit of validators from the beacon chain by submitting their public keys
+    /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
+    /// @dev    The caller must provide sufficient fee via msg.value to cover the exit request costs
     function _requestValidatorsExit(bytes calldata _pubkeys) internal {
-        uint256 totalFee = _validateExitFee(_pubkeys);
+        (uint256 feePerRequest, uint256 totalFee) = _getAndValidateExitFees(_pubkeys);
 
-        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, totalFee);
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
 
         emit ValidatorsExitRequested(msg.sender, _pubkeys);
 
         _refundExcessExitFee(totalFee);
     }
 
-    /// @notice Requests partial exit of validators from the beacon chain
-    /// @param _pubkeys Concatenated validator public keys
-    /// @param _amounts Array of exit amounts for each validator
+    /// @notice Requests partial exit of validators from the beacon chain by submitting their public keys and exit amounts
+    /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
+    /// @param _amounts Array of exit amounts in Gwei for each validator, must match number of validators in _pubkeys
+    /// @dev    The caller must provide sufficient fee via msg.value to cover the exit request costs
     function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal {
-        uint256 totalFee = _validateExitFee(_pubkeys);
+        (uint256 feePerRequest, uint256 totalFee) = _getAndValidateExitFees(_pubkeys);
 
-        TriggerableWithdrawals.addPartialWithdrawalRequests(_pubkeys, _amounts, totalFee);
+        TriggerableWithdrawals.addPartialWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
         emit ValidatorsPartialExitRequested(msg.sender, _pubkeys, _amounts);
 
         _refundExcessExitFee(totalFee);
     }
 
-    /// @notice Refunds excess fee back to the sender
-    /// @param _totalFee Total fee required for the exit request
+    /// @notice Refunds excess fee back to the sender if they sent more than required
+    /// @param _totalFee Total fee required for the exit request that will be kept
+    /// @dev    Sends back any msg.value in excess of _totalFee to msg.sender
     function _refundExcessExitFee(uint256 _totalFee) private {
         uint256 excess = msg.value - _totalFee;
 
@@ -106,16 +105,18 @@ abstract contract VaultValidatorsManager {
         }
     }
 
-    /// @dev Validates that contract has enough balance to pay exit fee
-    /// @param _pubkeys Concatenated validator public keys
-    function _validateExitFee(bytes calldata _pubkeys) private view returns (uint256) {
-        uint256 totalFee = _calculateExitRequestFee(_pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH);
+    /// @notice Validates that sufficient fee was provided to cover validator exit requests
+    /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
+    /// @return feePerRequest Fee per request for the exit request
+    function _getAndValidateExitFees(bytes calldata _pubkeys) private view returns (uint256 feePerRequest, uint256 totalFee) {
+        feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        totalFee = _pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH * feePerRequest;
 
         if (msg.value < totalFee) {
             revert InsufficientExitFee(msg.value, totalFee);
         }
 
-        return totalFee;
+        return (feePerRequest, totalFee);
     }
 
     /// @notice Computes the deposit data root for a validator deposit
@@ -173,34 +174,35 @@ abstract contract VaultValidatorsManager {
 
     /**
      * @notice Emitted when ether is deposited to `DepositContract`
-     * @param sender Address that initiated the deposit
-     * @param deposits Number of validator deposits made
+     * @param _sender Address that initiated the deposit
+     * @param _deposits Number of validator deposits made
+     * @param _totalAmount Total amount of ether deposited
      */
-    event DepositedToBeaconChain(address indexed sender, uint256 deposits, uint256 totalAmount);
+    event DepositedToBeaconChain(address indexed _sender, uint256 _deposits, uint256 _totalAmount);
 
     /**
      * @notice Emitted when a validator exit request is made
      * @dev Signals `nodeOperator` to exit the validator
-     * @param sender Address that requested the validator exit
-     * @param pubkey Public key of the validator requested to exit
+     * @param _sender Address that requested the validator exit
+     * @param _pubkey Public key of the validator requested to exit
      */
-    event ValidatorsExitRequested(address indexed sender, bytes pubkey);
+    event ValidatorsExitRequested(address indexed _sender, bytes _pubkey);
 
     /**
      * @notice Emitted when a validator partial exit request is made
      * @dev Signals `nodeOperator` to exit the validator
-     * @param sender Address that requested the validator partial exit
-     * @param pubkey Public key of the validator requested to exit
-     * @param amounts Amounts of ether requested to exit
+     * @param _sender Address that requested the validator partial exit
+     * @param _pubkey Public key of the validator requested to exit
+     * @param _amounts Amounts of ether requested to exit
      */
-    event ValidatorsPartialExitRequested(address indexed sender, bytes pubkey, uint64[] amounts);
+    event ValidatorsPartialExitRequested(address indexed _sender, bytes _pubkey, uint64[] _amounts);
 
     /**
      * @notice Emitted when an excess fee is refunded back to the sender
-     * @param sender Address that received the refund
-     * @param amount Amount of ether refunded
+     * @param _sender Address that received the refund
+     * @param _amount Amount of ether refunded
      */
-    event ExitFeeRefunded(address indexed sender, uint256 amount);
+    event ExitFeeRefunded(address indexed _sender, uint256 _amount);
 
     /**
      * @notice Thrown when the balance is insufficient to cover the exit request fee
@@ -211,8 +213,8 @@ abstract contract VaultValidatorsManager {
 
     /**
      * @notice Thrown when a transfer fails
-     * @param sender Address that initiated the transfer
-     * @param amount Amount of ether to transfer
+     * @param _sender Address that initiated the transfer
+     * @param _amount Amount of ether to transfer
      */
-    error ExitFeeRefundFailed(address sender, uint256 amount);
+    error ExitFeeRefundFailed(address _sender, uint256 _amount);
 }

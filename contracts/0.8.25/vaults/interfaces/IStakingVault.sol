@@ -54,7 +54,7 @@ interface IStakingVault {
     function resumeBeaconChainDeposits() external;
     function depositToBeaconChain(Deposit[] calldata _deposits) external;
 
-    function calculateExitRequestFee(uint256 _validatorCount) external view returns (uint256);
+    function calculateTotalExitRequestFee(uint256 _validatorCount) external view returns (uint256);
     function requestValidatorsExit(bytes calldata _pubkeys) external payable;
     function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable;
 }

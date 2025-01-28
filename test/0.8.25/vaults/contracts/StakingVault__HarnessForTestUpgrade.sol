@@ -128,7 +128,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return false;
     }
 
-    function calculateExitRequestFee(uint256) external pure returns (uint256) {
+    function calculateTotalExitRequestFee(uint256) external pure returns (uint256) {
         return 1;
     }
 
