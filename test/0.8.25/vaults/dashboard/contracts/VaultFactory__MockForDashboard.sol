@@ -28,7 +28,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(dashboardImpl, immutableArgs)));
 
-        dashboard.initialize();
+        dashboard.initialize(msg.sender);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
