@@ -143,9 +143,19 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     }
 
     /**
-     * @dev Adds full withdrawal requests for the provided public keys.
-     *      The validator will fully withdraw and exit its duties as a validator.
-     * @param pubkeys An array of public keys for the validators requesting full withdrawals.
+     * @dev Submits EIP-7002 full withdrawal requests for the specified public keys.
+     *      Each request instructs a validator to fully withdraw its stake and exit its duties as a validator.
+     *      Refunds any excess fee to the caller after deducting the total fees,
+     *      which are calculated based on the number of public keys and the current minimum fee per withdrawal request.
+     *
+     * @param pubkeys A tightly packed array of 48-byte public keys corresponding to validators requesting full withdrawals.
+     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *
+     * @notice Reverts if:
+     *         - The caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE`.
+     *         - Validation of any of the provided public keys fails.
+     *         - The provided total withdrawal fee is insufficient to cover all requests.
+     *         - Refund of the excess fee fails.
      */
     function addFullWithdrawalRequests(
         bytes calldata pubkeys
@@ -177,6 +187,10 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         assert(address(this).balance == prevBalance);
     }
 
+    /**
+     * @dev Retrieves the current EIP-7002 withdrawal fee.
+     * @return The minimum fee required per withdrawal request.
+     */
     function getWithdrawalRequestFee() external view returns (uint256) {
         return TriggerableWithdrawals.getWithdrawalRequestFee();
     }

@@ -282,10 +282,7 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should revert if fee read fails", async function () {
       await withdrawalsPredeployed.setFailOnGetFee(true);
-      await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(
-        vault,
-        "WithdrawalRequestFeeReadFailed",
-      );
+      await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
     });
   });
 
@@ -351,7 +348,7 @@ describe("WithdrawalVault.sol", () => {
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(invalidPubkeyHexString, { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
     });
 
     it("Should revert if last pubkey not 48 bytes", async function () {
@@ -364,7 +361,7 @@ describe("WithdrawalVault.sol", () => {
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
@@ -387,7 +384,7 @@ describe("WithdrawalVault.sol", () => {
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "WithdrawalRequestFeeReadFailed");
+      ).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
     });
 
     it("should revert if refund failed", async function () {
