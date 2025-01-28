@@ -99,7 +99,7 @@ contract Dashboard is Permissions {
      *         and `vaultHub` address
      */
     function initialize(address _defaultAdmin) external virtual {
-        super._initialize(_defaultAdmin);
+        _initialize(_defaultAdmin);
     }
 
     // ==================== View Functions ====================
@@ -210,7 +210,7 @@ contract Dashboard is Permissions {
      * @param _newOwner Address of the new owner.
      */
     function transferStakingVaultOwnership(address _newOwner) external {
-        super._transferStakingVaultOwnership(_newOwner);
+        _transferStakingVaultOwnership(_newOwner);
     }
 
     /**
@@ -223,14 +223,14 @@ contract Dashboard is Permissions {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
         }
 
-        super._voluntaryDisconnect();
+        _voluntaryDisconnect();
     }
 
     /**
      * @notice Funds the staking vault with ether
      */
     function fund() external payable {
-        super._fund(msg.value);
+        _fund(msg.value);
     }
 
     /**
@@ -243,7 +243,7 @@ contract Dashboard is Permissions {
         WETH.transferFrom(msg.sender, address(this), _wethAmount);
         WETH.withdraw(_wethAmount);
 
-        super._fund(_wethAmount);
+        _fund(_wethAmount);
     }
 
     /**
@@ -252,7 +252,7 @@ contract Dashboard is Permissions {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        super._withdraw(_recipient, _ether);
+        _withdraw(_recipient, _ether);
     }
 
     /**
@@ -261,7 +261,7 @@ contract Dashboard is Permissions {
      * @param _ether Amount of ether to withdraw
      */
     function withdrawToWeth(address _recipient, uint256 _ether) external {
-        super._withdraw(address(this), _ether);
+        _withdraw(address(this), _ether);
         WETH.deposit{value: _ether}();
         WETH.transfer(_recipient, _ether);
     }
@@ -271,7 +271,7 @@ contract Dashboard is Permissions {
      * @param _validatorPublicKey Public key of the validator to exit
      */
     function requestValidatorExit(bytes calldata _validatorPublicKey) external {
-        super._requestValidatorExit(_validatorPublicKey);
+        _requestValidatorExit(_validatorPublicKey);
     }
 
     /**
@@ -280,7 +280,7 @@ contract Dashboard is Permissions {
      * @param _amountOfShares Amount of shares to mint
      */
     function mint(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
-        super._mint(_recipient, _amountOfShares);
+        _mint(_recipient, _amountOfShares);
     }
 
     /**
@@ -289,7 +289,7 @@ contract Dashboard is Permissions {
      * @param _tokens Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _tokens) external payable fundAndProceed {
-        super._mint(address(this), _tokens);
+        _mint(address(this), _tokens);
 
         STETH.approve(address(WSTETH), _tokens);
         uint256 wstETHAmount = WSTETH.wrap(_tokens);
@@ -302,7 +302,7 @@ contract Dashboard is Permissions {
      */
     function burn(uint256 _shares) external {
         STETH.transferSharesFrom(msg.sender, address(vaultHub), _shares);
-        super._burn(_shares);
+        _burn(_shares);
     }
 
     /**
@@ -318,7 +318,7 @@ contract Dashboard is Permissions {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        super._burn(sharesAmount);
+        _burn(sharesAmount);
     }
 
     /**
@@ -363,7 +363,7 @@ contract Dashboard is Permissions {
         uint256 _tokens,
         PermitInput calldata _permit
     ) external trustlessPermit(address(STETH), msg.sender, address(this), _permit) {
-        super._burn(_tokens);
+        _burn(_tokens);
     }
 
     /**
@@ -382,7 +382,7 @@ contract Dashboard is Permissions {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        super._burn(sharesAmount);
+        _burn(sharesAmount);
     }
 
     /**
@@ -390,21 +390,21 @@ contract Dashboard is Permissions {
      * @param _ether Amount of ether to rebalance
      */
     function rebalanceVault(uint256 _ether) external payable fundAndProceed {
-        super._rebalanceVault(_ether);
+        _rebalanceVault(_ether);
     }
 
     /**
      * @notice Pauses beacon chain deposits on the StakingVault.
      */
     function pauseBeaconChainDeposits() external {
-        super._pauseBeaconChainDeposits();
+        _pauseBeaconChainDeposits();
     }
 
     /**
      * @notice Resumes beacon chain deposits on the StakingVault.
      */
     function resumeBeaconChainDeposits() external {
-        super._resumeBeaconChainDeposits();
+        _resumeBeaconChainDeposits();
     }
 
     // ==================== Role Management Functions ====================
