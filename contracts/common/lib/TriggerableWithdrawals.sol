@@ -146,7 +146,7 @@ library TriggerableWithdrawals {
     }
 
     /**
-     * @dev Retrieves the current withdrawal request fee.
+     * @dev Retrieves the current EIP-7002 withdrawal fee.
      * @return The minimum fee required per withdrawal request.
      */
     function getWithdrawalRequestFee() internal view returns (uint256) {
