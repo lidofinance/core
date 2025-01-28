@@ -36,7 +36,7 @@ contract HashConsensus__HarnessForLegacyOracle is IHashConsensus {
         uint256 initialEpoch,
         uint256 epochsPerFrame,
         uint256 fastLaneLengthSlots
-    ) {
+    ) public {
         require(genesisTime <= _time, "GENESIS_TIME_CANNOT_BE_MORE_THAN_MOCK_TIME");
 
         SLOTS_PER_EPOCH = slotsPerEpoch;

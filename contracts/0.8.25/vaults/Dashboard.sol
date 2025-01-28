@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {Permissions} from "./Permissions.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
@@ -38,28 +38,38 @@ interface IWstETH is IERC20, IERC20Permit {
  * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
  * TODO: need to add recover methods for ERC20, probably in a separate contract
  */
-contract Dashboard is AccessControlEnumerable {
-    /// @notice Address of the implementation contract
-    /// @dev Used to prevent initialization in the implementation
-    address private immutable _SELF;
-    /// @notice Total basis points for fee calculations; equals to 100%.
+contract Dashboard is Permissions {
+    /**
+     * @notice Struct containing an account and a role for granting/revoking roles.
+     */
+    struct RoleAssignment {
+        address account;
+        bytes32 role;
+    }
+
+    /**
+     * @notice Total basis points for fee calculations; equals to 100%.
+     */
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
-    /// @notice The stETH token contract
+    /**
+     * @notice The stETH token contract
+     */
     IStETH public immutable STETH;
 
-    /// @notice The wrapped staked ether token contract
+    /**
+     * @notice The wstETH token contract
+     */
     IWstETH public immutable WSTETH;
 
-    /// @notice The wrapped ether token contract
+    /**
+     * @notice The wETH token contract
+     */
     IWeth public immutable WETH;
 
-    /// @notice Indicates whether the contract has been initialized
-    bool public initialized;
-
-    /// @notice The `VaultHub` contract
-    VaultHub public vaultHub;
-
+    /**
+     * @notice Struct containing the permit details.
+     */
     struct PermitInput {
         uint256 value;
         uint256 deadline;
@@ -71,17 +81,16 @@ contract Dashboard is AccessControlEnumerable {
     /**
      * @notice Constructor sets the stETH token address and the implementation contract address.
      * @param _stETH Address of the stETH token contract.
-     * @param _weth Address of the weth token contract.
+     * @param _wETH Address of the wETH token contract.
      * @param _wstETH Address of the wstETH token contract.
      */
-    constructor(address _stETH, address _weth, address _wstETH) {
+    constructor(address _stETH, address _wETH, address _wstETH) Permissions() {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
-        if (_weth == address(0)) revert ZeroArgument("_WETH");
+        if (_wETH == address(0)) revert ZeroArgument("_wETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
-        _SELF = address(this);
         STETH = IStETH(_stETH);
-        WETH = IWeth(_weth);
+        WETH = IWeth(_wETH);
         WSTETH = IWstETH(_wstETH);
     }
 
@@ -89,25 +98,15 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Initializes the contract with the default admin
      *         and `vaultHub` address
      */
-    function initialize() external virtual {
-        _initialize();
-    }
-
-    /**
-     * @dev Internal initialize function.
-     */
-    function _initialize() internal {
-        if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
-
-        initialized = true;
-        vaultHub = VaultHub(stakingVault().vaultHub());
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-
-        emit Initialized();
+    function initialize(address _defaultAdmin) external virtual {
+        _initialize(_defaultAdmin);
     }
 
     // ==================== View Functions ====================
+
+    function votingCommittee() external pure returns (bytes32[] memory) {
+        return _votingCommittee();
+    }
 
     /**
      * @notice Returns the vault socket data for the staking vault.
@@ -210,36 +209,41 @@ contract Dashboard is AccessControlEnumerable {
      * @notice Transfers ownership of the staking vault to a new owner.
      * @param _newOwner Address of the new owner.
      */
-    function transferStVaultOwnership(address _newOwner) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _transferStVaultOwnership(_newOwner);
+    function transferStakingVaultOwnership(address _newOwner) external {
+        _transferStakingVaultOwnership(_newOwner);
     }
 
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function voluntaryDisconnect() external payable fundAndProceed {
+        uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
+
+        if (shares > 0) {
+            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
+        }
+
         _voluntaryDisconnect();
     }
 
     /**
      * @notice Funds the staking vault with ether
      */
-    function fund() external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _fund();
+    function fund() external payable {
+        _fund(msg.value);
     }
 
     /**
      * @notice Funds the staking vault with wrapped ether. Approvals for the passed amounts should be done before.
      * @param _wethAmount Amount of wrapped ether to fund the staking vault with
      */
-    function fundByWeth(uint256 _wethAmount) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function fundByWeth(uint256 _wethAmount) external {
         if (WETH.allowance(msg.sender, address(this)) < _wethAmount) revert("ERC20: transfer amount exceeds allowance");
 
         WETH.transferFrom(msg.sender, address(this), _wethAmount);
         WETH.withdraw(_wethAmount);
 
-        // TODO: find way to use _fund() instead of stakingVault directly
-        stakingVault().fund{value: _wethAmount}();
+        _fund(_wethAmount);
     }
 
     /**
@@ -247,7 +251,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function withdraw(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdraw(address _recipient, uint256 _ether) external {
         _withdraw(_recipient, _ether);
     }
 
@@ -256,18 +260,10 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
-    function withdrawToWeth(address _recipient, uint256 _ether) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawToWeth(address _recipient, uint256 _ether) external {
         _withdraw(address(this), _ether);
         WETH.deposit{value: _ether}();
         WETH.transfer(_recipient, _ether);
-    }
-
-    /**
-     * @notice Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKeys Public keys of the validators to exit
-     */
-    function requestValidatorsExit(bytes calldata _validatorPublicKeys) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _requestValidatorsExit(_validatorPublicKeys);
     }
 
     /**
@@ -275,10 +271,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of shares to mint
      */
-    function mint(
-        address _recipient,
-        uint256 _amountOfShares
-    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function mint(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
         _mint(_recipient, _amountOfShares);
     }
 
@@ -287,10 +280,7 @@ contract Dashboard is AccessControlEnumerable {
      * @param _recipient Address of the recipient
      * @param _tokens Amount of tokens to mint
      */
-    function mintWstETH(
-        address _recipient,
-        uint256 _tokens
-    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function mintWstETH(address _recipient, uint256 _tokens) external payable fundAndProceed {
         _mint(address(this), _tokens);
 
         STETH.approve(address(WSTETH), _tokens);
@@ -300,17 +290,18 @@ contract Dashboard is AccessControlEnumerable {
 
     /**
      * @notice Burns stETH shares from the sender backed by the vault
-     * @param _amountOfShares Amount of shares to burn
+     * @param _shares Amount of shares to burn
      */
-    function burn(uint256 _amountOfShares) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
-        _burn(_amountOfShares);
+    function burn(uint256 _shares) external {
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _shares);
+        _burn(_shares);
     }
 
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault. Approvals for the passed amounts should be done before.
      * @param _tokens Amount of wstETH tokens to burn
      */
-    function burnWstETH(uint256 _tokens) external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function burnWstETH(uint256 _tokens) external {
         WSTETH.transferFrom(msg.sender, address(this), _tokens);
 
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
@@ -319,7 +310,7 @@ contract Dashboard is AccessControlEnumerable {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        vaultHub.burnSharesBackedByVault(address(stakingVault()), sharesAmount);
+        _burn(sharesAmount);
     }
 
     /**
@@ -363,12 +354,7 @@ contract Dashboard is AccessControlEnumerable {
     function burnWithPermit(
         uint256 _tokens,
         PermitInput calldata _permit
-    )
-        external
-        virtual
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        trustlessPermit(address(STETH), msg.sender, address(this), _permit)
-    {
+    ) external trustlessPermit(address(STETH), msg.sender, address(this), _permit) {
         _burn(_tokens);
     }
 
@@ -380,12 +366,7 @@ contract Dashboard is AccessControlEnumerable {
     function burnWstETHWithPermit(
         uint256 _tokens,
         PermitInput calldata _permit
-    )
-        external
-        virtual
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        trustlessPermit(address(WSTETH), msg.sender, address(this), _permit)
-    {
+    ) external trustlessPermit(address(WSTETH), msg.sender, address(this), _permit) {
         WSTETH.transferFrom(msg.sender, address(this), _tokens);
         uint256 stETHAmount = WSTETH.unwrap(_tokens);
 
@@ -393,29 +374,57 @@ contract Dashboard is AccessControlEnumerable {
 
         uint256 sharesAmount = STETH.getSharesByPooledEth(stETHAmount);
 
-        vaultHub.burnSharesBackedByVault(address(stakingVault()), sharesAmount);
+        _burn(sharesAmount);
     }
 
     /**
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function rebalanceVault(uint256 _ether) external payable fundAndProceed {
         _rebalanceVault(_ether);
     }
 
     /**
-     * @notice Pauses beacon chain deposits on the staking vault.
+     * @notice Pauses beacon chain deposits on the StakingVault.
      */
-    function pauseBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pauseBeaconChainDeposits() external {
         _pauseBeaconChainDeposits();
     }
 
     /**
-     * @notice Resumes beacon chain deposits on the staking vault.
+     * @notice Resumes beacon chain deposits on the StakingVault.
      */
-    function resumeBeaconChainDeposits() external virtual onlyRole(DEFAULT_ADMIN_ROLE) {
+    function resumeBeaconChainDeposits() external {
         _resumeBeaconChainDeposits();
+    }
+
+    // ==================== Role Management Functions ====================
+
+    /**
+     * @notice Mass-grants multiple roles to multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function grantRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            grantRole(_assignments[i].role, _assignments[i].account);
+        }
+    }
+
+    /**
+     * @notice Mass-revokes multiple roles from multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function revokeRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            revokeRole(_assignments[i].role, _assignments[i].account);
+        }
     }
 
     // ==================== Internal Functions ====================
@@ -425,71 +434,9 @@ contract Dashboard is AccessControlEnumerable {
      */
     modifier fundAndProceed() {
         if (msg.value > 0) {
-            _fund();
+            _fund(msg.value);
         }
         _;
-    }
-
-    /**
-     * @dev Transfers ownership of the staking vault to a new owner
-     * @param _newOwner Address of the new owner
-     */
-    function _transferStVaultOwnership(address _newOwner) internal {
-        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
-    }
-
-    /**
-     * @dev Disconnects the staking vault from the vault hub
-     */
-    function _voluntaryDisconnect() internal {
-        uint256 shares = sharesMinted();
-        if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
-        }
-
-        vaultHub.voluntaryDisconnect(address(stakingVault()));
-    }
-
-    /**
-     * @dev Funds the staking vault with the ether sent in the transaction
-     */
-    function _fund() internal {
-        stakingVault().fund{value: msg.value}();
-    }
-
-    /**
-     * @dev Withdraws ether from the staking vault to a recipient
-     * @param _recipient Address of the recipient
-     * @param _ether Amount of ether to withdraw
-     */
-    function _withdraw(address _recipient, uint256 _ether) internal {
-        stakingVault().withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @dev Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKeys Public key of the validator to exit
-     */
-    function _requestValidatorsExit(bytes calldata _validatorPublicKeys) internal {
-        stakingVault().requestValidatorsExit(_validatorPublicKeys);
-    }
-
-    /**
-     * @dev Mints stETH tokens backed by the vault to a recipient
-     * @param _recipient Address of the recipient
-     * @param _amountOfShares Amount of tokens to mint
-     */
-    function _mint(address _recipient, uint256 _amountOfShares) internal {
-        vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _amountOfShares);
-    }
-
-    /**
-     * @dev Burns stETH tokens from the sender backed by the vault
-     * @param _amountOfShares Amount of tokens to burn
-     */
-    function _burn(uint256 _amountOfShares) internal {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
-        vaultHub.burnSharesBackedByVault(address(stakingVault()), _amountOfShares);
     }
 
     /**
@@ -497,61 +444,17 @@ contract Dashboard is AccessControlEnumerable {
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
+            TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
-    /**
-     * @dev Rebalances the vault by transferring ether
-     * @param _ether Amount of ether to rebalance
-     */
-    function _rebalanceVault(uint256 _ether) internal {
-        stakingVault().rebalance(_ether);
-    }
-
-    /// @notice The underlying `StakingVault` contract
-    function stakingVault() public view returns (IStakingVault) {
-        bytes memory args = Clones.fetchCloneArgs(address(this));
-        address addr;
-        assembly {
-            addr := mload(add(args, 32))
-        }
-        return IStakingVault(addr);
-    }
-
-    /**
-     * @dev Pauses beacon chain deposits on the staking vault.
-     */
-    function _pauseBeaconChainDeposits() internal {
-        stakingVault().pauseBeaconChainDeposits();
-    }
-
-    /**
-     * @dev Resumes beacon chain deposits on the staking vault.
-     */
-    function _resumeBeaconChainDeposits() internal {
-        stakingVault().resumeBeaconChainDeposits();
-    }
-
-    // ==================== Events ====================
-
-    /// @notice Emitted when the contract is initialized
-    event Initialized();
-
     // ==================== Errors ====================
 
-    /// @notice Error for zero address arguments
-    /// @param argName Name of the argument that is zero
-    error ZeroArgument(string argName);
-
-    /// @notice Error when the withdrawable amount is insufficient.
-    /// @param withdrawable The amount that is withdrawable
-    /// @param requested The amount requested to withdraw
+    /**
+     * @notice Error when the withdrawable amount is insufficient.
+     * @param withdrawable The amount that is withdrawable
+     * @param requested The amount requested to withdraw
+     */
     error InsufficientWithdrawableAmount(uint256 withdrawable, uint256 requested);
-
-    /// @notice Error when direct calls to the implementation are forbidden
-    error NonProxyCallsForbidden();
-
-    /// @notice Error when the contract is already initialized.
-    error AlreadyInitialized();
 }

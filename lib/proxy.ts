@@ -11,10 +11,9 @@ import {
   StakingVault,
   VaultFactory,
 } from "typechain-types";
+import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { findEventsWithInterfaces } from "lib";
-
-import { IDelegation } from "../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -49,7 +48,7 @@ interface CreateVaultResponse {
 export async function createVaultProxy(
   caller: HardhatEthersSigner,
   vaultFactory: VaultFactory,
-  delegationParams: IDelegation.InitialStateStruct,
+  delegationParams: DelegationConfigStruct,
   stakingVaultInitializerExtraParams: BytesLike = "0x",
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory

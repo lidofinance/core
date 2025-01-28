@@ -249,7 +249,7 @@ describe("Integration: Accounting", () => {
     expect(sharesRateAfter).to.be.lessThan(sharesRateBefore);
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
-    expect(ethDistributedEvent[0].args.principalCLBalance + REBASE_AMOUNT).to.equal(
+    expect(ethDistributedEvent[0].args.preClBalance + REBASE_AMOUNT).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance differs from expected",
     );
@@ -351,7 +351,7 @@ describe("Integration: Accounting", () => {
     expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
-    expect(ethDistributedEvent[0].args.principalCLBalance + rebaseAmount).to.equal(
+    expect(ethDistributedEvent[0].args.preClBalance + rebaseAmount).to.equal(
       ethDistributedEvent[0].args.postCLBalance,
       "ETHDistributed: CL balance has not increased",
     );
