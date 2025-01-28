@@ -3,8 +3,7 @@
 
 /* See contracts/COMPILERS.md */
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity ^0.8.9;
-
+pragma solidity >=0.8.9 <0.9.0;
 library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
     uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
@@ -12,7 +11,7 @@ library TriggerableWithdrawals {
     uint256 internal constant WITHDRAWAL_AMOUNT_LENGTH = 8;
 
     error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
-    error InsufficientBalance(uint256 balance, uint256 totalWithdrawalFee);
+    error InsufficientBalanceForWithdrawalFee(uint256 balance, uint256 totalWithdrawalFee);
     error InsufficientRequestFee(uint256 feePerRequest, uint256 minFeePerRequest);
 
     error WithdrawalRequestFeeReadFailed();
@@ -26,10 +25,7 @@ library TriggerableWithdrawals {
      *      The validator will fully withdraw and exit its duties as a validator.
      * @param pubkeys An array of public keys for the validators requesting full withdrawals.
      */
-    function addFullWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint256 feePerRequest
-    ) internal {
+    function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) internal {
         uint256 keysCount = _validateAndCountPubkeys(pubkeys);
         feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
 
@@ -38,7 +34,7 @@ library TriggerableWithdrawals {
         for (uint256 i = 0; i < keysCount; i++) {
             _copyPubkeyToMemory(pubkeys, callData, i);
 
-            (bool success,) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
             if (!success) {
                 revert WithdrawalRequestAdditionFailed(callData);
@@ -77,11 +73,7 @@ library TriggerableWithdrawals {
      * @param pubkeys An array of public keys for the validators requesting withdrawals.
      * @param amounts An array of corresponding withdrawal amounts for each public key.
      */
-    function addWithdrawalRequests(
-        bytes calldata pubkeys,
-        uint64[] calldata amounts,
-        uint256 feePerRequest
-    ) internal {
+    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts, uint256 feePerRequest) internal {
         uint256 keysCount = _validateAndCountPubkeys(pubkeys);
 
         if (keysCount != amounts.length) {
@@ -95,7 +87,7 @@ library TriggerableWithdrawals {
             _copyPubkeyToMemory(pubkeys, callData, i);
             _copyAmountToMemory(callData, amounts[i]);
 
-            (bool success,) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
+            (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
             if (!success) {
                 revert WithdrawalRequestAdditionFailed(callData);
@@ -119,11 +111,7 @@ library TriggerableWithdrawals {
 
     function _copyPubkeyToMemory(bytes calldata pubkeys, bytes memory target, uint256 keyIndex) private pure {
         assembly {
-            calldatacopy(
-                add(target, 32),
-                add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)),
-                PUBLIC_KEY_LENGTH
-            )
+            calldatacopy(add(target, 32), add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)), PUBLIC_KEY_LENGTH)
         }
     }
 
@@ -158,7 +146,7 @@ library TriggerableWithdrawals {
         }
 
         if (address(this).balance < feePerRequest * keysCount) {
-            revert InsufficientBalance(address(this).balance, feePerRequest * keysCount);
+            revert InsufficientBalanceForWithdrawalFee(address(this).balance, feePerRequest * keysCount);
         }
 
         return feePerRequest;

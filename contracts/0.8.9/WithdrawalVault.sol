@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -51,7 +51,11 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     error NotLido();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
-    error InsufficientTriggerableWithdrawalFee(uint256 providedTotalFee, uint256 requiredTotalFee, uint256 requestCount);
+    error InsufficientTriggerableWithdrawalFee(
+        uint256 providedTotalFee,
+        uint256 requiredTotalFee,
+        uint256 requestCount
+    );
     error TriggerableWithdrawalRefundFailed();
 
     /**
@@ -59,8 +63,8 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
     constructor(address _lido, address _treasury) {
-        _requireNonZero(_lido);
-        _requireNonZero(_treasury);
+        _onlyNonZeroAddress(_lido);
+        _onlyNonZeroAddress(_treasury);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
@@ -149,7 +153,7 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH * minFeePerRequest;
+        uint256 totalFee = (pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH) * minFeePerRequest;
 
         if (totalFee > msg.value) {
             revert InsufficientTriggerableWithdrawalFee(
@@ -163,7 +167,7 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
 
         uint256 refund = msg.value - totalFee;
         if (refund > 0) {
-            (bool success,) = msg.sender.call{value: refund}("");
+            (bool success, ) = msg.sender.call{value: refund}("");
 
             if (!success) {
                 revert TriggerableWithdrawalRefundFailed();
@@ -177,12 +181,12 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         return TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
-    function _requireNonZero(address _address) internal pure {
+    function _onlyNonZeroAddress(address _address) internal pure {
         if (_address == address(0)) revert ZeroAddress();
     }
 
     function _initialize_v2(address _admin) internal {
-        _requireNonZero(_admin);
+        _onlyNonZeroAddress(_admin);
         _setupRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 }

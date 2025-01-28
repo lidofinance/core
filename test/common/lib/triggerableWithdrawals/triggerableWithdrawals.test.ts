@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { TriggerableWithdrawals_Harness, WithdrawalsPredeployed_Mock } from "typechain-types";
+import { EIP7002WithdrawalRequest_Mock, TriggerableWithdrawals_Harness } from "typechain-types";
 
 import { Snapshot } from "test/suite";
 
@@ -21,7 +21,7 @@ const EMPTY_PUBKEYS = "0x";
 describe("TriggerableWithdrawals.sol", () => {
   let actor: HardhatEthersSigner;
 
-  let withdrawalsPredeployed: WithdrawalsPredeployed_Mock;
+  let withdrawalsPredeployed: EIP7002WithdrawalRequest_Mock;
   let triggerableWithdrawals: TriggerableWithdrawals_Harness;
 
   let originalState: string;
@@ -233,15 +233,15 @@ describe("TriggerableWithdrawals.sol", () => {
       await setBalance(await triggerableWithdrawals.getAddress(), balance);
 
       await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalanceForWithdrawalFee")
         .withArgs(balance, expectedMinimalBalance);
     });
 

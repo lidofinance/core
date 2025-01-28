@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
 pragma solidity 0.8.9;
 
 /**
- * @notice This is an mock of EIP-7002's pre-deploy contract.
+ * @notice This is a mock of EIP-7002's pre-deploy contract.
  */
-contract WithdrawalsPredeployed_Mock {
+contract EIP7002WithdrawalRequest_Mock {
     uint256 public fee;
     bool public failOnAddRequest;
     bool public failOnGetFee;

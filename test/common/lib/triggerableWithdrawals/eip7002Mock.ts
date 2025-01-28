@@ -1,6 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt } from "ethers";
-import { ContractTransactionResponse } from "ethers";
+import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { findEventsWithInterfaces } from "lib";
@@ -25,7 +24,7 @@ export const testEip7002Mock = async (
   expectedPubkeys: string[],
   expectedAmounts: bigint[],
   expectedFee: bigint,
-) => {
+): Promise<{ tx: ContractTransactionResponse; receipt: ContractTransactionReceipt }> => {
   const tx = await addTriggeranleWithdrawalRequests();
   const receipt = await tx.wait();
 
@@ -35,6 +34,10 @@ export const testEip7002Mock = async (
   for (let i = 0; i < expectedPubkeys.length; i++) {
     expect(events[i].args[0]).to.equal(encodeEip7002Payload(expectedPubkeys[i], expectedAmounts[i]));
     expect(events[i].args[1]).to.equal(expectedFee);
+  }
+
+  if (!receipt) {
+    throw new Error("No receipt");
   }
 
   return { tx, receipt };
