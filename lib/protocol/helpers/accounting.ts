@@ -49,7 +49,7 @@ export type OracleReportParams = {
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
   vaultValues?: bigint[];
-  netCashFlows?: bigint[];
+  inOutDeltas?: bigint[];
   silent?: boolean;
 };
 
@@ -85,7 +85,7 @@ export const report = async (
     reportElVault = true,
     reportWithdrawalsVault = true,
     vaultValues = [],
-    netCashFlows = [],
+    inOutDeltas = [],
   }: OracleReportParams = {},
 ): Promise<OracleReportResults> => {
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
@@ -145,7 +145,7 @@ export const report = async (
       withdrawalVaultBalance,
       elRewardsVaultBalance,
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     });
 
     if (!simulatedReport) {
@@ -189,7 +189,7 @@ export const report = async (
     withdrawalFinalizationBatches,
     isBunkerMode,
     vaultsValues: vaultValues,
-    vaultsNetCashFlows: netCashFlows,
+    vaultsInOutDeltas: inOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -278,7 +278,7 @@ type SimulateReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultValues: bigint[];
-  netCashFlows: bigint[];
+  inOutDeltas: bigint[];
 };
 
 type SimulateReportResult = {
@@ -300,7 +300,7 @@ const simulateReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     vaultValues,
-    netCashFlows,
+    inOutDeltas,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -328,7 +328,7 @@ const simulateReport = async (
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     },
     0n,
   );
@@ -355,7 +355,7 @@ type HandleOracleReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultValues?: bigint[];
-  netCashFlows?: bigint[];
+  inOutDeltas?: bigint[];
 };
 
 export const handleOracleReport = async (
@@ -367,7 +367,7 @@ export const handleOracleReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     vaultValues = [],
-    netCashFlows = [],
+    inOutDeltas = [],
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
@@ -399,7 +399,7 @@ export const handleOracleReport = async (
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     });
 
     await trace("accounting.handleOracleReport", handleReportTx);
@@ -504,7 +504,7 @@ export type OracleReportSubmitParams = {
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
   vaultsValues: bigint[];
-  vaultsNetCashFlows: bigint[];
+  vaultsInOutDeltas: bigint[];
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -534,7 +534,7 @@ const submitReport = async (
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
     vaultsValues = [],
-    vaultsNetCashFlows = [],
+    vaultsInOutDeltas = [],
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -555,7 +555,7 @@ const submitReport = async (
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
     "Vaults values": vaultsValues,
-    "Vaults net cash flows": vaultsNetCashFlows,
+    "Vaults in-out deltas": vaultsInOutDeltas,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -578,7 +578,7 @@ const submitReport = async (
     withdrawalFinalizationBatches,
     isBunkerMode,
     vaultsValues,
-    vaultsNetCashFlows,
+    vaultsInOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -710,7 +710,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
   data.vaultsValues,
-  data.vaultsNetCashFlows,
+  data.vaultsInOutDeltas,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -733,7 +733,7 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
     "uint256[]", // vaultsValues
-    "int256[]", // vaultsNetCashFlow
+    "int256[]", // vaultsInOutDeltas
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount
