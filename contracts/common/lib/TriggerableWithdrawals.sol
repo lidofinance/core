@@ -11,19 +11,21 @@ pragma solidity >=0.8.9 <0.9.0;
  */
 library TriggerableWithdrawals {
     address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
-    uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
+
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant WITHDRAWAL_AMOUNT_LENGTH = 8;
+    uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
 
-    error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
-    error InsufficientBalance(uint256 balance, uint256 totalWithdrawalFee);
-    error InsufficientRequestFee(uint256 feePerRequest, uint256 minFeePerRequest);
-
-    error WithdrawalRequestFeeReadFailed();
+    error WithdrawalFeeReadFailed();
     error WithdrawalRequestAdditionFailed(bytes callData);
+
+    error InsufficientWithdrawalFee(uint256 feePerRequest, uint256 minFeePerRequest);
+    error TotalWithdrawalFeeExceededBalance(uint256 balance, uint256 totalWithdrawalFee);
+
     error NoWithdrawalRequests();
+    error MalformedPubkeysArray();
     error PartialWithdrawalRequired(uint256 index);
-    error InvalidPublicKeyLength();
+    error MismatchedArrayLengths(uint256 keysCount, uint256 amountsCount);
 
     /**
      * @dev Send EIP-7002 full withdrawal requests for the specified public keys.
@@ -151,7 +153,7 @@ library TriggerableWithdrawals {
         (bool success, bytes memory feeData) = WITHDRAWAL_REQUEST.staticcall("");
 
         if (!success) {
-            revert WithdrawalRequestFeeReadFailed();
+            revert WithdrawalFeeReadFailed();
         }
 
         return abi.decode(feeData, (uint256));
@@ -171,7 +173,7 @@ library TriggerableWithdrawals {
 
     function _validateAndCountPubkeys(bytes calldata pubkeys) private pure returns (uint256) {
         if (pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
-            revert InvalidPublicKeyLength();
+            revert MalformedPubkeysArray();
         }
 
         uint256 keysCount = pubkeys.length / PUBLIC_KEY_LENGTH;
@@ -190,11 +192,11 @@ library TriggerableWithdrawals {
         }
 
         if (feePerRequest < minFeePerRequest) {
-            revert InsufficientRequestFee(feePerRequest, minFeePerRequest);
+            revert InsufficientWithdrawalFee(feePerRequest, minFeePerRequest);
         }
 
         if (address(this).balance < feePerRequest * keysCount) {
-            revert InsufficientBalance(address(this).balance, feePerRequest * keysCount);
+            revert TotalWithdrawalFeeExceededBalance(address(this).balance, feePerRequest * keysCount);
         }
 
         return feePerRequest;

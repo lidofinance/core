@@ -78,7 +78,7 @@ describe("TriggerableWithdrawals.sol", () => {
       await withdrawalsPredeployed.setFailOnGetFee(true);
       await expect(triggerableWithdrawals.getWithdrawalRequestFee()).to.be.revertedWithCustomError(
         triggerableWithdrawals,
-        "WithdrawalRequestFeeReadFailed",
+        "WithdrawalFeeReadFailed",
       );
     });
   });
@@ -133,15 +133,15 @@ describe("TriggerableWithdrawals.sol", () => {
       // 2. Should revert if fee is less than required
       const insufficientFee = 2n;
       await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientRequestFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
         .withArgs(2n, 3n);
 
       await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, amounts, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientRequestFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
         .withArgs(2n, 3n);
 
       await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, amounts, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientRequestFee")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
         .withArgs(2n, 3n);
     });
 
@@ -154,15 +154,15 @@ describe("TriggerableWithdrawals.sol", () => {
 
       await expect(
         triggerableWithdrawals.addFullWithdrawalRequests(invalidPubkeyHexString, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
 
       await expect(
         triggerableWithdrawals.addPartialWithdrawalRequests(invalidPubkeyHexString, amounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
 
       await expect(
         triggerableWithdrawals.addWithdrawalRequests(invalidPubkeyHexString, amounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
     });
 
     it("Should revert if last pubkey not 48 bytes", async function () {
@@ -177,15 +177,15 @@ describe("TriggerableWithdrawals.sol", () => {
 
       await expect(
         triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
 
       await expect(
         triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, amounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
 
       await expect(
         triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, amounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "InvalidPublicKeyLength");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "MalformedPubkeysArray");
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
@@ -233,15 +233,15 @@ describe("TriggerableWithdrawals.sol", () => {
       await setBalance(await triggerableWithdrawals.getAddress(), balance);
 
       await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
         .withArgs(balance, expectedMinimalBalance);
 
       await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientBalance")
+        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
         .withArgs(balance, expectedMinimalBalance);
     });
 
@@ -254,15 +254,15 @@ describe("TriggerableWithdrawals.sol", () => {
 
       await expect(
         triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestFeeReadFailed");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
 
       await expect(
         triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestFeeReadFailed");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
 
       await expect(
         triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestFeeReadFailed");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
     });
 
     it("Should accept withdrawal requests with minimal possible fee when fee not provided", async function () {
