@@ -5,11 +5,11 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {SignatureChecker} from "@openzeppelin/contracts-v5.2/utils/cryptography/SignatureChecker.sol";
 import {ERC165} from "@openzeppelin/contracts-v5.2/utils/introspection/ERC165.sol";
 import {IERC1271} from "@openzeppelin/contracts-v5.2/interfaces/IERC1271.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {SignatureUtils} from "contracts/common/lib/SignatureUtils.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -323,7 +323,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function depositToBeaconChain(
         Deposit[] calldata _deposits,
         bytes32 _expectedGlobalDepositRoot,
-        GuardianSignature calldata _signature
+        bytes calldata _signature
     ) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
@@ -338,10 +338,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
-        bytes memory concatenatedDepositDataRoots;
+        // XOR is a commutative operation, so the order of deposits does not matter
+        bytes32 depositDataBatchXorRoot;
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
+
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 bytes.concat(withdrawalCredentials()),
@@ -350,22 +352,20 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             );
 
             totalAmount += deposit.amount;
-            concatenatedDepositDataRoots = abi.encodePacked(concatenatedDepositDataRoots, deposit.depositDataRoot);
+            depositDataBatchXorRoot ^= keccak256(abi.encodePacked(deposit.depositDataRoot));
         }
 
         if (
-            !SignatureUtils.isValidSignature(
+            !SignatureChecker.isValidSignatureNow(
                 $.depositGuardian,
                 keccak256(
                     abi.encodePacked(
                         DEPOSIT_GUARDIAN_MESSAGE_PREFIX,
                         _expectedGlobalDepositRoot,
-                        keccak256(concatenatedDepositDataRoots)
+                        depositDataBatchXorRoot
                     )
                 ),
-                _signature.v,
-                _signature.r,
-                _signature.s
+                _signature
             )
         ) revert DepositGuardianSignatureInvalid();
 
@@ -442,22 +442,18 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Sets the deposit guardian
      * @param _depositGuardian The address of the deposit guardian
-     * @dev If the deposit guardian is set to a contract, it must implement EIP-1271,
-     *      even though the function does not check for the interface requirement.
+     * @dev In case where the deposit guardian is a contract, it must implement EIP-1271.
+     *      The interface check for EIP-1271 is omitted because the only way to check for whether an account is a contract
+     *      is to call `extcodesize` on it. This method is not reliable, as it can be broken, for instance, by CREATE2-deployed contracts.
+     *      So to avoid false positives, the contract shifts this responsibility to the owner.
+     *      If a contract mistakenly assigned as a deposit guardian is not a valid EIP-1271 signer,
+     *      the owner can simply set it to a different address.
      */
     function setDepositGuardian(address _depositGuardian) external onlyOwner {
         if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
 
-        // perhaps, we don't need this check because there can be edge cases, e.g.
-        // account-abstracted addresses or CREATE2-deployed contracts.
-        if (
-            SignatureUtils._hasCode(_depositGuardian) &&
-            !ERC165(_depositGuardian).supportsInterface(type(IERC1271).interfaceId)
-        ) revert DepositGuardianContractDoesNotSupportEIP1271();
-
         ERC7201Storage storage $ = _getStorage();
         address oldDepositGuardian = $.depositGuardian;
-
         $.depositGuardian = _depositGuardian;
 
         emit DepositGuardianSet(oldDepositGuardian, _depositGuardian);

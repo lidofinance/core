@@ -27,12 +27,6 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
-    struct GuardianSignature {
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
     function initialize(address _owner, address _operator, bytes calldata _params) external;
 
     function version() external pure returns (uint64);
@@ -66,7 +60,7 @@ interface IStakingVault {
     function depositToBeaconChain(
         Deposit[] calldata _deposits,
         bytes32 _expectedGlobalDepositRoot,
-        GuardianSignature calldata _guardianSignature
+        bytes calldata _guardianSignature
     ) external;
 
     function requestValidatorExit(bytes calldata _pubkeys) external;
