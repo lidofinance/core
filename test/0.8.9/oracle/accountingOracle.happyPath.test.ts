@@ -150,7 +150,7 @@ describe("AccountingOracle.sol:happyPath", () => {
       withdrawalFinalizationBatches: [1],
       isBunkerMode: true,
       vaultsValues: [],
-      vaultsNetCashFlows: [],
+      vaultsInOutDeltas: [],
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
       extraDataHash,
       extraDataItemsCount: extraDataItems.length,
