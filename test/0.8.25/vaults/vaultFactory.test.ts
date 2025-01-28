@@ -25,7 +25,7 @@ import { createVaultProxy, ether } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { IDelegation } from "../../../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
+import { DelegationConfigStruct } from "../../../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -57,7 +57,7 @@ describe("VaultFactory.sol", () => {
 
   let originalState: string;
 
-  let delegationParams: IDelegation.InitialStateStruct;
+  let delegationParams: DelegationConfigStruct;
 
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
@@ -105,11 +105,18 @@ describe("VaultFactory.sol", () => {
 
     delegationParams = {
       defaultAdmin: await admin.getAddress(),
+      funder: await vaultOwner1.getAddress(),
+      withdrawer: await vaultOwner1.getAddress(),
+      minter: await vaultOwner1.getAddress(),
+      burner: await vaultOwner1.getAddress(),
       curator: await vaultOwner1.getAddress(),
-      minterBurner: await vaultOwner1.getAddress(),
-      funderWithdrawer: await vaultOwner1.getAddress(),
+      rebalancer: await vaultOwner1.getAddress(),
+      depositPauser: await vaultOwner1.getAddress(),
+      depositResumer: await vaultOwner1.getAddress(),
+      exitRequester: await vaultOwner1.getAddress(),
+      disconnecter: await vaultOwner1.getAddress(),
       nodeOperatorManager: await operator.getAddress(),
-      nodeOperatorFeeClaimer: await vaultOwner1.getAddress(),
+      nodeOperatorFeeClaimer: await operator.getAddress(),
       curatorFeeBP: 100n,
       nodeOperatorFeeBP: 200n,
     };
