@@ -12,7 +12,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { de0x, ether, impersonate } from "lib";
+import { computeDepositDataRoot, de0x, ether, impersonate, streccak } from "lib";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -21,7 +21,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 // @TODO: test reentrancy attacks
-describe("StakingVault.sol:Accounting", () => {
+describe("StakingVault.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -57,13 +57,9 @@ describe("StakingVault.sol:Accounting", () => {
     vaultHubSigner = await impersonate(vaultHubAddress, ether("10"));
   });
 
-  beforeEach(async () => {
-    originalState = await Snapshot.take();
-  });
+  beforeEach(async () => (originalState = await Snapshot.take()));
 
-  afterEach(async () => {
-    await Snapshot.restore(originalState);
-  });
+  afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
     it("sets the vault hub address in the implementation", async () => {
@@ -78,12 +74,6 @@ describe("StakingVault.sol:Accounting", () => {
       await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
-    });
-
-    it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_beaconChainDepositContract");
     });
 
     it("petrifies the implementation by setting the initialized version to 2^64 - 1", async () => {
@@ -115,6 +105,114 @@ describe("StakingVault.sol:Accounting", () => {
       expect(await stakingVault.valuation()).to.equal(0n);
       expect(await stakingVault.isBalanced()).to.be.true;
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
+
+  context("pauseBeaconChainDeposits", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).pauseBeaconChainDeposits())
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
+    });
+
+    it("reverts if the beacon deposits are already paused", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
+
+      await expect(stakingVault.connect(vaultOwner).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        stakingVault,
+        "BeaconChainDepositsResumeExpected",
+      );
+    });
+
+    it("allows to pause deposits", async () => {
+      await expect(stakingVault.connect(vaultOwner).pauseBeaconChainDeposits()).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconChainDeposits", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).resumeBeaconChainDeposits())
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
+    });
+
+    it("reverts if the beacon deposits are already resumed", async () => {
+      await expect(stakingVault.connect(vaultOwner).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        stakingVault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
+
+    it("allows to resume deposits", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
+
+      await expect(stakingVault.connect(vaultOwner).resumeBeaconChainDeposits()).to.emit(
+        stakingVault,
+        "BeaconChainDepositsResumed",
+      );
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
+
+  context("depositToBeaconChain", () => {
+    it("reverts if called by a non-operator", async () => {
+      await expect(
+        stakingVault
+          .connect(stranger)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("depositToBeaconChain", stranger);
+    });
+
+    it("reverts if the number of deposits is zero", async () => {
+      await expect(stakingVault.depositToBeaconChain([]))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_deposits");
+    });
+
+    it("reverts if the vault is not balanced", async () => {
+      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      await expect(
+        stakingVault
+          .connect(operator)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
+    });
+
+    it("reverts if the deposits are paused", async () => {
+      await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
+      await expect(
+        stakingVault
+          .connect(operator)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
+          ]),
+      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsArePaused");
+    });
+
+    it("makes deposits to the beacon chain and emits the DepositedToBeaconChain event", async () => {
+      await stakingVault.fund({ value: ether("32") });
+
+      const pubkey = "0x" + "ab".repeat(48);
+      const signature = "0x" + "ef".repeat(96);
+      const amount = ether("32");
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+
+      await expect(
+        stakingVault.connect(operator).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
+      )
+        .to.emit(stakingVault, "DepositedToBeaconChain")
+        .withArgs(operator, 1, amount);
     });
   });
 

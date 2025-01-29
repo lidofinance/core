@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {VaultValidatorsManager} from "./VaultValidatorsManager.sol";
+import {ValidatorsManager} from "./ValidatorsManager.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
@@ -56,7 +56,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeable {
+contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -110,7 +110,7 @@ contract StakingVault is IStakingVault, VaultValidatorsManager, OwnableUpgradeab
     constructor(
         address _vaultHub,
         address _beaconChainDepositContract
-    ) VaultValidatorsManager(_beaconChainDepositContract) {
+    ) ValidatorsManager(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         VAULT_HUB = VaultHub(_vaultHub);

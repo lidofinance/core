@@ -10,7 +10,7 @@ import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /// @notice Abstract contract that manages validator deposits and exits for staking vaults
-abstract contract VaultValidatorsManager {
+abstract contract ValidatorsManager {
 
     /// @notice The Beacon Chain deposit contract used for staking validators
     IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
@@ -184,18 +184,18 @@ abstract contract VaultValidatorsManager {
      * @notice Emitted when a validator exit request is made
      * @dev Signals `nodeOperator` to exit the validator
      * @param _sender Address that requested the validator exit
-     * @param _pubkey Public key of the validator requested to exit
+     * @param _pubkeys Public key of the validator requested to exit
      */
-    event ValidatorsExitRequested(address indexed _sender, bytes _pubkey);
+    event ValidatorsExitRequested(address indexed _sender, bytes _pubkeys);
 
     /**
      * @notice Emitted when a validator partial exit request is made
      * @dev Signals `nodeOperator` to exit the validator
      * @param _sender Address that requested the validator partial exit
-     * @param _pubkey Public key of the validator requested to exit
+     * @param _pubkeys Public key of the validator requested to exit
      * @param _amounts Amounts of ether requested to exit
      */
-    event ValidatorsPartialExitRequested(address indexed _sender, bytes _pubkey, uint64[] _amounts);
+    event ValidatorsPartialExitRequested(address indexed _sender, bytes _pubkeys, uint64[] _amounts);
 
     /**
      * @notice Emitted when an excess fee is refunded back to the sender
