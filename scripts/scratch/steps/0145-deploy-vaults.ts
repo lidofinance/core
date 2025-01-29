@@ -40,6 +40,8 @@ export async function main() {
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
+  console.log("BeaconProxy address", await vaultBeaconProxy.getAddress());
+
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     beaconAddress,
