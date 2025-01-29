@@ -5,8 +5,6 @@
 pragma solidity 0.8.25;
 
 import {Permissions} from "./Permissions.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -17,7 +15,6 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;
@@ -36,9 +33,7 @@ interface IWstETH is IERC20, IERC20Permit {
  * @notice This contract is meant to be used as the owner of `StakingVault`.
  * This contract improves the vault UX by bundling all functions from the vault and vault hub
  * in this single contract. It provides administrative functions for managing the staking vault,
- * including funding, withdrawing, depositing to the beacon chain, minting, burning, and rebalancing operations.
- * All these functions are only callable by the account with the DEFAULT_ADMIN_ROLE.
- * TODO: need to add recover methods for ERC20, probably in a separate contract
+ * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is Permissions {
     /**
@@ -87,25 +82,24 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Constructor sets the stETH, WETH, and WSTETH token addresses.
-     * @param _weth Address of the weth token contract.
+     * @param _wETH Address of the weth token contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _weth, address _lidoLocator) Permissions() {
-        if (_weth == address(0)) revert ZeroArgument("_WETH");
+    constructor(address _wETH, address _lidoLocator) Permissions() {
+        if (_wETH == address(0)) revert ZeroArgument("_wETH");
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
-        WETH = IWETH9(_weth);
+        WETH = IWETH9(_wETH);
         STETH = IStETH(ILidoLocator(_lidoLocator).lido());
         WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
     }
 
     /**
-     * @notice Initializes the contract with the default admin
-     *         and `vaultHub` address
+     * @notice Initializes the contract with the default admin role
      */
     function initialize(address _defaultAdmin) external virtual {
         // reduces gas cost for `mintWsteth`
-        // dashboard will hold STETH during this tx
+        // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
         _initialize(_defaultAdmin);
@@ -142,18 +136,18 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Returns the reserve ratio of the vault
+     * @notice Returns the reserve ratio of the vault in basis points
      * @return The reserve ratio as a uint16
      */
-    function reserveRatio() public view returns (uint16) {
+    function reserveRatioBP() public view returns (uint16) {
         return vaultSocket().reserveRatioBP;
     }
 
     /**
-     * @notice Returns the threshold reserve ratio of the vault.
+     * @notice Returns the threshold reserve ratio of the vault in basis points.
      * @return The threshold reserve ratio as a uint16.
      */
-    function thresholdReserveRatio() external view returns (uint16) {
+    function thresholdReserveRatioBP() external view returns (uint16) {
         return vaultSocket().reserveRatioThresholdBP;
     }
 
@@ -174,8 +168,8 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Returns the total of shares that can be minted on the vault bound by valuation and vault share limit.
-     * @return The maximum number of stETH shares as a uint256.
+     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by valuation and vault share limit.
+     * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
         return _totalMintableShares(stakingVault().valuation());
@@ -238,14 +232,14 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Funds the staking vault with wrapped ether. Expects WETH amount apporved to this contract. Auth is perfomed in _fund
-     * @param _amountWETH Amount of wrapped ether to fund the staking vault with
+     * @notice Funds the staking vault with wrapped ether. Expects WETH amount approved to this contract. Auth is performed in _fund
+     * @param _amountOfWETH Amount of wrapped ether to fund the staking vault with
      */
-    function fundWeth(uint256 _amountWETH) external {
-        SafeERC20.safeTransferFrom(WETH, msg.sender, address(this), _amountWETH);
-        WETH.withdraw(_amountWETH);
+    function fundWeth(uint256 _amountOfWETH) external {
+        SafeERC20.safeTransferFrom(WETH, msg.sender, address(this), _amountOfWETH);
+        WETH.withdraw(_amountOfWETH);
 
-        _fund(_amountWETH);
+        _fund(_amountOfWETH);
     }
 
     /**
@@ -260,12 +254,12 @@ contract Dashboard is Permissions {
     /**
      * @notice Withdraws stETH tokens from the staking vault to wrapped ether.
      * @param _recipient Address of the recipient
-     * @param _amountWETH Amount of WETH to withdraw
+     * @param _amountOfWETH Amount of WETH to withdraw
      */
-    function withdrawWeth(address _recipient, uint256 _amountWETH) external {
-        _withdraw(address(this), _amountWETH);
-        WETH.deposit{value: _amountWETH}();
-        SafeERC20.safeTransfer(WETH, _recipient, _amountWETH);
+    function withdrawWETH(address _recipient, uint256 _amountOfWETH) external {
+        _withdraw(address(this), _amountOfWETH);
+        WETH.deposit{value: _amountOfWETH}();
+        SafeERC20.safeTransfer(WETH, _recipient, _amountOfWETH);
     }
 
     /**
@@ -279,62 +273,62 @@ contract Dashboard is Permissions {
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
      * @param _recipient Address of the recipient
-     * @param _amountShares Amount of stETH shares to mint
+     * @param _amountOfShares Amount of stETH shares to mint
      */
-    function mintShares(address _recipient, uint256 _amountShares) external payable fundAndProceed {
-        _mintShares(_recipient, _amountShares);
+    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
+        _mintShares(_recipient, _amountOfShares);
     }
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
      * !NB: this will revert with`VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
-     * @param _amountStETH Amount of stETH to mint
+     * @param _amountOfStETH Amount of stETH to mint
      */
-    function mintStETH(address _recipient, uint256 _amountStETH) external payable virtual fundAndProceed {
-        _mintShares(_recipient, STETH.getSharesByPooledEth(_amountStETH));
+    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundAndProceed {
+        _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
     /**
      * @notice Mints wstETH tokens backed by the vault to a recipient.
      * @param _recipient Address of the recipient
-     * @param _amountWstETH Amount of tokens to mint
+     * @param _amountOfWstETH Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _amountWstETH) external payable fundAndProceed {
-        _mintShares(address(this), _amountWstETH);
+    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundAndProceed {
+        _mintShares(address(this), _amountOfWstETH);
 
-        uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountWstETH);
+        uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
         uint256 wrappedWstETH = WSTETH.wrap(mintedStETH);
-        WSTETH.transfer(_recipient, wrappedWstETH);
+        SafeERC20.safeTransfer(WSTETH, _recipient, wrappedWstETH);
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects corresponding amount of stETH apporved to this contract.
-     * @param _amountShares Amount of stETH shares to burn
+     * @notice Burns stETH shares from the sender backed by the vault. Expects corresponding amount of stETH approved to this contract.
+     * @param _amountOfShares Amount of stETH shares to burn
      */
-    function burnShares(uint256 _amountShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountShares);
-        _burnShares(_amountShares);
+    function burnShares(uint256 _amountOfShares) external {
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        _burnShares(_amountOfShares);
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects stETH amount apporved to this contract.
+     * @notice Burns stETH shares from the sender backed by the vault. Expects stETH amount approved to this contract.
      * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountStETH Amount of stETH shares to burn
+     * @param _amountOfStETH Amount of stETH shares to burn
      */
-    function burnSteth(uint256 _amountStETH) external {
-        _burnStETH(_amountStETH);
+    function burnStETH(uint256 _amountOfStETH) external {
+        _burnStETH(_amountOfStETH);
     }
 
     /**
-     * @notice Burns wstETH tokens from the sender backed by the vault. Expects wstETH amount apporved to this contract.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding insie wstETH unwrap method
-     * @param _amountWstETH Amount of wstETH tokens to burn
+     * @notice Burns wstETH tokens from the sender backed by the vault. Expects wstETH amount approved to this contract.
+     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
+     * @param _amountOfWstETH Amount of wstETH tokens to burn
 
      */
-    function burnWstETH(uint256 _amountWstETH) external {
-        _burnWstETH(_amountWstETH);
+    function burnWstETH(uint256 _amountOfWstETH) external {
+        _burnWstETH(_amountOfWstETH);
     }
 
     /**
@@ -372,41 +366,41 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Burns stETH tokens (in shares) backed by the vault from the sender using permit (with value in stETH).
-     * @param _amountShares Amount of stETH shares to burn
+     * @param _amountOfShares Amount of stETH shares to burn
      * @param _permit data required for the stETH.permit() with amount in stETH
      */
     function burnSharesWithPermit(
-        uint256 _amountShares,
+        uint256 _amountOfShares,
         PermitInput calldata _permit
     ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountShares);
-        _burnShares(_amountShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        _burnShares(_amountOfShares);
     }
 
     /**
      * @notice Burns stETH tokens backed by the vault from the sender using permit.
      * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountStETH Amount of stETH to burn
+     * @param _amountOfStETH Amount of stETH to burn
      * @param _permit data required for the stETH.permit() method to set the allowance
      */
-    function burnStethWithPermit(
-        uint256 _amountStETH,
+    function burnStETHWithPermit(
+        uint256 _amountOfStETH,
         PermitInput calldata _permit
     ) external safePermit(address(STETH), msg.sender, address(this), _permit) {
-        _burnStETH(_amountStETH);
+        _burnStETH(_amountOfStETH);
     }
 
     /**
      * @notice Burns wstETH tokens backed by the vault from the sender using EIP-2612 Permit.
      * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
-     * @param _amountWstETH Amount of wstETH tokens to burn
+     * @param _amountOfWstETH Amount of wstETH tokens to burn
      * @param _permit data required for the wstETH.permit() method to set the allowance
      */
     function burnWstETHWithPermit(
-        uint256 _amountWstETH,
+        uint256 _amountOfWstETH,
         PermitInput calldata _permit
     ) external safePermit(address(WSTETH), msg.sender, address(this), _permit) {
-        _burnWstETH(_amountWstETH);
+        _burnWstETH(_amountOfWstETH);
     }
 
     /**
@@ -422,18 +416,15 @@ contract Dashboard is Permissions {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-
-        uint256 _amount;
+        if (_amount == 0) revert ZeroArgument("_amount");
 
         if (_token == ETH) {
-            _amount = address(this).balance;
             (bool success, ) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
-            _amount = IERC20(_token).balanceOf(address(this));
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
         }
 
@@ -515,21 +506,21 @@ contract Dashboard is Permissions {
 
     /**
      * @dev Burns stETH tokens from the sender backed by the vault
-     * @param _amountStETH Amount of tokens to burn
+     * @param _amountOfStETH Amount of tokens to burn
      */
-    function _burnStETH(uint256 _amountStETH) internal {
-        uint256 _amountShares = STETH.getSharesByPooledEth(_amountStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountShares);
-        _burnShares(_amountShares);
+    function _burnStETH(uint256 _amountOfStETH) internal {
+        uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        _burnShares(_amountOfShares);
     }
 
     /**
      * @dev Burns wstETH tokens from the sender backed by the vault
-     * @param _amountWstETH Amount of tokens to burn
+     * @param _amountOfWstETH Amount of tokens to burn
      */
-    function _burnWstETH(uint256 _amountWstETH) internal {
-        WSTETH.transferFrom(msg.sender, address(this), _amountWstETH);
-        uint256 unwrappedStETH = WSTETH.unwrap(_amountWstETH);
+    function _burnWstETH(uint256 _amountOfWstETH) internal {
+        SafeERC20.safeTransferFrom(WSTETH, msg.sender, address(this), _amountOfWstETH);
+        uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
         STETH.transferShares(address(vaultHub), unwrappedShares);

@@ -112,7 +112,7 @@ describe("Dashboard.sol", () => {
     it("reverts if WETH is zero address", async () => {
       await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_WETH");
+        .withArgs("_wETH");
     });
 
     it("sets the stETH, wETH, and wstETH addresses", async () => {
@@ -175,8 +175,8 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.vaultSocket()).to.deep.equal(Object.values(sockets));
       expect(await dashboard.shareLimit()).to.equal(sockets.shareLimit);
       expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
-      expect(await dashboard.reserveRatio()).to.equal(sockets.reserveRatioBP);
-      expect(await dashboard.thresholdReserveRatio()).to.equal(sockets.reserveRatioThresholdBP);
+      expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
+      expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
     });
   });
@@ -586,7 +586,7 @@ describe("Dashboard.sol", () => {
     const amount = ether("1");
 
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).withdrawWeth(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).withdrawWETH(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -596,7 +596,7 @@ describe("Dashboard.sol", () => {
       await dashboard.fund({ value: amount });
       const previousBalance = await ethers.provider.getBalance(stranger);
 
-      await expect(dashboard.withdrawWeth(stranger, amount))
+      await expect(dashboard.withdrawWETH(stranger, amount))
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, dashboard, amount);
 
@@ -794,7 +794,7 @@ describe("Dashboard.sol", () => {
       await steth.mintExternalShares(stranger, amountShares);
       await steth.connect(stranger).approve(dashboard, amountSteth);
 
-      await expect(dashboard.connect(stranger).burnSteth(amountSteth)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).burnStETH(amountSteth)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -808,7 +808,7 @@ describe("Dashboard.sol", () => {
         .withArgs(vaultOwner, dashboard, amountSteth);
       expect(await steth.allowance(vaultOwner, dashboard)).to.equal(amountSteth);
 
-      await expect(dashboard.burnSteth(amountSteth))
+      await expect(dashboard.burnStETH(amountSteth))
         .to.emit(steth, "Transfer") // transfer from owner to hub
         .withArgs(vaultOwner, hub, amountSteth)
         .and.to.emit(steth, "TransferShares") // transfer shares to hub
@@ -819,7 +819,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow to burn 1 wei stETH", async () => {
-      await expect(dashboard.burnSteth(1n)).to.be.revertedWithCustomError(hub, "ZeroArgument");
+      await expect(dashboard.burnStETH(1n)).to.be.revertedWithCustomError(hub, "ZeroArgument");
     });
   });
 
@@ -962,15 +962,16 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await steth.mintExternalShares(stranger, amountShares);
       const permit = {
-        owner: vaultOwner.address,
+        owner: stranger.address,
         spender: dashboardAddress,
         value: amountSteth,
-        nonce: await steth.nonces(vaultOwner),
+        nonce: await steth.nonces(stranger),
         deadline: BigInt(await time.latest()) + days(1n),
       };
 
-      const signature = await signPermit(await stethDomain(steth), permit, vaultOwner);
+      const signature = await signPermit(await stethDomain(steth), permit, stranger);
       const { deadline, value } = permit;
       const { v, r, s } = signature;
 
@@ -1173,7 +1174,7 @@ describe("Dashboard.sol", () => {
       const { v, r, s } = signature;
 
       await expect(
-        dashboard.connect(stranger).burnStethWithPermit(amountSteth, {
+        dashboard.connect(stranger).burnStETHWithPermit(amountSteth, {
           value,
           deadline,
           v,
@@ -1197,7 +1198,7 @@ describe("Dashboard.sol", () => {
       const { v, r, s } = signature;
 
       await expect(
-        dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, {
+        dashboard.connect(vaultOwner).burnStETHWithPermit(amountSteth, {
           value,
           deadline,
           v,
@@ -1221,7 +1222,7 @@ describe("Dashboard.sol", () => {
       const { v, r, s } = signature;
 
       const balanceBefore = await steth.balanceOf(vaultOwner);
-      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, {
+      const result = await dashboard.connect(vaultOwner).burnStETHWithPermit(amountSteth, {
         value,
         deadline,
         v,
@@ -1257,13 +1258,13 @@ describe("Dashboard.sol", () => {
       };
 
       await expect(
-        dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, permitData),
+        dashboard.connect(vaultOwner).burnStETHWithPermit(amountSteth, permitData),
       ).to.be.revertedWithCustomError(dashboard, "InvalidPermit");
 
       await steth.connect(vaultOwner).approve(dashboard, amountSteth);
 
       const balanceBefore = await steth.balanceOf(vaultOwner);
-      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(amountSteth, permitData);
+      const result = await dashboard.connect(vaultOwner).burnStETHWithPermit(amountSteth, permitData);
 
       await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, amountSteth); // transfer steth to hub
       await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountSteth, amountSteth, amountShares); // burn steth
@@ -1297,7 +1298,7 @@ describe("Dashboard.sol", () => {
       };
 
       const balanceBefore = await steth.balanceOf(vaultOwner);
-      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(stethToBurn, permitData);
+      const result = await dashboard.connect(vaultOwner).burnStETHWithPermit(stethToBurn, permitData);
 
       await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, stethToBurn); // transfer steth to hub
       await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
@@ -1331,7 +1332,7 @@ describe("Dashboard.sol", () => {
       };
 
       const balanceBefore = await steth.balanceOf(vaultOwner);
-      const result = await dashboard.connect(vaultOwner).burnStethWithPermit(stethToBurn, permitData);
+      const result = await dashboard.connect(vaultOwner).burnStETHWithPermit(stethToBurn, permitData);
 
       await expect(result).to.emit(steth, "Transfer").withArgs(vaultOwner, hub, stethToBurn); // transfer steth to hub
       await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, stethToBurn, stethToBurn, sharesToBurn); // burn steth
@@ -1355,20 +1356,24 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await dashboard.mintShares(stranger, amountShares + 100n);
+      await steth.connect(stranger).approve(wsteth, amountSteth + 100n);
+      await wsteth.connect(stranger).wrap(amountSteth + 100n);
+
       const permit = {
-        owner: vaultOwner.address,
+        owner: stranger.address,
         spender: dashboardAddress,
         value: amountShares,
-        nonce: await wsteth.nonces(vaultOwner),
+        nonce: await wsteth.nonces(stranger),
         deadline: BigInt(await time.latest()) + days(1n),
       };
 
-      const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
+      const signature = await signPermit(await wstethDomain(wsteth), permit, stranger);
       const { deadline, value } = permit;
       const { v, r, s } = signature;
 
       await expect(
-        dashboard.connect(stranger).burnSharesWithPermit(amountShares, {
+        dashboard.connect(stranger).burnWstETHWithPermit(amountShares, {
           value,
           deadline,
           v,
@@ -1589,7 +1594,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("allows only admin to recover", async () => {
-      await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -1599,28 +1604,24 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow zero token address for erc20 recovery", async () => {
-      await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroArgument",
       );
-      await expect(dashboard.recoverERC20(weth, ZeroAddress)).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      await expect(dashboard.recoverERC20(weth, ZeroAddress, 1n)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroArgument",
+      );
+      await expect(dashboard.recoverERC20(weth, vaultOwner, 0n)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroArgument",
+      );
     });
 
     it("recovers all ether", async () => {
       const ethStub = await dashboard.ETH();
       const preBalance = await ethers.provider.getBalance(vaultOwner);
-      const tx = await dashboard.recoverERC20(ethStub, vaultOwner);
-      const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
-
-      await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, ethStub, amount);
-      expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(0);
-      expect(await ethers.provider.getBalance(vaultOwner)).to.equal(preBalance + amount - gasUsed * gasPrice);
-    });
-
-    it("recovers all ether", async () => {
-      const ethStub = await dashboard.ETH();
-      const preBalance = await ethers.provider.getBalance(vaultOwner);
-      const tx = await dashboard.recoverERC20(ethStub, vaultOwner);
+      const tx = await dashboard.recoverERC20(ethStub, vaultOwner, amount);
       const { gasUsed, gasPrice } = (await ethers.provider.getTransactionReceipt(tx.hash))!;
 
       await expect(tx).to.emit(dashboard, "ERC20Recovered").withArgs(tx.from, ethStub, amount);
@@ -1630,7 +1631,7 @@ describe("Dashboard.sol", () => {
 
     it("recovers all weth", async () => {
       const preBalance = await weth.balanceOf(vaultOwner);
-      const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner);
+      const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner, amount);
 
       await expect(tx)
         .to.emit(dashboard, "ERC20Recovered")

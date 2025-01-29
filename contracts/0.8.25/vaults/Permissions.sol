@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
