@@ -291,10 +291,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountStETH Amount of stETH to mint
      */
-    function mintStETH(
-        address _recipient,
-        uint256 _amountStETH
-    ) external payable virtual onlyRole(DEFAULT_ADMIN_ROLE) fundAndProceed {
+    function mintStETH(address _recipient, uint256 _amountStETH) external payable virtual fundAndProceed {
         _mintShares(_recipient, STETH.getSharesByPooledEth(_amountStETH));
     }
 
@@ -381,7 +378,7 @@ contract Dashboard is Permissions {
     function burnSharesWithPermit(
         uint256 _amountShares,
         PermitInput calldata _permit
-    ) external virtual onlyRole(DEFAULT_ADMIN_ROLE) safePermit(address(STETH), msg.sender, address(this), _permit) {
+    ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
         STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountShares);
         _burnShares(_amountShares);
     }
