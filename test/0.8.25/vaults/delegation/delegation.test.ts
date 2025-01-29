@@ -160,7 +160,7 @@ describe("Delegation.sol", () => {
     it("reverts if wETH is zero address", async () => {
       await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_WETH");
+        .withArgs("_wETH");
     });
 
     it("sets the stETH address", async () => {
