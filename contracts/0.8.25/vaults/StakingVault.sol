@@ -458,11 +458,21 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
     }
 
     /**
+     * @notice Requests validator exit from the beacon chain
+     * @param _pubkeys Concatenated validator public keys
+     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     */
+    function requestValidatorsExit(bytes calldata _pubkeys) external onlyOwner {
+        _requestValidatorsExit(_pubkeys);
+    }
+
+
+    /**
      * @notice Requests validators exit from the beacon chain
      * @param _pubkeys Concatenated validators public keys
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function requestValidatorsExit(bytes calldata _pubkeys) external payable {
+    function forceValidatorsExit(bytes calldata _pubkeys) external payable {
         // Only owner or node operator can exit validators when vault is balanced
         if (isBalanced()) {
             _onlyOwnerOrNodeOperator();
@@ -474,7 +484,7 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
             revert ExitTimelockNotElapsed(exitTimelock);
         }
 
-        _requestValidatorsExit(_pubkeys);
+        _forceValidatorsExit(_pubkeys);
     }
 
     /**
@@ -483,10 +493,10 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
      * @param _amounts Amounts of ether to exit
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
+    function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
         _onlyOwnerOrNodeOperator();
 
-        _requestValidatorsPartialExit(_pubkeys, _amounts);
+        _forcePartialValidatorsExit(_pubkeys, _amounts);
     }
 
     /**

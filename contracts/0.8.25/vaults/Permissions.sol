@@ -60,6 +60,11 @@ abstract contract Permissions is AccessControlVoteable {
     bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("StakingVault.Permissions.RequestValidatorExit");
 
     /**
+     * @notice Permission for force validators exit from the StakingVault using EIP-7002 triggerable exit.
+     */
+    bytes32 public constant FORCE_VALIDATORS_EXIT_ROLE = keccak256("StakingVault.Permissions.ForceValidatorsExit");
+
+    /**
      * @notice Permission for voluntary disconnecting the StakingVault.
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("StakingVault.Permissions.VoluntaryDisconnect");
@@ -145,8 +150,12 @@ abstract contract Permissions is AccessControlVoteable {
         stakingVault().requestValidatorsExit(_pubkey);
     }
 
-    function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorsPartialExit(_pubkeys, _amounts);
+    function _forceValidatorsExit(bytes calldata _pubkeys) internal onlyRole(FORCE_VALIDATORS_EXIT_ROLE) {
+        stakingVault().forceValidatorsExit(_pubkeys);
+    }
+
+    function _forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(FORCE_VALIDATORS_EXIT_ROLE) {
+        stakingVault().forcePartialValidatorsExit(_pubkeys, _amounts);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {

@@ -99,8 +99,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
     function rebalance(uint256 _ether) external {}
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
-    function requestValidatorsExit(bytes calldata _pubkeys) external payable {}
-    function requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
     function lock(uint256 _locked) external {}
 
     function locked() external pure returns (uint256) {
@@ -134,6 +132,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function pauseBeaconChainDeposits() external {}
     function resumeBeaconChainDeposits() external {}
+
+    function requestValidatorsExit(bytes calldata _pubkeys) external {}
+    function forceValidatorsExit(bytes calldata _pubkeys) external payable {}
+    function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();

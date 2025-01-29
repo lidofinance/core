@@ -62,15 +62,21 @@ abstract contract ValidatorsManager {
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
+    /// @notice Emits the ValidatorsExitRequest event
+    /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
+    function _requestValidatorsExit(bytes calldata _pubkeys) internal {
+        emit ValidatorsExitRequested(msg.sender, _pubkeys);
+    }
+
     /// @notice Requests full exit of validators from the beacon chain by submitting their public keys
     /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
     /// @dev    The caller must provide sufficient fee via msg.value to cover the exit request costs
-    function _requestValidatorsExit(bytes calldata _pubkeys) internal {
+    function _forceValidatorsExit(bytes calldata _pubkeys) internal {
         (uint256 feePerRequest, uint256 totalFee) = _getAndValidateExitFees(_pubkeys);
 
         TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
 
-        emit ValidatorsExitRequested(msg.sender, _pubkeys);
+        emit ValidatorsExitForced(msg.sender, _pubkeys);
 
         _refundExcessExitFee(totalFee);
     }
@@ -79,12 +85,12 @@ abstract contract ValidatorsManager {
     /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
     /// @param _amounts Array of exit amounts in Gwei for each validator, must match number of validators in _pubkeys
     /// @dev    The caller must provide sufficient fee via msg.value to cover the exit request costs
-    function _requestValidatorsPartialExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal {
+    function _forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal {
         (uint256 feePerRequest, uint256 totalFee) = _getAndValidateExitFees(_pubkeys);
 
         TriggerableWithdrawals.addPartialWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
-        emit ValidatorsPartialExitRequested(msg.sender, _pubkeys, _amounts);
+        emit PartialValidatorsExitForced(msg.sender, _pubkeys, _amounts);
 
         _refundExcessExitFee(totalFee);
     }
@@ -189,13 +195,21 @@ abstract contract ValidatorsManager {
     event ValidatorsExitRequested(address indexed _sender, bytes _pubkeys);
 
     /**
-     * @notice Emitted when a validator partial exit request is made
+     * @notice Emitted when a validator exit request is forced via EIP-7002
+     * @dev Signals `nodeOperator` to exit the validator
+     * @param _sender Address that requested the validator exit
+     * @param _pubkeys Public key of the validator requested to exit
+     */
+    event ValidatorsExitForced(address indexed _sender, bytes _pubkeys);
+
+    /**
+     * @notice Emitted when a validator partial exit request is forced via EIP-7002
      * @dev Signals `nodeOperator` to exit the validator
      * @param _sender Address that requested the validator partial exit
      * @param _pubkeys Public key of the validator requested to exit
      * @param _amounts Amounts of ether requested to exit
      */
-    event ValidatorsPartialExitRequested(address indexed _sender, bytes _pubkeys, uint64[] _amounts);
+    event PartialValidatorsExitForced(address indexed _sender, bytes _pubkeys, uint64[] _amounts);
 
     /**
      * @notice Emitted when an excess fee is refunded back to the sender
