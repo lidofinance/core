@@ -22,6 +22,8 @@ interface IAccounting {
 interface ILido {
     function getTotalShares() external view returns (uint256);
 
+    function getPooledEthByShares(uint256 _sharesAmount) external view returns (uint256);
+
     function resume() external;
 
     function getBeaconStat()
@@ -36,6 +38,11 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
     uint256 public ghost_clValidators;
     uint256 public ghost_depositedValidators;
+    uint256 public ghost_sharesMintAsFees;
+    uint256 public ghost_transferShares;
+    uint256 public ghost_totalRewards;
+    uint256 public ghost_principalClBalance;
+    uint256 public ghost_unifiedClBalance;
 
     address private accountingOracle;
     address private lidoExecutionLayerRewardVault;
@@ -51,7 +58,6 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         accounting = IAccounting(_accounting);
         lido = ILido(_lido);
         accountingOracle = _accountingOracle;
-        ghost_clValidators = 0;
         limitList = _limitList;
         lidoExecutionLayerRewardVault = _lidoExecutionLayerRewardVault;
     }
@@ -93,7 +99,6 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         _preClBalance = bound(_preClBalance, _preClValidators * stableBalance, _preClValidators * stableBalance);
         ghost_clValidators = _preClValidators;
 
-        // _clValidators = bound(_clValidators, _preClValidators, _preClValidators + 900);
         _clValidators = bound(
             _clValidators,
             _preClValidators,
@@ -114,9 +119,8 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         vm.store(address(lido), keccak256("lido.Lido.beaconValidators"), bytes32(_preClValidators));
         vm.store(address(lido), keccak256("lido.Lido.beaconBalance"), bytes32(_preClBalance * 1 ether));
 
-        vm.deal(lidoExecutionLayerRewardVault, 1000 * 1 ether);
-        // IncorrectELRewardsVaultBalance(0)
-        // sharesToMintAsFees
+        // research correlation with elRewardsVaultBalance
+        vm.deal(lidoExecutionLayerRewardVault, 300 ether);
 
         ReportValues memory currentReport = ReportValues({
             timestamp: _timestamp,
@@ -124,22 +128,47 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             clValidators: _clValidators,
             clBalance: _clBalance * 1 ether,
             withdrawalVaultBalance: 0,
-            elRewardsVaultBalance: 1_000 * 1 ether,
+            elRewardsVaultBalance: 200 ether,
             sharesRequestedToBurn: 0,
             withdrawalFinalizationBatches: new uint256[](0),
             vaultValues: new uint256[](0),
             netCashFlows: new int256[](0)
         });
 
+        ghost_principalClBalance =
+            _preClBalance *
+            1 ether +
+            (currentReport.clValidators - _preClValidators) *
+            stableBalance *
+            1 ether;
+        ghost_unifiedClBalance = currentReport.clBalance + currentReport.withdrawalVaultBalance; // ?
+
+        ghost_totalRewards = ghost_unifiedClBalance - ghost_principalClBalance + currentReport.elRewardsVaultBalance;
+
         vm.prank(accountingOracle);
+
+        vm.recordLogs();
         accounting.handleOracleReport(currentReport);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        bytes32 totalSharesSignature = keccak256("Mock__MintedTotalShares(uint256)");
+        bytes32 transferSharesSignature = keccak256("TransferShares(address,address,uint256)");
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == totalSharesSignature) {
+                ghost_sharesMintAsFees = abi.decode(abi.encodePacked(entries[i].topics[1]), (uint256));
+            }
+
+            if (entries[i].topics[0] == transferSharesSignature) {
+                ghost_transferShares = abi.decode(entries[i].data, (uint256));
+            }
+        }
     }
 }
 
 contract AccountingTest is BaseProtocolTest {
     AccountingHandler private accountingHandler;
 
-    uint256 private protocolStartBalance = 15_000 ether;
+    uint256 private protocolStartBalance = 1 ether;
 
     address private rootAccount = address(0x123);
     address private userAccount = address(0x321);
@@ -172,26 +201,41 @@ contract AccountingTest is BaseProtocolTest {
     // - 0 OR 10% OF PROTOCOL FEES SHOULD BE REPORTED (Collect total fees from reports in handler)
     // CLb + ELr <= 10%
 
-    // - user tokens must not be used except burner contract (from Zero / to Zero)
+    // - user tokens must not be used except burner as source (from Zero / to Zero). From burner to zerop
+    // - from zero to Treasure, burner
+    //
     // - solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
     // - vault params do not affect protocol share rate
     //}
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 1
-     * forge-config: default.invariant.depth = 1
+     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      *
      *  Should not be able to decrease validator number
      */
-    function invariant_clValidators() public view {
+    function invariant_handleOracleReport() public view {
         ILido lido = ILido(lidoLocator.lido());
         (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
 
         assertGe(clValidators, accountingHandler.ghost_clValidators());
         assertEq(depositedValidators, accountingHandler.ghost_depositedValidators());
 
-        // console2.log(depositedValidators);
+        if (accountingHandler.ghost_unifiedClBalance() > accountingHandler.ghost_principalClBalance()) {
+            uint256 treasuryFeesETH = lido.getPooledEthByShares(accountingHandler.ghost_sharesMintAsFees()) / 1 ether;
+            uint256 reportRewardsMintedETH = lido.getPooledEthByShares(accountingHandler.ghost_transferShares()) /
+                1 ether;
+            uint256 totalFees = treasuryFeesETH + reportRewardsMintedETH;
+            uint256 totalRewards = accountingHandler.ghost_totalRewards() / 1 ether;
+
+            if (totalRewards != 0) {
+                uint256 percents = (totalFees * 100) / totalRewards;
+
+                assertTrue(percents <= 10);
+                assertTrue(percents > 0);
+            }
+        }
     }
 }

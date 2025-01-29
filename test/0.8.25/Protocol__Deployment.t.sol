@@ -3,15 +3,16 @@
 
 pragma solidity ^0.8.0;
 
+import "../0.4.24/contracts/StakingRouter__MockForLidoAccounting.sol";
 import "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
+
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
-
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
@@ -132,8 +133,33 @@ contract BaseProtocolTest is Test {
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("RESUME_ROLE"), rootAccount);
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("PAUSE_ROLE"), rootAccount);
 
+        StakingRouter__MockForLidoAccounting stakingRouter = new StakingRouter__MockForLidoAccounting();
+
+        uint256[] memory stakingModuleIds = new uint256[](3);
+        stakingModuleIds[0] = 1;
+        stakingModuleIds[1] = 2;
+        stakingModuleIds[2] = 3;
+
+        uint96[] memory stakingModuleFees = new uint96[](3);
+        stakingModuleFees[0] = 4876942047684326532;
+        stakingModuleFees[1] = 145875332634464962;
+        stakingModuleFees[2] = 38263043302959438;
+
+        address[] memory recipients = new address[](3);
+        recipients[0] = 0x55032650b14df07b85bF18A3a3eC8E0Af2e028d5;
+        recipients[1] = 0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433;
+        recipients[2] = 0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F;
+
+        stakingRouter.mock__getStakingRewardsDistribution(
+            recipients,
+            stakingModuleIds,
+            stakingModuleFees,
+            9999999999999999996,
+            100000000000000000000
+        );
+
         /// @dev deploy lido locator with dummy default values
-        lidoLocator = _deployLidoLocator(lidoProxyAddress);
+        lidoLocator = _deployLidoLocator(lidoProxyAddress, address(stakingRouter));
 
         // Add accounting contract with handler to the protocol
         address accountingImpl = deployCode(
@@ -168,12 +194,9 @@ contract BaseProtocolTest is Test {
         // Add burner contract to the protocol
         deployCodeTo(
             "LidoExecutionLayerRewardsVault.sol:LidoExecutionLayerRewardsVault",
-            abi.encode(rootAccount, lidoProxyAddress, lidoTreasury),
+            abi.encode(lidoProxyAddress, lidoTreasury),
             lidoLocator.elRewardsVault()
         );
-
-        // Add staking router contract to the protocol
-        deployCodeTo("StakingRouter.sol:StakingRouter", abi.encode(depositContract), lidoLocator.stakingRouter());
 
         // Add oracle report sanity checker contract to the protocol
         deployCodeTo(
@@ -206,8 +229,6 @@ contract BaseProtocolTest is Test {
         );
 
         IAccounting(lidoLocator.accounting()).initialize(rootAccount);
-
-        // contracts/0.8.9/LidoExecutionLayerRewardsVault.sol
 
         /// @dev deploy eip712steth
         address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
@@ -254,7 +275,7 @@ contract BaseProtocolTest is Test {
     }
 
     /// @dev deploy lido locator with dummy default values
-    function _deployLidoLocator(address lido) internal returns (ILidoLocator) {
+    function _deployLidoLocator(address lido, address stakingRouterAddress) internal returns (ILidoLocator) {
         LidoLocatorConfig memory config = LidoLocatorConfig({
             accountingOracle: makeAddr("dummy-locator:accountingOracle"),
             depositSecurityModule: makeAddr("dummy-locator:depositSecurityModule"),
@@ -264,7 +285,7 @@ contract BaseProtocolTest is Test {
             oracleReportSanityChecker: makeAddr("dummy-locator:oracleReportSanityChecker"),
             postTokenRebaseReceiver: address(0),
             burner: makeAddr("dummy-locator:burner"),
-            stakingRouter: makeAddr("dummy-locator:stakingRouter"),
+            stakingRouter: stakingRouterAddress,
             treasury: makeAddr("dummy-locator:treasury"),
             validatorsExitBusOracle: makeAddr("dummy-locator:validatorsExitBusOracle"),
             withdrawalQueue: makeAddr("dummy-locator:withdrawalQueue"),
