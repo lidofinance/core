@@ -6,11 +6,11 @@ pragma solidity 0.8.25;
 
 import {StakingVault} from "./StakingVault.sol";
 
+// TODO: minor UX improvement: perhaps there's way to reuse predeposits for a different validator without withdrawing
 contract PredepositDepositGuardian {
     uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
     mapping(bytes32 validatorId => bool isPreDeposited) public validatorPredeposits;
-    mapping(address nodeOperator => bytes32 validatorId) public nodeOperatorValidators;
     mapping(bytes32 validatorId => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
 
     function predeposit(
@@ -39,7 +39,6 @@ contract PredepositDepositGuardian {
             }
 
             validatorPredeposits[validatorId] = true;
-            nodeOperatorValidators[nodeOperator] = validatorId;
 
             if (deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
         }
@@ -158,4 +157,5 @@ contract PredepositDepositGuardian {
     error WithdrawValidatorTransferFailed();
     error WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
     error WithdrawSenderNotNodeOperator();
+    error WithdrawValidatorDoesNotBelongToNodeOperator();
 }
