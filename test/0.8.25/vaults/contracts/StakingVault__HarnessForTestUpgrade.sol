@@ -84,11 +84,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         }
     }
 
-    function depositToBeaconChain(
-        Deposit[] calldata _deposits,
-        bytes32 _expectedGlobalDepositRoot,
-        bytes calldata _guardianSignature
-    ) external {}
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {}
 
     function fund() external payable {}
 

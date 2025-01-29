@@ -7,121 +7,155 @@ pragma solidity 0.8.25;
 import {StakingVault} from "./StakingVault.sol";
 
 contract PredepositDepositGuardian {
-    enum ValidatorStatus {
-        NO_RECORD,
-        AWAITING_PROOF,
-        RESOLVED,
-        WITHDRAWN
-    }
+    uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
-    mapping(address nodeOperator => bytes32 validatorPubkeyHash) public nodeOperatorToValidators;
-    mapping(bytes32 validatorPubkeyHash => ValidatorStatus validatorStatus) public validatorStatuses;
-    mapping(bytes32 validatorPubkeyHash => bytes32 withdrawalCredentials) public wcRecords;
+    mapping(bytes32 validatorId => bool isPreDeposited) public validatorPredeposits;
+    mapping(address nodeOperator => bytes32 validatorId) public nodeOperatorValidators;
+    mapping(bytes32 validatorId => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
 
-    function predeposit(address stakingVault, StakingVault.Deposit[] calldata deposits) external payable {
-        if (msg.value % 1 ether != 0) revert PredepositMustBeMultipleOfOneEther();
-        if (msg.value / 1 ether != deposits.length) revert PredepositMustBeOneEtherPerDeposit();
-        if (msg.sender != StakingVault(payable(stakingVault)).nodeOperator()) revert MustBeNodeOperatorOfStakingVault();
+    function predeposit(
+        StakingVault stakingVault,
+        address nodeOperator,
+        StakingVault.Deposit[] calldata deposits
+    ) external payable {
+        if (deposits.length == 0) revert PredepositNoDeposits();
+        if (msg.value % PREDEPOSIT_AMOUNT != 0) revert PredepositValueNotMultipleOfOneEther();
+        if (msg.value / PREDEPOSIT_AMOUNT != deposits.length) revert PredepositValueNotMatchingNumberOfDeposits();
+        if (nodeOperator != stakingVault.nodeOperator()) revert PredepositNodeOperatorNotMatching();
 
         for (uint256 i = 0; i < deposits.length; i++) {
             StakingVault.Deposit calldata deposit = deposits[i];
 
-            if (validatorStatuses[keccak256(deposit.pubkey)] != ValidatorStatus.AWAITING_PROOF) {
-                revert MustBeNewValidatorPubkey();
+            bytes32 validatorId = keccak256(deposit.pubkey);
+
+            // cannot predeposit a validator that is already predeposited
+            if (validatorPredeposits[validatorId]) {
+                revert PredepositValidatorAlreadyPredeposited();
             }
 
-            nodeOperatorToValidators[msg.sender] = keccak256(deposit.pubkey);
-            validatorStatuses[keccak256(deposit.pubkey)] = ValidatorStatus.AWAITING_PROOF;
+            // cannot predeposit a validator that has withdrawal credentials already proven
+            if (validatorWithdrawalCredentials[validatorId] != bytes32(0)) {
+                revert PredepositValidatorWithdrawalCredentialsAlreadyProven();
+            }
 
-            if (deposit.amount != 1 ether) revert PredepositMustBeOneEtherPerDeposit();
+            validatorPredeposits[validatorId] = true;
+            nodeOperatorValidators[nodeOperator] = validatorId;
+
+            if (deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
         }
 
-        // we don't need to pass deposit root or signature because the msg.sender is deposit guardian itself
-        StakingVault(payable(stakingVault)).depositToBeaconChain(deposits, bytes32(0), bytes(""));
+        stakingVault.depositToBeaconChain(deposits);
     }
 
-    function proveWithdrawalCredentials(
-        bytes32[] calldata proof,
-        bytes calldata validatorPubkey,
-        bytes32 withdrawalCredentials
+    function proveValidatorWithdrawalCredentials(
+        bytes32[] calldata /* proof */,
+        bytes calldata _pubkey,
+        bytes32 _withdrawalCredentials
     ) external {
         // TODO: proof logic
+        // revert if proof is invalid
 
-        bytes32 validatorPubkeyHash = keccak256(validatorPubkey);
-        wcRecords[validatorPubkeyHash] = withdrawalCredentials;
-        validatorStatuses[validatorPubkeyHash] = ValidatorStatus.RESOLVED;
+        validatorWithdrawalCredentials[keccak256(_pubkey)] = _withdrawalCredentials;
     }
 
-    function deposit(address _stakingVault, StakingVault.Deposit[] calldata deposits) external payable {
-        if (msg.sender != StakingVault(payable(_stakingVault)).nodeOperator())
-            revert MustBeNodeOperatorOfStakingVault();
+    function depositToProvenValidators(
+        StakingVault _stakingVault,
+        StakingVault.Deposit[] calldata _deposits
+    ) external payable {
+        if (msg.sender != _stakingVault.nodeOperator()) revert DepositSenderNotNodeOperator();
 
-        for (uint256 i = 0; i < deposits.length; i++) {
-            StakingVault.Deposit calldata deposit = deposits[i];
+        for (uint256 i = 0; i < _deposits.length; i++) {
+            StakingVault.Deposit calldata deposit = _deposits[i];
+            bytes32 validatorId = keccak256(deposit.pubkey);
 
-            if (validatorStatuses[keccak256(deposit.pubkey)] != ValidatorStatus.RESOLVED) {
-                revert MustBeResolvedValidatorPubkey();
+            if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
+                revert DepositToUnprovenValidator();
             }
         }
 
-        // we don't need to pass deposit root or signature because the msg.sender is deposit guardian itself
-        StakingVault(payable(_stakingVault)).depositToBeaconChain(deposits, bytes32(0), bytes(""));
+        _stakingVault.depositToBeaconChain(_deposits);
     }
 
-    function withdrawAsVaultOwner(address stakingVault, bytes[] calldata validatorPubkeys) external {
-        if (msg.sender != StakingVault(payable(stakingVault)).owner()) revert MustBeVaultOwner();
+    // called by the staking vault owner if the predeposited validator has a different withdrawal credentials than the vault's withdrawal credentials,
+    // i.e. node operator was malicious
+    function withdrawDisprovenPredeposits(
+        StakingVault _stakingVault,
+        bytes32[] calldata _validatorIds,
+        address _recipient
+    ) external {
+        if (msg.sender != _stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
+        if (_recipient == address(0)) revert WithdrawRecipientZeroAddress();
 
-        for (uint256 i = 0; i < validatorPubkeys.length; i++) {
-            bytes32 validatorPubkeyHash = keccak256(validatorPubkeys[i]);
+        uint256 validatorsLength = _validatorIds.length;
+        for (uint256 i = 0; i < validatorsLength; i++) {
+            bytes32 validatorId = _validatorIds[i];
 
-            if (validatorStatuses[validatorPubkeyHash] != ValidatorStatus.RESOLVED) {
-                revert MustBeResolvedValidatorPubkey();
+            // cannot withdraw predeposit for a validator that is not pre-deposited
+            if (!validatorPredeposits[validatorId]) {
+                revert WithdrawValidatorNotPreDeposited();
             }
 
-            if (validatorStatuses[validatorPubkeyHash] == ValidatorStatus.WITHDRAWN) {
-                revert ValidatorAlreadyWithdrawn();
+            // cannot withdraw predeposit for a validator that has withdrawal credentials matching the vault's withdrawal credentials
+            if (validatorWithdrawalCredentials[validatorId] == _stakingVault.withdrawalCredentials()) {
+                revert WithdrawValidatorWithdrawalCredentialsMatchStakingVault();
             }
 
-            if (wcRecords[validatorPubkeyHash] == StakingVault(payable(stakingVault)).withdrawalCredentials()) {
-                revert ValidatorWithdrawalCredentialsMatchVaultWithdrawalCredentials();
-            }
+            // set flag to false to prevent double withdrawal
+            validatorPredeposits[validatorId] = false;
 
-            msg.sender.call{value: 1 ether}("");
-
-            validatorStatuses[validatorPubkeyHash] = ValidatorStatus.WITHDRAWN;
+            (bool success, ) = _recipient.call{value: 1 ether}("");
+            if (!success) revert WithdrawValidatorTransferFailed();
         }
     }
 
-    function withdrawAsNodeOperator(bytes[] calldata validatorPubkeys) external {
-        for (uint256 i = 0; i < validatorPubkeys.length; i++) {
-            bytes32 validatorPubkeyHash = keccak256(validatorPubkeys[i]);
+    // called by the node operator if the predeposited validator has the same withdrawal credentials as the vault's withdrawal credentials,
+    // i.e. node operator was honest
+    function withdrawProvenPredeposits(
+        StakingVault _stakingVault,
+        bytes32[] calldata _validatorIds,
+        address _recipient
+    ) external {
+        uint256 validatorsLength = _validatorIds.length;
+        for (uint256 i = 0; i < validatorsLength; i++) {
+            bytes32 validatorId = _validatorIds[i];
 
-            if (validatorStatuses[validatorPubkeyHash] != ValidatorStatus.RESOLVED) {
-                revert MustBeResolvedValidatorPubkey();
+            if (msg.sender != _stakingVault.nodeOperator()) {
+                revert WithdrawSenderNotNodeOperator();
             }
 
-            if (validatorStatuses[validatorPubkeyHash] == ValidatorStatus.WITHDRAWN) {
-                revert ValidatorAlreadyWithdrawn();
+            // cannot withdraw predeposit for a validator that is not pre-deposited
+            if (!validatorPredeposits[validatorId]) {
+                revert WithdrawValidatorNotPreDeposited();
             }
 
-            if (nodeOperatorToValidators[msg.sender] != validatorPubkeyHash) {
-                revert ValidatorMustBelongToSender();
+            // cannot withdraw predeposit for a validator that has withdrawal credentials not matching the vault's withdrawal credentials
+            if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
+                revert WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
             }
 
-            msg.sender.call{value: 1 ether}("");
+            // set flag to false to prevent double withdrawal
+            validatorPredeposits[validatorId] = false;
 
-            validatorStatuses[validatorPubkeyHash] = ValidatorStatus.WITHDRAWN;
+            (bool success, ) = _recipient.call{value: 1 ether}("");
+            if (!success) revert WithdrawValidatorTransferFailed();
         }
     }
 
-    error PredepositMustBeMultipleOfOneEther();
-    error PredepositMustBeOneEtherPerDeposit();
-    error MustBeNodeOperatorOfStakingVault();
-    error MustBeNewValidatorPubkey();
-    error WithdrawalFailed();
-    error MustBeResolvedValidatorPubkey();
-    error ValidatorMustBelongToSender();
-    error MustBeVaultOwner();
-    error ValidatorWithdrawalCredentialsMatchVaultWithdrawalCredentials();
-    error ValidatorAlreadyWithdrawn();
+    error PredepositNoDeposits();
+    error PredepositValueNotMultipleOfOneEther();
+    error PredepositValueNotMatchingNumberOfDeposits();
+    error PredepositNodeOperatorNotMatching();
+    error PredepositValidatorAlreadyPredeposited();
+    error PredepositValidatorWithdrawalCredentialsAlreadyProven();
+    error PredepositDepositAmountInvalid();
+    error ValidatorNotPreDeposited();
+    error DepositSenderNotNodeOperator();
+    error DepositToUnprovenValidator();
+    error WithdrawSenderNotStakingVaultOwner();
+    error WithdrawRecipientZeroAddress();
+    error WithdrawValidatorNotPreDeposited();
+    error WithdrawValidatorWithdrawalCredentialsMatchStakingVault();
+    error WithdrawValidatorTransferFailed();
+    error WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
+    error WithdrawSenderNotNodeOperator();
 }

@@ -57,11 +57,7 @@ interface IStakingVault {
 
     function withdraw(address _recipient, uint256 _ether) external;
 
-    function depositToBeaconChain(
-        Deposit[] calldata _deposits,
-        bytes32 _expectedGlobalDepositRoot,
-        bytes calldata _guardianSignature
-    ) external;
+    function depositToBeaconChain(Deposit[] calldata _deposits) external;
 
     function requestValidatorExit(bytes calldata _pubkeys) external;
 

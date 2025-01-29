@@ -318,46 +318,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _deposits Array of deposit structs
      * @dev Includes a check to ensure StakingVault is balanced before making deposits
      */
-    function depositToBeaconChain(
-        Deposit[] calldata _deposits,
-        bytes32 _expectedGlobalDepositRoot,
-        bytes calldata _signature
-    ) external {
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
         if (!isBalanced()) revert Unbalanced();
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
+        if (msg.sender != $.depositGuardian) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         uint256 numberOfDeposits = _deposits.length;
-
-        if (msg.sender != $.depositGuardian) {
-            bytes32 currentGlobalDepositRoot = BEACON_CHAIN_DEPOSIT_CONTRACT.get_deposit_root();
-            if (_expectedGlobalDepositRoot != currentGlobalDepositRoot)
-                revert GlobalDepositRootMismatch(_expectedGlobalDepositRoot, currentGlobalDepositRoot);
-
-            bytes32 depositDataBatchXorRoot;
-
-            for (uint256 i = 0; i < numberOfDeposits; i++) {
-                Deposit calldata deposit = _deposits[i];
-
-                depositDataBatchXorRoot ^= keccak256(abi.encodePacked(deposit.depositDataRoot));
-            }
-
-            if (
-                !SignatureChecker.isValidSignatureNow(
-                    $.depositGuardian,
-                    keccak256(
-                        abi.encodePacked(
-                            DEPOSIT_GUARDIAN_MESSAGE_PREFIX,
-                            _expectedGlobalDepositRoot,
-                            depositDataBatchXorRoot
-                        )
-                    ),
-                    _signature
-                )
-            ) revert DepositGuardianSignatureInvalid();
-        }
 
         uint256 totalAmount = 0;
 
