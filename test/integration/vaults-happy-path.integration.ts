@@ -285,12 +285,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     // Validate minting with the cap
-    const mintOverLimitTx = delegation.connect(curator).mint(curator, stakingVaultMaxMintingShares + 1n);
+    const mintOverLimitTx = delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares + 1n);
     await expect(mintOverLimitTx)
       .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
       .withArgs(stakingVault, stakingVault.valuation());
 
-    const mintTx = await delegation.connect(curator).mint(curator, stakingVaultMaxMintingShares);
+    const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
@@ -423,7 +423,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       .approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
     await trace("lido.approve", approveVaultTx);
 
-    const burnTx = await delegation.connect(curator).burn(stakingVaultMaxMintingShares);
+    const burnTx = await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
     await trace("delegation.burn", burnTx);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();

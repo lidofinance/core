@@ -59,8 +59,4 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
     function mock__setTotalShares(uint256 _totalShares) external {
         totalShares = _totalShares;
     }
-
-    function mock__getTotalShares() external view returns (uint256) {
-        return _getTotalShares();
-    }
 }

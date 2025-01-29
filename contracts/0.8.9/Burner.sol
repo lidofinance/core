@@ -244,9 +244,9 @@ contract Burner is IBurner, AccessControlEnumerable {
         if (_amount == 0) revert ZeroRecoveryAmount();
         if (_token == address(LIDO)) revert StETHRecoveryWrongFunc();
 
-        emit ERC20Recovered(msg.sender, _token, _amount);
-
         IERC20(_token).safeTransfer(LOCATOR.treasury(), _amount);
+
+        emit ERC20Recovered(msg.sender, _token, _amount);
     }
 
     /**
@@ -259,9 +259,9 @@ contract Burner is IBurner, AccessControlEnumerable {
     function recoverERC721(address _token, uint256 _tokenId) external {
         if (_token == address(LIDO)) revert StETHRecoveryWrongFunc();
 
-        emit ERC721Recovered(msg.sender, _token, _tokenId);
-
         IERC721(_token).transferFrom(address(this), LOCATOR.treasury(), _tokenId);
+
+        emit ERC721Recovered(msg.sender, _token, _tokenId);
     }
 
     /**

@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   Delegation,
   DepositContract__MockForStakingVault,
+  LidoLocator,
   StakingVault,
   StETH__MockForDelegation,
   UpgradeableBeacon,
@@ -18,6 +19,7 @@ import {
 
 import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BP_BASE = 10000n;
@@ -43,6 +45,7 @@ describe("Delegation.sol", () => {
   let rewarder: HardhatEthersSigner;
   const recipient = certainAddress("some-recipient");
 
+  let lidoLocator: LidoLocator;
   let steth: StETH__MockForDelegation;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
@@ -81,8 +84,9 @@ describe("Delegation.sol", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
-    delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+    delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
@@ -148,26 +152,22 @@ describe("Delegation.sol", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, weth, wsteth]))
+      await expect(ethers.deployContract("Delegation", [weth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_stETH");
+        .withArgs("_lidoLocator");
     });
 
     it("reverts if wETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, ethers.ZeroAddress, wsteth]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_wETH");
     });
 
-    it("reverts if wstETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, weth, ethers.ZeroAddress]))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_wstETH");
-    });
-
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
       expect(await delegation_.STETH()).to.equal(steth);
+      expect(await delegation_.WETH()).to.equal(weth);
+      expect(await delegation_.WSTETH()).to.equal(wsteth);
     });
   });
 
@@ -177,7 +177,7 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
       await expect(delegation_.initialize(vaultOwner)).to.be.revertedWithCustomError(
         delegation_,
@@ -468,7 +468,7 @@ describe("Delegation.sol", () => {
 
   context("mint", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).mint(recipient, 1n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).mintShares(recipient, 1n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -476,7 +476,7 @@ describe("Delegation.sol", () => {
 
     it("mints the tokens", async () => {
       const amount = 100n;
-      await expect(delegation.connect(minter).mint(recipient, amount))
+      await expect(delegation.connect(minter).mintShares(recipient, amount))
         .to.emit(steth, "Transfer")
         .withArgs(ethers.ZeroAddress, recipient, amount);
     });
@@ -485,9 +485,9 @@ describe("Delegation.sol", () => {
   context("burn", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
       await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(minter).mint(stranger, 100n);
+      await delegation.connect(minter).mintShares(stranger, 100n);
 
-      await expect(delegation.connect(stranger).burn(100n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).burnShares(100n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -495,9 +495,9 @@ describe("Delegation.sol", () => {
 
     it("burns the tokens", async () => {
       const amount = 100n;
-      await delegation.connect(minter).mint(burner, amount);
+      await delegation.connect(minter).mintShares(burner, amount);
 
-      await expect(delegation.connect(burner).burn(amount))
+      await expect(delegation.connect(burner).burnShares(amount))
         .to.emit(steth, "Transfer")
         .withArgs(burner, hub, amount)
         .and.to.emit(steth, "Transfer")

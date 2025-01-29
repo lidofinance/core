@@ -20,11 +20,11 @@ contract VaultHub__MockForDelegation {
         emit Mock__VaultDisconnected(vault);
     }
 
-    function mintSharesBackedByVault(address, address recipient, uint256 amount) external {
+    function mintSharesBackedByVault(address /* vault */, address recipient, uint256 amount) external {
         steth.mint(recipient, amount);
     }
 
-    function burnSharesBackedByVault(address, uint256 amount) external {
+    function burnSharesBackedByVault(address /* vault */, uint256 amount) external {
         steth.burn(amount);
     }
 

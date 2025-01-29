@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
@@ -121,11 +121,11 @@ abstract contract Permissions is AccessControlVoteable {
         _unsafeWithdraw(_recipient, _ether);
     }
 
-    function _mint(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
+    function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
         vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _shares);
     }
 
-    function _burn(uint256 _shares) internal onlyRole(BURN_ROLE) {
+    function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
         vaultHub.burnSharesBackedByVault(address(stakingVault()), _shares);
     }
 
