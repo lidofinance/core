@@ -33,8 +33,8 @@
     "voting": {
       "minSupportRequired": "500000000000000000",
       "minAcceptanceQuorum": "50000000000000000",
-      "voteDuration": 900,
-      "objectionPhaseDuration": 300
+      "voteDuration": 60,
+      "objectionPhaseDuration": 5
     },
     "fee": {
       "totalPercent": 10,
@@ -52,6 +52,8 @@
       "0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f": "820000000000000000000000",
       "0xaa6bfBCD634EE744CB8FE522b29ADD23124593D3": "60000000000000000000000",
       "0xBA59A84C6440E8cccfdb5448877E26F1A431Fc8B": "60000000000000000000000",
+      "0x8943545177806ED17B9F23F0a21ee5948eCaa776": "820000000000000000000000",
+      "0xE25583099BA105D9ec0A67f5Ae86D90e50036425": "820000000000000000000000",
       "lido-aragon-agent-placeholder": "60000000000000000000000"
     },
     "start": 0,
@@ -89,7 +91,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "depositSecurityModule": {
@@ -137,7 +139,7 @@
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "simple-dvt-onchain-v1",
+      "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },

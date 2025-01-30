@@ -25,11 +25,16 @@ export async function main() {
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
   ];
 
-  for (const contract of ozAdminTransfers) {
-    const contractInstance = await loadContract(contract.name, contract.address);
-    await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
-    await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
-  }
+  const contractInstances = await Promise.all(
+    ozAdminTransfers.map((contract) => loadContract(contract.name, contract.address)),
+  );
+
+  await Promise.all(
+    contractInstances.map(async (contractInstance) => {
+      await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
+      await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    }),
+  );
 
   // Change admin for OssifiableProxy contracts
   const ossifiableProxyAdminChanges = [
@@ -40,12 +45,15 @@ export async function main() {
     state.withdrawalQueueERC721.proxy.address,
   ];
 
-  for (const proxyAddress of ossifiableProxyAdminChanges) {
-    const proxy = await loadContract("OssifiableProxy", proxyAddress);
-    await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
-  }
+  // Parallel execution of proxy admin changes
+  await Promise.all(
+    ossifiableProxyAdminChanges.map(async (proxyAddress) => {
+      const proxy = await loadContract("OssifiableProxy", proxyAddress);
+      return makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
+    }),
+  );
 
-  // Change DepositSecurityModule admin if not using predefined address
+  // Change DepositSecurityModule admin if not using a predefined address
   if (state[Sk.depositSecurityModule].deployParameters.usePredefinedAddressInstead === null) {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });

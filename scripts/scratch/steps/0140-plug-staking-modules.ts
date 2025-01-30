@@ -1,3 +1,4 @@
+import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import { loadContract } from "lib/contract";
@@ -31,39 +32,47 @@ export async function main() {
   // Grant STAKING_MODULE_MANAGE_ROLE to deployer
   await makeTx(stakingRouter, "grantRole", [STAKING_MODULE_MANAGE_ROLE, deployer], { from: deployer });
 
+  const waitTransactionsGroup: Promise<ContractTransactionReceipt>[] = [];
+
   // Add staking module to StakingRouter
-  await makeTx(
-    stakingRouter,
-    "addStakingModule",
-    [
-      state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
-      state[Sk.appNodeOperatorsRegistry].proxy.address,
-      NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
-      NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
-      NOR_STAKING_MODULE_MODULE_FEE_BP,
-      NOR_STAKING_MODULE_TREASURY_FEE_BP,
-      NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
-      NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
-    ],
-    { from: deployer },
+  waitTransactionsGroup.push(
+    makeTx(
+      stakingRouter,
+      "addStakingModule",
+      [
+        state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
+        state[Sk.appNodeOperatorsRegistry].proxy.address,
+        NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+        NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+        NOR_STAKING_MODULE_MODULE_FEE_BP,
+        NOR_STAKING_MODULE_TREASURY_FEE_BP,
+        NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+        NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+      ],
+      { from: deployer },
+    ),
   );
 
   // Add simple DVT module to StakingRouter
-  await makeTx(
-    stakingRouter,
-    "addStakingModule",
-    [
-      state.simpleDvt.deployParameters.stakingModuleTypeId,
-      state[Sk.appSimpleDvt].proxy.address,
-      SDVT_STAKING_MODULE_TARGET_SHARE_BP,
-      SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
-      SDVT_STAKING_MODULE_MODULE_FEE_BP,
-      SDVT_STAKING_MODULE_TREASURY_FEE_BP,
-      SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
-      SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
-    ],
-    { from: deployer },
+  waitTransactionsGroup.push(
+    makeTx(
+      stakingRouter,
+      "addStakingModule",
+      [
+        state.simpleDvt.deployParameters.stakingModuleTypeId,
+        state[Sk.appSimpleDvt].proxy.address,
+        SDVT_STAKING_MODULE_TARGET_SHARE_BP,
+        SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+        SDVT_STAKING_MODULE_MODULE_FEE_BP,
+        SDVT_STAKING_MODULE_TREASURY_FEE_BP,
+        SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+        SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+      ],
+      { from: deployer },
+    ),
   );
+
+  await Promise.all(waitTransactionsGroup);
 
   // Renounce STAKING_MODULE_MANAGE_ROLE from deployer
   await makeTx(stakingRouter, "renounceRole", [STAKING_MODULE_MANAGE_ROLE, deployer], { from: deployer });
