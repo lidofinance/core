@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {StakingVault} from "./StakingVault.sol";
 
 // TODO: minor UX improvement: perhaps there's way to reuse predeposits for a different validator without withdrawing
-contract PredepositDepositGuardian {
+contract PredepositGuardian {
     uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
     mapping(bytes32 validatorId => bool isPreDeposited) public validatorPredeposits;
