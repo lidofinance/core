@@ -206,7 +206,7 @@ contract Dashboard is Permissions {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable fundAndProceed {
+    function voluntaryDisconnect() external payable fundable {
         uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
 
         if (shares > 0) {
@@ -267,7 +267,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
      */
-    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
+    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
         _mintShares(_recipient, _amountOfShares);
     }
 
@@ -277,7 +277,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
-    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundAndProceed {
+    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundable {
         _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
@@ -286,7 +286,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfWstETH Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundAndProceed {
+    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
         _mintShares(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
@@ -399,7 +399,7 @@ contract Dashboard is Permissions {
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable fundAndProceed {
+    function rebalanceVault(uint256 _ether) external payable fundable {
         _rebalanceVault(_ether);
     }
 
@@ -459,7 +459,7 @@ contract Dashboard is Permissions {
     /**
      * @dev Modifier to fund the staking vault if msg.value > 0
      */
-    modifier fundAndProceed() {
+    modifier fundable() {
         if (msg.value > 0) {
             _fund(msg.value);
         }
