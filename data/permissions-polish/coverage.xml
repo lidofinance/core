@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3584"  lines-covered="3268"  line-rate="0.9118"  branches-valid="1650"  branches-covered="1424"  branch-rate="0.863"  timestamp="1738237545795" complexity="0" version="0.1">
+<coverage lines-valid="3584"  lines-covered="3268"  line-rate="0.9118"  branches-valid="1650"  branches-covered="1424"  branch-rate="0.863"  timestamp="1738238592574" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2178,7 +2178,7 @@
 			<method name="resumeBeaconChainDeposits"  hits="6"  signature="()V" >
 				<lines><line number="453"  hits="6" /></lines>
 			</method>
-			<method name="fundAndProceed"  hits="50"  signature="()V" >
+			<method name="fundable"  hits="50"  signature="()V" >
 				<lines><line number="462"  hits="50" /></lines>
 			</method>
 			<method name="_burnStETH"  hits="8"  signature="()V" >
