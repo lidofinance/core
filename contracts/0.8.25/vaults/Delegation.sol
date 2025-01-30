@@ -254,7 +254,7 @@ contract Delegation is Dashboard {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        super._unsafeWithdraw(_recipient, _fee);
+        stakingVault().withdraw(_recipient, _fee);
     }
 
     /**
