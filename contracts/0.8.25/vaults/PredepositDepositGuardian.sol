@@ -13,15 +13,12 @@ contract PredepositDepositGuardian {
     mapping(bytes32 validatorId => bool isPreDeposited) public validatorPredeposits;
     mapping(bytes32 validatorId => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
 
-    function predeposit(
-        StakingVault stakingVault,
-        address nodeOperator,
-        StakingVault.Deposit[] calldata deposits
-    ) external payable {
+    // Question: predeposit is permissionless, i.e. the msg.sender doesn't have to be the node operator,
+    // however, the deposit will still revert if it wasn't signed with the validator private key
+    function predeposit(StakingVault stakingVault, StakingVault.Deposit[] calldata deposits) external payable {
         if (deposits.length == 0) revert PredepositNoDeposits();
         if (msg.value % PREDEPOSIT_AMOUNT != 0) revert PredepositValueNotMultipleOfOneEther();
         if (msg.value / PREDEPOSIT_AMOUNT != deposits.length) revert PredepositValueNotMatchingNumberOfDeposits();
-        if (nodeOperator != stakingVault.nodeOperator()) revert PredepositNodeOperatorNotMatching();
 
         for (uint256 i = 0; i < deposits.length; i++) {
             StakingVault.Deposit calldata deposit = deposits[i];
@@ -29,18 +26,16 @@ contract PredepositDepositGuardian {
             bytes32 validatorId = keccak256(deposit.pubkey);
 
             // cannot predeposit a validator that is already predeposited
-            if (validatorPredeposits[validatorId]) {
-                revert PredepositValidatorAlreadyPredeposited();
-            }
+            if (validatorPredeposits[validatorId]) revert PredepositValidatorAlreadyPredeposited();
 
             // cannot predeposit a validator that has withdrawal credentials already proven
-            if (validatorWithdrawalCredentials[validatorId] != bytes32(0)) {
+            if (validatorWithdrawalCredentials[validatorId] != bytes32(0))
                 revert PredepositValidatorWithdrawalCredentialsAlreadyProven();
-            }
+
+            // cannot predeposit a validator with a deposit amount that is not 1 ether
+            if (deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
 
             validatorPredeposits[validatorId] = true;
-
-            if (deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
         }
 
         stakingVault.depositToBeaconChain(deposits);
