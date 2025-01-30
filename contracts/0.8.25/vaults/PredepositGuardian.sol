@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {StakingVault} from "./StakingVault.sol";
 
+// TODO: think about naming. It's not a deposit guardian, it's the depositor itself
 // TODO: minor UX improvement: perhaps there's way to reuse predeposits for a different validator without withdrawing
 contract PredepositGuardian {
     uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
