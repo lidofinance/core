@@ -18,6 +18,14 @@ import {VaultHub} from "./VaultHub.sol";
  */
 abstract contract Permissions is AccessControlVoteable {
     /**
+     * @notice Struct containing an account and a role for granting/revoking roles.
+     */
+    struct RoleAssignment {
+        address account;
+        bytes32 role;
+    }
+
+    /**
      * @notice Permission for funding the StakingVault.
      */
     bytes32 public constant FUND_ROLE = keccak256("StakingVault.Permissions.Fund");
@@ -105,6 +113,34 @@ abstract contract Permissions is AccessControlVoteable {
             addr := mload(add(args, 32))
         }
         return IStakingVault(addr);
+    }
+
+    // ==================== Role Management Functions ====================
+
+    /**
+     * @notice Mass-grants multiple roles to multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function grantRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            grantRole(_assignments[i].role, _assignments[i].account);
+        }
+    }
+
+    /**
+     * @notice Mass-revokes multiple roles from multiple accounts.
+     * @param _assignments An array of role assignments.
+     * @dev Performs the role admin checks internally.
+     */
+    function revokeRoles(RoleAssignment[] memory _assignments) external {
+        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+
+        for (uint256 i = 0; i < _assignments.length; i++) {
+            revokeRole(_assignments[i].role, _assignments[i].account);
+        }
     }
 
     function _votingCommittee() internal pure virtual returns (bytes32[] memory) {
