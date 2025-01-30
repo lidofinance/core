@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import "../0.4.24/contracts/StakingRouter__MockForLidoAccounting.sol";
+import "../0.4.24/contracts/SecondOpinionOracle__Mock.sol";
 import "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -84,6 +85,7 @@ contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
     IACL public acl;
+    SecondOpinionOracle__Mock public secondOpinionOracleMock;
     IKernel private dao;
 
     address private rootAccount;
@@ -221,11 +223,11 @@ contract BaseProtocolTest is Test {
             lidoLocator.oracleReportSanityChecker()
         );
 
-        address secondOpinionOracle = makeAddr("dummy-OracleReportSanityChecker:secondOpinionOracle");
+        secondOpinionOracleMock = new SecondOpinionOracle__Mock();
         vm.store(
             lidoLocator.oracleReportSanityChecker(),
             bytes32(uint256(2)),
-            bytes32(uint256(uint160(secondOpinionOracle)))
+            bytes32(uint256(uint160(address(secondOpinionOracleMock))))
         );
 
         IAccounting(lidoLocator.accounting()).initialize(rootAccount);
