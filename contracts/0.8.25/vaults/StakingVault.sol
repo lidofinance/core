@@ -334,6 +334,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
 
+            //TODO: check BLS signature
+
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 bytes.concat(withdrawalCredentials()),
