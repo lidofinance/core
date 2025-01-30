@@ -68,6 +68,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        // depositGuardian becomes the depositor, instead of just guardian, perhaps a renaming is needed 🌚
         address depositGuardian;
         bool beaconChainDepositsPaused;
     }
