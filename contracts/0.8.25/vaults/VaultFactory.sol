@@ -26,6 +26,7 @@ struct DelegationConfig {
     address nodeOperatorFeeClaimer;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
+    uint256 confirmLifetime;
 }
 
 contract VaultFactory {
@@ -66,7 +67,7 @@ contract VaultFactory {
         );
 
         // initialize Delegation
-        delegation.initialize(address(this));
+        delegation.initialize(address(this), _delegationConfig.confirmLifetime);
 
         // setup roles
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);

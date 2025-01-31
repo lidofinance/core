@@ -97,8 +97,8 @@ contract Delegation is Dashboard {
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
      */
-    function initialize(address _defaultAdmin) external override {
-        _initialize(_defaultAdmin);
+    function initialize(address _defaultAdmin, uint256 _confirmLifetime) external override {
+        _initialize(_defaultAdmin, _confirmLifetime);
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked

@@ -89,12 +89,12 @@ contract Dashboard is Permissions {
     /**
      * @notice Initializes the contract with the default admin role
      */
-    function initialize(address _defaultAdmin) external virtual {
+    function initialize(address _defaultAdmin, uint256 _confirmLifetime) external virtual {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        _initialize(_defaultAdmin);
+        _initialize(_defaultAdmin, _confirmLifetime);
     }
 
     // ==================== View Functions ====================
