@@ -103,7 +103,7 @@ contract Delegation is Dashboard {
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
         // at the end of the initialization
-        _grantRole(NODE_OPERATOR_MANAGER_ROLE, msg.sender);
+        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIMER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
