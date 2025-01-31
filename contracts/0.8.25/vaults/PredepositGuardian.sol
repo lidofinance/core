@@ -26,10 +26,25 @@ contract PredepositGuardian {
     mapping(bytes32 validatorPubkeyHash => ValidatorStatus validatorStatus) public validatorStatuses;
     mapping(bytes32 validatorPubkeyHash => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
 
-    /// views
+    /// Events
+
+    event NodeOperatorCollateralToppedUp(address indexed nodeOperator, uint256 amount);
+    event NodeOperatorCollateralWithdrawn(address indexed nodeOperator, uint256 amount, address indexed recipient);
+    event NodeOperatorDelegated(address indexed nodeOperator, address indexed delegate);
+    event PredepositCompleted(address indexed nodeOperator, uint256 numberOfDeposits);
+    event ValidatorProved(bytes32 indexed validatorPubkeyHash);
+    event ValidatorProvedInvalid(bytes32 indexed validatorPubkeyHash);
+    event ValidatorsDeposited(address indexed nodeOperator, uint256 numberOfDeposits);
+    event ValidatorSlashed(bytes32 indexed validatorPubkeyHash, address indexed recipient);
+
+    /// Views
 
     function nodeOperatorBalance(address nodeOperator) external view returns (uint256, uint256) {
         return (nodeOperatorCollateral[nodeOperator], nodeOperatorCollateralLocked[nodeOperator]);
+    }
+
+    function validatorInfo(bytes32 validatorPubkey) external view returns (ValidatorStatus, bytes32) {
+        return (validatorStatuses[keccak256(validatorPubkey)], validatorWithdrawalCredentials[keccak256(validatorPubkey)]);
     }
 
     /// Balance operations
@@ -42,25 +57,26 @@ contract PredepositGuardian {
     function withdrawNodeOperatorCollateral(address _nodeOperator, uint256 _amount, address _recipient) external {
         if (_amount == 0) revert ZeroArgument("amount");
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-        // TODO: delegate
-        if (msg.sender != _nodeOperator) revert MustBeNodeOperator();
 
-        if (nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator] >= _amount)
-            revert NotEnoughUnlockedCollateralToWithdraw();
+        _isValidNodeOperatorCaller(_nodeOperator);
+
+        uint256 unlockedCollateral = nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator];
+        if (unlockedCollateral < _amount)
+            revert NotEnoughUnlockedCollateralToWithdraw(unlockedCollateral, _amount);
 
         nodeOperatorCollateral[_nodeOperator] -= _amount;
         (bool success, ) = _recipient.call{value: _amount}("");
 
         if (!success) revert WithdrawalFailed();
 
-        // TODO: event
+        emit NodeOperatorCollateralWithdrawn(_nodeOperator, _amount, _recipient);
     }
 
     // delegation
 
     function delegateNodeOperator(address _delegate) external {
         nodeOperatorDelegate[msg.sender] = _delegate;
-        //  TODO: event
+        emit NodeOperatorDelegated(msg.sender, _delegate);
     }
 
     // Question: predeposit is permissionless, i.e. the msg.sender doesn't have to be the node operator,
@@ -81,7 +97,7 @@ contract PredepositGuardian {
 
         uint256 totalDepositAmount = PREDEPOSIT_AMOUNT * _deposits.length;
 
-        if (unlockedCollateral < totalDepositAmount) revert NotEnoughUnlockedCollateralToPredeposit();
+        if (unlockedCollateral < totalDepositAmount) revert NotEnoughUnlockedCollateralToPredeposit(unlockedCollateral, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             StakingVault.Deposit calldata _deposit = _deposits[i];
@@ -89,7 +105,7 @@ contract PredepositGuardian {
             bytes32 validatorId = keccak256(_deposit.pubkey);
 
             if (validatorStatuses[validatorId] != ValidatorStatus.NO_RECORD) {
-                revert MustBeNewValidatorPubkey();
+                revert MustBeNewValidatorPubkey(validatorId, validatorStatuses[validatorId]);
             }
 
             // cannot predeposit a validator with a deposit amount that is not 1 ether
@@ -102,7 +118,8 @@ contract PredepositGuardian {
 
         nodeOperatorCollateralLocked[_nodeOperator] += totalDepositAmount;
         _stakingVault.depositToBeaconChain(_deposits);
-        // TODO: event
+
+        emit PredepositCompleted(_nodeOperator, _deposits.length);
     }
 
     function proveValidatorDeposit(
@@ -122,14 +139,14 @@ contract PredepositGuardian {
             revert InvalidStakingVault();
         }
 
-        if (!_isValidProof(proof, _stakingVault.withdrawalCredentials(), _deposit)) revert InvalidProof();
+        if (!_isValidProof(proof, _stakingVault.withdrawalCredentials(), _deposit)) revert InvalidProof(_deposit.pubkey);
 
         address _nodeOperator = _stakingVault.nodeOperator();
         nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
 
         validatorStatuses[validatorId] = ValidatorStatus.PROVED;
 
-        // TODO: event
+        emit ValidatorProved(validatorId);
     }
 
     function proveInvalidValidatorDeposit(
@@ -148,11 +165,11 @@ contract PredepositGuardian {
             revert WithdrawalCredentialsAreValid();
         }
 
-        if (!_isValidProof(proof, _invalidWC, _deposit)) revert InvalidProof();
+        if (!_isValidProof(proof, _invalidWC, _deposit)) revert InvalidProof(_deposit.pubkey);
 
         validatorStatuses[validatorId] = ValidatorStatus.PROVED_INVALID;
 
-        // TODO: event
+        emit ValidatorProvedInvalid(validatorId);
     }
 
     function depositToProvenValidators(
@@ -165,12 +182,14 @@ contract PredepositGuardian {
             StakingVault.Deposit calldata deposit = _deposits[i];
             bytes32 validatorId = keccak256(deposit.pubkey);
 
-            if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
+            if (validatorStatuses[validatorId] != ValidatorStatus.PROVED || validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
                 revert DepositToUnprovenValidator();
             }
         }
 
         _stakingVault.depositToBeaconChain(_deposits);
+
+        emit ValidatorsDeposited(_stakingVault.nodeOperator(), _deposits.length);
     }
 
     // called by the staking vault owner if the predeposited validator has a different withdrawal credentials than the vault's withdrawal credentials,
@@ -187,12 +206,18 @@ contract PredepositGuardian {
             revert WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
         }
 
+        if (nodeOperatorCollateralLocked[_stakingVault.nodeOperator()] < PREDEPOSIT_AMOUNT) {
+            revert NotEnoughLockedCollateralToWithdraw(nodeOperatorCollateralLocked[_stakingVault.nodeOperator()], PREDEPOSIT_AMOUNT);
+        }
+
         validatorStatuses[_validatorId] = ValidatorStatus.WITHDRAWN;
+        nodeOperatorCollateral[_stakingVault.nodeOperator()] -= PREDEPOSIT_AMOUNT;
+        nodeOperatorCollateralLocked[_stakingVault.nodeOperator()] -= PREDEPOSIT_AMOUNT;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
         if (!success) revert WithdrawValidatorTransferFailed();
 
-        //TODO: events
+        emit ValidatorSlashed(_validatorId, _recipient);
     }
 
     /// Internal functions
@@ -209,46 +234,35 @@ contract PredepositGuardian {
     function _topUpNodeOperatorCollateral(address _nodeOperator) internal {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
         nodeOperatorCollateral[_nodeOperator] += msg.value;
-        // TODO: event
+
+        emit NodeOperatorCollateralToppedUp(_nodeOperator, msg.value);
     }
 
     function _isValidNodeOperatorCaller(address _nodeOperator) internal view {
         if (msg.sender != _nodeOperator && nodeOperatorDelegate[_nodeOperator] != msg.sender)
-            revert MustBeNodeOperator();
+            revert MustBeNodeOperatorOrDelegate();
     }
 
     error PredepositNoDeposits();
-    error PredepositValueNotMultipleOfOneEther();
-    error PredepositValueNotMatchingNumberOfDeposits();
-    error PredepositNodeOperatorNotMatching();
-    error PredepositValidatorAlreadyPredeposited();
-    error PredepositValidatorWithdrawalCredentialsAlreadyProven();
     error PredepositDepositAmountInvalid();
     error ValidatorNotPreDeposited();
     error DepositSenderNotNodeOperator();
     error DepositToUnprovenValidator();
     error WithdrawSenderNotStakingVaultOwner();
     error WithdrawRecipientZeroAddress();
-    error WithdrawValidatorNotPreDeposited();
-    error WithdrawValidatorWithdrawalCredentialsMatchStakingVault();
     error WithdrawValidatorTransferFailed();
     error WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
-    error WithdrawSenderNotNodeOperator();
-    error WithdrawValidatorDoesNotBelongToNodeOperator();
-    ///
-
-    error NotEnoughUnlockedCollateralToWithdraw();
-    // TODO: rename to mention delegate
-    error MustBeNodeOperatorOfStakingVault();
-    error MustBeNodeOperator();
+    error MustBeNodeOperatorOrDelegate();
     error WithdrawalFailed();
-    error ZeroArgument(string argument);
-    // TODO: args NO, amount - unlocked
-    error NotEnoughUnlockedCollateralToPredeposit();
-    error MustBeNewValidatorPubkey();
-    error InvalidProof();
     error InvalidStakingVault();
-    error ProofOfWrongDeposit();
     error WithdrawalCredentialsAreValid();
     error SlashingNotPermitted();
+
+    error NotEnoughUnlockedCollateralToWithdraw(uint256 unlockedCollateral, uint256 amount);
+    error NotEnoughLockedCollateralToWithdraw(uint256 lockedCollateral, uint256 amount);
+    error ZeroArgument(string argument);
+    error NotEnoughUnlockedCollateralToPredeposit(uint256 unlockedCollateral, uint256 totalDepositAmount);
+    error MustBeNewValidatorPubkey(bytes32 validatorId, ValidatorStatus validatorStatus);
+    error InvalidProof(bytes32 validatorPubkey);
+
 }
