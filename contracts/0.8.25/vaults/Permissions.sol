@@ -106,12 +106,7 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
     }
 
     function stakingVault() public view returns (IStakingVault) {
-        bytes memory args = Clones.fetchCloneArgs(address(this));
-        address addr;
-        assembly {
-            addr := mload(add(args, 32))
-        }
-        return IStakingVault(addr);
+        return IStakingVault(_loadStakingVaultAddress());
     }
 
     // ==================== Role Management Functions ====================
@@ -186,6 +181,13 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyMutuallyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+    }
+
+    function _loadStakingVaultAddress() internal view returns (address addr) {
+        bytes memory args = Clones.fetchCloneArgs(address(this));
+        assembly {
+            addr := mload(add(args, 32))
+        }
     }
 
     /**
