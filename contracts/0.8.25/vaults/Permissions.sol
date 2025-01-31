@@ -102,7 +102,7 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
 
         _setConfirmLifetime(7 days);
 
-        emit Initialized();
+        emit Initialized(_defaultAdmin);
     }
 
     function stakingVault() public view returns (IStakingVault) {
@@ -193,7 +193,7 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
     /**
      * @notice Emitted when the contract is initialized
      */
-    event Initialized();
+    event Initialized(address _defaultAdmin);
 
     /**
      * @notice Error when direct calls to the implementation are forbidden
