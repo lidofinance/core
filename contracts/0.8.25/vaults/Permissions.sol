@@ -28,49 +28,48 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
     /**
      * @notice Permission for funding the StakingVault.
      */
-    bytes32 public constant FUND_ROLE = keccak256("StakingVault.Permissions.Fund");
+    bytes32 public constant FUND_ROLE = keccak256("vaults.Permissions.Fund");
 
     /**
      * @notice Permission for withdrawing funds from the StakingVault.
      */
-    bytes32 public constant WITHDRAW_ROLE = keccak256("StakingVault.Permissions.Withdraw");
+    bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
 
     /**
      * @notice Permission for minting stETH shares backed by the StakingVault.
      */
-    bytes32 public constant MINT_ROLE = keccak256("StakingVault.Permissions.Mint");
+    bytes32 public constant MINT_ROLE = keccak256("vaults.Permissions.Mint");
 
     /**
      * @notice Permission for burning stETH shares backed by the StakingVault.
      */
-    bytes32 public constant BURN_ROLE = keccak256("StakingVault.Permissions.Burn");
+    bytes32 public constant BURN_ROLE = keccak256("vaults.Permissions.Burn");
 
     /**
      * @notice Permission for rebalancing the StakingVault.
      */
-    bytes32 public constant REBALANCE_ROLE = keccak256("StakingVault.Permissions.Rebalance");
+    bytes32 public constant REBALANCE_ROLE = keccak256("vaults.Permissions.Rebalance");
 
     /**
      * @notice Permission for pausing beacon chain deposits on the StakingVault.
      */
-    bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE =
-        keccak256("StakingVault.Permissions.PauseBeaconChainDeposits");
+    bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.PauseBeaconChainDeposits");
 
     /**
      * @notice Permission for resuming beacon chain deposits on the StakingVault.
      */
     bytes32 public constant RESUME_BEACON_CHAIN_DEPOSITS_ROLE =
-        keccak256("StakingVault.Permissions.ResumeBeaconChainDeposits");
+        keccak256("vaults.Permissions.ResumeBeaconChainDeposits");
 
     /**
      * @notice Permission for requesting validator exit from the StakingVault.
      */
-    bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("StakingVault.Permissions.RequestValidatorExit");
+    bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("vaults.Permissions.RequestValidatorExit");
 
     /**
      * @notice Permission for voluntary disconnecting the StakingVault.
      */
-    bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("StakingVault.Permissions.VoluntaryDisconnect");
+    bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
      * @notice Address of the implementation contract
