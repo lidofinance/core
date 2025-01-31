@@ -42,7 +42,7 @@ contract Delegation is Dashboard {
      * - pauses deposits to beacon chain;
      * - resumes deposits to beacon chain.
      */
-    bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
+    bytes32 public constant CURATOR_ROLE = keccak256("vaults.Delegation.CuratorRole");
 
     /**
      * @notice Node operator manager role:
@@ -51,13 +51,13 @@ contract Delegation is Dashboard {
      * - confirms ownership transfer;
      * - assigns NODE_OPERATOR_FEE_CLAIMER_ROLE.
      */
-    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("Vault.Delegation.NodeOperatorManagerRole");
+    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.Delegation.NodeOperatorManagerRole");
 
     /**
      * @notice Node operator fee claimer role:
      * - claims node operator fee.
      */
-    bytes32 public constant NODE_OPERATOR_FEE_CLAIMER_ROLE = keccak256("Vault.Delegation.NodeOperatorFeeClaimerRole");
+    bytes32 public constant NODE_OPERATOR_FEE_CLAIMER_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimerRole");
 
     /**
      * @notice Curator fee in basis points; combined with node operator fee cannot exceed 100%.
