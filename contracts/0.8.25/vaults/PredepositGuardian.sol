@@ -9,8 +9,6 @@ import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/Merkl
 import {StakingVault} from "./StakingVault.sol";
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 
-// TODO: think about naming. It's not a deposit guardian, it's the depositor itself
-// TODO: minor UX improvement: perhaps there's way to reuse predeposits for a different validator without withdrawing
 contract PredepositGuardian {
     uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
@@ -30,7 +28,8 @@ contract PredepositGuardian {
     mapping(address nodeOperator => address delegate) public nodeOperatorDelegate;
 
     mapping(bytes32 validatorPubkeyHash => ValidatorStatus validatorStatus) public validatorStatuses;
-    mapping(bytes32 validatorPubkeyHash => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
+    mapping(bytes32 validatorPubkeyHash => StakingVault) public validatorStakingVault;
+    // node operator can be taken from vault,but this prevents malicious vault from changing node operator midflight
     mapping(bytes32 validatorPubkeyHash => address nodeOperator) public validatorToNodeOperator;
 
     /// views
@@ -70,8 +69,8 @@ contract PredepositGuardian {
         //  TODO: event
     }
 
-    // Question: predeposit is permissionless, i.e. the msg.sender doesn't have to be the node operator,
-    // however, the deposit will still revert if it wasn't signed with the validator private key
+    /// Deposit operations
+
     function predeposit(StakingVault _stakingVault, StakingVault.Deposit[] calldata _deposits) external payable {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
@@ -103,7 +102,7 @@ contract PredepositGuardian {
             if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
 
             validatorStatuses[validatorId] = ValidatorStatus.AWAITING_PROOF;
-            validatorWithdrawalCredentials[validatorId] = _stakingVault.withdrawalCredentials();
+            validatorStakingVault[validatorId] = _stakingVault;
             validatorToNodeOperator[validatorId] = _nodeOperator;
         }
 
@@ -123,7 +122,10 @@ contract PredepositGuardian {
             revert ValidatorNotPreDeposited();
         }
 
-        _validateDepositDataRoot(_deposit, validatorWithdrawalCredentials[validatorId]);
+        // NB! this is potential attack vector, what if the staking vault is malicious
+        // it can change WC to block node operator from bringing proof
+        // we could check if staking vault must always have wc to it's own address is invariant
+        _validateDepositDataRoot(_deposit, validatorStakingVault[validatorId].withdrawalCredentials());
 
         // check that predeposit was made to the staking vault in proof
         _validateProof(proof, _deposit.depositDataRoot, beaconBlockTimestamp);
@@ -140,22 +142,26 @@ contract PredepositGuardian {
         bytes32[] calldata proof,
         uint64 beaconBlockTimestamp
     ) external {
-        bytes32 validatorId = keccak256(_deposit.pubkey);
+        bytes32 _validatorId = keccak256(_deposit.pubkey);
 
         // check that the validator is predeposited
-        if (validatorStatuses[validatorId] != ValidatorStatus.AWAITING_PROOF) {
+        if (validatorStatuses[_validatorId] != ValidatorStatus.AWAITING_PROOF) {
             revert ValidatorNotPreDeposited();
         }
 
         _validateDepositDataRoot(_deposit, _invalidWC);
 
-        if (validatorWithdrawalCredentials[validatorId] == _invalidWC) {
+        // NB! this is potential attack vector, if the staking vault is malicious
+        // it can change WC to steal from the node operator
+        // alt check if staking vault must always have wc to it's own address is invariant
+        //if (address(validatorStakingVault[_validatorId]) == _wcToAddress(_invalidWC)) {
+        if (validatorStakingVault[_validatorId].withdrawalCredentials() == _invalidWC) {
             revert WithdrawalCredentialsAreValid();
         }
 
         _validateProof(proof, _deposit.depositDataRoot, beaconBlockTimestamp);
 
-        validatorStatuses[validatorId] = ValidatorStatus.PROVED_INVALID;
+        validatorStatuses[_validatorId] = ValidatorStatus.PROVED_INVALID;
 
         // TODO: event
     }
@@ -168,13 +174,13 @@ contract PredepositGuardian {
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             StakingVault.Deposit calldata _deposit = _deposits[i];
-            bytes32 validatorId = keccak256(_deposit.pubkey);
+            bytes32 _validatorId = keccak256(_deposit.pubkey);
 
-            if (validatorStatuses[validatorId] != ValidatorStatus.PROVED) {
+            if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED) {
                 revert DepositToUnprovenValidator();
             }
 
-            if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
+            if (validatorStakingVault[_validatorId] != _stakingVault) {
                 revert DepositToWrongVault();
             }
         }
@@ -184,22 +190,13 @@ contract PredepositGuardian {
 
     // called by the staking vault owner if the predeposited validator has a different withdrawal credentials than the vault's withdrawal credentials,
     // i.e. node operator was malicious
-    function withdrawDisprovenCollateral(
-        StakingVault _stakingVault,
-        bytes32 _validatorId,
-        address _recipient
-    ) external {
+    function withdrawDisprovenCollateral(bytes32 _validatorId, address _recipient) external {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
         address _nodeOperator = validatorToNodeOperator[_validatorId];
         if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid();
 
-        if (msg.sender != _stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
-
-        if (_stakingVault.withdrawalCredentials() != validatorWithdrawalCredentials[_validatorId]) {
-            revert WithdrawalCollateralOfWrongVault();
-        }
-        //if (_stakingVault.nodeOperator() != _nodeOperator) revert WithdrawSenderNotNodeOperator();
+        if (msg.sender != validatorStakingVault[_validatorId].owner()) revert WithdrawSenderNotStakingVaultOwner();
 
         nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
         nodeOperatorCollateral[_nodeOperator] -= PREDEPOSIT_AMOUNT;
@@ -261,6 +258,10 @@ contract PredepositGuardian {
         if (_deposit.depositDataRoot != node) {
             revert InvalidDepositRoot();
         }
+    }
+
+    function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address) {
+        return address(uint160(uint256(_withdrawalCredentials)));
     }
 
     // predeposit errors
