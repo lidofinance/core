@@ -4,7 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
+
 import {StakingVault} from "./StakingVault.sol";
+import {IDepositContract} from "../interfaces/IDepositContract.sol";
 
 // TODO: think about naming. It's not a deposit guardian, it's the depositor itself
 // TODO: minor UX improvement: perhaps there's way to reuse predeposits for a different validator without withdrawing
@@ -19,12 +22,16 @@ contract PredepositGuardian {
         WITHDRAWN
     }
 
+    // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
+    address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+
     mapping(address nodeOperator => uint256) public nodeOperatorCollateral;
     mapping(address nodeOperator => uint256) public nodeOperatorCollateralLocked;
     mapping(address nodeOperator => address delegate) public nodeOperatorDelegate;
 
     mapping(bytes32 validatorPubkeyHash => ValidatorStatus validatorStatus) public validatorStatuses;
     mapping(bytes32 validatorPubkeyHash => bytes32 withdrawalCredentials) public validatorWithdrawalCredentials;
+    mapping(bytes32 validatorPubkeyHash => address nodeOperator) public validatorToNodeOperator;
 
     /// views
 
@@ -32,7 +39,7 @@ contract PredepositGuardian {
         return (nodeOperatorCollateral[nodeOperator], nodeOperatorCollateralLocked[nodeOperator]);
     }
 
-    /// Balance operations
+    /// NO Balance operations
 
     function topUpNodeOperatorCollateral(address _nodeOperator) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
@@ -68,7 +75,7 @@ contract PredepositGuardian {
     function predeposit(StakingVault _stakingVault, StakingVault.Deposit[] calldata _deposits) external payable {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
-        address _nodeOperator = StakingVault(payable(_stakingVault)).nodeOperator();
+        address _nodeOperator = _stakingVault.nodeOperator();
         _isValidNodeOperatorCaller(_nodeOperator);
 
         // optional top up
@@ -96,8 +103,8 @@ contract PredepositGuardian {
             if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
 
             validatorStatuses[validatorId] = ValidatorStatus.AWAITING_PROOF;
-            // this prevents cross deposit to other vault
             validatorWithdrawalCredentials[validatorId] = _stakingVault.withdrawalCredentials();
+            validatorToNodeOperator[validatorId] = _nodeOperator;
         }
 
         nodeOperatorCollateralLocked[_nodeOperator] += totalDepositAmount;
@@ -105,37 +112,33 @@ contract PredepositGuardian {
         // TODO: event
     }
 
-    function proveValidatorDeposit(
-        StakingVault _stakingVault,
+    function proveValidatorPreDeposit(
+        StakingVault.Deposit calldata _deposit,
         bytes32[] calldata proof,
-        StakingVault.Deposit calldata _deposit
+        uint64 beaconBlockTimestamp
     ) external {
         bytes32 validatorId = keccak256(_deposit.pubkey);
-
         // check that the validator is predeposited
         if (validatorStatuses[validatorId] != ValidatorStatus.AWAITING_PROOF) {
             revert ValidatorNotPreDeposited();
         }
 
+        _validateDepositDataRoot(_deposit, validatorWithdrawalCredentials[validatorId]);
+
         // check that predeposit was made to the staking vault in proof
-        if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
-            revert InvalidStakingVault();
-        }
+        _validateProof(proof, _deposit.depositDataRoot, beaconBlockTimestamp);
 
-        if (!_isValidProof(proof, _stakingVault.withdrawalCredentials(), _deposit)) revert InvalidProof();
-
-        address _nodeOperator = _stakingVault.nodeOperator();
-        nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
-
+        nodeOperatorCollateralLocked[validatorToNodeOperator[validatorId]] -= PREDEPOSIT_AMOUNT;
         validatorStatuses[validatorId] = ValidatorStatus.PROVED;
 
         // TODO: event
     }
 
-    function proveInvalidValidatorDeposit(
-        bytes32[] calldata proof,
+    function proveInvalidValidatorPreDeposit(
         StakingVault.Deposit calldata _deposit,
-        bytes32 _invalidWC
+        bytes32 _invalidWC,
+        bytes32[] calldata proof,
+        uint64 beaconBlockTimestamp
     ) external {
         bytes32 validatorId = keccak256(_deposit.pubkey);
 
@@ -144,11 +147,13 @@ contract PredepositGuardian {
             revert ValidatorNotPreDeposited();
         }
 
+        _validateDepositDataRoot(_deposit, _invalidWC);
+
         if (validatorWithdrawalCredentials[validatorId] == _invalidWC) {
             revert WithdrawalCredentialsAreValid();
         }
 
-        if (!_isValidProof(proof, _invalidWC, _deposit)) revert InvalidProof();
+        _validateProof(proof, _deposit.depositDataRoot, beaconBlockTimestamp);
 
         validatorStatuses[validatorId] = ValidatorStatus.PROVED_INVALID;
 
@@ -159,14 +164,18 @@ contract PredepositGuardian {
         StakingVault _stakingVault,
         StakingVault.Deposit[] calldata _deposits
     ) external payable {
-        if (msg.sender != _stakingVault.nodeOperator()) revert DepositSenderNotNodeOperator();
+        _isValidNodeOperatorCaller(_stakingVault.nodeOperator());
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            StakingVault.Deposit calldata deposit = _deposits[i];
-            bytes32 validatorId = keccak256(deposit.pubkey);
+            StakingVault.Deposit calldata _deposit = _deposits[i];
+            bytes32 validatorId = keccak256(_deposit.pubkey);
+
+            if (validatorStatuses[validatorId] != ValidatorStatus.PROVED) {
+                revert DepositToUnprovenValidator();
+            }
 
             if (validatorWithdrawalCredentials[validatorId] != _stakingVault.withdrawalCredentials()) {
-                revert DepositToUnprovenValidator();
+                revert DepositToWrongVault();
             }
         }
 
@@ -175,18 +184,20 @@ contract PredepositGuardian {
 
     // called by the staking vault owner if the predeposited validator has a different withdrawal credentials than the vault's withdrawal credentials,
     // i.e. node operator was malicious
-    function slashCollateral(StakingVault _stakingVault, bytes32 _validatorId, address _recipient) external {
+    function withdrawDisprovenCollateral(
+        StakingVault _stakingVault,
+        bytes32 _validatorId,
+        address _recipient
+    ) external {
+        address _nodeOperator = validatorToNodeOperator[_validatorId];
+        if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) revert SlashingNotPermitted();
+
         if (msg.sender != _stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
         if (_recipient == address(0)) revert WithdrawRecipientZeroAddress();
+        if (_stakingVault.nodeOperator() != _nodeOperator) revert WithdrawSenderNotNodeOperator();
 
-        if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) {
-            revert SlashingNotPermitted();
-        }
-
-        if (validatorWithdrawalCredentials[_validatorId] != _stakingVault.withdrawalCredentials()) {
-            revert WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
-        }
-
+        nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
+        nodeOperatorCollateral[_nodeOperator] -= PREDEPOSIT_AMOUNT;
         validatorStatuses[_validatorId] = ValidatorStatus.WITHDRAWN;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
@@ -197,13 +208,13 @@ contract PredepositGuardian {
 
     /// Internal functions
 
-    function _isValidProof(
+    function _validateProof(
         bytes32[] calldata _proof,
-        bytes32 _withdrawalCredentials,
-        StakingVault.Deposit calldata _deposit
-    ) internal pure returns (bool) {
-        // proof logic
-        return true;
+        bytes32 _depositDataRoot,
+        uint64 beaconBlockTimestamp
+    ) internal view {
+        if (!MerkleProof.verifyCalldata(_proof, _getParentBlockRoot(beaconBlockTimestamp), _depositDataRoot))
+            revert InvalidProof();
     }
 
     function _topUpNodeOperatorCollateral(address _nodeOperator) internal {
@@ -217,6 +228,37 @@ contract PredepositGuardian {
             revert MustBeNodeOperator();
     }
 
+    function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
+        (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(blockTimestamp));
+
+        if (!success || data.length == 0) {
+            revert RootNotFound();
+        }
+
+        return abi.decode(data, (bytes32));
+    }
+
+    function _validateDepositDataRoot(StakingVault.Deposit calldata _deposit, bytes32 _invalidWC) internal pure {
+        bytes32 pubkey_root = sha256(abi.encodePacked(_deposit.pubkey, bytes16(0)));
+        bytes32 signature_root = sha256(
+            abi.encodePacked(
+                sha256(abi.encodePacked(_deposit.signature[:64])),
+                sha256(abi.encodePacked(_deposit.signature[64:], bytes32(0)))
+            )
+        );
+        bytes32 node = sha256(
+            abi.encodePacked(
+                sha256(abi.encodePacked(pubkey_root, _invalidWC)),
+                sha256(abi.encodePacked(_deposit.amount, bytes24(0), signature_root))
+            )
+        );
+
+        if (_deposit.depositDataRoot != node) {
+            revert InvalidDepositRoot();
+        }
+    }
+
+    error RootNotFound();
     error PredepositNoDeposits();
     error PredepositValueNotMultipleOfOneEther();
     error PredepositValueNotMatchingNumberOfDeposits();
@@ -251,4 +293,6 @@ contract PredepositGuardian {
     error ProofOfWrongDeposit();
     error WithdrawalCredentialsAreValid();
     error SlashingNotPermitted();
+    error InvalidDepositRoot();
+    error DepositToWrongVault();
 }

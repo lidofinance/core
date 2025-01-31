@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {SignatureChecker} from "@openzeppelin/contracts-v5.2/utils/cryptography/SignatureChecker.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 
@@ -335,7 +334,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             Deposit calldata deposit = _deposits[i];
 
             //TODO: check BLS signature
-
+            // check deposit data root
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 bytes.concat(withdrawalCredentials()),
