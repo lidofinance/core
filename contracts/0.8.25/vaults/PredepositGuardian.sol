@@ -222,13 +222,57 @@ contract PredepositGuardian {
 
     /// Internal functions
 
+    // function _isValidProof(
+    //     bytes32[] calldata _proof,
+    //     bytes32 _withdrawalCredentials,
+    //     StakingVault.Deposit calldata _deposit
+    // ) internal pure returns (bool) {
+    //     // proof logic
+    //     return true;
+    // }
+
+    interface IBeaconRoot {
+        function get() external view returns (bytes32);
+    }
+
+    /// @dev Beacon Root Contract
+    address private constant BEACON_ROOT_CONTRACT = 0x00;
+
     function _isValidProof(
-        bytes32[] calldata _proof,
-        bytes32 _withdrawalCredentials,
-        StakingVault.Deposit calldata _deposit
+        bytes32[] calldata proof, // Merkle Proof from Beacon Chain
+        bytes32 withdrawalCredentials, // Expected WC
+        StakingVault.Deposit calldata deposit // Deposit data to verify
+    ) internal view returns (bool) {
+        // 1. Get root from Beacon Root Contract
+        bytes32 beaconRoot = IBeaconRoot(BEACON_ROOT_CONTRACT).get();
+
+        // 2. Hash depositData
+        bytes32 depositHash = keccak256(
+            abi.encode(deposit.pubkey, withdrawalCredentials, deposit.amount)
+        );
+
+        // 3. Verify Merkle Proof against beaconRoot
+        return _verifyMerkleProof(proof, beaconRoot, depositHash);
+    }
+
+    function _verifyMerkleProof(
+        bytes32[] calldata proof,
+        bytes32 root,
+        bytes32 leaf
     ) internal pure returns (bool) {
-        // proof logic
-        return true;
+        bytes32 computedHash = leaf;
+
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 proofElement = proof[i];
+
+            if (computedHash < proofElement) {
+                computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+            } else {
+                computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+            }
+        }
+
+        return computedHash == root;
     }
 
     function _topUpNodeOperatorCollateral(address _nodeOperator) internal {
