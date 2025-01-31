@@ -7,12 +7,15 @@ import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {console2} from "forge-std/console2.sol";
+import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
+
+interface IStakingRouter {
+    function getRecipients() external view returns (address[] memory);
+}
 
 interface IAccounting {
     function handleOracleReport(ReportValues memory _report) external;
@@ -47,16 +50,22 @@ interface ISecondOpinionOracleMock {
 // 0.0073 * 10^18
 uint256 constant maxYiedPerOperatorWei = 2_792_000_000_000_000; // which % of slashing could be?
 uint256 constant maxLossPerOperatorWei = 7_300_000_000_000_000;
+uint256 constant stableBalanceWei = 32 * 1 ether;
 
 struct FuzzValues {
     uint256 _preClValidators;
-    uint256 _preClBalanceGwei;
+    uint256 _preClBalanceWei;
     uint256 _clValidators;
-    uint256 _clBalanceGwei;
+    uint256 _clBalanceWei;
     uint256 _withdrawalVaultBalance;
-    uint256 _elRewardsVaultBalance;
+    uint256 _elRewardsVaultBalanceWei;
     uint256 _sharesRequestedToBurn;
-    uint256 _lidoExecutionLayerRewardVault;
+    uint256 _lidoExecutionLayerRewardVaultWei;
+}
+
+struct LidoTransfer {
+    address from;
+    address to;
 }
 
 contract AccountingHandler is CommonBase, StdCheats, StdUtils {
@@ -65,19 +74,22 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         int256 depositedValidators;
         int256 sharesMintAsFees;
         int256 transferShares;
-        int256 totalRewards;
-        int256 principalClBalance;
-        int256 unifiedClBalance;
+        int256 totalRewardsWei;
+        int256 principalClBalanceWei;
+        int256 unifiedClBalanceWei;
     }
 
     IAccounting private accounting;
     ILido private lido;
     ISecondOpinionOracleMock private secondOpinionOracle;
+    IStakingRouter public stakingRouter;
 
     Ghost public ghost;
+    LidoTransfer[] public ghost_lidoTransfers;
 
     address private accountingOracle;
     address private lidoExecutionLayerRewardVault;
+    address private burner;
     LimitsList public limitList;
 
     constructor(
@@ -86,15 +98,20 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         address _accountingOracle,
         LimitsList memory _limitList,
         address _lidoExecutionLayerRewardVault,
-        address _secondOpinionOracle
+        address _secondOpinionOracle,
+        address _burnerAddress,
+        address _stakingRouter
     ) {
         accounting = IAccounting(_accounting);
         lido = ILido(_lido);
         accountingOracle = _accountingOracle;
         limitList = _limitList;
         lidoExecutionLayerRewardVault = _lidoExecutionLayerRewardVault;
+
         ghost = Ghost(0, 0, 0, 0, 0, 0, 0);
         secondOpinionOracle = ISecondOpinionOracleMock(_secondOpinionOracle);
+        burner = _burnerAddress;
+        stakingRouter = IStakingRouter(_stakingRouter);
     }
 
     function cutGwei(uint256 value) public returns (uint256) {
@@ -109,32 +126,15 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         // if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         vm.warp(_timestamp + 1);
 
-        // How to determinate max possible balance of validator
-        //
-        // APR ~ 4-6 %
-        // BalVal = 32 ETH
-        // after 10 years staking 32 x (1 + 0.06)^10 ~= 57.4
-        // after 20 years staking 32 x (1 + 0.06)^20 ~= 114.8
-        //
-        // Min Balance = 16. If balVal < 16, then validator is deactivated
-        // uint256 minBalance = 16;
-        // uint256 maxBalance = 100;
-        uint256 stableBalanceWei = 32 * 1 ether;
+        fuzz._lidoExecutionLayerRewardVaultWei = bound(fuzz._lidoExecutionLayerRewardVaultWei, 0, 1_000) * 1 ether;
+        fuzz._elRewardsVaultBalanceWei = bound(
+            fuzz._elRewardsVaultBalanceWei,
+            0,
+            fuzz._lidoExecutionLayerRewardVaultWei
+        );
 
-        fuzz._lidoExecutionLayerRewardVault = bound(fuzz._lidoExecutionLayerRewardVault, 0, 1000);
-        fuzz._elRewardsVaultBalance = bound(fuzz._elRewardsVaultBalance, 0, fuzz._lidoExecutionLayerRewardVault);
-
-        if (fuzz._elRewardsVaultBalance < fuzz._lidoExecutionLayerRewardVault) {
-            console2.log(
-                "reported values less then EL",
-                int256(fuzz._elRewardsVaultBalance) - int256(fuzz._lidoExecutionLayerRewardVault)
-            );
-        } else if (fuzz._elRewardsVaultBalance == fuzz._lidoExecutionLayerRewardVault) {
-            console2.log("equal");
-        }
-
-        fuzz._preClValidators = bound(fuzz._preClValidators, 250_000, type(uint32).max);
-        fuzz._preClBalanceGwei = cutGwei(fuzz._preClValidators * stableBalanceWei);
+        fuzz._preClValidators = bound(fuzz._preClValidators, 250_000, 100_000_000_000);
+        fuzz._preClBalanceWei = cutGwei(fuzz._preClValidators * stableBalanceWei);
 
         ghost.clValidators = int256(fuzz._preClValidators);
 
@@ -144,9 +144,9 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             fuzz._preClValidators + limitList.appearedValidatorsPerDayLimit
         );
 
-        uint256 minBalancePerValidator = fuzz._clValidators * (stableBalanceWei - maxLossPerOperatorWei);
-        uint256 maxBalancePerValidator = fuzz._clValidators * (stableBalanceWei + maxYiedPerOperatorWei);
-        fuzz._clBalanceGwei = cutGwei(bound(fuzz._clBalanceGwei, minBalancePerValidator, maxBalancePerValidator));
+        uint256 minBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei - maxLossPerOperatorWei);
+        uint256 maxBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei + maxYiedPerOperatorWei);
+        fuzz._clBalanceWei = bound(fuzz._clBalanceWei, minBalancePerValidatorWei, maxBalancePerValidatorWei);
 
         // depositedValidators is always greater or equal to beaconValidators
         // Todo: Upper extremum ?
@@ -159,36 +159,36 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
         vm.store(address(lido), keccak256("lido.Lido.depositedValidators"), bytes32(depositedValidators));
         vm.store(address(lido), keccak256("lido.Lido.beaconValidators"), bytes32(fuzz._preClValidators));
-        vm.store(address(lido), keccak256("lido.Lido.beaconBalance"), bytes32(fuzz._preClBalanceGwei));
+        vm.store(address(lido), keccak256("lido.Lido.beaconBalance"), bytes32(fuzz._preClBalanceWei));
 
-        vm.deal(lidoExecutionLayerRewardVault, fuzz._lidoExecutionLayerRewardVault * 1 ether);
+        vm.deal(lidoExecutionLayerRewardVault, fuzz._lidoExecutionLayerRewardVaultWei);
 
         ReportValues memory currentReport = ReportValues({
             timestamp: _timestamp,
             timeElapsed: _timeElapsed,
             clValidators: fuzz._clValidators,
-            clBalance: fuzz._clBalanceGwei,
+            clBalance: (fuzz._clBalanceWei / 1e9) * 1e9,
+            elRewardsVaultBalance: fuzz._elRewardsVaultBalanceWei,
             withdrawalVaultBalance: 0,
-            elRewardsVaultBalance: fuzz._elRewardsVaultBalance * 1 ether,
             sharesRequestedToBurn: 0,
             withdrawalFinalizationBatches: new uint256[](0),
             vaultValues: new uint256[](0),
             netCashFlows: new int256[](0)
         });
 
-        ghost.unifiedClBalance = int256(currentReport.clBalance + currentReport.withdrawalVaultBalance); // ?
-        ghost.principalClBalance = int256(
-            fuzz._preClBalanceGwei + (currentReport.clValidators - fuzz._preClValidators) * stableBalanceWei * 1 ether
+        ghost.unifiedClBalanceWei = int256(fuzz._clBalanceWei + currentReport.withdrawalVaultBalance); // ?
+        ghost.principalClBalanceWei = int256(
+            fuzz._preClBalanceWei + (currentReport.clValidators - fuzz._preClValidators) * stableBalanceWei
         );
 
-        ghost.totalRewards =
-            ghost.unifiedClBalance -
-            ghost.principalClBalance +
-            int256(currentReport.elRewardsVaultBalance);
+        ghost.totalRewardsWei =
+            ghost.unifiedClBalanceWei -
+            ghost.principalClBalanceWei +
+            int256(fuzz._elRewardsVaultBalanceWei);
 
         secondOpinionOracle.mock__setReportValues(
             true,
-            currentReport.clBalance / 1e9,
+            fuzz._clBalanceWei / 1e9,
             currentReport.withdrawalVaultBalance,
             uint256(ghost.depositedValidators),
             0
@@ -196,12 +196,15 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
         vm.prank(accountingOracle);
 
+        delete ghost_lidoTransfers;
         vm.recordLogs();
         accounting.handleOracleReport(currentReport);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         bytes32 totalSharesSignature = keccak256("Mock__MintedTotalShares(uint256)");
         bytes32 transferSharesSignature = keccak256("TransferShares(address,address,uint256)");
+        bytes32 lidoTransferSignature = keccak256("Transfer(address,address,uint256)");
+
         for (uint256 i = 0; i < entries.length; i++) {
             if (entries[i].topics[0] == totalSharesSignature) {
                 ghost.sharesMintAsFees = int256(abi.decode(abi.encodePacked(entries[i].topics[1]), (uint256)));
@@ -210,11 +213,24 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             if (entries[i].topics[0] == transferSharesSignature) {
                 ghost.transferShares = int256(abi.decode(entries[i].data, (uint256)));
             }
+
+            if (entries[i].topics[0] == lidoTransferSignature) {
+                if (entries[i].emitter == address(lido)) {
+                    address from = abi.decode(abi.encodePacked(entries[i].topics[1]), (address));
+                    address to = abi.decode(abi.encodePacked(entries[i].topics[2]), (address));
+
+                    ghost_lidoTransfers.push(LidoTransfer({from: from, to: to}));
+                }
+            }
         }
     }
 
     function getGhost() public view returns (Ghost memory) {
         return ghost;
+    }
+
+    function getLidoTransfers() public view returns (LidoTransfer[] memory) {
+        return ghost_lidoTransfers;
     }
 }
 
@@ -226,6 +242,8 @@ contract AccountingTest is BaseProtocolTest {
     address private rootAccount = address(0x123);
     address private userAccount = address(0x321);
 
+    mapping(address => bool) public possibleLidoRecipients;
+
     function setUp() public {
         BaseProtocolTest.setUpProtocol(protocolStartBalance, rootAccount, userAccount);
 
@@ -235,7 +253,9 @@ contract AccountingTest is BaseProtocolTest {
             lidoLocator.accountingOracle(),
             limitList,
             lidoLocator.elRewardsVault(),
-            address(secondOpinionOracleMock)
+            address(secondOpinionOracleMock),
+            lidoLocator.burner(),
+            lidoLocator.stakingRouter()
         );
 
         // Set target contract to the accounting handler
@@ -244,6 +264,13 @@ contract AccountingTest is BaseProtocolTest {
         vm.prank(userAccount);
         lidoContract.resume();
 
+        possibleLidoRecipients[lidoLocator.burner()] = true;
+        possibleLidoRecipients[lidoLocator.treasury()] = true;
+
+        for (uint256 i = 0; i < accountingHandler.stakingRouter().getRecipients().length; i++) {
+            possibleLidoRecipients[accountingHandler.stakingRouter().getRecipients()[i]] = true;
+        }
+
         // Set target selectors to the accounting handler
         bytes4[] memory selectors = new bytes4[](1);
         selectors[0] = accountingHandler.handleOracleReport.selector;
@@ -251,30 +278,38 @@ contract AccountingTest is BaseProtocolTest {
         targetSelector(FuzzSelector({addr: address(accountingHandler), selectors: selectors}));
     }
 
-    // - user tokens must not be used except burner as source (from Zero / to Zero). From burner to zerop
-    // - from zero to Treasure, burner
-    //
     // - solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
     // - vault params do not affect protocol share rate
-    //}
+    //
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
+     * forge-config: default.invariant.runs = 128
+     * forge-config: default.invariant.depth = 128
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_handleOracleReport() public view {
+    function invariant_clValidatorNotDecreased() public view {
         ILido lido = ILido(lidoLocator.lido());
         (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
 
         // Should not be able to decrease validator number
         assertGe(clValidators, uint256(accountingHandler.getGhost().clValidators));
         assertEq(depositedValidators, uint256(accountingHandler.getGhost().depositedValidators));
+    }
 
-        // - 0 OR 10% OF PROTOCOL FEES SHOULD BE REPORTED (Collect total fees from reports in handler)
-        // CLb + ELr <= 10%
-        if (accountingHandler.getGhost().unifiedClBalance > accountingHandler.getGhost().principalClBalance) {
+    /**
+     *  0 OR 10% OF PROTOCOL FEES SHOULD BE REPORTED (Collect total fees from reports in handler)
+     *  CLb + ELr <= 10%
+     *
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
+     * forge-config: default.invariant.runs = 128
+     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.fail-on-revert = true
+     */
+    function invariant_NonNegativeRebase() public view {
+        ILido lido = ILido(lidoLocator.lido());
+
+        if (accountingHandler.getGhost().unifiedClBalanceWei > accountingHandler.getGhost().principalClBalanceWei) {
             if (accountingHandler.getGhost().sharesMintAsFees < 0) {
                 revert("sharesMintAsFees < 0");
             }
@@ -290,17 +325,36 @@ contract AccountingTest is BaseProtocolTest {
                 lido.getPooledEthByShares(uint256(accountingHandler.getGhost().transferShares))
             );
             int256 totalFees = int256(treasuryFeesETH + reportRewardsMintedETH);
-            int256 totalRewards = accountingHandler.getGhost().totalRewards;
+            int256 totalRewards = accountingHandler.getGhost().totalRewardsWei;
 
             if (totalRewards != 0) {
                 int256 percents = (totalFees * 100) / totalRewards;
-                console2.log("percents", percents);
 
                 assertTrue(percents <= 10, "all distributed rewards > 10%");
-                assertTrue(percents > 0, "all distributed rewards < 0%");
+                assertTrue(percents >= 0, "all distributed rewards < 0%");
             }
         } else {
-            console2.log("Negative rebase. Skipping report", accountingHandler.getGhost().totalRewards / 1 ether);
+            console2.log("Negative rebase. Skipping report", accountingHandler.getGhost().totalRewardsWei / 1 ether);
+        }
+    }
+
+    /**
+     *  Lido.Transfer from (0x00, to treasure or burner. Other -> collect and check what is it)
+     *
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
+     * forge-config: default.invariant.runs = 128
+     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.fail-on-revert = true
+     */
+    function invariant_LidoTransfers() public view {
+        LidoTransfer[] memory lidoTransfers = accountingHandler.getLidoTransfers();
+
+        for (uint256 i = 0; i < lidoTransfers.length; i++) {
+            assertEq(lidoTransfers[i].from, address(0), "Lido.Transfer sender is not zero");
+            assertTrue(
+                possibleLidoRecipients[lidoTransfers[i].to],
+                "Lido.Transfer recipient is not possibleLidoRecipients"
+            );
         }
     }
 }

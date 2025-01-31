@@ -62,6 +62,10 @@ contract StakingRouter__MockForLidoAccounting {
         return stakingModuleIds__mocked;
     }
 
+    function getRecipients() public view returns (address[] memory) {
+        return recipients__mocked;
+    }
+
     function getStakingModule(uint256 _stakingModuleId) public view returns (StakingRouter.StakingModule memory) {
         if (_stakingModuleId >= 4) {
             revert("Staking module does not exist");
