@@ -36,9 +36,9 @@ contract Delegation is Dashboard {
      * @notice Curator role:
      * - sets curator fee;
      * - claims curator fee;
-     * - votes on vote lifetime;
-     * - votes on node operator fee;
-     * - votes on ownership transfer;
+     * - confirms confirm lifetime;
+     * - confirms node operator fee;
+     * - confirms ownership transfer;
      * - pauses deposits to beacon chain;
      * - resumes deposits to beacon chain.
      */
@@ -46,9 +46,9 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Node operator manager role:
-     * - votes on vote lifetime;
-     * - votes on node operator fee;
-     * - votes on ownership transfer;
+     * - confirms confirm lifetime;
+     * - confirms node operator fee;
+     * - confirms ownership transfer;
      * - assigns NODE_OPERATOR_FEE_CLAIMER_ROLE.
      */
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("Vault.Delegation.NodeOperatorManagerRole");
@@ -92,7 +92,7 @@ contract Delegation is Dashboard {
     /**
      * @notice Initializes the contract:
      * - sets up the roles;
-     * - sets the vote lifetime to 7 days (can be changed later by CURATOR_ROLE and NODE_OPERATOR_MANAGER_ROLE).
+     * - sets the confirm lifetime to 7 days (can be changed later by CURATOR_ROLE and NODE_OPERATOR_MANAGER_ROLE).
      * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
@@ -152,13 +152,13 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Sets the vote lifetime.
-     * Vote lifetime is a period during which the vote is counted. Once the period is over,
-     * the vote is considered expired, no longer counts and must be recasted for the voting to go through.
-     * @param _newVoteLifetime The new vote lifetime in seconds.
+     * @notice Sets the confirm lifetime.
+     * Confirm lifetime is a period during which the confirm is counted. Once the period is over,
+     * the confirm is considered expired, no longer counts and must be recasted.
+     * @param _newConfirmLifetime The new confirm lifetime in seconds.
      */
-    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(_votingCommittee()) {
-        _setVoteLifetime(_newVoteLifetime);
+    function setConfirmLifetime(uint256 _newConfirmLifetime) external onlyMutuallyConfirmed(_confirmingRoles()) {
+        _setConfirmLifetime(_newConfirmLifetime);
     }
 
     /**
@@ -181,11 +181,11 @@ contract Delegation is Dashboard {
      * @notice Sets the node operator fee.
      * The node operator fee is the percentage (in basis points) of node operator's share of the StakingVault rewards.
      * The node operator fee combined with the curator fee cannot exceed 100%.
-     * Note that the function reverts if the node operator fee is unclaimed and all the votes must be recasted to execute it again,
-     * which is why the deciding voter must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
+     * Note that the function reverts if the node operator fee is unclaimed and all the confirms must be recasted to execute it again,
+     * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(_votingCommittee()) {
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyMutuallyConfirmed(_confirmingRoles()) {
         if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
@@ -258,16 +258,17 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Returns the committee that can:
-     * - change the vote lifetime;
+     * @notice Returns the roles that can:
+     * - change the confirm lifetime;
+     * - set the curator fee;
      * - set the node operator fee;
      * - transfer the ownership of the StakingVault.
-     * @return committee is an array of roles that form the voting committee.
+     * @return roles is an array of roles that form the confirming roles.
      */
-    function _votingCommittee() internal pure override returns (bytes32[] memory committee) {
-        committee = new bytes32[](2);
-        committee[0] = CURATOR_ROLE;
-        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
+    function _confirmingRoles() internal pure override returns (bytes32[] memory roles) {
+        roles = new bytes32[](2);
+        roles[0] = CURATOR_ROLE;
+        roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
     /**

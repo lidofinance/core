@@ -99,8 +99,8 @@ contract Dashboard is Permissions {
 
     // ==================== View Functions ====================
 
-    function votingCommittee() external pure returns (bytes32[] memory) {
-        return _votingCommittee();
+    function confirmingRoles() external pure returns (bytes32[] memory) {
+        return _confirmingRoles();
     }
 
     /**

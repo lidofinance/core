@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {AccessControlVoteable} from "contracts/0.8.25/utils/AccessControlVoteable.sol";
+import {AccessControlMutuallyConfirmable} from "contracts/0.8.25/utils/AccessControlMutuallyConfirmable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -16,7 +16,7 @@ import {VaultHub} from "./VaultHub.sol";
  * @author Lido
  * @notice Provides granular permissions for StakingVault operations.
  */
-abstract contract Permissions is AccessControlVoteable {
+abstract contract Permissions is AccessControlMutuallyConfirmable {
     /**
      * @notice Struct containing an account and a role for granting/revoking roles.
      */
@@ -101,7 +101,7 @@ abstract contract Permissions is AccessControlVoteable {
         vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
-        _setVoteLifetime(7 days);
+        _setConfirmLifetime(7 days);
 
         emit Initialized();
     }
@@ -143,7 +143,7 @@ abstract contract Permissions is AccessControlVoteable {
         }
     }
 
-    function _votingCommittee() internal pure virtual returns (bytes32[] memory) {
+    function _confirmingRoles() internal pure virtual returns (bytes32[] memory) {
         bytes32[] memory roles = new bytes32[](1);
         roles[0] = DEFAULT_ADMIN_ROLE;
         return roles;
@@ -185,7 +185,7 @@ abstract contract Permissions is AccessControlVoteable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
+    function _transferStakingVaultOwnership(address _newOwner) internal onlyMutuallyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
