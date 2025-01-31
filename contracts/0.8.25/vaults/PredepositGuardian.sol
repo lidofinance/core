@@ -49,8 +49,8 @@ contract PredepositGuardian {
     function withdrawNodeOperatorCollateral(address _nodeOperator, uint256 _amount, address _recipient) external {
         if (_amount == 0) revert ZeroArgument("amount");
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-        // TODO: delegate
-        if (msg.sender != _nodeOperator) revert MustBeNodeOperator();
+
+        _isValidNodeOperatorCaller(_nodeOperator);
 
         if (nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator] >= _amount)
             revert NotEnoughUnlockedCollateralToWithdraw();
@@ -189,19 +189,24 @@ contract PredepositGuardian {
         bytes32 _validatorId,
         address _recipient
     ) external {
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+
         address _nodeOperator = validatorToNodeOperator[_validatorId];
-        if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) revert SlashingNotPermitted();
+        if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid();
 
         if (msg.sender != _stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
-        if (_recipient == address(0)) revert WithdrawRecipientZeroAddress();
-        if (_stakingVault.nodeOperator() != _nodeOperator) revert WithdrawSenderNotNodeOperator();
+
+        if (_stakingVault.withdrawalCredentials() != validatorWithdrawalCredentials[_validatorId]) {
+            revert WithdrawalCollateralOfWrongVault();
+        }
+        //if (_stakingVault.nodeOperator() != _nodeOperator) revert WithdrawSenderNotNodeOperator();
 
         nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
         nodeOperatorCollateral[_nodeOperator] -= PREDEPOSIT_AMOUNT;
         validatorStatuses[_validatorId] = ValidatorStatus.WITHDRAWN;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
-        if (!success) revert WithdrawValidatorTransferFailed();
+        if (!success) revert WithdrawalFailed();
 
         //TODO: events
     }
@@ -225,7 +230,7 @@ contract PredepositGuardian {
 
     function _isValidNodeOperatorCaller(address _nodeOperator) internal view {
         if (msg.sender != _nodeOperator && nodeOperatorDelegate[_nodeOperator] != msg.sender)
-            revert MustBeNodeOperator();
+            revert MustBeNodeOperatorOrDelegate();
     }
 
     function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
@@ -258,41 +263,39 @@ contract PredepositGuardian {
         }
     }
 
-    error RootNotFound();
+    // predeposit errors
     error PredepositNoDeposits();
-    error PredepositValueNotMultipleOfOneEther();
-    error PredepositValueNotMatchingNumberOfDeposits();
-    error PredepositNodeOperatorNotMatching();
-    error PredepositValidatorAlreadyPredeposited();
-    error PredepositValidatorWithdrawalCredentialsAlreadyProven();
+    error PredepositValueNotMultipleOfPrediposit();
     error PredepositDepositAmountInvalid();
+    error MustBeNewValidatorPubkey();
+    error NotEnoughUnlockedCollateralToPredeposit();
+
+    // proving errors
     error ValidatorNotPreDeposited();
-    error DepositSenderNotNodeOperator();
+    error RootNotFound();
+    error InvalidProof();
+    error InvalidDepositRoot();
+
+    // depositing errors
     error DepositToUnprovenValidator();
+    error DepositToWrongVault();
+
+    // withdrawal proven
+    error NotEnoughUnlockedCollateralToWithdraw();
+
+    // withdrawal disproven
+    error ValidatorNotProvenInvalid();
     error WithdrawSenderNotStakingVaultOwner();
-    error WithdrawRecipientZeroAddress();
-    error WithdrawValidatorNotPreDeposited();
-    error WithdrawValidatorWithdrawalCredentialsMatchStakingVault();
-    error WithdrawValidatorTransferFailed();
-    error WithdrawValidatorWithdrawalCredentialsNotMatchingStakingVault();
     error WithdrawSenderNotNodeOperator();
     error WithdrawValidatorDoesNotBelongToNodeOperator();
-    ///
-
-    error NotEnoughUnlockedCollateralToWithdraw();
-    // TODO: rename to mention delegate
-    error MustBeNodeOperatorOfStakingVault();
-    error MustBeNodeOperator();
-    error WithdrawalFailed();
-    error ZeroArgument(string argument);
-    // TODO: args NO, amount - unlocked
-    error NotEnoughUnlockedCollateralToPredeposit();
-    error MustBeNewValidatorPubkey();
-    error InvalidProof();
-    error InvalidStakingVault();
-    error ProofOfWrongDeposit();
+    error WithdrawalCollateralOfWrongVault();
     error WithdrawalCredentialsAreValid();
-    error SlashingNotPermitted();
-    error InvalidDepositRoot();
-    error DepositToWrongVault();
+    /// withdrawal genereic
+    error WithdrawalFailed();
+
+    // auth
+    error MustBeNodeOperatorOrDelegate();
+
+    // general
+    error ZeroArgument(string argument);
 }
