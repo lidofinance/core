@@ -3,8 +3,6 @@
 
 pragma solidity 0.4.24;
 
-import {StETH} from "contracts/0.4.24/StETH.sol";
-
 contract WETH9__MockForVault {
     string public name = "Wrapped Ether";
     string public symbol = "WETH";

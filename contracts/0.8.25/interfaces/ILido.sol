@@ -16,6 +16,8 @@ interface ILido is IERC20, IERC20Permit {
 
     function transferSharesFrom(address, address, uint256) external returns (uint256);
 
+    function transferShares(address, uint256) external returns (uint256);
+
     function rebalanceExternalEtherToInternal() external payable;
 
     function getTotalPooledEther() external view returns (uint256);
