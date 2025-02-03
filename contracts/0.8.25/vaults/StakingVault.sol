@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {ValidatorsManager} from "./ValidatorsManager.sol";
+import {BeaconValidatorController} from "./BeaconValidatorController.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
@@ -56,7 +56,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
+contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -110,7 +110,7 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
     constructor(
         address _vaultHub,
         address _beaconChainDepositContract
-    ) ValidatorsManager(_beaconChainDepositContract) {
+    ) BeaconValidatorController(_beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         VAULT_HUB = VaultHub(_vaultHub);
@@ -379,16 +379,16 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
      * @return Address of `BeaconChainDepositContract`
      */
     function depositContract() external view returns (address) {
-        return _getDepositContract();
+        return _depositContract();
     }
 
     /**
-     * @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this `StakingVault`
-     *         All CL rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported for now.
+     * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
+     *         All CL rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported for now.
      * @return Withdrawal credentials as bytes32
      */
     function withdrawalCredentials() external view returns (bytes32) {
-        return _getWithdrawalCredentials();
+        return _withdrawalCredentials();
     }
 
     /**
@@ -443,7 +443,7 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (!isBalanced()) revert Unbalanced();
 
-        _depositToBeaconChain(_deposits);
+        _deposit(_deposits);
     }
 
     /**
@@ -454,18 +454,17 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
     function calculateTotalExitRequestFee(uint256 _numberOfKeys) external view returns (uint256) {
         if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
 
-        return _calculateTotalExitRequestFee(_numberOfKeys);
+        return _calculateWithdrawalFee(_numberOfKeys);
     }
 
     /**
      * @notice Requests validator exit from the beacon chain
      * @param _pubkeys Concatenated validator public keys
-     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     * @dev    Signals the node operator to eject the specified validators from the beacon chain
      */
     function requestValidatorsExit(bytes calldata _pubkeys) external onlyOwner {
-        _requestValidatorsExit(_pubkeys);
+        _requestExit(_pubkeys);
     }
-
 
     /**
      * @notice Requests validators exit from the beacon chain
@@ -484,7 +483,7 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
             revert ExitTimelockNotElapsed(exitTimelock);
         }
 
-        _forceValidatorsExit(_pubkeys);
+        _initiateFullWithdrawal(_pubkeys);
     }
 
     /**
@@ -496,7 +495,7 @@ contract StakingVault is IStakingVault, ValidatorsManager, OwnableUpgradeable {
     function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
         _onlyOwnerOrNodeOperator();
 
-        _forcePartialValidatorsExit(_pubkeys, _amounts);
+        _initiatePartialWithdrawal(_pubkeys, _amounts);
     }
 
     /**
