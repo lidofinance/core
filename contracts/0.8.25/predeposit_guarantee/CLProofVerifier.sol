@@ -12,16 +12,17 @@ contract CLProofVerifier {
     // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    function _validateProof(
+    function _validateWCProof(
         Validator calldata _validator,
         bytes32[] calldata _proof,
         uint64 beaconBlockTimestamp
-    ) internal view {
+    ) internal view returns (bytes32) {
         if (
             !MerkleProof.verifyCalldata(_proof, _getParentBlockRoot(beaconBlockTimestamp), SSZ.hashTreeRoot(_validator))
         ) {
             revert InvalidProof();
         }
+        return _validator.withdrawalCredentials;
     }
 
     function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
