@@ -19,7 +19,7 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
      * - role: role that confirmed the action
      * - timestamp: timestamp of the confirmation.
      */
-    mapping(bytes32 callId => mapping(bytes32 role => uint256 expiryTimestamp)) public confirmations;
+    mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) public confirmations;
 
     /**
      * @notice Confirmation lifetime in seconds; after this period, the confirmation expires and no longer counts.
@@ -64,7 +64,6 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
     modifier onlyMutuallyConfirmed(bytes32[] memory _roles) {
         if (confirmLifetime == 0) revert ConfirmLifetimeNotSet();
 
-        bytes32 callId = keccak256(msg.data);
         uint256 numberOfRoles = _roles.length;
         uint256 numberOfConfirms = 0;
         bool[] memory deferredConfirms = new bool[](numberOfRoles);
@@ -79,7 +78,7 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
                 deferredConfirms[i] = true;
 
                 emit RoleMemberConfirmed(msg.sender, role, block.timestamp, msg.data);
-            } else if (confirmations[callId][role] >= block.timestamp) {
+            } else if (confirmations[msg.data][role] >= block.timestamp) {
                 numberOfConfirms++;
             }
         }
@@ -89,14 +88,14 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
         if (numberOfConfirms == numberOfRoles) {
             for (uint256 i = 0; i < numberOfRoles; ++i) {
                 bytes32 role = _roles[i];
-                delete confirmations[callId][role];
+                delete confirmations[msg.data][role];
             }
             _;
         } else {
             for (uint256 i = 0; i < numberOfRoles; ++i) {
                 if (deferredConfirms[i]) {
                     bytes32 role = _roles[i];
-                    confirmations[callId][role] = block.timestamp + confirmLifetime;
+                    confirmations[msg.data][role] = block.timestamp + confirmLifetime;
                 }
             }
         }
