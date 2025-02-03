@@ -21,19 +21,15 @@ contract PredepositGuarantee is CLProofVerifier {
     }
 
     mapping(address nodeOperator => uint256) public nodeOperatorCollateral;
-    mapping(address nodeOperator => uint256) public nodeOperatorCollateralLocked;
+    //mapping(address nodeOperator => uint256) public nodeOperatorCollateralLocked;
     mapping(address nodeOperator => address delegate) public nodeOperatorDelegate;
 
-    mapping(bytes32 validatorPubkeyHash => ValidatorStatus validatorStatus) public validatorStatuses;
-    mapping(bytes32 validatorPubkeyHash => StakingVault) public validatorStakingVault;
+    mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) public validatorStatuses;
+    mapping(bytes validatorPubkey => StakingVault) public validatorStakingVault;
     // node operator can be taken from vault,but this prevents malicious vault from changing node operator midflight
-    mapping(bytes32 validatorPubkeyHash => address nodeOperator) public validatorToNodeOperator;
+    mapping(bytes validatorPubkey => address nodeOperator) public validatorToNodeOperator;
 
     /// views
-
-    function nodeOperatorBalance(address nodeOperator) external view returns (uint256, uint256) {
-        return (nodeOperatorCollateral[nodeOperator], nodeOperatorCollateralLocked[nodeOperator]);
-    }
 
     /// NO Balance operations
 
@@ -48,11 +44,10 @@ contract PredepositGuarantee is CLProofVerifier {
 
         _isValidNodeOperatorCaller(_nodeOperator);
 
-        if (nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator] < _amount)
-            revert NotEnoughUnlockedCollateralToWithdraw();
+        if (nodeOperatorCollateral[_nodeOperator] < _amount) revert NotEnoughUnlockedCollateralToWithdraw();
 
         nodeOperatorCollateral[_nodeOperator] -= _amount;
-        (bool success, ) = _recipient.call{value: _amount}("");
+        (bool success, ) = _recipient.call{value: uint256(_amount)}("");
 
         if (!success) revert WithdrawalFailed();
 
@@ -61,7 +56,7 @@ contract PredepositGuarantee is CLProofVerifier {
 
     // delegation
 
-    function delegateNodeOperator(address _delegate) external {
+    function delegateNodeOperatorCollateral(address _delegate) external {
         nodeOperatorDelegate[msg.sender] = _delegate;
         //  TODO: event
     }
@@ -72,38 +67,34 @@ contract PredepositGuarantee is CLProofVerifier {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
         address _nodeOperator = _stakingVault.nodeOperator();
-        _isValidNodeOperatorCaller(_nodeOperator);
+        if (msg.sender != _nodeOperator) revert MustBeNodeOperator();
 
         // optional top up
         if (msg.value != 0) {
             _topUpNodeOperatorCollateral(_nodeOperator);
         }
 
-        uint256 unlockedCollateral = nodeOperatorCollateral[_nodeOperator] -
-            nodeOperatorCollateralLocked[_nodeOperator];
-
         uint256 totalDepositAmount = PREDEPOSIT_AMOUNT * _deposits.length;
 
-        if (unlockedCollateral < totalDepositAmount) revert NotEnoughUnlockedCollateralToPredeposit();
+        if (nodeOperatorCollateral[_nodeOperator] < totalDepositAmount)
+            revert NotEnoughUnlockedCollateralToPredeposit();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             StakingVault.Deposit calldata _deposit = _deposits[i];
 
-            bytes32 validatorId = keccak256(_deposit.pubkey);
-
-            if (validatorStatuses[validatorId] != ValidatorStatus.NO_RECORD) {
+            if (validatorStatuses[_deposit.pubkey] != ValidatorStatus.NO_RECORD) {
                 revert MustBeNewValidatorPubkey();
             }
 
             // cannot predeposit a validator with a deposit amount that is not 1 ether
             if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositDepositAmountInvalid();
 
-            validatorStatuses[validatorId] = ValidatorStatus.AWAITING_PROOF;
-            validatorStakingVault[validatorId] = _stakingVault;
-            validatorToNodeOperator[validatorId] = _nodeOperator;
+            validatorStatuses[_deposit.pubkey] = ValidatorStatus.AWAITING_PROOF;
+            validatorStakingVault[_deposit.pubkey] = _stakingVault;
+            validatorToNodeOperator[_deposit.pubkey] = _nodeOperator;
         }
 
-        nodeOperatorCollateralLocked[_nodeOperator] += totalDepositAmount;
+        nodeOperatorCollateral[_nodeOperator] -= totalDepositAmount;
         _stakingVault.depositToBeaconChain(_deposits);
         // TODO: event
     }
@@ -113,42 +104,40 @@ contract PredepositGuarantee is CLProofVerifier {
         bytes32[] calldata _proof,
         uint64 _beaconBlockTimestamp
     ) external {
-        bytes32 _validatorId = keccak256(_validator.pubkey);
         // check that the validator is predeposited
-        if (validatorStatuses[_validatorId] != ValidatorStatus.AWAITING_PROOF) {
+        if (validatorStatuses[_validator.pubkey] != ValidatorStatus.AWAITING_PROOF) {
             revert ValidatorNotPreDeposited();
         }
 
-        if (address(validatorStakingVault[_validatorId]) != _wcToAddress(_validator.withdrawalCredentials)) {
+        if (address(validatorStakingVault[_validator.pubkey]) != _wcToAddress(_validator.withdrawalCredentials)) {
             revert WithdrawalCredentialsAreInvalid();
         }
 
         _validateProof(_validator, _proof, _beaconBlockTimestamp);
 
-        nodeOperatorCollateralLocked[validatorToNodeOperator[_validatorId]] -= PREDEPOSIT_AMOUNT;
-        validatorStatuses[_validatorId] = ValidatorStatus.PROVED;
+        nodeOperatorCollateral[validatorToNodeOperator[_validator.pubkey]] += PREDEPOSIT_AMOUNT;
+        validatorStatuses[_validator.pubkey] = ValidatorStatus.PROVED;
 
         // TODO: event
     }
 
     function proveInvalidValidatorPreDeposit(
         Validator calldata _validator,
-        bytes32[] calldata _proof,Т
+        bytes32[] calldata _proof,
         uint64 _beaconBlockTimestamp
     ) external {
-        bytes32 _validatorId = keccak256(_validator.pubkey);
         // check that the validator is predeposited
-        if (validatorStatuses[_validatorId] != ValidatorStatus.AWAITING_PROOF) {
+        if (validatorStatuses[_validator.pubkey] != ValidatorStatus.AWAITING_PROOF) {
             revert ValidatorNotPreDeposited();
         }
 
-        if (address(validatorStakingVault[_validatorId]) == _wcToAddress(_validator.withdrawalCredentials)) {
+        if (address(validatorStakingVault[_validator.pubkey]) == _wcToAddress(_validator.withdrawalCredentials)) {
             revert WithdrawalCredentialsAreValid();
         }
 
         _validateProof(_validator, _proof, _beaconBlockTimestamp);
 
-        validatorStatuses[_validatorId] = ValidatorStatus.PROVED_INVALID;
+        validatorStatuses[_validator.pubkey] = ValidatorStatus.PROVED_INVALID;
 
         // TODO: event
     }
@@ -157,17 +146,18 @@ contract PredepositGuarantee is CLProofVerifier {
         StakingVault _stakingVault,
         StakingVault.Deposit[] calldata _deposits
     ) external payable {
-        _isValidNodeOperatorCaller(_stakingVault.nodeOperator());
+        if (msg.sender != _stakingVault.nodeOperator()) {
+            revert MustBeNodeOperator();
+        }
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             StakingVault.Deposit calldata _deposit = _deposits[i];
-            bytes32 _validatorId = keccak256(_deposit.pubkey);
 
-            if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED) {
+            if (validatorStatuses[_deposit.pubkey] != ValidatorStatus.PROVED) {
                 revert DepositToUnprovenValidator();
             }
 
-            if (validatorStakingVault[_validatorId] != _stakingVault) {
+            if (validatorStakingVault[_deposit.pubkey] != _stakingVault) {
                 revert DepositToWrongVault();
             }
         }
@@ -178,17 +168,14 @@ contract PredepositGuarantee is CLProofVerifier {
     // called by the staking vault owner if the predeposited validator has a different withdrawal credentials than the vault's withdrawal credentials,
     // i.e. node operator was malicio
 
-    function withdrawDisprovenCollateral(bytes32 _validatorId, address _recipient) external {
+    function withdrawDisprovenCollateral(bytes calldata validatorPubkey, address _recipient) external {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
-        address _nodeOperator = validatorToNodeOperator[_validatorId];
-        if (validatorStatuses[_validatorId] != ValidatorStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid();
+        if (validatorStatuses[validatorPubkey] != ValidatorStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid();
 
-        if (msg.sender != validatorStakingVault[_validatorId].owner()) revert WithdrawSenderNotStakingVaultOwner();
+        if (msg.sender != validatorStakingVault[validatorPubkey].owner()) revert WithdrawSenderNotStakingVaultOwner();
 
-        nodeOperatorCollateralLocked[_nodeOperator] -= PREDEPOSIT_AMOUNT;
-        nodeOperatorCollateral[_nodeOperator] -= PREDEPOSIT_AMOUNT;
-        validatorStatuses[_validatorId] = ValidatorStatus.WITHDRAWN;
+        validatorStatuses[validatorPubkey] = ValidatorStatus.WITHDRAWN;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
         if (!success) revert WithdrawalFailed();
@@ -243,6 +230,7 @@ contract PredepositGuarantee is CLProofVerifier {
 
     // auth
     error MustBeNodeOperatorOrDelegate();
+    error MustBeNodeOperator();
 
     // general
     error ZeroArgument(string argument);
