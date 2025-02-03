@@ -48,7 +48,7 @@ contract PredepositGuarantee is CLProofVerifier {
 
         _isValidNodeOperatorCaller(_nodeOperator);
 
-        if (nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator] >= _amount)
+        if (nodeOperatorCollateral[_nodeOperator] - nodeOperatorCollateralLocked[_nodeOperator] < _amount)
             revert NotEnoughUnlockedCollateralToWithdraw();
 
         nodeOperatorCollateral[_nodeOperator] -= _amount;
@@ -133,8 +133,7 @@ contract PredepositGuarantee is CLProofVerifier {
 
     function proveInvalidValidatorPreDeposit(
         Validator calldata _validator,
-        bytes32[] calldata _proof,
-        bytes32 _invalidWC,
+        bytes32[] calldata _proof,Т
         uint64 _beaconBlockTimestamp
     ) external {
         bytes32 _validatorId = keccak256(_validator.pubkey);
