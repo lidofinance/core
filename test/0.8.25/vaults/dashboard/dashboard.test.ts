@@ -616,7 +616,7 @@ describe("Dashboard.sol", () => {
     it("requests the exit of a validator", async () => {
       const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       await expect(dashboard.requestValidatorsExit(validatorPublicKeys))
-        .to.emit(vault, "ValidatorsExitRequest")
+        .to.emit(vault, "ExitRequested")
         .withArgs(dashboard, validatorPublicKeys);
     });
   });
