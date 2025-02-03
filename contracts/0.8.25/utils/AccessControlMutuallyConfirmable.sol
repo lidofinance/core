@@ -62,6 +62,7 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
      *
      */
     modifier onlyMutuallyConfirmed(bytes32[] memory _roles) {
+        if (_roles.length == 0) revert ZeroConfirmingRoles();
         if (confirmLifetime == 0) revert ConfirmLifetimeNotSet();
 
         uint256 numberOfRoles = _roles.length;
@@ -146,4 +147,9 @@ abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
      * @dev Thrown when a caller without a required role attempts to confirm.
      */
     error SenderNotMember();
+
+    /**
+     * @dev Thrown when the roles array is empty.
+     */
+    error ZeroConfirmingRoles();
 }
