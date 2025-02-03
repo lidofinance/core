@@ -90,10 +90,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return -1;
     }
 
-    function isBalanced() external pure returns (bool) {
-        return true;
-    }
-
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
@@ -126,16 +122,16 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return false;
     }
 
-    function calculateTotalExitRequestFee(uint256) external pure returns (uint256) {
+    function calculateValidatorWithdrawalFee(uint256) external pure returns (uint256) {
         return 1;
     }
 
     function pauseBeaconChainDeposits() external {}
     function resumeBeaconChainDeposits() external {}
 
-    function requestValidatorsExit(bytes calldata _pubkeys) external {}
-    function forceValidatorsExit(bytes calldata _pubkeys) external payable {}
-    function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
+    function requestValidatorExit(bytes calldata _pubkeys) external {}
+    function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {}
+    function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();

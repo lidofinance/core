@@ -71,9 +71,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
-        /// Status variables
         bool beaconChainDepositsPaused;
-        uint256 unbalancedSince;
     }
 
     /**
@@ -95,11 +93,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      */
     bytes32 private constant ERC7201_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
-
-    /**
-     * @notice Update constant for exit timelock duration to 3 days
-     */
-    uint256 private constant EXIT_TIMELOCK_DURATION = 3 days;
 
     /**
      * @notice Constructs the implementation of `StakingVault`
@@ -218,28 +211,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Returns whether `StakingVault` is balanced, i.e. its valuation is greater than the locked amount
-     * @return True if `StakingVault` is balanced
-     * @dev Not to be confused with the ether balance of the contract (`address(this).balance`).
-     *      Semantically, this state has nothing to do with the actual balance of the contract,
-     *      althogh, of course, the balance of the contract is accounted for in its valuation.
-     *      The `isBalanced()` state indicates whether `StakingVault` is in a good shape
-     *      in terms of the balance of its valuation against the locked amount.
-     */
-    function isBalanced() public view returns (bool) {
-        return valuation() >= _getStorage().locked;
-    }
-
-    /**
-     * @notice Returns the timestamp when `StakingVault` became unbalanced
-     * @return Timestamp when `StakingVault` became unbalanced
-     * @dev If `StakingVault` is balanced, returns 0
-     */
-    function unbalancedSince() external view returns (uint256) {
-        return _getStorage().unbalancedSince;
-    }
-
-    /**
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
      *         In the context of this contract, the node operator performs deposits to the beacon chain
@@ -269,10 +240,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         ERC7201Storage storage $ = _getStorage();
         $.inOutDelta += int128(int256(msg.value));
 
-        if (isBalanced()) {
-            $.unbalancedSince = 0;
-        }
-
         emit Funded(msg.sender, msg.value);
     }
 
@@ -282,8 +249,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _ether Amount of ether to withdraw.
      * @dev Cannot withdraw more than the unlocked amount or the balance of the contract, whichever is less.
      * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether
-     * @dev Includes the `isBalanced()` check to ensure `StakingVault` remains balanced after the withdrawal,
-     *      to safeguard against possible reentrancy attacks.
+     * @dev Includes a check that valuation remains greater than locked amount after withdrawal to ensure
+     *      `StakingVault` stays balanced and prevent reentrancy attacks.
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -297,7 +264,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
-        if (!isBalanced()) revert Unbalanced();
+
+        if (valuation() < $.locked) revert Unbalanced();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -315,10 +283,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
 
         $.locked = uint128(_locked);
 
-        if (!isBalanced()) {
-            $.unbalancedSince = block.timestamp;
-        }
-
         emit LockedIncreased(_locked);
     }
 
@@ -334,8 +298,9 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         uint256 _valuation = valuation();
         if (_ether > _valuation) revert RebalanceAmountExceedsValuation(_valuation, _ether);
 
-        if (owner() == msg.sender || (!isBalanced() && msg.sender == address(VAULT_HUB))) {
-            ERC7201Storage storage $ = _getStorage();
+        ERC7201Storage storage $ = _getStorage();
+        if (owner() == msg.sender || (_valuation < $.locked && msg.sender == address(VAULT_HUB))) {
+
             $.inOutDelta -= int128(int256(_ether));
 
             emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
@@ -360,12 +325,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
-
-        if (isBalanced()) {
-            $.unbalancedSince = 0;
-        } else {
-            $.unbalancedSince = block.timestamp;
-        }
 
         emit Reported(_valuation, _inOutDelta, _locked);
     }
@@ -441,7 +400,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
 
         if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (!isBalanced()) revert Unbalanced();
+        if (valuation() < $.locked) revert Unbalanced();
 
         _deposit(_deposits);
     }
@@ -451,7 +410,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _numberOfKeys Number of validator keys
      * @return Total fee amount
      */
-    function calculateTotalExitRequestFee(uint256 _numberOfKeys) external view returns (uint256) {
+    function calculateValidatorWithdrawalFee(uint256 _numberOfKeys) external view returns (uint256) {
         if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
 
         return _calculateWithdrawalFee(_numberOfKeys);
@@ -462,7 +421,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _pubkeys Concatenated validator public keys
      * @dev    Signals the node operator to eject the specified validators from the beacon chain
      */
-    function requestValidatorsExit(bytes calldata _pubkeys) external onlyOwner {
+    function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
         _requestExit(_pubkeys);
     }
 
@@ -471,18 +430,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _pubkeys Concatenated validators public keys
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function forceValidatorsExit(bytes calldata _pubkeys) external payable {
-        // Only owner or node operator can exit validators when vault is balanced
-        if (isBalanced()) {
-            _onlyOwnerOrNodeOperator();
-        }
-
-        // Ensure timelock period has elapsed
-        uint256 exitTimelock = _getStorage().unbalancedSince + EXIT_TIMELOCK_DURATION;
-        if (block.timestamp < exitTimelock) {
-            revert ExitTimelockNotElapsed(exitTimelock);
-        }
-
+    function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {
+        _onlyOwnerOrNodeOperator();
         _initiateFullWithdrawal(_pubkeys);
     }
 
@@ -492,9 +441,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _amounts Amounts of ether to exit
      * @dev Signals the node operator to eject the specified validators from the beacon chain
      */
-    function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
+    function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
         _onlyOwnerOrNodeOperator();
-
         _initiatePartialWithdrawal(_pubkeys, _amounts);
     }
 

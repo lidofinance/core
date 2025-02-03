@@ -35,7 +35,6 @@ interface IStakingVault {
     function nodeOperator() external view returns (address);
     function locked() external view returns (uint256);
     function valuation() external view returns (uint256);
-    function isBalanced() external view returns (bool);
     function unlocked() external view returns (uint256);
     function inOutDelta() external view returns (int256);
 
@@ -54,9 +53,9 @@ interface IStakingVault {
     function resumeBeaconChainDeposits() external;
     function depositToBeaconChain(Deposit[] calldata _deposits) external;
 
-    function requestValidatorsExit(bytes calldata _pubkeys) external;
+    function requestValidatorExit(bytes calldata _pubkeys) external;
 
-    function calculateTotalExitRequestFee(uint256 _validatorCount) external view returns (uint256);
-    function forceValidatorsExit(bytes calldata _pubkeys) external payable;
-    function forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable;
+    function calculateValidatorWithdrawalFee(uint256 _validatorCount) external view returns (uint256);
+    function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable;
+    function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable;
 }

@@ -62,7 +62,7 @@ abstract contract Permissions is AccessControlVoteable {
     /**
      * @notice Permission for force validators exit from the StakingVault using EIP-7002 triggerable exit.
      */
-    bytes32 public constant FORCE_VALIDATORS_EXIT_ROLE = keccak256("StakingVault.Permissions.ForceValidatorsExit");
+    bytes32 public constant INITIATE_VALIDATOR_WITHDRAWAL_ROLE = keccak256("StakingVault.Permissions.InitiateValidatorWithdrawal");
 
     /**
      * @notice Permission for voluntary disconnecting the StakingVault.
@@ -147,15 +147,15 @@ abstract contract Permissions is AccessControlVoteable {
     }
 
     function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorsExit(_pubkey);
+        stakingVault().requestValidatorExit(_pubkey);
     }
 
-    function _forceValidatorsExit(bytes calldata _pubkeys) internal onlyRole(FORCE_VALIDATORS_EXIT_ROLE) {
-        stakingVault().forceValidatorsExit(_pubkeys);
+    function _initiateFullValidatorsWithdrawal(bytes calldata _pubkeys) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().initiateFullValidatorWithdrawal(_pubkeys);
     }
 
-    function _forcePartialValidatorsExit(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(FORCE_VALIDATORS_EXIT_ROLE) {
-        stakingVault().forcePartialValidatorsExit(_pubkeys, _amounts);
+    function _initiatePartialValidatorsWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().initiatePartialValidatorWithdrawal(_pubkeys, _amounts);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
