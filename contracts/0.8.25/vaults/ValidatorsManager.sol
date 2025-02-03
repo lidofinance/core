@@ -29,11 +29,11 @@ abstract contract ValidatorsManager {
         return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
-    /// @notice Returns the 0x01-type withdrawal credentials for the validators deposited from this contract
-    /// @dev    All consensus layer rewards are sent to this contract. Only 0x01-type withdrawal credentials are supported.
-    /// @return bytes32 The withdrawal credentials, with 0x01 prefix followed by this contract's address
+    /// @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this contract
+    /// @dev    All consensus layer rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported.
+    /// @return bytes32 The withdrawal credentials, with 0x02 prefix followed by this contract's address
     function _getWithdrawalCredentials() internal view returns (bytes32) {
-        return bytes32((0x01 << 248) + uint160(address(this)));
+        return bytes32((0x02 << 248) + uint160(address(this)));
     }
 
     /// @notice Deposits validators to the beacon chain deposit contract
