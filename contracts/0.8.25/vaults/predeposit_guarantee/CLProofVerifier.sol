@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Validator, SSZ} from "../lib/SSZ.sol";
+import {Validator, SSZ} from "../../lib/SSZ.sol";
 
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 

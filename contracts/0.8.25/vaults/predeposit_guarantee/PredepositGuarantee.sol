@@ -4,10 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Validator} from "../lib/SSZ.sol";
+import {Validator} from "../../lib/SSZ.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
-import {StakingVault} from "../vaults/StakingVault.sol";
+import {StakingVault} from "../StakingVault.sol";
 
 struct ValidatorProof {
     Validator validator;
