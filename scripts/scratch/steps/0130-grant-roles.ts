@@ -1,7 +1,13 @@
 import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  Burner,
+  StakingRouter,
+  ValidatorsExitBusOracle,
+  WithdrawalQueueERC721,
+  WithdrawalVault,
+} from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -20,6 +26,7 @@ export async function main() {
   const burnerAddress = state[Sk.burner].address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
+  const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
@@ -91,6 +98,18 @@ export async function main() {
     makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
       from: deployer,
     }),
+  );
+
+  // WithdrawalVault
+  const withdrawalVault = await loadContract<WithdrawalVault>("WithdrawalVault", withdrawalVaultAddress);
+
+  await makeTx(
+    withdrawalVault,
+    "grantRole",
+    [await withdrawalVault.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    {
+      from: deployer,
+    },
   );
 
   // Burner
