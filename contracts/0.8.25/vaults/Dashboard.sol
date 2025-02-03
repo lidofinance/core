@@ -323,38 +323,7 @@ contract Dashboard is Permissions {
         _burnWstETH(_amountOfWstETH);
     }
 
-    /**
-     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
-     */
-    modifier safePermit(
-        address token,
-        address owner,
-        address spender,
-        PermitInput calldata permitInput
-    ) {
-        // Try permit() before allowance check to advance nonce if possible
-        try
-            IERC20Permit(token).permit(
-                owner,
-                spender,
-                permitInput.value,
-                permitInput.deadline,
-                permitInput.v,
-                permitInput.r,
-                permitInput.s
-            )
-        {
-            _;
-            return;
-        } catch {
-            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
-            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
-                _;
-                return;
-            }
-        }
-        revert InvalidPermit(token);
-    }
+    // TODO: move down
 
     /**
      * @notice Burns stETH tokens (in shares) backed by the vault from the sender using permit (with value in stETH).
@@ -464,6 +433,39 @@ contract Dashboard is Permissions {
             _fund(msg.value);
         }
         _;
+    }
+
+    /**
+     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
+     */
+    modifier safePermit(
+        address token,
+        address owner,
+        address spender,
+        PermitInput calldata permitInput
+    ) {
+        // Try permit() before allowance check to advance nonce if possible
+        try
+            IERC20Permit(token).permit(
+                owner,
+                spender,
+                permitInput.value,
+                permitInput.deadline,
+                permitInput.v,
+                permitInput.r,
+                permitInput.s
+            )
+        {
+            _;
+            return;
+        } catch {
+            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
+            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
+                _;
+                return;
+            }
+        }
+        revert InvalidPermit(token);
     }
 
     /**
