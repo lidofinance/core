@@ -10,7 +10,7 @@ pragma solidity >=0.8.9 <0.9.0;
  * Allow validators to trigger withdrawals and exits from their execution layer (0x01) withdrawal credentials.
  */
 library TriggerableWithdrawals {
-    address constant WITHDRAWAL_REQUEST = 0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA;
+    address constant WITHDRAWAL_REQUEST = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant WITHDRAWAL_AMOUNT_LENGTH = 8;
