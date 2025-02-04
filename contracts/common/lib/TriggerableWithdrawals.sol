@@ -17,6 +17,7 @@ library TriggerableWithdrawals {
     uint256 internal constant WITHDRAWAL_REQUEST_CALLDATA_LENGTH = 56;
 
     error WithdrawalFeeReadFailed();
+    error WithdrawalFeeInvalidData();
     error WithdrawalRequestAdditionFailed(bytes callData);
 
     error InsufficientWithdrawalFee(uint256 feePerRequest, uint256 minFeePerRequest);
@@ -154,6 +155,10 @@ library TriggerableWithdrawals {
 
         if (!success) {
             revert WithdrawalFeeReadFailed();
+        }
+
+        if (feeData.length != 32) {
+            revert WithdrawalFeeInvalidData();
         }
 
         return abi.decode(feeData, (uint256));

@@ -81,6 +81,17 @@ describe("TriggerableWithdrawals.sol", () => {
         "WithdrawalFeeReadFailed",
       );
     });
+
+    ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
+      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+
+        await expect(triggerableWithdrawals.getWithdrawalRequestFee()).to.be.revertedWithCustomError(
+          triggerableWithdrawals,
+          "WithdrawalFeeInvalidData",
+        );
+      });
+    });
   });
 
   context("add triggerable withdrawal requests", () => {
@@ -263,6 +274,28 @@ describe("TriggerableWithdrawals.sol", () => {
       await expect(
         triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
       ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
+    });
+
+    ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
+      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+
+        const { pubkeysHexString, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
+          generateWithdrawalRequestPayload(2);
+        const fee = 10n;
+
+        await expect(
+          triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
+        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
+
+        await expect(
+          triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee),
+        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
+
+        await expect(
+          triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
+        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
+      });
     });
 
     it("Should accept withdrawal requests with minimal possible fee when fee not provided", async function () {

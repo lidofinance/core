@@ -284,6 +284,14 @@ describe("WithdrawalVault.sol", () => {
       await withdrawalsPredeployed.setFailOnGetFee(true);
       await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
     });
+
+    ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
+      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+
+        await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "WithdrawalFeeInvalidData");
+      });
+    });
   });
 
   async function getFee(): Promise<bigint> {
@@ -385,6 +393,19 @@ describe("WithdrawalVault.sol", () => {
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
+    });
+
+    ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
+      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+
+        const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
+        const fee = 10n;
+
+        await expect(
+          vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
+        ).to.be.revertedWithCustomError(vault, "WithdrawalFeeInvalidData");
+      });
     });
 
     it("should revert if refund failed", async function () {
