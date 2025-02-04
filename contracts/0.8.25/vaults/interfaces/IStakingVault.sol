@@ -58,4 +58,6 @@ interface IStakingVault {
     function calculateValidatorWithdrawalFee(uint256 _validatorCount) external view returns (uint256);
     function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable;
     function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable;
+
+    function forceValidatorWithdrawal(bytes calldata _pubkeys) external payable;
 }

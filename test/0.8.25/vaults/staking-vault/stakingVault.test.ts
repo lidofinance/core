@@ -59,7 +59,7 @@ describe("StakingVault.sol", () => {
     depositContractAddress = await depositContract.getAddress();
     ethRejectorAddress = await ethRejector.getAddress();
 
-    vaultHubSigner = await impersonate(vaultHubAddress, ether("10"));
+    vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -679,6 +679,33 @@ describe("StakingVault.sol", () => {
         .withArgs(operator, SAMPLE_PUBKEY, [ether("16")])
         .and.to.emit(stakingVault, "FeeRefunded")
         .withArgs(operator, amount - fee);
+    });
+  });
+
+  context("forceValidatorWithdrawal", () => {
+    it("reverts if called by a non-vault hub", async () => {
+      await expect(stakingVault.connect(stranger).forceValidatorWithdrawal(SAMPLE_PUBKEY))
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("forceValidatorWithdrawal", stranger);
+    });
+
+    it("reverts if the passed fee is too high", async () => {
+      const fee = BigInt(await withdrawalRequest.fee());
+      const amount = ether("32");
+
+      await expect(stakingVault.connect(vaultHubSigner).forceValidatorWithdrawal(SAMPLE_PUBKEY, { value: amount }))
+        .to.be.revertedWithCustomError(stakingVault, "FeeRefundFailed")
+        .withArgs(vaultHubSigner, amount - fee);
+    });
+
+    it("makes a full validator withdrawal when called by the vault hub", async () => {
+      const fee = BigInt(await withdrawalRequest.fee());
+
+      await expect(stakingVault.connect(vaultHubSigner).forceValidatorWithdrawal(SAMPLE_PUBKEY, { value: fee }))
+        .to.emit(stakingVault, "FullWithdrawalInitiated")
+        .withArgs(vaultHubSigner, SAMPLE_PUBKEY)
+        .and.to.emit(stakingVault, "ForceValidatorWithdrawal")
+        .withArgs(SAMPLE_PUBKEY);
     });
   });
 

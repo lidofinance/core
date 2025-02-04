@@ -7,7 +7,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
-contract VaultFactory__MockForStakingVault is UpgradeableBeacon {
+contract VaultFactory__Mock is UpgradeableBeacon {
     event VaultCreated(address indexed vault);
 
     constructor(address _stakingVaultImplementation) UpgradeableBeacon(_stakingVaultImplementation, msg.sender) {}

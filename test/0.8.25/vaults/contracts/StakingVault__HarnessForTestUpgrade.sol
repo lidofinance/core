@@ -133,6 +133,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {}
     function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
 
+    function forceValidatorWithdrawal(bytes calldata _pubkeys) external payable {}
+
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 }

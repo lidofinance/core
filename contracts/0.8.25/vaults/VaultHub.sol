@@ -334,6 +334,25 @@ abstract contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
 
+    /// @notice force validator withdrawal from the beacon chain in case the vault is unbalanced
+    /// @param _vault vault address
+    /// @param _pubkeys pubkeys of the validators to withdraw
+    function forceValidatorWithdrawal(address _vault, bytes calldata _pubkeys) external payable {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
+        if (socket.sharesMinted <= threshold) {
+            revert AlreadyBalanced(_vault, socket.sharesMinted, threshold);
+        }
+
+        IStakingVault(_vault).forceValidatorWithdrawal{value: msg.value}(_pubkeys);
+
+        emit ForceValidatorWithdrawalRequested(_vault, _pubkeys);
+    }
+
     function _disconnect(address _vault) internal {
         VaultSocket storage socket = _connectedSocket(_vault);
         IStakingVault vault_ = IStakingVault(socket.vault);
@@ -509,6 +528,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
+    event ForceValidatorWithdrawalRequested(address indexed vault, bytes pubkeys);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);

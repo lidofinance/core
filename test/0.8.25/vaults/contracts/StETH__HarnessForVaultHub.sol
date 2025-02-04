@@ -41,4 +41,8 @@ contract StETH__HarnessForVaultHub is StETH {
     function harness__mintInitialShares(uint256 _sharesAmount) public {
         _mintInitialShares(_sharesAmount);
     }
+
+    function mintExternalShares(address _recipient, uint256 _sharesAmount) public {
+        _mintShares(_recipient, _sharesAmount);
+    }
 }

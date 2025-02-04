@@ -456,6 +456,19 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
+     * @notice Forces validator withdrawal from the beacon chain in case the vault is unbalanced.
+     * @param _pubkeys pubkeys of the validators to withdraw.
+     * @dev    Can only be called by the vault hub in case the vault is unbalanced.
+     */
+    function forceValidatorWithdrawal(bytes calldata _pubkeys) external payable override {
+        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("forceValidatorWithdrawal", msg.sender);
+
+        _initiateFullWithdrawal(_pubkeys);
+
+        emit ForceValidatorWithdrawal(_pubkeys);
+    }
+
+    /**
      * @notice Computes the deposit data root for a validator deposit
      * @param _pubkey Validator public key, 48 bytes
      * @param _withdrawalCredentials Withdrawal credentials, 32 bytes
@@ -540,6 +553,12 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Emitted when deposits to beacon chain are resumed
      */
     event BeaconChainDepositsResumed();
+
+    /**
+     * @notice Emitted when validator withdrawal is forced
+     * @param pubkeys Concatenated validators public keys.
+     */
+    event ForceValidatorWithdrawal(bytes pubkeys);
 
     /// Errors
 
