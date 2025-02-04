@@ -44,7 +44,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   vaultOwner: HardhatEthersSigner,
   operator: HardhatEthersSigner,
 ): Promise<DeployedStakingVault> {
-  // ERC7002 pre-deployed contract mock (0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA)
+  // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
   await deployWithdrawalsPreDeployedMock(1n);
 
   // deploying implementation

@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
  * @notice This is a mock of EIP-7002's pre-deploy contract.
  */
 contract EIP7002WithdrawalRequest_Mock {
-    uint256 public fee;
+    bytes public fee;
     bool public failOnAddRequest;
     bool public failOnGetFee;
 
@@ -23,15 +23,18 @@ contract EIP7002WithdrawalRequest_Mock {
 
     function setFee(uint256 _fee) external {
         require(_fee > 0, "fee must be greater than 0");
-        fee = _fee;
+        fee = abi.encode(_fee);
     }
 
-    fallback(bytes calldata input) external payable returns (bytes memory output) {
+    function setFeeRaw(bytes calldata _rawFeeBytes) external {
+        fee = _rawFeeBytes;
+    }
+
+    fallback(bytes calldata input) external payable returns (bytes memory) {
         if (input.length == 0) {
             require(!failOnGetFee, "fail on get fee");
 
-            output = abi.encode(fee);
-            return output;
+            return fee;
         }
 
         require(!failOnAddRequest, "fail on add request");

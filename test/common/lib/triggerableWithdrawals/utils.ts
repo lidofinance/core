@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { EIP7002WithdrawalRequest_Mock } from "typechain-types";
 
-export const withdrawalsPredeployedHardcodedAddress = "0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA";
+export const withdrawalsPredeployedHardcodedAddress = "0x00000961Ef480Eb55e80D19ad83579A64c007002";
 
 export async function deployWithdrawalsPredeployedMock(
   defaultRequestFee: bigint,

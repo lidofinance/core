@@ -621,7 +621,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("makes a full validator withdrawal when called by the node operator", async () => {
-      const fee = await withdrawalRequest.fee();
+      const fee = BigInt(await withdrawalRequest.fee());
       const amount = ether("32");
 
       await expect(stakingVault.connect(operator).initiateFullValidatorWithdrawal(SAMPLE_PUBKEY, { value: amount }))
@@ -652,8 +652,8 @@ describe("StakingVault.sol", () => {
     });
 
     it("makes a partial validator withdrawal when called by the owner", async () => {
+      const fee = BigInt(await withdrawalRequest.fee());
       const amount = ether("32");
-      const fee = await withdrawalRequest.fee();
 
       await expect(
         stakingVault
@@ -667,8 +667,8 @@ describe("StakingVault.sol", () => {
     });
 
     it("makes a partial validator withdrawal when called by the node operator", async () => {
+      const fee = BigInt(await withdrawalRequest.fee());
       const amount = ether("32");
-      const fee = await withdrawalRequest.fee();
 
       await expect(
         stakingVault
