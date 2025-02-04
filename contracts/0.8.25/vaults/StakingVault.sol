@@ -46,6 +46,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
+ *   - `forceValidatorWithdrawal()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
@@ -329,10 +330,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         emit Reported(_valuation, _inOutDelta, _locked);
     }
 
-    // * * * * * * * * * * * * * * * * * * * * * //
-    // * * * BEACON CHAIN DEPOSITS LOGIC * * * * //
-    // * * * * * * * * * * * * * * * * * * * * * //
-
     /**
      * @notice Returns the address of `BeaconChainDepositContract`.
      * @return Address of `BeaconChainDepositContract`.
@@ -464,8 +461,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("forceValidatorWithdrawal", msg.sender);
 
         _initiateFullWithdrawal(_pubkeys);
-
-        emit ForceValidatorWithdrawal(_pubkeys);
     }
 
     /**
@@ -488,23 +483,20 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         return _computeDepositDataRoot(_pubkey, _withdrawalCredentials, _signature, _amount);
     }
 
-    // * * * * * * * * * * * * * * * * * * * * *  //
-    // * * * INTERNAL FUNCTIONS * * * * * * * * * //
-    // * * * * * * * * * * * * * * * * * * * * *  //
-
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
         }
     }
 
+    /**
+     * @notice Ensures the caller is either the owner or the node operator.
+     */
     function _onlyOwnerOrNodeOperator() internal view {
         if (msg.sender != owner() && msg.sender != _getStorage().nodeOperator) {
             revert OwnableUnauthorizedAccount(msg.sender);
         }
     }
-
-    /// Events
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
@@ -553,14 +545,6 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Emitted when deposits to beacon chain are resumed
      */
     event BeaconChainDepositsResumed();
-
-    /**
-     * @notice Emitted when validator withdrawal is forced
-     * @param pubkeys Concatenated validators public keys.
-     */
-    event ForceValidatorWithdrawal(bytes pubkeys);
-
-    /// Errors
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -639,10 +623,4 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
     error BeaconChainDepositsArePaused();
-
-    /**
-     * @notice Emitted when the exit timelock has not elapsed
-     * @param timelockedUntil Timestamp when the exit timelock will end
-     */
-    error ExitTimelockNotElapsed(uint256 timelockedUntil);
 }
