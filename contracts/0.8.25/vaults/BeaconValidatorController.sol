@@ -76,7 +76,7 @@ abstract contract BeaconValidatorController {
 
         TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
 
-        emit WithdrawalInitiated(msg.sender, _pubkeys);
+        emit FullWithdrawalInitiated(msg.sender, _pubkeys);
 
         _refundExcessFee(totalFee);
     }
@@ -194,7 +194,7 @@ abstract contract BeaconValidatorController {
      * @param _sender Address that requested the validator withdrawal.
      * @param _pubkeys Public key of the validator requested to withdraw.
      */
-    event WithdrawalInitiated(address indexed _sender, bytes _pubkeys);
+    event FullWithdrawalInitiated(address indexed _sender, bytes _pubkeys);
 
     /**
      * @notice Emitted when a validator partial withdrawal request is forced via EIP-7002.

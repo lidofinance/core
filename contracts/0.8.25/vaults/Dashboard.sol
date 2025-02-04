@@ -459,7 +459,7 @@ contract Dashboard is Permissions {
      * @param _validatorPublicKeys The public keys of the validators to request exit for.
      * @dev    This only emits an event requesting the exit, it does not actually initiate the exit.
      */
-    function requestValidatorsExit(bytes calldata _validatorPublicKeys) external {
+    function requestValidatorExit(bytes calldata _validatorPublicKeys) external {
         _requestValidatorExit(_validatorPublicKeys);
     }
 

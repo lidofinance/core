@@ -35,19 +35,19 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- *   - `requestValidatorsExit()`
- *   - `requestValidatorsPartialExit()`
+ *   - `requestValidatorExit()`
+ *   - `initiateFullValidatorWithdrawal()`
+ *   - `initiatePartialValidatorWithdrawal()`
  * - Operator:
  *   - `depositToBeaconChain()`
- *   - `requestValidatorsExit()`
- *   - `requestValidatorsPartialExit()`
+ *   - `initiateFullValidatorWithdrawal()`
+ *   - `initiatePartialValidatorWithdrawal()`
  * - VaultHub:
  *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
- *   - `requestValidatorsExit()` if the vault is unbalanced for more than EXIT_TIMELOCK_DURATION days
  *
  * BeaconProxy
  * The contract is designed as a beacon proxy implementation, allowing all StakingVault instances
@@ -214,7 +214,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
      *         In the context of this contract, the node operator performs deposits to the beacon chain
-     *         and processes validator exit requests submitted by `owner` through `requestValidatorsExit()`.
+     *         and processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
      *         Node operator address is set in the initialization and can never be changed.
      * @return Address of the node operator
      */
@@ -334,33 +334,33 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     // * * * * * * * * * * * * * * * * * * * * * //
 
     /**
-     * @notice Returns the address of `BeaconChainDepositContract`
-     * @return Address of `BeaconChainDepositContract`
+     * @notice Returns the address of `BeaconChainDepositContract`.
+     * @return Address of `BeaconChainDepositContract`.
      */
     function depositContract() external view returns (address) {
         return _depositContract();
     }
 
     /**
-     * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
+     * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`.
      *         All CL rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported for now.
-     * @return Withdrawal credentials as bytes32
+     * @return Withdrawal credentials as bytes32.
      */
     function withdrawalCredentials() external view returns (bytes32) {
         return _withdrawalCredentials();
     }
 
     /**
-     * @notice Returns whether deposits are paused by the vault owner
-     * @return True if deposits are paused
+     * @notice Returns whether deposits are paused by the vault owner.
+     * @return True if deposits are paused.
      */
     function beaconChainDepositsPaused() external view returns (bool) {
         return _getStorage().beaconChainDepositsPaused;
     }
 
     /**
-     * @notice Pauses deposits to beacon chain
-     * @dev Can only be called by the vault owner
+     * @notice Pauses deposits to beacon chain.
+     * @dev    Can only be called by the vault owner.
      */
     function pauseBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -374,8 +374,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Resumes deposits to beacon chain
-     * @dev Can only be called by the vault owner
+     * @notice Resumes deposits to beacon chain.
+     * @dev    Can only be called by the vault owner.
      */
     function resumeBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -389,9 +389,9 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Performs a deposit to the beacon chain deposit contract
-     * @param _deposits Array of deposit structs
-     * @dev Includes a check to ensure StakingVault is balanced before making deposits
+     * @notice Performs a deposit to the beacon chain deposit contract.
+     * @param _deposits Array of deposit structs.
+     * @dev    Includes a check to ensure StakingVault is balanced before making deposits.
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
@@ -406,7 +406,7 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Returns total fee required for given number of validator keys
+     * @notice Returns total withdrawal fee required for given number of validator keys.
      * @param _numberOfKeys Number of validator keys
      * @return Total fee amount
      */
@@ -417,31 +417,40 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Requests validator exit from the beacon chain
-     * @param _pubkeys Concatenated validator public keys
-     * @dev    Signals the node operator to eject the specified validators from the beacon chain
+     * @notice Requests validator exit from the beacon chain.
+     * @param _pubkeys Concatenated validator public keys.
+     * @dev    Signals the node operator to eject the specified validators from the beacon chain.
      */
     function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+
         _requestExit(_pubkeys);
     }
 
     /**
-     * @notice Requests validators exit from the beacon chain
-     * @param _pubkeys Concatenated validators public keys
-     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     * @notice Initiates a full validator withdrawal from the beacon chain following EIP-7002.
+     * @param _pubkeys Concatenated validators public keys.
+     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings.
+     *         Only allowed to be called by the owner or the node operator.
      */
     function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+
         _onlyOwnerOrNodeOperator();
         _initiateFullWithdrawal(_pubkeys);
     }
 
     /**
-     * @notice Requests partial exit of validators from the beacon chain
-     * @param _pubkeys Concatenated validators public keys
-     * @param _amounts Amounts of ether to exit
-     * @dev Signals the node operator to eject the specified validators from the beacon chain
+     * @notice Initiates a partial validator withdrawal from the beacon chain following EIP-7002.
+     * @param _pubkeys Concatenated validators public keys.
+     * @param _amounts Amounts of ether to exit.
+     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings.
+     *         Only allowed to be called by the owner or the node operator.
      */
     function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+        if (_amounts.length == 0) revert ZeroArgument("_amounts");
+
         _onlyOwnerOrNodeOperator();
         _initiatePartialWithdrawal(_pubkeys, _amounts);
     }

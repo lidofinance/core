@@ -123,7 +123,7 @@ describe("BeaconValidatorController.sol", () => {
     });
   });
 
-  context("_initiateFullWithdrawal", () => {
+  context("_initiateWithdrawal", () => {
     it("reverts if passed fee is less than the required fee", async () => {
       const numberOfKeys = 4;
       const pubkeys = getPubkeys(numberOfKeys);
@@ -156,7 +156,7 @@ describe("BeaconValidatorController.sol", () => {
       const fee = await controller.harness__calculateWithdrawalFee(numberOfKeys);
 
       await expect(controller.connect(owner).harness__initiateFullWithdrawal(pubkeys, { value: fee }))
-        .to.emit(controller, "WithdrawalInitiated")
+        .to.emit(controller, "FullWithdrawalInitiated")
         .withArgs(owner, pubkeys);
     });
 
@@ -167,7 +167,7 @@ describe("BeaconValidatorController.sol", () => {
       const overpaid = 100n;
 
       await expect(controller.connect(owner).harness__initiateFullWithdrawal(pubkeys, { value: fee + overpaid }))
-        .to.emit(controller, "WithdrawalInitiated")
+        .to.emit(controller, "FullWithdrawalInitiated")
         .withArgs(owner, pubkeys)
         .and.to.emit(controller, "FeeRefunded")
         .withArgs(owner, overpaid);

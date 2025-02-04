@@ -7,6 +7,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
+  EIP7002WithdrawalRequest_Mock,
   EthRejector,
   StakingVault,
   VaultHub__MockForStakingVault,
@@ -14,11 +15,13 @@ import {
 
 import { computeDepositDataRoot, de0x, ether, impersonate, streccak } from "lib";
 
-import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
+import { deployStakingVaultBehindBeaconProxy, deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
+
+const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 // @TODO: test reentrancy attacks
 describe("StakingVault.sol", () => {
@@ -32,6 +35,7 @@ describe("StakingVault.sol", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
+  let withdrawalRequest: EIP7002WithdrawalRequest_Mock;
   let ethRejector: EthRejector;
 
   let vaultOwnerAddress: string;
@@ -46,6 +50,7 @@ describe("StakingVault.sol", () => {
     ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
       await deployStakingVaultBehindBeaconProxy(vaultOwner, operator));
 
+    withdrawalRequest = await deployWithdrawalsPreDeployedMock(1n);
     ethRejector = await ethers.deployContract("EthRejector");
 
     vaultOwnerAddress = await vaultOwner.getAddress();
@@ -558,6 +563,141 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(stakingVault, "Deposited")
         .withArgs(operator, 1, amount);
+    });
+  });
+
+  context("calculateValidatorWithdrawalFee", () => {
+    it("reverts if the number of validators is zero", async () => {
+      await expect(stakingVault.calculateValidatorWithdrawalFee(0))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_numberOfKeys");
+    });
+
+    it("returns the correct withdrawal fee", async () => {
+      await withdrawalRequest.setFee(100n);
+      expect(await stakingVault.calculateValidatorWithdrawalFee(1)).to.equal(100n);
+    });
+  });
+
+  context("requestValidatorExit", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).requestValidatorExit("0x"))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("reverts if the number of validators is zero", async () => {
+      await expect(stakingVault.connect(vaultOwner).requestValidatorExit("0x"))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_pubkeys");
+    });
+
+    it("emits the `ExitRequested` event", async () => {
+      await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
+        .to.emit(stakingVault, "ExitRequested")
+        .withArgs(vaultOwner, SAMPLE_PUBKEY);
+    });
+  });
+
+  context("initiateFullValidatorWithdrawal", () => {
+    it("reverts if the number of validators is zero", async () => {
+      await expect(stakingVault.connect(vaultOwner).initiateFullValidatorWithdrawal("0x"))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_pubkeys");
+    });
+
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).initiateFullValidatorWithdrawal(SAMPLE_PUBKEY))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("makes a full validator withdrawal when called by the owner", async () => {
+      await expect(
+        stakingVault.connect(vaultOwner).initiateFullValidatorWithdrawal(SAMPLE_PUBKEY, { value: ether("32") }),
+      )
+        .to.emit(stakingVault, "FullWithdrawalInitiated")
+        .withArgs(vaultOwner, SAMPLE_PUBKEY);
+    });
+
+    it("makes a full validator withdrawal when called by the node operator", async () => {
+      const fee = await withdrawalRequest.fee();
+      const amount = ether("32");
+
+      await expect(stakingVault.connect(operator).initiateFullValidatorWithdrawal(SAMPLE_PUBKEY, { value: amount }))
+        .and.to.emit(stakingVault, "FullWithdrawalInitiated")
+        .withArgs(operator, SAMPLE_PUBKEY)
+        .and.to.emit(stakingVault, "FeeRefunded")
+        .withArgs(operator, amount - fee);
+    });
+  });
+
+  context("initiatePartialValidatorWithdrawal", () => {
+    it("reverts if the number of validators is zero", async () => {
+      await expect(stakingVault.connect(vaultOwner).initiatePartialValidatorWithdrawal("0x", [ether("16")]))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_pubkeys");
+    });
+
+    it("reverts if the number of amounts is zero", async () => {
+      await expect(stakingVault.connect(vaultOwner).initiatePartialValidatorWithdrawal(SAMPLE_PUBKEY, []))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_amounts");
+    });
+
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).initiatePartialValidatorWithdrawal(SAMPLE_PUBKEY, [ether("16")]))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("makes a partial validator withdrawal when called by the owner", async () => {
+      const amount = ether("32");
+      const fee = await withdrawalRequest.fee();
+
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .initiatePartialValidatorWithdrawal(SAMPLE_PUBKEY, [ether("16")], { value: amount }),
+      )
+        .to.emit(stakingVault, "PartialWithdrawalInitiated")
+        .withArgs(vaultOwner, SAMPLE_PUBKEY, [ether("16")])
+        .and.to.emit(stakingVault, "FeeRefunded")
+        .withArgs(vaultOwner, amount - fee);
+    });
+
+    it("makes a partial validator withdrawal when called by the node operator", async () => {
+      const amount = ether("32");
+      const fee = await withdrawalRequest.fee();
+
+      await expect(
+        stakingVault
+          .connect(operator)
+          .initiatePartialValidatorWithdrawal(SAMPLE_PUBKEY, [ether("16")], { value: amount }),
+      )
+        .and.to.emit(stakingVault, "PartialWithdrawalInitiated")
+        .withArgs(operator, SAMPLE_PUBKEY, [ether("16")])
+        .and.to.emit(stakingVault, "FeeRefunded")
+        .withArgs(operator, amount - fee);
+    });
+  });
+
+  context("computeDepositDataRoot", () => {
+    it("computes the deposit data root", async () => {
+      // sample tx data: https://etherscan.io/tx/0x02980d44c119b0a8e3ca0d31c288e9f177c76fb4d7ab616563e399dd9c7c6507
+      const pubkey =
+        "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
+      const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
+      const signature =
+        "0xab95e358d002fd79bc08564a2db057dd5164af173915eba9e3e9da233d404c0eb0058760bc30cb89abbc55cf57f0c5a6018cdb17df73ca39ddc80a323a13c2e7ba942faa86757b26120b3a58dcce5d89e95ea1ee8fa3276ffac0f0ad9313211d";
+      const amount = ether("32");
+      const expectedDepositDataRoot = "0xb28f86815813d7da8132a2979836b326094a350e7aa301ba611163d4b7ca77be";
+
+      computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
+
+      expect(await stakingVault.computeDepositDataRoot(pubkey, withdrawalCredentials, signature, amount)).to.equal(
+        expectedDepositDataRoot,
+      );
     });
   });
 });
