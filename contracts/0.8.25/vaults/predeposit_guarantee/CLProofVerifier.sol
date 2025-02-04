@@ -25,7 +25,8 @@ contract CLProofVerifier {
         return _validator.withdrawalCredentials;
     }
 
-    function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
+    // virtual for testing
+    function _getParentBlockRoot(uint64 blockTimestamp) internal view virtual returns (bytes32) {
         (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(blockTimestamp));
 
         if (!success || data.length == 0) {

@@ -157,6 +157,8 @@ contract PredepositGuarantee is CLProofVerifier {
     function withdrawDisprovenCollateral(bytes calldata validatorPubkey, address _recipient) external {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
+        if (_recipient == address(validatorStakingVault[validatorPubkey])) revert WithdrawToVaultNotAllowed();
+
         if (validatorStatuses[validatorPubkey] != ValidatorStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid();
 
         if (msg.sender != validatorStakingVault[validatorPubkey].owner()) revert WithdrawSenderNotStakingVaultOwner();
@@ -164,6 +166,7 @@ contract PredepositGuarantee is CLProofVerifier {
         validatorStatuses[validatorPubkey] = ValidatorStatus.WITHDRAWN;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
+
         if (!success) revert WithdrawalFailed();
 
         //TODO: events
@@ -233,6 +236,7 @@ contract PredepositGuarantee is CLProofVerifier {
     error WithdrawValidatorDoesNotBelongToNodeOperator();
     error WithdrawalCollateralOfWrongVault();
     error WithdrawalCredentialsAreValid();
+    error WithdrawToVaultNotAllowed();
     /// withdrawal generic
     error WithdrawalFailed();
 
