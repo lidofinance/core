@@ -4,15 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Validator} from "../../lib/SSZ.sol";
+import {CLProofVerifier, ValidatorWitness} from "./CLProofVerifier.sol";
 
-import {CLProofVerifier} from "./CLProofVerifier.sol";
 import {StakingVault} from "../StakingVault.sol";
-
-struct ValidatorProof {
-    Validator validator;
-    bytes32[] proof;
-}
 
 contract PredepositGuarantee is CLProofVerifier {
     uint256 public constant PREDEPOSIT_AMOUNT = 1 ether;
@@ -101,12 +95,8 @@ contract PredepositGuarantee is CLProofVerifier {
         // TODO: event
     }
 
-    function proveValidatorWC(
-        Validator calldata _validator,
-        bytes32[] calldata _proof,
-        uint64 _beaconBlockTimestamp
-    ) external {
-        _processWCProof(_validator, _proof, _beaconBlockTimestamp);
+    function proveValidatorWC(ValidatorWitness calldata _witness) external {
+        _processWCProof(_witness);
     }
 
     function depositToProvenValidators(
@@ -139,14 +129,12 @@ contract PredepositGuarantee is CLProofVerifier {
       - trigger deposit to proven validators via vault
      NB! proven and deposited validators sets don't have to match */
     function proveAndDeposit(
-        ValidatorProof[] calldata _validatorProofs,
+        ValidatorWitness[] calldata _witnesses,
         StakingVault.Deposit[] calldata _deposits,
-        StakingVault _stakingVault,
-        uint64 _beaconBlockTimestamp
+        StakingVault _stakingVault
     ) external payable {
-        for (uint256 i = 0; i < _validatorProofs.length; i++) {
-            ValidatorProof calldata _validatorProof = _validatorProofs[i];
-            _processWCProof(_validatorProof.validator, _validatorProof.proof, _beaconBlockTimestamp);
+        for (uint256 i = 0; i < _witnesses.length; i++) {
+            _processWCProof(_witnesses[i]);
         }
 
         depositToProvenValidators(_stakingVault, _deposits);
@@ -189,24 +177,17 @@ contract PredepositGuarantee is CLProofVerifier {
         return address(uint160(uint256(_withdrawalCredentials)));
     }
 
-    function _processWCProof(
-        Validator calldata _validator,
-        bytes32[] calldata _proof,
-        uint64 _beaconBlockTimestamp
-    ) internal {
-        if (validatorStatuses[_validator.pubkey] != ValidatorStatus.AWAITING_PROOF) {
+    function _processWCProof(ValidatorWitness calldata _witness) internal {
+        if (validatorStatuses[_witness.validator.pubkey] != ValidatorStatus.AWAITING_PROOF) {
             revert ValidatorNotPreDeposited();
         }
 
-        if (
-            address(validatorStakingVault[_validator.pubkey]) ==
-            _wcToAddress(_validateWCProof(_validator, _proof, _beaconBlockTimestamp))
-        ) {
-            nodeOperatorCollateral[validatorToNodeOperator[_validator.pubkey]] += PREDEPOSIT_AMOUNT;
-            validatorStatuses[_validator.pubkey] = ValidatorStatus.PROVED;
+        if (address(validatorStakingVault[_witness.validator.pubkey]) == _wcToAddress(_validateWCProof(_witness))) {
+            nodeOperatorCollateral[validatorToNodeOperator[_witness.validator.pubkey]] += PREDEPOSIT_AMOUNT;
+            validatorStatuses[_witness.validator.pubkey] = ValidatorStatus.PROVED;
             // TODO: positive events
         } else {
-            validatorStatuses[_validator.pubkey] = ValidatorStatus.PROVED_INVALID;
+            validatorStatuses[_witness.validator.pubkey] = ValidatorStatus.PROVED_INVALID;
             // TODO: negative events
         }
     }

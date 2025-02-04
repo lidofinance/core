@@ -3,10 +3,9 @@
 
 pragma solidity 0.8.25;
 
-import {CLProofVerifier, Validator, SSZ} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
+import {CLProofVerifier, Validator, SSZ, ValidatorWitness} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
 
-import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
-
+// TODO: remake this to allign with SSZ and CL merkle tree
 contract CLProofVerifier__Harness is CLProofVerifier {
     // Store the leaves of the Merkle tree.
     bytes32[] public leaves;
@@ -133,11 +132,7 @@ contract CLProofVerifier__Harness is CLProofVerifier {
         return _computeMerkleRoot(leaves);
     }
 
-    function TEST_validateWCProof(
-        Validator calldata _validator,
-        bytes32[] calldata _proof,
-        uint64 beaconBlockTimestamp
-    ) public view {
-        require(_validator.withdrawalCredentials == super._validateWCProof(_validator, _proof, beaconBlockTimestamp));
+    function TEST_validateWCProof(ValidatorWitness calldata _witness) public view {
+        super._validateWCProof(_witness);
     }
 }
