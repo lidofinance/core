@@ -1761,4 +1761,47 @@ describe("Dashboard.sol", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
   });
+
+  context("role management", () => {
+    let assignments: Dashboard.RoleAssignmentStruct[];
+
+    beforeEach(async () => {
+      assignments = [
+        { role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+      ];
+    });
+
+    context("grantRoles", () => {
+      it("reverts when assignments array is empty", async () => {
+        await expect(dashboard.grantRoles([])).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      });
+
+      it("grants roles to multiple accounts", async () => {
+        await dashboard.grantRoles(assignments);
+
+        for (const assignment of assignments) {
+          expect(await dashboard.hasRole(assignment.role, assignment.account)).to.be.true;
+        }
+      });
+    });
+
+    context("revokeRoles", () => {
+      beforeEach(async () => {
+        await dashboard.grantRoles(assignments);
+      });
+
+      it("reverts when assignments array is empty", async () => {
+        await expect(dashboard.revokeRoles([])).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      });
+
+      it("revokes roles from multiple accounts", async () => {
+        await dashboard.revokeRoles(assignments);
+
+        for (const assignment of assignments) {
+          expect(await dashboard.hasRole(assignment.role, assignment.account)).to.be.false;
+        }
+      });
+    });
+  });
 });
