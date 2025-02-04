@@ -21,7 +21,7 @@ import {
 
 import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstethDomain } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("Dashboard.sol", () => {
@@ -49,8 +49,12 @@ describe("Dashboard.sol", () => {
 
   const BP_BASE = 10_000n;
 
+  const FEE = 10n; // some withdrawal fee for EIP-7002
+
   before(async () => {
     [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+
+    await deployWithdrawalsPreDeployedMock(FEE);
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
@@ -135,6 +139,13 @@ describe("Dashboard.sol", () => {
         dashboard_,
         "NonProxyCallsForbidden",
       );
+    });
+  });
+
+  context("votingCommittee", () => {
+    it("returns the array of roles", async () => {
+      const votingCommittee = await dashboard.votingCommittee();
+      expect(votingCommittee).to.deep.equal([ZeroAddress]);
     });
   });
 
@@ -606,8 +617,8 @@ describe("Dashboard.sol", () => {
   });
 
   context("requestValidatorExit", () => {
+    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
     it("reverts if called by a non-admin", async () => {
-      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       await expect(dashboard.connect(stranger).requestValidatorExit(validatorPublicKeys)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -615,10 +626,42 @@ describe("Dashboard.sol", () => {
     });
 
     it("requests the exit of a validator", async () => {
-      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       await expect(dashboard.requestValidatorExit(validatorPublicKeys))
         .to.emit(vault, "ExitRequested")
         .withArgs(dashboard, validatorPublicKeys);
+    });
+  });
+
+  context("initiateFullValidatorWithdrawal", () => {
+    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(
+        dashboard.connect(stranger).initiateFullValidatorWithdrawal(validatorPublicKeys),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("initiates a full validator withdrawal", async () => {
+      await expect(dashboard.initiateFullValidatorWithdrawal(validatorPublicKeys, { value: FEE }))
+        .to.emit(vault, "FullWithdrawalInitiated")
+        .withArgs(dashboard, validatorPublicKeys);
+    });
+  });
+
+  context("initiatePartialValidatorWithdrawal", () => {
+    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+    const amounts = [ether("0.1")];
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(
+        dashboard.connect(stranger).initiatePartialValidatorWithdrawal(validatorPublicKeys, amounts),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("initiates a partial validator withdrawal", async () => {
+      await expect(dashboard.initiatePartialValidatorWithdrawal(validatorPublicKeys, amounts, { value: FEE }))
+        .to.emit(vault, "PartialWithdrawalInitiated")
+        .withArgs(dashboard, validatorPublicKeys, amounts);
     });
   });
 

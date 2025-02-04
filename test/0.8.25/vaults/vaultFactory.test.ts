@@ -118,6 +118,7 @@ describe("VaultFactory.sol", () => {
       depositPauser: await vaultOwner1.getAddress(),
       depositResumer: await vaultOwner1.getAddress(),
       exitRequester: await vaultOwner1.getAddress(),
+      withdrawalInitiator: await vaultOwner1.getAddress(),
       disconnecter: await vaultOwner1.getAddress(),
       nodeOperatorManager: await operator.getAddress(),
       nodeOperatorFeeClaimer: await operator.getAddress(),

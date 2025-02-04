@@ -463,6 +463,23 @@ contract Dashboard is Permissions {
         _requestValidatorExit(_validatorPublicKeys);
     }
 
+    /**
+     * @notice Initiates a full validator withdrawal for the given validator public keys.
+     * @param _validatorPublicKeys The public keys of the validators to initiate withdrawal for.
+     */
+    function initiateFullValidatorWithdrawal(bytes calldata _validatorPublicKeys) external payable {
+        _initiateFullValidatorWithdrawal(_validatorPublicKeys);
+    }
+
+    /**
+     * @notice Initiates a partial validator withdrawal for the given validator public keys and amounts.
+     * @param _validatorPublicKeys The public keys of the validators to initiate withdrawal for.
+     * @param _amounts The amounts of the validators to initiate withdrawal for.
+     */
+    function initiatePartialValidatorWithdrawal(bytes calldata _validatorPublicKeys, uint64[] calldata _amounts) external payable {
+        _initiatePartialValidatorWithdrawal(_validatorPublicKeys, _amounts);
+    }
+
     // ==================== Role Management Functions ====================
 
     /**

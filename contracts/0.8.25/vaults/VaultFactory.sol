@@ -20,6 +20,7 @@ struct DelegationConfig {
     address depositPauser;
     address depositResumer;
     address exitRequester;
+    address withdrawalInitiator;
     address disconnecter;
     address curator;
     address nodeOperatorManager;
@@ -78,6 +79,7 @@ contract VaultFactory {
         delegation.grantRole(delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositPauser);
         delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumer);
         delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequester);
+        delegation.grantRole(delegation.INITIATE_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.withdrawalInitiator);
         delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecter);
         delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);

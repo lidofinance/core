@@ -150,12 +150,12 @@ abstract contract Permissions is AccessControlVoteable {
         stakingVault().requestValidatorExit(_pubkey);
     }
 
-    function _initiateFullValidatorsWithdrawal(bytes calldata _pubkeys) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
-        stakingVault().initiateFullValidatorWithdrawal(_pubkeys);
+    function _initiateFullValidatorWithdrawal(bytes calldata _pubkeys) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().initiateFullValidatorWithdrawal{value: msg.value}(_pubkeys);
     }
 
-    function _initiatePartialValidatorsWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
-        stakingVault().initiatePartialValidatorWithdrawal(_pubkeys, _amounts);
+    function _initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) internal onlyRole(INITIATE_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().initiatePartialValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
