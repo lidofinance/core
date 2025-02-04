@@ -2,12 +2,11 @@
 // for testing purposes only
 pragma solidity ^0.8.0;
 
-import "foundry/lib/forge-std/src/Vm.sol";
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
@@ -25,6 +24,10 @@ interface IAccounting {
 
 interface ILido {
     function getTotalShares() external view returns (uint256);
+
+    function getBufferedEther() external view returns (uint256);
+
+    function getExternalShares() external view returns (uint256);
 
     function getPooledEthByShares(uint256 _sharesAmount) external view returns (uint256);
 
@@ -48,7 +51,7 @@ interface ISecondOpinionOracleMock {
 
 // 0.002792 * 10^18
 // 0.0073 * 10^18
-uint256 constant maxYiedPerOperatorWei = 2_792_000_000_000_000; // which % of slashing could be?
+uint256 constant maxYieldPerOperatorWei = 2_792_000_000_000_000; // which % of slashing could be?
 uint256 constant maxLossPerOperatorWei = 7_300_000_000_000_000;
 uint256 constant stableBalanceWei = 32 * 1 ether;
 
@@ -120,7 +123,7 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
     function handleOracleReport(FuzzValues memory fuzz) external {
         uint256 _timeElapsed = 86_400;
-        uint256 _timestamp = 1_737_366_566 + _timeElapsed;
+        uint256 _timestamp = block.timestamp + _timeElapsed;
 
         // cheatCode for
         // if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
@@ -145,14 +148,14 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         );
 
         uint256 minBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei - maxLossPerOperatorWei);
-        uint256 maxBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei + maxYiedPerOperatorWei);
+        uint256 maxBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei + maxYieldPerOperatorWei);
         fuzz._clBalanceWei = bound(fuzz._clBalanceWei, minBalancePerValidatorWei, maxBalancePerValidatorWei);
 
         // depositedValidators is always greater or equal to beaconValidators
         // Todo: Upper extremum ?
         uint256 depositedValidators = bound(
             fuzz._preClValidators,
-            fuzz._clValidators,
+            fuzz._clValidators + 1,
             fuzz._clValidators + limitList.appearedValidatorsPerDayLimit
         );
         ghost.depositedValidators = int256(depositedValidators);
@@ -278,10 +281,6 @@ contract AccountingTest is BaseProtocolTest {
         targetSelector(FuzzSelector({addr: address(accountingHandler), selectors: selectors}));
     }
 
-    // - solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
-    // - vault params do not affect protocol share rate
-    //
-
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
      * forge-config: default.invariant.runs = 128
@@ -339,8 +338,7 @@ contract AccountingTest is BaseProtocolTest {
     }
 
     /**
-     *  Lido.Transfer from (0x00, to treasure or burner. Other -> collect and check what is it)
-     *
+     * Lido.Transfer from (0x00, to treasure or burner. Other -> collect and check what is it)
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
      * forge-config: default.invariant.runs = 128
      * forge-config: default.invariant.depth = 128
@@ -356,5 +354,43 @@ contract AccountingTest is BaseProtocolTest {
                 "Lido.Transfer recipient is not possibleLidoRecipients"
             );
         }
+    }
+
+    /**
+     * solvency - stETH <> ETH = 1:1 - internal and total share rates are equal
+     * vault params do not affect protocol share rate
+     *
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
+     * forge-config: default.invariant.runs = 128
+     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.fail-on-revert = true
+     */
+    function invariant_vaultsDonAffectSharesRate() public view {
+        ILido lido = ILido(lidoLocator.lido());
+
+        uint256 totalShares = lido.getTotalShares();
+        uint256 totalEth = lido.getBufferedEther();
+        uint256 totalShareRate = totalEth / totalShares;
+
+        console2.log("totalShares", totalShares);
+        console2.log("totalEth", totalEth);
+        console2.log("totalShareRate", totalShareRate);
+
+        (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
+        // clValidators can never be less than deposited ones.
+        uint256 transientEther = (depositedValidators - clValidators) * 32 ether;
+        console2.log("transientEther", transientEther);
+
+        uint256 internalEther = totalEth + clBalance + transientEther;
+        console2.log("internalEther", internalEther);
+        uint256 internalShares = totalShares - lido.getExternalShares();
+        console2.log("internalShares", internalShares);
+        console2.log("getExternalShares", lido.getExternalShares());
+
+        uint256 internalShareRate = internalEther / internalShares;
+
+        console2.log("internalShareRate", internalShareRate);
+
+        assertEq(totalShareRate, internalShareRate);
     }
 }

@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
-
 pragma solidity ^0.8.0;
 
-import "../0.4.24/contracts/StakingRouter__MockForLidoAccounting.sol";
-import "../0.4.24/contracts/SecondOpinionOracle__Mock.sol";
 import "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
-import {StdCheats} from "forge-std/StdCheats.sol";
-
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
+import {StdCheats} from "forge-std/StdCheats.sol";
+
+import "../0.4.24/contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
+import "../0.4.24/contracts/SecondOpinionOracle__Mock.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
@@ -135,7 +134,7 @@ contract BaseProtocolTest is Test {
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("RESUME_ROLE"), rootAccount);
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("PAUSE_ROLE"), rootAccount);
 
-        StakingRouter__MockForLidoAccounting stakingRouter = new StakingRouter__MockForLidoAccounting();
+        StakingRouter__MockForLidoAccountingFuzzing stakingRouter = new StakingRouter__MockForLidoAccountingFuzzing();
 
         uint256[] memory stakingModuleIds = new uint256[](3);
         stakingModuleIds[0] = 1;

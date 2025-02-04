@@ -111,6 +111,9 @@ contract ShareRateTest is BaseProtocolTest {
      * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
+     *
+     * TODO: Maybe add an invariant that lido.getExternalShares = startExternalBalance + mintedExternal - burnedExternal?
+     * So we'll know it something is odd inside a math for external shares?
      */
     function invariant_totalShares() public view {
         assertEq(lidoContract.getTotalShares(), shareRateHandler.getTotalShares());
