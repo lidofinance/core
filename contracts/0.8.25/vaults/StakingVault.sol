@@ -5,10 +5,11 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {BeaconValidatorController} from "./BeaconValidatorController.sol";
 
+import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -57,7 +58,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * deposit contract.
  *
  */
-contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgradeable {
+contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -88,6 +89,12 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     VaultHub private immutable VAULT_HUB;
 
     /**
+     * @notice Address of `BeaconChainDepositContract`
+     *         Set immutably in the constructor to avoid storage costs
+     */
+    IDepositContract private immutable BEACON_CHAIN_DEPOSIT_CONTRACT;
+
+    /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
@@ -101,13 +108,12 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(
-        address _vaultHub,
-        address _beaconChainDepositContract
-    ) BeaconValidatorController(_beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
+        BEACON_CHAIN_DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -331,33 +337,33 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Returns the address of `BeaconChainDepositContract`.
-     * @return Address of `BeaconChainDepositContract`.
+     * @notice Returns the address of `BeaconChainDepositContract`
+     * @return Address of `BeaconChainDepositContract`
      */
     function depositContract() external view returns (address) {
-        return _depositContract();
+        return address(BEACON_CHAIN_DEPOSIT_CONTRACT);
     }
 
     /**
-     * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`.
-     *         All CL rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported for now.
-     * @return Withdrawal credentials as bytes32.
+     * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
+     *         All consensus layer rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported
+     * @return Withdrawal credentials as bytes32
      */
-    function withdrawalCredentials() external view returns (bytes32) {
-        return _withdrawalCredentials();
+    function withdrawalCredentials() public view returns (bytes32) {
+        return bytes32((0x02 << 248) + uint160(address(this)));
     }
 
     /**
-     * @notice Returns whether deposits are paused by the vault owner.
-     * @return True if deposits are paused.
+     * @notice Returns whether deposits are paused by the vault owner
+     * @return True if deposits are paused
      */
     function beaconChainDepositsPaused() external view returns (bool) {
         return _getStorage().beaconChainDepositsPaused;
     }
 
     /**
-     * @notice Pauses deposits to beacon chain.
-     * @dev    Can only be called by the vault owner.
+     * @notice Pauses deposits to beacon chain
+     * @dev    Can only be called by the vault owner
      */
     function pauseBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -371,8 +377,8 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Resumes deposits to beacon chain.
-     * @dev    Can only be called by the vault owner.
+     * @notice Resumes deposits to beacon chain
+     * @dev    Can only be called by the vault owner
      */
     function resumeBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -386,9 +392,9 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
     }
 
     /**
-     * @notice Performs a deposit to the beacon chain deposit contract.
-     * @param _deposits Array of deposit structs.
-     * @dev    Includes a check to ensure StakingVault is balanced before making deposits.
+     * @notice Performs a deposit to the beacon chain deposit contract
+     * @param _deposits Array of deposit structs
+     * @dev    Includes a check to ensure `StakingVault` is balanced before making deposits
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
@@ -399,68 +405,104 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (valuation() < $.locked) revert Unbalanced();
 
-        _deposit(_deposits);
+        uint256 totalAmount = 0;
+        uint256 numberOfDeposits = _deposits.length;
+        for (uint256 i = 0; i < numberOfDeposits; i++) {
+            IStakingVault.Deposit calldata deposit = _deposits[i];
+            BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
+                deposit.pubkey,
+                bytes.concat(withdrawalCredentials()),
+                deposit.signature,
+                deposit.depositDataRoot
+            );
+            totalAmount += deposit.amount;
+        }
+
+        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
     /**
-     * @notice Returns total withdrawal fee required for given number of validator keys.
-     * @param _numberOfKeys Number of validator keys
+     * @notice Calculates the total withdrawal fee required for given number of validator keys
+     * @param _numberOfKeys Number of validators' public keys
      * @return Total fee amount
      */
     function calculateValidatorWithdrawalFee(uint256 _numberOfKeys) external view returns (uint256) {
         if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
 
-        return _calculateWithdrawalFee(_numberOfKeys);
+        return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
     /**
-     * @notice Requests validator exit from the beacon chain.
-     * @param _pubkeys Concatenated validator public keys.
-     * @dev    Signals the node operator to eject the specified validators from the beacon chain.
+     * @notice Requests validator exit from the beacon chain by emitting an `ValidatorExitRequested` event
+     * @param _pubkeys Concatenated validators' public keys
+     * @dev    Signals the node operator to eject the specified validators from the beacon chain
      */
     function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
 
-        _requestExit(_pubkeys);
+        emit ValidatorExitRequested(msg.sender, _pubkeys);
     }
 
     /**
-     * @notice Initiates a full validator withdrawal from the beacon chain following EIP-7002.
-     * @param _pubkeys Concatenated validators public keys.
-     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings.
-     *         Only allowed to be called by the owner or the node operator.
+     * @notice Initiates a full validator withdrawal from the beacon chain following EIP-7002
+     * @param _pubkeys Concatenated validators public keys
+     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings
+     *         Only allowed to be called by the owner or the node operator
+     * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
     function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
-
         _onlyOwnerOrNodeOperator();
-        _initiateFullWithdrawal(_pubkeys);
+
+        (uint256 feePerRequest, uint256 totalFee) = _getAndValidateWithdrawalFees(_pubkeys);
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
+
+        emit FullValidatorWithdrawalInitiated(msg.sender, _pubkeys);
+
+        _refundExcessFee(totalFee);
     }
 
     /**
-     * @notice Initiates a partial validator withdrawal from the beacon chain following EIP-7002.
-     * @param _pubkeys Concatenated validators public keys.
-     * @param _amounts Amounts of ether to exit.
-     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings.
-     *         Only allowed to be called by the owner or the node operator.
+     * @notice Initiates a partial validator withdrawal from the beacon chain following EIP-7002
+     * @param _pubkeys Concatenated validators public keys
+     * @param _amounts Amounts of ether to exit
+     * @dev    Keys are expected to be 48 bytes long tightly packed without paddings
+     *         Only allowed to be called by the owner or the node operator
+     * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
     function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
 
         _onlyOwnerOrNodeOperator();
-        _initiatePartialWithdrawal(_pubkeys, _amounts);
+
+        (uint256 feePerRequest, uint256 totalFee) = _getAndValidateWithdrawalFees(_pubkeys);
+        TriggerableWithdrawals.addPartialWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
+
+        emit PartialValidatorWithdrawalInitiated(msg.sender, _pubkeys, _amounts);
+
+        _refundExcessFee(totalFee);
     }
 
     /**
      * @notice Forces validator withdrawal from the beacon chain in case the vault is unbalanced.
      * @param _pubkeys pubkeys of the validators to withdraw.
      * @dev    Can only be called by the vault hub in case the vault is unbalanced.
+     * @dev    The caller must provide exactly the required fee via msg.value to cover the withdrawal request costs. No refunds are provided.
      */
     function forceValidatorWithdrawal(bytes calldata _pubkeys) external payable override {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("forceValidatorWithdrawal", msg.sender);
 
-        _initiateFullWithdrawal(_pubkeys);
+        uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        uint256 totalFee = feePerRequest * _pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH;
+
+        if (msg.value != totalFee) {
+            revert InvalidValidatorWithdrawalFee(msg.value, totalFee);
+        }
+
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
+
+        emit FullValidatorWithdrawalInitiated(msg.sender, _pubkeys);
     }
 
     /**
@@ -480,7 +522,37 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         bytes calldata _signature,
         uint256 _amount
     ) external pure returns (bytes32) {
-        return _computeDepositDataRoot(_pubkey, _withdrawalCredentials, _signature, _amount);
+        // Step 1. Convert the deposit amount in wei to gwei in 64-bit bytes
+        bytes memory amountBE64 = abi.encodePacked(uint64(_amount / 1 gwei));
+
+        // Step 2. Convert the amount to little-endian format by flipping the bytes
+        bytes memory amountLE64 = new bytes(8);
+        amountLE64[0] = amountBE64[7];
+        amountLE64[1] = amountBE64[6];
+        amountLE64[2] = amountBE64[5];
+        amountLE64[3] = amountBE64[4];
+        amountLE64[4] = amountBE64[3];
+        amountLE64[5] = amountBE64[2];
+        amountLE64[6] = amountBE64[1];
+        amountLE64[7] = amountBE64[0];
+
+        // Step 3. Compute the root of the pubkey
+        bytes32 pubkeyRoot = sha256(abi.encodePacked(_pubkey, bytes16(0)));
+
+        // Step 4. Compute the root of the signature
+        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0 : 64]));
+        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64 :], bytes32(0)));
+        bytes32 signatureRoot = sha256(abi.encodePacked(sigSlice1Root, sigSlice2Root));
+
+        // Step 5. Compute the root-toot-toorootoo of the deposit data
+        bytes32 depositDataRoot = sha256(
+            abi.encodePacked(
+                sha256(abi.encodePacked(pubkeyRoot, _withdrawalCredentials)),
+                sha256(abi.encodePacked(amountLE64, bytes24(0), signatureRoot))
+            )
+        );
+
+        return depositDataRoot;
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -489,12 +561,41 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
         }
     }
 
-    /**
-     * @notice Ensures the caller is either the owner or the node operator.
-     */
+    /// @notice Ensures the caller is either the owner or the node operator
     function _onlyOwnerOrNodeOperator() internal view {
         if (msg.sender != owner() && msg.sender != _getStorage().nodeOperator) {
             revert OwnableUnauthorizedAccount(msg.sender);
+        }
+    }
+
+    /// @notice Validates that sufficient fee was provided to cover validator withdrawal requests
+    /// @param _pubkeys Concatenated validator public keys, each 48 bytes long
+    /// @return feePerRequest Fee per request for the withdrawal request
+    /// @return totalFee Total fee required for the withdrawal request
+    function _getAndValidateWithdrawalFees(bytes calldata _pubkeys) private view returns (uint256 feePerRequest, uint256 totalFee) {
+        feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        totalFee = feePerRequest * _pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH;
+
+        if (msg.value < totalFee) {
+            revert InvalidValidatorWithdrawalFee(msg.value, totalFee);
+        }
+
+        return (feePerRequest, totalFee);
+    }
+
+    /// @notice Refunds excess fee back to the sender if they sent more than required
+    /// @param _totalFee Total fee required for the withdrawal request that will be kept
+    /// @dev    Sends back any msg.value in excess of _totalFee to msg.sender
+    function _refundExcessFee(uint256 _totalFee) private {
+        uint256 excess = msg.value - _totalFee;
+
+        if (excess > 0) {
+            (bool success,) = msg.sender.call{value: excess}("");
+            if (!success) {
+                revert ValidatorWithdrawalFeeRefundFailed(msg.sender, excess);
+            }
+
+            emit ValidatorWithdrawalFeeRefunded(msg.sender, excess);
         }
     }
 
@@ -545,6 +646,44 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Emitted when deposits to beacon chain are resumed
      */
     event BeaconChainDepositsResumed();
+
+    /**
+     * @notice Emitted when ether is deposited to `DepositContract`.
+     * @param _sender Address that initiated the deposit.
+     * @param _deposits Number of validator deposits made.
+     * @param _totalAmount Total amount of ether deposited.
+     */
+    event DepositedToBeaconChain(address indexed _sender, uint256 _deposits, uint256 _totalAmount);
+
+    /**
+     * @notice Emitted when a validator exit request is made.
+     * @param _sender Address that requested the validator exit.
+     * @param _pubkeys Public key of the validator requested to exit.
+     * @dev    Signals `nodeOperator` to exit the validator.
+     */
+    event ValidatorExitRequested(address indexed _sender, bytes _pubkeys);
+
+    /**
+     * @notice Emitted when a validator withdrawal request is forced via EIP-7002.
+     * @param _sender Address that requested the validator withdrawal.
+     * @param _pubkeys Public key of the validator requested to withdraw.
+     */
+    event FullValidatorWithdrawalInitiated(address indexed _sender, bytes _pubkeys);
+
+    /**
+     * @notice Emitted when a validator partial withdrawal request is forced via EIP-7002.
+     * @param _sender Address that requested the validator partial withdrawal.
+     * @param _pubkeys Public key of the validator requested to withdraw.
+     * @param _amounts Amounts of ether requested to withdraw.
+     */
+    event PartialValidatorWithdrawalInitiated(address indexed _sender, bytes _pubkeys, uint64[] _amounts);
+
+    /**
+     * @notice Emitted when an excess fee is refunded back to the sender.
+     * @param _sender Address that received the refund.
+     * @param _amount Amount of ether refunded.
+     */
+    event ValidatorWithdrawalFeeRefunded(address indexed _sender, uint256 _amount);
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -623,4 +762,18 @@ contract StakingVault is IStakingVault, BeaconValidatorController, OwnableUpgrad
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
     error BeaconChainDepositsArePaused();
+
+    /**
+     * @notice Thrown when the validator withdrawal fee is invalid
+     * @param _passed Amount of ether passed to the function
+     * @param _required Amount of ether required to cover the fee
+     */
+    error InvalidValidatorWithdrawalFee(uint256 _passed, uint256 _required);
+
+    /**
+     * @notice Thrown when a validator withdrawal fee refund fails
+     * @param _sender Address that initiated the refund
+     * @param _amount Amount of ether to refund
+     */
+    error ValidatorWithdrawalFeeRefundFailed(address _sender, uint256 _amount);
 }

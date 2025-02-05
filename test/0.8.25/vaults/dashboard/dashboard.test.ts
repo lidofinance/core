@@ -627,7 +627,7 @@ describe("Dashboard.sol", () => {
 
     it("requests the exit of a validator", async () => {
       await expect(dashboard.requestValidatorExit(validatorPublicKeys))
-        .to.emit(vault, "ExitRequested")
+        .to.emit(vault, "ValidatorExitRequested")
         .withArgs(dashboard, validatorPublicKeys);
     });
   });
@@ -643,7 +643,7 @@ describe("Dashboard.sol", () => {
 
     it("initiates a full validator withdrawal", async () => {
       await expect(dashboard.initiateFullValidatorWithdrawal(validatorPublicKeys, { value: FEE }))
-        .to.emit(vault, "FullWithdrawalInitiated")
+        .to.emit(vault, "FullValidatorWithdrawalInitiated")
         .withArgs(dashboard, validatorPublicKeys);
     });
   });
@@ -660,7 +660,7 @@ describe("Dashboard.sol", () => {
 
     it("initiates a partial validator withdrawal", async () => {
       await expect(dashboard.initiatePartialValidatorWithdrawal(validatorPublicKeys, amounts, { value: FEE }))
-        .to.emit(vault, "PartialWithdrawalInitiated")
+        .to.emit(vault, "PartialValidatorWithdrawalInitiated")
         .withArgs(dashboard, validatorPublicKeys, amounts);
     });
   });

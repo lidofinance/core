@@ -127,12 +127,12 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       it("reverts if fees are insufficient or too high", async () => {
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 1n }))
-          .to.be.revertedWithCustomError(vault, "InsufficientFee")
+          .to.be.revertedWithCustomError(vault, "InvalidValidatorWithdrawalFee")
           .withArgs(1n, FEE);
 
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: FEE + 1n }))
-          .to.be.revertedWithCustomError(vault, "FeeRefundFailed")
-          .withArgs(vaultHubAddress, 1n);
+          .to.be.revertedWithCustomError(vault, "InvalidValidatorWithdrawalFee")
+          .withArgs(FEE + 1n, FEE);
       });
 
       it("initiates force validator withdrawal", async () => {
