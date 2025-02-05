@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
+/*
+ Cut version of SSZ library from CSM, only supports Validator container
+ original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
+*/
+
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
@@ -18,8 +23,6 @@ struct Validator {
     uint64 withdrawableEpoch;
 }
 
-// Cut version of SSZ library from https://github.com/lidofinance/community-staking-module/blob/develop/src/lib/SSZ.sol
-// Only contains SSZ for Validator container
 library SSZ {
     error BranchHasMissingItem();
     error BranchHasExtraItem();
