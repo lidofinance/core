@@ -123,10 +123,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
+    function initialize(
+        address _owner,
+        address _nodeOperator,
+        address _depositGuardian,
+        bytes calldata /* _params */
+    ) external initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
-        _getStorage().depositGuardian = _owner;
+        _getStorage().depositGuardian = _depositGuardian;
     }
 
     /**
@@ -334,7 +339,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             Deposit calldata deposit = _deposits[i];
 
             //TODO: check BLS signature
-            // check deposit data root
+
             BEACON_CHAIN_DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 bytes.concat(withdrawalCredentials()),
@@ -413,77 +418,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.locked = uint128(_locked);
 
         emit Reported(_valuation, _inOutDelta, _locked);
-    }
-
-    /**
-     * @notice Sets the deposit guardian
-     * @param _depositGuardian The address of the deposit guardian
-     * @dev In case where the deposit guardian is a contract, it must implement EIP-1271.
-     *      The interface check for EIP-1271 is omitted because the only way to check for whether an account is a contract
-     *      is to call `extcodesize` on it. This method is not reliable, as it can be broken, for instance, by CREATE2-deployed contracts.
-     *      So to avoid false positives, the contract shifts this responsibility to the owner.
-     *      If a contract mistakenly assigned as a deposit guardian is not a valid EIP-1271 signer,
-     *      the owner can simply set it to a different address.
-     */
-    function setDepositGuardian(address _depositGuardian) external onlyOwner {
-        if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
-
-        ERC7201Storage storage $ = _getStorage();
-        address oldDepositGuardian = $.depositGuardian;
-        $.depositGuardian = _depositGuardian;
-
-        emit DepositGuardianSet(oldDepositGuardian, _depositGuardian);
-    }
-
-    /**
-     * @notice Computes the deposit data root for a validator deposit
-     * @param _pubkey Validator public key, 48 bytes
-     * @param _withdrawalCredentials Withdrawal credentials, 32 bytes
-     * @param _signature Signature of the deposit, 96 bytes
-     * @param _amount Amount of ether to deposit, in wei
-     * @return Deposit data root as bytes32
-     * @dev This function computes the deposit data root according to the deposit contract's specification.
-     *      The deposit data root is check upon deposit to the deposit contract as a protection against malformed deposit data.
-     *      See more: https://etherscan.io/address/0x00000000219ab540356cbb839cbe05303d7705fa#code
-     *
-     */
-    function computeDepositDataRoot(
-        bytes calldata _pubkey,
-        bytes calldata _withdrawalCredentials,
-        bytes calldata _signature,
-        uint256 _amount
-    ) external view returns (bytes32) {
-        // Step 1. Convert the deposit amount in wei to gwei in 64-bit bytes
-        bytes memory amountBE64 = abi.encodePacked(uint64(_amount / 1 gwei));
-
-        // Step 2. Convert the amount to little-endian format by flipping the bytes 🧠
-        bytes memory amountLE64 = new bytes(8);
-        amountLE64[0] = amountBE64[7];
-        amountLE64[1] = amountBE64[6];
-        amountLE64[2] = amountBE64[5];
-        amountLE64[3] = amountBE64[4];
-        amountLE64[4] = amountBE64[3];
-        amountLE64[5] = amountBE64[2];
-        amountLE64[6] = amountBE64[1];
-        amountLE64[7] = amountBE64[0];
-
-        // Step 3. Compute the root of the pubkey
-        bytes32 pubkeyRoot = sha256(abi.encodePacked(_pubkey, bytes16(0)));
-
-        // Step 4. Compute the root of the signature
-        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0:64]));
-        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64:], bytes32(0)));
-        bytes32 signatureRoot = sha256(abi.encodePacked(sigSlice1Root, sigSlice2Root));
-
-        // Step 5. Compute the root-toot-toorootoo of the deposit data
-        bytes32 depositDataRoot = sha256(
-            abi.encodePacked(
-                sha256(abi.encodePacked(pubkeyRoot, _withdrawalCredentials)),
-                sha256(abi.encodePacked(amountLE64, bytes24(0), signatureRoot))
-            )
-        );
-
-        return depositDataRoot;
     }
 
     /**
@@ -586,13 +520,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event BeaconChainDepositsResumed();
 
     /**
-     * @notice Emitted when the deposit guardian is set
-     * @param oldDepositGuardian The address of the old deposit guardian
-     * @param newDepositGuardian The address of the new deposit guardian
-     */
-    event DepositGuardianSet(address oldDepositGuardian, address newDepositGuardian);
-
-    /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
      */
@@ -659,16 +586,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the global deposit root does not match the expected global deposit root
      */
     error GlobalDepositRootMismatch(bytes32 expected, bytes32 actual);
-
-    /**
-     * @notice Thrown when the guardian signature is invalid
-     */
-    error DepositGuardianSignatureInvalid();
-
-    /**
-     * @notice Thrown when the deposit guardian is not an EIP-1271 contract
-     */
-    error DepositGuardianContractDoesNotSupportEIP1271();
 
     /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused

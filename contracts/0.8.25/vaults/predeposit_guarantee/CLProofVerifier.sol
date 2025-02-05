@@ -26,7 +26,7 @@ contract CLProofVerifier {
     // and makes it harder for us to revoke ownership and ossify the contract
     function _validateWCProof(ValidatorWitness calldata _witness) internal view returns (bytes32) {
         if (_witness.generalIndex.index() <= 1) {
-            revert InvalidGeneralIndex();
+            revert InvalidGeneralIndex(_witness.generalIndex.index());
         }
         SSZ.verifyProof({
             proof: _witness.proof,
@@ -49,6 +49,6 @@ contract CLProofVerifier {
     }
 
     // proving errors
-    error InvalidGeneralIndex();
+    error InvalidGeneralIndex(uint256);
     error RootNotFound();
 }

@@ -1,10 +1,11 @@
-import { hexlify, randomBytes } from "ethers";
+import { hexlify, parseUnits, randomBytes, toBeHex } from "ethers";
 import { ethers } from "hardhat";
 
 import { CLProofVerifier__Harness } from "typechain-types";
 import { ValidatorStruct } from "typechain-types/contracts/0.8.25/predeposit_guarantee/PredepositGuarantee";
 
-import { ether } from "lib";
+// bytes32 from int
+const toBytes32 = (num: number | bigint): string => toBeHex(num.toString(), 32);
 
 export const generateValidator = (customWC?: string, customPukey?: string): ValidatorStruct => {
   const randomInt = (max: number): number => Math.floor(Math.random() * max);
@@ -14,7 +15,7 @@ export const generateValidator = (customWC?: string, customPukey?: string): Vali
   return {
     pubkey: customPukey ?? randomValidatorPubkey(),
     withdrawalCredentials: customWC ?? randomBytes32(),
-    effectiveBalance: ether(randomInt(32).toString()),
+    effectiveBalance: parseUnits(randomInt(32).toString(), "gwei"),
     slashed: false,
     activationEligibilityEpoch: randomInt(343300),
     activationEpoch: randomInt(343300),
@@ -32,11 +33,21 @@ describe("CLProofVerifier.sol", () => {
   });
 
   it("should verify validator object in merkle tree", async () => {
+    await CLProofVerifier.TEST_addValidatorLeaf(generateValidator());
+    await CLProofVerifier.TEST_addValidatorLeaf(generateValidator());
+    await CLProofVerifier.TEST_addValidatorLeaf(generateValidator());
+    await CLProofVerifier.TEST_addValidatorLeaf(generateValidator());
+
     const validator = generateValidator();
     await CLProofVerifier.TEST_addValidatorLeaf(validator);
     const validator_index = await CLProofVerifier.TEST_lastIndex();
-    const proofs = await CLProofVerifier.TEST_getProof(validator_index);
+    const proof = await CLProofVerifier.TEST_getProof(validator_index);
 
-    await CLProofVerifier.TEST_validateWCProof(validator, proofs, 1);
+    await CLProofVerifier.TEST_validateWCProof({
+      validator,
+      proof,
+      generalIndex: toBytes32(validator_index),
+      beaconBlockTimestamp: 1,
+    });
   });
 });

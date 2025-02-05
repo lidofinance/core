@@ -47,19 +47,19 @@ interface IDelegation {
 
 contract VaultFactory {
     address public immutable BEACON;
+    address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable DELEGATION_IMPL;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(
-        address _beacon,
-        address _delegationImpl
-    ) {
+    constructor(address _beacon, address _delegationImpl, address _predeposit_guarantee) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_predeposit_guarantee == address(0)) revert ZeroArgument("_predeposit_guarantee");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
+        PREDEPOSIT_GUARANTEE = _predeposit_guarantee;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -81,6 +81,7 @@ contract VaultFactory {
         vault.initialize(
             address(delegation),
             _delegationInitialState.nodeOperatorManager,
+            PREDEPOSIT_GUARANTEE,
             _stakingVaultInitializerExtraParams
         );
         // initialize Delegation
@@ -92,7 +93,10 @@ contract VaultFactory {
         delegation.grantRole(delegation.FUND_WITHDRAW_ROLE(), _delegationInitialState.funderWithdrawer);
         delegation.grantRole(delegation.MINT_BURN_ROLE(), _delegationInitialState.minterBurner);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationInitialState.nodeOperatorManager);
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationInitialState.nodeOperatorFeeClaimer);
+        delegation.grantRole(
+            delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(),
+            _delegationInitialState.nodeOperatorFeeClaimer
+        );
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
