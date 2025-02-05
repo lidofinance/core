@@ -179,6 +179,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -189,6 +190,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
+      expect(await dashboard.forceWithdrawalUnlockTime()).to.equal(sockets.forceWithdrawalUnlockTime);
     });
   });
 
@@ -215,7 +217,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -236,7 +240,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -255,7 +261,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -274,7 +282,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 0n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
       await dashboard.fund({ value: funding });
@@ -301,7 +311,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       const funding = 1000n;
@@ -326,7 +338,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
@@ -348,7 +362,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
       const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
@@ -368,7 +384,9 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
 
@@ -391,6 +409,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
+        forceWithdrawalUnlockTime: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);

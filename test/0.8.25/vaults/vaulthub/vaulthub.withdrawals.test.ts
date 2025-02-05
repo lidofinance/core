@@ -6,12 +6,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { DepositContract, StakingVault, StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 
-import { impersonate } from "lib";
+import { advanceChainTime, getCurrentBlockTimestamp, impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
 import { deployLidoLocator, deployWithdrawalsPreDeployedMock } from "test/deploy";
-import { Snapshot, Tracing } from "test/suite";
+import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
@@ -20,9 +20,11 @@ const RESERVE_RATIO_BP = 10_00n;
 const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
+const FORCE_WITHDRAWAL_TIMELOCK = BigInt(3 * 24 * 60 * 60);
+
 const FEE = 2n;
 
-describe("VaultHub.sol:forceWithdrawals", () => {
+describe("VaultHub.sol:withdrawals", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -35,10 +37,12 @@ describe("VaultHub.sol:forceWithdrawals", () => {
   let vaultAddress: string;
   let vaultHubAddress: string;
 
+  let vaultSigner: HardhatEthersSigner;
+  let vaultHubSigner: HardhatEthersSigner;
+
   let originalState: string;
 
   before(async () => {
-    Tracing.enable();
     [deployer, user, stranger] = await ethers.getSigners();
 
     await deployWithdrawalsPreDeployedMock(FEE);
@@ -82,11 +86,52 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     await vaultHub
       .connect(user)
       .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+
+    vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
+    vaultSigner = await impersonate(vaultAddress, ether("100"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
+
+  // Simulate getting in the unbalanced state
+  const makeVaultUnbalanced = async () => {
+    await vault.fund({ value: ether("1") });
+    await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1"));
+    await vaultHub.mintSharesBackedByVault(vaultAddress, user, ether("0.9"));
+    await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1.1"));
+    await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+  };
+
+  // Simulate getting in the unbalanced state and reporting it
+  const reportUnbalancedVault = async (): Promise<bigint> => {
+    await makeVaultUnbalanced();
+
+    const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
+    const events = await findEvents((await tx.wait()) as ContractTransactionReceipt, "VaultBecameUnbalanced");
+
+    return events[0].args.unlockTime;
+  };
+
+  context("canForceValidatorWithdrawal", () => {
+    it("returns false if the vault is balanced", async () => {
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.false;
+    });
+
+    it("returns false if the vault is unbalanced and the time is not yet reached", async () => {
+      await reportUnbalancedVault();
+
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.false;
+    });
+
+    it("returns true if the vault is unbalanced and the time is reached", async () => {
+      const unbalancedUntil = await reportUnbalancedVault();
+
+      await advanceChainTime(unbalancedUntil + 1n);
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.true;
+    });
+  });
 
   context("forceValidatorWithdrawal", () => {
     it("reverts if the vault is zero address", async () => {
@@ -115,17 +160,19 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     });
 
     context("unbalanced vault", () => {
-      beforeEach(async () => {
-        const vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
+      let unbalancedUntil: bigint;
 
-        await vault.fund({ value: ether("1") });
-        await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1"));
-        await vaultHub.mintSharesBackedByVault(vaultAddress, user, ether("0.9"));
-        await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1.1"));
-        await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+      beforeEach(async () => (unbalancedUntil = await reportUnbalancedVault()));
+
+      it("reverts if the time is not yet reached", async () => {
+        await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 1n }))
+          .to.be.revertedWithCustomError(vaultHub, "ForceWithdrawalTimelockActive")
+          .withArgs(vaultAddress, unbalancedUntil);
       });
 
       it("reverts if fees are insufficient or too high", async () => {
+        await advanceChainTime(unbalancedUntil);
+
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 1n }))
           .to.be.revertedWithCustomError(vault, "InvalidValidatorWithdrawalFee")
           .withArgs(1n, FEE);
@@ -136,10 +183,54 @@ describe("VaultHub.sol:forceWithdrawals", () => {
       });
 
       it("initiates force validator withdrawal", async () => {
+        await advanceChainTime(unbalancedUntil - 1n);
+
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: FEE }))
           .to.emit(vaultHub, "VaultForceWithdrawalInitiated")
           .withArgs(vaultAddress, SAMPLE_PUBKEY);
       });
+    });
+  });
+
+  context("_updateUnbalancedState", () => {
+    beforeEach(async () => await makeVaultUnbalanced());
+
+    it("sets the unlock time and emits the event if the vault is unbalanced (via rebalance)", async () => {
+      const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
+
+      // Hacky way to get the unlock time right
+      const events = await findEvents((await tx.wait()) as ContractTransactionReceipt, "VaultBecameUnbalanced");
+      const unbalancedUntil = events[0].args.unlockTime;
+
+      expect(unbalancedUntil).to.be.gte((await getCurrentBlockTimestamp()) + FORCE_WITHDRAWAL_TIMELOCK);
+
+      await expect(tx).to.emit(vaultHub, "VaultBecameUnbalanced").withArgs(vaultAddress, unbalancedUntil);
+    });
+
+    it("does not change the unlock time if the vault is already unbalanced and the unlock time is already set", async () => {
+      await vaultHub.connect(vaultSigner).rebalance({ value: 1n }); // report the vault as unbalanced
+
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: 1n })).to.not.emit(
+        vaultHub,
+        "VaultBecameUnbalanced",
+      );
+    });
+
+    it("resets the unlock time if the vault becomes balanced", async () => {
+      await vaultHub.connect(vaultSigner).rebalance({ value: 1n }); // report the vault as unbalanced
+
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") }))
+        .to.emit(vaultHub, "VaultBecameBalanced")
+        .withArgs(vaultAddress);
+    });
+
+    it("does not change the unlock time if the vault is already balanced", async () => {
+      await vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") }); // report the vault as balanced
+
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") })).to.not.emit(
+        vaultHub,
+        "VaultBecameBalanced",
+      );
     });
   });
 });

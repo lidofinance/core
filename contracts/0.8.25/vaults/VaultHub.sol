@@ -49,7 +49,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool isDisconnected;
-        // ### we have 104 bits left in this slot
+        /// @notice timestamp when the vault can force withdraw in case it is unbalanced
+        /// @dev 0 if the vault is currently balanced
+        uint40 forceWithdrawalUnlockTime;
+        // ### we have 64 bits left in this slot
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -69,6 +72,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 internal constant CONNECT_DEPOSIT = 1 ether;
 
+    /// @notice Time-lock for force validator withdrawal
+    uint256 public constant FORCE_WITHDRAWAL_TIMELOCK = 3 days;
+
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
 
@@ -83,7 +89,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     function __VaultHub_init(address _admin) internal onlyInitializing {
         __AccessControlEnumerable_init();
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -159,7 +165,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_reserveRatioThresholdBP),
             uint16(_treasuryFeeBP),
-            false // isDisconnected
+            false, // isDisconnected
+            0 // forceWithdrawalUnlockTime
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vr);
@@ -265,6 +272,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         STETH.burnExternalShares(_amountOfShares);
 
+        _updateUnbalancedState(_vault, socket);
+
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
 
@@ -312,6 +321,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
+
+        // NB: check _updateUnbalancedState is calculated in rebalance() triggered from the `StakingVault`.
     }
 
     /// @notice rebalances the vault by writing off the amount of ether equal
@@ -330,10 +341,24 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         STETH.rebalanceExternalEtherToInternal{value: msg.value}();
 
+        // Check if vault is still unbalanced after rebalance
+        _updateUnbalancedState(msg.sender, socket);
+
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
 
-    /// @notice force validator withdrawal from the beacon chain in case the vault is unbalanced
+    /// @notice checks if the vault can force withdraw
+    /// @param _vault vault address
+    /// @return bool whether the vault can force withdraw
+    function canForceValidatorWithdrawal(address _vault) public view returns (bool) {
+        uint40 forceWithdrawalUnlockTime = _connectedSocket(_vault).forceWithdrawalUnlockTime;
+
+        if (forceWithdrawalUnlockTime == 0) return false;
+
+        return block.timestamp >= forceWithdrawalUnlockTime;
+    }
+
+    /// @notice forces validator withdrawal from the beacon chain in case the vault is unbalanced
     /// @param _vault vault address
     /// @param _pubkeys pubkeys of the validators to withdraw
     function forceValidatorWithdrawal(address _vault, bytes calldata _pubkeys) external payable {
@@ -345,6 +370,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
         if (socket.sharesMinted <= threshold) {
             revert AlreadyBalanced(_vault, socket.sharesMinted, threshold);
+        }
+
+        if (!canForceValidatorWithdrawal(_vault)) {
+            revert ForceWithdrawalTimelockActive(_vault, socket.forceWithdrawalUnlockTime);
         }
 
         IStakingVault(_vault).forceValidatorWithdrawal{value: msg.value}(_pubkeys);
@@ -443,7 +472,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         // TODO: optimize potential rewards calculation
         uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
+        (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
         uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
 
         treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
@@ -466,6 +495,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
             if (treasuryFeeShares > 0) {
                 socket.sharesMinted += uint96(treasuryFeeShares);
             }
+
+            _updateUnbalancedState(socket.vault, socket);
+
             IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
         }
 
@@ -485,6 +517,25 @@ abstract contract VaultHub is PausableUntilWithRoles {
         }
     }
 
+    function _updateUnbalancedState(address _vault, VaultSocket storage _socket) internal {
+        uint256 threshold = _maxMintableShares(_vault, _socket.reserveRatioThresholdBP, _socket.shareLimit);
+        bool isUnbalanced = _socket.sharesMinted > threshold;
+        uint40 currentUnlockTime = _socket.forceWithdrawalUnlockTime;
+
+        if (isUnbalanced) {
+            if (currentUnlockTime == 0) {
+                uint40 newUnlockTime = uint40(block.timestamp + FORCE_WITHDRAWAL_TIMELOCK);
+                _socket.forceWithdrawalUnlockTime = newUnlockTime;
+                emit VaultBecameUnbalanced(_vault, newUnlockTime);
+            }
+        } else {
+            if (currentUnlockTime != 0) {
+                _socket.forceWithdrawalUnlockTime = 0;
+                emit VaultBecameBalanced(_vault);
+            }
+        }
+    }
+
     function _vaultAuth(address _vault, string memory _operation) internal view {
         if (msg.sender != OwnableUpgradeable(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
     }
@@ -500,7 +551,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     ///      it does not count shares that is already minted, but does count shareLimit on the vault
     function _maxMintableShares(address _vault, uint256 _reserveRatio, uint256 _shareLimit) internal view returns (uint256) {
         uint256 maxStETHMinted = (IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - _reserveRatio)) /
-            TOTAL_BASIS_POINTS;
+                    TOTAL_BASIS_POINTS;
 
         return Math256.min(STETH.getSharesByPooledEth(maxStETHMinted), _shareLimit);
     }
@@ -528,6 +579,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event VaultForceWithdrawalInitiated(address indexed vault, bytes pubkeys);
+    event VaultBecameUnbalanced(address indexed vault, uint40 unlockTime);
+    event VaultBecameBalanced(address indexed vault);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -548,4 +601,5 @@ abstract contract VaultHub is PausableUntilWithRoles {
     error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
     error VaultProxyNotAllowed(address beacon);
+    error ForceWithdrawalTimelockActive(address vault, uint256 unlockTime);
 }
