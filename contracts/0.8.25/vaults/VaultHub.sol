@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/IBeacon.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -350,7 +349,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault(_vault).forceValidatorWithdrawal{value: msg.value}(_pubkeys);
 
-        emit ForceValidatorWithdrawalRequested(_vault, _pubkeys);
+        emit VaultForceWithdrawalInitiated(_vault, _pubkeys);
     }
 
     function _disconnect(address _vault) internal {
@@ -528,7 +527,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event ForceValidatorWithdrawalRequested(address indexed vault, bytes pubkeys);
+    event VaultForceWithdrawalInitiated(address indexed vault, bytes pubkeys);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);

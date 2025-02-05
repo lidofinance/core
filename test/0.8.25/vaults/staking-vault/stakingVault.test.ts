@@ -703,9 +703,7 @@ describe("StakingVault.sol", () => {
 
       await expect(stakingVault.connect(vaultHubSigner).forceValidatorWithdrawal(SAMPLE_PUBKEY, { value: fee }))
         .to.emit(stakingVault, "FullWithdrawalInitiated")
-        .withArgs(vaultHubSigner, SAMPLE_PUBKEY)
-        .and.to.emit(stakingVault, "ForceValidatorWithdrawal")
-        .withArgs(SAMPLE_PUBKEY);
+        .withArgs(vaultHubSigner, SAMPLE_PUBKEY);
     });
   });
 

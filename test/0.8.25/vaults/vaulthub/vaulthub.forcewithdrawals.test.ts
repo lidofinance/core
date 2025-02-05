@@ -137,7 +137,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       it("initiates force validator withdrawal", async () => {
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: FEE }))
-          .to.emit(vaultHub, "ForceValidatorWithdrawalRequested")
+          .to.emit(vaultHub, "VaultForceWithdrawalInitiated")
           .withArgs(vaultAddress, SAMPLE_PUBKEY);
       });
     });

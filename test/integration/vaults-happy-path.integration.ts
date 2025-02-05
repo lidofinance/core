@@ -168,6 +168,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         depositPauser: curator,
         depositResumer: curator,
         exitRequester: curator,
+        withdrawalInitiator: curator,
         disconnecter: curator,
         nodeOperatorManager: nodeOperator,
         nodeOperatorFeeClaimer: nodeOperator,

@@ -456,28 +456,28 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Requests validators exit for the given validator public keys.
-     * @param _validatorPublicKeys The public keys of the validators to request exit for.
+     * @param _pubkeys The public keys of the validators to request exit for.
      * @dev    This only emits an event requesting the exit, it does not actually initiate the exit.
      */
-    function requestValidatorExit(bytes calldata _validatorPublicKeys) external {
-        _requestValidatorExit(_validatorPublicKeys);
+    function requestValidatorExit(bytes calldata _pubkeys) external {
+        _requestValidatorExit(_pubkeys);
     }
 
     /**
      * @notice Initiates a full validator withdrawal for the given validator public keys.
-     * @param _validatorPublicKeys The public keys of the validators to initiate withdrawal for.
+     * @param _pubkeys The public keys of the validators to initiate withdrawal for.
      */
-    function initiateFullValidatorWithdrawal(bytes calldata _validatorPublicKeys) external payable {
-        _initiateFullValidatorWithdrawal(_validatorPublicKeys);
+    function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {
+        _initiateFullValidatorWithdrawal(_pubkeys);
     }
 
     /**
      * @notice Initiates a partial validator withdrawal for the given validator public keys and amounts.
-     * @param _validatorPublicKeys The public keys of the validators to initiate withdrawal for.
+     * @param _pubkeys The public keys of the validators to initiate withdrawal for.
      * @param _amounts The amounts of the validators to initiate withdrawal for.
      */
-    function initiatePartialValidatorWithdrawal(bytes calldata _validatorPublicKeys, uint64[] calldata _amounts) external payable {
-        _initiatePartialValidatorWithdrawal(_validatorPublicKeys, _amounts);
+    function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {
+        _initiatePartialValidatorWithdrawal(_pubkeys, _amounts);
     }
 
     // ==================== Role Management Functions ====================

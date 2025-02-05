@@ -35,6 +35,7 @@ describe("Delegation.sol", () => {
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
   let exitRequester: HardhatEthersSigner;
+  let withdrawalInitiator: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
@@ -71,6 +72,7 @@ describe("Delegation.sol", () => {
       depositPauser,
       depositResumer,
       exitRequester,
+      withdrawalInitiator,
       disconnecter,
       curator,
       nodeOperatorManager,
@@ -113,6 +115,7 @@ describe("Delegation.sol", () => {
         depositPauser,
         depositResumer,
         exitRequester,
+        withdrawalInitiator,
         disconnecter,
         curator,
         nodeOperatorManager,
