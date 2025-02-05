@@ -4,13 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex} from "../../lib/GIndex.sol";
 import {Validator, SSZ} from "../../lib/SSZ.sol";
 
 struct ValidatorWitness {
     Validator validator;
     bytes32[] proof;
-    GIndex generalIndex;
+    uint256 generalIndex;
     uint64 beaconBlockTimestamp;
 }
 
@@ -25,14 +24,14 @@ contract CLProofVerifier {
     // which it turn makes us dependant on the hardfork(as GI can change with it)
     // and makes it harder for us to revoke ownership and ossify the contract
     function _validateWCProof(ValidatorWitness calldata _witness) internal view returns (bytes32) {
-        if (_witness.generalIndex.index() <= 1) {
-            revert InvalidGeneralIndex(_witness.generalIndex.index());
+        if (_witness.generalIndex <= 1) {
+            revert InvalidGeneralIndex(_witness.generalIndex);
         }
         SSZ.verifyProof({
             proof: _witness.proof,
             root: _getParentBlockRoot(_witness.beaconBlockTimestamp),
             leaf: _witness.validator.hashTreeRoot(),
-            gI: _witness.generalIndex
+            index: _witness.generalIndex
         });
         return _witness.validator.withdrawalCredentials;
     }
