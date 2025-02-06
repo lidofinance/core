@@ -40,7 +40,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        bytes calldata _params
+        address /* _depositGuardian */,
+        bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) {
             revert VaultAlreadyInitialized();

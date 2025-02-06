@@ -73,3 +73,12 @@ interface IStakingVault {
 
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
 }
+
+/**
+ * @title IStakingVault
+ * @author Lido
+ * @notice Interface for the `StakingVault` contract with `owner()` method from OZ `OwnableUpgradeable`
+ */
+interface IStakingVaultOwnable is IStakingVault {
+    function owner() external view returns (address);
+}

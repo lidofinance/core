@@ -4,36 +4,33 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Validator, SSZ} from "../../lib/SSZ.sol";
+import {Validator, SSZ, GIndex} from "contracts/0.8.25/lib/SSZ.sol";
 
 struct ValidatorWitness {
     Validator validator;
     bytes32[] proof;
-    uint256 generalIndex;
+    uint256 validatorIndex;
     uint64 beaconBlockTimestamp;
 }
 
-contract CLProofVerifier {
+abstract contract CLProofVerifier {
     using SSZ for Validator;
     // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
-    address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+    address public immutable BEACON_ROOTS;
+    GIndex public immutable GI_FIRST_VALIDATOR;
 
-    // Is gI safe for user input?
-    // it securely narrows search only to validators reducing hash collusion risk
-    // but makes us store GIndex of the first validator in the contract
-    // which it turn makes us dependant on the hardfork(as GI can change with it)
-    // and makes it harder for us to revoke ownership and ossify the contract
-    function _validateWCProof(ValidatorWitness calldata _witness) internal view returns (bytes32) {
-        if (_witness.generalIndex <= 1) {
-            revert InvalidGeneralIndex(_witness.generalIndex);
-        }
+    constructor(GIndex _gIFirstValidator) {
+        BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+        GI_FIRST_VALIDATOR = _gIFirstValidator;
+    }
+
+    function _validateWCProof(ValidatorWitness calldata _witness) internal view {
         SSZ.verifyProof({
             proof: _witness.proof,
             root: _getParentBlockRoot(_witness.beaconBlockTimestamp),
             leaf: _witness.validator.hashTreeRoot(),
-            index: _witness.generalIndex
+            gIndex: _getValidatorGI(_witness.validatorIndex)
         });
-        return _witness.validator.withdrawalCredentials;
     }
 
     // virtual for testing
@@ -45,6 +42,10 @@ contract CLProofVerifier {
         }
 
         return abi.decode(data, (bytes32));
+    }
+
+    function _getValidatorGI(uint256 offset) internal view returns (GIndex) {
+        return GI_FIRST_VALIDATOR.shr(offset);
     }
 
     // proving errors

@@ -1,11 +1,8 @@
-import { hexlify, parseUnits, randomBytes, toBeHex } from "ethers";
+import { hexlify, parseUnits, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { CLProofVerifier__Harness } from "typechain-types";
 import { ValidatorStruct } from "typechain-types/contracts/0.8.25/predeposit_guarantee/PredepositGuarantee";
-
-// bytes32 from int
-const toBytes32 = (num: number | bigint): string => toBeHex(num.toString(), 32);
 
 export const generateValidator = (customWC?: string, customPukey?: string): ValidatorStruct => {
   const randomInt = (max: number): number => Math.floor(Math.random() * max);
@@ -45,8 +42,8 @@ describe("CLProofVerifier.sol", () => {
 
     await CLProofVerifier.TEST_validateWCProof({
       validator,
-      proof,
-      generalIndex: toBytes32(validator_index),
+      proof: [...proof],
+      validatorIndex: validator_index,
       beaconBlockTimestamp: 1,
     });
   });

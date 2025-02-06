@@ -9,6 +9,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {GIndex} from "./GIndex.sol";
+
 // As defined in phase0/beacon-chain.md:356
 struct Validator {
     bytes pubkey;
@@ -116,7 +118,8 @@ library SSZ {
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
-    function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, uint256 index) internal view {
+    function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, GIndex gIndex) internal view {
+        uint256 index = gIndex.index();
         /// @solidity memory-safe-assembly
         assembly {
             // Check if `proof` is empty.

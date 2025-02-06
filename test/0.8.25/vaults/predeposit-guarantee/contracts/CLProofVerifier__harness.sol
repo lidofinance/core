@@ -3,12 +3,14 @@
 
 pragma solidity 0.8.25;
 
-import {CLProofVerifier, Validator, SSZ, ValidatorWitness} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
+import {CLProofVerifier, Validator, SSZ, ValidatorWitness, GIndex} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
 
 // TODO: remake this to allign with SSZ and CL merkle tree
 contract CLProofVerifier__Harness is CLProofVerifier {
     // Store the leaves of the Merkle tree.
     bytes32[] public leaves;
+
+    constructor(GIndex _gIFirstValidator) CLProofVerifier(_gIFirstValidator) {}
 
     /**
      * @notice Adds a new leaf to the tree.

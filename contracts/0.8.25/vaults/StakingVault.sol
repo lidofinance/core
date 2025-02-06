@@ -36,7 +36,8 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- * - Operator:
+ *   - `setDepositGuardian()`
+ * - Deposit Guardian:
  *   - `depositToBeaconChain()`
  * - VaultHub:
  *   - `lock()`
@@ -56,18 +57,18 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
-     * @custom:report Latest report containing valuation and inOutDelta
-     * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
-     * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
-     * @custom:nodeOperator Address of the node operator
-     * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
+     * @custom: report Latest report containing valuation and inOutDelta
+     * @custom: locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
+     * @custom: inOutDelta Net difference between ether funded and withdrawn from StakingVault
+     * @custom: nodeOperator Address of the node operator
+     * @custom: depositGuardian Address of the deposit guardian
+     * @custom: beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
         Report report;
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
-        // depositGuardian becomes the depositor, instead of just guardian, perhaps a renaming is needed 🌚
         address depositGuardian;
         bool beaconChainDepositsPaused;
     }
@@ -421,6 +422,29 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Sets the deposit guardian
+     * @param _depositGuardian The address of the deposit guardian
+     * @dev It can only be changed when vault is not connected to the VaultHub
+     *
+     */
+    function setDepositGuardian(address _depositGuardian) external onlyOwner {
+        if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
+
+        VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
+
+        if (socket.vault == address(this) && !socket.isDisconnected) {
+            revert SenderNotBeacon(msg.sender, address(this));
+        }
+
+        ERC7201Storage storage $ = _getStorage();
+        address oldDepositGuardian = $.depositGuardian;
+
+        $.depositGuardian = _depositGuardian;
+
+        emit DepositGuardianSet(oldDepositGuardian, _depositGuardian);
+    }
+
+    /**
      * @notice Pauses deposits to beacon chain
      * @dev Can only be called by the vault owner
      */
@@ -520,6 +544,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event BeaconChainDepositsResumed();
 
     /**
+     * @notice Emitted when the deposit guardian is set
+     * @param oldDepositGuardian The address of the old deposit guardian
+     * @param newDepositGuardian The address of the new deposit guardian
+     */
+    event DepositGuardianSet(address oldDepositGuardian, address newDepositGuardian);
+
+    /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
      */
@@ -601,4 +632,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
     error BeaconChainDepositsArePaused();
+
+    /**
+     * @notice Thrown when trying to update deposit guardian for connected vault
+     */
+    error DepositGuardianCannotChangeWhenConnected();
 }
