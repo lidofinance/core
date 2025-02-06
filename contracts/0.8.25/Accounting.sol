@@ -69,8 +69,6 @@ contract Accounting is VaultHub {
         uint256 postTotalPooledEther;
         /// @notice amount of ether to be locked in the vaults
         uint256[] vaultsLockedEther;
-        /// @notice amount of ether to be locked in the vaults
-        uint256[] vaultsThresholdEther;
         /// @notice amount of shares to be minted as vault fees to the treasury
         uint256[] vaultsTreasuryFeeShares;
         /// @notice total amount of shares to be minted as vault fees to the treasury
@@ -227,12 +225,7 @@ contract Accounting is VaultHub {
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (
-            update.vaultsLockedEther,
-            update.vaultsThresholdEther,
-            update.vaultsTreasuryFeeShares,
-            update.totalVaultsTreasuryFeeShares
-        ) =
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
             _calculateVaultsRebase(
                 update.postTotalShares,
                 update.postTotalPooledEther,
@@ -346,8 +339,9 @@ contract Accounting is VaultHub {
             _report.vaultValues,
             _report.inOutDeltas,
             _update.vaultsLockedEther,
-            _update.vaultsThresholdEther,
-            _update.vaultsTreasuryFeeShares
+            _update.vaultsTreasuryFeeShares,
+            _update.postTotalPooledEther,
+            _update.postTotalShares
         );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {

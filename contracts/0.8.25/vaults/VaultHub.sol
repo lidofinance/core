@@ -405,12 +405,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) internal view returns (
-        uint256[] memory lockedEther,
-        uint256[] memory thresholdEther,
-        uint256[] memory treasuryFeeShares,
-        uint256 totalTreasuryFeeShares
-    ) {
+    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -431,7 +426,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         treasuryFeeShares = new uint256[](length);
         lockedEther = new uint256[](length);
-        thresholdEther = new uint256[](length);
 
         for (uint256 i = 0; i < length; ++i) {
             VaultSocket memory socket = $.sockets[i + 1];
@@ -452,9 +446,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
                     (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
                     CONNECT_DEPOSIT
                 );
-
-                // Minimum amount of ether that should be in the vault to avoid unbalanced state
-                thresholdEther[i] = (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioThresholdBP);
             }
         }
     }
@@ -493,8 +484,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256[] memory _valuations,
         int256[] memory _inOutDeltas,
         uint256[] memory _locked,
-        uint256[] memory _thresholds,
-        uint256[] memory _treasureFeeShares
+        uint256[] memory _treasureFeeShares,
+        uint256 _postTotalPooledEther,
+        uint256 _postTotalShares
     ) internal {
         VaultHubStorage storage $ = _getVaultHubStorage();
 
@@ -508,7 +500,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
                 socket.sharesMinted += uint96(treasuryFeeShares);
             }
 
-            _epicrisis(_valuations[i], _thresholds[i], socket);
+            uint256 mintedStETH = (socket.sharesMinted * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
+            uint256 threshold = (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioThresholdBP);
+            _epicrisis(_valuations[i], threshold, socket);
 
 
             IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
