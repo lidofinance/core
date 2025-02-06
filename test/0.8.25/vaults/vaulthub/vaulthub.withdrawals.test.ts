@@ -115,6 +115,22 @@ describe("VaultHub.sol:withdrawals", () => {
   };
 
   context("canForceValidatorWithdrawal", () => {
+    it("reverts if the vault is not connected to the hub", async () => {
+      await expect(vaultHub.canForceValidatorWithdrawal(stranger)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotConnectedToHub",
+      );
+    });
+
+    it("reverts if called on a disconnected vault", async () => {
+      await vaultHub.connect(user).disconnect(vaultAddress);
+
+      await expect(vaultHub.canForceValidatorWithdrawal(stranger)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotConnectedToHub",
+      );
+    });
+
     it("returns false if the vault is balanced", async () => {
       expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.false;
     });
@@ -127,34 +143,69 @@ describe("VaultHub.sol:withdrawals", () => {
 
     it("returns true if the vault is unbalanced and the time is reached", async () => {
       const unbalancedUntil = await reportUnbalancedVault();
+      const future = unbalancedUntil + 1000n;
 
-      await advanceChainTime(unbalancedUntil + 1n);
+      await advanceChainTime(future);
+
+      expect(await getCurrentBlockTimestamp()).to.be.gt(future);
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.true;
+    });
+
+    it("returns correct values for border cases", async () => {
+      const unbalancedUntil = await reportUnbalancedVault();
+
+      // 1 second before the unlock time
+      await advanceChainTime(unbalancedUntil - (await getCurrentBlockTimestamp()) - 1n);
+      expect(await getCurrentBlockTimestamp()).to.be.lt(unbalancedUntil);
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.false;
+
+      // exactly the unlock time
+      await advanceChainTime(1n);
+      expect(await getCurrentBlockTimestamp()).to.be.eq(unbalancedUntil);
+      expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.true;
+
+      // 1 second after the unlock time
+      await advanceChainTime(1n);
+      expect(await getCurrentBlockTimestamp()).to.be.gt(unbalancedUntil);
       expect(await vaultHub.canForceValidatorWithdrawal(vaultAddress)).to.be.true;
     });
   });
 
   context("forceValidatorWithdrawal", () => {
+    it("reverts if msg.value is 0", async () => {
+      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 0n }))
+        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
+        .withArgs("msg.value");
+    });
+
     it("reverts if the vault is zero address", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(ZeroAddress, SAMPLE_PUBKEY))
+      await expect(vaultHub.forceValidatorWithdrawal(ZeroAddress, SAMPLE_PUBKEY, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_vault");
     });
 
     it("reverts if zero pubkeys", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, "0x")).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroArgument",
-      );
+      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, "0x", { value: 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
+        .withArgs("_pubkeys");
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(stranger, SAMPLE_PUBKEY))
+      await expect(vaultHub.forceValidatorWithdrawal(stranger, SAMPLE_PUBKEY, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(stranger.address);
     });
 
+    it("reverts if called for a disconnected vault", async () => {
+      await vaultHub.connect(user).disconnect(vaultAddress);
+
+      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts if called for a balanced vault", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY))
+      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "AlreadyBalanced")
         .withArgs(vaultAddress, 0n, 0n);
     });
@@ -189,48 +240,101 @@ describe("VaultHub.sol:withdrawals", () => {
           .to.emit(vaultHub, "VaultForceWithdrawalInitiated")
           .withArgs(vaultAddress, SAMPLE_PUBKEY);
       });
+
+      it("initiates force validator withdrawal with multiple pubkeys", async () => {
+        const numPubkeys = 3;
+        const pubkeys = "0x" + "ab".repeat(numPubkeys * 48);
+        await advanceChainTime(unbalancedUntil - 1n);
+
+        await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, pubkeys, { value: FEE * BigInt(numPubkeys) }))
+          .to.emit(vaultHub, "VaultForceWithdrawalInitiated")
+          .withArgs(vaultAddress, pubkeys);
+      });
     });
   });
 
-  context("_updateUnbalancedState", () => {
+  context("_vaultAssessment & _epicrisis", () => {
     beforeEach(async () => await makeVaultUnbalanced());
 
     it("sets the unlock time and emits the event if the vault is unbalanced (via rebalance)", async () => {
-      const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
-
       // Hacky way to get the unlock time right
+      const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
       const events = await findEvents((await tx.wait()) as ContractTransactionReceipt, "VaultBecameUnbalanced");
       const unbalancedUntil = events[0].args.unlockTime;
 
       expect(unbalancedUntil).to.be.gte((await getCurrentBlockTimestamp()) + FORCE_WITHDRAWAL_TIMELOCK);
 
       await expect(tx).to.emit(vaultHub, "VaultBecameUnbalanced").withArgs(vaultAddress, unbalancedUntil);
+
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(
+        unbalancedUntil - FORCE_WITHDRAWAL_TIMELOCK,
+      );
     });
 
     it("does not change the unlock time if the vault is already unbalanced and the unlock time is already set", async () => {
-      await vaultHub.connect(vaultSigner).rebalance({ value: 1n }); // report the vault as unbalanced
+      // report the vault as unbalanced
+      const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
+      const events = await findEvents((await tx.wait()) as ContractTransactionReceipt, "VaultBecameUnbalanced");
+      const unbalancedUntil = events[0].args.unlockTime;
+
+      await expect(await vaultHub.connect(vaultSigner).rebalance({ value: 1n })).to.not.emit(
+        vaultHub,
+        "VaultBecameUnbalanced",
+      );
+
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(
+        unbalancedUntil - FORCE_WITHDRAWAL_TIMELOCK,
+      );
+    });
+
+    it("resets the unlock time if the vault becomes balanced", async () => {
+      // report the vault as unbalanced
+      await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
+
+      // report the vault as balanced
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") }))
+        .to.emit(vaultHub, "VaultBecameBalanced")
+        .withArgs(vaultAddress);
+
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(0n);
+    });
+
+    it("does not change the unlock time if the vault is already balanced", async () => {
+      // report the vault as balanced
+      await vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") });
+
+      // report the vault as balanced again
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") })).to.not.emit(
+        vaultHub,
+        "VaultBecameBalanced",
+      );
+
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(0n);
+    });
+
+    it("maintains the same unbalanced unlock time across multiple rebalance calls while still unbalanced", async () => {
+      // report the vault as unbalanced
+      const tx = await vaultHub.connect(vaultSigner).rebalance({ value: 1n });
+      const events = await findEvents((await tx.wait()) as ContractTransactionReceipt, "VaultBecameUnbalanced");
+      const unbalancedSince = events[0].args.unlockTime - FORCE_WITHDRAWAL_TIMELOCK;
+
+      // Advance time by less than FORCE_WITHDRAWAL_TIMELOCK.
+      await advanceChainTime(1000n);
 
       await expect(vaultHub.connect(vaultSigner).rebalance({ value: 1n })).to.not.emit(
         vaultHub,
         "VaultBecameUnbalanced",
       );
-    });
 
-    it("resets the unlock time if the vault becomes balanced", async () => {
-      await vaultHub.connect(vaultSigner).rebalance({ value: 1n }); // report the vault as unbalanced
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(unbalancedSince);
 
-      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") }))
-        .to.emit(vaultHub, "VaultBecameBalanced")
-        .withArgs(vaultAddress);
-    });
-
-    it("does not change the unlock time if the vault is already balanced", async () => {
-      await vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") }); // report the vault as balanced
-
-      await expect(vaultHub.connect(vaultSigner).rebalance({ value: ether("0.1") })).to.not.emit(
+      // report the vault as unbalanced again
+      await expect(vaultHub.connect(vaultSigner).rebalance({ value: 1n })).to.not.emit(
         vaultHub,
-        "VaultBecameBalanced",
+        "VaultBecameUnbalanced",
       );
+
+      expect((await vaultHub["vaultSocket(address)"](vaultAddress)).unbalancedSince).to.be.eq(unbalancedSince);
     });
   });
 });

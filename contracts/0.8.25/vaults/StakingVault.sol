@@ -307,7 +307,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         if (owner() == msg.sender || (_valuation < $.locked && msg.sender == address(VAULT_HUB))) {
-
             $.inOutDelta -= int128(int256(_ether));
 
             emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);

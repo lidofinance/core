@@ -179,7 +179,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -190,7 +190,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
-      expect(await dashboard.forceWithdrawalUnlockTime()).to.equal(sockets.forceWithdrawalUnlockTime);
+      expect(await dashboard.unbalancedSince()).to.equal(sockets.unbalancedSince);
     });
   });
 
@@ -217,7 +217,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -240,7 +240,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -261,7 +261,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -282,7 +282,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 0n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -311,7 +311,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -338,7 +338,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -362,7 +362,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -384,7 +384,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -409,7 +409,7 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        forceWithdrawalUnlockTime: 0n,
+        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);

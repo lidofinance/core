@@ -168,11 +168,11 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Returns the force withdrawal unlock time of the vault.
-     * @return The force withdrawal unlock time as a uint40.
+     * @notice Returns the time when the vault became unbalanced.
+     * @return The time when the vault became unbalanced as a uint40.
      */
-    function forceWithdrawalUnlockTime() external view returns (uint40) {
-        return vaultSocket().forceWithdrawalUnlockTime;
+    function unbalancedSince() external view returns (uint40) {
+        return vaultSocket().unbalancedSince;
     }
 
     /**
