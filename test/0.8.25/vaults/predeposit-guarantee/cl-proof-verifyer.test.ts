@@ -1,11 +1,9 @@
 import { hexlify, parseUnits, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
-import { CLProofVerifier__Harness } from "typechain-types";
+import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
 import { ValidatorStruct } from "typechain-types/contracts/0.8.25/predeposit_guarantee/PredepositGuarantee";
 import { ValidatorWitnessStruct } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-
-import { Tracing } from "test/suite";
 
 export const generateValidator = (customWC?: string, customPukey?: string): ValidatorStruct => {
   const randomInt = (max: number): number => Math.floor(Math.random() * max);
@@ -28,6 +26,8 @@ export const generateValidator = (customWC?: string, customPukey?: string): Vali
 const STATIC_VALIDATOR = {
   // state root mocked as block root because CSM proves against state and verifies block root separately
   root: "0x21205c716572ae05692c0f8a4c64fd84e504cbb1a16fa0371701adbab756dd72",
+  // pack(0x560000000000, 40)
+  gIFirstValidator: "0x0000000000000000000000000000000000000000000000000056000000000028",
   witness: {
     validatorIndex: 1551477n,
     beaconBlockTimestamp: 42,
@@ -97,14 +97,41 @@ const STATIC_VALIDATOR = {
 
 describe("CLProofVerifier.sol", () => {
   let CLProofVerifier: CLProofVerifier__Harness;
+  let sszMerkleTree: SSZMerkleTree;
+
   before(async () => {
-    CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", {});
+    sszMerkleTree = await ethers.deployContract("SSZMerkleTree", {});
+    await sszMerkleTree.addValidatorLeaf(generateValidator());
+    const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(0n);
+    CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", [gIFirstValidator], {});
   });
 
-  it("should verify validator object in merkle tree", async () => {
-    await CLProofVerifier.setRoot(STATIC_VALIDATOR.root);
-    Tracing.enable();
-    await CLProofVerifier.TEST_validateWCProof(STATIC_VALIDATOR.witness, { gasLimit: 100000000 });
-    Tracing.disable();
+  it("should verify precalclulated validator object in merkle tree", async () => {
+    const StaticCLProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
+      "CLProofVerifier__Harness",
+      [STATIC_VALIDATOR.gIFirstValidator],
+      {},
+    );
+    await StaticCLProofVerifier.setRoot(STATIC_VALIDATOR.root);
+    await StaticCLProofVerifier.TEST_validateWCProof(STATIC_VALIDATOR.witness);
+  });
+
+  it("can verify against dynamic merkle tree", async () => {
+    const validator = generateValidator();
+
+    await sszMerkleTree.addValidatorLeaf(validator);
+
+    const validatorIndex = (await sszMerkleTree.leafCount()) - 1n;
+    const proof = await sszMerkleTree.getMerkleProof(validatorIndex);
+    const root = await sszMerkleTree.getMerkleRoot();
+
+    await CLProofVerifier.setRoot(root);
+
+    await CLProofVerifier.TEST_validateWCProof({
+      validatorIndex,
+      proof: [...proof],
+      validator,
+      beaconBlockTimestamp: 1n,
+    });
   });
 });
