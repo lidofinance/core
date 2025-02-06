@@ -32,20 +32,24 @@ library SSZ {
         bytes32 pubkeyRoot;
 
         assembly {
-            // Dynamic data types such as bytes are stored at the specified offset.
-            let offset := mload(validator)
-            // Copy the pubkey to the scratch space.
-            mcopy(0x00, add(offset, 32), 48)
-            // Clear the last 16 bytes.
-            mcopy(48, 0x60, 16)
-            // Call sha256 precompile.
-            let result := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
-
-            if iszero(result) {
-                // Precompiles returns no data on OutOfGas error.
+            // In calldata, a dynamic field is encoded as an offset (relative to the start
+            // of the struct’s calldata) followed by its contents. The first 32 bytes of
+            // `validator` is the offset for `pubkey`. (Remember that `pubkey` is expected
+            // to be exactly 48 bytes long.)
+            let pubkeyOffset := calldataload(validator)
+            // The pubkey’s actual data is encoded at:
+            //    validator + pubkeyOffset + 32
+            // because the first word at that location is the length.
+            // Copy 48 bytes of pubkey data into memory at 0x00.
+            calldatacopy(0x00, add(validator, add(pubkeyOffset, 32)), 48)
+            // Zero the remaining 16 bytes to form a 64‐byte block.
+            // (0x30 = 48, so mstore at 0x30 will zero 32 bytes covering addresses 48–79;
+            // only bytes 48–63 matter for our 64-byte input.)
+            mstore(0x30, 0)
+            // Call the SHA‑256 precompile (at address 0x02) with the 64-byte block.
+            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
                 revert(0, 0)
             }
-
             pubkeyRoot := mload(0x00)
         }
 
