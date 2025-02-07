@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {CLProofVerifier, ValidatorWitness, GIndex} from "./CLProofVerifier.sol";
+import {CLProofVerifier, GIndex} from "./CLProofVerifier.sol";
 
 import {IStakingVaultOwnable} from "../interfaces/IStakingVault.sol";
 
@@ -99,6 +99,11 @@ contract PredepositGuarantee is CLProofVerifier {
             _topUpNodeOperatorCollateral(_nodeOperator);
         }
 
+        // ensures vault fair play
+        if (address(_stakingVault) != _wcToAddress(_stakingVault.withdrawalCredentials())) {
+            revert stakingVaultWithdrawalCredentialsMismatch();
+        }
+
         uint128 totalDepositAmount = PREDEPOSIT_AMOUNT * uint128(_deposits.length);
 
         if (nodeOperatorBonds[_nodeOperator].total - nodeOperatorBonds[_nodeOperator].locked < totalDepositAmount)
@@ -126,8 +131,14 @@ contract PredepositGuarantee is CLProofVerifier {
         // TODO: event
     }
 
+    /*
+     *
+     *  POSITIVE PROOF METHODS
+     *
+     */
+
     function proveValidatorWC(ValidatorWitness calldata _witness) external {
-        _processWCProof(_witness);
+        _processWitnessProof(_witness);
     }
 
     function depositToProvenValidators(
@@ -165,15 +176,43 @@ contract PredepositGuarantee is CLProofVerifier {
         IStakingVaultOwnable _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            _processWCProof(_witnesses[i]);
+            _processWitnessProof(_witnesses[i]);
         }
 
         depositToProvenValidators(_stakingVault, _deposits);
     }
 
+    /*
+     *
+     *  NEGATIVE PROOF METHODS
+     *
+     */
+
+    function proveInvalidValidatorWC(ValidatorWitness calldata _witness, bytes32 _invalidWithdrawalCredentials) public {
+        ValidatorStatus storage validatorStatus = validatorStatuses[_witness.pubkey];
+
+        if (validatorStatus.bondStatus != BondStatus.AWAITING_PROOF) {
+            revert ValidatorNotPreDeposited();
+        }
+
+        if (address(validatorStatus.stakingVault) == _wcToAddress(_invalidWithdrawalCredentials)) {
+            revert WithdrawalCredentialsAreValid();
+        }
+
+        _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
+
+        // reduces total&locked NO deposit
+        nodeOperatorBonds[validatorStatus.nodeOperator].total -= PREDEPOSIT_AMOUNT;
+        nodeOperatorBonds[validatorStatus.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
+        // freed ether only will returned to owner of the vault with this validator
+        validatorStatus.bondStatus = BondStatus.PROVED_INVALID;
+
+        // TODO: events
+    }
+
     // called by the staking vault owner if the predeposited validator was proven invalid
     // i.e. node operator was malicious and has stolen vault ether
-    function withdrawDisprovenCollateral(bytes calldata validatorPubkey, address _recipient) external {
+    function withdrawDisprovenPredeposit(bytes calldata validatorPubkey, address _recipient) public {
         ValidatorStatus storage validatorStatus = validatorStatuses[validatorPubkey];
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -193,6 +232,15 @@ contract PredepositGuarantee is CLProofVerifier {
         //TODO: events
     }
 
+    function disproveAndWithdraw(
+        ValidatorWitness calldata _witness,
+        bytes32 _invalidWithdrawalCredentials,
+        address _recipient
+    ) external {
+        proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
+        withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
+    }
+
     /// Internal functions
 
     function _validateNodeOperatorCaller(address _nodeOperator) internal view {
@@ -205,44 +253,36 @@ contract PredepositGuarantee is CLProofVerifier {
         // TODO: event
     }
 
-    function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address) {
-        return address(uint160(uint256(_withdrawalCredentials)));
-    }
-
-    function _deconstructWC(bytes32 _withdrawalCredentials) internal pure returns (uint64, address) {
-        return (uint8(_withdrawalCredentials[0]), address(uint160(uint256(_withdrawalCredentials))));
-    }
-
-    function _processWCProof(ValidatorWitness calldata _witness) internal {
-        ValidatorStatus storage validatorStatus = validatorStatuses[_witness.validator.pubkey];
-
-        if (validatorStatus.bondStatus != BondStatus.AWAITING_PROOF) {
-            revert ValidatorNotPreDeposited();
-        }
-
-        (uint64 _wcVersion, address _wcAddress) = _deconstructWC(_witness.validator.withdrawalCredentials);
+    function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address _wcAddress) {
+        uint64 _wcVersion = uint8(_withdrawalCredentials[0]);
 
         if (_wcVersion < 1) {
             revert WithdrawalCredentialsAreInvalid();
         }
 
-        _validateWCProof(_witness);
+        _wcAddress = address(uint160(uint256(_withdrawalCredentials)));
+    }
 
-        // determine proof direction
-        if (address(validatorStatus.stakingVault) == _wcAddress) {
-            // stricter WC check to ensure WC version matches
-            if (validatorStatus.stakingVault.withdrawalCredentials() != _witness.validator.withdrawalCredentials) {
-                revert WithdrawalCredentialsAreInvalid();
-            }
+    function _processWitnessProof(ValidatorWitness calldata _witness) internal {
+        ValidatorStatus storage validatorStatus = validatorStatuses[_witness.pubkey];
 
-            validatorStatus.bondStatus = BondStatus.PROVED;
-            // TODO: positive events
-        } else {
-            validatorStatus.bondStatus = BondStatus.PROVED_INVALID;
-            nodeOperatorBonds[validatorStatus.nodeOperator].total -= PREDEPOSIT_AMOUNT;
-            // TODO: negative events
+        if (validatorStatus.bondStatus != BondStatus.AWAITING_PROOF) {
+            revert ValidatorNotPreDeposited();
         }
+
+        bytes32 _withdrawalCredentials = validatorStatus.stakingVault.withdrawalCredentials();
+
+        // ensures vault fair play
+        if (address(validatorStatus.stakingVault) != _wcToAddress(_withdrawalCredentials)) {
+            revert WithdrawalCredentialsAreInvalid();
+        }
+
+        _validatePubKeyWCProof(_witness, _withdrawalCredentials);
+
+        validatorStatus.bondStatus = BondStatus.PROVED;
         nodeOperatorBonds[validatorStatus.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
+
+        // TODO: positive events
     }
 
     // node operator accounting
@@ -254,6 +294,7 @@ contract PredepositGuarantee is CLProofVerifier {
     error PredepositValueNotMultipleOfPrediposit();
     error PredepositDepositAmountInvalid();
     error MustBeNewValidatorPubkey();
+    error stakingVaultWithdrawalCredentialsMismatch();
     error NotEnoughUnlockedCollateralToPredeposit();
 
     // depositing errors
