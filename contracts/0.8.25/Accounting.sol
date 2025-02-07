@@ -339,9 +339,7 @@ contract Accounting is VaultHub {
             _report.vaultValues,
             _report.inOutDeltas,
             _update.vaultsLockedEther,
-            _update.vaultsTreasuryFeeShares,
-            _update.postTotalPooledEther,
-            _update.postTotalShares
+            _update.vaultsTreasuryFeeShares
         );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {

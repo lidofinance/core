@@ -179,7 +179,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -190,7 +189,6 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
       expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
-      expect(await dashboard.unbalancedSince()).to.equal(sockets.unbalancedSince);
     });
   });
 
@@ -217,7 +215,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -240,7 +237,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -261,7 +257,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -282,7 +277,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 0n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -311,7 +305,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -338,7 +331,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -362,7 +354,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -384,7 +375,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -409,7 +399,6 @@ describe("Dashboard.sol", () => {
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
         isDisconnected: false,
-        unbalancedSince: 0n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -635,52 +624,49 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("requestValidatorExit", () => {
-    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+  context("markValidatorsForExit", () => {
+    const pubkeys = ["01".repeat(48), "02".repeat(48)];
+    const pubkeysConcat = `0x${pubkeys.join("")}`;
+
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).requestValidatorExit(validatorPublicKeys)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).markValidatorsForExit(pubkeysConcat)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
-    it("requests the exit of a validator", async () => {
-      await expect(dashboard.requestValidatorExit(validatorPublicKeys))
-        .to.emit(vault, "ValidatorExitRequested")
-        .withArgs(dashboard, validatorPublicKeys);
+    it("signals the requested exit of a validator", async () => {
+      await expect(dashboard.markValidatorsForExit(pubkeysConcat))
+        .to.emit(vault, "ValidatorMarkedForExit")
+        .withArgs(dashboard, `0x${pubkeys[0]}`)
+        .to.emit(vault, "ValidatorMarkedForExit")
+        .withArgs(dashboard, `0x${pubkeys[1]}`);
     });
   });
 
-  context("initiateFullValidatorWithdrawal", () => {
-    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
-
+  context("requestValidatorWithdrawals", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(
-        dashboard.connect(stranger).initiateFullValidatorWithdrawal(validatorPublicKeys),
+        dashboard.connect(stranger).requestValidatorWithdrawals("0x", [0n], vaultOwner),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
-    it("initiates a full validator withdrawal", async () => {
-      await expect(dashboard.initiateFullValidatorWithdrawal(validatorPublicKeys, { value: FEE }))
-        .to.emit(vault, "FullValidatorWithdrawalInitiated")
-        .withArgs(dashboard, validatorPublicKeys);
-    });
-  });
+    it("requests a full validator withdrawal", async () => {
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      const amounts = [0n]; // 0 amount means full withdrawal
 
-  context("initiatePartialValidatorWithdrawal", () => {
-    const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
-    const amounts = [ether("0.1")];
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(
-        dashboard.connect(stranger).initiatePartialValidatorWithdrawal(validatorPublicKeys, amounts),
-      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+      await expect(dashboard.requestValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalsRequested")
+        .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
 
-    it("initiates a partial validator withdrawal", async () => {
-      await expect(dashboard.initiatePartialValidatorWithdrawal(validatorPublicKeys, amounts, { value: FEE }))
-        .to.emit(vault, "PartialValidatorWithdrawalInitiated")
-        .withArgs(dashboard, validatorPublicKeys, amounts);
+    it("requests a partial validator withdrawal", async () => {
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      const amounts = [ether("0.1")];
+
+      await expect(dashboard.requestValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalsRequested")
+        .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
   });
 

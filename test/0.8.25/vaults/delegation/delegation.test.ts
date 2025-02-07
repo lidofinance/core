@@ -34,8 +34,8 @@ describe("Delegation.sol", () => {
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
-  let exitRequester: HardhatEthersSigner;
-  let withdrawalInitiator: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalRequester: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
@@ -71,8 +71,8 @@ describe("Delegation.sol", () => {
       rebalancer,
       depositPauser,
       depositResumer,
-      exitRequester,
-      withdrawalInitiator,
+      validatorExitRequester,
+      validatorWithdrawalRequester,
       disconnecter,
       curator,
       nodeOperatorManager,
@@ -114,8 +114,8 @@ describe("Delegation.sol", () => {
         rebalancer,
         depositPauser,
         depositResumer,
-        exitRequester,
-        withdrawalInitiator,
+        validatorExitRequester,
+        validatorWithdrawalRequester,
         disconnecter,
         curator,
         nodeOperatorManager,
@@ -205,7 +205,8 @@ describe("Delegation.sol", () => {
       await assertSoleMember(rebalancer, await delegation.REBALANCE_ROLE());
       await assertSoleMember(depositPauser, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await assertSoleMember(depositResumer, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await assertSoleMember(exitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorExitRequester, await delegation.MARK_VALIDATORS_FOR_EXIT_ROLE());
+      await assertSoleMember(validatorWithdrawalRequester, await delegation.REQUEST_VALIDATOR_WITHDRAWALS_ROLE());
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
       await assertSoleMember(curator, await delegation.CURATOR_ROLE());
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());

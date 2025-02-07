@@ -37,8 +37,8 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.REBALANCE_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.REQUEST_VALIDATOR_EXIT_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.INITIATE_VALIDATOR_WITHDRAWAL_ROLE(), msg.sender);
+        dashboard.grantRole(dashboard.MARK_VALIDATORS_FOR_EXIT_ROLE(), msg.sender);
+        dashboard.grantRole(dashboard.REQUEST_VALIDATOR_WITHDRAWALS_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.VOLUNTARY_DISCONNECT_ROLE(), msg.sender);
 
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));

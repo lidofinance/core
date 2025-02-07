@@ -19,8 +19,9 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     uint64 private constant _version = 2;
-    address public immutable beaconChainDepositContract;
     VaultHub private immutable VAULT_HUB;
+
+    address public immutable DEPOSIT_CONTRACT;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -30,7 +31,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        beaconChainDepositContract = _beaconChainDepositContract;
+        DEPOSIT_CONTRACT = _beaconChainDepositContract;
         VAULT_HUB = VaultHub(_vaultHub);
 
         // Prevents reinitialization of the implementation
@@ -66,10 +67,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function version() external pure virtual returns (uint64) {
         return _version;
-    }
-
-    function depositContract() external view returns (address) {
-        return beaconChainDepositContract;
     }
 
     function latestReport() external view returns (IStakingVault.Report memory) {
@@ -115,25 +112,28 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function withdraw(address _recipient, uint256 _ether) external {}
 
     function withdrawalCredentials() external view returns (bytes32) {
-        return bytes32((0x01 << 248) + uint160(address(this)));
+        return bytes32((0x02 << 248) + uint160(address(this)));
     }
 
     function beaconChainDepositsPaused() external pure returns (bool) {
         return false;
     }
 
-    function calculateValidatorWithdrawalFee(uint256) external pure returns (uint256) {
-        return 1;
-    }
-
     function pauseBeaconChainDeposits() external {}
     function resumeBeaconChainDeposits() external {}
 
-    function requestValidatorExit(bytes calldata _pubkeys) external {}
-    function initiateFullValidatorWithdrawal(bytes calldata _pubkeys) external payable {}
-    function initiatePartialValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts) external payable {}
+    function calculateValidatorWithdrawalsFee(uint256) external pure returns (uint256) {
+        return 1;
+    }
 
-    function forceValidatorWithdrawal(bytes calldata _pubkeys) external payable {}
+    function markValidatorsForExit(bytes calldata _pubkeys) external {}
+    function requestValidatorWithdrawals(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _recipient
+    ) external payable {}
+
+    function forceValidatorWithdrawals(bytes calldata _pubkeys) external payable {}
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
