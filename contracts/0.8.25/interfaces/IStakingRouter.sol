@@ -16,5 +16,5 @@ interface IStakingRouter {
             uint256 precisionPoints
         );
 
-    function reportRewardsMinted(uint256[] memory _stakingModuleIds, uint256[] memory _totalShares) external;
+    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
 }

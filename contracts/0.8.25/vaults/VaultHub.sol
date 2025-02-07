@@ -500,10 +500,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
                 socket.sharesMinted += uint96(treasuryFeeShares);
             }
 
-            uint256 mintedStETH = (socket.sharesMinted * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
+            uint256 mintedStETH = (socket.sharesMinted * _postTotalPooledEther) / _postTotalShares; //TODO: Should use round up?
             uint256 threshold = (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioThresholdBP);
             _epicrisis(_valuations[i], threshold, socket);
-
 
             IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
         }
@@ -527,7 +526,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice Evaluates if vault's valuation meets minimum threshold and marks it as unbalanced if below threshold
     function _vaultAssessment(address _vault, VaultSocket storage _socket) internal {
         uint256 valuation = IStakingVault(_vault).valuation();
-        uint256 threshold = (_socket.sharesMinted * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - _socket.reserveRatioThresholdBP);
+        uint256 mintedStETH = STETH.getPooledEthByShares(_socket.sharesMinted); //TODO: Should use round up?
+        uint256 threshold = (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - _socket.reserveRatioThresholdBP);
 
         _epicrisis(valuation, threshold, _socket);
     }
