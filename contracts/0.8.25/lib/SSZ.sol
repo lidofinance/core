@@ -1,124 +1,20 @@
 // SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-/*
- Cut version of SSZ library from CSM, only supports Validator container
- original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
-*/
-
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
 import {GIndex} from "./GIndex.sol";
 
-// As defined in phase0/beacon-chain.md:356
-struct Validator {
-    bytes pubkey;
-    bytes32 withdrawalCredentials;
-    uint64 effectiveBalance;
-    bool slashed;
-    uint64 activationEligibilityEpoch;
-    uint64 activationEpoch;
-    uint64 exitEpoch;
-    uint64 withdrawableEpoch;
-}
-
+/*
+ Cut and modified version of SSZ library from CSM only has methods for merkilized SSZ proof validation
+ original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
+*/
 library SSZ {
     error BranchHasMissingItem();
     error BranchHasExtraItem();
     error InvalidProof();
-
-    function hashTreeRoot(Validator calldata validator) internal view returns (bytes32 root) {
-        bytes32 pubkeyRoot;
-
-        assembly {
-            // In calldata, a dynamic field is encoded as an offset (relative to the start
-            // of the struct’s calldata) followed by its contents. The first 32 bytes of
-            // `validator` is the offset for `pubkey`. (Remember that `pubkey` is expected
-            // to be exactly 48 bytes long.)
-            let pubkeyOffset := calldataload(validator)
-            // The pubkey’s actual data is encoded at:
-            //    validator + pubkeyOffset + 32
-            // because the first word at that location is the length.
-            // Copy 48 bytes of pubkey data into memory at 0x00.
-            calldatacopy(0x00, add(validator, add(pubkeyOffset, 32)), 48)
-            // Zero the remaining 16 bytes to form a 64‐byte block.
-            // (0x30 = 48, so mstore at 0x30 will zero 32 bytes covering addresses 48–79;
-            // only bytes 48–63 matter for our 64-byte input.)
-            mstore(0x30, 0)
-            // Call the SHA‑256 precompile (at address 0x02) with the 64-byte block.
-            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
-                revert(0, 0)
-            }
-            pubkeyRoot := mload(0x00)
-        }
-
-        bytes32[8] memory nodes = [
-            pubkeyRoot,
-            validator.withdrawalCredentials,
-            toLittleEndian(validator.effectiveBalance),
-            toLittleEndian(validator.slashed),
-            toLittleEndian(validator.activationEligibilityEpoch),
-            toLittleEndian(validator.activationEpoch),
-            toLittleEndian(validator.exitEpoch),
-            toLittleEndian(validator.withdrawableEpoch)
-        ];
-
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Count of nodes to hash
-            let count := 8
-
-            // Loop over levels
-            // prettier-ignore
-            for { } 1 { } {
-                // Loop over nodes at the given depth
-
-                // Initialize `offset` to the offset of `proof` elements in memory.
-                let target := nodes
-                let source := nodes
-                let end := add(source, shl(5, count))
-
-                // prettier-ignore
-                for { } 1 { } {
-                    // Read next two hashes to hash
-                    mcopy(0x00, source, 0x40)
-
-                    // Call sha256 precompile
-                    let result := staticcall(
-                        gas(),
-                        0x02,
-                        0x00,
-                        0x40,
-                        0x00,
-                        0x20
-                    )
-
-                    if iszero(result) {
-                        // Precompiles returns no data on OutOfGas error.
-                        revert(0, 0)
-                    }
-
-                    // Store the resulting hash at the target location
-                    mstore(target, mload(0x00))
-
-                    // Advance the pointers
-                    target := add(target, 0x20)
-                    source := add(source, 0x40)
-
-                    if iszero(lt(source, end)) {
-                        break
-                    }
-                }
-
-                count := shr(1, count)
-                if eq(count, 1) {
-                    root := mload(0x00)
-                    break
-                }
-            }
-        }
-    }
+    error InvalidPubkeyLength();
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
@@ -190,25 +86,47 @@ library SSZ {
         }
     }
 
-    // See https://github.com/succinctlabs/telepathy-contracts/blob/5aa4bb7/src/libraries/SimpleSerialize.sol#L17-L28
-    function toLittleEndian(uint256 v) internal pure returns (bytes32) {
-        v =
-            ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
-            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-        v =
-            ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-        v =
-            ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
-            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
-        v =
-            ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
-            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
-        v = (v >> 128) | (v << 128);
-        return bytes32(v);
+    /// @notice Extracted part from `verifyProof` for hashing two leaves
+    /// @dev Combines 2 bytes32 in 64 bytes input for sha256 precompile
+    function sha256Pair(bytes32 left, bytes32 right) internal view returns (bytes32 result) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Store `left` at memory position 0x00
+            mstore(0x00, left)
+            // Store `right` at memory position 0x20
+            mstore(0x20, right)
+
+            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
+            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            // Load the resulting hash from memory
+            result := mload(0x00)
+        }
     }
 
-    function toLittleEndian(bool v) internal pure returns (bytes32) {
-        return bytes32(v ? 1 << 248 : 0);
+    /// @notice Extracted and modified part from `hashTreeRoot` for hashing validator pubkey from calldata
+    /// @dev Reverts if `pubkey` length is not 48
+    function pubkeyRoot(bytes calldata pubkey) internal view returns (bytes32 _pubkeyRoot) {
+        if (pubkey.length != 48) revert InvalidPubkeyLength();
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Copy 48 bytes of `pubkey` to memory at 0x00
+            calldatacopy(0x00, pubkey.offset, 48)
+
+            // Zero the remaining 16 bytes to form a 64-byte input block
+            mstore(0x30, 0)
+
+            // Call the SHA-256 precompile (0x02) with the 64-byte input
+            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
+                revert(0, 0)
+            }
+
+            // Load the resulting SHA-256 hash
+            _pubkeyRoot := mload(0x00)
+        }
     }
 }

@@ -33,7 +33,7 @@ abstract contract CLProofVerifier {
     function _validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) internal view {
         // parent node for first two leaves in validator container tree
         // pubkey + wc
-        bytes32 _leaf = _sha256Pair(_pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
+        bytes32 _leaf = SSZ.sha256Pair(SSZ.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
         // concatenated index for parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon Block Tree
         GIndex _gIndex = concat(GI_STATE_VIEW, concat(_getValidatorGI(_witness.validatorIndex), GI_PUBKEY_WC_PARENT));
 
@@ -45,8 +45,7 @@ abstract contract CLProofVerifier {
         });
     }
 
-    // virtual for testing
-    function _getParentBlockRoot(uint64 blockTimestamp) internal view virtual returns (bytes32) {
+    function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
         (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(blockTimestamp));
 
         if (!success || data.length == 0) {
@@ -60,50 +59,6 @@ abstract contract CLProofVerifier {
         return GI_FIRST_VALIDATOR.shr(offset);
     }
 
-    // hashes calldata validator pubkey
-    function _pubkeyRoot(bytes calldata pubkey) public view returns (bytes32 pubkeyRoot) {
-        if (pubkey.length != 48) revert InvalidPubkeyLength();
-
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Copy 48 bytes of `pubkey` to memory at 0x00
-            calldatacopy(0x00, pubkey.offset, 48)
-
-            // Zero the remaining 16 bytes to form a 64-byte input block
-            mstore(0x30, 0)
-
-            // Call the SHA-256 precompile (0x02) with the 64-byte input
-            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
-                revert(0, 0)
-            }
-
-            // Load the resulting SHA-256 hash
-            pubkeyRoot := mload(0x00)
-        }
-    }
-
-    // combines 2 bytes32 in 64 bytes input for sha256 precompile
-    function _sha256Pair(bytes32 left, bytes32 right) internal view returns (bytes32 result) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Store `left` at memory position 0x00
-            mstore(0x00, left)
-            // Store `right` at memory position 0x20
-            mstore(0x20, right)
-
-            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
-            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
-            if iszero(success) {
-                revert(0, 0)
-            }
-
-            // Load the resulting hash from memory
-            result := mload(0x00)
-        }
-    }
-
-    // proving errors
     error InvalidGeneralIndex(uint256);
     error RootNotFound();
-    error InvalidPubkeyLength();
 }

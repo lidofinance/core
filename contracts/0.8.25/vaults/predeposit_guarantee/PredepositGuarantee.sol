@@ -71,8 +71,9 @@ contract PredepositGuarantee is CLProofVerifier {
         if (bond.locked != 0) revert BondMustBeFullyUnlocked();
 
         if (bond.total > 0 && nodeOperatorVoucher[msg.sender] != address(0)) {
+            uint256 ejected = nodeOperatorBonds[msg.sender].total;
             nodeOperatorBonds[msg.sender].total = 0;
-            (bool success, ) = nodeOperatorVoucher[msg.sender].call{value: uint256(bond.total)}("");
+            (bool success, ) = nodeOperatorVoucher[msg.sender].call{value: ejected}("");
 
             // voucher can block change?
             if (!success) revert WithdrawalFailed();
