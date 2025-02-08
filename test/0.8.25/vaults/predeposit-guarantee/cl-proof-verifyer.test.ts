@@ -194,7 +194,7 @@ describe("CLProofVerifier.sol", () => {
         proof: concatenatedProof,
         pubkey: STATIC_VALIDATOR.witness.validator.pubkey,
         validatorIndex: STATIC_VALIDATOR.witness.validatorIndex,
-        parentBlockTimestamp: timestamp,
+        childBlockTimestamp: timestamp,
       },
       STATIC_VALIDATOR.witness.validator.withdrawalCredentials,
     );
@@ -235,7 +235,7 @@ describe("CLProofVerifier.sol", () => {
         validatorIndex,
         proof: [...proof],
         pubkey: validator.pubkey,
-        parentBlockTimestamp: timestamp,
+        childBlockTimestamp: timestamp,
       },
       validator.withdrawalCredentials,
     );
