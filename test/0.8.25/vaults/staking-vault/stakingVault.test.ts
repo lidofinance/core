@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -13,7 +13,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { computeDepositDataRoot, de0x, ether, impersonate, streccak } from "lib";
+import { computeDepositDataRoot, de0x, ether, impersonate, MAX_UINT256, streccak } from "lib";
 
 import { deployStakingVaultBehindBeaconProxy, deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -24,7 +24,11 @@ const MAX_UINT128 = 2n ** 128n - 1n;
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
-  const pubkeys = Array.from({ length: num }, (_, i) => `0x${`${(i + 1).toString().padStart(2, "0")}`.repeat(48)}`);
+  const pubkeys = Array.from({ length: num }, (_, i) => {
+    const paddedIndex = (i + 1).toString().padStart(8, "0");
+    return `0x${paddedIndex.repeat(12)}`;
+  });
+
   return {
     pubkeys,
     stringified: `0x${pubkeys.map(de0x).join("")}`,
@@ -241,7 +245,7 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.fund({ value: maxInOutDelta })).to.not.be.reverted;
     });
 
-    it("restores the vault to a balanced state if the vault was unbalanced", async () => {
+    it("restores the vault to a healthy state if the vault was unhealthy", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
       expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
 
@@ -289,7 +293,7 @@ describe("StakingVault.sol", () => {
         .withArgs(unlocked);
     });
 
-    it.skip("reverts is vault is unbalanced", async () => {});
+    it.skip("reverts if vault is unhealthy", async () => {});
 
     it("does not revert on max int128", async () => {
       const forGas = ether("10");
@@ -420,7 +424,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore - ether("1"));
     });
 
-    it("can be called by the vault hub when the vault is unbalanced", async () => {
+    it("can be called by the vault hub when the vault is unhealthy", async () => {
       await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
       expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
@@ -540,7 +544,7 @@ describe("StakingVault.sol", () => {
         .withArgs("_deposits");
     });
 
-    it("reverts if the vault is not balanced", async () => {
+    it("reverts if the vault valuation is below the locked amount", async () => {
       await stakingVault.connect(vaultHubSigner).lock(ether("1"));
       await expect(
         stakingVault
@@ -548,7 +552,7 @@ describe("StakingVault.sol", () => {
           .depositToBeaconChain([
             { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
           ]),
-      ).to.be.revertedWithCustomError(stakingVault, "Unbalanced");
+      ).to.be.revertedWithCustomError(stakingVault, "ValuationBelowLockedAmount");
     });
 
     it("reverts if the deposits are paused", async () => {
@@ -607,6 +611,11 @@ describe("StakingVault.sol", () => {
         .withArgs("_numberOfKeys");
     });
 
+    it("works with max uint256", async () => {
+      const fee = BigInt(await withdrawalRequest.fee());
+      expect(await stakingVault.calculateValidatorWithdrawalsFee(MAX_UINT256)).to.equal(BigInt(MAX_UINT256) * fee);
+    });
+
     it("calculates the total fee for given number of validator keys", async () => {
       const newFee = 100n;
       await withdrawalRequest.setFee(newFee);
@@ -641,13 +650,32 @@ describe("StakingVault.sol", () => {
       ).to.be.revertedWithCustomError(stakingVault, "InvalidValidatorPubkeysLength");
     });
 
-    it("emits the `ValidatorMarkedForExit` event for each validator", async () => {
+    it("emits the `ValidatorMarkedForExit` event for a single validator key", async () => {
+      await expect(stakingVault.connect(vaultOwner).markValidatorsForExit(SAMPLE_PUBKEY))
+        .to.emit(stakingVault, "ValidatorMarkedForExit")
+        .withArgs(vaultOwner, SAMPLE_PUBKEY);
+    });
+
+    it("emits the exact number of `ValidatorMarkedForExit` events as the number of validator keys", async () => {
       const numberOfKeys = 2;
       const keys = getPubkeys(numberOfKeys);
 
-      await expect(stakingVault.connect(vaultOwner).markValidatorsForExit(keys.stringified))
+      const tx = await stakingVault.connect(vaultOwner).markValidatorsForExit(keys.stringified);
+      await expect(tx.wait())
         .to.emit(stakingVault, "ValidatorMarkedForExit")
-        .withArgs(vaultOwner, keys.pubkeys[0]);
+        .withArgs(vaultOwner, keys.pubkeys[0])
+        .and.emit(stakingVault, "ValidatorMarkedForExit")
+        .withArgs(vaultOwner, keys.pubkeys[1]);
+
+      const receipt = (await tx.wait()) as ContractTransactionReceipt;
+      expect(receipt.logs.length).to.equal(numberOfKeys);
+    });
+
+    it("handles large number of validator keys", async () => {
+      const numberOfKeys = 5000; // uses ~16300771 gas (>54% from the 30000000 gas limit)
+      const keys = getPubkeys(numberOfKeys);
+
+      await stakingVault.connect(vaultOwner).markValidatorsForExit(keys.stringified);
     });
   });
 

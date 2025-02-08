@@ -23,9 +23,9 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * The StakingVault can be used as a backing for minting new stETH if the StakingVault is connected to the VaultHub.
  * When minting stETH backed by the StakingVault, the VaultHub locks a portion of the StakingVault's valuation,
  * which cannot be withdrawn by the owner. If the locked amount exceeds the StakingVault's valuation,
- * the StakingVault enters the unbalanced state.
+ * the StakingVault enters the unhealthy state.
  * In this state, the VaultHub can force-rebalance the StakingVault by withdrawing a portion of the locked amount
- * and writing off the locked amount to restore the balanced state.
+ * and writing off the locked amount to restore the healthy state.
  * The owner can voluntarily rebalance the StakingVault in any state or by simply
  * supplying more ether to increase the valuation.
  *
@@ -265,7 +265,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Cannot withdraw more than the unlocked amount or the balance of the contract, whichever is less.
      * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether
      * @dev Includes a check that valuation remains greater than locked amount after withdrawal to ensure
-     *      `StakingVault` stays balanced and prevent reentrancy attacks.
+     *      `StakingVault` stays healthy and prevent reentrancy attacks.
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -280,7 +280,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (valuation() < $.locked) revert Unbalanced();
+        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -303,7 +303,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Rebalances StakingVault by withdrawing ether to VaultHub
-     * @dev Can only be called by VaultHub if StakingVault is unbalanced,
+     * @dev Can only be called by VaultHub if StakingVault is unhealthy,
      *      or by owner at any moment
      * @param _ether Amount of ether to rebalance
      */
@@ -394,7 +394,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Performs a deposit to the beacon chain deposit contract
      * @param _deposits Array of deposit structs
-     * @dev    Includes a check to ensure `StakingVault` is balanced before making deposits
+     * @dev    Includes a check to ensure `StakingVault` is healthy before making deposits
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
@@ -403,7 +403,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (valuation() < $.locked) revert Unbalanced();
+        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
@@ -456,8 +456,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _amounts Amounts of ether to exit, must match the length of _pubkeys.
      * @param _refundRecipient Address to receive the fee refund.
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs.
-     * TODO: check if the vault is unbalanced
-     * TODO: check auth for vo, no and unbalanced then vaulthub
+     * TODO: check if the vault is unhealthy
      */
     function requestValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
         uint256 value = msg.value; // cache msg.value to save gas
@@ -661,9 +660,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error TransferFailed(address recipient, uint256 amount);
 
     /**
-     * @notice Thrown when the locked amount is greater than the valuation of `StakingVault`
+     * @notice Thrown when the valuation of the vault falls below the locked amount
      */
-    error Unbalanced();
+    error ValuationBelowLockedAmount();
 
     /**
      * @notice Thrown when an unauthorized address attempts a restricted operation
