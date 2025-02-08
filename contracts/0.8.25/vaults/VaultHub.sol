@@ -124,6 +124,13 @@ abstract contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
+    /// @param _vault vault address
+    /// @return true if the vault is healthy
+    function isVaultHealthy(address _vault) external view returns (bool) {
+        VaultSocket storage socket = _connectedSocket(_vault);
+        return socket.sharesMinted <= _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
+    }
+
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
