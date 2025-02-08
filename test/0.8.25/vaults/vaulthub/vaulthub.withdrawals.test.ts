@@ -91,12 +91,10 @@ describe("VaultHub.sol:withdrawals", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  // Simulate getting in the unbalanced state
-  const makeVaultUnbalanced = async () => {
+  // Simulate getting in the unhealthy state
+  const makeVaultUnhealthy = async () => {
     await vault.fund({ value: ether("1") });
-    await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1"));
     await vaultHub.mintSharesBackedByVault(vaultAddress, user, ether("0.9"));
-    await vault.connect(vaultHubSigner).report(ether("1"), ether("1"), ether("1.1"));
     await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
@@ -152,7 +150,7 @@ describe("VaultHub.sol:withdrawals", () => {
     });
 
     context("unhealthy vault", () => {
-      beforeEach(async () => await makeVaultUnbalanced());
+      beforeEach(async () => await makeVaultUnhealthy());
 
       it("reverts if fees are insufficient", async () => {
         await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
