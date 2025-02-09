@@ -89,10 +89,10 @@ const config: HardhatUserConfig = {
     customChains: [
       {
         network: "local-devnet",
-        chainId: 32382,
+        chainId: process.env.LOCAL_DENVET_CHAIN_ID ?? 32382,
         urls: {
-          apiURL: "http://localhost:3080/api",
-          browserURL: "http://localhost:3080",
+          apiURL: process.env.LOCAL_DENVET_EXPLORER_API_URL,
+          browserURL: process.env.LOCAL_DENVET_EXPLORER_URL,
         },
       },
     ],
