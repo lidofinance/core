@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3649"  lines-covered="3372"  line-rate="0.9240999999999999"  branches-valid="1700"  branches-covered="1493"  branch-rate="0.8782"  timestamp="1739195754291" complexity="0" version="0.1">
+<coverage lines-valid="3649"  lines-covered="3372"  line-rate="0.9240999999999999"  branches-valid="1700"  branches-covered="1493"  branch-rate="0.8782"  timestamp="1739196136678" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2541,10 +2541,10 @@
 				<lines><line number="461"  hits="21" /></lines>
 			</method>
 			<method name="computeDepositDataRoot"  hits="1"  signature="()V" >
-				<lines><line number="514"  hits="1" /></lines>
+				<lines><line number="513"  hits="1" /></lines>
 			</method>
 			<method name="_getStorage"  hits="432"  signature="()V" >
-				<lines><line number="553"  hits="432" /></lines>
+				<lines><line number="552"  hits="432" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2644,24 +2644,25 @@
 			<line number="467"  hits="18"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="469"  hits="17"  branch="false" />
 			<line number="470"  hits="17"  branch="false" />
-			<line number="471"  hits="17"  branch="true"  condition-coverage="100% (6/6)" />
-			<line number="473"  hits="15"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="474"  hits="5"  branch="false" />
-			<line number="475"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="476"  hits="1"  branch="false" />
+			<line number="471"  hits="17"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="472"  hits="5"  branch="false" />
+			<line number="473"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="474"  hits="1"  branch="false" />
+			<line number="479"  hits="16"  branch="true"  condition-coverage="100% (6/6)" />
+			<line number="480"  hits="14"  branch="false" />
 			<line number="481"  hits="14"  branch="false" />
-			<line number="482"  hits="14"  branch="false" />
-			<line number="483"  hits="14"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="484"  hits="2"  branch="false" />
-			<line number="487"  hits="12"  branch="false" />
-			<line number="489"  hits="12"  branch="false" />
-			<line number="490"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="491"  hits="2"  branch="false" />
-			<line number="492"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="493"  hits="1"  branch="false" />
-			<line number="497"  hits="11"  branch="false" />
-			<line number="499"  hits="2"  branch="false" />
-			<line number="521"  hits="1"  branch="false" />
+			<line number="482"  hits="14"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="483"  hits="2"  branch="false" />
+			<line number="486"  hits="12"  branch="false" />
+			<line number="488"  hits="12"  branch="false" />
+			<line number="489"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="490"  hits="2"  branch="false" />
+			<line number="491"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="492"  hits="1"  branch="false" />
+			<line number="496"  hits="11"  branch="false" />
+			<line number="498"  hits="2"  branch="false" />
+			<line number="520"  hits="1"  branch="false" />
+			<line number="523"  hits="1"  branch="false" />
 			<line number="524"  hits="1"  branch="false" />
 			<line number="525"  hits="1"  branch="false" />
 			<line number="526"  hits="1"  branch="false" />
@@ -2670,14 +2671,13 @@
 			<line number="529"  hits="1"  branch="false" />
 			<line number="530"  hits="1"  branch="false" />
 			<line number="531"  hits="1"  branch="false" />
-			<line number="532"  hits="1"  branch="false" />
-			<line number="535"  hits="1"  branch="false" />
+			<line number="534"  hits="1"  branch="false" />
+			<line number="537"  hits="1"  branch="false" />
 			<line number="538"  hits="1"  branch="false" />
 			<line number="539"  hits="1"  branch="false" />
-			<line number="540"  hits="1"  branch="false" />
-			<line number="543"  hits="1"  branch="false" />
-			<line number="550"  hits="1"  branch="false" />
-			<line number="554"  hits="432"  branch="false" />
+			<line number="542"  hits="1"  branch="false" />
+			<line number="549"  hits="1"  branch="false" />
+			<line number="553"  hits="432"  branch="false" />
 		</lines>
 		</class>
 		<class name="VaultFactory.sol"  filename="contracts/0.8.25/vaults/VaultFactory.sol"  line-rate="1"  branch-rate="1" >
