@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { randomBytes } from "ethers";
 
-import { impersonate, log, streccak, trace } from "lib";
+import { ether, impersonate, log, streccak, trace } from "lib";
 
-import { ether } from "../../units";
 import { ProtocolContext } from "../types";
 
 import { getOperatorManagerAddress, getOperatorName, getOperatorRewardAddress } from "./nor";
+import { depositAndReportValidators } from "./staking";
 
+const SDVT_MODULE_ID = 2n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
@@ -40,7 +41,9 @@ export const sdvtEnsureOperators = async (
     expect(nodeOperatorAfter.totalVettedValidators).to.equal(nodeOperatorBefore.totalAddedValidators);
   }
 
-  return newOperatorsCount;
+  if (newOperatorsCount > 0) {
+    await depositAndReportValidators(ctx, SDVT_MODULE_ID, newOperatorsCount);
+  }
 };
 
 /**

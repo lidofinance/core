@@ -30,6 +30,7 @@ describe("Protocol Happy Path", () => {
 
   let uncountedStETHShares: bigint;
   let amountWithRewards: bigint;
+  let depositCount: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -220,7 +221,7 @@ describe("Protocol Happy Path", () => {
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const stakingModules = await stakingRouter.getStakingModules();
 
-    let depositCount = 0n;
+    depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
       const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, module.id, ZERO_HASH);
@@ -294,11 +295,10 @@ describe("Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    // Stranger deposited 100 ETH, enough to deposit 3 validators, need to reflect this in the report
-    // 0.01 ETH is added to the clDiff to simulate some rewards
+    // 0.001 – to simulate rewards
     const reportData: Partial<OracleReportOptions> = {
-      clDiff: ether("96.01"),
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * depositCount + ether("0.001"),
+      clAppearedValidators: depositCount,
     };
 
     const { reportTx, extraDataTx } = (await report(ctx, reportData)) as {

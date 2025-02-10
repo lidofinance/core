@@ -5,6 +5,9 @@ import { certainAddress, log, trace } from "lib";
 
 import { ProtocolContext, StakingModuleName } from "../types";
 
+import { depositAndReportValidators } from "./staking";
+
+const NOR_MODULE_ID = 1n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
@@ -16,10 +19,9 @@ export const norEnsureOperators = async (
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
 ) => {
-  const newOperatorsCount = await norEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
-
   const { nor } = ctx.contracts;
 
+  const newOperatorsCount = await norEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
   for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
     const nodeOperatorBefore = await nor.getNodeOperator(operatorId, false);
 
@@ -40,7 +42,9 @@ export const norEnsureOperators = async (
     "Min keys count": minOperatorKeysCount,
   });
 
-  return newOperatorsCount;
+  if (newOperatorsCount > 0) {
+    await depositAndReportValidators(ctx, NOR_MODULE_ID, newOperatorsCount);
+  }
 };
 
 /**

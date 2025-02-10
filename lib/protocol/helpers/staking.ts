@@ -8,11 +8,6 @@ import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
 
-const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
-const SIMPLE_DVT_MODULE_ID = 2n;
-
 /**
  * Unpauses the staking contract.
  */
@@ -47,36 +42,37 @@ export const ensureStakeLimit = async (ctx: ProtocolContext) => {
   }
 };
 
-export const depositAndReportValidators = async (ctx: ProtocolContext) => {
+export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, depositSecurityModule } = ctx.contracts;
-  const ethHolder = await impersonate(certainAddress("provision:eht:whale"), ether("100000"));
+  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), ether("100000"));
 
   await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
 
-  // Deposit node operators
-  const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-  await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-  await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
+  // Deposit validators
+  const dsmSigner = await impersonate(depositSecurityModule.address, ether("100000"));
+  await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
 
   const before = await lido.getBeaconStat();
 
   log.debug("Validators on beacon chain before provisioning", {
-    depositedValidators: before.depositedValidators,
-    beaconValidators: before.beaconValidators,
-    beaconBalance: before.beaconBalance,
+    "Module ID to deposit": moduleId,
+    "Deposited": before.depositedValidators,
+    "Total": before.beaconValidators,
+    "Balance": before.beaconBalance,
   });
 
   // Add new validators to beacon chain
   await report(ctx, {
-    clDiff: ether("32") * before.depositedValidators,
-    clAppearedValidators: before.depositedValidators,
+    clDiff: ether("32") * depositsCount,
+    clAppearedValidators: depositsCount,
   });
 
   const after = await lido.getBeaconStat();
 
-  log.debug("Validators on beacon chain after provisioning", {
-    depositedValidators: after.depositedValidators,
-    beaconValidators: after.beaconValidators,
-    beaconBalance: after.beaconBalance,
+  log.debug("Validators on beacon chain after depositing", {
+    "Module ID deposited": moduleId,
+    "Deposited": after.depositedValidators,
+    "Total": after.beaconValidators,
+    "Balance": after.beaconBalance,
   });
 };

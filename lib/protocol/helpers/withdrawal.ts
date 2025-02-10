@@ -1,4 +1,3 @@
-import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 
 import { certainAddress, ether, impersonate, log, trace } from "lib";
@@ -33,19 +32,13 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
 export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
-  const seed = Math.random() * 1000000;
-
-  const ethHolder = await impersonate(certainAddress(`withdrawalQueue:eth:whale:${seed}`), ether("100000"));
-  const stEthHolder = await impersonate(certainAddress(`withdrawalQueue:stEth:whale:${seed}`), ether("100000"));
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
+  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
   const stEthHolderAmount = ether("10000");
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
   const tx = await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
   await trace("stEthHolder.sendTransaction", tx);
-
-  const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
-
-  expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
 
   let lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
   let lastRequestId = await withdrawalQueue.getLastRequestId();

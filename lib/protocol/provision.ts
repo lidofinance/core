@@ -1,7 +1,6 @@
 import { log } from "lib";
 
 import {
-  depositAndReportValidators,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   ensureStakeLimit,
@@ -33,7 +32,7 @@ export const provision = async (ctx: ProtocolContext) => {
 
   await norEnsureOperators(ctx, 3n, 5n);
   await sdvtEnsureOperators(ctx, 3n, 5n);
-  await depositAndReportValidators(ctx);
+
   await finalizeWithdrawalQueue(ctx);
 
   await ensureStakeLimit(ctx);
