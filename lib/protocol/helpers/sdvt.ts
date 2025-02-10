@@ -21,7 +21,7 @@ export const sdvtEnsureOperators = async (
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
 ) => {
-  await sdvtEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
+  const newOperatorsCount = await sdvtEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
 
   const { sdvt } = ctx.contracts;
 
@@ -39,6 +39,8 @@ export const sdvtEnsureOperators = async (
 
     expect(nodeOperatorAfter.totalVettedValidators).to.equal(nodeOperatorBefore.totalAddedValidators);
   }
+
+  return newOperatorsCount;
 };
 
 /**
@@ -48,8 +50,8 @@ const sdvtEnsureOperatorsHaveMinKeys = async (
   ctx: ProtocolContext,
   minOperatorsCount = MIN_OPS_COUNT,
   minKeysCount = MIN_OP_KEYS_COUNT,
-) => {
-  await sdvtEnsureMinOperators(ctx, minOperatorsCount);
+): Promise<bigint> => {
+  const newOperatorsCount = await sdvtEnsureMinOperators(ctx, minOperatorsCount);
 
   const { sdvt } = ctx.contracts;
 
@@ -74,12 +76,14 @@ const sdvtEnsureOperatorsHaveMinKeys = async (
     "Min operators count": minOperatorsCount,
     "Min keys count": minKeysCount,
   });
+
+  return newOperatorsCount;
 };
 
 /**
  * Fills the Simple DVT with some operators in case there are not enough of them.
  */
-const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT) => {
+const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT): Promise<bigint> => {
   const { sdvt } = ctx.contracts;
 
   const before = await sdvt.getNodeOperatorsCount();
@@ -110,6 +114,8 @@ const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = 
     "Min operators count": minOperatorsCount,
     "Operators count": after,
   });
+
+  return count;
 };
 
 /**

@@ -49,17 +49,28 @@ describe("Accounting", () => {
 
     await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
 
-    await norEnsureOperators(ctx, 3n, 5n);
-    await sdvtEnsureOperators(ctx, 3n, 5n);
+    const addedToNor = await norEnsureOperators(ctx, 3n, 5n);
+    const addedToSdvt = await sdvtEnsureOperators(ctx, 3n, 5n);
 
     // Deposit node operators
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
+    const newOperators = addedToNor + addedToSdvt;
+
+    if (newOperators) {
+      log.debug("New operators added", {
+        NOR: addedToNor,
+        SDVT: addedToSdvt,
+      });
+    } else {
+      log("No new operators added");
+    }
+
     await report(ctx, {
-      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
-      clAppearedValidators: 6n,
+      clDiff: ether("32") * newOperators,
+      clAppearedValidators: newOperators,
       excludeVaultsBalances: true,
     });
   });
