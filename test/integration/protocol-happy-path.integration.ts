@@ -25,7 +25,6 @@ describe("Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
-  let ethHolder: HardhatEthersSigner;
   let stEthHolder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -35,7 +34,7 @@ describe("Protocol Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder, stranger] = await ethers.getSigners();
+    [stEthHolder, stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -55,7 +54,16 @@ describe("Protocol Happy Path", () => {
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
+    const stEthHolderAmount = ether("10000");
+
+    // Deposit some eth
+    const tx = await lido.submit(ZeroAddress, { value: stEthHolderAmount });
+    await trace("lido.submit", tx);
+
+    const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
+    expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
+
+    await finalizeWithdrawalQueue(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();
