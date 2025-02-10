@@ -440,10 +440,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function setDepositGuardian(address _depositGuardian) external onlyOwner {
         if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
 
+        if (_depositGuardian == _getStorage().depositGuardian) {
+            revert DepositGuardianAlreadySet();
+        }
+
         VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
 
         if (socket.vault == address(this) && !socket.isDisconnected) {
-            revert SenderNotBeacon(msg.sender, address(this));
+            revert DepositGuardianCannotChangeWhenConnected();
         }
 
         ERC7201Storage storage $ = _getStorage();
@@ -647,4 +651,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to update deposit guardian for connected vault
      */
     error DepositGuardianCannotChangeWhenConnected();
+
+    /**
+     * @notice Thrown when trying to update deposit guardian for connected vault
+     */
+    error DepositGuardianAlreadySet();
 }

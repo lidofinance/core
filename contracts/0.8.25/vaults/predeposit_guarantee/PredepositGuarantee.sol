@@ -87,11 +87,11 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     /// NO Balance operations
 
-    function topUpNodeOperatorBond(address _nodeOperator) external payable {
+    function topUpNodeOperatorBond(address _nodeOperator) external payable whenResumed {
         _topUpNodeOperatorBalance(_nodeOperator);
     }
 
-    function withdrawNodeOperatorBond(address _nodeOperator, uint128 _amount, address _recipient) external {
+    function withdrawNodeOperatorBond(address _nodeOperator, uint128 _amount, address _recipient) external whenResumed {
         if (_amount == 0) revert ZeroArgument("amount");
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
@@ -110,7 +110,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         emit NodeOperatorBondWithdrawn(_nodeOperator, _amount, _recipient);
     }
 
-    function setNodeOperatorVoucher(address _voucher) external payable {
+    function setNodeOperatorVoucher(address _voucher) external payable whenResumed {
         ERC7201Storage storage $ = _getStorage();
 
         NodeOperatorBond storage bond = $.nodeOperatorBonds[msg.sender];
@@ -147,7 +147,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     function predeposit(
         IStakingVaultOwnable _stakingVault,
         IStakingVaultOwnable.Deposit[] calldata _deposits
-    ) external payable {
+    ) external payable whenResumed {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
         address _nodeOperator = _stakingVault.nodeOperator();
@@ -200,14 +200,14 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Positive Proof Flow  * * * * * //
 
-    function proveValidatorWC(ValidatorWitness calldata _witness) external {
+    function proveValidatorWC(ValidatorWitness calldata _witness) external whenResumed {
         _processWCProof(_witness);
     }
 
     function depositToBeaconChain(
         IStakingVaultOwnable _stakingVault,
         IStakingVaultOwnable.Deposit[] calldata _deposits
-    ) public payable {
+    ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert MustBeNodeOperator();
         }
@@ -253,7 +253,10 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Negative Proof Flow  * * * * * //
 
-    function proveInvalidValidatorWC(ValidatorWitness calldata _witness, bytes32 _invalidWithdrawalCredentials) public {
+    function proveInvalidValidatorWC(
+        ValidatorWitness calldata _witness,
+        bytes32 _invalidWithdrawalCredentials
+    ) public whenResumed {
         ERC7201Storage storage $ = _getStorage();
 
         ValidatorStatus storage validator = $.validatorStatuses[_witness.pubkey];
@@ -284,7 +287,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // called by the staking vault owner if the predeposited validator was proven invalid
     // i.e. node operator was malicious and has stolen vault ether
-    function withdrawDisprovenPredeposit(bytes calldata validatorPubkey, address _recipient) public {
+    function withdrawDisprovenPredeposit(bytes calldata validatorPubkey, address _recipient) public whenResumed {
         ValidatorStatus storage validator = _getStorage().validatorStatuses[validatorPubkey];
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -348,7 +351,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         _wcAddress = address(uint160(uint256(_withdrawalCredentials)));
     }
 
-    function _processWCProof(ValidatorWitness calldata _witness) internal {
+    function _processWCProof(ValidatorWitness calldata _witness) internal whenResumed {
         ValidatorStatus storage validator = _getStorage().validatorStatuses[_witness.pubkey];
 
         if (validator.bondStatus != BondStatus.AWAITING_PROOF) {
