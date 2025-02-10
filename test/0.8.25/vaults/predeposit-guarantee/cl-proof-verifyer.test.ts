@@ -1,15 +1,18 @@
+import { expect } from "chai";
 import { hexlify, parseUnits, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
-import { ValidatorStruct } from "typechain-types/contracts/0.8.25/predeposit_guarantee/PredepositGuarantee";
-import { ValidatorWitnessStruct } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
-export const generateValidator = (customWC?: string, customPukey?: string): ValidatorStruct => {
-  const randomInt = (max: number): number => Math.floor(Math.random() * max);
-  const randomBytes32 = (): string => hexlify(randomBytes(32));
-  const randomValidatorPubkey = (): string => hexlify(randomBytes(96));
+import { impersonate } from "lib";
 
+import { Snapshot } from "test/suite";
+
+const randomBytes32 = (): string => hexlify(randomBytes(32));
+const randomInt = (max: number): number => Math.floor(Math.random() * max);
+const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
+
+export const generateValidator = (customWC?: string, customPukey?: string) => {
   return {
     pubkey: customPukey ?? randomValidatorPubkey(),
     withdrawalCredentials: customWC ?? randomBytes32(),
@@ -22,12 +25,28 @@ export const generateValidator = (customWC?: string, customPukey?: string): Vali
   };
 };
 
+export const generateBeaconHeader = (stateRoot: string) => {
+  return {
+    slot: randomInt(1743359),
+    proposerIndex: randomInt(1337),
+    parentRoot: randomBytes32(),
+    stateRoot,
+    bodyRoot: randomBytes32(),
+  };
+};
+
 // CSM "borrowed" prefab validator object with mocked state root
 const STATIC_VALIDATOR = {
-  // state root mocked as block root because CSM proves against state and verifies block root separately
-  root: "0x21205c716572ae05692c0f8a4c64fd84e504cbb1a16fa0371701adbab756dd72",
+  blockRoot: "0x56073a5bf24e8a3ea2033ad10a5039a7a7a6884086b67053c90d38f104ae89cf",
   // pack(0x560000000000, 40)
   gIFirstValidator: "0x0000000000000000000000000000000000000000000000000056000000000028",
+  beaconBlockHeader: {
+    slot: 1743359,
+    proposerIndex: 1337,
+    parentRoot: "0x5db6dfb2b5e735bafb437a76b9e525e958d2aef589649e862bfbc02964edf5ab",
+    stateRoot: "0x21205c716572ae05692c0f8a4c64fd84e504cbb1a16fa0371701adbab756dd72",
+    bodyRoot: "0x459390eed4479eb49b71efadcc3b540bbc60073f196e0409588d6cc9eafbe5fa",
+  },
   witness: {
     validatorIndex: 1551477n,
     beaconBlockTimestamp: 42,
@@ -90,20 +109,55 @@ const STATIC_VALIDATOR = {
       "0xbb2952772995323016b98233c26e96e5c54955fda62e643cb56981da6aab7365",
       "0xda5ca7afba0d19d345e85d2825fc3078eefdd76ead776b108fe0eac9aa96e5e6",
     ],
-  } as ValidatorWitnessStruct,
+  },
 };
-
-// random number integer generator
 
 describe("CLProofVerifier.sol", () => {
   let CLProofVerifier: CLProofVerifier__Harness;
   let sszMerkleTree: SSZMerkleTree;
+  let BEACON_ROOTS: string;
+  let snapshotState: string;
+  let setBeaconBlockRoot: (root: string) => Promise<number>;
 
   before(async () => {
     sszMerkleTree = await ethers.deployContract("SSZMerkleTree", {});
     await sszMerkleTree.addValidatorLeaf(generateValidator());
     const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(0n);
+
+    // populate merkle tree with validators
+    for (let i = 1; i < 100; i++) {
+      await sszMerkleTree.addValidatorLeaf(generateValidator());
+    }
+
     CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", [gIFirstValidator], {});
+    BEACON_ROOTS = await CLProofVerifier.BEACON_ROOTS();
+
+    const systemSigner = await impersonate("0xfffffffffffffffffffffffffffffffffffffffe", 999999999999999999999999999n);
+
+    setBeaconBlockRoot = async (root: string) => {
+      const block = await systemSigner
+        .sendTransaction({
+          to: BEACON_ROOTS,
+          value: 0,
+          data: root,
+        })
+        .then((tx) => tx.getBlock());
+      if (!block) throw new Error("ivariant");
+      return block.timestamp;
+    };
+
+    // test mocker
+    const mockRoot = randomBytes32();
+    const timestamp = await setBeaconBlockRoot(mockRoot);
+    expect(await CLProofVerifier.TEST_getParentBlockRoot(timestamp)).to.equal(mockRoot);
+  });
+
+  beforeEach(async () => {
+    snapshotState = await Snapshot.take();
+  });
+
+  afterEach(async () => {
+    await Snapshot.restore(snapshotState);
   });
 
   it("should verify precalclulated validator object in merkle tree", async () => {
@@ -112,26 +166,82 @@ describe("CLProofVerifier.sol", () => {
       [STATIC_VALIDATOR.gIFirstValidator],
       {},
     );
-    await StaticCLProofVerifier.setRoot(STATIC_VALIDATOR.root);
-    await StaticCLProofVerifier.TEST_validateWCProof(STATIC_VALIDATOR.witness);
+
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(STATIC_VALIDATOR.witness.validator);
+    const beaconHeaderMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(STATIC_VALIDATOR.beaconBlockHeader);
+    const validatorGIndex = await StaticCLProofVerifier.TEST_getValidatorGI(STATIC_VALIDATOR.witness.validatorIndex);
+
+    // raw proof verification with same input as CSM
+    await sszMerkleTree.verifyProof(
+      STATIC_VALIDATOR.witness.proof,
+      STATIC_VALIDATOR.beaconBlockHeader.stateRoot,
+      validatorMerkle.root,
+      validatorGIndex,
+    );
+
+    // concatentate all proofs to match PG style
+    const concatenatedProof = [
+      ...validatorMerkle.proof,
+      ...STATIC_VALIDATOR.witness.proof,
+      ...beaconHeaderMerkle.proof,
+    ];
+
+    const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
+
+    // PG style proof verification from PK+WC to BeaconBlockRoot
+    await StaticCLProofVerifier.TEST_validatePubKeyWCProof(
+      {
+        proof: concatenatedProof,
+        pubkey: STATIC_VALIDATOR.witness.validator.pubkey,
+        validatorIndex: STATIC_VALIDATOR.witness.validatorIndex,
+        childBlockTimestamp: timestamp,
+      },
+      STATIC_VALIDATOR.witness.validator.withdrawalCredentials,
+    );
   });
 
   it("can verify against dynamic merkle tree", async () => {
     const validator = generateValidator();
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
 
+    // verify just the validator container tree from PK+WC node
+    await sszMerkleTree.verifyProof(
+      [...validatorMerkle.proof],
+      validatorMerkle.root,
+      validatorMerkle.parentNode,
+      validatorMerkle.parentIndex,
+    );
+
+    // add validator to CL state merkle tree
     await sszMerkleTree.addValidatorLeaf(validator);
-
+    const stateRoot = await sszMerkleTree.getMerkleRoot();
     const validatorIndex = (await sszMerkleTree.leafCount()) - 1n;
-    const proof = await sszMerkleTree.getMerkleProof(validatorIndex);
-    const root = await sszMerkleTree.getMerkleRoot();
+    const stateProof = await sszMerkleTree.getMerkleProof(validatorIndex);
+    const validatorGIndex = await sszMerkleTree.getGeneralizedIndex(validatorIndex);
 
-    await CLProofVerifier.setRoot(root);
+    // verify just the state tree
+    await sszMerkleTree.verifyProof([...stateProof], stateRoot, validatorMerkle.root, validatorGIndex);
 
-    await CLProofVerifier.TEST_validateWCProof({
-      validatorIndex,
-      proof: [...proof],
-      validator,
-      beaconBlockTimestamp: 1n,
-    });
+    const beaconHeader = generateBeaconHeader(stateRoot);
+    const beaconMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
+    // verify just the beacon tree
+    await sszMerkleTree.verifyProof([...beaconMerkle.proof], beaconMerkle.root, stateRoot, beaconMerkle.index);
+
+    const timestamp = await setBeaconBlockRoot(beaconMerkle.root);
+
+    const proof = [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof];
+    await CLProofVerifier.TEST_validatePubKeyWCProof(
+      {
+        validatorIndex,
+        proof: [...proof],
+        pubkey: validator.pubkey,
+        childBlockTimestamp: timestamp,
+      },
+      validator.withdrawalCredentials,
+    );
   });
+
+  /*
+    TODO: negative tests
+  */
 });
