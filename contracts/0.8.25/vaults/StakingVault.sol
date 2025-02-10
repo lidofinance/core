@@ -95,7 +95,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice The type of withdrawal credentials for the validators deposited from this `StakingVault`.
      */
-    uint256 private constant WC_0x02_PREFIX = 0x02 << 248;
+    uint256 private constant WC_0X02_PREFIX = 0x02 << 248;
 
     /**
      * @notice The length of the public key in bytes
@@ -350,7 +350,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @return Withdrawal credentials as bytes32
      */
     function withdrawalCredentials() public view returns (bytes32) {
-        return bytes32(WC_0x02_PREFIX | uint160(address(this)));
+        return bytes32(WC_0X02_PREFIX | uint160(address(this)));
     }
 
     /**
@@ -467,7 +467,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
 
         ERC7201Storage storage $ = _getStorage();
-        if (msg.sender == $.nodeOperator || msg.sender == owner() || (valuation() < $.locked && msg.sender == address(VAULT_HUB))) {
+        bool isHealthy = valuation() >= $.locked;
+        if (!isHealthy) {
+            for (uint256 i = 0; i < _amounts.length; i++) {
+                if (_amounts[i] > 0) {
+                    revert PartialWithdrawalsForbidden();
+                }
+            }
+        }
+
+        if (msg.sender == $.nodeOperator || msg.sender == owner() || (!isHealthy && msg.sender == address(VAULT_HUB))) {
             uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
             uint256 totalFee = (feePerRequest * _pubkeys.length) / PUBLIC_KEY_LENGTH;
             if (value < totalFee) {
@@ -723,4 +732,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _amount Amount of ether to refund
      */
     error ValidatorWithdrawalFeeRefundFailed(address _sender, uint256 _amount);
+
+    /**
+     * @notice Thrown when partial withdrawals are forbidden on an unhealthy vault
+     */
+    error PartialWithdrawalsForbidden();
 }

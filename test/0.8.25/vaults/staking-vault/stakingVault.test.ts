@@ -874,6 +874,17 @@ describe("StakingVault.sol", () => {
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
     });
+
+    it("reverts if partial withdrawals is called on an unhealthy vault", async () => {
+      await stakingVault.fund({ value: ether("1") });
+      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+      ).to.be.revertedWithCustomError(stakingVault, "PartialWithdrawalsForbidden");
+    });
   });
 
   context("computeDepositDataRoot", () => {
