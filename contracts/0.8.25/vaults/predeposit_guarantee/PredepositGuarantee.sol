@@ -63,7 +63,7 @@ contract PredepositGuarantee is CLProofVerifier {
     /// NO Balance operations
 
     function topUpNodeOperatorBond(address _nodeOperator) external payable {
-        _topUpNodeOperatorCollateral(_nodeOperator, msg.value);
+        _topUpNodeOperatorCollateral(_nodeOperator);
     }
 
     function withdrawNodeOperatorBond(address _nodeOperator, uint128 _amount, address _recipient) external {
@@ -118,7 +118,7 @@ contract PredepositGuarantee is CLProofVerifier {
 
         // optional top up
         if (msg.value != 0) {
-            _topUpNodeOperatorCollateral(_nodeOperator, msg.value);
+            _topUpNodeOperatorCollateral(_nodeOperator);
         }
 
         // ensures vault fair play
@@ -273,15 +273,15 @@ contract PredepositGuarantee is CLProofVerifier {
         revert MustBeNodeOperatorOrVoucher();
     }
 
-    function _topUpNodeOperatorCollateral(address _nodeOperator, uint256 _amount) internal {
-        if (_amount == 0) revert ZeroArgument("msg.value");
+    function _topUpNodeOperatorCollateral(address _nodeOperator) internal {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         _validateNodeOperatorCaller(_nodeOperator);
 
-        nodeOperatorBonds[_nodeOperator].total += uint128(_amount);
+        nodeOperatorBonds[_nodeOperator].total += uint128(msg.value);
 
-        emit NodeOperatorBondToppedUp(_nodeOperator, _amount);
+        emit NodeOperatorBondToppedUp(_nodeOperator, msg.value);
     }
 
     function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address _wcAddress) {
