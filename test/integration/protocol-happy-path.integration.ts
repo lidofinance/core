@@ -55,10 +55,10 @@ describe("Protocol Happy Path", () => {
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
-    const stEthHolderAmount = ether("10000");
+    const stEthHolderAmount = ether("1000");
 
     // Deposit some eth
-    const tx = await lido.submit(ZeroAddress, { value: stEthHolderAmount });
+    const tx = await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
     await trace("lido.submit", tx);
 
     const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
