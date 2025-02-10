@@ -35,7 +35,29 @@ export const generateBeaconHeader = (stateRoot: string) => {
   };
 };
 
-// CSM "borrowed" prefab validator object with mocked state root
+export const setBeaconBlockRoot = async (root: string) => {
+  const systemSigner = await impersonate("0xfffffffffffffffffffffffffffffffffffffffe", 999999999999999999999999999n);
+  const BEACON_ROOTS = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
+  const block = await systemSigner
+    .sendTransaction({
+      to: BEACON_ROOTS,
+      value: 0,
+      data: root,
+    })
+    .then((tx) => tx.getBlock());
+  if (!block) throw new Error("ivariant");
+  return block.timestamp;
+};
+
+export const prepareLocalMerkleTree = async () => {
+  const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", {});
+  await sszMerkleTree.addValidatorLeaf(generateValidator());
+  const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(0n);
+  return { sszMerkleTree, gIFirstValidator };
+};
+
+// CSM "borrowed" prefab validator object with precalculated proofs & root
+// allows us to be sure that core merkle proof validation is working correctly
 const STATIC_VALIDATOR = {
   blockRoot: "0x56073a5bf24e8a3ea2033ad10a5039a7a7a6884086b67053c90d38f104ae89cf",
   // pack(0x560000000000, 40)
@@ -115,36 +137,19 @@ const STATIC_VALIDATOR = {
 describe("CLProofVerifier.sol", () => {
   let CLProofVerifier: CLProofVerifier__Harness;
   let sszMerkleTree: SSZMerkleTree;
-  let BEACON_ROOTS: string;
+
   let snapshotState: string;
-  let setBeaconBlockRoot: (root: string) => Promise<number>;
 
   before(async () => {
-    sszMerkleTree = await ethers.deployContract("SSZMerkleTree", {});
-    await sszMerkleTree.addValidatorLeaf(generateValidator());
-    const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(0n);
+    const localTree = await prepareLocalMerkleTree();
+    sszMerkleTree = localTree.sszMerkleTree;
 
     // populate merkle tree with validators
     for (let i = 1; i < 100; i++) {
       await sszMerkleTree.addValidatorLeaf(generateValidator());
     }
 
-    CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", [gIFirstValidator], {});
-    BEACON_ROOTS = await CLProofVerifier.BEACON_ROOTS();
-
-    const systemSigner = await impersonate("0xfffffffffffffffffffffffffffffffffffffffe", 999999999999999999999999999n);
-
-    setBeaconBlockRoot = async (root: string) => {
-      const block = await systemSigner
-        .sendTransaction({
-          to: BEACON_ROOTS,
-          value: 0,
-          data: root,
-        })
-        .then((tx) => tx.getBlock());
-      if (!block) throw new Error("ivariant");
-      return block.timestamp;
-    };
+    CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", [localTree.gIFirstValidator], {});
 
     // test mocker
     const mockRoot = randomBytes32();
