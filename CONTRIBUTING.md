@@ -328,7 +328,7 @@ mainnet environment, allowing you to run integration tests with trace logging.
 
 > [!NOTE]
 > Ensure that `HARDHAT_FORKING_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
-> `.env` file (refer to `.env.example` for guidance).
+> `.env` file (refer to `.env.example` for guidance). Otherwise, the tests will run against the Scratch deployment.
 
 ```bash
 # Run all integration tests

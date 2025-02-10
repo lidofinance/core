@@ -176,7 +176,7 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             sharesRequestedToBurn: 0,
             withdrawalFinalizationBatches: new uint256[](0),
             vaultValues: new uint256[](0),
-            netCashFlows: new int256[](0)
+            inOutDeltas: new int256[](0)
         });
 
         ghost.unifiedClBalanceWei = int256(fuzz._clBalanceWei + currentReport.withdrawalVaultBalance); // ?

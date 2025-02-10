@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { impersonate, log, trace, updateBalance } from "lib";
+import { computeDepositDataRoot, impersonate, log, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -43,10 +43,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   let ethHolder: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
 
   let depositContract: string;
 
@@ -70,7 +68,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, operator, curator, staker, tokenMaster] = await ethers.getSigners();
+    [ethHolder, owner, nodeOperator, curator] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -139,17 +137,17 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
-    const implAddress = await stakingVaultFactory.implementation();
-    const adminContractImplAddress = await stakingVaultFactory.delegationImpl();
+    const implAddress = await stakingVaultBeacon.implementation();
+    const delegationAddress = await stakingVaultFactory.DELEGATION_IMPL();
 
-    const vaultImpl = await ethers.getContractAt("StakingVault", implAddress);
-    const vaultFactoryAdminContract = await ethers.getContractAt("Delegation", adminContractImplAddress);
+    const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
+    const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await vaultImpl.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await vaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await vaultFactoryAdminContract.STETH()).to.equal(ctx.contracts.lido.address);
+    expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
+    expect(await _stakingVault.depositContract()).to.equal(depositContract);
+    expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
@@ -158,15 +156,23 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVault(
+    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
-        operatorFee: VAULT_OWNER_FEE,
-        curatorFee: VAULT_NODE_OPERATOR_FEE,
-        curator: curator,
-        operator: operator,
-        staker: staker,
-        tokenMaster: tokenMaster,
-        claimOperatorDueRole: operator,
+        defaultAdmin: owner,
+        funder: curator,
+        withdrawer: curator,
+        minter: curator,
+        burner: curator,
+        curator,
+        rebalancer: curator,
+        depositPauser: curator,
+        depositResumer: curator,
+        exitRequester: curator,
+        disconnecter: curator,
+        nodeOperatorManager: nodeOperator,
+        nodeOperatorFeeClaimer: nodeOperator,
+        curatorFeeBP: VAULT_OWNER_FEE,
+        nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
       },
       "0x",
     );
@@ -179,34 +185,24 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
     delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
 
-    expect(await delegation.getRoleMemberCount(await delegation.DEFAULT_ADMIN_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), owner)).to.be.true;
+    expect(await isSoleRoleMember(owner, await delegation.DEFAULT_ADMIN_ROLE())).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.CURATOR_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.CURATOR_ROLE(), curator)).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.OPERATOR_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
+    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.CLAIM_OPERATOR_DUE_ROLE(), operator)).to.be.true;
-    expect(await delegation.getRoleAdmin(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.be.equal(
-      await delegation.OPERATOR_ROLE(),
-    );
+    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.be.true;
 
-    expect(await delegation.getRoleMemberCount(await delegation.TOKEN_MASTER_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
-
-    expect(await delegation.getRoleMemberCount(await delegation.STAKER_ROLE())).to.be.equal(1n);
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
-  });
-
-  it("Should allow Owner to assign Staker and Token Master roles", async () => {
-    await delegation.connect(owner).grantRole(await delegation.STAKER_ROLE(), staker);
-    await delegation.connect(owner).grantRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster);
-
-    expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
-    expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.MINT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.BURN_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.REBALANCE_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -231,7 +227,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Staker to fund vault via delegation contract", async () => {
-    const depositTx = await delegation.connect(staker).fund({ value: VAULT_DEPOSIT });
+    const depositTx = await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
     await trace("delegation.fund", depositTx);
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
@@ -245,7 +241,24 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
     signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const topUpTx = await stakingVault.connect(operator).depositToBeaconChain(keysToAdd, pubKeysBatch, signaturesBatch);
+    const deposits = [];
+
+    for (let i = 0; i < keysToAdd; i++) {
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
+      const signature = hexlify(
+        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
+      );
+
+      deposits.push({
+        pubkey: pubkey,
+        signature: signature,
+        amount: VALIDATOR_DEPOSIT_SIZE,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
+      });
+    }
+
+    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     await trace("stakingVault.depositToBeaconChain", topUpTx);
 
@@ -272,12 +285,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     // Validate minting with the cap
-    const mintOverLimitTx = delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMaxMintingShares + 1n);
+    const mintOverLimitTx = delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares + 1n);
     await expect(mintOverLimitTx)
       .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
       .withArgs(stakingVault, stakingVault.valuation());
 
-    const mintTx = await delegation.connect(tokenMaster).mint(tokenMaster, stakingVaultMaxMintingShares);
+    const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
@@ -305,7 +318,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     const { reportTx } = (await report(ctx, params)) as {
@@ -324,25 +337,25 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
 
-    expect(await delegation.curatorDue()).to.be.gt(0n);
-    expect(await delegation.operatorDue()).to.be.gt(0n);
+    expect(await delegation.curatorUnclaimedFee()).to.be.gt(0n);
+    expect(await delegation.nodeOperatorUnclaimedFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await delegation.operatorDue();
+    const performanceFee = await delegation.nodeOperatorUnclaimedFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
-    const operatorBalanceBefore = await ethers.provider.getBalance(operator);
+    const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
-    const claimPerformanceFeesTx = await delegation.connect(operator).claimOperatorDue(operator);
+    const claimPerformanceFeesTx = await delegation.connect(nodeOperator).claimNodeOperatorFee(nodeOperator);
     const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimOperatorDue",
+      "delegation.claimNodeOperatorFee",
       claimPerformanceFeesTx,
     );
 
-    const operatorBalanceAfter = await ethers.provider.getBalance(operator);
+    const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);
     const gasFee = claimPerformanceFeesTxReceipt.gasPrice * claimPerformanceFeesTxReceipt.cumulativeGasUsed;
 
     log.debug("Operator's StETH balance", {
@@ -358,7 +371,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Owner to trigger validator exit to cover fees", async () => {
     // simulate validator exit
     const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
-    await delegation.connect(owner).requestValidatorExit(secondValidatorKey);
+    await delegation.connect(curator).requestValidatorExit(secondValidatorKey);
     await updateBalance(stakingVaultAddress, VALIDATOR_DEPOSIT_SIZE);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
@@ -368,14 +381,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     await report(ctx, params);
   });
 
   it("Should allow Manager to claim manager rewards in ETH after rebase with exited validator", async () => {
-    const feesToClaim = await delegation.curatorDue();
+    const feesToClaim = await delegation.curatorUnclaimedFee();
 
     log.debug("Staking Vault stats after operator exit", {
       "Staking Vault management fee": ethers.formatEther(feesToClaim),
@@ -384,8 +397,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const managerBalanceBefore = await ethers.provider.getBalance(curator);
 
-    const claimEthTx = await delegation.connect(curator).claimCuratorDue(curator);
-    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorDue", claimEthTx);
+    const claimEthTx = await delegation.connect(curator).claimCuratorFee(curator);
+    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorFee", claimEthTx);
 
     const managerBalanceAfter = await ethers.provider.getBalance(curator);
     const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
@@ -406,11 +419,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Token master can approve the vault to burn the shares
     const approveVaultTx = await lido
-      .connect(tokenMaster)
+      .connect(curator)
       .approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
     await trace("lido.approve", approveVaultTx);
 
-    const burnTx = await delegation.connect(tokenMaster).burn(stakingVaultMaxMintingShares);
+    const burnTx = await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
     await trace("delegation.burn", burnTx);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
@@ -420,7 +433,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
       vaultValues: [vaultValue],
-      netCashFlows: [VAULT_DEPOSIT],
+      inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
     const { reportTx } = (await report(ctx, params)) as {
@@ -457,4 +470,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await stakingVault.locked()).to.equal(0);
   });
+
+  async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {
+    return (await delegation.getRoleMemberCount(role)).toString() === "1" && (await delegation.hasRole(role, account));
+  }
 });

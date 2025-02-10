@@ -4,8 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IERC20} from "@openzeppelin/contracts-v5.0.2/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.0.2/token/ERC20/extensions/IERC20Permit.sol";
+import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
 
 interface ILido is IERC20, IERC20Permit {
     function getSharesByPooledEth(uint256) external view returns (uint256);
@@ -15,6 +15,8 @@ interface ILido is IERC20, IERC20Permit {
     function getPooledEthBySharesRoundUp(uint256) external view returns (uint256);
 
     function transferSharesFrom(address, address, uint256) external returns (uint256);
+
+    function transferShares(address, uint256) external returns (uint256);
 
     function rebalanceExternalEtherToInternal() external payable;
 

@@ -137,11 +137,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
-    // @dev `principalCLBalance` is the balance of the validators on previous report
+    // @dev `preClBalance` is the balance of the validators on previous report
     // plus the amount of ether that was deposited to the deposit contract since then
     event ETHDistributed(
         uint256 indexed reportTimestamp,
-        uint256 principalCLBalance, // preClBalance + deposits
+        uint256 preClBalance, // actually its preClBalance + deposits due to compatibility reasons
         uint256 postCLBalance,
         uint256 withdrawalsWithdrawn,
         uint256 executionLayerRewardsWithdrawn,
@@ -196,7 +196,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _eip712StETH eip712 helper contract for StETH
      */
     function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
-        _bootstrapInitialHolder();
+        _bootstrapInitialHolder(); // stone in the elevator
 
         LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
         emit LidoLocatorSet(_lidoLocator);
@@ -945,6 +945,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getTotalPooledEther() internal view returns (uint256) {
         uint256 internalEther = _getInternalEther();
         return internalEther.add(_getExternalEther(internalEther));
+    }
+
+    /// @dev the numerator (in ether) of the share rate for StETH conversion between shares and ether and vice versa.
+    /// using the numerator and denominator different from totalShares and totalPooledEther allows to:
+    /// - avoid double precision loss on additional division on external ether calculations
+    /// - optimize gas cost of conversions between shares and ether
+    function _getShareRateNumerator() internal view returns (uint256) {
+        return _getInternalEther();
+    }
+
+    /// @dev the denominator (in shares) of the share rate for StETH conversion between shares and ether and vice versa.
+    function _getShareRateDenominator() internal view returns (uint256) {
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 internalShares = _getTotalShares() - externalShares; // never 0 because of the stone in the elevator
+        return internalShares;
     }
 
     /// @notice Calculate the maximum amount of external shares that can be minted while maintaining

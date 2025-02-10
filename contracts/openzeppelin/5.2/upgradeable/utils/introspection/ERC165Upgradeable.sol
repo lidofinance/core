@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v5.0.0) (utils/introspection/ERC165.sol)
+// OpenZeppelin Contracts (last updated v5.1.0) (utils/introspection/ERC165.sol)
 
 pragma solidity ^0.8.20;
 
-import {IERC165} from "@openzeppelin/contracts-v5.0.2/utils/introspection/IERC165.sol";
+import {IERC165} from "@openzeppelin/contracts-v5.2/utils/introspection/IERC165.sol";
 import {Initializable} from "../../proxy/utils/Initializable.sol";
 
 /**
  * @dev Implementation of the {IERC165} interface.
  *
- * Contracts that want to implement ERC165 should inherit from this contract and override {supportsInterface} to check
+ * Contracts that want to implement ERC-165 should inherit from this contract and override {supportsInterface} to check
  * for the additional interface id that will be supported. For example:
  *
  * ```solidity
@@ -19,10 +19,11 @@ import {Initializable} from "../../proxy/utils/Initializable.sol";
  * ```
  */
 abstract contract ERC165Upgradeable is Initializable, IERC165 {
-    function __ERC165_init() internal onlyInitializing {}
+    function __ERC165_init() internal onlyInitializing {
+    }
 
-    function __ERC165_init_unchained() internal onlyInitializing {}
-
+    function __ERC165_init_unchained() internal onlyInitializing {
+    }
     /**
      * @dev See {IERC165-supportsInterface}.
      */

@@ -303,8 +303,8 @@ contract StETH is IERC20, Pausable {
      */
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
         return _ethAmount
-            .mul(_getTotalShares())
-            .div(_getTotalPooledEther());
+            .mul(_getShareRateDenominator()) // denominator in shares
+            .div(_getShareRateNumerator()); // numerator in ether
     }
 
     /**
@@ -312,8 +312,8 @@ contract StETH is IERC20, Pausable {
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
         return _sharesAmount
-            .mul(_getTotalPooledEther())
-            .div(_getTotalShares());
+            .mul(_getShareRateNumerator()) // numerator in ether
+            .div(_getShareRateDenominator()); // denominator in shares
     }
 
     /**
@@ -322,14 +322,14 @@ contract StETH is IERC20, Pausable {
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
     function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
-        uint256 totalEther = _getTotalPooledEther();
-        uint256 totalShares = _getTotalShares();
+        uint256 numeratorInEther = _getShareRateNumerator();
+        uint256 denominatorInShares = _getShareRateDenominator();
 
         etherAmount = _sharesAmount
-            .mul(totalEther)
-            .div(totalShares);
+            .mul(numeratorInEther)
+            .div(denominatorInShares);
 
-        if (etherAmount.mul(totalShares) != _sharesAmount.mul(totalEther)) {
+        if (_sharesAmount.mul(numeratorInEther) != etherAmount.mul(denominatorInShares)) {
             ++etherAmount;
         }
     }
@@ -388,6 +388,22 @@ contract StETH is IERC20, Pausable {
      * @dev This function is required to be implemented in a derived contract.
      */
     function _getTotalPooledEther() internal view returns (uint256);
+
+    /**
+     * @return the numerator of the protocol's share rate (in ether).
+     * @dev used to convert shares to tokens and vice versa.
+     */
+    function _getShareRateNumerator() internal view returns (uint256) {
+        return _getTotalPooledEther();
+    }
+
+    /**
+     * @return the denominator of the protocol's share rate (in shares).
+     * @dev used to convert shares to tokens and vice versa.
+     */
+    function _getShareRateDenominator() internal view returns (uint256) {
+        return _getTotalShares();
+    }
 
     /**
      * @notice Moves `_amount` tokens from `_sender` to `_recipient`.

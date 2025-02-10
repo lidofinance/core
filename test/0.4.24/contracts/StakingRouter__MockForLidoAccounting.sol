@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
-pragma solidity 0.4.24;
+
+pragma solidity 0.8.9;
 
 contract StakingRouter__MockForLidoAccounting {
     event Mock__MintedRewardsReported();
@@ -29,14 +30,14 @@ contract StakingRouter__MockForLidoAccounting {
         precisionPoints = precisionPoint__mocked;
     }
 
-    function reportRewardsMinted(uint256[], uint256[]) external {
+    function reportRewardsMinted(uint256[] calldata, uint256[] calldata) external {
         emit Mock__MintedRewardsReported();
     }
 
     function mock__getStakingRewardsDistribution(
-        address[] _recipients,
-        uint256[] _stakingModuleIds,
-        uint96[] _stakingModuleFees,
+        address[] calldata _recipients,
+        uint256[] calldata _stakingModuleIds,
+        uint96[] calldata _stakingModuleFees,
         uint96 _totalFee,
         uint256 _precisionPoints
     ) external {
