@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity ^0.8.0;
 
+import {Vm} from "forge-std/Vm.sol";
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
-import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {BaseProtocolTest} from "./Protocol__Deployment.t.sol";
@@ -24,6 +25,8 @@ interface IAccounting {
 
 interface ILido {
     function getTotalShares() external view returns (uint256);
+
+    function getTotalPooledEther() external view returns (uint256);
 
     function getBufferedEther() external view returns (uint256);
 
@@ -82,6 +85,19 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         int256 unifiedClBalanceWei;
     }
 
+    struct BoundaryValues {
+        uint256 minPreClValidators;
+        uint256 maxPreClValidators;
+        uint256 minClValidators;
+        uint256 maxClValidators;
+        uint256 minClBalanceWei;
+        uint256 maxClBalanceWei;
+        uint256 minDepositedValidators;
+        uint256 maxDepositedValidators;
+        uint256 minElRewardsVaultBalanceWei;
+        uint256 maxElRewardsVaultBalanceWei;
+    }
+
     IAccounting private accounting;
     ILido private lido;
     ISecondOpinionOracleMock private secondOpinionOracle;
@@ -89,6 +105,7 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
 
     Ghost public ghost;
     LidoTransfer[] public ghost_lidoTransfers;
+    BoundaryValues public boundaryValues;
 
     address private accountingOracle;
     address private lidoExecutionLayerRewardVault;
@@ -115,9 +132,23 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
         secondOpinionOracle = ISecondOpinionOracleMock(_secondOpinionOracle);
         burner = _burnerAddress;
         stakingRouter = IStakingRouter(_stakingRouter);
+
+        // Initialize boundary values with extreme values
+        boundaryValues = BoundaryValues({
+            minPreClValidators: type(uint256).max,
+            maxPreClValidators: 0,
+            minClValidators: type(uint256).max,
+            maxClValidators: 0,
+            minClBalanceWei: type(uint256).max,
+            maxClBalanceWei: 0,
+            minDepositedValidators: type(uint256).max,
+            maxDepositedValidators: 0,
+            minElRewardsVaultBalanceWei: type(uint256).max,
+            maxElRewardsVaultBalanceWei: 0
+        });
     }
 
-    function cutGwei(uint256 value) public returns (uint256) {
+    function cutGwei(uint256 value) public pure returns (uint256) {
         return (value / 1 gwei) * 1 gwei;
     }
 
@@ -136,8 +167,24 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             fuzz._lidoExecutionLayerRewardVaultWei
         );
 
+        // Update boundary values for elRewardsVaultBalanceWei
+        if (fuzz._elRewardsVaultBalanceWei < boundaryValues.minElRewardsVaultBalanceWei) {
+            boundaryValues.minElRewardsVaultBalanceWei = fuzz._elRewardsVaultBalanceWei;
+        }
+        if (fuzz._elRewardsVaultBalanceWei > boundaryValues.maxElRewardsVaultBalanceWei) {
+            boundaryValues.maxElRewardsVaultBalanceWei = fuzz._elRewardsVaultBalanceWei;
+        }
+
         fuzz._preClValidators = bound(fuzz._preClValidators, 250_000, 100_000_000_000);
         fuzz._preClBalanceWei = cutGwei(fuzz._preClValidators * stableBalanceWei);
+
+        // Update boundary values for preClValidators
+        if (fuzz._preClValidators < boundaryValues.minPreClValidators) {
+            boundaryValues.minPreClValidators = fuzz._preClValidators;
+        }
+        if (fuzz._preClValidators > boundaryValues.maxPreClValidators) {
+            boundaryValues.maxPreClValidators = fuzz._preClValidators;
+        }
 
         ghost.clValidators = int256(fuzz._preClValidators);
 
@@ -147,9 +194,25 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             fuzz._preClValidators + limitList.appearedValidatorsPerDayLimit
         );
 
+        // Update boundary values for clValidators
+        if (fuzz._clValidators < boundaryValues.minClValidators) {
+            boundaryValues.minClValidators = fuzz._clValidators;
+        }
+        if (fuzz._clValidators > boundaryValues.maxClValidators) {
+            boundaryValues.maxClValidators = fuzz._clValidators;
+        }
+
         uint256 minBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei - maxLossPerOperatorWei);
         uint256 maxBalancePerValidatorWei = fuzz._clValidators * (stableBalanceWei + maxYieldPerOperatorWei);
         fuzz._clBalanceWei = bound(fuzz._clBalanceWei, minBalancePerValidatorWei, maxBalancePerValidatorWei);
+
+        // Update boundary values for clBalanceWei
+        if (fuzz._clBalanceWei < boundaryValues.minClBalanceWei) {
+            boundaryValues.minClBalanceWei = fuzz._clBalanceWei;
+        }
+        if (fuzz._clBalanceWei > boundaryValues.maxClBalanceWei) {
+            boundaryValues.maxClBalanceWei = fuzz._clBalanceWei;
+        }
 
         // depositedValidators is always greater or equal to beaconValidators
         // Todo: Upper extremum ?
@@ -158,6 +221,15 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             fuzz._clValidators + 1,
             fuzz._clValidators + limitList.appearedValidatorsPerDayLimit
         );
+
+        // Update boundary values for depositedValidators
+        if (depositedValidators < boundaryValues.minDepositedValidators) {
+            boundaryValues.minDepositedValidators = depositedValidators;
+        }
+        if (depositedValidators > boundaryValues.maxDepositedValidators) {
+            boundaryValues.maxDepositedValidators = depositedValidators;
+        }
+
         ghost.depositedValidators = int256(depositedValidators);
 
         vm.store(address(lido), keccak256("lido.Lido.depositedValidators"), bytes32(depositedValidators));
@@ -235,6 +307,10 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
     function getLidoTransfers() public view returns (LidoTransfer[] memory) {
         return ghost_lidoTransfers;
     }
+
+    function getBoundaryValues() public view returns (BoundaryValues memory) {
+        return boundaryValues;
+    }
 }
 
 contract AccountingTest is BaseProtocolTest {
@@ -281,19 +357,37 @@ contract AccountingTest is BaseProtocolTest {
         targetSelector(FuzzSelector({addr: address(accountingHandler), selectors: selectors}));
     }
 
+    function logBoundaryValues() internal view {
+        AccountingHandler.BoundaryValues memory bounds = accountingHandler.getBoundaryValues();
+        console2.log("Boundary Values:");
+        console2.log("PreClValidators min:", bounds.minPreClValidators);
+        console2.log("PreClValidators max:", bounds.maxPreClValidators);
+        console2.log("ClValidators min:", bounds.minClValidators);
+        console2.log("ClValidators max:", bounds.maxClValidators);
+        console2.log("ClBalanceWei min:", bounds.minClBalanceWei);
+        console2.log("ClBalanceWei max:", bounds.maxClBalanceWei);
+        console2.log("DepositedValidators min:", bounds.minDepositedValidators);
+        console2.log("DepositedValidators max:", bounds.maxDepositedValidators);
+        console2.log("ElRewardsVaultBalanceWei min:", bounds.minElRewardsVaultBalanceWei);
+        console2.log("ElRewardsVaultBalanceWei max:", bounds.maxElRewardsVaultBalanceWei);
+    }
+
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 128
-     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_clValidatorNotDecreased() public view {
         ILido lido = ILido(lidoLocator.lido());
-        (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
+
+        (uint256 depositedValidators, uint256 clValidators, ) = lido.getBeaconStat();
 
         // Should not be able to decrease validator number
         assertGe(clValidators, uint256(accountingHandler.getGhost().clValidators));
         assertEq(depositedValidators, uint256(accountingHandler.getGhost().depositedValidators));
+
+        logBoundaryValues();
     }
 
     /**
@@ -301,30 +395,29 @@ contract AccountingTest is BaseProtocolTest {
      *  CLb + ELr <= 10%
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 128
-     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_NonNegativeRebase() public view {
         ILido lido = ILido(lidoLocator.lido());
 
-        if (accountingHandler.getGhost().unifiedClBalanceWei > accountingHandler.getGhost().principalClBalanceWei) {
-            if (accountingHandler.getGhost().sharesMintAsFees < 0) {
+        AccountingHandler.Ghost memory ghost = accountingHandler.getGhost();
+
+        bool isRebasePositive = ghost.unifiedClBalanceWei > ghost.principalClBalanceWei;
+        if (isRebasePositive) {
+            if (ghost.sharesMintAsFees < 0) {
                 revert("sharesMintAsFees < 0");
             }
 
-            if (accountingHandler.getGhost().transferShares < 0) {
+            if (ghost.transferShares < 0) {
                 revert("transferShares < 0");
             }
 
-            int256 treasuryFeesETH = int256(
-                lido.getPooledEthByShares(uint256(accountingHandler.getGhost().sharesMintAsFees))
-            );
-            int256 reportRewardsMintedETH = int256(
-                lido.getPooledEthByShares(uint256(accountingHandler.getGhost().transferShares))
-            );
+            int256 treasuryFeesETH = int256(lido.getPooledEthByShares(uint256(ghost.sharesMintAsFees)));
+            int256 reportRewardsMintedETH = int256(lido.getPooledEthByShares(uint256(ghost.transferShares)));
             int256 totalFees = int256(treasuryFeesETH + reportRewardsMintedETH);
-            int256 totalRewards = accountingHandler.getGhost().totalRewardsWei;
+            int256 totalRewards = ghost.totalRewardsWei;
 
             if (totalRewards != 0) {
                 int256 percents = (totalFees * 100) / totalRewards;
@@ -333,15 +426,17 @@ contract AccountingTest is BaseProtocolTest {
                 assertTrue(percents >= 0, "all distributed rewards < 0%");
             }
         } else {
-            console2.log("Negative rebase. Skipping report", accountingHandler.getGhost().totalRewardsWei / 1 ether);
+            console2.log("Negative rebase. Skipping report", ghost.totalRewardsWei / 1 ether);
         }
+
+        logBoundaryValues();
     }
 
     /**
      * Lido.Transfer from (0x00, to treasure or burner. Other -> collect and check what is it)
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 128
-     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_LidoTransfers() public view {
@@ -354,6 +449,8 @@ contract AccountingTest is BaseProtocolTest {
                 "Lido.Transfer recipient is not possibleLidoRecipients"
             );
         }
+
+        logBoundaryValues();
     }
 
     /**
@@ -361,36 +458,46 @@ contract AccountingTest is BaseProtocolTest {
      * vault params do not affect protocol share rate
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 128
-     * forge-config: default.invariant.depth = 128
+     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_vaultsDonAffectSharesRate() public view {
         ILido lido = ILido(lidoLocator.lido());
 
+        uint256 totalPooledEther = lido.getTotalPooledEther();
+        uint256 bufferedEther = lido.getBufferedEther();
         uint256 totalShares = lido.getTotalShares();
-        uint256 totalEth = lido.getBufferedEther();
-        uint256 totalShareRate = totalEth / totalShares;
+        uint256 externalShares = lido.getExternalShares();
 
+        uint256 totalShareRate = totalPooledEther / totalShares;
+
+        console2.log("bufferedEther", bufferedEther);
+        console2.log("totalPooledEther", totalPooledEther);
         console2.log("totalShares", totalShares);
-        console2.log("totalEth", totalEth);
         console2.log("totalShareRate", totalShareRate);
 
+        // Get transient ether
         (uint256 depositedValidators, uint256 clValidators, uint256 clBalance) = lido.getBeaconStat();
         // clValidators can never be less than deposited ones.
         uint256 transientEther = (depositedValidators - clValidators) * 32 ether;
         console2.log("transientEther", transientEther);
 
-        uint256 internalEther = totalEth + clBalance + transientEther;
+        // Calculate internal ether
+        uint256 internalEther = bufferedEther + clBalance + transientEther;
         console2.log("internalEther", internalEther);
-        uint256 internalShares = totalShares - lido.getExternalShares();
+
+        // Calculate internal shares
+        uint256 internalShares = totalShares - externalShares;
         console2.log("internalShares", internalShares);
-        console2.log("getExternalShares", lido.getExternalShares());
+        console2.log("getExternalShares", externalShares);
 
         uint256 internalShareRate = internalEther / internalShares;
 
         console2.log("internalShareRate", internalShareRate);
 
         assertEq(totalShareRate, internalShareRate);
+
+        logBoundaryValues();
     }
 }

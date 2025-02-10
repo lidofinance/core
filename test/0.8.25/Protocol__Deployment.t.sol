@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
+
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
@@ -9,10 +10,11 @@ import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 
-import "../0.4.24/contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
-import "../0.4.24/contracts/SecondOpinionOracle__Mock.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
+
+import {StakingRouter__MockForLidoAccountingFuzzing} from "./contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
+import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
@@ -84,7 +86,7 @@ contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
     IACL public acl;
-    SecondOpinionOracle__Mock public secondOpinionOracleMock;
+    SecondOpinionOracle__MockForAccountingFuzzing public secondOpinionOracleMock;
     IKernel private dao;
 
     address private rootAccount;
@@ -222,7 +224,7 @@ contract BaseProtocolTest is Test {
             lidoLocator.oracleReportSanityChecker()
         );
 
-        secondOpinionOracleMock = new SecondOpinionOracle__Mock();
+        secondOpinionOracleMock = new SecondOpinionOracle__MockForAccountingFuzzing();
         vm.store(
             lidoLocator.oracleReportSanityChecker(),
             bytes32(uint256(2)),

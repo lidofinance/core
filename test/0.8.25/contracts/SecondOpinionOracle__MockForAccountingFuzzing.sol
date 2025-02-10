@@ -3,14 +3,14 @@
 
 pragma solidity 0.8.9;
 
-contract SecondOpinionOracle__Mock {
+contract SecondOpinionOracle__MockForAccountingFuzzing {
     bool private success;
     uint256 private clBalanceGwei;
     uint256 private withdrawalVaultBalanceWei;
     uint256 private totalDepositedValidators;
     uint256 private totalExitedValidators;
 
-    function getReport(uint256 refSlot) external view returns (bool, uint256, uint256, uint256, uint256) {
+    function getReport(uint256) external view returns (bool, uint256, uint256, uint256, uint256) {
         return (success, clBalanceGwei, withdrawalVaultBalanceWei, totalDepositedValidators, totalExitedValidators);
     }
 
