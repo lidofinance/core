@@ -1,13 +1,13 @@
 import { ethers } from "hardhat";
 
-import { WithdrawalsPredeployed_Mock } from "typechain-types";
+import { EIP7002WithdrawalRequest_Mock } from "typechain-types";
 
-export const withdrawalsPredeployedHardcodedAddress = "0x0c15F14308530b7CDB8460094BbB9cC28b9AaaAA";
+export const withdrawalsPredeployedHardcodedAddress = "0x00000961Ef480Eb55e80D19ad83579A64c007002";
 
 export async function deployWithdrawalsPredeployedMock(
   defaultRequestFee: bigint,
-): Promise<WithdrawalsPredeployed_Mock> {
-  const withdrawalsPredeployed = await ethers.deployContract("WithdrawalsPredeployed_Mock");
+): Promise<EIP7002WithdrawalRequest_Mock> {
+  const withdrawalsPredeployed = await ethers.deployContract("EIP7002WithdrawalRequest_Mock");
   const withdrawalsPredeployedAddress = await withdrawalsPredeployed.getAddress();
 
   await ethers.provider.send("hardhat_setCode", [
@@ -15,17 +15,17 @@ export async function deployWithdrawalsPredeployedMock(
     await ethers.provider.getCode(withdrawalsPredeployedAddress),
   ]);
 
-  const contract = await ethers.getContractAt("WithdrawalsPredeployed_Mock", withdrawalsPredeployedHardcodedAddress);
+  const contract = await ethers.getContractAt("EIP7002WithdrawalRequest_Mock", withdrawalsPredeployedHardcodedAddress);
   await contract.setFee(defaultRequestFee);
   return contract;
 }
 
 function toValidatorPubKey(num: number): string {
   if (num < 0 || num > 0xffff) {
-    throw new Error("Number is out of the 2-byte range (0x0000 - 0xFFFF).");
+    throw new Error("Number is out of the 2-byte range (0x0000 - 0xffff).");
   }
 
-  return `0x${num.toString(16).padStart(4, "0").repeat(24)}`;
+  return `${num.toString(16).padStart(4, "0").toLocaleLowerCase().repeat(24)}`;
 }
 
 const convertEthToGwei = (ethAmount: string | number): bigint => {
@@ -47,5 +47,11 @@ export function generateWithdrawalRequestPayload(numberOfRequests: number) {
     mixedWithdrawalAmounts.push(i % 2 === 0 ? 0n : convertEthToGwei(i));
   }
 
-  return { pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts };
+  return {
+    pubkeysHexString: `0x${pubkeys.join("")}`,
+    pubkeys,
+    fullWithdrawalAmounts,
+    partialWithdrawalAmounts,
+    mixedWithdrawalAmounts,
+  };
 }
