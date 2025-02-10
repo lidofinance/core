@@ -79,8 +79,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     uint64 private constant _VERSION = 1;
 
-    bytes32 public constant DEPOSIT_GUARDIAN_MESSAGE_PREFIX = keccak256("StakingVault.DepositGuardianMessagePrefix");
-
     /**
      * @notice Address of `VaultHub`
      *         Set immutably in the constructor to avoid storage costs
@@ -254,13 +252,25 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
-     *         In the context of this contract, the node operator performs deposits to the beacon chain
-     *         and processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
+     *         In the context of this contract, the node operator runs vault validators on CL and
+     *         processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
      *         Node operator address is set in the initialization and can never be changed.
      * @return Address of the node operator
      */
     function nodeOperator() external view returns (address) {
         return _getStorage().nodeOperator;
+    }
+
+    /**
+     * @notice Returns the address of the deposit guardian
+     *         Trusted party responsible for securely depositing validators to the beacon chain.
+     *         In the context of this contract, the deposit guardian performs deposits through `depositToBeaconChain()`.
+     *         DepositGuardian address is set in the initialization and can be changed by the owner with `setDepositGuardian`
+     *         only on the condition that the vault is not connected to the VaultHub.
+     * @return Address of the deposit guardian
+     */
+    function depositGuardian() external view returns (address) {
+        return _getStorage().depositGuardian;
     }
 
     /**

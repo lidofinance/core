@@ -22,6 +22,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address withdrawalVault;
         address oracleDaemonConfig;
         address accounting;
+        address predepositGuarantee;
         address wstETH;
     }
 
@@ -42,6 +43,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
     address public immutable accounting;
+    address public immutable predepositGuarantee;
     address public immutable wstETH;
 
     /**
@@ -66,6 +68,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
         accounting = _assertNonZero(_config.accounting);
         wstETH = _assertNonZero(_config.wstETH);
+        predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

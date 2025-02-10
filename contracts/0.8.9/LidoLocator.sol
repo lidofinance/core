@@ -29,6 +29,7 @@ contract LidoLocator is ILidoLocator {
         address withdrawalVault;
         address oracleDaemonConfig;
         address accounting;
+        address predepositGuarantee;
         address wstETH;
     }
 
@@ -49,6 +50,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
     address public immutable accounting;
+    address public immutable predepositGuarantee;
     address public immutable wstETH;
 
     /**
@@ -72,35 +74,15 @@ contract LidoLocator is ILidoLocator {
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
         accounting = _assertNonZero(_config.accounting);
+        predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);
     }
 
-    function coreComponents() external view returns(
-        address,
-        address,
-        address,
-        address,
-        address,
-        address
-    ) {
-        return (
-            elRewardsVault,
-            oracleReportSanityChecker,
-            stakingRouter,
-            treasury,
-            withdrawalQueue,
-            withdrawalVault
-        );
+    function coreComponents() external view returns (address, address, address, address, address, address) {
+        return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponents() external view returns(
-        address,
-        address,
-        address,
-        address,
-        address,
-        address
-    ) {
+    function oracleReportComponents() external view returns (address, address, address, address, address, address) {
         return (
             accountingOracle,
             oracleReportSanityChecker,

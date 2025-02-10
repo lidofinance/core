@@ -31,7 +31,7 @@ abstract contract CLProofVerifier {
     }
 
     // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
-    address public immutable BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+    address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
     // Index of parent node for (Pubkey,WC) in validator container
     GIndex public immutable GI_PUBKEY_WC_PARENT = pack(1 << 2, 2);

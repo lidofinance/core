@@ -16,6 +16,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address depositGuardian;
     }
 
     uint64 private constant _version = 2;
@@ -40,7 +41,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        address /* _depositGuardian */,
+        address _depositGuardian,
         bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) {
@@ -50,6 +51,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().nodeOperator = _nodeOperator;
+        _getVaultStorage().depositGuardian = _depositGuardian;
+    }
+
+    function depositGuardian() external view returns (address) {
+        return _getVaultStorage().depositGuardian;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {

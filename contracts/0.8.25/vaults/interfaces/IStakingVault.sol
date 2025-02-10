@@ -39,6 +39,8 @@ interface IStakingVault {
 
     function nodeOperator() external view returns (address);
 
+    function depositGuardian() external view returns (address);
+
     function locked() external view returns (uint256);
 
     function valuation() external view returns (uint256);

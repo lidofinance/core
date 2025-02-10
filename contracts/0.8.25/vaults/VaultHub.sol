@@ -8,6 +8,7 @@ import {IBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/IBeacon.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido as IStETH} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
@@ -72,11 +73,13 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
+    /// @notice Lido Locator contract
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     /// @param _stETH Lido stETH contract
-    constructor(IStETH _stETH) {
+    constructor(ILidoLocator _locator, IStETH _stETH) {
         STETH = _stETH;
-
+        LIDO_LOCATOR = _locator;
         _disableInitializers();
     }
 
@@ -140,9 +143,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
+            revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
         if (_reserveRatioThresholdBP == 0) revert ZeroArgument("_reserveRatioThresholdBP");
-        if (_reserveRatioThresholdBP > _reserveRatioBP) revert ReserveRatioTooHigh(_vault, _reserveRatioThresholdBP, _reserveRatioBP);
+        if (_reserveRatioThresholdBP > _reserveRatioBP)
+            revert ReserveRatioTooHigh(_vault, _reserveRatioThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == MAX_VAULTS_COUNT) revert TooManyVaults();
         _checkShareLimitUpperBound(_vault, _shareLimit);
@@ -152,6 +157,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
+
+        if (IStakingVault(_vault).depositGuardian() != LIDO_LOCATOR.predepositGuarantee())
+            revert VaultDepositGuardianNotAllowed(IStakingVault(_vault).depositGuardian());
 
         VaultSocket memory vr = VaultSocket(
             _vault,
@@ -308,8 +316,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
         // reserveRatio = BPS_BASE - maxMintableRatio
         // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        uint256 amountToRebalance = (mintedStETH * TOTAL_BASIS_POINTS -
-            IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
+        uint256 amountToRebalance = (mintedStETH *
+            TOTAL_BASIS_POINTS -
+            IStakingVault(_vault).valuation() *
+            maxMintableRatio) / reserveRatioBP;
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
@@ -356,7 +366,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
+    )
+        internal
+        view
+        returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares)
+    {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -425,7 +439,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         // TODO: optimize potential rewards calculation
         uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
+            (_postTotalSharesNoFees * _preTotalPooledEther) -
+            chargeableValue);
         uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
 
         treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
@@ -480,7 +495,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @dev returns total number of stETH shares that is possible to mint on the provided vault with provided reserveRatio
     ///      it does not count shares that is already minted, but does count shareLimit on the vault
-    function _maxMintableShares(address _vault, uint256 _reserveRatio, uint256 _shareLimit) internal view returns (uint256) {
+    function _maxMintableShares(
+        address _vault,
+        uint256 _reserveRatio,
+        uint256 _shareLimit
+    ) internal view returns (uint256) {
         uint256 maxStETHMinted = (IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - _reserveRatio)) /
             TOTAL_BASIS_POINTS;
 
@@ -529,4 +548,5 @@ abstract contract VaultHub is PausableUntilWithRoles {
     error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
     error VaultProxyNotAllowed(address beacon);
+    error VaultDepositGuardianNotAllowed(address depositGuardian);
 }
