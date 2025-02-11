@@ -1,6 +1,6 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log, trace } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 
 import { ZERO_HASH } from "test/deploy";
 
@@ -17,8 +17,7 @@ export const unpauseStaking = async (ctx: ProtocolContext) => {
     log.warning("Unpausing staking contract");
 
     const votingSigner = await ctx.getSigner("voting");
-    const tx = await lido.connect(votingSigner).resume();
-    await trace("lido.resume", tx);
+    await lido.connect(votingSigner).resume();
 
     log.success("Staking contract unpaused");
   }
@@ -35,8 +34,7 @@ export const ensureStakeLimit = async (ctx: ProtocolContext) => {
     const stakeLimitIncreasePerBlock = ether("20"); // this is an arbitrary value
 
     const votingSigner = await ctx.getSigner("voting");
-    const tx = await lido.connect(votingSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
-    await trace("lido.setStakingLimit", tx);
+    await lido.connect(votingSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
 
     log.success("Staking limit set");
   }

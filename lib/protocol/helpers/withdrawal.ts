@@ -1,6 +1,6 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log, trace } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 
 import { ProtocolContext } from "../types";
 
@@ -19,10 +19,7 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
     const agentSignerAddress = await agentSigner.getAddress();
 
     await withdrawalQueue.connect(agentSigner).grantRole(resumeRole, agentSignerAddress);
-
-    const tx = await withdrawalQueue.connect(agentSigner).resume();
-    await trace("withdrawalQueue.resume", tx);
-
+    await withdrawalQueue.connect(agentSigner).resume();
     await withdrawalQueue.connect(agentSigner).revokeRole(resumeRole, agentSignerAddress);
 
     log.success("Unpaused withdrawal queue contract");
@@ -37,8 +34,7 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const stEthHolderAmount = ether("10000");
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
-  const tx = await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
-  await trace("stEthHolder.sendTransaction", tx);
+  await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
 
   let lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
   let lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -54,14 +50,10 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
       "Last request ID": lastRequestId,
     });
 
-    const submitTx = await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-
-    await trace("lido.submit", submitTx);
+    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
   }
 
-  const submitTx = await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-
-  await trace("lido.submit", submitTx);
+  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
 
   log.success("Finalized withdrawal queue");
 };

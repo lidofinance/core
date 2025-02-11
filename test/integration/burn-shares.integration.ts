@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ether, impersonate, log, trace } from "lib";
+import { ether, impersonate, log } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { finalizeWithdrawalQueue, handleOracleReport } from "lib/protocol/helpers";
 
@@ -47,8 +47,7 @@ describe("Burn Shares", () => {
   it("Should allow stranger to submit ETH", async () => {
     const { lido } = ctx.contracts;
 
-    const submitTx = await lido.connect(stranger).submit(ZeroAddress, { value: amount });
-    await trace("lido.submit", submitTx);
+    await lido.connect(stranger).submit(ZeroAddress, { value: amount });
 
     const stEthBefore = await lido.balanceOf(stranger.address);
     expect(stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
@@ -74,12 +73,10 @@ describe("Burn Shares", () => {
   it("Should burn shares after report", async () => {
     const { lido, burner } = ctx.contracts;
 
-    const approveTx = await lido.connect(stranger).approve(burner.address, ether("1000000"));
-    await trace("lido.approve", approveTx);
+    await lido.connect(stranger).approve(burner.address, ether("1000000"));
 
     const lidoSigner = await impersonate(lido.address);
-    const burnTx = await burner.connect(lidoSigner).requestBurnSharesForCover(stranger, sharesToBurn);
-    await trace("burner.requestBurnSharesForCover", burnTx);
+    await burner.connect(lidoSigner).requestBurnSharesForCover(stranger, sharesToBurn);
 
     const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
 
