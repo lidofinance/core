@@ -14,8 +14,6 @@ describe("Burn Shares", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
-  let ethHolder: HardhatEthersSigner;
-  let stEthHolder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   const amount = ether("1");
@@ -26,7 +24,7 @@ describe("Burn Shares", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder, stranger] = await ethers.getSigners();
+    [stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -38,7 +36,7 @@ describe("Burn Shares", () => {
   it("Should finalize withdrawal queue", async () => {
     const { withdrawalQueue } = ctx.contracts;
 
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
+    await finalizeWithdrawalQueue(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();

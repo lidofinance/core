@@ -40,7 +40,7 @@ jobs:
 
       - name: Run slither
         run: >
-          poetry run slither . --no-fail-pedantic --sarif results.sarif 
+          poetry run slither . --no-fail-pedantic --sarif results.sarif
 
       - name: Check results.sarif presence
         id: results
