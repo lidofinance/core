@@ -1,4 +1,4 @@
-export { unpauseStaking, ensureStakeLimit } from "./staking";
+export { unpauseStaking, ensureStakeLimit, depositAndReportValidators } from "./staking";
 
 export { unpauseWithdrawalQueue, finalizeWithdrawalQueue } from "./withdrawal";
 
