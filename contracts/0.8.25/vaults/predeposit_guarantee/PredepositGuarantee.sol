@@ -200,8 +200,34 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Positive Proof Flow  * * * * * //
 
-    function proveValidatorWC(ValidatorWitness calldata _witness) external whenResumed {
-        _processWCProof(_witness);
+    function proveValidatorWC(ValidatorWitness calldata _witness) public whenResumed {
+        ValidatorStatus storage validator = _getStorage().validatorStatuses[_witness.pubkey];
+
+        if (validator.bondStatus != BondStatus.AWAITING_PROOF) {
+            revert ValidatorNotPreDeposited(_witness.pubkey, validator.bondStatus);
+        }
+
+        bytes32 _withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
+
+        // ensures vault fair play
+        if (address(validator.stakingVault) != _wcToAddress(_withdrawalCredentials)) {
+            revert StakingVaultWithdrawalCredentialsMismatch(
+                address(validator.stakingVault),
+                _wcToAddress(_withdrawalCredentials)
+            );
+        }
+
+        _validatePubKeyWCProof(_witness, _withdrawalCredentials);
+
+        validator.bondStatus = BondStatus.PROVED;
+        _getStorage().nodeOperatorBonds[validator.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
+
+        emit ValidatorProven(
+            validator.nodeOperator,
+            _witness.pubkey,
+            address(validator.stakingVault),
+            _withdrawalCredentials
+        );
     }
 
     function depositToBeaconChain(
@@ -245,7 +271,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         IStakingVaultOwnable _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            _processWCProof(_witnesses[i]);
+            proveValidatorWC(_witnesses[i]);
         }
 
         depositToBeaconChain(_stakingVault, _deposits);
@@ -318,7 +344,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address _recipient
     ) external {
         proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
-        withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
+        withdrawDisprovenPredeposit(_witness. , _recipient);
     }
 
     /// Internal functions
@@ -349,36 +375,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         }
 
         _wcAddress = address(uint160(uint256(_withdrawalCredentials)));
-    }
-
-    function _processWCProof(ValidatorWitness calldata _witness) internal whenResumed {
-        ValidatorStatus storage validator = _getStorage().validatorStatuses[_witness.pubkey];
-
-        if (validator.bondStatus != BondStatus.AWAITING_PROOF) {
-            revert ValidatorNotPreDeposited(_witness.pubkey, validator.bondStatus);
-        }
-
-        bytes32 _withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
-
-        // ensures vault fair play
-        if (address(validator.stakingVault) != _wcToAddress(_withdrawalCredentials)) {
-            revert StakingVaultWithdrawalCredentialsMismatch(
-                address(validator.stakingVault),
-                _wcToAddress(_withdrawalCredentials)
-            );
-        }
-
-        _validatePubKeyWCProof(_witness, _withdrawalCredentials);
-
-        validator.bondStatus = BondStatus.PROVED;
-        _getStorage().nodeOperatorBonds[validator.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
-
-        emit ValidatorProven(
-            validator.nodeOperator,
-            _witness.pubkey,
-            address(validator.stakingVault),
-            _withdrawalCredentials
-        );
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
