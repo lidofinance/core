@@ -5,6 +5,9 @@ import { certainAddress, log, trace } from "lib";
 
 import { ProtocolContext, StakingModuleName } from "../types";
 
+import { depositAndReportValidators } from "./staking";
+
+const NOR_MODULE_ID = 1n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
@@ -16,10 +19,9 @@ export const norEnsureOperators = async (
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
 ) => {
-  await norEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
-
   const { nor } = ctx.contracts;
 
+  const newOperatorsCount = await norEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
   for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
     const nodeOperatorBefore = await nor.getNodeOperator(operatorId, false);
 
@@ -39,6 +41,10 @@ export const norEnsureOperators = async (
     "Min operators count": minOperatorsCount,
     "Min keys count": minOperatorKeysCount,
   });
+
+  if (newOperatorsCount > 0) {
+    await depositAndReportValidators(ctx, NOR_MODULE_ID, newOperatorsCount);
+  }
 };
 
 /**
@@ -48,8 +54,8 @@ const norEnsureOperatorsHaveMinKeys = async (
   ctx: ProtocolContext,
   minOperatorsCount = MIN_OPS_COUNT,
   minKeysCount = MIN_OP_KEYS_COUNT,
-) => {
-  await norEnsureMinOperators(ctx, minOperatorsCount);
+): Promise<bigint> => {
+  const newOperatorsCount = await norEnsureMinOperators(ctx, minOperatorsCount);
 
   const { nor } = ctx.contracts;
 
@@ -67,12 +73,14 @@ const norEnsureOperatorsHaveMinKeys = async (
 
     expect(keysCountAfter).to.be.gte(minKeysCount);
   }
+
+  return newOperatorsCount;
 };
 
 /**
  * Fills the NOR with some operators in case there are not enough of them.
  */
-const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT) => {
+const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT): Promise<bigint> => {
   const { nor } = ctx.contracts;
 
   const before = await nor.getNodeOperatorsCount();
@@ -96,6 +104,8 @@ const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = M
 
   expect(after).to.equal(before + count);
   expect(after).to.be.gte(minOperatorsCount);
+
+  return count;
 };
 
 /**
