@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { randomBytes } from "ethers";
 
-import { impersonate, log, streccak, trace } from "lib";
+import { ether, impersonate, log, streccak, trace } from "lib";
 
-import { ether } from "../../units";
 import { ProtocolContext } from "../types";
 
 import { getOperatorManagerAddress, getOperatorName, getOperatorRewardAddress } from "./nor";
+import { depositAndReportValidators } from "./staking";
 
+const SDVT_MODULE_ID = 2n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
@@ -21,7 +22,7 @@ export const sdvtEnsureOperators = async (
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
 ) => {
-  await sdvtEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
+  const newOperatorsCount = await sdvtEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
 
   const { sdvt } = ctx.contracts;
 
@@ -39,6 +40,10 @@ export const sdvtEnsureOperators = async (
 
     expect(nodeOperatorAfter.totalVettedValidators).to.equal(nodeOperatorBefore.totalAddedValidators);
   }
+
+  if (newOperatorsCount > 0) {
+    await depositAndReportValidators(ctx, SDVT_MODULE_ID, newOperatorsCount);
+  }
 };
 
 /**
@@ -48,8 +53,8 @@ const sdvtEnsureOperatorsHaveMinKeys = async (
   ctx: ProtocolContext,
   minOperatorsCount = MIN_OPS_COUNT,
   minKeysCount = MIN_OP_KEYS_COUNT,
-) => {
-  await sdvtEnsureMinOperators(ctx, minOperatorsCount);
+): Promise<bigint> => {
+  const newOperatorsCount = await sdvtEnsureMinOperators(ctx, minOperatorsCount);
 
   const { sdvt } = ctx.contracts;
 
@@ -74,12 +79,14 @@ const sdvtEnsureOperatorsHaveMinKeys = async (
     "Min operators count": minOperatorsCount,
     "Min keys count": minKeysCount,
   });
+
+  return newOperatorsCount;
 };
 
 /**
  * Fills the Simple DVT with some operators in case there are not enough of them.
  */
-const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT) => {
+const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT): Promise<bigint> => {
   const { sdvt } = ctx.contracts;
 
   const before = await sdvt.getNodeOperatorsCount();
@@ -110,6 +117,8 @@ const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = 
     "Min operators count": minOperatorsCount,
     "Operators count": after,
   });
+
+  return count;
 };
 
 /**

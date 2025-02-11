@@ -7,33 +7,15 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, trace, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import {
-  finalizeWithdrawalQueue,
-  getReportTimeElapsed,
-  norEnsureOperators,
-  report,
-  sdvtEnsureOperators,
-} from "lib/protocol/helpers";
+import { getReportTimeElapsed, report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
-import {
-  CURATED_MODULE_ID,
-  LIMITER_PRECISION_BASE,
-  MAX_BASIS_POINTS,
-  MAX_DEPOSIT,
-  ONE_DAY,
-  SHARE_RATE_PRECISION,
-  SIMPLE_DVT_MODULE_ID,
-  ZERO_HASH,
-} from "test/suite/constants";
-
-const AMOUNT = ether("100");
+import { LIMITER_PRECISION_BASE, MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
 
 describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
-  let stEthHolder: HardhatEthersSigner;
 
   let snapshot: string;
   let originalState: string;
@@ -41,27 +23,9 @@ describe("Integration: Accounting", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder] = await ethers.getSigners();
+    [ethHolder] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
-
-    const { lido, depositSecurityModule } = ctx.contracts;
-
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
-
-    await norEnsureOperators(ctx, 3n, 5n);
-    await sdvtEnsureOperators(ctx, 3n, 5n);
-
-    // Deposit node operators
-    const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-
-    await report(ctx, {
-      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
-      clAppearedValidators: 6n,
-      excludeVaultsBalances: true,
-    });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
