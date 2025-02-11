@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -17,9 +17,11 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 /// @title Lido Accounting contract
 /// @author folkyatina
-/// @notice contract is responsible for handling oracle reports
+/// @notice contract is responsible for handling accounting oracle reports
 /// calculating all the state changes that is required to apply the report
 /// and distributing calculated values to relevant parts of the protocol
+/// @dev accounting is inherited from VaultHub contract to reduce gas costs and
+/// simplify the auth flows, but they are mostly independent
 contract Accounting is VaultHub {
     struct Contracts {
         address accountingOracleAddress;
@@ -54,11 +56,12 @@ contract Accounting is VaultHub {
         uint256 sharesToBurnForWithdrawals;
         /// @notice number of stETH shares that will be burned from Burner this report
         uint256 totalSharesToBurn;
-        /// @notice number of stETH shares to mint as a fee to Lido treasury
+        /// @notice number of stETH shares to mint as a protocol fee
         uint256 sharesToMintAsFees;
         /// @notice amount of NO fees to transfer to each module
         StakingRewardsDistribution rewardDistribution;
         /// @notice amount of CL ether that is not rewards earned during this report period
+        /// the sum of CL balance on the previous report and the amount of fresh deposits since then
         uint256 principalClBalance;
         /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
@@ -98,11 +101,11 @@ contract Accounting is VaultHub {
 
     /// @notice calculates all the state changes that is required to apply the report
     /// @param _report report values
-    /// @param _withdrawalShareRate maximum share rate used for withdrawal resolution
+    /// @param _withdrawalShareRate maximum share rate used for withdrawal finalization
     ///                             if _withdrawalShareRate == 0, no withdrawals are
     ///                             simulated
     function simulateOracleReport(
-        ReportValues memory _report,
+        ReportValues calldata _report,
         uint256 _withdrawalShareRate
     ) public view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
@@ -114,7 +117,7 @@ contract Accounting is VaultHub {
     /// @notice Updates accounting stats, collects EL rewards and distributes collected rewards
     ///        if beacon balance increased, performs withdrawal requests finalization
     /// @dev periodically called by the AccountingOracle contract
-    function handleOracleReport(ReportValues memory _report) external {
+    function handleOracleReport(ReportValues calldata _report) external {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
 
@@ -130,7 +133,7 @@ contract Accounting is VaultHub {
     /// @dev prepare all the required data to process the report
     function _calculateOracleReportContext(
         Contracts memory _contracts,
-        ReportValues memory _report
+        ReportValues calldata _report
     ) internal view returns (PreReportState memory pre, CalculatedValues memory update, uint256 withdrawalsShareRate) {
         pre = _snapshotPreReportState();
 
@@ -155,7 +158,7 @@ contract Accounting is VaultHub {
     function _simulateOracleReport(
         Contracts memory _contracts,
         PreReportState memory _pre,
-        ReportValues memory _report,
+        ReportValues calldata _report,
         uint256 _withdrawalsShareRate
     ) internal view returns (CalculatedValues memory update) {
         update.rewardDistribution = _getStakingRewardsDistribution(_contracts.stakingRouter);
@@ -238,7 +241,7 @@ contract Accounting is VaultHub {
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
     function _calculateWithdrawals(
         Contracts memory _contracts,
-        ReportValues memory _report,
+        ReportValues calldata _report,
         uint256 _simulatedShareRate
     ) internal view returns (uint256 etherToLock, uint256 sharesToBurn) {
         if (_report.withdrawalFinalizationBatches.length != 0 && !_contracts.withdrawalQueue.isPaused()) {
@@ -249,36 +252,36 @@ contract Accounting is VaultHub {
         }
     }
 
-    /// @dev calculates shares that are minted to treasury as the protocol fees
+    /// @dev calculates shares that are minted as the protocol fees
     function _calculateFeesAndExternalEther(
-        ReportValues memory _report,
+        ReportValues calldata _report,
         PreReportState memory _pre,
-        CalculatedValues memory _calculated
+        CalculatedValues memory _update
     ) internal pure returns (uint256 sharesToMintAsFees, uint256 postExternalEther) {
         // we are calculating the share rate equal to the post-rebase share rate
         // but with fees taken as eth deduction
         // and without externalBalance taken into account
-        uint256 shares = _pre.totalShares - _calculated.totalSharesToBurn - _pre.externalShares;
-        uint256 eth = _pre.totalPooledEther - _calculated.etherToFinalizeWQ - _pre.externalEther;
+        uint256 shares = _pre.totalShares - _update.totalSharesToBurn - _pre.externalShares;
+        uint256 eth = _pre.totalPooledEther - _update.etherToFinalizeWQ - _pre.externalEther;
 
-        uint256 unifiedClBalance = _report.clBalance + _calculated.withdrawals;
+        uint256 unifiedClBalance = _report.clBalance + _update.withdrawals;
 
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
-        if (unifiedClBalance > _calculated.principalClBalance) {
-            uint256 totalRewards = unifiedClBalance - _calculated.principalClBalance + _calculated.elRewards;
-            uint256 totalFee = _calculated.rewardDistribution.totalFee;
-            uint256 precision = _calculated.rewardDistribution.precisionPoints;
+        if (unifiedClBalance > _update.principalClBalance) {
+            uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewards;
+            uint256 totalFee = _update.rewardDistribution.totalFee;
+            uint256 precision = _update.rewardDistribution.precisionPoints;
             uint256 feeEther = (totalRewards * totalFee) / precision;
             eth += totalRewards - feeEther;
 
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             sharesToMintAsFees = (feeEther * shares) / eth;
         } else {
-            uint256 clPenalty = _calculated.principalClBalance - unifiedClBalance;
-            eth = eth - clPenalty + _calculated.elRewards;
+            uint256 clPenalty = _update.principalClBalance - unifiedClBalance;
+            eth = eth - clPenalty + _update.elRewards;
         }
 
         // externalBalance is rebasing at the same rate as the primary balance does
@@ -288,10 +291,10 @@ contract Accounting is VaultHub {
     /// @dev applies the precalculated changes to the protocol state
     function _applyOracleReportContext(
         Contracts memory _contracts,
-        ReportValues memory _report,
+        ReportValues calldata _report,
         PreReportState memory _pre,
         CalculatedValues memory _update,
-        uint256 _simulatedShareRate
+        uint256 _withdrawalShareRate
     ) internal {
         _checkAccountingOracleReport(_contracts, _report, _pre, _update);
 
@@ -322,13 +325,13 @@ contract Accounting is VaultHub {
             _update.withdrawals,
             _update.elRewards,
             lastWithdrawalRequestToFinalize,
-            _simulatedShareRate,
+            _withdrawalShareRate,
             _update.etherToFinalizeWQ
         );
 
         _updateVaults(
             _report.vaultValues,
-            _report.netCashFlows,
+            _report.inOutDeltas,
             _update.vaultsLockedEther,
             _update.vaultsTreasuryFeeShares
         );
@@ -337,7 +340,7 @@ contract Accounting is VaultHub {
             STETH.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
         }
 
-        _notifyObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
+        _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
         LIDO.emitTokenRebase(
             _report.timestamp,
@@ -354,7 +357,7 @@ contract Accounting is VaultHub {
     /// reverts if a check fails
     function _checkAccountingOracleReport(
         Contracts memory _contracts,
-        ReportValues memory _report,
+        ReportValues calldata _report,
         PreReportState memory _pre,
         CalculatedValues memory _update
     ) internal {
@@ -383,9 +386,9 @@ contract Accounting is VaultHub {
     }
 
     /// @dev Notify observer about the completed token rebase.
-    function _notifyObserver(
+    function _notifyRebaseObserver(
         IPostTokenRebaseReceiver _postTokenRebaseReceiver,
-        ReportValues memory _report,
+        ReportValues calldata _report,
         PreReportState memory _pre,
         CalculatedValues memory _update
     ) internal {

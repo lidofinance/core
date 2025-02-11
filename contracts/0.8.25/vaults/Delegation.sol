@@ -27,7 +27,6 @@ import {Dashboard} from "./Dashboard.sol";
  * The unclaimed fee is the amount of ether that is owed to the curator or node operator based on the feeBP.
  */
 contract Delegation is Dashboard {
-
     /**
      * @notice Maximum combined feeBP value; equals to 100%.
      */
@@ -44,20 +43,6 @@ contract Delegation is Dashboard {
      * - resumes deposits to beacon chain.
      */
     bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
-
-    /**
-     * @notice Mint/burn role:
-     * - mints shares of stETH;
-     * - burns shares of stETH.
-     */
-    bytes32 public constant MINT_BURN_ROLE = keccak256("Vault.Delegation.MintBurnRole");
-
-    /**
-     * @notice Fund/withdraw role:
-     * - funds StakingVault;
-     * - withdraws from StakingVault.
-     */
-    bytes32 public constant FUND_WITHDRAW_ROLE = keccak256("Vault.Delegation.FundWithdrawRole");
 
     /**
      * @notice Node operator manager role:
@@ -97,28 +82,12 @@ contract Delegation is Dashboard {
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
 
     /**
-     * @notice Tracks committee votes
-     * - callId: unique identifier for the call, derived as `keccak256(msg.data)`
-     * - role: role that voted
-     * - voteTimestamp: timestamp of the vote.
-     * The term "voting" refers to the entire voting process through which vote-restricted actions are performed.
-     * The term "vote" refers to a single individual vote cast by a committee member.
-     */
-    mapping(bytes32 callId => mapping(bytes32 role => uint256 voteTimestamp)) public votings;
-
-    /**
-     * @notice Vote lifetime in seconds; after this period, the vote expires and no longer counts.
-     */
-    uint256 public voteLifetime;
-
-    /**
      * @notice Constructs the contract.
      * @dev Stores token addresses in the bytecode to reduce gas costs.
-     * @param _stETH The address of the stETH token.
      * @param _weth Address of the weth token contract.
-     * @param _wstETH Address of the wstETH token contract.
+     * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _weth, address _wstETH) Dashboard(_stETH, _weth, _wstETH) {}
+    constructor(address _weth, address _lidoLocator) Dashboard(_weth, _lidoLocator) {}
 
     /**
      * @notice Initializes the contract:
@@ -128,8 +97,8 @@ contract Delegation is Dashboard {
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
      */
-    function initialize() external override {
-        _initialize();
+    function initialize(address _defaultAdmin) external override {
+        _initialize(_defaultAdmin);
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
@@ -137,8 +106,6 @@ contract Delegation is Dashboard {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, msg.sender);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIMER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-
-        voteLifetime = 7 days;
     }
 
     /**
@@ -185,87 +152,13 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Returns the committee that can:
-     * - change the vote lifetime;
-     * - set the node operator fee;
-     * - transfer the ownership of the StakingVault.
-     * @return committee is an array of roles that form the voting committee.
-     */
-    function votingCommittee() public pure returns (bytes32[] memory committee) {
-        committee = new bytes32[](2);
-        committee[0] = CURATOR_ROLE;
-        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
-    }
-
-    /**
-     * @notice Funds the StakingVault with ether.
-     */
-    function fund() external payable override onlyRole(FUND_WITHDRAW_ROLE) {
-        _fund();
-    }
-
-    /**
-     * @notice Withdraws ether from the StakingVault.
-     * Cannot withdraw more than the unreserved amount: which is the amount of ether
-     * that is not locked in the StakingVault and not reserved for curator and node operator fees.
-     * Does not include a check for the balance of the StakingVault, this check is present
-     * on the StakingVault itself.
-     * @param _recipient The address to which the ether will be sent.
-     * @param _ether The amount of ether to withdraw.
-     */
-    function withdraw(address _recipient, uint256 _ether) external override onlyRole(FUND_WITHDRAW_ROLE) {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_ether == 0) revert ZeroArgument("_ether");
-        uint256 withdrawable = unreserved();
-        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
-
-        _withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @notice Mints shares for a given recipient.
-     * This function works with shares of StETH, not the tokens.
-     * For conversion rates, please refer to the official documentation: docs.lido.fi.
-     * @param _recipient The address to which the shares will be minted.
-     * @param _amountOfShares The amount of shares to mint.
-     */
-    function mint(
-        address _recipient,
-        uint256 _amountOfShares
-    ) external payable override onlyRole(MINT_BURN_ROLE) fundAndProceed {
-        _mint(_recipient, _amountOfShares);
-    }
-
-    /**
-     * @notice Burns shares for a given recipient.
-     * This function works with shares of StETH, not the tokens.
-     * For conversion rates, please refer to the official documentation: docs.lido.fi.
-     * NB: Delegation contract must have ERC-20 approved allowance to burn sender's shares.
-     * @param _amountOfShares The amount of shares to burn.
-     */
-    function burn(uint256 _amountOfShares) external override onlyRole(MINT_BURN_ROLE) {
-        _burn(_amountOfShares);
-    }
-
-    /**
-     * @notice Rebalances the StakingVault with a given amount of ether.
-     * @param _ether The amount of ether to rebalance with.
-     */
-    function rebalanceVault(uint256 _ether) external payable override onlyRole(CURATOR_ROLE) fundAndProceed {
-        _rebalanceVault(_ether);
-    }
-
-    /**
      * @notice Sets the vote lifetime.
      * Vote lifetime is a period during which the vote is counted. Once the period is over,
      * the vote is considered expired, no longer counts and must be recasted for the voting to go through.
      * @param _newVoteLifetime The new vote lifetime in seconds.
      */
-    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(votingCommittee()) {
-        uint256 oldVoteLifetime = voteLifetime;
-        voteLifetime = _newVoteLifetime;
-
-        emit VoteLifetimeSet(msg.sender, oldVoteLifetime, _newVoteLifetime);
+    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(_votingCommittee()) {
+        _setVoteLifetime(_newVoteLifetime);
     }
 
     /**
@@ -292,7 +185,7 @@ contract Delegation is Dashboard {
      * which is why the deciding voter must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(votingCommittee()) {
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(_votingCommittee()) {
         if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
@@ -324,112 +217,13 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Transfers the ownership of the StakingVault.
-     * This function transfers the ownership of the StakingVault to a new owner which can be an entirely new owner
-     * or the same underlying owner (DEFAULT_ADMIN_ROLE) but a different Delegation contract.
-     * @param _newOwner The address to which the ownership will be transferred.
+     * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
+     * @param _ether The amount of ether to check.
      */
-    function transferStVaultOwnership(address _newOwner) public override onlyIfVotedBy(votingCommittee()) {
-        _transferStVaultOwnership(_newOwner);
-    }
-
-    /**
-     * @notice Voluntarily disconnects the StakingVault from VaultHub.
-     */
-    function voluntaryDisconnect() external payable override onlyRole(CURATOR_ROLE) fundAndProceed {
-        _voluntaryDisconnect();
-    }
-
-    /**
-     * @notice Pauses deposits to beacon chain from the StakingVault.
-     */
-    function pauseBeaconChainDeposits() external override onlyRole(CURATOR_ROLE) {
-        _pauseBeaconChainDeposits();
-    }
-
-    /**
-     * @notice Resumes deposits to beacon chain from the StakingVault.
-     */
-    function resumeBeaconChainDeposits() external override onlyRole(CURATOR_ROLE) {
-        _resumeBeaconChainDeposits();
-    }
-
-    /**
-     * @dev Modifier that implements a mechanism for multi-role committee approval.
-     * Each unique function call (identified by msg.data: selector + arguments) requires
-     * approval from all committee role members within a specified time window.
-     *
-     * The voting process works as follows:
-     * 1. When a committee member calls the function:
-     *    - Their vote is counted immediately
-     *    - If not enough votes exist, their vote is recorded
-     *    - If they're not a committee member, the call reverts
-     *
-     * 2. Vote counting:
-     *    - Counts the current caller's votes if they're a committee member
-     *    - Counts existing votes that are within the voting period
-     *    - All votes must occur within the same voting period window
-     *
-     * 3. Execution:
-     *    - If all committee members have voted within the period, executes the function
-     *    - On successful execution, clears all voting state for this call
-     *    - If not enough votes, stores the current votes
-     *    - Thus, if the caller has all the roles, the function is executed immediately
-     *
-     * 4. Gas Optimization:
-     *    - Votes are stored in a deferred manner using a memory array
-     *    - Vote storage writes only occur if the function cannot be executed immediately
-     *    - This prevents unnecessary storage writes when all votes are present,
-     *      because the votes are cleared anyway after the function is executed,
-     *    - i.e. this optimization is beneficial for the deciding caller and
-     *      saves 1 storage write for each role the deciding caller has
-     *
-     * @param _committee Array of role identifiers that form the voting committee
-     *
-     * @notice Votes expire after the voting period and must be recast
-     * @notice All committee members must vote within the same voting period
-     * @notice Only committee members can initiate votes
-     *
-     * @custom:security-note Each unique function call (including parameters) requires its own set of votes
-     */
-    modifier onlyIfVotedBy(bytes32[] memory _committee) {
-        bytes32 callId = keccak256(msg.data);
-        uint256 committeeSize = _committee.length;
-        uint256 votingStart = block.timestamp - voteLifetime;
-        uint256 voteTally = 0;
-        bool[] memory deferredVotes = new bool[](committeeSize);
-        bool isCommitteeMember = false;
-
-        for (uint256 i = 0; i < committeeSize; ++i) {
-            bytes32 role = _committee[i];
-
-            if (super.hasRole(role, msg.sender)) {
-                isCommitteeMember = true;
-                voteTally++;
-                deferredVotes[i] = true;
-
-                emit RoleMemberVoted(msg.sender, role, block.timestamp, msg.data);
-            } else if (votings[callId][role] >= votingStart) {
-                voteTally++;
-            }
-        }
-
-        if (!isCommitteeMember) revert NotACommitteeMember();
-
-        if (voteTally == committeeSize) {
-            for (uint256 i = 0; i < committeeSize; ++i) {
-                bytes32 role = _committee[i];
-                delete votings[callId][role];
-            }
-            _;
-        } else {
-            for (uint256 i = 0; i < committeeSize; ++i) {
-                if (deferredVotes[i]) {
-                    bytes32 role = _committee[i];
-                    votings[callId][role] = block.timestamp;
-                }
-            }
-        }
+    modifier onlyIfUnreserved(uint256 _ether) {
+        uint256 withdrawable = unreserved();
+        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
+        _;
     }
 
     /**
@@ -454,20 +248,40 @@ contract Delegation is Dashboard {
      * @dev Claims the curator/node operator fee amount.
      * @param _recipient The address to which the fee will be sent.
      * @param _fee The accrued fee amount.
+     * @dev Use `Permissions._unsafeWithdraw()` to avoid the `WITHDRAW_ROLE` check.
      */
-    function _claimFee(address _recipient, uint256 _fee) internal {
+    function _claimFee(address _recipient, uint256 _fee) internal onlyIfUnreserved(_fee) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        _withdraw(_recipient, _fee);
+        super._unsafeWithdraw(_recipient, _fee);
     }
 
     /**
-     * @dev Emitted when the vote lifetime is set.
-     * @param oldVoteLifetime The old vote lifetime.
-     * @param newVoteLifetime The new vote lifetime.
+     * @notice Returns the committee that can:
+     * - change the vote lifetime;
+     * - set the node operator fee;
+     * - transfer the ownership of the StakingVault.
+     * @return committee is an array of roles that form the voting committee.
      */
-    event VoteLifetimeSet(address indexed sender, uint256 oldVoteLifetime, uint256 newVoteLifetime);
+    function _votingCommittee() internal pure override returns (bytes32[] memory committee) {
+        committee = new bytes32[](2);
+        committee[0] = CURATOR_ROLE;
+        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
+    }
+
+    /**
+     * @dev Overrides the Permissions' internal withdraw function to add a check for the unreserved amount.
+     * Cannot withdraw more than the unreserved amount: which is the amount of ether
+     * that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * Does not include a check for the balance of the StakingVault, this check is present
+     * on the StakingVault itself.
+     * @param _recipient The address to which the ether will be sent.
+     * @param _ether The amount of ether to withdraw.
+     */
+    function _withdraw(address _recipient, uint256 _ether) internal override onlyIfUnreserved(_ether) {
+        super._withdraw(_recipient, _ether);
+    }
 
     /**
      * @dev Emitted when the curator fee is set.
@@ -482,20 +296,6 @@ contract Delegation is Dashboard {
      * @param newNodeOperatorFeeBP The new node operator fee.
      */
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
-
-    /**
-     * @dev Emitted when a committee member votes.
-     * @param member The address of the voting member.
-     * @param role The role of the voting member.
-     * @param timestamp The timestamp of the vote.
-     * @param data The msg.data of the vote.
-     */
-    event RoleMemberVoted(address indexed member, bytes32 indexed role, uint256 timestamp, bytes data);
-
-    /**
-     * @dev Error emitted when a caller without a required role attempts to vote.
-     */
-    error NotACommitteeMember();
 
     /**
      * @dev Error emitted when the curator fee is unclaimed.

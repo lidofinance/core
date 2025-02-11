@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   Delegation,
   DepositContract__MockForStakingVault,
+  LidoLocator,
   StakingVault,
   StETH__MockForDelegation,
   UpgradeableBeacon,
@@ -18,6 +19,7 @@ import {
 
 import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BP_BASE = 10000n;
@@ -25,9 +27,16 @@ const MAX_FEE = BP_BASE;
 
 describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
+  let funder: HardhatEthersSigner;
+  let withdrawer: HardhatEthersSigner;
+  let minter: HardhatEthersSigner;
+  let burner: HardhatEthersSigner;
+  let rebalancer: HardhatEthersSigner;
+  let depositPauser: HardhatEthersSigner;
+  let depositResumer: HardhatEthersSigner;
+  let exitRequester: HardhatEthersSigner;
+  let disconnecter: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
-  let funderWithdrawer: HardhatEthersSigner;
-  let minterBurner: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -36,6 +45,7 @@ describe("Delegation.sol", () => {
   let rewarder: HardhatEthersSigner;
   const recipient = certainAddress("some-recipient");
 
+  let lidoLocator: LidoLocator;
   let steth: StETH__MockForDelegation;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
@@ -53,9 +63,16 @@ describe("Delegation.sol", () => {
   before(async () => {
     [
       vaultOwner,
+      funder,
+      withdrawer,
+      minter,
+      burner,
+      rebalancer,
+      depositPauser,
+      depositResumer,
+      exitRequester,
+      disconnecter,
       curator,
-      funderWithdrawer,
-      minterBurner,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       stranger,
@@ -67,8 +84,9 @@ describe("Delegation.sol", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
-    delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+    delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
@@ -87,9 +105,16 @@ describe("Delegation.sol", () => {
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
         defaultAdmin: vaultOwner,
+        funder,
+        withdrawer,
+        minter,
+        burner,
+        rebalancer,
+        depositPauser,
+        depositResumer,
+        exitRequester,
+        disconnecter,
         curator,
-        funderWithdrawer,
-        minterBurner,
         nodeOperatorManager,
         nodeOperatorFeeClaimer,
         curatorFeeBP: 0n,
@@ -127,38 +152,37 @@ describe("Delegation.sol", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, weth, wsteth]))
+      await expect(ethers.deployContract("Delegation", [weth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_stETH");
+        .withArgs("_lidoLocator");
     });
 
     it("reverts if wETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, ethers.ZeroAddress, wsteth]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_WETH");
-    });
-
-    it("reverts if wstETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, weth, ethers.ZeroAddress]))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_wstETH");
+        .withArgs("_wETH");
     });
 
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
       expect(await delegation_.STETH()).to.equal(steth);
+      expect(await delegation_.WETH()).to.equal(weth);
+      expect(await delegation_.WSTETH()).to.equal(wsteth);
     });
   });
 
   context("initialize", () => {
     it("reverts if already initialized", async () => {
-      await expect(delegation.initialize()).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
+      await expect(delegation.initialize(vaultOwner)).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
-      await expect(delegation_.initialize()).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
+      await expect(delegation_.initialize(vaultOwner)).to.be.revertedWithCustomError(
+        delegation_,
+        "NonProxyCallsForbidden",
+      );
     });
   });
 
@@ -170,19 +194,19 @@ describe("Delegation.sol", () => {
       expect(await delegation.stakingVault()).to.equal(vault);
       expect(await delegation.vaultHub()).to.equal(hub);
 
-      expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.DEFAULT_ADMIN_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.CURATOR_ROLE(), curator)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.CURATOR_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.FUND_WITHDRAW_ROLE(), funderWithdrawer)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.FUND_WITHDRAW_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.MINT_BURN_ROLE(), minterBurner)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.MINT_BURN_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.NODE_OPERATOR_MANAGER_ROLE(), nodeOperatorManager)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), nodeOperatorFeeClaimer)).to.be
-        .true;
-      expect(await delegation.getRoleMemberCount(await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.equal(1);
+      await assertSoleMember(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE());
+      await assertSoleMember(funder, await delegation.FUND_ROLE());
+      await assertSoleMember(withdrawer, await delegation.WITHDRAW_ROLE());
+      await assertSoleMember(minter, await delegation.MINT_ROLE());
+      await assertSoleMember(burner, await delegation.BURN_ROLE());
+      await assertSoleMember(rebalancer, await delegation.REBALANCE_ROLE());
+      await assertSoleMember(depositPauser, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
+      await assertSoleMember(depositResumer, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
+      await assertSoleMember(exitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
+      await assertSoleMember(curator, await delegation.CURATOR_ROLE());
+      await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
+      await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE());
 
       expect(await delegation.curatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
@@ -352,7 +376,7 @@ describe("Delegation.sol", () => {
       expect(await vault.inOutDelta()).to.equal(0n);
       expect(await vault.valuation()).to.equal(0n);
 
-      await expect(delegation.connect(funderWithdrawer).fund({ value: amount }))
+      await expect(delegation.connect(funder).fund({ value: amount }))
         .to.emit(vault, "Funded")
         .withArgs(delegation, amount);
 
@@ -363,7 +387,9 @@ describe("Delegation.sol", () => {
   });
 
   context("withdraw", () => {
-    it("reverts if the caller is not a member of the staker role", async () => {
+    it("reverts if the caller is not a member of the withdrawer role", async () => {
+      await delegation.connect(funder).fund({ value: ether("1") });
+
       await expect(delegation.connect(stranger).withdraw(recipient, ether("1"))).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
@@ -371,23 +397,26 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the recipient is the zero address", async () => {
-      await expect(
-        delegation.connect(funderWithdrawer).withdraw(ethers.ZeroAddress, ether("1")),
-      ).to.be.revertedWithCustomError(delegation, "ZeroArgument");
+      await delegation.connect(funder).fund({ value: ether("1") });
+
+      await expect(delegation.connect(withdrawer).withdraw(ethers.ZeroAddress, ether("1")))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_recipient");
     });
 
     it("reverts if the amount is zero", async () => {
-      await expect(delegation.connect(funderWithdrawer).withdraw(recipient, 0n)).to.be.revertedWithCustomError(
-        delegation,
-        "ZeroArgument",
-      );
+      await expect(delegation.connect(withdrawer).withdraw(recipient, 0n))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_ether");
     });
 
     it("reverts if the amount is greater than the unreserved amount", async () => {
+      await delegation.connect(funder).fund({ value: ether("1") });
       const unreserved = await delegation.unreserved();
-      await expect(
-        delegation.connect(funderWithdrawer).withdraw(recipient, unreserved + 1n),
-      ).to.be.revertedWithCustomError(delegation, "RequestedAmountExceedsUnreserved");
+      await expect(delegation.connect(withdrawer).withdraw(recipient, unreserved + 1n)).to.be.revertedWithCustomError(
+        delegation,
+        "RequestedAmountExceedsUnreserved",
+      );
     });
 
     it("withdraws the amount", async () => {
@@ -401,7 +430,7 @@ describe("Delegation.sol", () => {
       expect(await ethers.provider.getBalance(vault)).to.equal(amount);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
-      await expect(delegation.connect(funderWithdrawer).withdraw(recipient, amount))
+      await expect(delegation.connect(withdrawer).withdraw(recipient, amount))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, amount);
       expect(await ethers.provider.getBalance(vault)).to.equal(0n);
@@ -419,16 +448,17 @@ describe("Delegation.sol", () => {
 
     it("rebalances the vault by transferring ether", async () => {
       const amount = ether("1");
-      await delegation.connect(funderWithdrawer).fund({ value: amount });
+      await delegation.connect(funder).fund({ value: amount });
 
-      await expect(delegation.connect(curator).rebalanceVault(amount))
+      await expect(delegation.connect(rebalancer).rebalanceVault(amount))
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
     });
 
     it("funds and rebalances the vault", async () => {
       const amount = ether("1");
-      await expect(delegation.connect(curator).rebalanceVault(amount, { value: amount }))
+      await delegation.connect(vaultOwner).grantRole(await delegation.FUND_ROLE(), rebalancer);
+      await expect(delegation.connect(rebalancer).rebalanceVault(amount, { value: amount }))
         .to.emit(vault, "Funded")
         .withArgs(delegation, amount)
         .to.emit(hub, "Mock__Rebalanced")
@@ -438,7 +468,7 @@ describe("Delegation.sol", () => {
 
   context("mint", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).mint(recipient, 1n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).mintShares(recipient, 1n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -446,7 +476,7 @@ describe("Delegation.sol", () => {
 
     it("mints the tokens", async () => {
       const amount = 100n;
-      await expect(delegation.connect(minterBurner).mint(recipient, amount))
+      await expect(delegation.connect(minter).mintShares(recipient, amount))
         .to.emit(steth, "Transfer")
         .withArgs(ethers.ZeroAddress, recipient, amount);
     });
@@ -454,7 +484,10 @@ describe("Delegation.sol", () => {
 
   context("burn", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).burn(100n)).to.be.revertedWithCustomError(
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(minter).mintShares(stranger, 100n);
+
+      await expect(delegation.connect(stranger).burnShares(100n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -462,11 +495,11 @@ describe("Delegation.sol", () => {
 
     it("burns the tokens", async () => {
       const amount = 100n;
-      await delegation.connect(minterBurner).mint(minterBurner, amount);
+      await delegation.connect(minter).mintShares(burner, amount);
 
-      await expect(delegation.connect(minterBurner).burn(amount))
+      await expect(delegation.connect(burner).burnShares(amount))
         .to.emit(steth, "Transfer")
-        .withArgs(minterBurner, hub, amount)
+        .withArgs(burner, hub, amount)
         .and.to.emit(steth, "Transfer")
         .withArgs(hub, ethers.ZeroAddress, amount);
     });
@@ -623,9 +656,9 @@ describe("Delegation.sol", () => {
     });
   });
 
-  context("transferStVaultOwnership", () => {
+  context("transferStakingVaultOwnership", () => {
     it("reverts if the caller is not a member of the transfer committee", async () => {
-      await expect(delegation.connect(stranger).transferStVaultOwnership(recipient)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).transferStakingVaultOwnership(recipient)).to.be.revertedWithCustomError(
         delegation,
         "NotACommitteeMember",
       );
@@ -633,16 +666,16 @@ describe("Delegation.sol", () => {
 
     it("requires both curator and operator to transfer ownership and emits the RoleMemberVoted event", async () => {
       const newOwner = certainAddress("newOwner");
-      const msgData = delegation.interface.encodeFunctionData("transferStVaultOwnership", [newOwner]);
+      const msgData = delegation.interface.encodeFunctionData("transferStakingVaultOwnership", [newOwner]);
       let voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(curator).transferStVaultOwnership(newOwner))
+      await expect(delegation.connect(curator).transferStakingVaultOwnership(newOwner))
         .to.emit(delegation, "RoleMemberVoted")
         .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
       // owner is unchanged
       expect(await vault.owner()).to.equal(delegation);
 
       voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(nodeOperatorManager).transferStVaultOwnership(newOwner))
+      await expect(delegation.connect(nodeOperatorManager).transferStakingVaultOwnership(newOwner))
         .to.emit(delegation, "RoleMemberVoted")
         .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), voteTimestamp, msgData);
       // owner changed
@@ -659,16 +692,19 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the beacon deposits are already paused", async () => {
-      await delegation.connect(curator).pauseBeaconChainDeposits();
+      await delegation.connect(depositPauser).pauseBeaconChainDeposits();
 
-      await expect(delegation.connect(curator).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+      await expect(delegation.connect(depositPauser).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
         vault,
         "BeaconChainDepositsResumeExpected",
       );
     });
 
     it("pauses the beacon deposits", async () => {
-      await expect(delegation.connect(curator).pauseBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsPaused");
+      await expect(delegation.connect(depositPauser).pauseBeaconChainDeposits()).to.emit(
+        vault,
+        "BeaconChainDepositsPaused",
+      );
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
     });
   });
@@ -682,20 +718,25 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the beacon deposits are already resumed", async () => {
-      await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+      await expect(delegation.connect(depositResumer).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
         vault,
         "BeaconChainDepositsPauseExpected",
       );
     });
 
     it("resumes the beacon deposits", async () => {
-      await delegation.connect(curator).pauseBeaconChainDeposits();
+      await delegation.connect(depositPauser).pauseBeaconChainDeposits();
 
-      await expect(delegation.connect(curator).resumeBeaconChainDeposits()).to.emit(
+      await expect(delegation.connect(depositResumer).resumeBeaconChainDeposits()).to.emit(
         vault,
         "BeaconChainDepositsResumed",
       );
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
   });
+
+  async function assertSoleMember(account: HardhatEthersSigner, role: string) {
+    expect(await delegation.hasRole(role, account)).to.be.true;
+    expect(await delegation.getRoleMemberCount(role)).to.equal(1);
+  }
 });

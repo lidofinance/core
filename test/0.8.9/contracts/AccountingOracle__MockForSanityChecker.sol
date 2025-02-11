@@ -43,7 +43,7 @@ contract AccountingOracle__MockForSanityChecker {
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
                 data.vaultsValues,
-                data.vaultsNetCashFlows
+                data.vaultsInOutDeltas
             )
         );
     }

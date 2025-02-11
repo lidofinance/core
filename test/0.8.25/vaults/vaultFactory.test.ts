@@ -19,13 +19,12 @@ import {
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
+import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { createVaultProxy, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { IDelegation } from "../../../typechain-types/contracts/0.8.25/vaults/VaultFactory.sol/VaultFactory";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -57,22 +56,27 @@ describe("VaultFactory.sol", () => {
 
   let originalState: string;
 
-  let delegationParams: IDelegation.InitialStateStruct;
+  let delegationParams: DelegationConfigStruct;
 
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
-    locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
       value: ether("10.0"),
       from: deployer,
     });
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+
+    locator = await deployLidoLocator({
+      lido: steth,
+      wstETH: wsteth,
+    });
+
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
@@ -89,7 +93,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
-    delegation = await ethers.deployContract("Delegation", [steth, weth, wsteth], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
@@ -105,11 +109,18 @@ describe("VaultFactory.sol", () => {
 
     delegationParams = {
       defaultAdmin: await admin.getAddress(),
+      funder: await vaultOwner1.getAddress(),
+      withdrawer: await vaultOwner1.getAddress(),
+      minter: await vaultOwner1.getAddress(),
+      burner: await vaultOwner1.getAddress(),
       curator: await vaultOwner1.getAddress(),
-      minterBurner: await vaultOwner1.getAddress(),
-      funderWithdrawer: await vaultOwner1.getAddress(),
+      rebalancer: await vaultOwner1.getAddress(),
+      depositPauser: await vaultOwner1.getAddress(),
+      depositResumer: await vaultOwner1.getAddress(),
+      exitRequester: await vaultOwner1.getAddress(),
+      disconnecter: await vaultOwner1.getAddress(),
       nodeOperatorManager: await operator.getAddress(),
-      nodeOperatorFeeClaimer: await vaultOwner1.getAddress(),
+      nodeOperatorFeeClaimer: await operator.getAddress(),
       curatorFeeBP: 100n,
       nodeOperatorFeeBP: 200n,
     };
