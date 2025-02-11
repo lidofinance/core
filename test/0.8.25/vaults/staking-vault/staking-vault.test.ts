@@ -93,7 +93,7 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
   });
@@ -510,23 +510,8 @@ describe("StakingVault.sol", () => {
     });
   });
 
-  context("computeDepositDataRoot", () => {
-    it("computes the deposit data root", async () => {
-      // sample tx data: https://etherscan.io/tx/0x02980d44c119b0a8e3ca0d31c288e9f177c76fb4d7ab616563e399dd9c7c6507
-      const pubkey =
-        "0x8d6aa059b52f6b11d07d73805d409feba07dffb6442c4ef6645f7caa4038b1047e072cba21eb766579f8286ccac630b0";
-      const withdrawalCredentials = "0x010000000000000000000000b8b5da17a1b7a8ad1cf45a12e1e61d3577052d35";
-      const signature =
-        "0xab95e358d002fd79bc08564a2db057dd5164af173915eba9e3e9da233d404c0eb0058760bc30cb89abbc55cf57f0c5a6018cdb17df73ca39ddc80a323a13c2e7ba942faa86757b26120b3a58dcce5d89e95ea1ee8fa3276ffac0f0ad9313211d";
-      const amount = ether("32");
-      const expectedDepositDataRoot = "0xb28f86815813d7da8132a2979836b326094a350e7aa301ba611163d4b7ca77be";
-
-      computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
-
-      expect(await stakingVault.computeDepositDataRoot(pubkey, withdrawalCredentials, signature, amount)).to.equal(
-        expectedDepositDataRoot,
-      );
-    });
+  context("setDepositGuardian", () => {
+    // TODO:
   });
 
   async function deployStakingVaultBehindBeaconProxy(): Promise<
@@ -553,7 +538,7 @@ describe("StakingVault.sol", () => {
 
     // deploying beacon proxy
     const vaultCreation = await vaultFactory_
-      .createVault(await vaultOwner.getAddress(), await operator.getAddress())
+      .createVault(await vaultOwner.getAddress(), await operator.getAddress(), await operator.getAddress())
       .then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");

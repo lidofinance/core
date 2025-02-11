@@ -2,9 +2,9 @@ import { expect } from "chai";
 import { hexlify, parseUnits, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
-import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
+import { CLProofVerifier__Harness, IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 
-import { impersonate } from "lib";
+import { ether, impersonate } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -12,7 +12,7 @@ const randomBytes32 = (): string => hexlify(randomBytes(32));
 const randomInt = (max: number): number => Math.floor(Math.random() * max);
 const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
 
-export const generateValidator = (customWC?: string, customPukey?: string) => {
+export const generateValidator = (customWC?: string, customPukey?: string): SSZHelpers.ValidatorStruct => {
   return {
     pubkey: customPukey ?? randomValidatorPubkey(),
     withdrawalCredentials: customWC ?? randomBytes32(),
@@ -22,6 +22,27 @@ export const generateValidator = (customWC?: string, customPukey?: string) => {
     activationEpoch: randomInt(343300),
     exitEpoch: randomInt(343300),
     withdrawableEpoch: randomInt(343300),
+  };
+};
+
+export const generatePredeposit = (validator: SSZHelpers.ValidatorStruct): IStakingVault.DepositStruct => {
+  return {
+    pubkey: validator.pubkey,
+    amount: ether("1"),
+    signature: randomBytes(96),
+    depositDataRoot: randomBytes32(),
+  };
+};
+
+export const generatePostDeposit = (
+  validator: SSZHelpers.ValidatorStruct,
+  amount = ether("31"),
+): IStakingVault.DepositStruct => {
+  return {
+    pubkey: validator.pubkey,
+    amount,
+    signature: randomBytes(96),
+    depositDataRoot: randomBytes32(),
   };
 };
 

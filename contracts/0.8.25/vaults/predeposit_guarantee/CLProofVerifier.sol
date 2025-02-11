@@ -33,11 +33,14 @@ abstract contract CLProofVerifier {
     // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    // Index of parent node for (Pubkey,WC) in validator container
+    // GIndex of parent node for (Pubkey,WC) in validator container
+    // unlikely to change, same between mainnet/testnets
     GIndex public immutable GI_PUBKEY_WC_PARENT = pack(1 << 2, 2);
-    // Index of stateRoot in Beacon Block state
+    // GIndex of stateRoot in Beacon Block state
+    // unlikely to change, same between mainnet/testnets
     GIndex public immutable GI_STATE_VIEW = pack((1 << 3) + 3, 3);
     // Index of first validator in CL state
+    // can change between hardforks and must be updated
     GIndex public immutable GI_FIRST_VALIDATOR;
 
     constructor(GIndex _gIFirstValidator) {

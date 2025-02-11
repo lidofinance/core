@@ -30,6 +30,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
     accounting: certainAddress("dummy-locator:withdrawalVault"),
     wstETH: certainAddress("dummy-locator:wstETH"),
+    predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
     ...config,
   });
 

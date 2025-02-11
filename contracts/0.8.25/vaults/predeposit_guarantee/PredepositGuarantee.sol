@@ -195,7 +195,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         $.nodeOperatorBonds[_nodeOperator].locked += totalDepositAmount;
         _stakingVault.depositToBeaconChain(_deposits);
 
-        emit ValidatorPreDeposited(_nodeOperator, address(_stakingVault), _deposits.length);
+        emit ValidatorsPreDeposited(_nodeOperator, address(_stakingVault), _deposits.length);
     }
 
     // * * * * * Positive Proof Flow  * * * * * //
@@ -344,7 +344,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address _recipient
     ) external {
         proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
-        withdrawDisprovenPredeposit(_witness. , _recipient);
+        withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
     }
 
     /// Internal functions
@@ -388,7 +388,11 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     event NodeOperatorBondToppedUp(address indexed nodeOperator, uint256 amount);
     event NodeOperatorBondWithdrawn(address indexed nodeOperator, uint256 amount, address indexed recipient);
     event NodeOperatorVoucherSet(address indexed nodeOperator, address indexed voucher);
-    event ValidatorPreDeposited(address indexed nodeOperator, address indexed stakingVault, uint256 numberOfDeposits);
+    event ValidatorsPreDeposited(
+        address indexed nodeOperator,
+        address indexed stakingVault,
+        uint256 numberOfValidators
+    );
     event ValidatorProven(
         address indexed nodeOperator,
         bytes indexed validatorPubkey,
