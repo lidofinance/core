@@ -61,7 +61,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      * @notice The order of confirmations does not matter
      *
      */
-    modifier onlyMutuallyConfirmed(bytes32[] memory _roles) {
+    modifier onlyConfirmed(bytes32[] memory _roles) {
         if (_roles.length == 0) revert ZeroConfirmingRoles();
         if (confirmLifetime == 0) revert ConfirmLifetimeNotSet();
 

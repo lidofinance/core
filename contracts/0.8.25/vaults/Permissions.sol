@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {AccessControlMutuallyConfirmable} from "contracts/0.8.25/utils/AccessControlMutuallyConfirmable.sol";
+import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -16,7 +16,7 @@ import {VaultHub} from "./VaultHub.sol";
  * @author Lido
  * @notice Provides granular permissions for StakingVault operations.
  */
-abstract contract Permissions is AccessControlMutuallyConfirmable {
+abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Struct containing an account and a role for granting/revoking roles.
      */
@@ -179,7 +179,7 @@ abstract contract Permissions is AccessControlMutuallyConfirmable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _transferStakingVaultOwnership(address _newOwner) internal onlyMutuallyConfirmed(_confirmingRoles()) {
+    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 

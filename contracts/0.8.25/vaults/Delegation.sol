@@ -157,7 +157,7 @@ contract Delegation is Dashboard {
      * the confirm is considered expired, no longer counts and must be recasted.
      * @param _newConfirmLifetime The new confirm lifetime in seconds.
      */
-    function setConfirmLifetime(uint256 _newConfirmLifetime) external onlyMutuallyConfirmed(_confirmingRoles()) {
+    function setConfirmLifetime(uint256 _newConfirmLifetime) external onlyConfirmed(_confirmingRoles()) {
         _setConfirmLifetime(_newConfirmLifetime);
     }
 
@@ -185,7 +185,7 @@ contract Delegation is Dashboard {
      * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyMutuallyConfirmed(_confirmingRoles()) {
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(_confirmingRoles()) {
         if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
