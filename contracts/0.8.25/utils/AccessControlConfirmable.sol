@@ -7,12 +7,12 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
 /**
- * @title AccessControlMutuallyConfirmable
+ * @title AccessControlConfirmable
  * @author Lido
  * @notice An extension of AccessControlEnumerable that allows exectuing functions by mutual confirmation.
  * @dev This contract extends AccessControlEnumerable and adds a confirmation mechanism in the form of a modifier.
  */
-abstract contract AccessControlMutuallyConfirmable is AccessControlEnumerable {
+abstract contract AccessControlConfirmable is AccessControlEnumerable {
     /**
      * @notice Tracks confirmations
      * - callId: unique identifier for the call, derived as `keccak256(msg.data)`
