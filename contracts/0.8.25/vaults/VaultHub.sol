@@ -76,10 +76,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    /// @param _stETH Lido stETH contract
-    constructor(ILidoLocator _locator, IStETH _stETH) {
-        STETH = _stETH;
+    /// @param _locator Lido Locator contract
+    constructor(ILidoLocator _locator) {
         LIDO_LOCATOR = _locator;
+        STETH = IStETH(_locator.lido());
         _disableInitializers();
     }
 

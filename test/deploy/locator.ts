@@ -107,6 +107,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
     "accounting",
     "wstETH",
+    "predepositGuarantee",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

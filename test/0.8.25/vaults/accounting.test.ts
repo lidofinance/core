@@ -29,14 +29,14 @@ describe("Accounting.sol", () => {
   before(async () => {
     [deployer, admin, user, holder, stranger] = await ethers.getSigners();
 
-    locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], {
       value: ether("10.0"),
       from: deployer,
     });
+    locator = await deployLidoLocator({ lido: steth });
 
     // VaultHub
-    vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
+    vaultHubImpl = await ethers.deployContract("Accounting", [locator], { from: deployer });
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
 

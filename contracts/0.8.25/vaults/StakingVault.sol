@@ -628,11 +628,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error UnrecoverableError();
 
     /**
-     * @notice Thrown when the global deposit root does not match the expected global deposit root
-     */
-    error GlobalDepositRootMismatch(bytes32 expected, bytes32 actual);
-
-    /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
      */
     error BeaconChainDepositsPauseExpected();

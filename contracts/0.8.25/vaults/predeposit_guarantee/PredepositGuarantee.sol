@@ -17,8 +17,6 @@ import {IStakingVaultOwnable} from "../interfaces/IStakingVault.sol";
  * @notice
  */
 contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
-    uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
-
     enum BondStatus {
         NO_RECORD,
         AWAITING_PROOF,
@@ -48,6 +46,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         mapping(address nodeOperator => address voucher) nodeOperatorVouchers;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatuses;
     }
+
+    uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
     /**
      * @notice Storage offset slot for ERC-7201 namespace
@@ -85,14 +85,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         return _getStorage().validatorStatuses[_validatorPubkey];
     }
 
-    /// NO Balance operations
-
     function topUpNodeOperatorBond(address _nodeOperator) external payable whenResumed {
         _topUpNodeOperatorBalance(_nodeOperator);
     }
 
     function withdrawNodeOperatorBond(address _nodeOperator, uint128 _amount, address _recipient) external whenResumed {
         if (_amount == 0) revert ZeroArgument("amount");
+        if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueMustBeMultipleOfPredepositAmount(_amount);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         ERC7201Storage storage $ = _getStorage();
@@ -122,20 +121,30 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (bond.total > 0 && $.nodeOperatorVouchers[msg.sender] != address(0)) {
             uint256 _ejected = $.nodeOperatorBonds[msg.sender].total;
             $.nodeOperatorBonds[msg.sender].total = 0;
-            (bool success, ) = $.nodeOperatorVouchers[msg.sender].call{value: _ejected}("");
 
-            // voucher can block change?
+            /* NB!
+             * Malicious voucher can block change to a new voucher by reverting `call`
+             * But due to balance top up & withdrawal amounts always being multiple of `PREDEPOSIT_AMOUNT`
+             * Voucher can't leave unusable balance ("dust") on NO balance
+             * In case malicious voucher leaves single PREDEPOSIT_AMOUNT of ether NO can:
+             *  - perform frontrun deposit manually to a validator
+             *  - predeposit this validator and `steal` vault PREDEPOSIT_AMOUNT ether via wrong WC
+             *  - disprove predeposit with proof of wrong WC and burn bond towards staking vault
+             *  - allow staking vault owner to withdraw PREDEPOSIT_AMOUNT ether
+             * Thus making this griefing attack not feasible
+             */
+            (bool success, ) = $.nodeOperatorVouchers[msg.sender].call{value: _ejected}("");
             if (!success) revert WithdrawalFailed();
 
             emit NodeOperatorBondWithdrawn(msg.sender, _ejected, _voucher);
         }
 
+        $.nodeOperatorVouchers[msg.sender] = _voucher;
+
         // optional top up that will only work in NO sets voucher to zero address
         if (msg.value != 0) {
             _topUpNodeOperatorBalance(msg.sender);
         }
-
-        $.nodeOperatorVouchers[msg.sender] = _voucher;
 
         emit NodeOperatorVoucherSet(msg.sender, _voucher);
     }
@@ -153,7 +162,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address _nodeOperator = _stakingVault.nodeOperator();
         if (msg.sender != _nodeOperator) revert MustBeNodeOperator();
 
-        // optional top up
+        // optional top up when NO has no voucher
         if (msg.value != 0) {
             _topUpNodeOperatorBalance(_nodeOperator);
         }
@@ -236,10 +245,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert MustBeNodeOperator();
-        }
-
-        if (msg.value != 0) {
-            _topUpNodeOperatorBalance(_stakingVault.nodeOperator());
         }
 
         ERC7201Storage storage $ = _getStorage();
@@ -351,6 +356,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal {
         if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (msg.value % PREDEPOSIT_AMOUNT != 0) revert ValueMustBeMultipleOfPredepositAmount(msg.value);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         _validateNodeOperatorCaller(_nodeOperator);
@@ -417,6 +423,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // node operator accounting
     error BondMustBeFullyUnlocked(uint256 locked);
     error CannotSetSelfAsVoucher();
+    error ValueMustBeMultipleOfPredepositAmount(uint256 value);
 
     // predeposit errors
     error PredepositNoDeposits();

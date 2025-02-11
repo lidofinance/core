@@ -86,8 +86,8 @@ contract Accounting is VaultHub {
     /// @notice Lido contract
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(_lidoLocator, _lido) {
-        LIDO = _lido;
+    constructor(ILidoLocator _lidoLocator) VaultHub(_lidoLocator) {
+        LIDO = ILido(_lidoLocator.lido());
     }
 
     function initialize(address _admin) external initializer {

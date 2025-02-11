@@ -27,7 +27,7 @@ describe("VaultHub.sol:pausableUntil", () => {
     const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    const vaultHubImpl = await ethers.deployContract("Accounting", [locator]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const accounting = await ethers.getContractAt("Accounting", proxy);
