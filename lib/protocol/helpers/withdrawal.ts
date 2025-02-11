@@ -12,8 +12,6 @@ import { report } from "./accounting";
 export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { withdrawalQueue } = ctx.contracts;
   if (await withdrawalQueue.isPaused()) {
-    log.warning("Unpausing withdrawal queue contract");
-
     const resumeRole = await withdrawalQueue.RESUME_ROLE();
     const agentSigner = await ctx.getSigner("agent");
     const agentSignerAddress = await agentSigner.getAddress();

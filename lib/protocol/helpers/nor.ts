@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { randomBytes } from "ethers";
+import { ethers, randomBytes } from "ethers";
 
 import { certainAddress, log } from "lib";
 
@@ -123,7 +123,12 @@ export const norAddNodeOperator = async (
   const { nor } = ctx.contracts;
   const { operatorId, name, rewardAddress, managerAddress } = params;
 
-  log.warning(`Adding fake NOR operator ${operatorId}`);
+  log.debug(`Adding fake NOR operator ${operatorId}`, {
+    "Operator ID": operatorId,
+    "Name": name,
+    "Reward address": rewardAddress,
+    "Manager address": managerAddress,
+  });
 
   const agentSigner = await ctx.getSigner("agent");
   await nor.connect(agentSigner).addNodeOperator(name, rewardAddress);
@@ -151,7 +156,10 @@ export const norAddOperatorKeys = async (
   const { nor } = ctx.contracts;
   const { operatorId, keysToAdd } = params;
 
-  log.warning(`Adding fake keys to NOR operator ${operatorId}`);
+  log.debug(`Adding fake keys to NOR operator ${operatorId}`, {
+    "Operator ID": operatorId,
+    "Keys to add": keysToAdd,
+  });
 
   const totalKeysBefore = await nor.getTotalSigningKeyCount(operatorId);
   const unusedKeysBefore = await nor.getUnusedSigningKeyCount(operatorId);
@@ -198,7 +206,10 @@ const norSetOperatorStakingLimit = async (
   const { nor } = ctx.contracts;
   const { operatorId, limit } = params;
 
-  log.warning(`Setting NOR operator ${operatorId} staking limit`);
+  log.debug(`Setting NOR operator ${operatorId} staking limit`, {
+    "Operator ID": operatorId,
+    "Limit": ethers.formatEther(limit),
+  });
 
   const votingSigner = await ctx.getSigner("voting");
   await nor.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);

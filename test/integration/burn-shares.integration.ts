@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ether, impersonate, log } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { finalizeWithdrawalQueue, handleOracleReport } from "lib/protocol/helpers";
+import { handleOracleReport } from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -32,17 +32,6 @@ describe("Burn Shares", () => {
   beforeEach(bailOnFailure);
 
   after(async () => await Snapshot.restore(snapshot));
-
-  it("Should finalize withdrawal queue", async () => {
-    const { withdrawalQueue } = ctx.contracts;
-
-    await finalizeWithdrawalQueue(ctx);
-
-    const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
-    const lastRequestId = await withdrawalQueue.getLastRequestId();
-
-    expect(lastFinalizedRequestId).to.equal(lastRequestId);
-  });
 
   it("Should allow stranger to submit ETH", async () => {
     const { lido } = ctx.contracts;

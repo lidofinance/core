@@ -4,6 +4,8 @@ import { formatUnits, Interface, TransactionReceipt, TransactionResponse } from 
 import { extendEnvironment } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+
 // Custom errors
 class NoReceiptError extends Error {
   constructor() {
@@ -71,6 +73,8 @@ function formatTransactionLines(
 }
 
 extendEnvironment((hre: HardhatRuntimeEnvironment) => {
+  if (LOG_LEVEL != "debug" && LOG_LEVEL != "all") return;
+
   const originalSendTransaction = hre.ethers.provider.send;
 
   // Wrap the provider's send method to intercept transactions
@@ -156,6 +160,7 @@ extendEnvironment((hre: HardhatRuntimeEnvironment) => {
       const lines = formatTransactionLines(tx, receipt, txType, name, functionName, blockGasLimit, gasPrice);
 
       lines.forEach((line) => console.log(line));
+      console.log();
 
       return receipt;
     } catch (error) {

@@ -62,7 +62,10 @@ const sdvtEnsureOperatorsHaveMinKeys = async (
     const unusedKeysCount = await sdvt.getUnusedSigningKeyCount(operatorId);
 
     if (unusedKeysCount < minKeysCount) {
-      log.warning(`Adding SDVT fake keys to operator ${operatorId}`);
+      log.debug(`Adding SDVT fake keys to operator ${operatorId}`, {
+        "Unused keys count": unusedKeysCount,
+        "Min keys count": minKeysCount,
+      });
 
       await sdvtAddNodeOperatorKeys(ctx, {
         operatorId,
@@ -102,7 +105,12 @@ const sdvtEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = 
       managerAddress: getOperatorManagerAddress("sdvt", operatorId),
     };
 
-    log.warning(`Adding SDVT fake operator ${operatorId}`);
+    log.debug(`Adding SDVT fake operator ${operatorId}`, {
+      "Operator ID": operatorId,
+      "Name": operator.name,
+      "Reward address": operator.rewardAddress,
+      "Manager address": operator.managerAddress,
+    });
 
     await sdvtAddNodeOperator(ctx, operator);
     count++;
@@ -147,12 +155,7 @@ const sdvtAddNodeOperator = async (
     [1 << (240 + Number(operatorId))],
   );
 
-  log.debug("Added SDVT fake operator", {
-    "Operator ID": operatorId,
-    "Name": name,
-    "Reward address": rewardAddress,
-    "Manager address": managerAddress,
-  });
+  log.success(`Added fake SDVT operator ${operatorId}`);
 };
 
 /**
@@ -188,14 +191,7 @@ const sdvtAddNodeOperatorKeys = async (
   expect(totalKeysAfter).to.equal(totalKeysBefore + keysToAdd);
   expect(unusedKeysAfter).to.equal(unusedKeysBefore + keysToAdd);
 
-  log.debug("Added SDVT fake signing keys", {
-    "Operator ID": operatorId,
-    "Keys to add": keysToAdd,
-    "Total keys before": totalKeysBefore,
-    "Total keys after": totalKeysAfter,
-    "Unused keys before": unusedKeysBefore,
-    "Unused keys after": unusedKeysAfter,
-  });
+  log.success(`Added fake keys to SDVT operator ${operatorId}`);
 };
 
 /**
@@ -212,6 +208,7 @@ const sdvtSetOperatorStakingLimit = async (
   const { operatorId, limit } = params;
 
   const easyTrackExecutor = await ctx.getSigner("easyTrack");
-
   await sdvt.connect(easyTrackExecutor).setNodeOperatorStakingLimit(operatorId, limit);
+
+  log.success(`Set SDVT operator ${operatorId} staking limit`);
 };
