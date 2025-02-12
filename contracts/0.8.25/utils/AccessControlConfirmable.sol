@@ -79,6 +79,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
         uint256 numberOfConfirms = 0;
         bool[] memory deferredConfirms = new bool[](numberOfRoles);
         bool isRoleMember = false;
+        uint256 expiryTimestamp = block.timestamp + confirmLifetime;
 
         for (uint256 i = 0; i < numberOfRoles; ++i) {
             bytes32 role = _roles[i];
@@ -88,7 +89,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
                 numberOfConfirms++;
                 deferredConfirms[i] = true;
 
-                emit RoleMemberConfirmed(msg.sender, role, block.timestamp, msg.data);
+                emit RoleMemberConfirmed(msg.sender, role, expiryTimestamp, msg.data);
             } else if (confirmations[msg.data][role] >= block.timestamp) {
                 numberOfConfirms++;
             }
@@ -106,7 +107,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
             for (uint256 i = 0; i < numberOfRoles; ++i) {
                 if (deferredConfirms[i]) {
                     bytes32 role = _roles[i];
-                    confirmations[msg.data][role] = block.timestamp + confirmLifetime;
+                    confirmations[msg.data][role] = expiryTimestamp;
                 }
             }
         }
@@ -138,10 +139,10 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      * @dev Emitted when a role member confirms.
      * @param member The address of the confirming member.
      * @param role The role of the confirming member.
-     * @param timestamp The timestamp of the confirmation.
+     * @param expiryTimestamp The timestamp of the confirmation.
      * @param data The msg.data of the confirmation (selector + arguments).
      */
-    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 timestamp, bytes data);
+    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
 
     /**
      * @dev Thrown when attempting to set confirmation lifetime to zero.
