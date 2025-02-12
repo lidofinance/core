@@ -142,52 +142,107 @@ abstract contract Permissions is AccessControlConfirmable {
         }
     }
 
+    /**
+     * @dev Returns an array of roles that need to confirm the call
+     *      used for the `onlyConfirmed` modifier.
+     *      At this level, only the DEFAULT_ADMIN_ROLE is needed to confirm the call
+     *      but in inherited contracts, the function can be overridden to add more roles,
+     *      which are introduced further in the inheritance chain.
+     * @return The roles that need to confirm the call.
+     */
     function _confirmingRoles() internal pure virtual returns (bytes32[] memory) {
         bytes32[] memory roles = new bytes32[](1);
         roles[0] = DEFAULT_ADMIN_ROLE;
         return roles;
     }
 
+    /**
+     * @dev Checks the FUND_ROLE and funds the StakingVault.
+     * @param _ether The amount of ether to fund the StakingVault with.
+     */
     function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
         stakingVault().fund{value: _ether}();
     }
 
+    /**
+     * @dev Checks the WITHDRAW_ROLE and withdraws funds from the StakingVault.
+     * @param _recipient The address to withdraw the funds to.
+     * @param _ether The amount of ether to withdraw from the StakingVault.
+     * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
+     */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
         stakingVault().withdraw(_recipient, _ether);
     }
 
+    /**
+     * @dev Checks the MINT_ROLE and mints shares backed by the StakingVault.
+     * @param _recipient The address to mint the shares to.
+     * @param _shares The amount of shares to mint.
+     * @dev The zero checks for parameters are performed in the VaultHub contract.
+     */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
         vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _shares);
     }
 
+    /**
+     * @dev Checks the BURN_ROLE and burns shares backed by the StakingVault.
+     * @param _shares The amount of shares to burn.
+     * @dev The zero check for parameters is performed in the VaultHub contract.
+     */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
         vaultHub.burnSharesBackedByVault(address(stakingVault()), _shares);
     }
 
+    /**
+     * @dev Checks the REBALANCE_ROLE and rebalances the StakingVault.
+     * @param _ether The amount of ether to rebalance the StakingVault with.
+     * @dev The zero check for parameters is performed in the StakingVault contract.
+     */
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
         stakingVault().rebalance(_ether);
     }
 
+    /**
+     * @dev Checks the PAUSE_BEACON_CHAIN_DEPOSITS_ROLE and pauses beacon chain deposits on the StakingVault.
+     */
     function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
         stakingVault().pauseBeaconChainDeposits();
     }
 
+    /**
+     * @dev Checks the RESUME_BEACON_CHAIN_DEPOSITS_ROLE and resumes beacon chain deposits on the StakingVault.
+     */
     function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
         stakingVault().resumeBeaconChainDeposits();
     }
 
+    /**
+     * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
+     * @param _pubkey The public key of the validator to request exit for.
+     */
     function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
         stakingVault().requestValidatorExit(_pubkey);
     }
 
+    /**
+     * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
+     */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
+    /**
+     * @dev Checks the DEFAULT_ADMIN_ROLE and transfers the StakingVault ownership.
+     * @param _newOwner The address to transfer the StakingVault ownership to.
+     */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
+    /**
+     * @dev Loads the address of the underlying StakingVault.
+     * @return addr The address of the StakingVault.
+     */
     function _loadStakingVaultAddress() internal view returns (address addr) {
         bytes memory args = Clones.fetchCloneArgs(address(this));
         assembly {
