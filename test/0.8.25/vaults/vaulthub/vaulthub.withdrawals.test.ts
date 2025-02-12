@@ -111,37 +111,31 @@ describe("VaultHub.sol:withdrawals", () => {
 
   context("forceValidatorWithdrawals", () => {
     it("reverts if msg.value is 0", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 0n }))
+      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 0n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("msg.value");
     });
 
     it("reverts if the vault is zero address", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(ZeroAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(ZeroAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_vault");
     });
 
     it("reverts if zero pubkeys", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, "0x", [0n], feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, "0x", feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_pubkeys");
     });
 
-    it("reverts if zero amounts", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [], feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_amounts");
-    });
-
     it("reverts if zero refund recipient", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], ZeroAddress, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_refundRecepient");
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(stranger, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(stranger.address);
     });
@@ -149,13 +143,13 @@ describe("VaultHub.sol:withdrawals", () => {
     it("reverts if called for a disconnected vault", async () => {
       await vaultHub.connect(user).disconnect(vaultAddress);
 
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(vaultAddress);
     });
 
     it("reverts if called for a healthy vault", async () => {
-      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "AlreadyBalanced")
         .withArgs(vaultAddress, 0n, 0n);
     });
@@ -164,31 +158,26 @@ describe("VaultHub.sol:withdrawals", () => {
       beforeEach(async () => await makeVaultUnhealthy());
 
       it("reverts if fees are insufficient", async () => {
-        await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
+        await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
           .to.be.revertedWithCustomError(vault, "InsufficientValidatorWithdrawalFee")
           .withArgs(1n, FEE);
       });
 
       it("initiates force validator withdrawal", async () => {
-        await expect(
-          vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: FEE }),
-        )
+        await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
           .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
-          .withArgs(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient);
+          .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);
       });
 
       it("initiates force validator withdrawal with multiple pubkeys", async () => {
         const numPubkeys = 3;
         const pubkeys = "0x" + "ab".repeat(numPubkeys * 48);
-        const amounts = Array.from({ length: numPubkeys }, () => 0n);
 
         await expect(
-          vaultHub.forceValidatorWithdrawals(vaultAddress, pubkeys, amounts, feeRecipient, {
-            value: FEE * BigInt(numPubkeys),
-          }),
+          vaultHub.forceValidatorWithdrawals(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
         )
           .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
-          .withArgs(vaultAddress, pubkeys, amounts, feeRecipient);
+          .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
     });
   });

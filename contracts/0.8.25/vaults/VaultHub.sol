@@ -69,6 +69,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     uint256 internal constant MAX_VAULT_SIZE_BP = 10_00;
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 internal constant CONNECT_DEPOSIT = 1 ether;
+    /// @notice length of the validator pubkey in bytes
+    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
@@ -344,15 +346,17 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice forces validator withdrawal from the beacon chain in case the vault is unbalanced
     /// @param _vault vault address
     /// @param _pubkeys pubkeys of the validators to withdraw
-    /// @param _amounts amounts of the validators to withdraw
     /// @param _refundRecepient address of the recipient of the refund
-    /// TODO: do not pass amounts, but calculate them based on the keys number
-    function forceValidatorWithdrawals(address _vault, bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecepient) external payable {
+    function forceValidatorWithdrawals(
+        address _vault,
+        bytes calldata _pubkeys,
+        address _refundRecepient
+    ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
-        if (_amounts.length == 0) revert ZeroArgument("_amounts");
         if (_refundRecepient == address(0)) revert ZeroArgument("_refundRecepient");
+        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
 
         VaultSocket storage socket = _connectedSocket(_vault);
         uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
@@ -360,9 +364,12 @@ abstract contract VaultHub is PausableUntilWithRoles {
             revert AlreadyBalanced(_vault, socket.sharesMinted, threshold);
         }
 
-        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecepient);
+        uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
+        uint64[] memory amounts = new uint64[](numValidators);
 
-        emit VaultForceWithdrawalTriggered(_vault, _pubkeys, _amounts, _refundRecepient);
+        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecepient);
+
+        emit VaultForceWithdrawalTriggered(_vault, _pubkeys, _refundRecepient);
     }
 
     function _disconnect(address _vault) internal {
@@ -541,7 +548,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event VaultForceWithdrawalTriggered(address indexed vault, bytes pubkeys, uint64[] amounts, address refundRecepient);
+    event VaultForceWithdrawalTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
@@ -562,4 +569,5 @@ abstract contract VaultHub is PausableUntilWithRoles {
     error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
     error VaultProxyNotAllowed(address beacon);
+    error InvalidPubkeysLength();
 }

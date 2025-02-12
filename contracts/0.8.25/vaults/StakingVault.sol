@@ -100,7 +100,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice The length of the public key in bytes
      */
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    uint256 public constant PUBLIC_KEY_LENGTH = 48;
+
+    /**
+     * @notice The maximum number of pubkeys per request (to avoid burning too much gas)
+     */
+    uint256 public constant MAX_PUBLIC_KEYS_PER_REQUEST = 5000;
 
     /**
      * @notice Storage offset slot for ERC-7201 namespace
@@ -445,6 +450,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
+        if (keysCount > MAX_PUBLIC_KEYS_PER_REQUEST) revert TooManyPubkeys();
         for (uint256 i = 0; i < keysCount; i++) {
             emit ValidatorExitRequested(msg.sender, bytes(_pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH]));
         }
@@ -724,6 +730,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the length of the amounts is not equal to the length of the pubkeys
      */
     error InvalidAmountsLength();
+
+    /**
+     * @notice Thrown when the number of pubkeys is too large
+     */
+    error TooManyPubkeys();
 
     /**
      * @notice Thrown when the validator withdrawal fee is insufficient
