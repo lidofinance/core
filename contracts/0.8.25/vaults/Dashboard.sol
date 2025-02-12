@@ -30,9 +30,9 @@ interface IWstETH is IERC20, IERC20Permit {
 
 /**
  * @title Dashboard
- * @notice This contract is meant to be used as the owner of `StakingVault`.
- * This contract improves the vault UX by bundling all functions from the vault and vault hub
- * in this single contract. It provides administrative functions for managing the staking vault,
+ * @notice This contract is a UX-layer for `StakingVault`.
+ * This contract improves the vault UX by bundling all functions from the StakingVault and VaultHub
+ * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is Permissions {
@@ -99,6 +99,10 @@ contract Dashboard is Permissions {
 
     // ==================== View Functions ====================
 
+    /**
+     * @notice Returns the roles that need to confirm multi-role operations.
+     * @return The roles that need to confirm the call.
+     */
     function confirmingRoles() external pure returns (bytes32[] memory) {
         return _confirmingRoles();
     }
@@ -147,7 +151,7 @@ contract Dashboard is Permissions {
      * @notice Returns the treasury fee basis points.
      * @return The treasury fee in basis points as a uint16.
      */
-    function treasuryFee() external view returns (uint16) {
+    function treasuryFeeBP() external view returns (uint16) {
         return vaultSocket().treasuryFeeBP;
     }
 
