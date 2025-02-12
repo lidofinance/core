@@ -19,8 +19,8 @@ struct DelegationConfig {
     address rebalancer;
     address depositPauser;
     address depositResumer;
-    address validatorExitRequester;
-    address validatorWithdrawalRequester;
+    address exitRequester;
+    address withdrawalTriggerer;
     address disconnecter;
     address curator;
     address nodeOperatorManager;
@@ -78,8 +78,8 @@ contract VaultFactory {
         delegation.grantRole(delegation.REBALANCE_ROLE(), _delegationConfig.rebalancer);
         delegation.grantRole(delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositPauser);
         delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumer);
-        delegation.grantRole(delegation.MARK_VALIDATORS_FOR_EXIT_ROLE(), _delegationConfig.validatorExitRequester);
-        delegation.grantRole(delegation.REQUEST_VALIDATOR_WITHDRAWALS_ROLE(), _delegationConfig.validatorWithdrawalRequester);
+        delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequester);
+        delegation.grantRole(delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.withdrawalTriggerer);
         delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecter);
         delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);

@@ -55,14 +55,14 @@ abstract contract Permissions is AccessControlVoteable {
         keccak256("StakingVault.Permissions.ResumeBeaconChainDeposits");
 
     /**
-     * @notice Permission for marking validators for exit from the StakingVault.
+     * @notice Permission for requesting validator exit from the StakingVault.
      */
-    bytes32 public constant MARK_VALIDATORS_FOR_EXIT_ROLE = keccak256("StakingVault.Permissions.MarkValidatorsForExit");
+    bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("StakingVault.Permissions.RequestValidatorExit");
 
     /**
-     * @notice Permission for force validators exit from the StakingVault using EIP-7002 triggerable exit.
+     * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
      */
-    bytes32 public constant REQUEST_VALIDATOR_WITHDRAWALS_ROLE = keccak256("StakingVault.Permissions.RequestValidatorWithdrawals");
+    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE = keccak256("StakingVault.Permissions.TriggerValidatorWithdrawal");
 
     /**
      * @notice Permission for voluntary disconnecting the StakingVault.
@@ -146,12 +146,12 @@ abstract contract Permissions is AccessControlVoteable {
         stakingVault().resumeBeaconChainDeposits();
     }
 
-    function _markValidatorsForExit(bytes calldata _pubkeys) internal onlyRole(MARK_VALIDATORS_FOR_EXIT_ROLE) {
-        stakingVault().markValidatorsForExit(_pubkeys);
+    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+        stakingVault().requestValidatorExit(_pubkeys);
     }
 
-    function _requestValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) internal onlyRole(REQUEST_VALIDATOR_WITHDRAWALS_ROLE) {
-        stakingVault().requestValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+    function _triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {

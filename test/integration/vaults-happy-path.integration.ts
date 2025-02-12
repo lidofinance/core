@@ -167,8 +167,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         rebalancer: curator,
         depositPauser: curator,
         depositResumer: curator,
-        validatorExitRequester: curator,
-        validatorWithdrawalRequester: curator,
+        exitRequester: curator,
+        withdrawalTriggerer: curator,
         disconnecter: curator,
         nodeOperatorManager: nodeOperator,
         nodeOperatorFeeClaimer: nodeOperator,
@@ -202,8 +202,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await isSoleRoleMember(curator, await delegation.REBALANCE_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.MARK_VALIDATORS_FOR_EXIT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_WITHDRAWALS_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
@@ -373,7 +373,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Owner to trigger validator exit to cover fees", async () => {
     // simulate validator exit
     const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
-    await delegation.connect(curator).markValidatorsForExit(secondValidatorKey);
+    await delegation.connect(curator).requestValidatorExit(secondValidatorKey);
     await updateBalance(stakingVaultAddress, VALIDATOR_DEPOSIT_SIZE);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();

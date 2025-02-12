@@ -458,23 +458,23 @@ contract Dashboard is Permissions {
      * @notice Signals to node operators that specific validators should exit from the beacon chain.
      *         It does not directly trigger exits - node operators must monitor for these events and handle the exits manually.
      * @param _pubkeys Concatenated validator public keys, each 48 bytes long.
-     * @dev    Emits `ValidatorMarkedForExit` event for each validator public key through the StakingVault
+     * @dev    Emits `ValidatorExitRequested` event for each validator public key through the StakingVault.
      *         This is a voluntary exit request - node operators can choose whether to act on it.
      */
-    function markValidatorsForExit(bytes calldata _pubkeys) external {
-        _markValidatorsForExit(_pubkeys);
+    function requestValidatorExit(bytes calldata _pubkeys) external {
+        _requestValidatorExit(_pubkeys);
     }
 
     /**
-     * @notice Requests validator withdrawals via EIP-7002 triggerable exit mechanism. This allows withdrawing either the full
+     * @notice Triggers validator withdrawals via EIP-7002 triggerable exit mechanism. This allows withdrawing either the full
      *         validator balance or a partial amount from each validator specified.
      * @param _pubkeys The concatenated public keys of the validators to request withdrawal for. Each key must be 48 bytes.
      * @param _amounts The withdrawal amounts in wei for each validator. Must match the length of _pubkeys.
      * @param _refundRecipient The address that will receive any fee refunds.
      * @dev    Requires payment of withdrawal fee which is calculated based on the number of validators and must be paid in msg.value.
      */
-    function requestValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
-        _requestValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
+    function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
     // ==================== Role Management Functions ====================

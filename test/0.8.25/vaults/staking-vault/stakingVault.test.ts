@@ -604,67 +604,67 @@ describe("StakingVault.sol", () => {
     });
   });
 
-  context("calculateValidatorWithdrawalsFee", () => {
+  context("calculateValidatorWithdrawalFee", () => {
     it("reverts if the number of validators is zero", async () => {
-      await expect(stakingVault.calculateValidatorWithdrawalsFee(0))
+      await expect(stakingVault.calculateValidatorWithdrawalFee(0))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_numberOfKeys");
     });
 
     it("works with max uint256", async () => {
       const fee = BigInt(await withdrawalRequest.fee());
-      expect(await stakingVault.calculateValidatorWithdrawalsFee(MAX_UINT256)).to.equal(BigInt(MAX_UINT256) * fee);
+      expect(await stakingVault.calculateValidatorWithdrawalFee(MAX_UINT256)).to.equal(BigInt(MAX_UINT256) * fee);
     });
 
     it("calculates the total fee for given number of validator keys", async () => {
       const newFee = 100n;
       await withdrawalRequest.setFee(newFee);
 
-      const fee = await stakingVault.calculateValidatorWithdrawalsFee(1n);
+      const fee = await stakingVault.calculateValidatorWithdrawalFee(1n);
       expect(fee).to.equal(newFee);
 
       const feePerRequest = await withdrawalRequest.fee();
       expect(fee).to.equal(feePerRequest);
 
-      const feeForMultipleKeys = await stakingVault.calculateValidatorWithdrawalsFee(2n);
+      const feeForMultipleKeys = await stakingVault.calculateValidatorWithdrawalFee(2n);
       expect(feeForMultipleKeys).to.equal(newFee * 2n);
     });
   });
 
-  context("markValidatorsForExit", () => {
+  context("requestValidatorExit", () => {
     it("reverts if called by a non-owner", async () => {
-      await expect(stakingVault.connect(stranger).markValidatorsForExit("0x"))
+      await expect(stakingVault.connect(stranger).requestValidatorExit("0x"))
         .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
         .withArgs(stranger);
     });
 
     it("reverts if the number of validators is zero", async () => {
-      await expect(stakingVault.connect(vaultOwner).markValidatorsForExit("0x"))
+      await expect(stakingVault.connect(vaultOwner).requestValidatorExit("0x"))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_pubkeys");
     });
 
     it("reverts if the length of the pubkeys is not a multiple of 48", async () => {
       await expect(
-        stakingVault.connect(vaultOwner).markValidatorsForExit("0x" + "ab".repeat(47)),
-      ).to.be.revertedWithCustomError(stakingVault, "InvalidValidatorPubkeysLength");
+        stakingVault.connect(vaultOwner).requestValidatorExit("0x" + "ab".repeat(47)),
+      ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
     });
 
-    it("emits the `ValidatorMarkedForExit` event for a single validator key", async () => {
-      await expect(stakingVault.connect(vaultOwner).markValidatorsForExit(SAMPLE_PUBKEY))
-        .to.emit(stakingVault, "ValidatorMarkedForExit")
+    it("emits the `ValidatorExitRequested` event for a single validator key", async () => {
+      await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
+        .to.emit(stakingVault, "ValidatorExitRequested")
         .withArgs(vaultOwner, SAMPLE_PUBKEY);
     });
 
-    it("emits the exact number of `ValidatorMarkedForExit` events as the number of validator keys", async () => {
+    it("emits the exact number of `ValidatorExitRequested` events as the number of validator keys", async () => {
       const numberOfKeys = 2;
       const keys = getPubkeys(numberOfKeys);
 
-      const tx = await stakingVault.connect(vaultOwner).markValidatorsForExit(keys.stringified);
+      const tx = await stakingVault.connect(vaultOwner).requestValidatorExit(keys.stringified);
       await expect(tx.wait())
-        .to.emit(stakingVault, "ValidatorMarkedForExit")
+        .to.emit(stakingVault, "ValidatorExitRequested")
         .withArgs(vaultOwner, keys.pubkeys[0])
-        .and.emit(stakingVault, "ValidatorMarkedForExit")
+        .and.emit(stakingVault, "ValidatorExitRequested")
         .withArgs(vaultOwner, keys.pubkeys[1]);
 
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
@@ -675,11 +675,11 @@ describe("StakingVault.sol", () => {
       const numberOfKeys = 5000; // uses ~16300771 gas (>54% from the 30000000 gas limit)
       const keys = getPubkeys(numberOfKeys);
 
-      await stakingVault.connect(vaultOwner).markValidatorsForExit(keys.stringified);
+      await stakingVault.connect(vaultOwner).requestValidatorExit(keys.stringified);
     });
   });
 
-  context("requestValidatorWithdrawals", () => {
+  context("triggerValidatorWithdrawal", () => {
     let baseFee: bigint;
 
     before(async () => {
@@ -687,14 +687,14 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if msg.value is zero", async () => {
-      await expect(stakingVault.connect(vaultOwner).requestValidatorWithdrawals("0x", [], vaultOwnerAddress))
+      await expect(stakingVault.connect(vaultOwner).triggerValidatorWithdrawal("0x", [], vaultOwnerAddress))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("msg.value");
     });
 
     it("reverts if the number of validators is zero", async () => {
       await expect(
-        stakingVault.connect(vaultOwner).requestValidatorWithdrawals("0x", [], vaultOwnerAddress, { value: 1n }),
+        stakingVault.connect(vaultOwner).triggerValidatorWithdrawal("0x", [], vaultOwnerAddress, { value: 1n }),
       )
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_pubkeys");
@@ -704,7 +704,7 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [], vaultOwnerAddress, { value: 1n }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [], vaultOwnerAddress, { value: 1n }),
       )
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_amounts");
@@ -714,7 +714,7 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], ZeroAddress, { value: 1n }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], ZeroAddress, { value: 1n }),
       )
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_refundRecipient");
@@ -724,33 +724,42 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(stranger)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
       )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("requestValidatorWithdrawals", stranger);
+        .withArgs("triggerValidatorWithdrawal", stranger);
     });
 
     it("reverts if called by the vault hub on a healthy vault", async () => {
       await expect(
         stakingVault
           .connect(vaultHubSigner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
       )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("requestValidatorWithdrawals", vaultHubAddress);
+        .withArgs("triggerValidatorWithdrawal", vaultHubAddress);
+    });
+
+    it("reverts if the amounts array is not the same length as the pubkeys array", async () => {
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1"), ether("2")], vaultOwnerAddress, { value: 1n }),
+      ).to.be.revertedWithCustomError(stakingVault, "InvalidAmountsLength");
     });
 
     it("reverts if the fee is less than the required fee", async () => {
       const numberOfKeys = 4;
       const pubkeys = getPubkeys(numberOfKeys);
+      const amounts = Array(numberOfKeys).fill(ether("1"));
       const value = baseFee * BigInt(numberOfKeys) - 1n;
 
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(pubkeys.stringified, [ether("1")], vaultOwnerAddress, { value }),
+          .triggerValidatorWithdrawal(pubkeys.stringified, amounts, vaultOwnerAddress, { value }),
       )
-        .to.be.revertedWithCustomError(stakingVault, "InsufficientValidatorWithdrawalsFee")
+        .to.be.revertedWithCustomError(stakingVault, "InsufficientValidatorWithdrawalFee")
         .withArgs(value, baseFee * BigInt(numberOfKeys));
     });
 
@@ -763,9 +772,9 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(pubkeys.stringified, [ether("1")], ethRejectorAddress, { value }),
+          .triggerValidatorWithdrawal(pubkeys.stringified, [ether("1")], ethRejectorAddress, { value }),
       )
-        .to.be.revertedWithCustomError(stakingVault, "ValidatorWithdrawalFeeRefundFailed")
+        .to.be.revertedWithCustomError(stakingVault, "WithdrawalFeeRefundFailed")
         .withArgs(ethRejectorAddress, overpaid);
     });
 
@@ -773,11 +782,11 @@ describe("StakingVault.sol", () => {
       const value = baseFee;
 
       await expect(
-        stakingVault.connect(vaultOwner).requestValidatorWithdrawals(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value }),
+        stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -785,11 +794,11 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(operator)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(operator, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -797,11 +806,11 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -810,11 +819,11 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [amount], vaultOwnerAddress, { value: baseFee }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], vaultOwnerAddress, { value: baseFee }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, 0);
     });
 
@@ -829,13 +838,13 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(pubkeys.stringified, amounts, vaultOwnerAddress, { value }),
+          .triggerValidatorWithdrawal(pubkeys.stringified, amounts, vaultOwnerAddress, { value }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
-        .and.to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .and.to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, vaultOwnerAddress, 0n);
     });
 
@@ -849,13 +858,13 @@ describe("StakingVault.sol", () => {
       const strangerBalanceBefore = await ethers.provider.getBalance(stranger);
 
       await expect(
-        stakingVault.connect(vaultOwner).requestValidatorWithdrawals(pubkeys.stringified, amounts, stranger, { value }),
+        stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(pubkeys.stringified, amounts, stranger, { value }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
-        .and.to.emit(stakingVault, "ValidatorWithdrawalsRequested")
+        .and.to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, stranger, valueToRefund);
 
       const strangerBalanceAfter = await ethers.provider.getBalance(stranger);
@@ -869,7 +878,7 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultHubSigner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: 1n }),
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: 1n }),
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
@@ -882,8 +891,8 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(vaultOwner)
-          .requestValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
-      ).to.be.revertedWithCustomError(stakingVault, "PartialWithdrawalsForbidden");
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+      ).to.be.revertedWithCustomError(stakingVault, "PartialWithdrawalNotAllowed");
     });
   });
 

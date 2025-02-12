@@ -122,12 +122,12 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function pauseBeaconChainDeposits() external {}
     function resumeBeaconChainDeposits() external {}
 
-    function calculateValidatorWithdrawalsFee(uint256) external pure returns (uint256) {
+    function calculateValidatorWithdrawalFee(uint256) external pure returns (uint256) {
         return 1;
     }
 
-    function markValidatorsForExit(bytes calldata _pubkeys) external {}
-    function requestValidatorWithdrawals(
+    function requestValidatorExit(bytes calldata _pubkeys) external {}
+    function triggerValidatorWithdrawal(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _recipient

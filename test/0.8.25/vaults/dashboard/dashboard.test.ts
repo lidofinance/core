@@ -624,30 +624,30 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("markValidatorsForExit", () => {
+  context("requestValidatorExit", () => {
     const pubkeys = ["01".repeat(48), "02".repeat(48)];
     const pubkeysConcat = `0x${pubkeys.join("")}`;
 
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).markValidatorsForExit(pubkeysConcat)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).requestValidatorExit(pubkeysConcat)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("signals the requested exit of a validator", async () => {
-      await expect(dashboard.markValidatorsForExit(pubkeysConcat))
-        .to.emit(vault, "ValidatorMarkedForExit")
+      await expect(dashboard.requestValidatorExit(pubkeysConcat))
+        .to.emit(vault, "ValidatorExitRequested")
         .withArgs(dashboard, `0x${pubkeys[0]}`)
-        .to.emit(vault, "ValidatorMarkedForExit")
+        .to.emit(vault, "ValidatorExitRequested")
         .withArgs(dashboard, `0x${pubkeys[1]}`);
     });
   });
 
-  context("requestValidatorWithdrawals", () => {
+  context("triggerValidatorWithdrawal", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(
-        dashboard.connect(stranger).requestValidatorWithdrawals("0x", [0n], vaultOwner),
+        dashboard.connect(stranger).triggerValidatorWithdrawal("0x", [0n], vaultOwner),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
@@ -655,8 +655,8 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       const amounts = [0n]; // 0 amount means full withdrawal
 
-      await expect(dashboard.requestValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
-        .to.emit(vault, "ValidatorWithdrawalsRequested")
+      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalRequested")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
 
@@ -664,8 +664,8 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       const amounts = [ether("0.1")];
 
-      await expect(dashboard.requestValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
-        .to.emit(vault, "ValidatorWithdrawalsRequested")
+      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalRequested")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
   });

@@ -98,14 +98,14 @@ describe("VaultHub.sol:withdrawals", () => {
     await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
-  context("isVaultHealthy", () => {
+  context("isVaultBalanced", () => {
     it("returns true if the vault is healthy", async () => {
-      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.true;
+      expect(await vaultHub.isVaultBalanced(vaultAddress)).to.be.true;
     });
 
     it("returns false if the vault is unhealthy", async () => {
       await makeVaultUnhealthy();
-      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultBalanced(vaultAddress)).to.be.false;
     });
   });
 
@@ -156,7 +156,7 @@ describe("VaultHub.sol:withdrawals", () => {
 
     it("reverts if called for a healthy vault", async () => {
       await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "AlreadyHealthy")
+        .to.be.revertedWithCustomError(vaultHub, "AlreadyBalanced")
         .withArgs(vaultAddress, 0n, 0n);
     });
 
@@ -165,7 +165,7 @@ describe("VaultHub.sol:withdrawals", () => {
 
       it("reverts if fees are insufficient", async () => {
         await expect(vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: 1n }))
-          .to.be.revertedWithCustomError(vault, "InsufficientValidatorWithdrawalsFee")
+          .to.be.revertedWithCustomError(vault, "InsufficientValidatorWithdrawalFee")
           .withArgs(1n, FEE);
       });
 
@@ -173,7 +173,7 @@ describe("VaultHub.sol:withdrawals", () => {
         await expect(
           vaultHub.forceValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient, { value: FEE }),
         )
-          .to.emit(vaultHub, "VaultForceValidatorWithdrawalsRequested")
+          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, [0n], feeRecipient);
       });
 
@@ -187,7 +187,7 @@ describe("VaultHub.sol:withdrawals", () => {
             value: FEE * BigInt(numPubkeys),
           }),
         )
-          .to.emit(vaultHub, "VaultForceValidatorWithdrawalsRequested")
+          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
           .withArgs(vaultAddress, pubkeys, amounts, feeRecipient);
       });
     });
