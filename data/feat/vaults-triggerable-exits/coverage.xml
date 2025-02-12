@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3653"  lines-covered="3376"  line-rate="0.9242"  branches-valid="1702"  branches-covered="1493"  branch-rate="0.8772"  timestamp="1739377589844" complexity="0" version="0.1">
+<coverage lines-valid="3653"  lines-covered="3376"  line-rate="0.9242"  branches-valid="1702"  branches-covered="1493"  branch-rate="0.8772"  timestamp="1739379983763" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2783,7 +2783,7 @@
 			<method name="rebalance"  hits="0"  signature="()V" >
 				<lines><line number="330"  hits="0" /></lines>
 			</method>
-			<method name="forceValidatorWithdrawals"  hits="10"  signature="()V" >
+			<method name="forceValidatorWithdrawal"  hits="10"  signature="()V" >
 				<lines><line number="350"  hits="10" /></lines>
 			</method>
 			<method name="_disconnect"  hits="1"  signature="()V" >
