@@ -27,6 +27,16 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     uint256 public confirmLifetime;
 
     /**
+     * @notice Returns the expiry timestamp of the confirmation for a given call and role.
+     * @param _callData The call data of the function.
+     * @param _role The role that confirmed the call.
+     * @return The expiry timestamp of the confirmation.
+     */
+    function confirmationExpiryTimestamp(bytes calldata _callData, bytes32 _role) public view returns (uint256) {
+        return confirmations[_callData][_role];
+    }
+
+    /**
      * @dev Restricts execution of the function unless confirmed by all specified roles.
      * Confirmation, in this context, is a call to the same function with the same arguments.
      *
