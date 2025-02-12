@@ -133,8 +133,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _recipient
     ) external payable {}
 
-    function forceValidatorWithdrawals(bytes calldata _pubkeys) external payable {}
-
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 }

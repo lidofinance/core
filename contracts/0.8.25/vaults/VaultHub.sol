@@ -347,7 +347,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _pubkeys pubkeys of the validators to withdraw
     /// @param _refundRecepient address of the recipient of the refund
-    function forceValidatorWithdrawals(
+    function forceValidatorWithdrawal(
         address _vault,
         bytes calldata _pubkeys,
         address _refundRecepient
