@@ -24,6 +24,7 @@ struct DelegationConfig {
     address curator;
     address nodeOperatorManager;
     address nodeOperatorFeeClaimer;
+    address assetRecoverer;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
 }
@@ -87,6 +88,7 @@ contract VaultFactory {
         delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
         delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
+        delegation.grantRole(delegation.ASSET_RECOVERY_ROLE(), _delegationConfig.assetRecoverer);
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));

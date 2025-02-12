@@ -9,6 +9,7 @@ import {AccessControlVoteable} from "contracts/0.8.25/utils/AccessControlVoteabl
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 /**
@@ -63,6 +64,16 @@ abstract contract Permissions is AccessControlVoteable {
      * @notice Permission for voluntary disconnecting the StakingVault.
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("StakingVault.Permissions.VoluntaryDisconnect");
+
+    /**
+     * @notice Permission for recover assets from Delegate contracts
+     */
+    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("StakingVault.Permissions.PDGWithdrawal");
+
+    /**
+     * @notice Permission for recover assets from Delegate contracts
+     */
+    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("StakingVault.Permissions.AssetRecovery");
 
     /**
      * @notice Address of the implementation contract
@@ -147,6 +158,13 @@ abstract contract Permissions is AccessControlVoteable {
 
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
+    }
+
+    function _withdrawDisputedValidatorFromPDG(
+        bytes calldata _pubkey,
+        address _recipient
+    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {
+        return IPredepositGuarantee(stakingVault().depositGuardian()).withdrawDisprovenPredeposit(_pubkey, _recipient);
     }
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {

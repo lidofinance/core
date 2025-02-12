@@ -7,6 +7,8 @@ pragma solidity 0.8.25;
 import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
 import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 
+import {ICLProofVerifier} from "../interfaces/IPredepositGuarantee.sol";
+
 /**
  * @title CLProofVerifier
  * @author Lido
@@ -22,14 +24,7 @@ import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
  * (e.g. Pectra, Altair, etc.)
  *
  */
-abstract contract CLProofVerifier {
-    struct ValidatorWitness {
-        bytes32[] proof;
-        bytes pubkey;
-        uint256 validatorIndex;
-        uint64 childBlockTimestamp;
-    }
-
+abstract contract CLProofVerifier is ICLProofVerifier {
     // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 

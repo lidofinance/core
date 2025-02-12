@@ -10,32 +10,14 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
 import {IStakingVaultOwnable} from "../interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 /**
  * @title PredepositGuarantee
  * @author Lido
  * @notice
  */
-contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
-    enum BondStatus {
-        NO_RECORD,
-        AWAITING_PROOF,
-        PROVED,
-        PROVED_INVALID,
-        WITHDRAWN
-    }
-
-    struct NodeOperatorBond {
-        uint128 total;
-        uint128 locked;
-    }
-
-    struct ValidatorStatus {
-        BondStatus bondStatus;
-        IStakingVaultOwnable stakingVault;
-        address nodeOperator;
-    }
-
+contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableUntilWithRoles {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -186,7 +168,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVaultOwnable.Deposit calldata _deposit = _deposits[i];
 
-            if ($.validatorStatuses[_deposit.pubkey].bondStatus != BondStatus.NO_RECORD) {
+            if ($.validatorStatuses[_deposit.pubkey].bondStatus != BondStatus.NONE) {
                 revert MustBeNewValidatorPubkey(_deposit.pubkey, $.validatorStatuses[_deposit.pubkey].bondStatus);
             }
 
@@ -318,38 +300,41 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // called by the staking vault owner if the predeposited validator was proven invalid
     // i.e. node operator was malicious and has stolen vault ether
-    function withdrawDisprovenPredeposit(bytes calldata validatorPubkey, address _recipient) public whenResumed {
-        ValidatorStatus storage validator = _getStorage().validatorStatuses[validatorPubkey];
+    function withdrawDisprovenPredeposit(
+        bytes calldata _validatorPubkey,
+        address _recipient
+    ) public whenResumed returns (uint128) {
+        ValidatorStatus storage validator = _getStorage().validatorStatuses[_validatorPubkey];
+
+        IStakingVaultOwnable _stakingVault = validator.stakingVault;
+        address _nodeOperator = validator.nodeOperator;
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
-        if (_recipient == address(validator.stakingVault)) revert WithdrawToVaultNotAllowed();
+        if (_recipient == address(_stakingVault)) revert WithdrawToVaultNotAllowed();
 
-        if (msg.sender != validator.stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
+        if (msg.sender != _stakingVault.owner()) revert WithdrawSenderNotStakingVaultOwner();
 
         if (validator.bondStatus != BondStatus.PROVED_INVALID) revert ValidatorNotProvenInvalid(validator.bondStatus);
 
-        validator.bondStatus = BondStatus.WITHDRAWN;
+        delete _getStorage().validatorStatuses[_validatorPubkey];
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
 
         if (!success) revert WithdrawalFailed();
 
-        emit ValidatorDisprovenWithdrawn(
-            validator.nodeOperator,
-            validatorPubkey,
-            address(validator.stakingVault),
-            _recipient
-        );
+        emit ValidatorDisprovenWithdrawn(_nodeOperator, _validatorPubkey, address(_stakingVault), _recipient);
+
+        return PREDEPOSIT_AMOUNT;
     }
 
     function disproveAndWithdraw(
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials,
         address _recipient
-    ) external {
+    ) external returns (uint128) {
         proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
-        withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
+        return withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
     }
 
     /// Internal functions

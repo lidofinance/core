@@ -171,6 +171,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         disconnecter: curator,
         nodeOperatorManager: nodeOperator,
         nodeOperatorFeeClaimer: nodeOperator,
+        assetRecoverer: curator,
         curatorFeeBP: VAULT_OWNER_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
       },

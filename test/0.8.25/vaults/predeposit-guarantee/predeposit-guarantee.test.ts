@@ -12,6 +12,7 @@ import {
   SSZMerkleTree,
   StakingVault,
   StakingVault__factory,
+  VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
@@ -27,7 +28,7 @@ import {
   generateValidator,
   prepareLocalMerkleTree,
   setBeaconBlockRoot,
-} from "./cl-proof-verifyer.test";
+} from "./helpers";
 
 describe("PredepositGuarantee.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -55,9 +56,10 @@ describe("PredepositGuarantee.sol", () => {
     ]);
 
     // deploying factory/beacon
-    const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
-      await stakingVaultImplementation_.getAddress(),
-    ]);
+    const vaultFactory_: VaultFactory__MockForStakingVault = await ethers.deployContract(
+      "VaultFactory__MockForStakingVault",
+      [await stakingVaultImplementation_.getAddress()],
+    );
 
     // deploying beacon proxy
     const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());

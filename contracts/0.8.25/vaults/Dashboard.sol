@@ -412,11 +412,29 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice withdraws ether of disputed validator from PDG
+     * @param _pubkey of validator that was proven invalid in PDG
+     * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     */
+    function withdrawDisputedValidator(bytes calldata _pubkey, address _recipient) external {
+        _withdrawDisputedValidatorFromPDG(_pubkey, _recipient);
+    }
+
+    /**
+     * @notice funds vault with ether of disproven validator from PDG
+     * @param _pubkey of validator that was proven invalid in PDG
+     */
+    function refundDisputedValidatorToVault(bytes calldata _pubkey) external {
+        uint128 _amount = _withdrawDisputedValidatorFromPDG(_pubkey, address(this));
+        _fund(_amount);
+    }
+
+    /**
      * @notice recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -439,7 +457,11 @@ contract Dashboard is Permissions {
      * @param _tokenId token id to recover
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC721(address _token, uint256 _tokenId, address _recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC721(
+        address _token,
+        uint256 _tokenId,
+        address _recipient
+    ) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
