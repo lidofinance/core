@@ -470,9 +470,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bool isHealthy = valuation() >= $.locked;
         if (!isHealthy) {
             for (uint256 i = 0; i < _amounts.length; i++) {
-                if (_amounts[i] > 0) {
-                    revert PartialWithdrawalsForbidden();
-                }
+                if (_amounts[i] > 0) revert PartialWithdrawalsForbidden();
             }
         }
 
