@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 import { ethers, run } from "hardhat";
 import { join } from "path";
-import readline from "readline";
 
 import { LidoLocator } from "typechain-types";
 
@@ -47,7 +46,7 @@ async function main() {
 
   // Deploy ValidatorExitBusOracle
   // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
-  const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator];
+  const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator.address];
 
   const validatorsExitBusOracle = (
     await deployImplementation(
@@ -60,7 +59,6 @@ async function main() {
   log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle}`);
   log.emptyLine();
 
-  // Deploy WithdrawalVault
   const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY];
 
   const withdrawalVault = (
@@ -69,17 +67,9 @@ async function main() {
   log.success(`WithdrawalVault address implementation: ${withdrawalVault}`);
   log.emptyLine();
 
-  // Deploy AO
-  // const accountingOracleArgs = [LOCATOR, LIDO, LEGACY_ORACLE, SECONDS_PER_SLOT, GENESIS_TIME];
-  // const accountingOracleAddress = (
-  //   await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, accountingOracleArgs)
-  // ).address;
-  // log.success(`AO implementation address: ${accountingOracleAddress}`);
-  // log.emptyLine();
-
-  // await waitForPressButton();
-
   log(cy("Continuing..."));
+
+  await new Promise((res) => setTimeout(res, 5000));
 
   await run("verify:verify", {
     address: withdrawalVault,
@@ -89,20 +79,8 @@ async function main() {
 
   await run("verify:verify", {
     address: validatorsExitBusOracle,
-    constructorArguments: [],
-    contract: "contracts/0.8.9/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
-  });
-}
-
-async function waitForPressButton(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    log(cy("When contracts will be ready for verification step, press Enter to continue..."));
-    const rl = readline.createInterface({ input: process.stdin });
-
-    rl.on("line", () => {
-      rl.close();
-      resolve();
-    });
+    constructorArguments: validatorsExitBusOracleArgs,
+    contract: "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
   });
 }
 
