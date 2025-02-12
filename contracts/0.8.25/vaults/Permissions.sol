@@ -115,6 +115,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Mass-grants multiple roles to multiple accounts.
      * @param _assignments An array of role assignments.
      * @dev Performs the role admin checks internally.
+     * @dev If an account is already a member of a role, doesn't revert, emits no events.
      */
     function grantRoles(RoleAssignment[] memory _assignments) external {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
