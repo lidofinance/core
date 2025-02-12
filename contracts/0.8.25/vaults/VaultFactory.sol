@@ -21,9 +21,11 @@ struct DelegationConfig {
     address depositResumer;
     address exitRequester;
     address disconnecter;
-    address curator;
+    address curatorFeeSetter;
+    address curatorFeeClaimer;
     address nodeOperatorManager;
-    address nodeOperatorFeeClaimer;
+    address nodeOperatorFeeConfirm;
+    address nodeOperatorFeeClaim;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
     uint256 confirmLifetime;
@@ -50,8 +52,6 @@ contract VaultFactory {
         DelegationConfig calldata _delegationConfig,
         bytes calldata _stakingVaultInitializerExtraParams
     ) external returns (IStakingVault vault, Delegation delegation) {
-        if (_delegationConfig.curator == address(0)) revert ZeroArgument("curator");
-
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
 
@@ -69,7 +69,8 @@ contract VaultFactory {
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmLifetime);
 
-        // setup roles
+        // setup roles from config
+        // basic permissions to the staking vault
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);
         delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funder);
         delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawer);
@@ -80,20 +81,24 @@ contract VaultFactory {
         delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumer);
         delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequester);
         delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecter);
-        delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
+        // delegation roles
+        delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), _delegationConfig.curatorFeeSetter);
+        delegation.grantRole(delegation.CURATOR_FEE_CLAIM_ROLE(), _delegationConfig.curatorFeeClaimer);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
+        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(), _delegationConfig.nodeOperatorFeeClaim);
+        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), _delegationConfig.nodeOperatorFeeConfirm);
 
-        // grant temporary roles to factory
-        delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
-        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
+        // grant temporary roles to factory for setting fees
+        delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
+        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), address(this));
 
         // set fees
         delegation.setCuratorFeeBP(_delegationConfig.curatorFeeBP);
         delegation.setNodeOperatorFeeBP(_delegationConfig.nodeOperatorFeeBP);
 
         // revoke temporary roles from factory
-        delegation.revokeRole(delegation.CURATOR_ROLE(), address(this));
+        delegation.revokeRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
+        delegation.revokeRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), address(this));
         delegation.revokeRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 
