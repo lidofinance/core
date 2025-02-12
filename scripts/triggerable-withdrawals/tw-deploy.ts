@@ -28,7 +28,7 @@ const SECONDS_PER_SLOT = 12;
 
 // Must match the beacon chain genesis_time: https://beaconstate-mainnet.chainsafe.io/eth/v1/beacon/genesis
 // and the current value: https://etherscan.io/address/0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb
-const GENESIS_TIME = 1606824023;
+const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
 
 async function main() {
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
@@ -47,7 +47,7 @@ async function main() {
 
   // Deploy ValidatorExitBusOracle
   // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
-  const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, GENESIS_TIME, locator];
+  const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator];
 
   const validatorsExitBusOracle = (
     await deployImplementation(
@@ -77,7 +77,7 @@ async function main() {
   // log.success(`AO implementation address: ${accountingOracleAddress}`);
   // log.emptyLine();
 
-  await waitForPressButton();
+  // await waitForPressButton();
 
   log(cy("Continuing..."));
 
