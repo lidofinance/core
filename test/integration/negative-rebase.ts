@@ -104,7 +104,6 @@ describe("Negative rebase", () => {
 
     expect(lastReportData.totalExitedValidators).to.be.equal(lastExitedTotal + 2n);
     expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
-
   });
 
   it("Should store correctly many negative rebases", async () => {

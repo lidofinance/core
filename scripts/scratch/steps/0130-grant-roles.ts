@@ -1,3 +1,4 @@
+import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import {
@@ -30,26 +31,33 @@ export async function main() {
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
 
+  const waitTransactionsGroup: Promise<ContractTransactionReceipt>[] = [];
+
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), depositSecurityModuleAddress],
-    { from: deployer },
+  waitTransactionsGroup.push(
+    makeTx(
+      stakingRouter,
+      "grantRole",
+      [await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), depositSecurityModuleAddress],
+      { from: deployer },
+    ),
   );
-  await makeTx(
-    stakingRouter,
-    "grantRole",
-    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), accountingOracleAddress],
-    { from: deployer },
+  waitTransactionsGroup.push(
+    makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), accountingOracleAddress], {
+      from: deployer,
+    }),
   );
-  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), lidoAddress], {
-    from: deployer,
-  });
-  await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
-    from: deployer,
-  });
+  waitTransactionsGroup.push(
+    makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), lidoAddress], {
+      from: deployer,
+    }),
+  );
+  waitTransactionsGroup.push(
+    makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
+      from: deployer,
+    }),
+  );
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -57,9 +65,11 @@ export async function main() {
       "ValidatorsExitBusOracle",
       validatorsExitBusOracleAddress,
     );
-    await makeTx(validatorsExitBusOracle, "grantRole", [await validatorsExitBusOracle.PAUSE_ROLE(), gateSealAddress], {
-      from: deployer,
-    });
+    waitTransactionsGroup.push(
+      makeTx(validatorsExitBusOracle, "grantRole", [await validatorsExitBusOracle.PAUSE_ROLE(), gateSealAddress], {
+        from: deployer,
+      }),
+    );
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
@@ -68,21 +78,27 @@ export async function main() {
   // WithdrawalQueue
   const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
   if (gateSealAddress) {
-    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), gateSealAddress], {
-      from: deployer,
-    });
+    waitTransactionsGroup.push(
+      makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), gateSealAddress], {
+        from: deployer,
+      }),
+    );
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalQueue`);
     log.emptyLine();
   }
 
-  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.FINALIZE_ROLE(), lidoAddress], {
-    from: deployer,
-  });
+  waitTransactionsGroup.push(
+    makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.FINALIZE_ROLE(), lidoAddress], {
+      from: deployer,
+    }),
+  );
 
-  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
-    from: deployer,
-  });
+  waitTransactionsGroup.push(
+    makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
+      from: deployer,
+    }),
+  );
 
   // WithdrawalVault
   const withdrawalVault = await loadContract<WithdrawalVault>("WithdrawalVault", withdrawalVaultAddress);
@@ -99,10 +115,16 @@ export async function main() {
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
-    from: deployer,
-  });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
-    from: deployer,
-  });
+  waitTransactionsGroup.push(
+    makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
+      from: deployer,
+    }),
+  );
+  waitTransactionsGroup.push(
+    makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+      from: deployer,
+    }),
+  );
+
+  await Promise.all(waitTransactionsGroup);
 }
