@@ -104,6 +104,10 @@ abstract contract Permissions is AccessControlConfirmable {
         emit Initialized(_defaultAdmin);
     }
 
+    /**
+     * @notice Returns the address of the underlying StakingVault.
+     * @return The address of the StakingVault.
+     */
     function stakingVault() public view returns (IStakingVault) {
         return IStakingVault(_loadStakingVaultAddress());
     }
