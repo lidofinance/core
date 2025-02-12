@@ -53,13 +53,12 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for pausing beacon chain deposits on the StakingVault.
      */
-    bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.PauseBeaconChainDeposits");
+    bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.PauseDeposits");
 
     /**
      * @notice Permission for resuming beacon chain deposits on the StakingVault.
      */
-    bytes32 public constant RESUME_BEACON_CHAIN_DEPOSITS_ROLE =
-        keccak256("vaults.Permissions.ResumeBeaconChainDeposits");
+    bytes32 public constant RESUME_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.ResumeDeposits");
 
     /**
      * @notice Permission for requesting validator exit from the StakingVault.
