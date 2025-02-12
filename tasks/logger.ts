@@ -2,22 +2,14 @@ import "hardhat/types/runtime";
 import chalk from "chalk";
 import { formatUnits, Interface, TransactionReceipt, TransactionResponse } from "ethers";
 import { extendEnvironment } from "hardhat/config";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { HardhatNetworkConfig, HardhatRuntimeEnvironment } from "hardhat/types";
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const DEFAULT_BLOCK_GAS_LIMIT = 30_000_000;
+const FUNCTION_SIGNATURE_LENGTH = 10;
 
-// Custom errors
-class NoReceiptError extends Error {
-  constructor() {
-    super("Transaction receipt not found");
-  }
-}
-
-// Types
-interface FunctionDetails {
-  name?: string;
-  functionName?: string;
-}
+const interfaceCache = new Map<string, Interface>();
+const callCache = new Map<string, Call>();
 
 enum TransactionType {
   CONTRACT_DEPLOYMENT = "Contract deployment",
@@ -25,51 +17,127 @@ enum TransactionType {
   CONTRACT_CALL = "Contract call",
 }
 
-// Constants
-const DEFAULT_BLOCK_GAS_LIMIT = 30_000_000;
-const FUNCTION_SIGNATURE_LENGTH = 10;
+type Call = {
+  contract: string;
+  function: string;
+};
 
-// Cache for contract interfaces and function details
-const interfaceCache = new Map<string, Interface>();
-const functionDetailsCache = new Map<string, FunctionDetails>();
-
-// Helper functions
-function formatGasUsage(gasUsed: bigint, blockGasLimit: number): string {
-  const gasUsedPercent = (Number(gasUsed) * 100) / blockGasLimit;
-  return `${gasUsed} (${gasUsedPercent.toFixed(2)}%)`;
-}
-
-function formatTransactionLines(
+function outputTransaction(
   tx: TransactionResponse,
+  txType: TransactionType,
   receipt: TransactionReceipt,
-  txType: string,
-  name: string | undefined,
-  functionName: string | undefined,
-  blockGasLimit: number,
+  call: Call,
+  gasLimit: number,
   gasPrice: string,
-): string[] {
-  const lines = [
-    `Transaction sent: ${chalk.yellow(receipt.hash)}`,
-    `  From: ${chalk.cyan(tx.from)}   To: ${chalk.cyan(tx.to || receipt.contractAddress)}`,
-    `  Gas price: ${chalk.yellow(gasPrice)} gwei   Gas limit: ${chalk.yellow(blockGasLimit)}   Gas used: ${chalk.yellow(formatGasUsage(receipt.gasUsed, blockGasLimit))}`,
-    `  Block: ${chalk.yellow(receipt.blockNumber)}   Nonce: ${chalk.yellow(tx.nonce)}`,
-  ];
+): void {
+  const gasUsedPercent = (Number(receipt.gasUsed) * 100) / gasLimit;
 
-  const color = receipt.status ? chalk.green : chalk.red;
-  const status = receipt.status ? "confirmed" : "failed";
+  const txHash = chalk.yellow(receipt.hash);
+  const txFrom = chalk.cyan(tx.from);
+  const txTo = chalk.cyan(tx.to || receipt.contractAddress);
+  const txGasPrice = chalk.yellow(gasPrice);
+  const txGasLimit = chalk.yellow(gasLimit);
+  const txGasUsed = chalk.yellow(`${receipt.gasUsed} (${gasUsedPercent.toFixed(2)}%)`);
+  const txBlock = chalk.yellow(receipt.blockNumber);
+  const txNonce = chalk.yellow(tx.nonce);
+  const txStatus = receipt.status ? chalk.green("confirmed") : chalk.red("failed");
+  const txContract = chalk.cyan(call.contract || "Contract deployment");
+  const txFunction = chalk.cyan(call.function || "");
+  const txCall = `${txContract}.${txFunction}`;
+
+  console.log(`Transaction sent: ${txHash}`);
+  console.log(`  From: ${txFrom}   To: ${txTo}`);
+  console.log(`  Gas price: ${txGasPrice} gwei   Gas limit: ${txGasLimit}   Gas used: ${txGasUsed}`);
+  console.log(`  Block: ${txBlock}   Nonce: ${txNonce}`);
 
   if (txType === TransactionType.CONTRACT_DEPLOYMENT) {
-    lines.push(`  Contract address: ${chalk.cyan(receipt.contractAddress)}`);
-    lines.push(`  ${color(name || "Contract deployment")} ${color(status)}`);
+    console.log(`  Contract deployed: ${chalk.cyan(receipt.contractAddress)}`);
   } else if (txType === TransactionType.ETH_TRANSFER) {
-    lines.push(`  ETH transfer: ${chalk.cyan(tx.value)}`);
-    lines.push(`  ${color("ETH transfer")} ${color(status)}`);
+    console.log(`  ETH transfer: ${chalk.yellow(tx.value)}`);
   } else {
-    const txName = name && functionName ? `${name}.${functionName}` : functionName || "Contract call";
-    lines.push(`  ${color(txName)} ${color(status)}`);
+    console.log(`  ${txCall} ${txStatus}`);
+  }
+  console.log();
+}
+
+// Transaction Processing
+async function getCall(tx: TransactionResponse, hre: HardhatRuntimeEnvironment): Promise<Call> {
+  if (!tx.data || tx.data === "0x" || !tx.to) return { contract: "", function: "" };
+
+  const cacheKey = `${tx.to}-${tx.data.slice(0, FUNCTION_SIGNATURE_LENGTH)}`;
+  if (callCache.has(cacheKey)) {
+    return callCache.get(cacheKey)!;
   }
 
-  return lines;
+  try {
+    const call = await extractCallDetails(tx, hre);
+    callCache.set(cacheKey, call);
+    return call;
+  } catch (error) {
+    console.warn("Error getting call details:", error);
+    const fallbackCall = { contract: tx.data.slice(0, FUNCTION_SIGNATURE_LENGTH), function: "" };
+    callCache.set(cacheKey, fallbackCall);
+    return fallbackCall;
+  }
+}
+
+async function extractCallDetails(tx: TransactionResponse, hre: HardhatRuntimeEnvironment): Promise<Call> {
+  try {
+    const artifacts = await hre.artifacts.getAllFullyQualifiedNames();
+    for (const name of artifacts) {
+      const iface = await getOrCreateInterface(name, hre);
+      const result = iface.parseTransaction({ data: tx.data });
+      if (result) {
+        return {
+          contract: name.split(":").pop() || "",
+          function: result.name || "",
+        };
+      }
+    }
+  } catch {
+    // Ignore errors and return empty call
+  }
+
+  return { contract: "", function: "" };
+}
+
+async function getOrCreateInterface(artifactName: string, hre: HardhatRuntimeEnvironment) {
+  if (interfaceCache.has(artifactName)) {
+    return interfaceCache.get(artifactName)!;
+  }
+
+  const artifact = await hre.artifacts.readArtifact(artifactName);
+  const iface = new Interface(artifact.abi);
+  interfaceCache.set(artifactName, iface);
+  return iface;
+}
+
+async function getTxType(tx: TransactionResponse, receipt: TransactionReceipt): Promise<TransactionType> {
+  if (receipt.contractAddress) return TransactionType.CONTRACT_DEPLOYMENT;
+  if (!tx.data || tx.data === "0x") return TransactionType.ETH_TRANSFER;
+  return TransactionType.CONTRACT_CALL;
+}
+
+async function logTransaction(tx: TransactionResponse, hre: HardhatRuntimeEnvironment) {
+  const receipt = await tx.wait();
+  if (!receipt) throw new Error("Transaction receipt not found");
+
+  try {
+    const network = await tx.provider.getNetwork();
+    const config = hre.config.networks[network.name] as HardhatNetworkConfig;
+    const gasLimit = config.blockGasLimit ?? DEFAULT_BLOCK_GAS_LIMIT;
+
+    const txType = await getTxType(tx, receipt);
+    const call = await getCall(tx, hre);
+    const gasPrice = formatUnits(receipt.gasPrice || 0n, "gwei");
+
+    outputTransaction(tx, txType, receipt, call, gasLimit, gasPrice);
+
+    return receipt;
+  } catch (error) {
+    console.error("Error logging transaction:", error);
+    return receipt;
+  }
 }
 
 extendEnvironment((hre: HardhatRuntimeEnvironment) => {
@@ -77,110 +145,14 @@ extendEnvironment((hre: HardhatRuntimeEnvironment) => {
 
   const originalSendTransaction = hre.ethers.provider.send;
 
-  // Wrap the provider's send method to intercept transactions
   hre.ethers.provider.send = async function (method: string, params: unknown[]) {
     const result = await originalSendTransaction.apply(this, [method, params]);
 
-    // Only log eth_sendTransaction and eth_sendRawTransaction calls
     if (method === "eth_sendTransaction" || method === "eth_sendRawTransaction") {
       const tx = (await this.getTransaction(result)) as TransactionResponse;
-      await logTransaction(tx);
+      await logTransaction(tx, hre);
     }
 
     return result;
   };
-
-  async function getFunctionDetails(tx: TransactionResponse): Promise<FunctionDetails> {
-    if (!tx.data || tx.data === "0x" || !tx.to) return {};
-
-    // Check cache first
-    const cacheKey = `${tx.to}-${tx.data.slice(0, FUNCTION_SIGNATURE_LENGTH)}`;
-    if (functionDetailsCache.has(cacheKey)) {
-      return functionDetailsCache.get(cacheKey)!;
-    }
-
-    try {
-      // Try to get contract name and function name from all available artifacts
-      const allArtifacts = await hre.artifacts.getAllFullyQualifiedNames();
-
-      for (const artifactName of allArtifacts) {
-        try {
-          let iface: Interface;
-
-          // Check interface cache
-          if (interfaceCache.has(artifactName)) {
-            iface = interfaceCache.get(artifactName)!;
-          } else {
-            const artifact = await hre.artifacts.readArtifact(artifactName);
-            iface = new Interface(artifact.abi);
-            interfaceCache.set(artifactName, iface);
-          }
-
-          const result = iface.parseTransaction({ data: tx.data });
-
-          if (result) {
-            const details = {
-              name: artifactName.split(":").pop() || "",
-              functionName: result.name,
-            };
-            functionDetailsCache.set(cacheKey, details);
-            return details;
-          }
-        } catch {
-          continue; // Skip artifacts that can't be parsed
-        }
-      }
-    } catch (error) {
-      console.warn("Error getting function details:", error);
-    }
-
-    // Cache and return function signature if we can't decode
-    const details = {
-      functionName: tx.data.slice(0, FUNCTION_SIGNATURE_LENGTH),
-    };
-    functionDetailsCache.set(cacheKey, details);
-    return details;
-  }
-
-  async function logTransaction(tx: TransactionResponse): Promise<TransactionReceipt> {
-    const receipt = await tx.wait();
-    if (!receipt) {
-      throw new NoReceiptError();
-    }
-
-    try {
-      const network = await tx.provider.getNetwork();
-      const config = hre.config.networks[network.name];
-      const blockGasLimit = "blockGasLimit" in config ? config.blockGasLimit : DEFAULT_BLOCK_GAS_LIMIT;
-
-      const txType = await getTxType(tx, receipt);
-      const { name, functionName } = await getFunctionDetails(tx);
-      const gasPrice = formatUnits(receipt.gasPrice || 0n, "gwei");
-
-      const lines = formatTransactionLines(tx, receipt, txType, name, functionName, blockGasLimit, gasPrice);
-
-      lines.forEach((line) => console.log(line));
-      console.log();
-
-      return receipt;
-    } catch (error) {
-      console.error("Error logging transaction:", error);
-      return receipt;
-    }
-  }
-
-  async function getTxType(tx: TransactionResponse, receipt: TransactionReceipt): Promise<string> {
-    if (receipt.contractAddress) {
-      return TransactionType.CONTRACT_DEPLOYMENT;
-    }
-
-    if (!tx.data || tx.data === "0x") {
-      return TransactionType.ETH_TRANSFER;
-    }
-
-    const { name, functionName } = await getFunctionDetails(tx);
-    return name && functionName ? `${name}.${functionName}` : functionName || TransactionType.CONTRACT_CALL;
-  }
-
-  return logTransaction;
 });
