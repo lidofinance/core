@@ -441,37 +441,40 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Pauses beacon chain deposits on the StakingVault.
+     * @notice Pauses beacon chain deposits on the StakingVault
      */
     function pauseBeaconChainDeposits() external {
         _pauseBeaconChainDeposits();
     }
 
     /**
-     * @notice Resumes beacon chain deposits on the StakingVault.
+     * @notice Resumes beacon chain deposits on the StakingVault
      */
     function resumeBeaconChainDeposits() external {
         _resumeBeaconChainDeposits();
     }
 
     /**
-     * @notice Signals to node operators that specific validators should exit from the beacon chain.
-     *         It does not directly trigger exits - node operators must monitor for these events and handle the exits manually.
-     * @param _pubkeys Concatenated validator public keys, each 48 bytes long.
-     * @dev    Emits `ValidatorExitRequested` event for each validator public key through the StakingVault.
-     *         This is a voluntary exit request - node operators can choose whether to act on it.
+     * @notice Signals to node operators that specific validators should exit from the beacon chain. It DOES NOT
+     *         directly trigger the exit - node operators must monitor for request events and handle the exits manually
+     * @param _pubkeys Concatenated validator public keys (48 bytes each)
+     * @dev    Emits `ValidatorExitRequested` event for each validator public key through the `StakingVault`
+     *         This is a voluntary exit request - node operators can choose whether to act on it or not
      */
     function requestValidatorExit(bytes calldata _pubkeys) external {
         _requestValidatorExit(_pubkeys);
     }
 
     /**
-     * @notice Triggers validator withdrawals via EIP-7002 triggerable exit mechanism. This allows withdrawing either the full
-     *         validator balance or a partial amount from each validator specified.
-     * @param _pubkeys The concatenated public keys of the validators to request withdrawal for. Each key must be 48 bytes.
-     * @param _amounts The withdrawal amounts in wei for each validator. Must match the length of _pubkeys.
-     * @param _refundRecipient The address that will receive any fee refunds.
-     * @dev    Requires payment of withdrawal fee which is calculated based on the number of validators and must be paid in msg.value.
+     * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
+     *         Both partial withdrawals (disabled for unbalanced `StakingVault`) and full validator exits are supported
+     * @param _pubkeys Concatenated validator public keys (48 bytes each)
+     * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length
+     *         Set amount to 0 for a full validator exit
+     *         For partial withdrawals, amounts will be capped to maintain the minimum stake of 32 ETH on the validator
+     * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender
+     * @dev    A withdrawal fee (calculated on block-by-block basis) must be paid via msg.value
+     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee
      */
     function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);

@@ -45,7 +45,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
- *   - `triggerValidatorWithdrawal()` (only full validator exit when the vault is unbalanced)
+ *   - `triggerValidatorWithdrawal()` (partial withdrawals are disabled for unbalanced `StakingVault`)
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
