@@ -1,10 +1,10 @@
 import * as dotenv from "dotenv";
-import { ethers } from "hardhat";
+import { ethers, run } from "hardhat";
 import { join } from "path";
 
 import { LidoLocator } from "typechain-types";
 
-import { cy, deployImplementation, loadContract, log, persistNetworkState, readNetworkState, Sk } from "lib";
+import { cy, loadContract, log, persistNetworkState, readNetworkState, Sk } from "lib";
 
 dotenv.config({ path: join(__dirname, "../../.env") });
 
@@ -30,7 +30,6 @@ const SECONDS_PER_SLOT = 12;
 const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
 
 async function main() {
-  const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const chainId = (await ethers.provider.getNetwork()).chainId;
 
   log(cy(`Deploy of contracts on chain ${chainId}`));
@@ -44,27 +43,21 @@ async function main() {
   const LIDO_PROXY = await locator.lido();
   const TREASURY_PROXY = await locator.treasury();
 
-  // Deploy ValidatorExitBusOracle
-  // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
   const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator.address];
-
-  const validatorsExitBusOracle = (
-    await deployImplementation(
-      Sk.validatorsExitBusOracle,
-      "ValidatorsExitBusOracle",
-      deployer,
-      validatorsExitBusOracleArgs,
-    )
-  ).address;
-  log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle}`);
-  log.emptyLine();
 
   const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY];
 
-  const withdrawalVault = (
-    await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultArgs)
-  ).address;
-  log.success(`WithdrawalVault address implementation: ${withdrawalVault}`);
+  await run("verify:verify", {
+    address: state[Sk.withdrawalVault].implementation.address,
+    constructorArguments: withdrawalVaultArgs,
+    contract: "contracts/0.8.9/WithdrawalVault.sol:WithdrawalVault",
+  });
+
+  await run("verify:verify", {
+    address: state[Sk.validatorsExitBusOracle].implementation.address,
+    constructorArguments: validatorsExitBusOracleArgs,
+    contract: "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
+  });
 }
 
 main()
