@@ -7,7 +7,11 @@ import {pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
 import {CLProofVerifier, SSZ, GIndex} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
 
 contract CLProofVerifier__Harness is CLProofVerifier {
-    constructor(GIndex _gIFirstValidator) CLProofVerifier(_gIFirstValidator) {}
+    constructor(
+        GIndex _gIFirstValidator,
+        GIndex _gIFirstValidatorAfterChange,
+        uint64 _changeSlot
+    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {}
 
     function TEST_validatePubKeyWCProof(
         ValidatorWitness calldata _witness,

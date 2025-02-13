@@ -106,7 +106,11 @@ describe("CLProofVerifier.sol", () => {
       await sszMerkleTree.addValidatorLeaf(generateValidator());
     }
 
-    CLProofVerifier = await ethers.deployContract("CLProofVerifier__Harness", [localTree.gIFirstValidator], {});
+    CLProofVerifier = await ethers.deployContract(
+      "CLProofVerifier__Harness",
+      [localTree.gIFirstValidator, localTree.gIFirstValidator, 0],
+      {},
+    );
 
     // test mocker
     const mockRoot = randomBytes32();
@@ -125,7 +129,7 @@ describe("CLProofVerifier.sol", () => {
   it("should verify precalclulated validator object in merkle tree", async () => {
     const StaticCLProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
       "CLProofVerifier__Harness",
-      [STATIC_VALIDATOR.gIFirstValidator],
+      [STATIC_VALIDATOR.gIFirstValidator, STATIC_VALIDATOR.gIFirstValidator, 0],
       {},
     );
 

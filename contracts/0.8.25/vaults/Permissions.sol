@@ -9,7 +9,7 @@ import {AccessControlVoteable} from "contracts/0.8.25/utils/AccessControlVoteabl
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {PredepositGuarantee} from "./predeposit_guarantee/PredepositGuarantee.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 /**
@@ -164,7 +164,7 @@ abstract contract Permissions is AccessControlVoteable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {
-        return IPredepositGuarantee(stakingVault().depositGuardian()).withdrawDisprovenPredeposit(_pubkey, _recipient);
+        return PredepositGuarantee(stakingVault().depositGuardian()).withdrawDisprovenPredeposit(_pubkey, _recipient);
     }
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {

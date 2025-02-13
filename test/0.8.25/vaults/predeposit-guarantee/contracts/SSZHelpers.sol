@@ -59,15 +59,17 @@ contract SSZHelpers {
             // `validator` is the offset for `pubkey`. (Remember that `pubkey` is expected
             // to be exactly 48 bytes long.)
             let pubkeyOffset := calldataload(validator)
+            // write 32 bytes to 32-64 bytes of scratch space
+            // to ensure last 49-64 bytes of pubkey are zeroed
+            mstore(0x20, 0)
             // The pubkey’s actual data is encoded at:
-            //    validator + pubkeyOffset + 32
+            // validator + pubkeyOffset + 32
             // because the first word at that location is the length.
-            // Copy 48 bytes of pubkey data into memory at 0x00.
             calldatacopy(0x00, add(validator, add(pubkeyOffset, 32)), 48)
             // Zero the remaining 16 bytes to form a 64‐byte block.
             // (0x30 = 48, so mstore at 0x30 will zero 32 bytes covering addresses 48–79;
             // only bytes 48–63 matter for our 64-byte input.)
-            mstore(0x30, 0)
+
             // Call the SHA‑256 precompile (at address 0x02) with the 64-byte block.
             if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
                 revert(0, 0)

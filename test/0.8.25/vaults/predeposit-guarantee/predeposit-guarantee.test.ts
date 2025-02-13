@@ -35,7 +35,7 @@ describe("PredepositGuarantee.sol", () => {
   let admin: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let vaultOperator: HardhatEthersSigner;
-  let vaultOperatorVoucher: HardhatEthersSigner;
+  let vaultOperatorGuarantor: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let proxy: OssifiableProxy;
@@ -75,7 +75,7 @@ describe("PredepositGuarantee.sol", () => {
   }
 
   before(async () => {
-    [deployer, admin, vaultOwner, vaultOperator, vaultOperatorVoucher, stranger] = await ethers.getSigners();
+    [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, stranger] = await ethers.getSigners();
 
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
@@ -85,7 +85,11 @@ describe("PredepositGuarantee.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // PDG
-    pdgImpl = await ethers.deployContract("PredepositGuarantee", [localMerkle.gIFirstValidator], { from: deployer });
+    pdgImpl = await ethers.deployContract(
+      "PredepositGuarantee",
+      [localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
+      { from: deployer },
+    );
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
     pdg = await ethers.getContractAt("PredepositGuarantee", proxy, vaultOperator);
 
@@ -119,13 +123,13 @@ describe("PredepositGuarantee.sol", () => {
 
   context("happy path", () => {
     it("can use PDG happy path", async () => {
-      // NO sets voucher
-      await pdg.setNodeOperatorVoucher(vaultOperatorVoucher);
-      expect(await pdg.nodeOperatorVoucher(vaultOperator)).to.equal(vaultOperatorVoucher);
+      // NO sets guarantor
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
 
-      // Voucher funds PDG for operator
-      await pdg.connect(vaultOperatorVoucher).topUpNodeOperatorBond(vaultOperator, { value: ether("1") });
-      let [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBond(vaultOperator);
+      // guarantor funds PDG for operator
+      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      let [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(0n);
 
@@ -149,7 +153,7 @@ describe("PredepositGuarantee.sol", () => {
         .to.emit(depositContract, "DepositEvent")
         .withArgs(predepositData.pubkey, vaultWC, predepositData.signature, predepositData.depositDataRoot);
 
-      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBond(vaultOperator);
+      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(ether("1"));
 
@@ -186,13 +190,13 @@ describe("PredepositGuarantee.sol", () => {
         .to.emit(depositContract, "DepositEvent")
         .withArgs(postDepositData.pubkey, vaultWC, postDepositData.signature, postDepositData.depositDataRoot);
 
-      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBond(vaultOperator);
+      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(ether("0"));
 
-      // NOs voucher withdraws bond from PDG
-      await pdg.connect(vaultOperatorVoucher).withdrawNodeOperatorBond(vaultOperator, ether("1"), vaultOperator);
-      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBond(vaultOperator);
+      // NOs guarantor withdraws bond from PDG
+      await pdg.connect(vaultOperatorGuarantor).withdrawNodeOperatorBalance(vaultOperator, ether("1"), vaultOperator);
+      [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("0"));
       expect(operatorBondLocked).to.equal(ether("0"));
     });
