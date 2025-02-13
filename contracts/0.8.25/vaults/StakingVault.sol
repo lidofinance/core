@@ -452,7 +452,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         if (keysCount > MAX_PUBLIC_KEYS_PER_REQUEST) revert TooManyPubkeys();
         for (uint256 i = 0; i < keysCount; i++) {
-            emit ValidatorExitRequested(msg.sender, bytes(_pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH]));
+            emit ValidatorExitRequested(msg.sender, string(_pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH]));
         }
     }
 
@@ -624,7 +624,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _pubkey Public key of the validator to exit
      * @dev    Signals to node operators that they should exit this validator from the beacon chain
      */
-    event ValidatorExitRequested(address _sender, bytes _pubkey);
+    event ValidatorExitRequested(address _sender, string indexed _pubkey);
 
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
