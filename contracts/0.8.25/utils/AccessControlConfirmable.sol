@@ -22,13 +22,23 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) public confirmations;
 
     /**
+     * @notice Minimal confirmation lifetime in seconds.
+     */
+    uint256 public constant MIN_CONFIRM_LIFETIME = 1 days;
+
+    /**
+     * @notice Maximal confirmation lifetime in seconds.
+     */
+    uint256 public constant MAX_CONFIRM_LIFETIME = 30 days;
+
+    /**
      * @notice Confirmation lifetime in seconds; after this period, the confirmation expires and no longer counts.
      * @dev We cannot set this to 0 because this means that all confirmations have to be in the same block,
      *      which can never be guaranteed. And, more importantly, if the `_setLifetime` is restricted by
      *      the `onlyConfirmed` modifier, the confirmation lifetime will be tricky to change.
      *      This is why this variable is private, set to a default value of 1 day and cannot be set to 0.
      */
-    uint256 private confirmLifetime = 1 days;
+    uint256 private confirmLifetime = MIN_CONFIRM_LIFETIME;
 
     /**
      * @notice Returns the confirmation lifetime.
@@ -122,7 +132,8 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      * @param _newConfirmLifetime The new confirmation lifetime in seconds.
      */
     function _setConfirmLifetime(uint256 _newConfirmLifetime) internal {
-        if (_newConfirmLifetime == 0) revert ConfirmLifetimeCannotBeZero();
+        if (_newConfirmLifetime < MIN_CONFIRM_LIFETIME || _newConfirmLifetime > MAX_CONFIRM_LIFETIME)
+            revert ConfirmLifetimeOutOfBounds();
 
         uint256 oldConfirmLifetime = confirmLifetime;
         confirmLifetime = _newConfirmLifetime;
@@ -147,14 +158,9 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
 
     /**
-     * @dev Thrown when attempting to set confirmation lifetime to zero.
+     * @dev Thrown when attempting to set confirmation lifetime out of bounds.
      */
-    error ConfirmLifetimeCannotBeZero();
-
-    /**
-     * @dev Thrown when attempting to confirm when the confirmation lifetime is not set.
-     */
-    error ConfirmLifetimeNotSet();
+    error ConfirmLifetimeOutOfBounds();
 
     /**
      * @dev Thrown when a caller without a required role attempts to confirm.
