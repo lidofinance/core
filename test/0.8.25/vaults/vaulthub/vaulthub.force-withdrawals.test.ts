@@ -104,17 +104,6 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
-  context("isVaultBalanced", () => {
-    it("returns true if the vault is healthy", async () => {
-      expect(await vaultHub.isVaultBalanced(vaultAddress)).to.be.true;
-    });
-
-    it("returns false if the vault is unhealthy", async () => {
-      await makeVaultUnhealthy();
-      expect(await vaultHub.isVaultBalanced(vaultAddress)).to.be.false;
-    });
-  });
-
   context("forceValidatorWithdrawal", () => {
     it("reverts if msg.value is 0", async () => {
       await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 0n }))

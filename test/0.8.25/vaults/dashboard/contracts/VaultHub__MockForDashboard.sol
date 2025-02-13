@@ -37,7 +37,7 @@ contract VaultHub__MockForDashboard {
         return vaultSockets[vault];
     }
 
-    function disconnectVault(address vault) external {
+    function disconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
     }
 
