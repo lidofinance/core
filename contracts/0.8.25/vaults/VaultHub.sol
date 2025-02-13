@@ -65,6 +65,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
+    /// @notice role that allows to update vaults limits
+    bytes32 public constant VAULT_LIMITS_UPDATER_ROLE = keccak256("Vaults.VaultHub.VaultLimitsUpdaterRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
@@ -150,7 +152,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Updates the maximum number of vaults that can be connected to the hub
     /// @param _maxVaultsCount new maximum number of vaults
-    function setMaxVaultsCount(uint256 _maxVaultsCount) external onlyRole(VAULT_REGISTRY_ROLE) {
+    function setMaxVaultsCount(uint256 _maxVaultsCount) external onlyRole(VAULT_LIMITS_UPDATER_ROLE) {
         if (_maxVaultsCount == 0) revert ZeroArgument("_maxVaultsCount");
         if (_maxVaultsCount < vaultsCount()) revert MaxVaultsCountTooLow(_maxVaultsCount, vaultsCount());
 
@@ -160,7 +162,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Updates the maximum size of a single vault relative to Lido TVL in basis points
     /// @param _maxVaultSizeBP new maximum vault size in basis points
-    function setMaxVaultSizeBP(uint256 _maxVaultSizeBP) external onlyRole(VAULT_REGISTRY_ROLE) {
+    function setMaxVaultSizeBP(uint256 _maxVaultSizeBP) external onlyRole(VAULT_LIMITS_UPDATER_ROLE) {
         if (_maxVaultSizeBP == 0) revert ZeroArgument("_maxVaultSizeBP");
         if (_maxVaultSizeBP > TOTAL_BASIS_POINTS) revert MaxVaultSizeBPTooHigh(_maxVaultSizeBP, TOTAL_BASIS_POINTS);
 

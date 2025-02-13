@@ -95,6 +95,7 @@ describe("VaultHub.sol:hub", () => {
     vaultHub = await ethers.getContractAt("Accounting", proxy, user);
     await accounting.grantRole(await vaultHub.PAUSE_ROLE(), user);
     await accounting.grantRole(await vaultHub.RESUME_ROLE(), user);
+    await accounting.grantRole(await vaultHub.VAULT_LIMITS_UPDATER_ROLE(), user);
     await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
@@ -261,7 +262,7 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("setMaxVaultsCount", () => {
-    it("reverts if called by non-VAULT_REGISTRY_ROLE", async () => {
+    it("reverts if called by non-VAULT_LIMITS_UPDATER_ROLE", async () => {
       await expect(vaultHub.connect(stranger).setMaxVaultsCount(500)).to.be.revertedWithCustomError(
         vaultHub,
         "AccessControlUnauthorizedAccount",
@@ -287,7 +288,7 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("setMaxVaultSizeBP", () => {
-    it("reverts if called by non-VAULT_REGISTRY_ROLE", async () => {
+    it("reverts if called by non-VAULT_LIMITS_UPDATER_ROLE", async () => {
       await expect(vaultHub.connect(stranger).setMaxVaultSizeBP(10_00)).to.be.revertedWithCustomError(
         vaultHub,
         "AccessControlUnauthorizedAccount",
