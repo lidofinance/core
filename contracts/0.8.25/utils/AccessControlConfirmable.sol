@@ -15,25 +15,27 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/exten
 abstract contract AccessControlConfirmable is AccessControlEnumerable {
     /**
      * @notice Tracks confirmations
-     * - callId: unique identifier for the call, derived as `keccak256(msg.data)`
+     * - callData: msg.data of the call (selector + arguments)
      * - role: role that confirmed the action
-     * - timestamp: timestamp of the confirmation.
+     * - expiryTimestamp: timestamp of the confirmation.
      */
     mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) public confirmations;
 
     /**
      * @notice Confirmation lifetime in seconds; after this period, the confirmation expires and no longer counts.
+     * @dev We cannot set this to 0 because this means that all confirmations have to be in the same block,
+     *      which can never be guaranteed. And, more importantly, if the `_setLifetime` is restricted by
+     *      the `onlyConfirmed` modifier, the confirmation lifetime will be tricky to change.
+     *      This is why this variable is private, set to a default value of 1 day and cannot be set to 0.
      */
-    uint256 public confirmLifetime;
+    uint256 private confirmLifetime = 1 days;
 
     /**
-     * @notice Returns the expiry timestamp of the confirmation for a given call and role.
-     * @param _callData The call data of the function.
-     * @param _role The role that confirmed the call.
-     * @return The expiry timestamp of the confirmation.
+     * @notice Returns the confirmation lifetime.
+     * @return The confirmation lifetime in seconds.
      */
-    function confirmationExpiryTimestamp(bytes calldata _callData, bytes32 _role) public view returns (uint256) {
-        return confirmations[_callData][_role];
+    function getConfirmLifetime() public view returns (uint256) {
+        return confirmLifetime;
     }
 
     /**
@@ -73,7 +75,6 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      */
     modifier onlyConfirmed(bytes32[] memory _roles) {
         if (_roles.length == 0) revert ZeroConfirmingRoles();
-        if (confirmLifetime == 0) revert ConfirmLifetimeNotSet();
 
         uint256 numberOfRoles = _roles.length;
         uint256 numberOfConfirms = 0;
@@ -114,9 +115,10 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     }
 
     /**
-     * @notice Sets the confirmation lifetime.
-     * Confirmation lifetime is a period during which the confirmation is counted. Once the period is over,
-     * the confirmation is considered expired, no longer counts and must be recasted for the confirmation to go through.
+     * @dev Sets the confirmation lifetime.
+     * Confirmation lifetime is a period during which the confirmation is counted. Once expired,
+     * the confirmation no longer counts and must be recasted for the confirmation to go through.
+     * @dev Does not retroactively apply to existing confirmations.
      * @param _newConfirmLifetime The new confirmation lifetime in seconds.
      */
     function _setConfirmLifetime(uint256 _newConfirmLifetime) internal {
