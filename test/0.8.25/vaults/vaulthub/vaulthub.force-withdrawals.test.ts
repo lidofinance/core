@@ -4,13 +4,18 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { DepositContract, StakingVault, StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
+import {
+  DepositContract__MockForVaultHub,
+  StakingVault__MockForVaultHub,
+  StETH__HarnessForVaultHub,
+  VaultHub,
+} from "typechain-types";
 
 import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
-import { deployLidoLocator, deployWithdrawalsPreDeployedMock } from "test/deploy";
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
@@ -22,15 +27,16 @@ const TREASURY_FEE_BP = 5_00n;
 
 const FEE = 2n;
 
-describe("VaultHub.sol:withdrawals", () => {
+describe("VaultHub.sol:forceWithdrawals", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
+
   let vaultHub: VaultHub;
-  let vault: StakingVault;
+  let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
-  let depositContract: DepositContract;
+  let depositContract: DepositContract__MockForVaultHub;
 
   let vaultAddress: string;
   let vaultHubAddress: string;
@@ -42,11 +48,9 @@ describe("VaultHub.sol:withdrawals", () => {
   before(async () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
 
-    await deployWithdrawalsPreDeployedMock(FEE);
-
     const locator = await deployLidoLocator();
-    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("100.0") });
-    depositContract = await ethers.deployContract("DepositContract");
+    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1000.0") });
+    depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
     const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
@@ -60,12 +64,14 @@ describe("VaultHub.sol:withdrawals", () => {
     await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    const stakingVaultImpl = await ethers.deployContract("StakingVault", [
+    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
       await depositContract.getAddress(),
     ]);
 
-    const vaultFactory = await ethers.deployContract("VaultFactory__Mock", [await stakingVaultImpl.getAddress()]);
+    const vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [
+      await stakingVaultImpl.getAddress(),
+    ]);
 
     const vaultCreationTx = (await vaultFactory
       .createVault(await user.getAddress(), await user.getAddress())
@@ -74,7 +80,7 @@ describe("VaultHub.sol:withdrawals", () => {
     const events = findEvents(vaultCreationTx, "VaultCreated");
     const vaultCreatedEvent = events[0];
 
-    vault = await ethers.getContractAt("StakingVault", vaultCreatedEvent.args.vault, user);
+    vault = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
     vaultAddress = await vault.getAddress();
 
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
@@ -134,6 +140,12 @@ describe("VaultHub.sol:withdrawals", () => {
         .withArgs("_refundRecepient");
     });
 
+    it("reverts if pubkeys are not valid", async () => {
+      await expect(
+        vaultHub.forceValidatorWithdrawal(vaultAddress, "0x" + "01".repeat(47), feeRecipient, { value: 1n }),
+      ).to.be.revertedWithCustomError(vaultHub, "InvalidPubkeysLength");
+    });
+
     it("reverts if vault is not connected to the hub", async () => {
       await expect(vaultHub.forceValidatorWithdrawal(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
@@ -156,12 +168,6 @@ describe("VaultHub.sol:withdrawals", () => {
 
     context("unhealthy vault", () => {
       beforeEach(async () => await makeVaultUnhealthy());
-
-      it("reverts if fees are insufficient", async () => {
-        await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
-          .to.be.revertedWithCustomError(vault, "InsufficientValidatorWithdrawalFee")
-          .withArgs(1n, FEE);
-      });
 
       it("initiates force validator withdrawal", async () => {
         await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))

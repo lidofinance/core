@@ -8,7 +8,7 @@ import {
   EIP7002WithdrawalRequest_Mock,
   StakingVault,
   StakingVault__factory,
-  VaultFactory__Mock,
+  VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
@@ -21,7 +21,7 @@ type DeployedStakingVault = {
   stakingVault: StakingVault;
   stakingVaultImplementation: StakingVault;
   vaultHub: VaultHub__MockForStakingVault;
-  vaultFactory: VaultFactory__Mock;
+  vaultFactory: VaultFactory__MockForStakingVault;
 };
 
 export async function deployWithdrawalsPreDeployedMock(
@@ -53,7 +53,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   ]);
 
   // deploying factory/beacon
-  const vaultFactory_ = await ethers.deployContract("VaultFactory__Mock", [
+  const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
     await stakingVaultImplementation_.getAddress(),
   ]);
 
