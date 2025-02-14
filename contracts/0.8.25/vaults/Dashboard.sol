@@ -87,7 +87,9 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Initializes the contract with the default admin role
+     * @notice Initializes the contract
+     * @param _defaultAdmin Address of the default admin
+     * @param _confirmLifetime Confirm lifetime in seconds
      */
     function initialize(address _defaultAdmin, uint256 _confirmLifetime) external virtual {
         // reduces gas cost for `mintWsteth`
@@ -326,8 +328,6 @@ contract Dashboard is Permissions {
     function burnWstETH(uint256 _amountOfWstETH) external {
         _burnWstETH(_amountOfWstETH);
     }
-
-    // TODO: move down
 
     /**
      * @notice Burns stETH tokens (in shares) backed by the vault from the sender using permit (with value in stETH).
