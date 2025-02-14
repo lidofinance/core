@@ -460,7 +460,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Triggers validator withdrawals from the beacon chain using EIP-7002 triggerable exit
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
      * @param _amounts Amounts of ether to exit, must match the length of _pubkeys
-     * @param _refundRecipient Address to receive the fee refund
+     * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
     function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
@@ -469,11 +469,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
-        if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
 
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         if (keysCount != _amounts.length) revert InvalidAmountsLength();
+
+        if (_refundRecipient == address(0)) {
+            _refundRecipient = msg.sender;
+        }
 
         ERC7201Storage storage $ = _getStorage();
         bool isBalanced = valuation() >= $.locked;

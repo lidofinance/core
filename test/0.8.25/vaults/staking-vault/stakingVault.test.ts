@@ -723,16 +723,6 @@ describe("StakingVault.sol", () => {
         .withArgs("_amounts");
     });
 
-    it("reverts if the refund recipient is the zero address", async () => {
-      await expect(
-        stakingVault
-          .connect(vaultOwner)
-          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], ZeroAddress, { value: 1n }),
-      )
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_refundRecipient");
-    });
-
     it("reverts if called by a non-owner or the node operator", async () => {
       await expect(
         stakingVault
@@ -791,6 +781,17 @@ describe("StakingVault.sol", () => {
         .withArgs(ethRejectorAddress, overpaid);
     });
 
+    it("reverts if partial withdrawals is called on an unhealthy vault", async () => {
+      await stakingVault.fund({ value: ether("1") });
+      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+      ).to.be.revertedWithCustomError(stakingVault, "PartialWithdrawalNotAllowed");
+    });
+
     it("requests a validator withdrawal when called by the owner", async () => {
       const value = baseFee;
 
@@ -838,6 +839,29 @@ describe("StakingVault.sol", () => {
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalRequested")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, 0);
+    });
+
+    it("requests a partial validator withdrawal and refunds the excess fee to the msg.sender if the refund recipient is the zero address", async () => {
+      const amount = ether("0.1");
+      const overpaid = 100n;
+      const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
+
+      const tx = await stakingVault
+        .connect(vaultOwner)
+        .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
+
+      await expect(tx)
+        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
+        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, overpaid);
+
+      const txReceipt = (await tx.wait()) as ContractTransactionReceipt;
+      const gasFee = txReceipt.gasPrice * txReceipt.cumulativeGasUsed;
+
+      const ownerBalanceAfter = await ethers.provider.getBalance(vaultOwner);
+
+      expect(ownerBalanceAfter).to.equal(ownerBalanceBefore - baseFee - gasFee); // overpaid is refunded back
     });
 
     it("requests a multiple validator withdrawals", async () => {
@@ -895,17 +919,6 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
-    });
-
-    it("reverts if partial withdrawals is called on an unhealthy vault", async () => {
-      await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
-
-      await expect(
-        stakingVault
-          .connect(vaultOwner)
-          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
-      ).to.be.revertedWithCustomError(stakingVault, "PartialWithdrawalNotAllowed");
     });
   });
 
