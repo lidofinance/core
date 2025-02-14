@@ -45,6 +45,8 @@ describe("Dashboard.sol", () => {
   let dashboard: Dashboard;
   let dashboardAddress: string;
 
+  const confirmLifetime = days(7n);
+
   let originalState: string;
 
   const BP_BASE = 10_000n;
@@ -125,13 +127,16 @@ describe("Dashboard.sol", () => {
 
   context("initialize", () => {
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vaultOwner)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
+      await expect(dashboard.initialize(vaultOwner, confirmLifetime)).to.be.revertedWithCustomError(
+        dashboard,
+        "AlreadyInitialized",
+      );
     });
 
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
 
-      await expect(dashboard_.initialize(vaultOwner)).to.be.revertedWithCustomError(
+      await expect(dashboard_.initialize(vaultOwner, confirmLifetime)).to.be.revertedWithCustomError(
         dashboard_,
         "NonProxyCallsForbidden",
       );
@@ -177,7 +182,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
-      expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
+      expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
     });
   });
 
@@ -460,7 +465,7 @@ describe("Dashboard.sol", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).transferStakingVaultOwnership(vaultOwner)).to.be.revertedWithCustomError(
         dashboard,
-        "NotACommitteeMember",
+        "SenderNotMember",
       );
     });
 
