@@ -10,11 +10,16 @@ contract Permissions__Harness is Permissions {
         _initialize(_defaultAdmin, _confirmLifetime);
     }
 
+    function revertDoubleInitialize(address _defaultAdmin, uint256 _confirmLifetime) external {
+        _initialize(_defaultAdmin, _confirmLifetime);
+        _initialize(_defaultAdmin, _confirmLifetime);
+    }
+
     function confirmingRoles() external pure returns (bytes32[] memory) {
         return _confirmingRoles();
     }
 
-    function fund(uint256 _ether) external {
+    function fund(uint256 _ether) external payable {
         _fund(_ether);
     }
 
@@ -44,6 +49,10 @@ contract Permissions__Harness is Permissions {
 
     function requestValidatorExit(bytes calldata _pubkey) external {
         _requestValidatorExit(_pubkey);
+    }
+
+    function voluntaryDisconnect() external {
+        _voluntaryDisconnect();
     }
 
     function transferStakingVaultOwnership(address _newOwner) external {
