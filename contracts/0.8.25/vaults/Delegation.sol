@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {Math256} from "contracts/common/lib/Math256.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Dashboard} from "./Dashboard.sol";
 
@@ -137,6 +139,16 @@ contract Delegation is Dashboard {
         uint256 valuation = stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
+    }
+
+    /**
+     * @notice Returns the amount of ether that can be withdrawn from the staking vault.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * @dev This method overrides the Dashboard's withdrawableEther() method
+     * @return The amount of ether that can be withdrawn.
+     */
+    function withdrawableEther() external view override returns (uint256) {
+        return Math256.min(address(stakingVault()).balance, unreserved());
     }
 
     /**

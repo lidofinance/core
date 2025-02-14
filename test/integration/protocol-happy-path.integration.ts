@@ -23,17 +23,17 @@ describe("Scenario: Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
-  let ethHolder: HardhatEthersSigner;
   let stEthHolder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let uncountedStETHShares: bigint;
   let amountWithRewards: bigint;
+  let depositCount: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder, stranger] = await ethers.getSigners();
+    [stEthHolder, stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -53,7 +53,16 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
+    const stEthHolderAmount = ether("1000");
+
+    // Deposit some eth
+    const tx = await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
+    await trace("lido.submit", tx);
+
+    const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
+    expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
+
+    await finalizeWithdrawalQueue(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -208,7 +217,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const stakingModules = await stakingRouter.getStakingModules();
 
-    let depositCount = 0n;
+    depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
       const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, module.id, ZERO_HASH);
@@ -282,11 +291,10 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    // Stranger deposited 100 ETH, enough to deposit 3 validators, need to reflect this in the report
-    // 0.01 ETH is added to the clDiff to simulate some rewards
+    // 0.001 – to simulate rewards
     const reportData: Partial<OracleReportParams> = {
-      clDiff: ether("96.01"),
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * depositCount + ether("0.001"),
+      clAppearedValidators: depositCount,
     };
 
     const { reportTx, extraDataTx } = (await report(ctx, reportData)) as {

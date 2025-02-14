@@ -190,7 +190,7 @@ contract Dashboard is Permissions {
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
      * @return The amount of ether that can be withdrawn.
      */
-    function withdrawableEther() external view returns (uint256) {
+    function withdrawableEther() external view virtual returns (uint256) {
         return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
     }
 
