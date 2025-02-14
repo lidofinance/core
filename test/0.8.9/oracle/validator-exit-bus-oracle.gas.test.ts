@@ -6,7 +6,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { trace } from "lib";
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
 import {
@@ -203,7 +202,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
       it(`a committee member submits the report data, exit requests are emitted`, async () => {
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        const receipt = await trace<ContractTransactionReceipt>("oracle.submit", tx);
+        const receipt = (await tx.wait()) as ContractTransactionReceipt;
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, reportHash);
         expect((await oracle.getConsensusReport()).processingStarted).to.equal(true);
 
