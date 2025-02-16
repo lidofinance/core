@@ -15,10 +15,34 @@ interface IVault is IStakingVault {
     function owner() external view returns (address);
 }
 
+/// @todo VaultHub.VaultSocket should be public to remove duplicate initialization from here
+struct VaultSocket {
+    // ### 1st slot
+    /// @notice vault address
+    address vault;
+    /// @notice total number of stETH shares minted by the vault
+    uint96 sharesMinted;
+    // ### 2nd slot
+    /// @notice maximum number of stETH shares that can be minted by vault owner
+    uint96 shareLimit;
+    /// @notice minimal share of ether that is reserved for each stETH minted
+    uint16 reserveRatioBP;
+    /// @notice if vault's reserve decreases to this threshold ratio,
+    /// it should be force rebalanced
+    uint16 reserveRatioThresholdBP;
+    /// @notice treasury fee in basis points
+    uint16 treasuryFeeBP;
+    /// @notice if true, vault is disconnected and fee is not accrued
+    bool isDisconnected;
+    // ### we have 104 bits left in this slot
+}
+
 interface IVaultHub {
     function vaultsCount() external view returns (uint256);
 
     function vault(uint256 _index) external view returns (IVault);
+
+    function vaultSocket(uint256 _index) external view returns (VaultSocket memory);
 }
 
 contract VaultHubViewerV1 {
@@ -129,7 +153,48 @@ contract VaultHubViewerV1 {
         return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
+    /// @notice Returns all connected vaults
+    /// @return array of connected vaults
+    /// @return number of leftover connected vaults
+    function vaultsConnected() public view returns (IVault[] memory, uint256) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+
+        return _filterNonZeroVaults(vaults, 0, valid);
+    }
+
+    /// @notice Returns all connected vaults within a range
+    /// @param _from Index to start from inclisive
+    /// @param _to Index to end at non-inculsive
+    /// @return array of connected vaults
+    /// @return number of leftover connected vaults
+    function vaultsConnectedBound(
+        uint256 _from,
+        uint256 _to
+    ) public view returns (IVault[] memory, uint256) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+
+        uint256 count = valid > _to ? _to : valid;
+        uint256 leftover = valid > _to ? valid - _to : 0;
+
+        return (_filterNonZeroVaults(vaults, _from, count), leftover);
+    }
+
     // ==================== Internal Functions ====================
+
+    /// @dev common logic for vaultsConnected and vaultsConnectedBound
+    function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
+        uint256 count = vaultHub.vaultsCount();
+        IVault[] memory vaults = new IVault[](count);
+
+        uint256 valid = 0;
+        for (uint256 i = 0; i < count; i++) {
+            if (!vaultHub.vaultSocket(i).isDisconnected) {
+                vaults[valid] = vaultHub.vault(i);
+                valid++;
+            }
+        }
+        return (vaults, valid);
+    }
 
     /// @dev common logic for vaultsByRole and vaultsByRoleBound
     function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
