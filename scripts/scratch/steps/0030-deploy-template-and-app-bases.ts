@@ -7,16 +7,15 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  await Promise.all([
-    // Deploy Aragon app implementations
-    deployImplementation(Sk.appAgent, "Agent", deployer),
-    deployImplementation(Sk.appFinance, "Finance", deployer),
-    deployImplementation(Sk.appTokenManager, "TokenManager", deployer),
-    deployImplementation(Sk.appVoting, "Voting", deployer),
-    // Deploy Lido-specific app implementations
-    deployImplementation(Sk.appLido, "Lido", deployer),
-    deployImplementation(Sk.appOracle, "LegacyOracle", deployer),
-  ]);
+  // Deploy Aragon app implementations
+  await deployImplementation(Sk.appAgent, "Agent", deployer);
+  await deployImplementation(Sk.appFinance, "Finance", deployer);
+  await deployImplementation(Sk.appTokenManager, "TokenManager", deployer);
+  await deployImplementation(Sk.appVoting, "Voting", deployer);
+
+  // Deploy Lido-specific app implementations
+  await deployImplementation(Sk.appLido, "Lido", deployer);
+  await deployImplementation(Sk.appOracle, "LegacyOracle", deployer);
 
   const minFirstAllocationStrategy = await deployWithoutProxy(
     Sk.minFirstAllocationStrategy,
