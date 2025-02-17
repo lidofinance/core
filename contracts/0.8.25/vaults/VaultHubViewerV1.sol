@@ -155,8 +155,7 @@ contract VaultHubViewerV1 {
 
     /// @notice Returns all connected vaults
     /// @return array of connected vaults
-    /// @return number of leftover connected vaults
-    function vaultsConnected() public view returns (IVault[] memory, uint256) {
+    function vaultsConnected() public view returns (IVault[] memory) {
         (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
 
         return _filterNonZeroVaults(vaults, 0, valid);
@@ -193,6 +192,7 @@ contract VaultHubViewerV1 {
                 valid++;
             }
         }
+
         return (vaults, valid);
     }
 
