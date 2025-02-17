@@ -17,7 +17,7 @@ export async function main() {
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const gateSealFactoryAddress = getEnvVariable("GATE_SEAL_FACTORY", "");
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
-  const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH") ?? 32);
+  const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH", "32"), 10);
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
