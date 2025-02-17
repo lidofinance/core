@@ -77,7 +77,7 @@ contract Dashboard is Permissions {
      * @param _wETH Address of the weth token contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _wETH, address _lidoLocator) Permissions() {
+    constructor(address _wETH, address _lidoLocator) {
         if (_wETH == address(0)) revert ZeroArgument("_wETH");
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
@@ -250,7 +250,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Withdraws stETH tokens from the staking vault to wrapped ether.
+     * @notice Withdraws wETH tokens from the staking vault to wrapped ether.
      * @param _recipient Address of the recipient
      * @param _amountOfWETH Amount of WETH to withdraw
      */
