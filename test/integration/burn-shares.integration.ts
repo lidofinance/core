@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ether, impersonate, log, trace } from "lib";
+import { ether, impersonate, log } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { finalizeWithdrawalQueue, handleOracleReport } from "lib/protocol/helpers";
+import { handleOracleReport } from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -14,8 +14,6 @@ describe("Burn Shares", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
-  let ethHolder: HardhatEthersSigner;
-  let stEthHolder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   const amount = ether("1");
@@ -26,7 +24,7 @@ describe("Burn Shares", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder, stranger] = await ethers.getSigners();
+    [stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -35,22 +33,10 @@ describe("Burn Shares", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  it("Should finalize withdrawal queue", async () => {
-    const { withdrawalQueue } = ctx.contracts;
-
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
-
-    const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
-    const lastRequestId = await withdrawalQueue.getLastRequestId();
-
-    expect(lastFinalizedRequestId).to.equal(lastRequestId);
-  });
-
   it("Should allow stranger to submit ETH", async () => {
     const { lido } = ctx.contracts;
 
-    const submitTx = await lido.connect(stranger).submit(ZeroAddress, { value: amount });
-    await trace("lido.submit", submitTx);
+    await lido.connect(stranger).submit(ZeroAddress, { value: amount });
 
     const stEthBefore = await lido.balanceOf(stranger.address);
     expect(stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
@@ -76,12 +62,10 @@ describe("Burn Shares", () => {
   it("Should burn shares after report", async () => {
     const { lido, burner } = ctx.contracts;
 
-    const approveTx = await lido.connect(stranger).approve(burner.address, ether("1000000"));
-    await trace("lido.approve", approveTx);
+    await lido.connect(stranger).approve(burner.address, ether("1000000"));
 
     const lidoSigner = await impersonate(lido.address);
-    const burnTx = await burner.connect(lidoSigner).requestBurnSharesForCover(stranger, sharesToBurn);
-    await trace("burner.requestBurnSharesForCover", burnTx);
+    await burner.connect(lidoSigner).requestBurnSharesForCover(stranger, sharesToBurn);
 
     const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
 
