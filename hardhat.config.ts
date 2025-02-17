@@ -66,10 +66,10 @@ const config: HardhatUserConfig = {
     customChains: [
       {
         network: "local-devnet",
-        chainId: process.env.LOCAL_DENVET_CHAIN_ID ?? 32382,
+        chainId: parseInt(process.env.LOCAL_DENVET_CHAIN_ID ?? "32382", 10),
         urls: {
-          apiURL: process.env.LOCAL_DENVET_EXPLORER_API_URL,
-          browserURL: process.env.LOCAL_DENVET_EXPLORER_URL,
+          apiURL: process.env.LOCAL_DENVET_EXPLORER_API_URL ?? "",
+          browserURL: process.env.LOCAL_DENVET_EXPLORER_URL ?? "",
         },
       },
     ],
