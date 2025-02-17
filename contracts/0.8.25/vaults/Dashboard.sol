@@ -269,7 +269,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Mints stETH tokens backed by the vault to the recipient.
+     * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
      */
@@ -311,9 +311,9 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects stETH amount approved to this contract.
+     * @notice Burns stETH tokens from the sender backed by the vault. Expects stETH amount approved to this contract.
      * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountOfStETH Amount of stETH shares to burn
+     * @param _amountOfStETH Amount of stETH tokens to burn
      */
     function burnStETH(uint256 _amountOfStETH) external {
         _burnStETH(_amountOfStETH);
@@ -330,7 +330,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Burns stETH tokens (in shares) backed by the vault from the sender using permit (with value in stETH).
+     * @notice Burns stETH shares backed by the vault from the sender using permit (with value in stETH).
      * @param _amountOfShares Amount of stETH shares to burn
      * @param _permit data required for the stETH.permit() with amount in stETH
      */
@@ -377,7 +377,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice recovers ERC20 tokens or ether from the dashboard contract to sender
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
@@ -498,7 +498,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @dev calculates total shares vault can mint
+     * @dev Calculates total shares vault can mint
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
