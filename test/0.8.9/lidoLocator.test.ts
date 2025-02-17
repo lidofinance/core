@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { LidoLocator } from "typechain-types";
 
-import { ArrayToUnion, randomAddress } from "lib";
+import { randomAddress } from "lib";
 
 const services = [
   "accountingOracle",
@@ -23,6 +23,7 @@ const services = [
   "oracleDaemonConfig",
 ] as const;
 
+type ArrayToUnion<A extends readonly unknown[]> = A[number];
 type Service = ArrayToUnion<typeof services>;
 type Config = Record<Service, string>;
 

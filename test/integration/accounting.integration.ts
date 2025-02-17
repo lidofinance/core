@@ -5,15 +5,9 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, log, ONE_GWEI, trace, updateBalance } from "lib";
+import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import {
-  finalizeWithdrawalQueue,
-  getReportTimeElapsed,
-  norEnsureOperators,
-  report,
-  sdvtEnsureOperators,
-} from "lib/protocol/helpers";
+import { getReportTimeElapsed, report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
@@ -22,18 +16,11 @@ const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
 const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 const ONE_DAY = 86400n;
 const MAX_BASIS_POINTS = 10000n;
-const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
-const SIMPLE_DVT_MODULE_ID = 2n;
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 describe("Accounting", () => {
   let ctx: ProtocolContext;
 
   let ethHolder: HardhatEthersSigner;
-  let stEthHolder: HardhatEthersSigner;
 
   let snapshot: string;
   let originalState: string;
@@ -41,27 +28,9 @@ describe("Accounting", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder] = await ethers.getSigners();
+    [ethHolder] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
-
-    const { lido, depositSecurityModule } = ctx.contracts;
-
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
-
-    await norEnsureOperators(ctx, 3n, 5n);
-    await sdvtEnsureOperators(ctx, 3n, 5n);
-
-    // Deposit node operators
-    const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-
-    await report(ctx, {
-      clDiff: ether("32") * 6n, // 32 ETH * (3 + 3) validators
-      clAppearedValidators: 6n,
-      excludeVaultsBalances: true,
-    });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -134,8 +103,7 @@ describe("Accounting", () => {
     const { lido, wstETH } = ctx.contracts;
     if (!(await lido.sharesOf(wstETH.address))) {
       const wstEthSigner = await impersonate(wstETH.address, ether("10001"));
-      const submitTx = await lido.connect(wstEthSigner).submit(ZeroAddress, { value: ether("10000") });
-      await trace("lido.submit", submitTx);
+      await lido.connect(wstEthSigner).submit(ZeroAddress, { value: ether("10000") });
     }
   }
 
@@ -147,8 +115,7 @@ describe("Accounting", () => {
 
     while ((await withdrawalQueue.getLastRequestId()) != (await withdrawalQueue.getLastFinalizedRequestId())) {
       await report(ctx);
-      const submitTx = await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-      await trace("lido.submit", submitTx);
+      await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
     }
   }
 
@@ -773,8 +740,7 @@ describe("Accounting", () => {
     const stethOfShares = await lido.getPooledEthByShares(sharesLimit);
 
     const wstEthSigner = await impersonate(wstETH.address, ether("1"));
-    const approveTx = await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
-    await trace("lido.approve", approveTx);
+    await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
 
     const coverShares = sharesLimit / 3n;
     const noCoverShares = sharesLimit - sharesLimit / 3n;
@@ -782,7 +748,7 @@ describe("Accounting", () => {
     const lidoSigner = await impersonate(lido.address);
 
     const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
-    const burnTxReceipt = await trace<ContractTransactionReceipt>("burner.requestBurnShares", burnTx);
+    const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
     const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntEvent.args.amountOfShares).to.equal(noCoverShares, "StETHBurnRequested: amountOfShares mismatch");
@@ -793,10 +759,7 @@ describe("Accounting", () => {
     );
 
     const burnForCoverTx = await burner.connect(lidoSigner).requestBurnSharesForCover(wstETH.address, coverShares);
-    const burnForCoverTxReceipt = await trace<ContractTransactionReceipt>(
-      "burner.requestBurnSharesForCover",
-      burnForCoverTx,
-    );
+    const burnForCoverTxReceipt = (await burnForCoverTx.wait()) as ContractTransactionReceipt;
     const sharesBurntForCoverEvent = getFirstEvent(burnForCoverTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntForCoverEvent.args.amountOfShares).to.equal(coverShares);
@@ -850,8 +813,7 @@ describe("Accounting", () => {
     const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
 
     const wstEthSigner = await impersonate(wstETH.address, ether("1"));
-    const approveTx = await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
-    await trace("lido.approve", approveTx);
+    await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
 
     const coverShares = limit / 3n;
     const noCoverShares = limit - limit / 3n + excess;
@@ -859,7 +821,7 @@ describe("Accounting", () => {
     const lidoSigner = await impersonate(lido.address);
 
     const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
-    const burnTxReceipt = await trace<ContractTransactionReceipt>("burner.requestBurnShares", burnTx);
+    const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
     const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntEvent.args.amountOfShares).to.equal(noCoverShares, "StETHBurnRequested: amountOfShares mismatch");

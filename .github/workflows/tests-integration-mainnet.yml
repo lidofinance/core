@@ -1,6 +1,9 @@
 name: Integration Tests
 
-on: [push]
+on:
+  push:
+  schedule:
+    - cron: "0 10 */2 * *"
 
 jobs:
   test_hardhat_integration_fork:
