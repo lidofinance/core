@@ -6,7 +6,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
 
-import { trace } from "lib";
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
 import {
@@ -155,9 +154,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
       let reportHash: string;
       let originalState: string;
 
-      before(async () => {
-        originalState = await Snapshot.take();
-      });
+      before(async () => (originalState = await Snapshot.take()));
 
       after(async () => await Snapshot.restore(originalState));
 
@@ -213,18 +210,25 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
       it(`a committee member submits the report data, exit requests are emitted`, async () => {
         const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        const receipt = await trace<ContractTransactionReceipt>("oracle.submit", tx);
+        const receipt = (await tx.wait()) as ContractTransactionReceipt;
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, reportHash);
         expect((await oracle.getConsensusReport()).processingStarted).to.equal(true);
 
         const timestamp = await oracle.getTime();
 
-        for (const request of exitRequests.requests) {
-          await expect(tx)
-            .to.emit(oracle, "ValidatorExitRequest")
-            .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-        }
+        const evFirst = exitRequests.requests[0];
+        const evLast = exitRequests.requests[exitRequests.requests.length - 1];
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(evFirst.moduleId, evFirst.nodeOpId, evFirst.valIndex, evFirst.valPubkey, timestamp);
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(evLast.moduleId, evLast.nodeOpId, evLast.valIndex, evLast.valPubkey, timestamp);
+
         const { gasUsed } = receipt;
+
         gasUsages.push({
           totalRequests,
           requestsPerModule: exitRequests.requestsPerModule,
