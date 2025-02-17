@@ -150,6 +150,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
       { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
     ];
 
     reportFields = {
@@ -220,24 +221,46 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   });
 
   it("last requested validator indices are updated", async () => {
-    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n]);
-    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n]);
+    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n, 3n]);
+    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n, 3n]);
 
-    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n]);
-    expect([...indices2]).to.have.ordered.members([1n, -1n, -1n]);
+    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n, -1n]);
+    expect([...indices2]).to.have.ordered.members([3n, -1n, -1n, -1n]);
   });
 
   it("someone submitted exit report data and triggered exit", async () => {
-    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 2], { value: 3 });
+    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 2, 3], { value: 4 });
 
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
-      .withArgs([PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]]);
+      .withArgs("0x" + concatenatedPubKeys);
   });
 
   it("someone submitted exit report data and triggered exit again", async () => {
     const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1], { value: 2 });
 
-    await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs([PUBKEYS[0], PUBKEYS[1]]);
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs("0x" + concatenatedPubKeys);
+  });
+
+  it("someone triggered exit on unpacked key", async () => {
+    await expect(oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 2, 4], { value: 3 }))
+      .to.be.revertedWithCustomError(oracle, "KeyWasNotUnpacked")
+      .withArgs(4, 3);
+  });
+
+  it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
+    const tx = await oracle.triggerExitHashVerify(reportFields.exitRequestData, [0, 1, 3], { value: 3 });
+
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs("0x" + concatenatedPubKeys);
   });
 });

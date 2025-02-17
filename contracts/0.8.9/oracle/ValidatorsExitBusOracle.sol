@@ -166,7 +166,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         ///
         /// Requests data
         ///
-
         ExitRequestData exitRequestData;
     }
 

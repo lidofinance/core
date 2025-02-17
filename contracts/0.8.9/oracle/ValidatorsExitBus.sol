@@ -7,7 +7,7 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
 
 interface IWithdrawalVault {
-    function addFullWithdrawalRequests(bytes[] calldata pubkeys) external payable;
+    function addFullWithdrawalRequests(bytes calldata pubkeys) external payable;
 
     function getWithdrawalRequestFee() external view returns (uint256);
 }
@@ -76,6 +76,8 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
 
+    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION =
         keccak256("lido.ValidatorsExitBus.reportHashes");
@@ -98,42 +100,33 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
-        uint256 fee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        uint requestsFee = keyIndexes.length * fee;
+        uint256 minFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
+        uint requestsFee = keyIndexes.length * minFee;
 
         if (msg.value < requestsFee) {
-           revert FeeNotEnough(fee, keyIndexes.length, msg.value);
+           revert FeeNotEnough(minFee, keyIndexes.length, msg.value);
         }
 
         uint256 refund = msg.value - requestsFee;
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
-        uint256 offset;
         bytes calldata data = exitRequestData.data;
-        bytes[] memory pubkeys = new bytes[](keyIndexes.length);
-
-        assembly {
-            offset := data.offset
-        }
+        bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] > lastDeliveredKeyIndex) {
                 revert KeyWasNotUnpacked(keyIndexes[i], lastDeliveredKeyIndex);
             }
-            uint256 requestOffset = offset + keyIndexes[i] * 64;
+            uint256 requestOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
 
-            bytes calldata pubkey;
+            for (uint256 j = 0; j < PUBLIC_KEY_LENGTH; j++) {
+                pubkeys[i * PUBLIC_KEY_LENGTH + j] = data[requestOffset + j];
 
-            assembly {
-                pubkey.offset := add(requestOffset, 16)
-                pubkey.length := 48
             }
-             pubkeys[i] = pubkey;
-
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests(pubkeys);
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: requestsFee}(pubkeys);
 
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
