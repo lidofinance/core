@@ -153,6 +153,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsConnected and vaultsConnectedBound
     function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -169,6 +170,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsByRole and vaultsByRoleBound
     function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -185,6 +187,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsByOwner and vaultsByOwnerBound
     function _vaultsByOwner(address _owner) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -227,10 +230,12 @@ contract VaultHubViewerV1 {
         uint256 _from,
         uint256 _to
     ) internal pure returns (IVault[] memory filtered) {
+        if (_to < _from) revert WrongPaginationRange(_from, _to);
+
         uint256 count = _to - _from;
         filtered = new IVault[](count);
-        for (uint256 i = _from; i < count; i++) {
-            filtered[i] = _vaults[i];
+        for (uint256 i = 0; i < count; i++) {
+            filtered[i] = _vaults[_from + i];
         }
     }
 
@@ -239,4 +244,9 @@ contract VaultHubViewerV1 {
     /// @notice Error for zero address arguments
     /// @param argName Name of the argument that is zero
     error ZeroArgument(string argName);
+
+    /// @notice Error for wrong pagination range
+    /// @param _from Start of the range
+    /// @param _to End of the range
+    error WrongPaginationRange(uint256 _from, uint256 _to);
 }
