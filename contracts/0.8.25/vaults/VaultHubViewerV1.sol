@@ -153,6 +153,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsConnected and vaultsConnectedBound
     function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -169,6 +170,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsByRole and vaultsByRoleBound
     function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -185,6 +187,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsByOwner and vaultsByOwnerBound
     function _vaultsByOwner(address _owner) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
