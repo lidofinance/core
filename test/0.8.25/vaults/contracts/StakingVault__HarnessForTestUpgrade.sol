@@ -16,6 +16,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address depositor;
     }
 
     uint64 private constant _version = 2;
@@ -40,7 +41,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        bytes calldata _params
+        address _depositor,
+        bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) {
             revert VaultAlreadyInitialized();
@@ -49,6 +51,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().nodeOperator = _nodeOperator;
+        _getVaultStorage().depositor = _depositor;
+    }
+
+    function depositor() external view returns (address) {
+        return _getVaultStorage().depositor;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {
@@ -56,6 +63,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     event InitializedV2();
+
     function __StakingVault_init_v2() internal onlyInitializing {
         emit InitializedV2();
     }
@@ -84,24 +92,33 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function depositToBeaconChain(Deposit[] calldata _deposits) external {}
+
     function fund() external payable {}
+
     function inOutDelta() external view returns (int256) {
         return -1;
     }
+
     function isBalanced() external view returns (bool) {
         return true;
     }
+
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
+
     function rebalance(uint256 _ether) external {}
+
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+
     function requestValidatorExit(bytes calldata _pubkeys) external {}
+
     function lock(uint256 _locked) external {}
 
     function locked() external view returns (uint256) {
         return 0;
     }
+
     function unlocked() external view returns (uint256) {
         return 0;
     }
@@ -125,6 +142,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function pauseBeaconChainDeposits() external {}
+
     function resumeBeaconChainDeposits() external {}
 
     error ZeroArgument(string name);

@@ -115,6 +115,7 @@ describe("Delegation.sol", () => {
         exitRequester,
         disconnecter,
         curator,
+        assetRecoverer: curator,
         nodeOperatorManager,
         nodeOperatorFeeClaimer,
         curatorFeeBP: 0n,

@@ -24,22 +24,27 @@ struct DelegationConfig {
     address curator;
     address nodeOperatorManager;
     address nodeOperatorFeeClaimer;
+    address assetRecoverer;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
 }
 
 contract VaultFactory {
     address public immutable BEACON;
+    address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable DELEGATION_IMPL;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl) {
+    /// @param _predeposit_guarantee The address of the PredepositGuarantee contract
+    constructor(address _beacon, address _delegationImpl, address _predeposit_guarantee) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_predeposit_guarantee == address(0)) revert ZeroArgument("_predeposit_guarantee");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
+        PREDEPOSIT_GUARANTEE = _predeposit_guarantee;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -62,6 +67,7 @@ contract VaultFactory {
         vault.initialize(
             address(delegation),
             _delegationConfig.nodeOperatorManager,
+            PREDEPOSIT_GUARANTEE,
             _stakingVaultInitializerExtraParams
         );
 
@@ -82,6 +88,7 @@ contract VaultFactory {
         delegation.grantRole(delegation.CURATOR_ROLE(), _delegationConfig.curator);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
         delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
+        delegation.grantRole(delegation.ASSET_RECOVERY_ROLE(), _delegationConfig.assetRecoverer);
 
         // grant temporary roles to factory
         delegation.grantRole(delegation.CURATOR_ROLE(), address(this));
