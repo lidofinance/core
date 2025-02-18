@@ -227,10 +227,12 @@ contract VaultHubViewerV1 {
         uint256 _from,
         uint256 _to
     ) internal pure returns (IVault[] memory filtered) {
+        if (_to < _from) revert WrongPaginationRange(_from, _to);
+
         uint256 count = _to - _from;
         filtered = new IVault[](count);
-        for (uint256 i = _from; i < count; i++) {
-            filtered[i] = _vaults[i];
+        for (uint256 i = 0; i < count; i++) {
+            filtered[i] = _vaults[_from + i];
         }
     }
 
@@ -239,4 +241,9 @@ contract VaultHubViewerV1 {
     /// @notice Error for zero address arguments
     /// @param argName Name of the argument that is zero
     error ZeroArgument(string argName);
+
+    /// @notice Error for wrong pagination range
+    /// @param _from Start of the range
+    /// @param _to End of the range
+    error WrongPaginationRange(uint256 _from, uint256 _to);
 }

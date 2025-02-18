@@ -272,7 +272,10 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("reverts if from is greater than to", async () => {
-      await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithPanic();
+      await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithCustomError(
+        vaultHubViewer,
+        "WrongPaginationRange",
+      );
     });
   });
 
@@ -323,7 +326,10 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("reverts if from is greater than to", async () => {
-      await expect(vaultHubViewer.vaultsByOwnerBound(vaultOwner.getAddress(), 3, 1)).to.be.revertedWithPanic();
+      await expect(vaultHubViewer.vaultsByOwnerBound(vaultOwner.getAddress(), 3, 1)).to.be.revertedWithCustomError(
+        vaultHubViewer,
+        "WrongPaginationRange",
+      );
     });
   });
 
