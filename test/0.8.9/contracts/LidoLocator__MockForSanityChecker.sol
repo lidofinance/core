@@ -22,6 +22,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address accounting;
+        address wstETH;
     }
 
     address public immutable lido;
@@ -38,10 +40,10 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
+    address public immutable wstETH;
 
-    constructor (
-        ContractAddresses memory addresses
-    ) {
+    constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
         depositSecurityModule = addresses.depositSecurityModule;
         elRewardsVault = addresses.elRewardsVault;
@@ -56,36 +58,22 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        accounting = addresses.accounting;
+        wstETH = addresses.wstETH;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
-        return (
-            elRewardsVault,
-            oracleReportSanityChecker,
-            stakingRouter,
-            treasury,
-            withdrawalQueue,
-            withdrawalVault
-        );
+        return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponentsForLido() external view returns (
-        address,
-        address,
-        address,
-        address,
-        address,
-        address,
-        address
-    ) {
+    function oracleReportComponents() external view returns (address, address, address, address, address, address) {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter
         );
     }
 }

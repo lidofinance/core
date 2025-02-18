@@ -76,25 +76,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const deploy = async () => {
-    const deployed = await deployVEBO(admin.address);
-    oracle = deployed.oracle;
-    consensus = deployed.consensus;
-
-    await initVEBO({
-      admin: admin.address,
-      oracle,
-      consensus,
-      resumeAfterDeploy: true,
-    });
-
-    oracleVersion = await oracle.getContractVersion();
-
-    await consensus.addMember(member1, 1);
-    await consensus.addMember(member2, 2);
-    await consensus.addMember(member3, 2);
-  };
-
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
     await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
@@ -124,7 +105,23 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
-    await deploy();
+
+    const deployed = await deployVEBO(admin.address);
+    oracle = deployed.oracle;
+    consensus = deployed.consensus;
+
+    await initVEBO({
+      admin: admin.address,
+      oracle,
+      consensus,
+      resumeAfterDeploy: true,
+    });
+
+    oracleVersion = await oracle.getContractVersion();
+
+    await consensus.addMember(member1, 1);
+    await consensus.addMember(member2, 2);
+    await consensus.addMember(member3, 2);
   });
 
   after(async () => {

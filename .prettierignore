@@ -1,5 +1,5 @@
-foundry
-contracts
+/foundry
+/contracts
 
 .gitignore
 .prettierignore

@@ -1,8 +1,9 @@
-import { BaseContract as EthersBaseContract, ContractTransactionReceipt, LogDescription } from "ethers";
+import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interface, LogDescription } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   AccountingOracle,
   ACL,
   Burner,
@@ -17,7 +18,9 @@ import {
   OracleDaemonConfig,
   OracleReportSanityChecker,
   StakingRouter,
+  UpgradeableBeacon,
   ValidatorsExitBusOracle,
+  VaultFactory,
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
@@ -35,6 +38,7 @@ export type ProtocolNetworkItems = {
   elRewardsVault: string;
   legacyOracle: string;
   lido: string;
+  accounting: string;
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
@@ -51,6 +55,9 @@ export type ProtocolNetworkItems = {
   sdvt: string;
   // hash consensus
   hashConsensus: string;
+  // vaults
+  stakingVaultFactory: string;
+  stakingVaultBeacon: string;
 };
 
 export interface ContractTypes {
@@ -60,6 +67,7 @@ export interface ContractTypes {
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
   LegacyOracle: LegacyOracle;
   Lido: Lido;
+  Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
@@ -72,6 +80,8 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  VaultFactory: VaultFactory;
+  UpgradeableBeacon: UpgradeableBeacon;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -89,6 +99,7 @@ export type CoreContracts = {
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
   legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
+  accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
@@ -119,11 +130,17 @@ export type WstETHContracts = {
   wstETH: LoadedContract<WstETH>;
 };
 
+export type VaultsContracts = {
+  stakingVaultFactory: LoadedContract<VaultFactory>;
+  stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
+};
+
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
   AragonContracts &
   StakingModuleContracts &
   HashConsensusContracts &
-  WstETHContracts;
+  WstETHContracts &
+  VaultsContracts;
 
 export type ProtocolSigners = {
   agent: string;
@@ -144,5 +161,9 @@ export type ProtocolContext = {
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
-  getEvents: (receipt: ContractTransactionReceipt, eventName: string) => LogDescription[];
+  getEvents: (
+    receipt: ContractTransactionReceipt,
+    eventName: string,
+    extraInterfaces?: Interface[], // additional interfaces to parse
+  ) => LogDescription[];
 };

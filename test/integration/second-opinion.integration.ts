@@ -21,7 +21,7 @@ function getDiffAmount(totalSupply: bigint): bigint {
   return (totalSupply / 10n / ONE_GWEI) * ONE_GWEI;
 }
 
-describe("Second opinion", () => {
+describe("Integration: Second opinion", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;

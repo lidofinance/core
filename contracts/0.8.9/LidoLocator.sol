@@ -28,6 +28,8 @@ contract LidoLocator is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address accounting;
+        address wstETH;
     }
 
     error ZeroAddress();
@@ -46,6 +48,8 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
+    address public immutable wstETH;
 
     /**
      * @notice declare service locations
@@ -59,7 +63,7 @@ contract LidoLocator is ILidoLocator {
         legacyOracle = _assertNonZero(_config.legacyOracle);
         lido = _assertNonZero(_config.lido);
         oracleReportSanityChecker = _assertNonZero(_config.oracleReportSanityChecker);
-        postTokenRebaseReceiver = _assertNonZero(_config.postTokenRebaseReceiver);
+        postTokenRebaseReceiver = _config.postTokenRebaseReceiver;
         burner = _assertNonZero(_config.burner);
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);
@@ -67,6 +71,8 @@ contract LidoLocator is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        accounting = _assertNonZero(_config.accounting);
+        wstETH = _assertNonZero(_config.wstETH);
     }
 
     function coreComponents() external view returns(
@@ -87,8 +93,7 @@ contract LidoLocator is ILidoLocator {
         );
     }
 
-    function oracleReportComponentsForLido() external view returns(
-        address,
+    function oracleReportComponents() external view returns(
         address,
         address,
         address,
@@ -98,12 +103,11 @@ contract LidoLocator is ILidoLocator {
     ) {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter
         );
     }
 

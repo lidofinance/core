@@ -11,6 +11,7 @@ import "hardhat-tracer";
 import "hardhat-watcher";
 import "hardhat-ignore-warnings";
 import "hardhat-contract-sizer";
+import "hardhat-gas-reporter";
 import { HardhatUserConfig } from "hardhat/config";
 
 import { mochaRootHooks } from "test/hooks";
@@ -23,14 +24,10 @@ const RPC_URL: string = process.env.RPC_URL || "";
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
+  gasReporter: {
+    enabled: process.env.SKIP_GAS_REPORT ? false : true,
+  },
   networks: {
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
     "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
@@ -46,14 +43,26 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "local": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+    },
+    "holesky": {
+      url: process.env.HOLESKY_RPC_URL || RPC_URL,
+      chainId: 17000,
+      accounts: loadAccounts("holesky"),
+    },
     "sepolia": {
-      url: RPC_URL,
+      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
+    },
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
     },
   },
   etherscan: {
@@ -111,6 +120,16 @@ const config: HardhatUserConfig = {
           evmVersion: "istanbul",
         },
       },
+      {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          evmVersion: "cancun",
+        },
+      },
     ],
   },
   tracer: {
@@ -125,7 +144,10 @@ const config: HardhatUserConfig = {
   },
   watcher: {
     test: {
-      tasks: [{ command: "test", params: { testFiles: ["{path}"] } }],
+      tasks: [
+        { command: "compile", params: { quiet: true } },
+        { command: "test", params: { noCompile: true, testFiles: ["{path}"] } },
+      ],
       files: ["./test/**/*"],
       clearOnStart: true,
       start: "echo Running tests...",
@@ -152,7 +174,7 @@ const config: HardhatUserConfig = {
   contractSizer: {
     alphaSort: false,
     disambiguatePaths: false,
-    runOnCompile: true,
+    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
     strict: true,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
