@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultHub} from "./VaultHub.sol";
 
 interface IDashboardACL {
     function getRoleMember(bytes32 role, uint256 index) external view returns (address);
@@ -15,45 +16,15 @@ interface IVault is IStakingVault {
     function owner() external view returns (address);
 }
 
-/// @todo VaultHub.VaultSocket should be public to remove duplicate initialization from here
-struct VaultSocket {
-    // ### 1st slot
-    /// @notice vault address
-    address vault;
-    /// @notice total number of stETH shares minted by the vault
-    uint96 sharesMinted;
-    // ### 2nd slot
-    /// @notice maximum number of stETH shares that can be minted by vault owner
-    uint96 shareLimit;
-    /// @notice minimal share of ether that is reserved for each stETH minted
-    uint16 reserveRatioBP;
-    /// @notice if vault's reserve decreases to this threshold ratio,
-    /// it should be force rebalanced
-    uint16 reserveRatioThresholdBP;
-    /// @notice treasury fee in basis points
-    uint16 treasuryFeeBP;
-    /// @notice if true, vault is disconnected and fee is not accrued
-    bool isDisconnected;
-    // ### we have 104 bits left in this slot
-}
-
-interface IVaultHub {
-    function vaultsCount() external view returns (uint256);
-
-    function vault(uint256 _index) external view returns (IVault);
-
-    function vaultSocket(uint256 _index) external view returns (VaultSocket memory);
-}
-
 contract VaultHubViewerV1 {
     bytes32 constant strictTrue = keccak256(hex"0000000000000000000000000000000000000000000000000000000000000001");
 
-    IVaultHub public immutable vaultHub;
+    VaultHub public immutable vaultHub;
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     constructor(address _vaultHubAddress) {
         if (_vaultHubAddress == address(0)) revert ZeroArgument("_vaultHubAddress");
-        vaultHub = IVaultHub(_vaultHubAddress);
+        vaultHub = VaultHub(_vaultHubAddress);
     }
 
     /// @notice Checks if a given address is a contract
@@ -188,7 +159,7 @@ contract VaultHubViewerV1 {
         uint256 valid = 0;
         for (uint256 i = 0; i < count; i++) {
             if (!vaultHub.vaultSocket(i).isDisconnected) {
-                vaults[valid] = vaultHub.vault(i);
+                vaults[valid] = IVault(vaultHub.vault(i));
                 valid++;
             }
         }
@@ -203,8 +174,8 @@ contract VaultHubViewerV1 {
 
         uint256 valid = 0;
         for (uint256 i = 0; i < count; i++) {
-            if (hasRole(vaultHub.vault(i), _member, _role)) {
-                vaults[valid] = vaultHub.vault(i);
+            if (hasRole(IVault(vaultHub.vault(i)), _member, _role)) {
+                vaults[valid] = IVault(vaultHub.vault(i));
                 valid++;
             }
         }
@@ -224,7 +195,7 @@ contract VaultHubViewerV1 {
         for (uint256 i = 0; i < count; i++) {
             IVault vaultInstance = IVault(vaultHub.vault(i));
             if (isOwner(vaultInstance, _owner)) {
-                vaults[valid] = vaultHub.vault(i);
+                vaults[valid] = IVault(vaultHub.vault(i));
                 valid++;
             }
         }
@@ -258,7 +229,7 @@ contract VaultHubViewerV1 {
     ) internal pure returns (IVault[] memory filtered) {
         uint256 count = _to - _from;
         filtered = new IVault[](count);
-        for (uint256 i = _from; i < _to; i++) {
+        for (uint256 i = _from; i < count; i++) {
             filtered[i] = _vaults[i];
         }
     }
