@@ -77,5 +77,8 @@ declare namespace NodeJS {
 
     /* for local devnet */
     LOCAL_DEVNET_PK?: string;
+    LOCAL_DEVNET_CHAIN_ID?: string;
+    LOCAL_DEVNET_EXPLORER_API_URL?: string;
+    LOCAL_DEVNET_EXPLORER_URL?: string;
   }
 }
