@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "./vaults/VaultHub.sol";
+import {FlashMinter} from "./vaults/FlashMinter.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
@@ -22,7 +23,7 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// and distributing calculated values to relevant parts of the protocol
 /// @dev accounting is inherited from VaultHub contract to reduce gas costs and
 /// simplify the auth flows, but they are mostly independent
-contract Accounting is VaultHub {
+contract Accounting is FlashMinter {
     struct Contracts {
         address accountingOracleAddress;
         IOracleReportSanityChecker oracleReportSanityChecker;
@@ -94,7 +95,7 @@ contract Accounting is VaultHub {
     constructor(
         ILidoLocator _lidoLocator,
         ILido _lido
-    ) VaultHub(_lido) {
+    ) FlashMinter(_lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
