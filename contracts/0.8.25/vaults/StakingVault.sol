@@ -479,19 +479,21 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isBalanced = valuation() >= $.locked;
-        bool isAuthorized = (
-            msg.sender == $.nodeOperator ||
-            msg.sender == owner() ||
-            (!isBalanced && msg.sender == address(VAULT_HUB))
-        );
 
-        if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
+        // If the vault is unbalanced, block partial withdrawals because they can front-run blocking the full exit
+        bool isBalanced = valuation() >= $.locked;
         if (!isBalanced) {
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
             }
         }
+
+        bool isAuthorized = (
+            msg.sender == $.nodeOperator ||
+            msg.sender == owner() ||
+            (!isBalanced && msg.sender == address(VAULT_HUB))
+        );
+        if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = feePerRequest * keysCount;
@@ -507,7 +509,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         emit ValidatorWithdrawalRequested(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
-
 
     /**
      * @notice Computes the deposit data root for a validator deposit

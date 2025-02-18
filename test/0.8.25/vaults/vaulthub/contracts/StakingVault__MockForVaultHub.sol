@@ -61,8 +61,22 @@ contract StakingVault__MockForVaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
+        if ($valuation > $locked) {
+            revert Mock__HealthyVault();
+        }
+
         emit ValidatorWithdrawalTriggered(_pubkeys, _amounts, _refundRecipient);
     }
 
+    function mock__decreaseValuation(uint256 amount) external {
+        $valuation -= amount;
+    }
+
+    function mock__increaseValuation(uint256 amount) external {
+        $valuation += amount;
+    }
+
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
+
+    error Mock__HealthyVault();
 }

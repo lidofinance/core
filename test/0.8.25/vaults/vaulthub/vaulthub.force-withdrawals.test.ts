@@ -8,7 +8,8 @@ import {
   DepositContract__MockForVaultHub,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
-  VaultHub,
+  VaultFactory__MockForVaultHub,
+  VaultHub__Harness,
 } from "typechain-types";
 
 import { impersonate } from "lib";
@@ -21,6 +22,7 @@ import { Snapshot } from "test/suite";
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
 const SHARE_LIMIT = ether("1");
+const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
 const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
@@ -33,7 +35,8 @@ describe("VaultHub.sol:forceWithdrawals", () => {
   let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
 
-  let vaultHub: VaultHub;
+  let vaultHub: VaultHub__Harness;
+  let vaultFactory: VaultFactory__MockForVaultHub;
   let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
   let depositContract: DepositContract__MockForVaultHub;
@@ -49,16 +52,16 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
 
     const locator = await deployLidoLocator();
-    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1000.0") });
+    steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [locator, steth]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("Accounting", proxy);
+    const accounting = await ethers.getContractAt("VaultHub__Harness", proxy);
     await accounting.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("Accounting", proxy, user);
+    vaultHub = await ethers.getContractAt("VaultHub__Harness", proxy, user);
     vaultHubAddress = await vaultHub.getAddress();
 
     await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
@@ -69,12 +72,10 @@ describe("VaultHub.sol:forceWithdrawals", () => {
       await depositContract.getAddress(),
     ]);
 
-    const vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [
-      await stakingVaultImpl.getAddress(),
-    ]);
+    vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
 
     const vaultCreationTx = (await vaultFactory
-      .createVault(await user.getAddress(), await user.getAddress())
+      .createVault(user, user)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -174,6 +175,53 @@ describe("VaultHub.sol:forceWithdrawals", () => {
           .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
           .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
+    });
+
+    // https://github.com/lidofinance/core/pull/933#discussion_r1954876831
+    it("works for a synthetic example", async () => {
+      const vaultCreationTx = (await vaultFactory
+        .createVault(user, user)
+        .then((tx) => tx.wait())) as ContractTransactionReceipt;
+
+      const events = findEvents(vaultCreationTx, "VaultCreated");
+      const demoVaultAddress = events[0].args.vault;
+
+      const demoVault = await ethers.getContractAt("StakingVault__MockForVaultHub", demoVaultAddress, user);
+
+      const valuation = ether("100");
+      await demoVault.fund({ value: valuation });
+      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_01n)) / TOTAL_BASIS_POINTS);
+
+      await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
+      await vaultHub.mintSharesBackedByVault(demoVaultAddress, user, cap);
+
+      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted).to.equal(cap);
+
+      // decrease valuation to trigger rebase
+      const penalty = ether("1");
+      await demoVault.mock__decreaseValuation(penalty);
+
+      const rebase = await vaultHub.mock__calculateVaultsRebase(
+        await steth.getTotalShares(),
+        await steth.getTotalPooledEther(),
+        await steth.getTotalShares(),
+        await steth.getTotalPooledEther(),
+        0n,
+      );
+
+      const totalMintedShares = (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted;
+      const mintedSteth = (totalMintedShares * (await steth.getTotalPooledEther())) / (await steth.getTotalShares());
+      const lockedEtherPredicted = (mintedSteth * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
+
+      expect(lockedEtherPredicted).to.equal(rebase.lockedEther[1]);
+
+      await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
+
+      expect(await vaultHub.isVaultBalanced(demoVaultAddress)).to.be.false;
+
+      await expect(vaultHub.forceValidatorWithdrawal(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
+        .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+        .withArgs(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient);
     });
   });
 });
