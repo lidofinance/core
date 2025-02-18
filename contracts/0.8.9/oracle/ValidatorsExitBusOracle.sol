@@ -10,6 +10,7 @@ import { PausableUntil } from "../utils/PausableUntil.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
+import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
 
 
 interface IOracleReportSanityChecker {
@@ -17,7 +18,7 @@ interface IOracleReportSanityChecker {
 }
 
 
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
+contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
 
@@ -109,6 +110,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
     }
 
+    function finalizeUpgrade_v2() external {
+        _updateContractVersion(2);
+        _initialize_v2(address(LOCATOR));
+    }
+
     /// @notice Resume accepting validator exit requests
     ///
     /// @dev Reverts with `PausedExpected()` if contract is already resumed
@@ -160,40 +166,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         ///
         /// Requests data
         ///
-
-        /// @dev Total number of validator exit requests in this report. Must not be greater
-        /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
-        uint256 requestsCount;
-
-        /// @dev Format of the validator exit requests data. Currently, only the
-        /// DATA_FORMAT_LIST=1 is supported.
-        uint256 dataFormat;
-
-        /// @dev Validator exit requests data. Can differ based on the data format,
-        /// see the constant defining a specific data format below for more info.
-        bytes data;
+        ExitRequestData exitRequestData;
     }
-
-    /// @notice The list format of the validator exit requests data. Used when all
-    /// requests fit into a single transaction.
-    ///
-    /// Each validator exit request is described by the following 64-byte array:
-    ///
-    /// MSB <------------------------------------------------------- LSB
-    /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
-    /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
-    ///
-    /// All requests are tightly packed into a byte array where requests follow
-    /// one another without any separator or padding, and passed to the `data`
-    /// field of the report structure.
-    ///
-    /// Requests must be sorted in the ascending order by the following compound
-    /// key: (moduleId, nodeOpId, validatorIndex).
-    ///
-    uint256 public constant DATA_FORMAT_LIST = 1;
-
-    /// Length in bytes of packed request
-    uint256 internal constant PACKED_REQUEST_LENGTH = 64;
 
     /// @notice Submits report data for processing.
     ///
@@ -216,10 +190,12 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
+        bytes32 exitRequestDataHash = keccak256(abi.encode(data.exitRequestData));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
-        _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data)));
+        _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data.consensusVersion, data.refSlot, exitRequestDataHash)));
         _startProcessing();
         _handleConsensusReportData(data);
+        _storeOracleExitRequestHash(exitRequestDataHash, data, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -328,36 +304,37 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.dataFormat != DATA_FORMAT_LIST) {
-            revert UnsupportedRequestsDataFormat(data.dataFormat);
+        if (data.exitRequestData.dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(data.exitRequestData.dataFormat);
         }
 
-        if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
+        if (data.exitRequestData.data.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
 
+        // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkExitBusOracleReport(data.requestsCount);
+            .checkExitBusOracleReport(data.exitRequestData.requestsCount);
 
-        if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
+        if (data.exitRequestData.data.length / PACKED_REQUEST_LENGTH != data.exitRequestData.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        _processExitRequestsList(data.data);
+        _processExitRequestsList(data.exitRequestData.data);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
-            requestsCount: data.requestsCount.toUint64(),
-            requestsProcessed: data.requestsCount.toUint64(),
+            requestsCount: data.exitRequestData.requestsCount.toUint64(),
+            requestsProcessed: data.exitRequestData.requestsCount.toUint64(),
             dataFormat: uint16(DATA_FORMAT_LIST)
         });
 
-        if (data.requestsCount == 0) {
+        if (data.exitRequestData.requestsCount == 0) {
             return;
         }
 
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
-            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.requestsCount
+            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.exitRequestData.requestsCount
         );
     }
 
@@ -437,6 +414,20 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     function _computeNodeOpKey(uint256 moduleId, uint256 nodeOpId) internal pure returns (uint256) {
         return (moduleId << 40) | nodeOpId;
+    }
+
+    function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
+        if (report.exitRequestData.requestsCount == 0) {
+            return;
+        }
+
+        mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
+
+        RequestStatus storage request = hashes[exitRequestHash];
+        request.totalItemsCount = report.exitRequestData.requestsCount;
+        request.deliveredItemsCount = report.exitRequestData.requestsCount;
+        request.contractVersion = contractVersion;
+        request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.exitRequestData.requestsCount - 1}));
     }
 
     ///

@@ -5,7 +5,7 @@ import { FactoryOptions } from "hardhat/types";
 import { LidoLocator } from "typechain-types";
 
 import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { ConvertibleToString, cy, gr, log, yl } from "lib/log";
+import { ConvertibleToString, cy, log, yl } from "lib/log";
 import { getNonceManagerWithDeployer } from "lib/nonce-manager";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
@@ -45,9 +45,6 @@ export async function makeTx(
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed, withStateFile);
 
-  log(` Executed (gas used: ${yl(gasUsed)})`);
-  log.emptyLine();
-
   return receipt;
 }
 
@@ -85,8 +82,6 @@ async function deployContractType2(
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
 
-  log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})`);
-
   const receipt = await tx.wait();
   if (!receipt) {
     throw new Error(`Failed to wait till the transaction ${tx.hash} execution!`);
@@ -96,9 +91,6 @@ async function deployContractType2(
   incrementGasUsed(gasUsed, withStateFile);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
-
-  log(` Deployed: ${gr(receipt.contractAddress!)} (gas used: ${yl(gasUsed)})`);
-  log.emptyLine();
 
   await addContractHelperFields(contract, artifactName);
 

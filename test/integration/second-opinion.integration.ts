@@ -1,13 +1,11 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, impersonate, log, ONE_GWEI } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { finalizeWithdrawalQueue, norEnsureOperators, report, sdvtEnsureOperators } from "lib/protocol/helpers";
+import { report } from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -26,9 +24,6 @@ function getDiffAmount(totalSupply: bigint): bigint {
 describe("Second opinion", () => {
   let ctx: ProtocolContext;
 
-  let ethHolder: HardhatEthersSigner;
-  let stEthHolder: HardhatEthersSigner;
-
   let snapshot: string;
   let originalState: string;
 
@@ -38,16 +33,9 @@ describe("Second opinion", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder] = await ethers.getSigners();
-
     snapshot = await Snapshot.take();
 
     const { lido, depositSecurityModule, oracleReportSanityChecker } = ctx.contracts;
-
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
-
-    await norEnsureOperators(ctx, 3n, 5n);
-    await sdvtEnsureOperators(ctx, 3n, 5n);
 
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
@@ -63,6 +51,7 @@ describe("Second opinion", () => {
       const adapterAddr = await ctx.contracts.stakingRouter.DEPOSIT_CONTRACT();
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
     }
+
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
 
