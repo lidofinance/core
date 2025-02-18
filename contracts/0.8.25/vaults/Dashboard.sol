@@ -412,12 +412,12 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice withdraws ether of disputed validator from PDG
+     * @notice withdraws ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
      */
-    function withdrawDisputedValidator(bytes calldata _pubkey, address _recipient) external {
-        _withdrawDisputedValidatorFromPDG(_pubkey, _recipient);
+    function withdrawDisprovenValidator(bytes calldata _pubkey, address _recipient) external {
+        _withdrawDisprovenValidatorFromPDG(_pubkey, _recipient);
     }
 
     /**
@@ -425,7 +425,7 @@ contract Dashboard is Permissions {
      * @param _pubkey of validator that was proven invalid in PDG
      */
     function refundDisputedValidatorToVault(bytes calldata _pubkey) external {
-        uint128 _amount = _withdrawDisputedValidatorFromPDG(_pubkey, address(this));
+        uint128 _amount = _withdrawDisprovenValidatorFromPDG(_pubkey, address(this));
         _fund(_amount);
     }
 

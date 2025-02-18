@@ -36,7 +36,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- *   - `setDepositGuardian()`
+ *   - `setDepositor()`
  * - Deposit Guardian:
  *   - `depositToBeaconChain()`
  * - VaultHub:
@@ -61,7 +61,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom: locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom: inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom: nodeOperator Address of the node operator
-     * @custom: depositGuardian Address of the deposit guardian
+     * @custom: depositor Address of the depositor
      * @custom: beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -69,7 +69,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
-        address depositGuardian;
+        address depositor;
         bool beaconChainDepositsPaused;
     }
 
@@ -125,12 +125,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function initialize(
         address _owner,
         address _nodeOperator,
-        address _depositGuardian,
+        address _depositor,
         bytes calldata /* _params */
     ) external initializer {
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
-        _getStorage().depositGuardian = _depositGuardian;
+        _getStorage().depositor = _depositor;
     }
 
     /**
@@ -262,15 +262,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the address of the deposit guardian
+     * @notice Returns the address of the depositor
      *         Trusted party responsible for securely depositing validators to the beacon chain.
-     *         In the context of this contract, the deposit guardian performs deposits through `depositToBeaconChain()`.
-     *         DepositGuardian address is set in the initialization and can be changed by the owner with `setDepositGuardian`
+     *         In the context of this contract, the depositor performs deposits through `depositToBeaconChain()`.
+     *         Depositor address is set in the initialization and can be changed by the owner with `setDepositor`
      *         only on the condition that the vault is not connected to the VaultHub.
      * @return Address of the deposit guardian
      */
-    function depositGuardian() external view returns (address) {
-        return _getStorage().depositGuardian;
+    function depositor() external view returns (address) {
+        return _getStorage().depositor;
     }
 
     /**
@@ -340,7 +340,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (msg.sender != $.depositGuardian) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         uint256 numberOfDeposits = _deposits.length;
 
@@ -432,30 +432,30 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Sets the deposit guardian
-     * @param _depositGuardian The address of the deposit guardian
+     * @notice Sets the depositor
+     * @param _depositor The address of the deposit guardian
      * @dev It can only be changed when vault is not connected to the VaultHub
      *
      */
-    function setDepositGuardian(address _depositGuardian) external onlyOwner {
-        if (_depositGuardian == address(0)) revert ZeroArgument("_depositGuardian");
+    function setDepositor(address _depositor) external onlyOwner {
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
-        if (_depositGuardian == _getStorage().depositGuardian) {
-            revert DepositGuardianAlreadySet();
+        if (_depositor == _getStorage().depositor) {
+            revert DepositorAlreadySet();
         }
 
         VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
 
         if (socket.vault == address(this) && !socket.isDisconnected) {
-            revert DepositGuardianCannotChangeWhenConnected();
+            revert DepositorCannotChangeWhenConnected();
         }
 
         ERC7201Storage storage $ = _getStorage();
-        address oldDepositGuardian = $.depositGuardian;
+        address oldDepositor = $.depositor;
 
-        $.depositGuardian = _depositGuardian;
+        $.depositor = _depositor;
 
-        emit DepositGuardianSet(oldDepositGuardian, _depositGuardian);
+        emit DepositorSet(oldDepositor, _depositor);
     }
 
     /**
@@ -559,10 +559,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Emitted when the deposit guardian is set
-     * @param oldDepositGuardian The address of the old deposit guardian
-     * @param newDepositGuardian The address of the new deposit guardian
+     * @param oldDepositor The address of the old deposit guardian
+     * @param newDepositor The address of the new deposit guardian
      */
-    event DepositGuardianSet(address oldDepositGuardian, address newDepositGuardian);
+    event DepositorSet(address oldDepositor, address newDepositor);
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -643,12 +643,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error BeaconChainDepositsArePaused();
 
     /**
-     * @notice Thrown when trying to update deposit guardian for connected vault
+     * @notice Thrown when trying to update depositor for connected vault
      */
-    error DepositGuardianCannotChangeWhenConnected();
+    error DepositorCannotChangeWhenConnected();
 
     /**
-     * @notice Thrown when trying to update deposit guardian for connected vault
+     * @notice Thrown when trying to update depositor for connected vault
      */
-    error DepositGuardianAlreadySet();
+    error DepositorAlreadySet();
 }

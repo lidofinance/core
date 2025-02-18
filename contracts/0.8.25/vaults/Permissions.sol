@@ -160,7 +160,7 @@ abstract contract Permissions is AccessControlVoteable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _withdrawDisputedValidatorFromPDG(
+    function _withdrawDisprovenValidatorFromPDG(
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {

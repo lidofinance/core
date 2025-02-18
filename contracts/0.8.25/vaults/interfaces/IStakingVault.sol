@@ -27,7 +27,7 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
-    function initialize(address _owner, address _operator, address _depositGuardian, bytes calldata _params) external;
+    function initialize(address _owner, address _operator, address _depositor, bytes calldata _params) external;
 
     function version() external pure returns (uint64);
 
@@ -39,7 +39,7 @@ interface IStakingVault {
 
     function nodeOperator() external view returns (address);
 
-    function depositGuardian() external view returns (address);
+    function depositor() external view returns (address);
 
     function locked() external view returns (uint256);
 
