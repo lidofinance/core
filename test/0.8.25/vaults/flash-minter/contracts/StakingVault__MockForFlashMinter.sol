@@ -5,7 +5,7 @@ pragma solidity 0.8.25;
 
 import {Ownable} from "@openzeppelin/contracts-v5.2/access/Ownable.sol";
 
-contract StakingVault__MockForLeverage is Ownable {
+contract StakingVault__MockForFlashMinter is Ownable {
     uint256 public locked;
     uint256 public valuation;
 
