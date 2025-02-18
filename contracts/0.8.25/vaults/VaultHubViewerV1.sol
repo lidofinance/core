@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultHub} from "./VaultHub.sol";
 
 interface IDashboardACL {
     function getRoleMember(bytes32 role, uint256 index) external view returns (address);
@@ -15,21 +16,15 @@ interface IVault is IStakingVault {
     function owner() external view returns (address);
 }
 
-interface IVaultHub {
-    function vaultsCount() external view returns (uint256);
-
-    function vault(uint256 _index) external view returns (IVault);
-}
-
 contract VaultHubViewerV1 {
     bytes32 constant strictTrue = keccak256(hex"0000000000000000000000000000000000000000000000000000000000000001");
 
-    IVaultHub public immutable vaultHub;
+    VaultHub public immutable vaultHub;
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     constructor(address _vaultHubAddress) {
         if (_vaultHubAddress == address(0)) revert ZeroArgument("_vaultHubAddress");
-        vaultHub = IVaultHub(_vaultHubAddress);
+        vaultHub = VaultHub(_vaultHubAddress);
     }
 
     /// @notice Checks if a given address is a contract
@@ -129,17 +124,60 @@ contract VaultHubViewerV1 {
         return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
+    /// @notice Returns all connected vaults
+    /// @return array of connected vaults
+    function vaultsConnected() public view returns (IVault[] memory) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+
+        return _filterNonZeroVaults(vaults, 0, valid);
+    }
+
+    /// @notice Returns all connected vaults within a range
+    /// @param _from Index to start from inclisive
+    /// @param _to Index to end at non-inculsive
+    /// @return array of connected vaults
+    /// @return number of leftover connected vaults
+    function vaultsConnectedBound(
+        uint256 _from,
+        uint256 _to
+    ) public view returns (IVault[] memory, uint256) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+
+        uint256 count = valid > _to ? _to : valid;
+        uint256 leftover = valid > _to ? valid - _to : 0;
+
+        return (_filterNonZeroVaults(vaults, _from, count), leftover);
+    }
+
     // ==================== Internal Functions ====================
 
-    /// @dev common logic for vaultsByRole and vaultsByRoleBound
-    function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
+    /// @dev common logic for vaultsConnected and vaultsConnectedBound
+    function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
         uint256 valid = 0;
         for (uint256 i = 0; i < count; i++) {
-            if (hasRole(vaultHub.vault(i), _member, _role)) {
-                vaults[valid] = vaultHub.vault(i);
+            if (!vaultHub.vaultSocket(i).isDisconnected) {
+                vaults[valid] = IVault(vaultHub.vault(i));
+                valid++;
+            }
+        }
+
+        return (vaults, valid);
+    }
+
+    /// @dev common logic for vaultsByRole and vaultsByRoleBound
+    function _vaultsByRole(bytes32 _role, address _member) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
+        uint256 count = vaultHub.vaultsCount();
+        IVault[] memory vaults = new IVault[](count);
+
+        uint256 valid = 0;
+        for (uint256 i = 0; i < count; i++) {
+            if (hasRole(IVault(vaultHub.vault(i)), _member, _role)) {
+                vaults[valid] = IVault(vaultHub.vault(i));
                 valid++;
             }
         }
@@ -149,6 +187,7 @@ contract VaultHubViewerV1 {
 
     /// @dev common logic for vaultsByOwner and vaultsByOwnerBound
     function _vaultsByOwner(address _owner) internal view returns (IVault[] memory, uint256) {
+        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -159,7 +198,7 @@ contract VaultHubViewerV1 {
         for (uint256 i = 0; i < count; i++) {
             IVault vaultInstance = IVault(vaultHub.vault(i));
             if (isOwner(vaultInstance, _owner)) {
-                vaults[valid] = vaultHub.vault(i);
+                vaults[valid] = IVault(vaultHub.vault(i));
                 valid++;
             }
         }
@@ -191,10 +230,12 @@ contract VaultHubViewerV1 {
         uint256 _from,
         uint256 _to
     ) internal pure returns (IVault[] memory filtered) {
+        if (_to < _from) revert WrongPaginationRange(_from, _to);
+
         uint256 count = _to - _from;
         filtered = new IVault[](count);
-        for (uint256 i = _from; i < _to; i++) {
-            filtered[i] = _vaults[i];
+        for (uint256 i = 0; i < count; i++) {
+            filtered[i] = _vaults[_from + i];
         }
     }
 
@@ -203,4 +244,9 @@ contract VaultHubViewerV1 {
     /// @notice Error for zero address arguments
     /// @param argName Name of the argument that is zero
     error ZeroArgument(string argName);
+
+    /// @notice Error for wrong pagination range
+    /// @param _from Start of the range
+    /// @param _to End of the range
+    error WrongPaginationRange(uint256 _from, uint256 _to);
 }
