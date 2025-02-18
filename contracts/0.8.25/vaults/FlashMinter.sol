@@ -53,7 +53,7 @@ abstract contract FlashMinter is VaultHub {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         // allow only registered recipients or the vault owner itself for flash minting
-        if (!isRegisteredFlashMintRecipient[_recipient] || _recipient != OwnableUpgradeable(_vault).owner())
+        if (!isRegisteredFlashMintRecipient[_recipient] && _recipient != OwnableUpgradeable(_vault).owner())
             revert FlashMintRecipientInvalid(_recipient);
 
         _vaultAuth(_vault, "flashMint");
