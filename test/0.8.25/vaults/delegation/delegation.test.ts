@@ -366,6 +366,45 @@ describe("Delegation.sol", () => {
     });
   });
 
+  context("withdrawableEther", () => {
+    it("returns the correct amount", async () => {
+      const amount = ether("1");
+      await delegation.connect(funder).fund({ value: amount });
+      expect(await delegation.withdrawableEther()).to.equal(amount);
+    });
+
+    it("returns the correct amount when balance is less than unreserved", async () => {
+      const valuation = ether("3");
+      const inOutDelta = 0n;
+      const locked = ether("2");
+
+      const amount = ether("1");
+      await delegation.connect(funder).fund({ value: amount });
+      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+
+      expect(await delegation.withdrawableEther()).to.equal(amount);
+    });
+
+    it("returns the correct amount when has fees", async () => {
+      const amount = ether("6");
+      const valuation = ether("3");
+      const inOutDelta = ether("1");
+      const locked = ether("2");
+
+      const curatorFeeBP = 1000; // 10%
+      const operatorFeeBP = 1000; // 10%
+      await delegation.connect(vaultOwner).setCuratorFeeBP(curatorFeeBP);
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFeeBP);
+
+      await delegation.connect(funder).fund({ value: amount });
+
+      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+      const unreserved = await delegation.unreserved();
+
+      expect(await delegation.withdrawableEther()).to.equal(unreserved);
+    });
+  });
+
   context("fund", () => {
     it("reverts if the caller is not a member of the staker role", async () => {
       await expect(delegation.connect(stranger).fund()).to.be.revertedWithCustomError(

@@ -387,7 +387,6 @@ export const handleOracleReport = async (
     });
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
-
     await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
       timeElapsed, // 1 day
@@ -593,7 +592,6 @@ const submitReport = async (
   log.debug("Pushed oracle report for reached consensus", data);
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
-
   log.debug("Pushed oracle report main data", {
     "Ref slot": refSlot,
     "Consensus version": consensusVersion,
