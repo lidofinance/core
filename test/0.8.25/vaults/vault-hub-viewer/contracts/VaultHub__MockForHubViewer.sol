@@ -40,6 +40,10 @@ contract VaultHub__MockForHubViewer {
         return vaultSockets[_vault];
     }
 
+    function vaultSocket(uint256 _index) external view returns (VaultHub.VaultSocket memory) {
+        return _getVaultHubStorage().sockets[_index];
+    }
+
     function vaultSocketIndex(address _vault) public view returns (uint256) {
         return _getVaultHubStorage().vaultIndex[_vault];
     }
