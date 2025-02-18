@@ -77,7 +77,9 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const deploy = async () => {
+  before(async () => {
+    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -95,12 +97,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     await consensus.addMember(member1, 1);
     await consensus.addMember(member2, 2);
     await consensus.addMember(member3, 2);
-  };
-
-  before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
-
-    await deploy();
   });
 
   const triggerConsensusOnHash = async (hash: string) => {
