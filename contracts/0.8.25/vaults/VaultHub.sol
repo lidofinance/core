@@ -14,6 +14,15 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
+interface IOperatorGrid {
+    function getVaultLimits(address vault) external returns(
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _reserveRatioThresholdBP,
+        uint256 _treasuryFeeBP
+    );
+}
+
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
 /// It allows to connect vaults, disconnect them, mint and burn stETH
 /// It also allows to force rebalance of the vaults
@@ -73,6 +82,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
 
+    IOperatorGrid public immutable OPERATOR_GRID;
+
     /// @param _stETH Lido stETH contract
     constructor(IStETH _stETH) {
         STETH = _stETH;
@@ -124,6 +135,16 @@ abstract contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
+    function connectVault(address _vault) external {
+        (
+            uint256 shareLimit,
+            uint256 reserveRatioBP,
+            uint256 reserveRatioThresholdBP,
+            uint256 treasuryFeeBP
+        ) = OPERATOR_GRID.getVaultLimits(_vault);
+        _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
+    }
+
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
@@ -138,6 +159,16 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 _reserveRatioThresholdBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
+        _connectVault(_vault, _shareLimit, _reserveRatioBP, _reserveRatioThresholdBP, _treasuryFeeBP);
+    }
+
+    function _connectVault(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _reserveRatioThresholdBP,
+        uint256 _treasuryFeeBP
+    ) internal {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
