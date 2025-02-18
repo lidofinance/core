@@ -158,8 +158,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
-        if (IStakingVault(_vault).depositGuardian() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositGuardianNotAllowed(IStakingVault(_vault).depositGuardian());
+        if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
+            revert VaultDepositGuardianNotAllowed(IStakingVault(_vault).depositor());
 
         VaultSocket memory vr = VaultSocket(
             _vault,
