@@ -662,7 +662,7 @@ describe("Dashboard.sol", () => {
       const amounts = [0n]; // 0 amount means full withdrawal
 
       await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
-        .to.emit(vault, "ValidatorWithdrawalRequested")
+        .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
 
@@ -671,7 +671,7 @@ describe("Dashboard.sol", () => {
       const amounts = [ether("0.1")];
 
       await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
-        .to.emit(vault, "ValidatorWithdrawalRequested")
+        .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
   });

@@ -23,9 +23,9 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * The StakingVault can be used as a backing for minting new stETH if the StakingVault is connected to the VaultHub.
  * When minting stETH backed by the StakingVault, the VaultHub locks a portion of the StakingVault's valuation,
  * which cannot be withdrawn by the owner. If the locked amount exceeds the StakingVault's valuation,
- * the StakingVault enters the unbalanced state.
+ * the StakingVault enters the unhealthy state.
  * In this state, the VaultHub can force-rebalance the StakingVault by withdrawing a portion of the locked amount
- * and writing off the locked amount to restore the balanced state.
+ * and writing off the locked amount to restore the healthy state.
  * The owner can voluntarily rebalance the StakingVault in any state or by simply
  * supplying more ether to increase the valuation.
  *
@@ -45,7 +45,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
- *   - `triggerValidatorWithdrawal()` (partial withdrawals are disabled for unbalanced `StakingVault`)
+ *   - `triggerValidatorWithdrawal()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
@@ -271,8 +271,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _ether Amount of ether to withdraw.
      * @dev Cannot withdraw more than the unlocked amount or the balance of the contract, whichever is less.
      * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether
-     * @dev Includes a check that valuation remains greater than locked amount after withdrawal to ensure
-     *      `StakingVault` stays balanced and prevent reentrancy attacks.
+     * @dev Checks that valuation remains greater than locked amount after withdrawal to maintain
+     *      `StakingVault` health and prevent reentrancy attacks.
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -310,8 +310,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Rebalances StakingVault by withdrawing ether to VaultHub
-     * @dev Can only be called by VaultHub if StakingVault is unbalanced,
-     *      or by owner at any moment
+     * @dev Can only be called by VaultHub if StakingVault is unhealthy, or by owner at any moment
      * @param _ether Amount of ether to rebalance
      */
     function rebalance(uint256 _ether) external {
@@ -481,10 +480,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-
-        // If the vault is unbalanced, block partial withdrawals because they can front-run blocking the full exit
-        bool isBalanced = valuation() >= $.locked;
-        if (!isBalanced) {
+        bool isValuationBelowLocked = valuation() < $.locked;
+        if (isValuationBelowLocked) {
+            // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
             }
@@ -493,8 +491,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bool isAuthorized = (
             msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (!isBalanced && msg.sender == address(VAULT_HUB))
+            (!isValuationBelowLocked && msg.sender == address(VAULT_HUB))
         );
+
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
@@ -509,7 +508,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
         }
 
-        emit ValidatorWithdrawalRequested(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+        emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
     /**
@@ -640,7 +639,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive any excess withdrawal fee
      * @param _excess Amount of excess fee refunded to recipient
      */
-    event ValidatorWithdrawalRequested(address indexed _sender, bytes _pubkeys, uint64[] _amounts, address _refundRecipient, uint256 _excess);
+    event ValidatorWithdrawalTriggered(address indexed _sender, bytes _pubkeys, uint64[] _amounts, address _refundRecipient, uint256 _excess);
 
     /**
      * @notice Emitted when an excess fee is refunded back to the sender.

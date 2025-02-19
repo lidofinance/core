@@ -810,7 +810,7 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -822,7 +822,7 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(operator, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -834,7 +834,7 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
     });
 
@@ -847,7 +847,7 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, 0);
     });
 
@@ -863,7 +863,7 @@ describe("StakingVault.sol", () => {
       await expect(tx)
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
-        .to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, overpaid);
 
       const txReceipt = (await tx.wait()) as ContractTransactionReceipt;
@@ -891,7 +891,7 @@ describe("StakingVault.sol", () => {
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
-        .and.to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, vaultOwnerAddress, 0n);
     });
 
@@ -911,7 +911,7 @@ describe("StakingVault.sol", () => {
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
         .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
-        .and.to.emit(stakingVault, "ValidatorWithdrawalRequested")
+        .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, stranger, valueToRefund);
 
       const strangerBalanceAfter = await ethers.provider.getBalance(stranger);
