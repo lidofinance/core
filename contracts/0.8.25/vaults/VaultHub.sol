@@ -382,7 +382,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
 
-    /// THIS IS A LAST RESORT MECHANISM, THAT SHOULD BE AVOIDED BY THE VAULT OPERATORS AT ALL COSTS
     /// In case of the unbalanced vault, ANYONE can force any validator belonging to the vault to withdraw from the
     /// beacon chain to get all the vault deposited ETH back to the vault balance and rebalance the vault
     /// @notice forces validator withdrawal from the beacon chain in case the vault is unbalanced

@@ -421,7 +421,7 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Signals to node operators that specific validators should exit from the beacon chain. It DOES NOT
-     *         directly trigger the exit - node operators must monitor for request events and handle the exits manually
+     *         directly trigger the exit - node operators must monitor for request events and handle the exits
      * @param _pubkeys Concatenated validator public keys (48 bytes each)
      * @dev    Emits `ValidatorExitRequested` event for each validator public key through the `StakingVault`
      *         This is a voluntary exit request - node operators can choose whether to act on it or not

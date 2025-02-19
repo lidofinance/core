@@ -361,7 +361,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns whether deposits are paused by the vault owner
+     * @notice Returns whether deposits are paused
      * @return True if deposits are paused
      */
     function beaconChainDepositsPaused() external view returns (bool) {
@@ -401,7 +401,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Performs a deposit to the beacon chain deposit contract
      * @param _deposits Array of deposit structs
-     * @dev    Includes a check to ensure `StakingVault` is balanced before making deposits
+     * @dev    Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
@@ -442,7 +442,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Requests node operator to exit validators from the beacon chain
-     *         It does not directly trigger exits - node operators must monitor for these events and handle the exits manually
+     *         It does not directly trigger exits - node operators must monitor for these events and handle the exits
      * @param _pubkeys Concatenated validator public keys, each 48 bytes long
      */
     function requestValidatorExit(bytes calldata _pubkeys) external onlyOwner {
