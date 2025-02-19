@@ -12,22 +12,22 @@ import {Delegation} from "./Delegation.sol";
 
 struct DelegationConfig {
     address defaultAdmin;
-    address funder;
-    address withdrawer;
-    address minter;
-    address burner;
-    address rebalancer;
-    address depositPauser;
-    address depositResumer;
-    address exitRequester;
-    address disconnecter;
-    address curatorFeeSetter;
-    address curatorFeeClaimer;
     address nodeOperatorManager;
-    address nodeOperatorFeeClaimer;
+    uint256 confirmLifetime;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
-    uint256 confirmLifetime;
+    address[] funders;
+    address[] withdrawers;
+    address[] minters;
+    address[] burners;
+    address[] rebalancers;
+    address[] depositPausers;
+    address[] depositResumers;
+    address[] exitRequesters;
+    address[] disconnecters;
+    address[] curatorFeeSetters;
+    address[] curatorFeeClaimers;
+    address[] nodeOperatorFeeClaimers;
 }
 
 contract VaultFactory {
@@ -71,20 +71,47 @@ contract VaultFactory {
         // setup roles from config
         // basic permissions to the staking vault
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);
-        delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funder);
-        delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawer);
-        delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minter);
-        delegation.grantRole(delegation.BURN_ROLE(), _delegationConfig.burner);
-        delegation.grantRole(delegation.REBALANCE_ROLE(), _delegationConfig.rebalancer);
-        delegation.grantRole(delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositPauser);
-        delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumer);
-        delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequester);
-        delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecter);
-        // delegation roles
-        delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), _delegationConfig.curatorFeeSetter);
-        delegation.grantRole(delegation.CURATOR_FEE_CLAIM_ROLE(), _delegationConfig.curatorFeeClaimer);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
+
+        for (uint256 i = 0; i < _delegationConfig.funders.length; i++) {
+            delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funders[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.withdrawers.length; i++) {
+            delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.minters.length; i++) {
+            delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.burners.length; i++) {
+            delegation.grantRole(delegation.BURN_ROLE(), _delegationConfig.burners[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.rebalancers.length; i++) {
+            delegation.grantRole(delegation.REBALANCE_ROLE(), _delegationConfig.rebalancers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.depositPausers.length; i++) {
+            delegation.grantRole(delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositPausers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
+            delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.exitRequesters.length; i++) {
+            delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequesters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
+            delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.curatorFeeSetters.length; i++) {
+            delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), _delegationConfig.curatorFeeSetters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.curatorFeeClaimers.length; i++) {
+            delegation.grantRole(delegation.CURATOR_FEE_CLAIM_ROLE(), _delegationConfig.curatorFeeClaimers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
+            delegation.grantRole(
+                delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+                _delegationConfig.nodeOperatorFeeClaimers[i]
+            );
+        }
 
         // grant temporary roles to factory for setting fees
         delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));

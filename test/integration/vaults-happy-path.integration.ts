@@ -159,23 +159,22 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
         defaultAdmin: owner,
-        funder: curator,
-        withdrawer: curator,
-        minter: curator,
-        burner: curator,
-        rebalancer: curator,
-        depositPauser: curator,
-        depositResumer: curator,
-        exitRequester: curator,
-        disconnecter: curator,
-        curatorFeeSetter: curator,
-        curatorFeeClaimer: curator,
         nodeOperatorManager: nodeOperator,
-        nodeOperatorFeeConfirmer: nodeOperator,
-        nodeOperatorFeeClaimer: nodeOperator,
         curatorFeeBP: VAULT_OWNER_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
         confirmLifetime: days(7n),
+        funders: [curator],
+        withdrawers: [curator],
+        minters: [curator],
+        burners: [curator],
+        rebalancers: [curator],
+        depositPausers: [curator],
+        depositResumers: [curator],
+        exitRequesters: [curator],
+        disconnecters: [curator],
+        curatorFeeSetters: [curator],
+        curatorFeeClaimers: [curator],
+        nodeOperatorFeeClaimers: [nodeOperator],
       },
       "0x",
     );
@@ -195,7 +194,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;

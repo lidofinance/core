@@ -39,7 +39,6 @@ describe("Delegation.sol", () => {
   let curatorFeeSetter: HardhatEthersSigner;
   let curatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
-  let nodeOperatorFeeConfirmer: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
@@ -78,7 +77,6 @@ describe("Delegation.sol", () => {
       curatorFeeSetter,
       curatorFeeClaimer,
       nodeOperatorManager,
-      nodeOperatorFeeConfirmer,
       nodeOperatorFeeClaimer,
       stranger,
       beaconOwner,
@@ -110,23 +108,22 @@ describe("Delegation.sol", () => {
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
         defaultAdmin: vaultOwner,
-        funder,
-        withdrawer,
-        minter,
-        burner,
-        rebalancer,
-        depositPauser,
-        depositResumer,
-        exitRequester,
-        disconnecter,
-        curatorFeeSetter,
-        curatorFeeClaimer,
         nodeOperatorManager,
-        nodeOperatorFeeConfirmer,
-        nodeOperatorFeeClaimer,
+        confirmLifetime: days(7n),
         curatorFeeBP: 0n,
         nodeOperatorFeeBP: 0n,
-        confirmLifetime: days(7n),
+        funders: [funder],
+        withdrawers: [withdrawer],
+        minters: [minter],
+        burners: [burner],
+        rebalancers: [rebalancer],
+        depositPausers: [depositPauser],
+        depositResumers: [depositResumer],
+        exitRequesters: [exitRequester],
+        disconnecters: [disconnecter],
+        curatorFeeSetters: [curatorFeeSetter],
+        curatorFeeClaimers: [curatorFeeClaimer],
+        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
       },
       "0x",
     );
@@ -218,7 +215,6 @@ describe("Delegation.sol", () => {
       await assertSoleMember(curatorFeeSetter, await delegation.CURATOR_FEE_SET_ROLE());
       await assertSoleMember(curatorFeeClaimer, await delegation.CURATOR_FEE_CLAIM_ROLE());
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
-      await assertSoleMember(nodeOperatorFeeConfirmer, await delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE());
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
 
       expect(await delegation.curatorFeeBP()).to.equal(0n);
