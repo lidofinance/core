@@ -181,7 +181,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        vaultHub.mintSharesBackedByVault(address(stakingVault()), _recipient, _shares);
+        vaultHub.mintShares(address(stakingVault()), _recipient, _shares);
     }
 
     /**
@@ -190,7 +190,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        vaultHub.burnSharesBackedByVault(address(stakingVault()), _shares);
+        vaultHub.burnShares(address(stakingVault()), _shares);
     }
 
     /**
