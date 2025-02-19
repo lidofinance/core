@@ -6,6 +6,27 @@ import { ethers } from "hardhat";
 import { log } from "./log";
 import { resetStateFile } from "./state-file";
 
+class StepsFileNotFoundError extends Error {
+  constructor(filePath: string) {
+    super(`Steps file ${filePath} not found!`);
+    this.name = "StepsFileNotFoundError";
+  }
+}
+
+class MigrationFileNotFoundError extends Error {
+  constructor(filePath: string) {
+    super(`Migration file ${filePath} not found!`);
+    this.name = "MigrationFileNotFoundError";
+  }
+}
+
+class MigrationMainFunctionError extends Error {
+  constructor(filePath: string) {
+    super(`Migration file ${filePath} does not export a 'main' function!`);
+    this.name = "MigrationMainFunctionError";
+  }
+}
+
 const deployedSteps: string[] = [];
 
 async function applySteps(steps: string[]) {
@@ -35,8 +56,11 @@ export async function deployUpgrade(networkName: string): Promise<void> {
 
     await applySteps(steps);
   } catch (error) {
-    log.error("Upgrade failed:", (error as Error).message);
-    log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+    if (error instanceof StepsFileNotFoundError) {
+      log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+    } else {
+      log.error("Upgrade failed:", (error as Error).message);
+    }
   }
 }
 
@@ -55,7 +79,7 @@ type StepsFile = {
 export const loadSteps = (stepsFile: string): string[] => {
   const stepsPath = path.resolve(process.cwd(), `scripts/${stepsFile}`);
   if (!fs.existsSync(stepsPath)) {
-    throw new Error(`Steps file ${stepsPath} not found!`);
+    throw new StepsFileNotFoundError(stepsPath);
   }
 
   return (JSON.parse(fs.readFileSync(stepsPath, "utf8")) as StepsFile).steps;
@@ -64,7 +88,7 @@ export const loadSteps = (stepsFile: string): string[] => {
 export const resolveMigrationFile = (step: string): string => {
   const migrationFile = path.resolve(process.cwd(), `scripts/${step}.ts`);
   if (!fs.existsSync(migrationFile)) {
-    throw new Error(`Migration file ${migrationFile} not found!`);
+    throw new MigrationFileNotFoundError(migrationFile);
   }
 
   return migrationFile;
@@ -80,7 +104,7 @@ export async function applyMigrationScript(migrationFile: string): Promise<void>
   const { main } = await import(fullPath);
 
   if (typeof main !== "function") {
-    throw new Error(`Migration file ${migrationFile} does not export a 'main' function!`);
+    throw new MigrationMainFunctionError(migrationFile);
   }
 
   try {
