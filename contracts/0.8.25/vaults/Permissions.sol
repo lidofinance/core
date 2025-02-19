@@ -232,7 +232,7 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the DEFAULT_ADMIN_ROLE and transfers the StakingVault ownership.
+     * @dev Checks the confirming roles and transfers the StakingVault ownership.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
