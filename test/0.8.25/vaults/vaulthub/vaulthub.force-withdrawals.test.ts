@@ -101,7 +101,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
   // Simulate getting in the unhealthy state
   const makeVaultUnhealthy = async () => {
     await vault.fund({ value: ether("1") });
-    await vaultHub.mintSharesBackedByVault(vaultAddress, user, ether("0.9"));
+    await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
     await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
@@ -193,7 +193,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
       const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_01n)) / TOTAL_BASIS_POINTS);
 
       await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
-      await vaultHub.mintSharesBackedByVault(demoVaultAddress, user, cap);
+      await vaultHub.mintShares(demoVaultAddress, user, cap);
 
       expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted).to.equal(cap);
 

@@ -261,7 +261,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintSharesBackedByVault(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
+    function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
@@ -300,7 +300,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
     /// @dev VaultHub must have all the stETH on its balance
-    function burnSharesBackedByVault(address _vault, uint256 _amountOfShares) public whenResumed {
+    function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         _vaultAuth(_vault, "burn");
@@ -319,10 +319,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
     /// @dev msg.sender should be vault's owner
-    function transferAndBurnSharesBackedByVault(address _vault, uint256 _amountOfShares) external {
+    function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
         STETH.transferSharesFrom(msg.sender, address(this), _amountOfShares);
 
-        burnSharesBackedByVault(_vault, _amountOfShares);
+        burnShares(_vault, _amountOfShares);
     }
 
     /// @notice force rebalance of the vault to have sufficient reserve ratio

@@ -75,7 +75,7 @@ describe("VaultHub.sol:hub", () => {
 
   async function makeVaultBalanced(vault: StakingVault__MockForVaultHub) {
     await vault.fund({ value: ether("1") });
-    await vaultHub.mintSharesBackedByVault(await vault.getAddress(), user, ether("0.9"));
+    await vaultHub.mintShares(await vault.getAddress(), user, ether("0.9"));
     await vault.report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   }
 
@@ -560,7 +560,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if vault has shares minted", async () => {
       await vault.fund({ value: ether("1") });
-      await vaultHub.connect(user).mintSharesBackedByVault(vaultAddress, user.address, 1n);
+      await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
       await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
@@ -619,7 +619,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if vault has shares minted", async () => {
       await vault.fund({ value: ether("1") });
-      await vaultHub.connect(user).mintSharesBackedByVault(vaultAddress, user.address, 1n);
+      await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
       await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
