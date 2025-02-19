@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { batch, ether, impersonate, log, trace, updateBalance } from "lib";
+import { batch, ether, impersonate, log, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
@@ -23,17 +23,17 @@ describe("Scenario: Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
-  let ethHolder: HardhatEthersSigner;
   let stEthHolder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let uncountedStETHShares: bigint;
   let amountWithRewards: bigint;
+  let depositCount: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    [stEthHolder, ethHolder, stranger] = await ethers.getSigners();
+    [stEthHolder, stranger] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -53,7 +53,15 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should finalize withdrawal queue", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
-    await finalizeWithdrawalQueue(ctx, stEthHolder, ethHolder);
+    const stEthHolderAmount = ether("1000");
+
+    // Deposit some eth
+    await lido.connect(stEthHolder).submit(ZeroAddress, { value: stEthHolderAmount });
+
+    const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
+    expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
+
+    await finalizeWithdrawalQueue(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -62,11 +70,8 @@ describe("Scenario: Protocol Happy Path", () => {
     uncountedStETHShares = await lido.sharesOf(withdrawalQueue.address);
 
     // Added to facilitate the burner transfers
-    const approveTx = await lido.connect(stEthHolder).approve(withdrawalQueue.address, 1000n);
-    await trace("lido.approve", approveTx);
-
-    const requestWithdrawalsTx = await withdrawalQueue.connect(stEthHolder).requestWithdrawals([1000n], stEthHolder);
-    await trace("withdrawalQueue.requestWithdrawals", requestWithdrawalsTx);
+    await lido.connect(stEthHolder).approve(withdrawalQueue.address, 1000n);
+    await withdrawalQueue.connect(stEthHolder).requestWithdrawals([1000n], stEthHolder);
 
     expect(lastFinalizedRequestId).to.equal(lastRequestId);
   });
@@ -118,7 +123,7 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     const tx = await lido.connect(stranger).submit(ZeroAddress, { value: AMOUNT });
-    const receipt = await trace<ContractTransactionReceipt>("lido.submit", tx);
+    const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
     expect(receipt).not.to.be.null;
 
@@ -208,11 +213,11 @@ describe("Scenario: Protocol Happy Path", () => {
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const stakingModules = await stakingRouter.getStakingModules();
 
-    let depositCount = 0n;
+    depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
       const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, module.id, ZERO_HASH);
-      const depositReceipt = await trace<ContractTransactionReceipt>(`lido.deposit (${module.name})`, depositTx);
+      const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
       const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
       const deposits = unbufferedAmount / ether("32");
@@ -282,11 +287,10 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    // Stranger deposited 100 ETH, enough to deposit 3 validators, need to reflect this in the report
-    // 0.01 ETH is added to the clDiff to simulate some rewards
+    // 0.001 – to simulate rewards
     const reportData: Partial<OracleReportParams> = {
-      clDiff: ether("96.01"),
-      clAppearedValidators: 3n,
+      clDiff: ether("32") * depositCount + ether("0.001"),
+      clAppearedValidators: depositCount,
     };
 
     const { reportTx, extraDataTx } = (await report(ctx, reportData)) as {
@@ -416,7 +420,7 @@ describe("Scenario: Protocol Happy Path", () => {
     amountWithRewards = balanceBeforeRequest.stETH;
 
     const approveTx = await lido.connect(stranger).approve(withdrawalQueue.address, amountWithRewards);
-    const approveTxReceipt = await trace<ContractTransactionReceipt>("lido.approve", approveTx);
+    const approveTxReceipt = (await approveTx.wait()) as ContractTransactionReceipt;
 
     const approveEvent = ctx.getEvents(approveTxReceipt, "Approval")[0];
 
@@ -432,11 +436,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const lastRequestIdBefore = await withdrawalQueue.getLastRequestId();
 
     const withdrawalTx = await withdrawalQueue.connect(stranger).requestWithdrawals([amountWithRewards], stranger);
-    const withdrawalTxReceipt = await trace<ContractTransactionReceipt>(
-      "withdrawalQueue.requestWithdrawals",
-      withdrawalTx,
-    );
-
+    const withdrawalTxReceipt = (await withdrawalTx.wait()) as ContractTransactionReceipt;
     const withdrawalEvent = ctx.getEvents(withdrawalTxReceipt, "WithdrawalRequested")[0];
 
     expect(withdrawalEvent?.args.toObject()).to.deep.include(
@@ -582,11 +582,10 @@ describe("Scenario: Protocol Happy Path", () => {
     expect(claimableEtherBeforeClaim).to.equal(amountWithRewards, "Claimable ether before claim");
 
     const claimTx = await withdrawalQueue.connect(stranger).claimWithdrawals([requestId], hints);
-    const claimTxReceipt = await trace<ContractTransactionReceipt>("withdrawalQueue.claimWithdrawals", claimTx);
+    const claimTxReceipt = (await claimTx.wait()) as ContractTransactionReceipt;
+    const claimEvent = ctx.getEvents(claimTxReceipt, "WithdrawalClaimed")[0];
 
     const spentGas = claimTxReceipt.gasUsed * claimTxReceipt.gasPrice;
-
-    const claimEvent = ctx.getEvents(claimTxReceipt, "WithdrawalClaimed")[0];
 
     expect(claimEvent?.args.toObject()).to.deep.include(
       {

@@ -21,7 +21,5 @@ export * from "./signing-keys";
 export * from "./state-file";
 export * from "./string";
 export * from "./time";
-export * from "./transaction";
-export * from "./type";
 export * from "./units";
 export * from "./deposit";
