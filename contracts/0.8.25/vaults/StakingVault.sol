@@ -139,6 +139,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param - Additional initialization parameters
      */
     function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
+        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
     }

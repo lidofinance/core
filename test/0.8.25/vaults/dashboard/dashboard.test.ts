@@ -11,6 +11,7 @@ import {
   DepositContract__MockForStakingVault,
   ERC721_MockForDashboard,
   LidoLocator,
+  Permissions,
   StakingVault,
   StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
@@ -44,6 +45,8 @@ describe("Dashboard.sol", () => {
   let vault: StakingVault;
   let dashboard: Dashboard;
   let dashboardAddress: string;
+
+  const confirmExpiry = days(7n);
 
   let originalState: string;
 
@@ -129,23 +132,26 @@ describe("Dashboard.sol", () => {
 
   context("initialize", () => {
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vaultOwner)).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
+      await expect(dashboard.initialize(vaultOwner, confirmExpiry)).to.be.revertedWithCustomError(
+        dashboard,
+        "AlreadyInitialized",
+      );
     });
 
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
 
-      await expect(dashboard_.initialize(vaultOwner)).to.be.revertedWithCustomError(
+      await expect(dashboard_.initialize(vaultOwner, confirmExpiry)).to.be.revertedWithCustomError(
         dashboard_,
         "NonProxyCallsForbidden",
       );
     });
   });
 
-  context("votingCommittee", () => {
+  context("confirmingRoles", () => {
     it("returns the array of roles", async () => {
-      const votingCommittee = await dashboard.votingCommittee();
-      expect(votingCommittee).to.deep.equal([ZeroAddress]);
+      const confirmingRoles = await dashboard.confirmingRoles();
+      expect(confirmingRoles).to.deep.equal([await dashboard.DEFAULT_ADMIN_ROLE()]);
     });
   });
 
@@ -188,7 +194,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
-      expect(await dashboard.treasuryFee()).to.equal(sockets.treasuryFeeBP);
+      expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
     });
   });
 
@@ -479,7 +485,7 @@ describe("Dashboard.sol", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).transferStakingVaultOwnership(vaultOwner)).to.be.revertedWithCustomError(
         dashboard,
-        "NotACommitteeMember",
+        "SenderNotMember",
       );
     });
 
@@ -931,7 +937,7 @@ describe("Dashboard.sol", () => {
       await steth.mock__setTotalPooledEther(baseTotalEther);
       await steth.mock__setTotalShares(baseTotalEther);
 
-      const wstethContract = await wsteth.connect(vaultOwner);
+      const wstethContract = wsteth.connect(vaultOwner);
 
       const totalEtherStep = baseTotalEther / 10n;
       const totalEtherMax = baseTotalEther * 2n;
@@ -1768,7 +1774,7 @@ describe("Dashboard.sol", () => {
   });
 
   context("role management", () => {
-    let assignments: Dashboard.RoleAssignmentStruct[];
+    let assignments: Permissions.RoleAssignmentStruct[];
 
     beforeEach(async () => {
       assignments = [

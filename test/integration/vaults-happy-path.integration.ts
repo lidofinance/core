@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, impersonate, log, updateBalance } from "lib";
+import { computeDepositDataRoot, days, impersonate, log, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -156,21 +156,23 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
         defaultAdmin: owner,
-        funder: curator,
-        withdrawer: curator,
-        minter: curator,
-        burner: curator,
-        curator,
-        rebalancer: curator,
-        depositPauser: curator,
-        depositResumer: curator,
-        exitRequester: curator,
-        withdrawalTriggerer: curator,
-        disconnecter: curator,
         nodeOperatorManager: nodeOperator,
-        nodeOperatorFeeClaimer: nodeOperator,
         curatorFeeBP: VAULT_OWNER_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+        confirmExpiry: days(7n),
+        funders: [curator],
+        withdrawers: [curator],
+        minters: [curator],
+        burners: [curator],
+        rebalancers: [curator],
+        depositPausers: [curator],
+        depositResumers: [curator],
+        validatorExitRequesters: [curator],
+        validatorWithdrawalTriggerers: [curator],
+        disconnecters: [curator],
+        curatorFeeSetters: [curator],
+        curatorFeeClaimers: [curator],
+        nodeOperatorFeeClaimers: [nodeOperator],
       },
       "0x",
     );
@@ -185,13 +187,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await isSoleRoleMember(owner, await delegation.DEFAULT_ADMIN_ROLE())).to.be.true;
 
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_SET_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_CLAIM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
 
-    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.be.true;
-
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.MINT_ROLE())).to.be.true;

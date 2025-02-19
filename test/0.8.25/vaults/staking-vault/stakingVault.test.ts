@@ -13,7 +13,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { computeDepositDataRoot, de0x, ether, impersonate, MAX_UINT256, streccak } from "lib";
+import { computeDepositDataRoot, de0x, ether, impersonate, MAX_UINT256, proxify, streccak } from "lib";
 
 import { deployStakingVaultBehindBeaconProxy, deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -107,7 +107,9 @@ describe("StakingVault.sol", () => {
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
+  });
 
+  context("initialize", () => {
     it("petrifies the implementation by setting the initialized version to 2^64 - 1", async () => {
       expect(await stakingVaultImplementation.getInitializedVersion()).to.equal(2n ** 64n - 1n);
       expect(await stakingVaultImplementation.version()).to.equal(1n);
@@ -117,6 +119,14 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
+    });
+
+    it("reverts if the node operator is zero address", async () => {
+      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
+        stakingVaultImplementation,
+        "ZeroArgument",
+      );
     });
   });
 
