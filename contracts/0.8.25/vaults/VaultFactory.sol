@@ -13,7 +13,7 @@ import {Delegation} from "./Delegation.sol";
 struct DelegationConfig {
     address defaultAdmin;
     address nodeOperatorManager;
-    uint256 confirmLifetime;
+    uint256 confirmExpiry;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
     address[] funders;
@@ -66,7 +66,7 @@ contract VaultFactory {
         );
 
         // initialize Delegation
-        delegation.initialize(address(this), _delegationConfig.confirmLifetime);
+        delegation.initialize(address(this), _delegationConfig.confirmExpiry);
 
         // setup roles from config
         // basic permissions to the staking vault

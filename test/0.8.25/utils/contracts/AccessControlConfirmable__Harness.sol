@@ -22,8 +22,8 @@ contract AccessControlConfirmable__Harness is AccessControlConfirmable {
         return roles;
     }
 
-    function setConfirmLifetime(uint256 _confirmLifetime) external {
-        _setConfirmLifetime(_confirmLifetime);
+    function setConfirmExpiry(uint256 _confirmExpiry) external {
+        _setConfirmExpiry(_confirmExpiry);
     }
 
     function setNumber(uint256 _number) external onlyConfirmed(confirmingRoles()) {

@@ -89,14 +89,14 @@ contract Dashboard is Permissions {
     /**
      * @notice Initializes the contract
      * @param _defaultAdmin Address of the default admin
-     * @param _confirmLifetime Confirm lifetime in seconds
+     * @param _confirmExpiry Confirm expiry in seconds
      */
-    function initialize(address _defaultAdmin, uint256 _confirmLifetime) external virtual {
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external virtual {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        _initialize(_defaultAdmin, _confirmLifetime);
+        _initialize(_defaultAdmin, _confirmExpiry);
     }
 
     // ==================== View Functions ====================

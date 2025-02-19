@@ -22,30 +22,30 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) public confirmations;
 
     /**
-     * @notice Minimal confirmation lifetime in seconds.
+     * @notice Minimal confirmation expiry in seconds.
      */
-    uint256 public constant MIN_CONFIRM_LIFETIME = 1 days;
+    uint256 public constant MIN_CONFIRM_EXPIRY = 1 days;
 
     /**
-     * @notice Maximal confirmation lifetime in seconds.
+     * @notice Maximal confirmation expiry in seconds.
      */
-    uint256 public constant MAX_CONFIRM_LIFETIME = 30 days;
+    uint256 public constant MAX_CONFIRM_EXPIRY = 30 days;
 
     /**
-     * @notice Confirmation lifetime in seconds; after this period, the confirmation expires and no longer counts.
+     * @notice Confirmation expiry in seconds; after this period, the confirmation expires and no longer counts.
      * @dev We cannot set this to 0 because this means that all confirmations have to be in the same block,
-     *      which can never be guaranteed. And, more importantly, if the `_setLifetime` is restricted by
-     *      the `onlyConfirmed` modifier, the confirmation lifetime will be tricky to change.
+     *      which can never be guaranteed. And, more importantly, if the `_setConfirmExpiry` is restricted by
+     *      the `onlyConfirmed` modifier, the confirmation expiry will be tricky to change.
      *      This is why this variable is private, set to a default value of 1 day and cannot be set to 0.
      */
-    uint256 private confirmLifetime = MIN_CONFIRM_LIFETIME;
+    uint256 private confirmExpiry = MIN_CONFIRM_EXPIRY;
 
     /**
-     * @notice Returns the confirmation lifetime.
-     * @return The confirmation lifetime in seconds.
+     * @notice Returns the confirmation expiry.
+     * @return The confirmation expiry in seconds.
      */
-    function getConfirmLifetime() public view returns (uint256) {
-        return confirmLifetime;
+    function getConfirmExpiry() public view returns (uint256) {
+        return confirmExpiry;
     }
 
     /**
@@ -60,7 +60,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      *
      * 2. Confirmation counting:
      *    - Counts the current caller's confirmations if they're a member of any of the specified roles
-     *    - Counts existing confirmations that are not expired, i.e. lifetime is not exceeded
+     *    - Counts existing confirmations that are not expired, i.e. expiry is not exceeded
      *
      * 3. Execution:
      *    - If all members of the specified roles have confirmed, executes the function
@@ -78,7 +78,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
      *
      * @param _roles Array of role identifiers that must confirm the call in order to execute it
      *
-     * @notice Confirmations past their lifetime are not counted and must be recast
+     * @notice Confirmations past their expiry are not counted and must be recast
      * @notice Only members of the specified roles can submit confirmations
      * @notice The order of confirmations does not matter
      *
@@ -90,7 +90,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
         uint256 numberOfConfirms = 0;
         bool[] memory deferredConfirms = new bool[](numberOfRoles);
         bool isRoleMember = false;
-        uint256 expiryTimestamp = block.timestamp + confirmLifetime;
+        uint256 expiryTimestamp = block.timestamp + confirmExpiry;
 
         for (uint256 i = 0; i < numberOfRoles; ++i) {
             bytes32 role = _roles[i];
@@ -125,28 +125,28 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     }
 
     /**
-     * @dev Sets the confirmation lifetime.
-     * Confirmation lifetime is a period during which the confirmation is counted. Once expired,
+     * @dev Sets the confirmation expiry.
+     * Confirmation expiry is a period during which the confirmation is counted. Once expired,
      * the confirmation no longer counts and must be recasted for the confirmation to go through.
      * @dev Does not retroactively apply to existing confirmations.
-     * @param _newConfirmLifetime The new confirmation lifetime in seconds.
+     * @param _newConfirmExpiry The new confirmation expiry in seconds.
      */
-    function _setConfirmLifetime(uint256 _newConfirmLifetime) internal {
-        if (_newConfirmLifetime < MIN_CONFIRM_LIFETIME || _newConfirmLifetime > MAX_CONFIRM_LIFETIME)
-            revert ConfirmLifetimeOutOfBounds();
+    function _setConfirmExpiry(uint256 _newConfirmExpiry) internal {
+        if (_newConfirmExpiry < MIN_CONFIRM_EXPIRY || _newConfirmExpiry > MAX_CONFIRM_EXPIRY)
+            revert ConfirmExpiryOutOfBounds();
 
-        uint256 oldConfirmLifetime = confirmLifetime;
-        confirmLifetime = _newConfirmLifetime;
+        uint256 oldConfirmExpiry = confirmExpiry;
+        confirmExpiry = _newConfirmExpiry;
 
-        emit ConfirmLifetimeSet(msg.sender, oldConfirmLifetime, _newConfirmLifetime);
+        emit ConfirmExpirySet(msg.sender, oldConfirmExpiry, _newConfirmExpiry);
     }
 
     /**
-     * @dev Emitted when the confirmation lifetime is set.
-     * @param oldConfirmLifetime The old confirmation lifetime.
-     * @param newConfirmLifetime The new confirmation lifetime.
+     * @dev Emitted when the confirmation expiry is set.
+     * @param oldConfirmExpiry The old confirmation expiry.
+     * @param newConfirmExpiry The new confirmation expiry.
      */
-    event ConfirmLifetimeSet(address indexed sender, uint256 oldConfirmLifetime, uint256 newConfirmLifetime);
+    event ConfirmExpirySet(address indexed sender, uint256 oldConfirmExpiry, uint256 newConfirmExpiry);
 
     /**
      * @dev Emitted when a role member confirms.
@@ -158,9 +158,9 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable {
     event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
 
     /**
-     * @dev Thrown when attempting to set confirmation lifetime out of bounds.
+     * @dev Thrown when attempting to set confirmation expiry out of bounds.
      */
-    error ConfirmLifetimeOutOfBounds();
+    error ConfirmExpiryOutOfBounds();
 
     /**
      * @dev Thrown when a caller without a required role attempts to confirm.

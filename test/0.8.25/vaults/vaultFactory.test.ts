@@ -110,7 +110,7 @@ describe("VaultFactory.sol", () => {
     delegationParams = {
       defaultAdmin: await admin.getAddress(),
       nodeOperatorManager: await operator.getAddress(),
-      confirmLifetime: days(7n),
+      confirmExpiry: days(7n),
       curatorFeeBP: 100n,
       nodeOperatorFeeBP: 200n,
       funders: [await vaultOwner1.getAddress()],

@@ -31,7 +31,7 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Node operator manager role:
-     * - confirms confirm lifetime;
+     * - confirms confirm expiry;
      * - confirms ownership transfer;
      * - assigns NODE_OPERATOR_FEE_CONFIRM_ROLE;
      * - assigns NODE_OPERATOR_FEE_CLAIM_ROLE.
@@ -76,13 +76,13 @@ contract Delegation is Dashboard {
     /**
      * @notice Initializes the contract:
      * - sets up the roles;
-     * - sets the confirm lifetime to 7 days (can be changed later by DEFAULT_ADMIN_ROLE and NODE_OPERATOR_MANAGER_ROLE).
+     * - sets the confirm expiry to 7 days (can be changed later by DEFAULT_ADMIN_ROLE and NODE_OPERATOR_MANAGER_ROLE).
      * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
      */
-    function initialize(address _defaultAdmin, uint256 _confirmLifetime) external override {
-        _initialize(_defaultAdmin, _confirmLifetime);
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external override {
+        _initialize(_defaultAdmin, _confirmExpiry);
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
@@ -146,13 +146,13 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Sets the confirm lifetime.
-     * Confirm lifetime is a period during which the confirm is counted. Once the period is over,
+     * @notice Sets the confirm expiry.
+     * Confirm expiry is a period during which the confirm is counted. Once the period is over,
      * the confirm is considered expired, no longer counts and must be recasted.
-     * @param _newConfirmLifetime The new confirm lifetime in seconds.
+     * @param _newConfirmExpiry The new confirm expiry in seconds.
      */
-    function setConfirmLifetime(uint256 _newConfirmLifetime) external onlyConfirmed(_confirmingRoles()) {
-        _setConfirmLifetime(_newConfirmLifetime);
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(_confirmingRoles()) {
+        _setConfirmExpiry(_newConfirmExpiry);
     }
 
     /**
@@ -253,7 +253,7 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Returns the roles that can:
-     * - change the confirm lifetime;
+     * - change the confirm expiry;
      * - set the curator fee;
      * - set the node operator fee;
      * - transfer the ownership of the StakingVault.

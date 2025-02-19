@@ -159,7 +159,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         nodeOperatorManager: nodeOperator,
         curatorFeeBP: VAULT_OWNER_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-        confirmLifetime: days(7n),
+        confirmExpiry: days(7n),
         funders: [curator],
         withdrawers: [curator],
         minters: [curator],

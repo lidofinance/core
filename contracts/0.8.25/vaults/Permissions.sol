@@ -90,7 +90,7 @@ abstract contract Permissions is AccessControlConfirmable {
         _SELF = address(this);
     }
 
-    function _initialize(address _defaultAdmin, uint256 _confirmLifetime) internal {
+    function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal {
         if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
@@ -99,7 +99,7 @@ abstract contract Permissions is AccessControlConfirmable {
         vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
-        _setConfirmLifetime(_confirmLifetime);
+        _setConfirmExpiry(_confirmExpiry);
 
         emit Initialized(_defaultAdmin);
     }

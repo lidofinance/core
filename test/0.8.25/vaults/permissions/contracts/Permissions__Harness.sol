@@ -6,13 +6,13 @@ pragma solidity ^0.8.0;
 import {Permissions} from "contracts/0.8.25/vaults/Permissions.sol";
 
 contract Permissions__Harness is Permissions {
-    function initialize(address _defaultAdmin, uint256 _confirmLifetime) external {
-        _initialize(_defaultAdmin, _confirmLifetime);
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
+        _initialize(_defaultAdmin, _confirmExpiry);
     }
 
-    function revertDoubleInitialize(address _defaultAdmin, uint256 _confirmLifetime) external {
-        _initialize(_defaultAdmin, _confirmLifetime);
-        _initialize(_defaultAdmin, _confirmLifetime);
+    function revertDoubleInitialize(address _defaultAdmin, uint256 _confirmExpiry) external {
+        _initialize(_defaultAdmin, _confirmExpiry);
+        _initialize(_defaultAdmin, _confirmExpiry);
     }
 
     function confirmingRoles() external pure returns (bytes32[] memory) {
@@ -59,7 +59,7 @@ contract Permissions__Harness is Permissions {
         _transferStakingVaultOwnership(_newOwner);
     }
 
-    function setConfirmLifetime(uint256 _newConfirmLifetime) external {
-        _setConfirmLifetime(_newConfirmLifetime);
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external {
+        _setConfirmExpiry(_newConfirmExpiry);
     }
 }

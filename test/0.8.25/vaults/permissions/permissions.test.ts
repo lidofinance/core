@@ -87,7 +87,7 @@ describe("Permissions", () => {
       {
         defaultAdmin,
         nodeOperator,
-        confirmLifetime: days(7n),
+        confirmExpiry: days(7n),
         funder,
         withdrawer,
         minter,
@@ -156,7 +156,7 @@ describe("Permissions", () => {
           {
             defaultAdmin,
             nodeOperator,
-            confirmLifetime: days(7n),
+            confirmExpiry: days(7n),
             funder,
             withdrawer,
             minter,
@@ -186,7 +186,7 @@ describe("Permissions", () => {
           {
             defaultAdmin,
             nodeOperator,
-            confirmLifetime: days(7n),
+            confirmExpiry: days(7n),
             funder,
             withdrawer,
             minter,

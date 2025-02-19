@@ -12,7 +12,7 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 struct PermissionsConfig {
     address defaultAdmin;
     address nodeOperator;
-    uint256 confirmLifetime;
+    uint256 confirmExpiry;
     address funder;
     address withdrawer;
     address minter;
@@ -56,7 +56,7 @@ contract VaultFactory__MockPermissions {
         vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
 
         // initialize Permissions
-        permissions.initialize(address(this), _permissionsConfig.confirmLifetime);
+        permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
 
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
@@ -91,9 +91,9 @@ contract VaultFactory__MockPermissions {
         vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
 
         // initialize Permissions
-        permissions.initialize(address(this), _permissionsConfig.confirmLifetime);
+        permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
         // should revert here
-        permissions.initialize(address(this), _permissionsConfig.confirmLifetime);
+        permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
 
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
@@ -128,7 +128,7 @@ contract VaultFactory__MockPermissions {
         vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
 
         // should revert here
-        permissions.initialize(address(0), _permissionsConfig.confirmLifetime);
+        permissions.initialize(address(0), _permissionsConfig.confirmExpiry);
 
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);

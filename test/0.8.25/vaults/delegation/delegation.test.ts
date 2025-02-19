@@ -109,7 +109,7 @@ describe("Delegation.sol", () => {
       {
         defaultAdmin: vaultOwner,
         nodeOperatorManager,
-        confirmLifetime: days(7n),
+        confirmExpiry: days(7n),
         curatorFeeBP: 0n,
         nodeOperatorFeeBP: 0n,
         funders: [funder],
@@ -235,32 +235,32 @@ describe("Delegation.sol", () => {
     });
   });
 
-  context("setConfirmLifetime", () => {
-    it("reverts if the caller is not a member of the confirm lifetime committee", async () => {
-      await expect(delegation.connect(stranger).setConfirmLifetime(days(10n))).to.be.revertedWithCustomError(
+  context("setConfirmExpiry", () => {
+    it("reverts if the caller is not a member of the confirm expiry committee", async () => {
+      await expect(delegation.connect(stranger).setConfirmExpiry(days(10n))).to.be.revertedWithCustomError(
         delegation,
         "SenderNotMember",
       );
     });
 
-    it("sets the new confirm lifetime", async () => {
-      const oldConfirmLifetime = await delegation.getConfirmLifetime();
-      const newConfirmLifetime = days(10n);
-      const msgData = delegation.interface.encodeFunctionData("setConfirmLifetime", [newConfirmLifetime]);
-      let confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+    it("sets the new confirm expiry", async () => {
+      const oldConfirmExpiry = await delegation.getConfirmExpiry();
+      const newConfirmExpiry = days(10n);
+      const msgData = delegation.interface.encodeFunctionData("setConfirmExpiry", [newConfirmExpiry]);
+      let confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
 
-      await expect(delegation.connect(vaultOwner).setConfirmLifetime(newConfirmLifetime))
+      await expect(delegation.connect(vaultOwner).setConfirmExpiry(newConfirmExpiry))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData);
 
-      confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
-      await expect(delegation.connect(nodeOperatorManager).setConfirmLifetime(newConfirmLifetime))
+      confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData)
-        .and.to.emit(delegation, "ConfirmLifetimeSet")
-        .withArgs(nodeOperatorManager, oldConfirmLifetime, newConfirmLifetime);
+        .and.to.emit(delegation, "ConfirmExpirySet")
+        .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
-      expect(await delegation.getConfirmLifetime()).to.equal(newConfirmLifetime);
+      expect(await delegation.getConfirmExpiry()).to.equal(newConfirmExpiry);
     });
   });
 
@@ -629,7 +629,7 @@ describe("Delegation.sol", () => {
     it("requires both default admin and operator manager to set the operator fee and emits the RoleMemberConfirmed event", async () => {
       const previousOperatorFee = await delegation.nodeOperatorFeeBP();
       const newOperatorFee = 1000n;
-      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       const msgData = delegation.interface.encodeFunctionData("setNodeOperatorFeeBP", [newOperatorFee]);
 
       await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
@@ -640,7 +640,7 @@ describe("Delegation.sol", () => {
       // check confirm
       expect(await delegation.confirmations(msgData, await delegation.DEFAULT_ADMIN_ROLE())).to.equal(expiryTimestamp);
 
-      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       await expect(delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(newOperatorFee))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), expiryTimestamp, msgData)
@@ -667,7 +667,7 @@ describe("Delegation.sol", () => {
       const previousOperatorFee = await delegation.nodeOperatorFeeBP();
       const newOperatorFee = 1000n;
       const msgData = delegation.interface.encodeFunctionData("setNodeOperatorFeeBP", [newOperatorFee]);
-      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
 
       await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
         .to.emit(delegation, "RoleMemberConfirmed")
@@ -679,7 +679,7 @@ describe("Delegation.sol", () => {
 
       // move time forward
       await advanceChainTime(days(7n) + 1n);
-      const expectedExpiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      const expectedExpiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       expect(expectedExpiryTimestamp).to.be.greaterThan(expiryTimestamp + days(7n));
       await expect(delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(newOperatorFee))
         .to.emit(delegation, "RoleMemberConfirmed")
@@ -693,7 +693,7 @@ describe("Delegation.sol", () => {
       );
 
       // curator has to confirm again
-      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData)
@@ -715,14 +715,14 @@ describe("Delegation.sol", () => {
     it("requires both curator and operator to transfer ownership and emits the RoleMemberConfirmd event", async () => {
       const newOwner = certainAddress("newOwner");
       const msgData = delegation.interface.encodeFunctionData("transferStakingVaultOwnership", [newOwner]);
-      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       await expect(delegation.connect(vaultOwner).transferStakingVaultOwnership(newOwner))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData);
       // owner is unchanged
       expect(await vault.owner()).to.equal(delegation);
 
-      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmLifetime());
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
       await expect(delegation.connect(nodeOperatorManager).transferStakingVaultOwnership(newOwner))
         .to.emit(delegation, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), expiryTimestamp, msgData);

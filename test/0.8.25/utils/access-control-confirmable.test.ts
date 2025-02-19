@@ -18,7 +18,7 @@ describe("AccessControlConfirmable.sol", () => {
     [admin, stranger, role1Member, role2Member] = await ethers.getSigners();
 
     harness = await ethers.deployContract("AccessControlConfirmable__Harness", [admin], admin);
-    expect(await harness.getConfirmLifetime()).to.equal(await harness.MIN_CONFIRM_LIFETIME());
+    expect(await harness.getConfirmExpiry()).to.equal(await harness.MIN_CONFIRM_EXPIRY());
     expect(await harness.hasRole(await harness.DEFAULT_ADMIN_ROLE(), admin)).to.be.true;
     expect(await harness.getRoleMemberCount(await harness.DEFAULT_ADMIN_ROLE())).to.equal(1);
 
@@ -33,14 +33,14 @@ describe("AccessControlConfirmable.sol", () => {
 
   context("constants", () => {
     it("returns the correct constants", async () => {
-      expect(await harness.MIN_CONFIRM_LIFETIME()).to.equal(days(1n));
-      expect(await harness.MAX_CONFIRM_LIFETIME()).to.equal(days(30n));
+      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(days(1n));
+      expect(await harness.MAX_CONFIRM_EXPIRY()).to.equal(days(30n));
     });
   });
 
-  context("getConfirmLifetime()", () => {
-    it("returns the minimal lifetime initially", async () => {
-      expect(await harness.getConfirmLifetime()).to.equal(await harness.MIN_CONFIRM_LIFETIME());
+  context("getConfirmExpiry()", () => {
+    it("returns the minimal expiry initially", async () => {
+      expect(await harness.getConfirmExpiry()).to.equal(await harness.MIN_CONFIRM_EXPIRY());
     });
   });
 
@@ -50,24 +50,26 @@ describe("AccessControlConfirmable.sol", () => {
     });
   });
 
-  context("setConfirmLifetime()", () => {
-    it("sets the confirm lifetime", async () => {
-      const oldLifetime = await harness.getConfirmLifetime();
-      const newLifetime = days(14n);
-      await expect(harness.setConfirmLifetime(newLifetime))
-        .to.emit(harness, "ConfirmLifetimeSet")
-        .withArgs(admin, oldLifetime, newLifetime);
-      expect(await harness.getConfirmLifetime()).to.equal(newLifetime);
+  context("setConfirmExpiry()", () => {
+    it("sets the confirm expiry", async () => {
+      const oldExpiry = await harness.getConfirmExpiry();
+      const newExpiry = days(14n);
+      await expect(harness.setConfirmExpiry(newExpiry))
+        .to.emit(harness, "ConfirmExpirySet")
+        .withArgs(admin, oldExpiry, newExpiry);
+      expect(await harness.getConfirmExpiry()).to.equal(newExpiry);
     });
 
-    it("reverts if the new lifetime is out of bounds", async () => {
-      await expect(
-        harness.setConfirmLifetime((await harness.MIN_CONFIRM_LIFETIME()) - 1n),
-      ).to.be.revertedWithCustomError(harness, "ConfirmLifetimeOutOfBounds");
+    it("reverts if the new expiry is out of bounds", async () => {
+      await expect(harness.setConfirmExpiry((await harness.MIN_CONFIRM_EXPIRY()) - 1n)).to.be.revertedWithCustomError(
+        harness,
+        "ConfirmExpiryOutOfBounds",
+      );
 
-      await expect(
-        harness.setConfirmLifetime((await harness.MAX_CONFIRM_LIFETIME()) + 1n),
-      ).to.be.revertedWithCustomError(harness, "ConfirmLifetimeOutOfBounds");
+      await expect(harness.setConfirmExpiry((await harness.MAX_CONFIRM_EXPIRY()) + 1n)).to.be.revertedWithCustomError(
+        harness,
+        "ConfirmExpiryOutOfBounds",
+      );
     });
   });
 
@@ -94,7 +96,7 @@ describe("AccessControlConfirmable.sol", () => {
     it("doesn't execute if the confirmation has expired", async () => {
       const oldNumber = await harness.number();
       const newNumber = 1;
-      const expiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmLifetime());
+      const expiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       const msgData = harness.interface.encodeFunctionData("setNumber", [newNumber]);
 
       await expect(harness.connect(role1Member).setNumber(newNumber))
@@ -106,7 +108,7 @@ describe("AccessControlConfirmable.sol", () => {
 
       await advanceChainTime(expiryTimestamp + 1n);
 
-      const newExpiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmLifetime());
+      const newExpiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       await expect(harness.connect(role2Member).setNumber(newNumber))
         .to.emit(harness, "RoleMemberConfirmed")
         .withArgs(role2Member, await harness.ROLE_2(), newExpiryTimestamp, msgData);

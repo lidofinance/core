@@ -45,7 +45,7 @@ describe("Dashboard.sol", () => {
   let dashboard: Dashboard;
   let dashboardAddress: string;
 
-  const confirmLifetime = days(7n);
+  const confirmExpiry = days(7n);
 
   let originalState: string;
 
@@ -127,7 +127,7 @@ describe("Dashboard.sol", () => {
 
   context("initialize", () => {
     it("reverts if already initialized", async () => {
-      await expect(dashboard.initialize(vaultOwner, confirmLifetime)).to.be.revertedWithCustomError(
+      await expect(dashboard.initialize(vaultOwner, confirmExpiry)).to.be.revertedWithCustomError(
         dashboard,
         "AlreadyInitialized",
       );
@@ -136,7 +136,7 @@ describe("Dashboard.sol", () => {
     it("reverts if called on the implementation", async () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
 
-      await expect(dashboard_.initialize(vaultOwner, confirmLifetime)).to.be.revertedWithCustomError(
+      await expect(dashboard_.initialize(vaultOwner, confirmExpiry)).to.be.revertedWithCustomError(
         dashboard_,
         "NonProxyCallsForbidden",
       );
