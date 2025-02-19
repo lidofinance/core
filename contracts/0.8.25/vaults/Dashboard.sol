@@ -30,7 +30,7 @@ interface IWstETH is IERC20, IERC20Permit {
 
 /**
  * @title Dashboard
- * @notice This contract is a UX-layer for `StakingVault`.
+ * @notice This contract is a UX-layer for StakingVault and meant to be used as its owner.
  * This contract improves the vault UX by bundling all functions from the StakingVault and VaultHub
  * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
