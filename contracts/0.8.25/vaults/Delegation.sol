@@ -39,11 +39,6 @@ contract Delegation is Dashboard {
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.Delegation.NodeOperatorManagerRole");
 
     /**
-     * @notice Confirms node operator fee.
-     */
-    bytes32 public constant NODE_OPERATOR_FEE_CONFIRM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeConfirmRole");
-
-    /**
      * @notice Claims node operator fee.
      */
     bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
@@ -81,7 +76,7 @@ contract Delegation is Dashboard {
     /**
      * @notice Initializes the contract:
      * - sets up the roles;
-     * - sets the confirm lifetime to 7 days (can be changed later by CURATOR_ROLE and NODE_OPERATOR_MANAGER_ROLE).
+     * - sets the confirm lifetime to 7 days (can be changed later by DEFAULT_ADMIN_ROLE and NODE_OPERATOR_MANAGER_ROLE).
      * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
@@ -94,7 +89,6 @@ contract Delegation is Dashboard {
         // at the end of the initialization
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(NODE_OPERATOR_FEE_CONFIRM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 

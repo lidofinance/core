@@ -24,7 +24,6 @@ struct DelegationConfig {
     address curatorFeeSetter;
     address curatorFeeClaimer;
     address nodeOperatorManager;
-    address nodeOperatorFeeConfirmer;
     address nodeOperatorFeeClaimer;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
@@ -86,11 +85,9 @@ contract VaultFactory {
         delegation.grantRole(delegation.CURATOR_FEE_CLAIM_ROLE(), _delegationConfig.curatorFeeClaimer);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
         delegation.grantRole(delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(), _delegationConfig.nodeOperatorFeeClaimer);
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), _delegationConfig.nodeOperatorFeeConfirmer);
 
         // grant temporary roles to factory for setting fees
         delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
-        delegation.grantRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), address(this));
 
         // set fees
         delegation.setCuratorFeeBP(_delegationConfig.curatorFeeBP);
@@ -98,7 +95,6 @@ contract VaultFactory {
 
         // revoke temporary roles from factory
         delegation.revokeRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
-        delegation.revokeRole(delegation.NODE_OPERATOR_FEE_CONFIRM_ROLE(), address(this));
         delegation.revokeRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 
