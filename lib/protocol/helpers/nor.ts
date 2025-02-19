@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { randomBytes } from "ethers";
+import { ethers, randomBytes } from "ethers";
 
-import { certainAddress, log, trace } from "lib";
+import { certainAddress, log } from "lib";
 
 import { ProtocolContext, StakingModuleName } from "../types";
 
@@ -123,12 +123,15 @@ export const norAddNodeOperator = async (
   const { nor } = ctx.contracts;
   const { operatorId, name, rewardAddress, managerAddress } = params;
 
-  log.warning(`Adding fake NOR operator ${operatorId}`);
+  log.debug(`Adding fake NOR operator ${operatorId}`, {
+    "Operator ID": operatorId,
+    "Name": name,
+    "Reward address": rewardAddress,
+    "Manager address": managerAddress,
+  });
 
   const agentSigner = await ctx.getSigner("agent");
-
-  const addTx = await nor.connect(agentSigner).addNodeOperator(name, rewardAddress);
-  await trace("nodeOperatorRegistry.addNodeOperator", addTx);
+  await nor.connect(agentSigner).addNodeOperator(name, rewardAddress);
 
   log.debug("Added NOR fake operator", {
     "Operator ID": operatorId,
@@ -153,14 +156,17 @@ export const norAddOperatorKeys = async (
   const { nor } = ctx.contracts;
   const { operatorId, keysToAdd } = params;
 
-  log.warning(`Adding fake keys to NOR operator ${operatorId}`);
+  log.debug(`Adding fake keys to NOR operator ${operatorId}`, {
+    "Operator ID": operatorId,
+    "Keys to add": keysToAdd,
+  });
 
   const totalKeysBefore = await nor.getTotalSigningKeyCount(operatorId);
   const unusedKeysBefore = await nor.getUnusedSigningKeyCount(operatorId);
 
   const votingSigner = await ctx.getSigner("voting");
 
-  const addKeysTx = await nor
+  await nor
     .connect(votingSigner)
     .addSigningKeys(
       operatorId,
@@ -168,7 +174,6 @@ export const norAddOperatorKeys = async (
       randomBytes(Number(keysToAdd * PUBKEY_LENGTH)),
       randomBytes(Number(keysToAdd * SIGNATURE_LENGTH)),
     );
-  await trace("nodeOperatorRegistry.addSigningKeys", addKeysTx);
 
   const totalKeysAfter = await nor.getTotalSigningKeyCount(operatorId);
   const unusedKeysAfter = await nor.getUnusedSigningKeyCount(operatorId);
@@ -201,12 +206,13 @@ const norSetOperatorStakingLimit = async (
   const { nor } = ctx.contracts;
   const { operatorId, limit } = params;
 
-  log.warning(`Setting NOR operator ${operatorId} staking limit`);
+  log.debug(`Setting NOR operator ${operatorId} staking limit`, {
+    "Operator ID": operatorId,
+    "Limit": ethers.formatEther(limit),
+  });
 
   const votingSigner = await ctx.getSigner("voting");
-
-  const setLimitTx = await nor.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
-  await trace("nodeOperatorRegistry.setNodeOperatorStakingLimit", setLimitTx);
+  await nor.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
 
   log.success(`Set NOR operator ${operatorId} staking limit`);
 };

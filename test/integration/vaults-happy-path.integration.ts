@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, impersonate, log, trace, updateBalance } from "lib";
+import { computeDepositDataRoot, days, impersonate, log, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   getReportTimeElapsed,
@@ -122,11 +122,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
-    const depositNorTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await trace("lido.deposit", depositNorTx);
-
-    const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-    await trace("lido.deposit", depositSdvtTx);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     const reportData: Partial<OracleReportParams> = {
       clDiff: LIDO_DEPOSIT,
@@ -179,7 +176,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       "0x",
     );
 
-    const createVaultTxReceipt = await trace<ContractTransactionReceipt>("vaultsFactory.createVault", deployTx);
+    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
     expect(createVaultEvents.length).to.equal(1n);
@@ -228,8 +225,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Staker to fund vault via delegation contract", async () => {
-    const depositTx = await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
-    await trace("delegation.fund", depositTx);
+    await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
@@ -259,9 +255,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       });
     }
 
-    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
-
-    await trace("stakingVault.depositToBeaconChain", topUpTx);
+    await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
@@ -292,7 +286,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       .withArgs(stakingVault, stakingVault.valuation());
 
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
-    const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
+    const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
     expect(mintEvents.length).to.equal(1n);
@@ -351,10 +345,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
     const claimPerformanceFeesTx = await delegation.connect(nodeOperator).claimNodeOperatorFee(nodeOperator);
-    const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimNodeOperatorFee",
-      claimPerformanceFeesTx,
-    );
+    const claimPerformanceFeesTxReceipt = (await claimPerformanceFeesTx.wait()) as ContractTransactionReceipt;
 
     const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);
     const gasFee = claimPerformanceFeesTxReceipt.gasPrice * claimPerformanceFeesTxReceipt.cumulativeGasUsed;
@@ -399,7 +390,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const managerBalanceBefore = await ethers.provider.getBalance(curator);
 
     const claimEthTx = await delegation.connect(curator).claimCuratorFee(curator);
-    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorFee", claimEthTx);
+    const { gasUsed, gasPrice } = (await claimEthTx.wait()) as ContractTransactionReceipt;
 
     const managerBalanceAfter = await ethers.provider.getBalance(curator);
     const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
@@ -419,13 +410,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { lido } = ctx.contracts;
 
     // Token master can approve the vault to burn the shares
-    const approveVaultTx = await lido
-      .connect(curator)
-      .approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
-    await trace("lido.approve", approveVaultTx);
-
-    const burnTx = await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
-    await trace("delegation.burn", burnTx);
+    await lido.connect(curator).approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
+    await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
@@ -437,12 +423,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
-    const { reportTx } = (await report(ctx, params)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    await trace("report", reportTx);
+    await report(ctx, params);
 
     const lockedOnVault = await stakingVault.locked();
     expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
@@ -456,15 +437,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const socket = await accounting["vaultSocket(address)"](stakingVaultAddress);
     const sharesMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    const rebalanceTx = await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
-    await trace("delegation.rebalanceVault", rebalanceTx);
+    await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
 
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
     const disconnectTx = await delegation.connect(curator).voluntaryDisconnect();
-    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("delegation.voluntaryDisconnect", disconnectTx);
+    const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
     expect(disconnectEvents.length).to.equal(1n);
