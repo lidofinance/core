@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3597"  lines-covered="3382"  line-rate="0.9401999999999999"  branches-valid="1652"  branches-covered="1478"  branch-rate="0.8946999999999999"  timestamp="1739957606861" complexity="0" version="0.1">
+<coverage lines-valid="3597"  lines-covered="3382"  line-rate="0.9401999999999999"  branches-valid="1652"  branches-covered="1478"  branch-rate="0.8946999999999999"  timestamp="1739959115248" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2010,13 +2010,13 @@
 	<classes>
 		<class name="AccessControlConfirmable.sol"  filename="contracts/0.8.25/utils/AccessControlConfirmable.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="getConfirmLifetime"  hits="17"  signature="()V" >
+			<method name="getConfirmExpiry"  hits="17"  signature="()V" >
 				<lines><line number="47"  hits="17" /></lines>
 			</method>
 			<method name="onlyConfirmed"  hits="40"  signature="()V" >
 				<lines><line number="86"  hits="40" /></lines>
 			</method>
-			<method name="_setConfirmLifetime"  hits="15"  signature="()V" >
+			<method name="_setConfirmExpiry"  hits="15"  signature="()V" >
 				<lines><line number="134"  hits="15" /></lines>
 			</method>
 		</methods>
@@ -2302,7 +2302,7 @@
 			<method name="withdrawableEther"  hits="3"  signature="()V" >
 				<lines><line number="144"  hits="3" /></lines>
 			</method>
-			<method name="setConfirmLifetime"  hits="1"  signature="()V" >
+			<method name="setConfirmExpiry"  hits="1"  signature="()V" >
 				<lines><line number="154"  hits="1" /></lines>
 			</method>
 			<method name="setCuratorFeeBP"  hits="14"  signature="()V" >
