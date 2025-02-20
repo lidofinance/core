@@ -87,6 +87,7 @@ export enum Sk {
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
+  vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
   // Vaults
   stakingVaultImpl = "stakingVaultImpl",

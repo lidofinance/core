@@ -143,6 +143,10 @@ export async function main() {
     lidoAddress,
   ]);
 
+  const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    lidoAddress,
+  ]);
+
   // Deploy AccountingOracle
   const accountingOracle = await deployBehindOssifiableProxy(
     Sk.accountingOracle,
@@ -210,6 +214,7 @@ export async function main() {
     oracleDaemonConfig.address,
     accounting.address,
     wstETH.address,
+    vaultHub.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }
