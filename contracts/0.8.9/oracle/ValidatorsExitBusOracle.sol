@@ -166,8 +166,37 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         ///
         /// Requests data
         ///
-        ExitRequestData exitRequestData;
+
+        /// @dev Total number of validator exit requests in this report. Must not be greater
+        /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
+        uint256 requestsCount;
+
+        /// @dev Format of the validator exit requests data. Currently, only the
+        /// DATA_FORMAT_LIST=1 is supported.
+        uint256 dataFormat;
+
+        /// @dev Validator exit requests data. Can differ based on the data format,
+        /// see the constant defining a specific data format below for more info.
+        bytes data;
     }
+
+    /// @notice The list format of the validator exit requests data. Used when all
+    /// requests fit into a single transaction.
+    ///
+    /// Each validator exit request is described by the following 64-byte array:
+    ///
+    /// MSB <------------------------------------------------------- LSB
+    /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
+    /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
+    ///
+    /// All requests are tightly packed into a byte array where requests follow
+    /// one another without any separator or padding, and passed to the `data`
+    /// field of the report structure.
+    ///
+    /// Requests must be sorted in the ascending order by the following compound
+    /// key: (moduleId, nodeOpId, validatorIndex).
+    ///
+    uint256 public constant DATA_FORMAT_LIST = 1;
 
     /// @notice Submits report data for processing.
     ///
@@ -190,12 +219,21 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        bytes32 exitRequestDataHash = keccak256(abi.encode(data.exitRequestData));
+        bytes32 dataHash = keccak256(abi.encode(data.data));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
-        _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data.consensusVersion, data.refSlot, exitRequestDataHash)));
+        bytes32 reportDataHash = keccak256(
+            abi.encode(
+                data.consensusVersion,
+                data.refSlot,
+                data.requestsCount,
+                data.dataFormat,
+                dataHash
+            )
+        );
+        _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
-        _storeOracleExitRequestHash(exitRequestDataHash, data, contractVersion);
+        _storeOracleExitRequestHash(dataHash, data, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -304,37 +342,37 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.exitRequestData.dataFormat != DATA_FORMAT_LIST) {
-            revert UnsupportedRequestsDataFormat(data.exitRequestData.dataFormat);
+        if (data.dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(data.dataFormat);
         }
 
-        if (data.exitRequestData.data.length % PACKED_REQUEST_LENGTH != 0) {
+        if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
 
         // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkExitBusOracleReport(data.exitRequestData.requestsCount);
+            .checkExitBusOracleReport(data.requestsCount);
 
-        if (data.exitRequestData.data.length / PACKED_REQUEST_LENGTH != data.exitRequestData.requestsCount) {
+        if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        _processExitRequestsList(data.exitRequestData.data);
+        _processExitRequestsList(data.data);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
-            requestsCount: data.exitRequestData.requestsCount.toUint64(),
-            requestsProcessed: data.exitRequestData.requestsCount.toUint64(),
+            requestsCount: data.requestsCount.toUint64(),
+            requestsProcessed: data.requestsCount.toUint64(),
             dataFormat: uint16(DATA_FORMAT_LIST)
         });
 
-        if (data.exitRequestData.requestsCount == 0) {
+        if (data.requestsCount == 0) {
             return;
         }
 
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
-            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.exitRequestData.requestsCount
+            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.requestsCount
         );
     }
 
@@ -417,17 +455,17 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
-        if (report.exitRequestData.requestsCount == 0) {
+        if (report.requestsCount == 0) {
             return;
         }
 
         mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
 
         RequestStatus storage request = hashes[exitRequestHash];
-        request.totalItemsCount = report.exitRequestData.requestsCount;
-        request.deliveredItemsCount = report.exitRequestData.requestsCount;
+        request.totalItemsCount = report.requestsCount;
+        request.deliveredItemsCount = report.requestsCount;
         request.contractVersion = contractVersion;
-        request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.exitRequestData.requestsCount - 1}));
+        request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.requestsCount - 1}));
     }
 
     ///

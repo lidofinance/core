@@ -49,29 +49,22 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     valIndex: number;
     valPubkey: string;
   }
-  interface ExitRequestData {
+
+  interface ReportFields {
+    consensusVersion: bigint;
+    refSlot: bigint;
     requestsCount: number;
     dataFormat: number;
     data: string;
   }
 
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    exitRequestData: ExitRequestData;
-  }
-
   const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const exitRequestItems = [
-      items.exitRequestData.requestsCount,
-      items.exitRequestData.dataFormat,
-      items.exitRequestData.data,
-    ];
-    const exitRequestData = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes)"], [exitRequestItems]);
-    const dataHash = ethers.keccak256(exitRequestData);
-    const oracleReportItems = [items.consensusVersion, items.refSlot, dataHash];
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,bytes32)"], [oracleReportItems]);
-    return ethers.keccak256(data);
+    const dataHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes"], [items.data]));
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, dataHash];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes32)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -177,11 +170,9 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         reportFields = {
           consensusVersion: CONSENSUS_VERSION,
           refSlot: refSlot,
-          exitRequestData: {
-            requestsCount: exitRequests.requests.length,
-            dataFormat: DATA_FORMAT_LIST,
-            data: encodeExitRequestsDataList(exitRequests.requests),
-          },
+          requestsCount: exitRequests.requests.length,
+          dataFormat: DATA_FORMAT_LIST,
+          data: encodeExitRequestsDataList(exitRequests.requests),
         };
 
         reportHash = calcValidatorsExitBusReportDataHash(reportFields);
