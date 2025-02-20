@@ -167,7 +167,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       it("initiates force validator withdrawal", async () => {
         await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+          .to.emit(vaultHub, "ForceValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);
       });
 
@@ -178,7 +178,7 @@ describe("VaultHub.sol:forceExit", () => {
         await expect(
           vaultHub.forceValidatorExit(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
         )
-          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+          .to.emit(vaultHub, "ForceValidatorExitTriggered")
           .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
     });
@@ -226,7 +226,7 @@ describe("VaultHub.sol:forceExit", () => {
       expect(await vaultHub.vaultHealthRatio(demoVault)).to.be.lt(TOTAL_BASIS_POINTS); // < 100%
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-        .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+        .to.emit(vaultHub, "ForceValidatorExitTriggered")
         .withArgs(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient);
     });
   });

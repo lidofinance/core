@@ -375,7 +375,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecepient);
 
-        emit VaultForceWithdrawalTriggered(_vault, _pubkeys, _refundRecepient);
+        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecepient);
     }
 
     function _disconnect(address _vault) internal {
@@ -559,7 +559,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event VaultForceWithdrawalTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
+    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
 
     error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault, uint256 healthRatio);
