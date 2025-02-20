@@ -42,8 +42,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint96 shareLimit;
         /// @notice minimal share of ether that is reserved for each stETH minted
         uint16 reserveRatioBP;
-        /// @notice if vault's reserve decreases to this threshold ratio,
-        /// it should be force rebalanced
+        /// @notice if vault's reserve decreases to this threshold ratio, it should be force rebalanced
         uint16 reserveRatioThresholdBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
@@ -139,9 +138,9 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice returns the health ratio of the vault
     /// @param _vault vault address
     /// @return health ratio in basis points
-    function vaultHealthRatio(address _vault) external view returns (uint256) {
+    function vaultHealthRatio(address _vault) public view returns (uint256) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (socket.sharesMinted == 0) return type(uint256).max; // infinite health
+        if (socket.sharesMinted == 0) return type(uint256).max;
 
         uint256 valuation = IStakingVault(_vault).valuation();
         uint256 mintedStETH = STETH.getPooledEthByShares(socket.sharesMinted);
@@ -306,17 +305,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @dev permissionless if the vault's min reserve ratio is broken
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        _onlyUnhealthy(_vault);
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
-        uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted <= threshold) {
-            // NOTE!: on connect vault is always balanced
-            revert AlreadyBalanced(_vault, sharesMinted, threshold);
-        }
-
-        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted); // TODO: fix rounding issue
+        uint256 mintedStETH = STETH.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
@@ -358,13 +351,13 @@ abstract contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
 
-    /// In case of the unbalanced vault, ANYONE can force any validator belonging to the vault to withdraw from the
-    /// beacon chain to get all the vault deposited ETH back to the vault balance and rebalance the vault
-    /// @notice forces validator withdrawal from the beacon chain in case the vault is unbalanced
-    /// @param _vault vault address
-    /// @param _pubkeys pubkeys of the validators to withdraw
-    /// @param _refundRecepient address of the recipient of the refund
-    function forceValidatorWithdrawal(
+    /// @notice Forces validator exit from the beacon chain when vault health ratio is below 100%
+    /// @param _vault The address of the vault to exit validators from
+    /// @param _pubkeys The public keys of the validators to exit
+    /// @param _refundRecepient The address that will receive the refund for transaction costs
+    /// @dev    When a vault's health ratio drops below 100%, anyone can force its validators to exit the beacon chain
+    ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
+    function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
         address _refundRecepient
@@ -375,11 +368,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         if (_refundRecepient == address(0)) revert ZeroArgument("_refundRecepient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
 
-        VaultSocket storage socket = _connectedSocket(_vault);
-        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
-        if (socket.sharesMinted <= threshold) {
-            revert AlreadyBalanced(_vault, socket.sharesMinted, threshold);
-        }
+        _onlyUnhealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
@@ -558,6 +547,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
         }
     }
 
+    function _onlyUnhealthy(address _vault) internal view {
+        uint256 healthRatio = vaultHealthRatio(_vault);
+        if (healthRatio >= TOTAL_BASIS_POINTS) revert AlreadyHealthy(_vault, healthRatio);
+    }
+
     event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 reserveRatioThreshold, uint256 treasuryFeeBP);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
@@ -568,7 +562,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event VaultForceWithdrawalTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
 
     error StETHMintFailed(address vault);
-    error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);
+    error AlreadyHealthy(address vault, uint256 healthRatio);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
