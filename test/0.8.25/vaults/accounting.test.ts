@@ -9,7 +9,7 @@ import { Accounting, LidoLocator, OssifiableProxy, StETH__HarnessForVaultHub } f
 import { ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("Accounting.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -36,7 +36,12 @@ describe("Accounting.sol", () => {
     });
 
     // VaultHub
-    vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth], { from: deployer });
+    vaultHubImpl = await ethers.deployContract("Accounting", [
+      locator,
+      steth,
+      VAULTS_CONNECTED_VAULTS_LIMIT,
+      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+    ]);
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
 

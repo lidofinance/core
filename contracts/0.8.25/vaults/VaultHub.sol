@@ -29,11 +29,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
-        /// @notice limit for the number of vaults that can ever be connected to the vault hub
-        uint256 connectedVaultsLimit;
-        /// @notice limit for a single vault share limit relative to Lido TVL in basis points
-        /// @dev    used to enforce an upper bound on individual vault share limits relative to total protocol TVL
-        uint256 relativeShareLimitBP;
     }
 
     struct VaultSocket {
@@ -66,8 +61,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
-    /// @notice role that allows to update vaults limits
-    bytes32 public constant VAULT_LIMITS_UPDATER_ROLE = keccak256("Vaults.VaultHub.VaultLimitsUpdaterRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
@@ -75,12 +68,25 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
+    /// @notice limit for the number of vaults that can ever be connected to the vault hub
+    uint256 private immutable CONNECTED_VAULTS_LIMIT;
+    /// @notice limit for a single vault share limit relative to Lido TVL in basis points
+    uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
+
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
 
     /// @param _stETH Lido stETH contract
-    constructor(IStETH _stETH) {
+    /// @param _connectedVaultsLimit Maximum number of vaults that can be connected
+    /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
+    constructor(IStETH _stETH, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
+        if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
+        if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
+        if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
+
         STETH = _stETH;
+        CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
+        RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
         _disableInitializers();
     }
@@ -89,12 +95,8 @@ abstract contract VaultHub is PausableUntilWithRoles {
     function __VaultHub_init(address _admin) internal onlyInitializing {
         __AccessControlEnumerable_init();
 
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        $.connectedVaultsLimit = 500;
-        $.relativeShareLimitBP = 10_00; // 10%
-
         // the stone in the elevator
-        $.sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, true));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, true));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -113,16 +115,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice returns the number of vaults connected to the hub
     function vaultsCount() public view returns (uint256) {
         return _getVaultHubStorage().sockets.length - 1;
-    }
-
-    /// @notice Returns the maximum number of vaults that can be connected to the hub
-    function connectedVaultsLimit() external view returns (uint256) {
-        return _getVaultHubStorage().connectedVaultsLimit;
-    }
-
-    /// @notice Returns the maximum allowedshare limit for a single vault relative to Lido TVL in basis points
-    function relativeShareLimitBP() external view returns (uint256) {
-        return _getVaultHubStorage().relativeShareLimitBP;
     }
 
     /// @param _index index of the vault
@@ -151,26 +143,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
         return socket.sharesMinted <= _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
     }
 
-    /// @notice Updates the limit for the number of vaults that can ever be connected to the vault hub
-    /// @param _connectedVaultsLimit new vaults limit
-    function setConnectedVaultsLimit(uint256 _connectedVaultsLimit) external onlyRole(VAULT_LIMITS_UPDATER_ROLE) {
-        if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
-        if (_connectedVaultsLimit < vaultsCount()) revert ConnectedVaultsLimitTooLow(_connectedVaultsLimit, vaultsCount());
-
-        _getVaultHubStorage().connectedVaultsLimit = _connectedVaultsLimit;
-        emit ConnectedVaultsLimitSet(_connectedVaultsLimit);
-    }
-
-    /// @notice Updates the limit for a single vault share limit relative to Lido TVL in basis points
-    /// @param _relativeShareLimitBP new relative share limit in basis points
-    function setRelativeShareLimitBP(uint256 _relativeShareLimitBP) external onlyRole(VAULT_LIMITS_UPDATER_ROLE) {
-        if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
-        if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
-
-        _getVaultHubStorage().relativeShareLimitBP = _relativeShareLimitBP;
-        emit RelativeShareLimitBPSet(_relativeShareLimitBP);
-    }
-
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
@@ -191,11 +163,10 @@ abstract contract VaultHub is PausableUntilWithRoles {
         if (_reserveRatioThresholdBP == 0) revert ZeroArgument("_reserveRatioThresholdBP");
         if (_reserveRatioThresholdBP > _reserveRatioBP) revert ReserveRatioThresholdTooHigh(_vault, _reserveRatioThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
-
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        if (vaultsCount() == $.connectedVaultsLimit) revert TooManyVaults();
+        if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
+        VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
         bytes32 vaultProxyCodehash = address(_vault).codehash;
@@ -576,8 +547,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @dev check if the share limit is within the upper bound set by relativeShareLimitBP
     function _checkShareLimitUpperBound(address _vault, uint256 _shareLimit) internal view {
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        uint256 relativeMaxShareLimitPerVault = (STETH.getTotalShares() * $.relativeShareLimitBP) / TOTAL_BASIS_POINTS;
+        uint256 relativeMaxShareLimitPerVault = (STETH.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
@@ -591,8 +561,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event VaultForceWithdrawalTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
-    event ConnectedVaultsLimitSet(uint256 connectedVaultsLimit);
-    event RelativeShareLimitBPSet(uint256 relativeShareLimitBP);
 
     error StETHMintFailed(address vault);
     error AlreadyBalanced(address vault, uint256 mintedShares, uint256 rebalancingThresholdInShares);

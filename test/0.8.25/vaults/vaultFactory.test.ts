@@ -24,7 +24,7 @@ import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/
 import { createVaultProxy, days, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -76,7 +76,13 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    accountingImpl = await ethers.deployContract("Accounting", [
+      locator,
+      steth,
+      VAULTS_CONNECTED_VAULTS_LIMIT,
+      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+    ]);
+
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);

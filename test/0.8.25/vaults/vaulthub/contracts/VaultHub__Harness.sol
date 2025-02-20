@@ -9,7 +9,12 @@ import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 contract VaultHub__Harness is Accounting {
-    constructor(address _locator, address _steth) Accounting(ILidoLocator(_locator), ILido(_steth)) {}
+    constructor(
+        address _locator,
+        address _steth,
+        uint256 _connectedVaultsLimit,
+        uint256 _relativeShareLimitBP
+    ) Accounting(ILidoLocator(_locator), ILido(_steth), _connectedVaultsLimit, _relativeShareLimitBP) {}
 
     function mock__calculateVaultsRebase(
         uint256 _postTotalShares,

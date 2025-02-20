@@ -16,7 +16,7 @@ import {
 import { ether, findEvents, randomAddress } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, ZERO_HASH } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
 
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 
@@ -27,6 +27,8 @@ const TREASURY_FEE_BP = 5_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
+
+const VAULTS_CONNECTED_VAULTS_LIMIT = 5; // Low limit to test the overflow
 
 describe("VaultHub.sol:hub", () => {
   let deployer: HardhatEthersSigner;
@@ -86,7 +88,13 @@ describe("VaultHub.sol:hub", () => {
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1000.0") });
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    const vaultHubImpl = await ethers.deployContract("Accounting", [
+      locator,
+      steth,
+      VAULTS_CONNECTED_VAULTS_LIMIT,
+      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+    ]);
+
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const accounting = await ethers.getContractAt("Accounting", proxy);
@@ -95,7 +103,6 @@ describe("VaultHub.sol:hub", () => {
     vaultHub = await ethers.getContractAt("Accounting", proxy, user);
     await accounting.grantRole(await vaultHub.PAUSE_ROLE(), user);
     await accounting.grantRole(await vaultHub.RESUME_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_LIMITS_UPDATER_ROLE(), user);
     await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
@@ -249,78 +256,6 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("connectedVaultsLimit", () => {
-    it("returns the maximum number of vaults that can be connected to the hub", async () => {
-      expect(await vaultHub.connectedVaultsLimit()).to.equal(500);
-    });
-  });
-
-  context("relativeShareLimitBP", () => {
-    it("returns the maximum size of a single vault relative to Lido TVL in basis points", async () => {
-      expect(await vaultHub.relativeShareLimitBP()).to.equal(10_00);
-    });
-  });
-
-  context("setConnectedVaultsLimit", () => {
-    it("reverts if called by non-VAULT_LIMITS_UPDATER_ROLE", async () => {
-      await expect(vaultHub.connect(stranger).setConnectedVaultsLimit(500)).to.be.revertedWithCustomError(
-        vaultHub,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("reverts if new vaults limit is zero", async () => {
-      await expect(vaultHub.connect(user).setConnectedVaultsLimit(0)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroArgument",
-      );
-    });
-
-    it("reverts if vaults limit is less than the number of already connected vaults", async () => {
-      await createVaultAndConnect(vaultFactory);
-      await expect(vaultHub.connect(user).setConnectedVaultsLimit(1)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ConnectedVaultsLimitTooLow",
-      );
-    });
-
-    it("updates the maximum number of vaults that can be connected to the hub", async () => {
-      await expect(vaultHub.connect(user).setConnectedVaultsLimit(1))
-        .to.emit(vaultHub, "ConnectedVaultsLimitSet")
-        .withArgs(1);
-      expect(await vaultHub.connectedVaultsLimit()).to.equal(1);
-    });
-  });
-
-  context("setRelativeShareLimitBP", () => {
-    it("reverts if called by non-VAULT_LIMITS_UPDATER_ROLE", async () => {
-      await expect(vaultHub.connect(stranger).setRelativeShareLimitBP(10_00)).to.be.revertedWithCustomError(
-        vaultHub,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("reverts if new relative share limit is zero", async () => {
-      await expect(vaultHub.connect(user).setRelativeShareLimitBP(0)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroArgument",
-      );
-    });
-
-    it("reverts if new relative share limit is greater than the total basis points", async () => {
-      await expect(
-        vaultHub.connect(user).setRelativeShareLimitBP(TOTAL_BASIS_POINTS + 1n),
-      ).to.be.revertedWithCustomError(vaultHub, "RelativeShareLimitBPTooHigh");
-    });
-
-    it("updates the relative share limit", async () => {
-      await expect(vaultHub.connect(user).setRelativeShareLimitBP(20_00))
-        .to.emit(vaultHub, "RelativeShareLimitBPSet")
-        .withArgs(20_00);
-      expect(await vaultHub.relativeShareLimitBP()).to.equal(20_00);
-    });
-  });
-
   context("connectVault", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
@@ -389,7 +324,10 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if max vault size is exceeded", async () => {
-      await vaultHub.connect(user).setConnectedVaultsLimit(1);
+      const vaultsCount = await vaultHub.vaultsCount();
+      for (let i = vaultsCount; i < VAULTS_CONNECTED_VAULTS_LIMIT; i++) {
+        await createVaultAndConnect(vaultFactory);
+      }
 
       await expect(
         vaultHub
@@ -508,7 +446,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if share limit exceeds the maximum vault limit", async () => {
       const insaneLimit = ether("1000000000000000000000000");
       const totalShares = await steth.getTotalShares();
-      const relativeShareLimitBP = await vaultHub.relativeShareLimitBP();
+      const relativeShareLimitBP = VAULTS_RELATIVE_SHARE_LIMIT_BP;
       const relativeShareLimitPerVault = (totalShares * relativeShareLimitBP) / TOTAL_BASIS_POINTS;
 
       await expect(vaultHub.connect(user).updateShareLimit(vaultAddress, insaneLimit))

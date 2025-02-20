@@ -491,7 +491,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bool isAuthorized = (
             msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (!isValuationBelowLocked && msg.sender == address(VAULT_HUB))
+            (isValuationBelowLocked && msg.sender == address(VAULT_HUB))
         );
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
