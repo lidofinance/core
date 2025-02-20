@@ -678,7 +678,6 @@ const reachConsensus = async (
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();
-
   expect(consensusReport).to.equal(reportHash, "Consensus report hash is incorrect");
 
   return submitter as HardhatEthersSigner;

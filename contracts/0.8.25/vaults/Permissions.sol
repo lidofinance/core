@@ -66,6 +66,11 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("vaults.Permissions.RequestValidatorExit");
 
     /**
+     * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
+     */
+    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.TriggerValidatorWithdrawal");
+
+    /**
      * @notice Permission for voluntary disconnecting the StakingVault.
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
@@ -218,10 +223,20 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
-     * @param _pubkey The public key of the validator to request exit for.
+     * @param _pubkeys The public keys of the validators to request exit for.
      */
-    function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorExit(_pubkey);
+    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+        stakingVault().requestValidatorExit(_pubkeys);
+    }
+
+    /**
+     * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
+     * @param _pubkeys The public keys of the validators to trigger withdrawal for.
+     * @param _amounts The amounts of ether to trigger withdrawal for.
+     * @param _refundRecipient The address to refund the excess ether to.
+     */
+    function _triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**

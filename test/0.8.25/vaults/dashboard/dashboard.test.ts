@@ -11,6 +11,7 @@ import {
   DepositContract__MockForStakingVault,
   ERC721_MockForDashboard,
   LidoLocator,
+  Permissions,
   StakingVault,
   StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
@@ -21,7 +22,7 @@ import {
 
 import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstethDomain } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("Dashboard.sol", () => {
@@ -51,8 +52,12 @@ describe("Dashboard.sol", () => {
 
   const BP_BASE = 10_000n;
 
+  const FEE = 10n; // some withdrawal fee for EIP-7002
+
   before(async () => {
     [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+
+    await deployWithdrawalsPreDeployedMock(FEE);
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
@@ -143,6 +148,13 @@ describe("Dashboard.sol", () => {
     });
   });
 
+  context("confirmingRoles", () => {
+    it("returns the array of roles", async () => {
+      const confirmingRoles = await dashboard.confirmingRoles();
+      expect(confirmingRoles).to.deep.equal([await dashboard.DEFAULT_ADMIN_ROLE()]);
+    });
+  });
+
   context("initialized state", () => {
     it("post-initialization state is correct", async () => {
       // vault state
@@ -210,6 +222,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -231,6 +244,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -250,6 +264,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       await dashboard.fund({ value: 1000n });
@@ -269,6 +284,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
       await dashboard.fund({ value: funding });
@@ -296,6 +312,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
 
       const funding = 1000n;
@@ -321,6 +338,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
@@ -343,6 +361,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
       const preFundCanMint = await dashboard.projectedNewMintableShares(funding);
@@ -363,6 +382,7 @@ describe("Dashboard.sol", () => {
         treasuryFeeBP: 500n,
         isDisconnected: false,
       };
+
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
 
@@ -611,19 +631,48 @@ describe("Dashboard.sol", () => {
   });
 
   context("requestValidatorExit", () => {
+    const pubkeys = ["01".repeat(48), "02".repeat(48)];
+    const pubkeysConcat = `0x${pubkeys.join("")}`;
+
     it("reverts if called by a non-admin", async () => {
-      const validatorPublicKey = "0x" + randomBytes(48).toString("hex");
-      await expect(dashboard.connect(stranger).requestValidatorExit(validatorPublicKey)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).requestValidatorExit(pubkeysConcat)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
-    it("requests the exit of a validator", async () => {
-      const validatorPublicKey = "0x" + randomBytes(48).toString("hex");
-      await expect(dashboard.requestValidatorExit(validatorPublicKey))
-        .to.emit(vault, "ValidatorsExitRequest")
-        .withArgs(dashboard, validatorPublicKey);
+    it("signals the requested exit of a validator", async () => {
+      await expect(dashboard.requestValidatorExit(pubkeysConcat))
+        .to.emit(vault, "ValidatorExitRequested")
+        .withArgs(dashboard, `0x${pubkeys[0]}`)
+        .to.emit(vault, "ValidatorExitRequested")
+        .withArgs(dashboard, `0x${pubkeys[1]}`);
+    });
+  });
+
+  context("triggerValidatorWithdrawal", () => {
+    it("reverts if called by a non-admin", async () => {
+      await expect(
+        dashboard.connect(stranger).triggerValidatorWithdrawal("0x", [0n], vaultOwner),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("requests a full validator withdrawal", async () => {
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      const amounts = [0n]; // 0 amount means full withdrawal
+
+      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalTriggered")
+        .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
+    });
+
+    it("requests a partial validator withdrawal", async () => {
+      const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
+      const amounts = [ether("0.1")];
+
+      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+        .to.emit(vault, "ValidatorWithdrawalTriggered")
+        .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
   });
 
@@ -888,7 +937,7 @@ describe("Dashboard.sol", () => {
       await steth.mock__setTotalPooledEther(baseTotalEther);
       await steth.mock__setTotalShares(baseTotalEther);
 
-      const wstethContract = await wsteth.connect(vaultOwner);
+      const wstethContract = wsteth.connect(vaultOwner);
 
       const totalEtherStep = baseTotalEther / 10n;
       const totalEtherMax = baseTotalEther * 2n;
@@ -1721,6 +1770,49 @@ describe("Dashboard.sol", () => {
 
       await expect(dashboard.resumeBeaconChainDeposits()).to.emit(vault, "BeaconChainDepositsResumed");
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
+
+  context("role management", () => {
+    let assignments: Permissions.RoleAssignmentStruct[];
+
+    beforeEach(async () => {
+      assignments = [
+        { role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+      ];
+    });
+
+    context("grantRoles", () => {
+      it("reverts when assignments array is empty", async () => {
+        await expect(dashboard.grantRoles([])).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      });
+
+      it("grants roles to multiple accounts", async () => {
+        await dashboard.grantRoles(assignments);
+
+        for (const assignment of assignments) {
+          expect(await dashboard.hasRole(assignment.role, assignment.account)).to.be.true;
+        }
+      });
+    });
+
+    context("revokeRoles", () => {
+      beforeEach(async () => {
+        await dashboard.grantRoles(assignments);
+      });
+
+      it("reverts when assignments array is empty", async () => {
+        await expect(dashboard.revokeRoles([])).to.be.revertedWithCustomError(dashboard, "ZeroArgument");
+      });
+
+      it("revokes roles from multiple accounts", async () => {
+        await dashboard.revokeRoles(assignments);
+
+        for (const assignment of assignments) {
+          expect(await dashboard.hasRole(assignment.role, assignment.account)).to.be.false;
+        }
+      });
     });
   });
 });

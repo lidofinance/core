@@ -34,7 +34,8 @@ describe("Delegation.sol", () => {
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
-  let exitRequester: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
   let curatorFeeSetter: HardhatEthersSigner;
   let curatorFeeClaimer: HardhatEthersSigner;
@@ -72,7 +73,8 @@ describe("Delegation.sol", () => {
       rebalancer,
       depositPauser,
       depositResumer,
-      exitRequester,
+      validatorExitRequester,
+      validatorWithdrawalTriggerer,
       disconnecter,
       curatorFeeSetter,
       curatorFeeClaimer,
@@ -119,7 +121,8 @@ describe("Delegation.sol", () => {
         rebalancers: [rebalancer],
         depositPausers: [depositPauser],
         depositResumers: [depositResumer],
-        exitRequesters: [exitRequester],
+        validatorExitRequesters: [validatorExitRequester],
+        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
         curatorFeeSetters: [curatorFeeSetter],
         curatorFeeClaimers: [curatorFeeClaimer],
@@ -210,7 +213,8 @@ describe("Delegation.sol", () => {
       await assertSoleMember(rebalancer, await delegation.REBALANCE_ROLE());
       await assertSoleMember(depositPauser, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await assertSoleMember(depositResumer, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await assertSoleMember(exitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorExitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorWithdrawalTriggerer, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
       await assertSoleMember(curatorFeeSetter, await delegation.CURATOR_FEE_SET_ROLE());
       await assertSoleMember(curatorFeeClaimer, await delegation.CURATOR_FEE_CLAIM_ROLE());

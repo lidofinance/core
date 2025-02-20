@@ -23,7 +23,8 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
-    address[] exitRequesters;
+    address[] validatorExitRequesters;
+    address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
     address[] curatorFeeSetters;
     address[] curatorFeeClaimers;
@@ -94,8 +95,11 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
-        for (uint256 i = 0; i < _delegationConfig.exitRequesters.length; i++) {
-            delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.exitRequesters[i]);
+        for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
+            delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.validatorExitRequesters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.validatorWithdrawalTriggerers.length; i++) {
+            delegation.grantRole(delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.validatorWithdrawalTriggerers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
