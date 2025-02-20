@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3075"  lines-covered="3042"  line-rate="0.9893000000000001"  branches-valid="1354"  branches-covered="1315"  branch-rate="0.9712000000000001"  timestamp="1740047550383" complexity="0" version="0.1">
+<coverage lines-valid="3074"  lines-covered="3041"  line-rate="0.9893000000000001"  branches-valid="1354"  branches-covered="1315"  branch-rate="0.9712000000000001"  timestamp="1740082064071" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4622,59 +4622,59 @@
 		</class>
 		<class name="ValidatorsExitBus.sol"  filename="contracts/0.8.9/oracle/ValidatorsExitBus.sol"  line-rate="0.8519"  branch-rate="0.5" >
 		<methods>
-			<method name="_initialize_v2"  hits="6"  signature="()V" >
-				<lines><line number="55"  hits="6" /></lines>
+			<method name="constructor"  hits="8"  signature="()V" >
+				<lines><line number="56"  hits="8" /></lines>
 			</method>
-			<method name="_setLocatorAddress"  hits="6"  signature="()V" >
-				<lines><line number="59"  hits="6" /></lines>
+			<method name="_setLocatorAddress"  hits="8"  signature="()V" >
+				<lines><line number="60"  hits="8" /></lines>
 			</method>
 			<method name="triggerExitHashVerify"  hits="4"  signature="()V" >
-				<lines><line number="65"  hits="4" /></lines>
+				<lines><line number="66"  hits="4" /></lines>
 			</method>
 			<method name="_storageExitRequestsHashes"  hits="27"  signature="()V" >
-				<lines><line number="107"  hits="27" /></lines>
+				<lines><line number="108"  hits="27" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="56"  hits="6"  branch="false" />
-			<line number="60"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="62"  hits="6"  branch="false" />
-			<line number="66"  hits="4"  branch="false" />
+			<line number="57"  hits="8"  branch="false" />
+			<line number="61"  hits="8"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="63"  hits="8"  branch="false" />
 			<line number="67"  hits="4"  branch="false" />
-			<line number="69"  hits="4"  branch="false" />
+			<line number="68"  hits="4"  branch="false" />
 			<line number="70"  hits="4"  branch="false" />
 			<line number="71"  hits="4"  branch="false" />
 			<line number="72"  hits="4"  branch="false" />
-			<line number="74"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="75"  hits="0"  branch="false" />
-			<line number="78"  hits="4"  branch="false" />
-			<line number="80"  hits="4"  branch="false" />
-			<line number="82"  hits="4"  branch="false" />
-			<line number="84"  hits="4"  branch="false" />
-			<line number="85"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="86"  hits="1"  branch="false" />
-			<line number="88"  hits="11"  branch="false" />
-			<line number="90"  hits="11"  branch="false" />
+			<line number="73"  hits="4"  branch="false" />
+			<line number="75"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="76"  hits="0"  branch="false" />
+			<line number="79"  hits="4"  branch="false" />
+			<line number="81"  hits="4"  branch="false" />
+			<line number="83"  hits="4"  branch="false" />
+			<line number="85"  hits="4"  branch="false" />
+			<line number="86"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="87"  hits="1"  branch="false" />
+			<line number="89"  hits="11"  branch="false" />
 			<line number="91"  hits="11"  branch="false" />
-			<line number="96"  hits="3"  branch="false" />
-			<line number="98"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="99"  hits="0"  branch="false" />
-			<line number="100"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="101"  hits="0"  branch="false" />
-			<line number="110"  hits="27"  branch="false" />
+			<line number="92"  hits="11"  branch="false" />
+			<line number="97"  hits="3"  branch="false" />
+			<line number="99"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="100"  hits="0"  branch="false" />
+			<line number="101"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="102"  hits="0"  branch="false" />
 			<line number="111"  hits="27"  branch="false" />
+			<line number="112"  hits="27"  branch="false" />
 		</lines>
 		</class>
-		<class name="ValidatorsExitBusOracle.sol"  filename="contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol"  line-rate="0.9808"  branch-rate="0.88" >
+		<class name="ValidatorsExitBusOracle.sol"  filename="contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol"  line-rate="0.9806"  branch-rate="0.88" >
 		<methods>
 			<method name="constructor"  hits="8"  signature="()V" >
-				<lines><line number="95"  hits="8" /></lines>
+				<lines><line number="96"  hits="8" /></lines>
 			</method>
 			<method name="initialize"  hits="8"  signature="()V" >
-				<lines><line number="100"  hits="8" /></lines>
+				<lines><line number="101"  hits="8" /></lines>
 			</method>
 			<method name="finalizeUpgrade_v2"  hits="6"  signature="()V" >
-				<lines><line number="113"  hits="6" /></lines>
+				<lines><line number="114"  hits="6" /></lines>
 			</method>
 			<method name="resume"  hits="7"  signature="()V" >
 				<lines><line number="123"  hits="7" /></lines>
@@ -4723,12 +4723,11 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="97"  hits="8"  branch="false" />
-			<line number="106"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="107"  hits="6"  branch="false" />
-			<line number="109"  hits="6"  branch="false" />
+			<line number="98"  hits="8"  branch="false" />
+			<line number="107"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="108"  hits="6"  branch="false" />
 			<line number="110"  hits="6"  branch="false" />
-			<line number="114"  hits="6"  branch="false" />
+			<line number="111"  hits="6"  branch="false" />
 			<line number="115"  hits="6"  branch="false" />
 			<line number="124"  hits="7"  branch="false" />
 			<line number="135"  hits="5"  branch="false" />
