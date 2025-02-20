@@ -20,21 +20,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
     error ZeroAddress();
     error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 msgValue);
-
-    /// Part of report data
-    struct ExitRequestData {
-        /// @dev Total number of validator exit requests in this report. Must not be greater
-        /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
-        uint256 requestsCount;
-
-        /// @dev Format of the validator exit requests data. Currently, only the
-        /// DATA_FORMAT_LIST=1 is supported.
-        uint256 dataFormat;
-
-        /// @dev Validator exit requests data. Can differ based on the data format,
-        /// see the constant defining a specific data format below for more info.
-        bytes data;
-    }
+    error TriggerableWithdrawalRefundFailed();
 
     // TODO: make type optimization
     struct DeliveryHistory {
@@ -54,24 +40,6 @@ contract ValidatorsExitBus is AccessControlEnumerable {
       uint256 contractVersion;
       DeliveryHistory[] deliverHistory;
     }
-
-    /// @notice The list format of the validator exit requests data. Used when all
-    /// requests fit into a single transaction.
-    ///
-    /// Each validator exit request is described by the following 64-byte array:
-    ///
-    /// MSB <------------------------------------------------------- LSB
-    /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
-    /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
-    ///
-    /// All requests are tightly packed into a byte array where requests follow
-    /// one another without any separator or padding, and passed to the `data`
-    /// field of the report structure.
-    ///
-    /// Requests must be sorted in the ascending order by the following compound
-    /// key: (moduleId, nodeOpId, validatorIndex).
-    ///
-    uint256 public constant DATA_FORMAT_LIST = 1;
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
@@ -94,8 +62,8 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         LOCATOR_CONTRACT_POSITION.setStorageAddress(addr);
     }
 
-    function triggerExitHashVerify(ExitRequestData calldata exitRequestData, uint256[] calldata keyIndexes) external payable {
-        bytes32 dataHash = keccak256(abi.encode(exitRequestData));
+    function triggerExitHashVerify(bytes calldata data, uint256[] calldata keyIndexes) external payable {
+        bytes32 dataHash = keccak256(abi.encode(data));
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[dataHash];
 
         address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
@@ -111,7 +79,6 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
-        bytes calldata data = exitRequestData.data;
         bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
@@ -131,6 +98,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
           require(success, "Refund failed");
+          revert TriggerableWithdrawalRefundFailed();
         }
 
     }
