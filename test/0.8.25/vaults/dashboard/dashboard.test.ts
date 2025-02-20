@@ -184,7 +184,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -220,7 +220,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -242,7 +242,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -262,7 +262,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 10_000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -282,7 +282,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 0n,
         reserveRatioThresholdBP: 0n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -310,7 +310,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -336,7 +336,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -359,7 +359,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -380,7 +380,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -404,7 +404,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         reserveRatioThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        isDisconnected: false,
+        pendingDisconnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);

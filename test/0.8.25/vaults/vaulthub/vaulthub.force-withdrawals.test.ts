@@ -196,7 +196,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       const valuation = ether("100");
       await demoVault.fund({ value: valuation });
-      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_01n)) / TOTAL_BASIS_POINTS);
+      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
       await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
@@ -223,7 +223,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 
-      expect(await vaultHub.isVaultBalanced(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.vaultHealthRatio(demoVault)).to.be.lt(TOTAL_BASIS_POINTS); // < 100%
 
       await expect(vaultHub.forceValidatorWithdrawal(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
