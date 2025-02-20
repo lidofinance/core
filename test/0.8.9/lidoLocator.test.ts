@@ -22,6 +22,7 @@ const services = [
   "oracleDaemonConfig",
   "accounting",
   "wstETH",
+  "vaultHub",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];
@@ -92,6 +93,7 @@ describe("LidoLocator.sol", () => {
         withdrawalQueue,
         postTokenRebaseReceiver,
         stakingRouter,
+        vaultHub,
       } = config;
 
       expect(await locator.oracleReportComponents()).to.deep.equal([
@@ -101,6 +103,7 @@ describe("LidoLocator.sol", () => {
         withdrawalQueue,
         postTokenRebaseReceiver,
         stakingRouter,
+        vaultHub,
       ]);
     });
   });
