@@ -38,6 +38,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
       uint256 deliveredItemsCount;
       // Vebo contract version at the time of hash submittion
       uint256 contractVersion;
+
       DeliveryHistory[] deliverHistory;
     }
 
@@ -52,7 +53,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
     bytes32 private constant LOCATOR_CONTRACT_POSITION = keccak256("lido.ValidatorsExitBus.locatorContract");
 
-    function _initialize_v2(address locatorAddr) internal {
+    constructor(address locatorAddr) {
       _setLocatorAddress(locatorAddr);
     }
 
@@ -69,7 +70,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
         uint256 minFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        uint requestsFee = keyIndexes.length * minFee;
+        uint256 requestsFee = keyIndexes.length * minFee;
 
         if (msg.value < requestsFee) {
            revert FeeNotEnough(minFee, keyIndexes.length, msg.value);
