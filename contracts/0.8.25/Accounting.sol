@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "./vaults/VaultHub.sol";
-import {FlashMinter} from "./vaults/FlashMinter.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
@@ -23,7 +22,7 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// and distributing calculated values to relevant parts of the protocol
 /// @dev accounting is inherited from VaultHub contract to reduce gas costs and
 /// simplify the auth flows, but they are mostly independent
-contract Accounting is FlashMinter {
+contract Accounting is VaultHub {
     struct Contracts {
         address accountingOracleAddress;
         IOracleReportSanityChecker oracleReportSanityChecker;
@@ -92,10 +91,7 @@ contract Accounting is FlashMinter {
     /// @notice Lido contract
     ILido public immutable LIDO;
 
-    constructor(
-        ILidoLocator _lidoLocator,
-        ILido _lido
-    ) FlashMinter(_lido) {
+    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(_lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -221,22 +217,27 @@ contract Accounting is FlashMinter {
             update.withdrawals -
             update.principalClBalance + // total cl rewards (or penalty)
             update.elRewards + // ELRewards
-            postExternalEther - _pre.externalEther // vaults rebase
-            - update.etherToFinalizeWQ; // withdrawals
+            postExternalEther -
+            _pre.externalEther - // vaults rebase
+            update.etherToFinalizeWQ; // withdrawals
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
-            _calculateVaultsRebase(
-                update.postTotalShares,
-                update.postTotalPooledEther,
-                _pre.totalShares,
-                _pre.totalPooledEther,
-                update.sharesToMintAsFees
-            );
+        (
+            update.vaultsLockedEther,
+            update.vaultsTreasuryFeeShares,
+            update.totalVaultsTreasuryFeeShares
+        ) = _calculateVaultsRebase(
+            update.postTotalShares,
+            update.postTotalPooledEther,
+            _pre.totalShares,
+            _pre.totalPooledEther,
+            update.sharesToMintAsFees
+        );
 
         update.postTotalPooledEther +=
-            update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
+            (update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther) /
+            update.postTotalShares;
         update.postTotalShares += update.totalVaultsTreasuryFeeShares;
     }
 
@@ -309,12 +310,7 @@ contract Accounting is FlashMinter {
             ];
         }
 
-        LIDO.processClStateUpdate(
-            _report.timestamp,
-            _pre.clValidators,
-            _report.clValidators,
-            _report.clBalance
-        );
+        LIDO.processClStateUpdate(_report.timestamp, _pre.clValidators, _report.clValidators, _report.clBalance);
 
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
