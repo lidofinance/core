@@ -4,36 +4,32 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Accounting, LidoLocator, OssifiableProxy, StETH__Harness } from "typechain-types";
+import { OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types";
 
 import { ether } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-describe("Accounting.sol", () => {
+describe("VaultHub.sol", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let proxy: OssifiableProxy;
-  let vaultHubImpl: Accounting;
-  let accounting: Accounting;
+  let vaultHubImpl: VaultHub;
   let steth: StETH__Harness;
-  let locator: LidoLocator;
+  let vaultHub: VaultHub;
 
   let originalState: string;
 
   before(async () => {
     [admin, user, holder, stranger] = await ethers.getSigners();
 
-    locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0") });
 
     // VaultHub
-    vaultHubImpl = await ethers.deployContract("Accounting", [
-      locator,
+    vaultHubImpl = await ethers.deployContract("VaultHub", [
       steth,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
@@ -41,7 +37,7 @@ describe("Accounting.sol", () => {
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
 
-    accounting = await ethers.getContractAt("Accounting", proxy, user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -56,16 +52,16 @@ describe("Accounting.sol", () => {
       );
     });
     it("reverts on `_admin` address is zero", async () => {
-      await expect(accounting.initialize(ZeroAddress))
-        .to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument")
+      await expect(vaultHub.initialize(ZeroAddress))
+        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_admin");
     });
     it("initialization happy path", async () => {
-      const tx = await accounting.initialize(admin);
+      const tx = await vaultHub.initialize(admin);
 
-      expect(await accounting.vaultsCount()).to.eq(0);
+      expect(await vaultHub.vaultsCount()).to.eq(0);
 
-      await expect(tx).to.be.emit(accounting, "Initialized").withArgs(1);
+      await expect(tx).to.be.emit(vaultHub, "Initialized").withArgs(1);
     });
   });
 });

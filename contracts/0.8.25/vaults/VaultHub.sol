@@ -18,7 +18,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 /// It also allows to force rebalance of the vaults
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
-abstract contract VaultHub is PausableUntilWithRoles {
+contract VaultHub is PausableUntilWithRoles {
     /// @custom:storage-location erc7201:VaultHub
     struct VaultHubStorage {
         /// @notice vault sockets with vaults connected to the hub
@@ -88,6 +88,12 @@ abstract contract VaultHub is PausableUntilWithRoles {
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
         _disableInitializers();
+    }
+
+    function initialize(address _admin) external initializer {
+        if (_admin == address(0)) revert ZeroArgument("_admin");
+
+        __VaultHub_init(_admin);
     }
 
     /// @param _admin admin address to manage the roles
@@ -394,13 +400,13 @@ abstract contract VaultHub is PausableUntilWithRoles {
         emit VaultDisconnected(_vault);
     }
 
-    function _calculateVaultsRebase(
+    function calculateVaultsRebase(
         uint256 _postTotalShares,
         uint256 _postTotalPooledEther,
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) internal view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
+    ) external view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
