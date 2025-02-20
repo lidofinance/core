@@ -15,6 +15,7 @@ import {
   StETH__HarnessForVaultHub,
   UpgradeableBeacon,
   VaultFactory,
+  VaultHub,
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
