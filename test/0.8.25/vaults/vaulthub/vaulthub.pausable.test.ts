@@ -157,28 +157,25 @@ describe("VaultHub.sol:pausableUntil", () => {
       await expect(vaultHub.voluntaryDisconnect(user)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
-    it("reverts mintSharesBackedByVault() if paused", async () => {
-      await expect(vaultHub.mintSharesBackedByVault(stranger, user, 1000n)).to.be.revertedWithCustomError(
+    it("reverts mintShares() if paused", async () => {
+      await expect(vaultHub.mintShares(stranger, user, 1000n)).to.be.revertedWithCustomError(
         vaultHub,
         "ResumedExpected",
       );
     });
 
-    it("reverts burnSharesBackedByVault() if paused", async () => {
-      await expect(vaultHub.burnSharesBackedByVault(stranger, 1000n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ResumedExpected",
-      );
+    it("reverts burnShares() if paused", async () => {
+      await expect(vaultHub.burnShares(stranger, 1000n)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
     it("reverts rebalance() if paused", async () => {
       await expect(vaultHub.rebalance()).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
-    it("reverts transferAndBurnSharesBackedByVault() if paused", async () => {
+    it("reverts transferAndBurnShares() if paused", async () => {
       await steth.connect(user).approve(vaultHub, 1000n);
 
-      await expect(vaultHub.transferAndBurnSharesBackedByVault(stranger, 1000n)).to.be.revertedWithCustomError(
+      await expect(vaultHub.transferAndBurnShares(stranger, 1000n)).to.be.revertedWithCustomError(
         vaultHub,
         "ResumedExpected",
       );
