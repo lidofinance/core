@@ -60,6 +60,15 @@ abstract contract Sideloading is VaultHub {
     }
 
     /**
+     * @notice Returns true if the sideloader is registered.
+     * @param _sideloader The address of the sideloader.
+     * @return True if the sideloader is registered, false otherwise.
+     */
+    function isRegisteredSideloader(address _sideloader) external view returns (bool) {
+        return _getSideloadingStorage().sideloaderRegistry[_sideloader];
+    }
+
+    /**
      * @notice Ignores the sideloader registry, allowing any address to be used as a sideloader.
      * @dev Only callable by the SIDELOADER_REGISTRY_SWITCH_ROLE.
      */
@@ -70,15 +79,6 @@ abstract contract Sideloading is VaultHub {
         $.isSideloaderRegistryIgnored = true;
 
         emit SideloaderRegistryIgnored(msg.sender);
-    }
-
-    /**
-     * @notice Returns true if the sideloader is registered.
-     * @param _sideloader The address of the sideloader.
-     * @return True if the sideloader is registered, false otherwise.
-     */
-    function isRegisteredSideloader(address _sideloader) external view returns (bool) {
-        return _getSideloadingStorage().sideloaderRegistry[_sideloader];
     }
 
     /**
