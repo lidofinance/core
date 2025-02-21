@@ -46,12 +46,6 @@ abstract contract Sideloading is VaultHub {
     bytes32 public constant SIDELOADER_REGISTRY_RECORD_ROLE = keccak256("Sideloading.RegistryRecordRole");
 
     /**
-     * @notice The registry of sideloaders.
-     *         Returns true if the address can be used as a sideloader.
-     */
-    mapping(address sideloader => bool isRegistered) public sideloaderRegistry;
-
-    /**
      * @notice Constructor.
      * @param _stETH The address of the STETH contract.
      */
