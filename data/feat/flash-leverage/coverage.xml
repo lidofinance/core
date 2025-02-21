@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3641"  lines-covered="3414"  line-rate="0.9377"  branches-valid="1692"  branches-covered="1492"  branch-rate="0.8818"  timestamp="1740130353215" complexity="0" version="0.1">
+<coverage lines-valid="3641"  lines-covered="3414"  line-rate="0.9377"  branches-valid="1692"  branches-covered="1492"  branch-rate="0.8818"  timestamp="1740130410236" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2478,11 +2478,11 @@
 			<method name="isSideloaderRegistryIgnored"  hits="0"  signature="()V" >
 				<lines><line number="58"  hits="0" /></lines>
 			</method>
-			<method name="ignoreSideloaderRegistry"  hits="0"  signature="()V" >
-				<lines><line number="66"  hits="0" /></lines>
-			</method>
 			<method name="isRegisteredSideloader"  hits="1"  signature="()V" >
-				<lines><line number="80"  hits="1" /></lines>
+				<lines><line number="67"  hits="1" /></lines>
+			</method>
+			<method name="ignoreSideloaderRegistry"  hits="0"  signature="()V" >
+				<lines><line number="75"  hits="0" /></lines>
 			</method>
 			<method name="respectSideloaderRegistry"  hits="0"  signature="()V" >
 				<lines><line number="88"  hits="0" /></lines>
@@ -2502,11 +2502,11 @@
 		</methods>
 		<lines>
 			<line number="59"  hits="0"  branch="false" />
-			<line number="67"  hits="0"  branch="false" />
-			<line number="68"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="70"  hits="0"  branch="false" />
-			<line number="72"  hits="0"  branch="false" />
-			<line number="81"  hits="1"  branch="false" />
+			<line number="68"  hits="1"  branch="false" />
+			<line number="76"  hits="0"  branch="false" />
+			<line number="77"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="79"  hits="0"  branch="false" />
+			<line number="81"  hits="0"  branch="false" />
 			<line number="89"  hits="0"  branch="false" />
 			<line number="90"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="92"  hits="0"  branch="false" />
