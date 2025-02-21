@@ -58,10 +58,9 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   }
 
   const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const dataHash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes"], [items.data]));
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, dataHash];
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
     const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes32)"], [reportData]),
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
     );
     return reportDataHash;
   };
@@ -252,5 +251,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
       .withArgs("0x" + concatenatedPubKeys);
+  });
+
+  it("Not enough fee", async () => {
+    await expect(oracle.triggerExitHashVerify(reportFields.data, [0, 1], { value: 1 }))
+      .to.be.revertedWithCustomError(oracle, "FeeNotEnough")
+      .withArgs(1, 2, 1);
   });
 });

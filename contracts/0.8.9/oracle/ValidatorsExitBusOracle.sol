@@ -221,15 +221,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         _checkContractVersion(contractVersion);
         bytes32 dataHash = keccak256(abi.encode(data.data));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
-        bytes32 reportDataHash = keccak256(
-            abi.encode(
-                data.consensusVersion,
-                data.refSlot,
-                data.requestsCount,
-                data.dataFormat,
-                dataHash
-            )
-        );
+        bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);

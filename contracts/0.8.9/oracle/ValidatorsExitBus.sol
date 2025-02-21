@@ -98,8 +98,10 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
-          require(success, "Refund failed");
-          revert TriggerableWithdrawalRefundFailed();
+
+           if (!success) {
+                revert TriggerableWithdrawalRefundFailed();
+           }
         }
 
     }
