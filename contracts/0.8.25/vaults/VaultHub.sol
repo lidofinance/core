@@ -249,19 +249,20 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 shareLimit = socket.shareLimit;
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
+        IStakingVault vault = IStakingVault(_vault);
         uint256 reserveRatioBP = socket.reserveRatioBP;
-        uint256 maxMintableShares = _maxMintableShares(_vault, reserveRatioBP, shareLimit);
-
-        if (vaultSharesAfterMint > maxMintableShares) {
-            revert InsufficientValuationToMint(_vault, IStakingVault(_vault).valuation());
+        uint256 valuation = vault.valuation();
+        uint256 stETHCapacity = (valuation * (TOTAL_BASIS_POINTS - socket.reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        uint256 sharesCapacity = Math256.min(STETH.getSharesByPooledEth(stETHCapacity), socket.shareLimit);
+        if (vaultSharesAfterMint > sharesCapacity) {
+            revert InsufficientValuationToMint(_vault, valuation);
         }
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
-
         uint256 totalEtherLocked = (STETH.getPooledEthByShares(vaultSharesAfterMint) * TOTAL_BASIS_POINTS) /
             (TOTAL_BASIS_POINTS - reserveRatioBP);
 
-        if (totalEtherLocked > IStakingVault(_vault).locked()) {
+        if (totalEtherLocked > vault.locked()) {
             IStakingVault(_vault).lock(totalEtherLocked);
         }
 
@@ -522,15 +523,6 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 index = $.vaultIndex[_vault];
         if (index == 0 || $.sockets[index].pendingDisconnect) revert NotConnectedToHub(_vault);
         return $.sockets[index];
-    }
-
-    /// @dev returns total number of stETH shares that is possible to mint on the provided vault with provided reserveRatio
-    ///      it does not count shares that is already minted, but does count shareLimit on the vault
-    function _maxMintableShares(address _vault, uint256 _reserveRatio, uint256 _shareLimit) internal view returns (uint256) {
-        uint256 maxStETHMinted = (IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - _reserveRatio)) /
-            TOTAL_BASIS_POINTS;
-
-        return Math256.min(STETH.getSharesByPooledEth(maxStETHMinted), _shareLimit);
     }
 
     function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
