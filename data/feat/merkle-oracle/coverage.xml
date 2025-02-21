@@ -1,13 +1,13 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3597"  lines-covered="3378"  line-rate="0.9390999999999999"  branches-valid="1652"  branches-covered="1478"  branch-rate="0.8946999999999999"  timestamp="1740084282418" complexity="0" version="0.1">
+<coverage lines-valid="3598"  lines-covered="3379"  line-rate="0.9390999999999999"  branches-valid="1656"  branches-covered="1482"  branch-rate="0.8948999999999999"  timestamp="1740138105775" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
 <packages>
-	<package name="0.4.24"  line-rate="0.9797"  branch-rate="0.95" >
+	<package name="0.4.24"  line-rate="0.9797"  branch-rate="0.9519" >
 	<classes>
-		<class name="Lido.sol"  filename="contracts/0.4.24/Lido.sol"  line-rate="0.9701000000000001"  branch-rate="0.9394" >
+		<class name="Lido.sol"  filename="contracts/0.4.24/Lido.sol"  line-rate="0.9703"  branch-rate="0.9429000000000001" >
 		<methods>
 			<method name="initialize"  hits="51"  signature="()V" >
 				<lines><line number="198"  hits="51" /></lines>
@@ -81,8 +81,8 @@
 			<method name="getTotalELRewardsCollected"  hits="6"  signature="()V" >
 				<lines><line number="500"  hits="6" /></lines>
 			</method>
-			<method name="getLidoLocator"  hits="113"  signature="()V" >
-				<lines><line number="507"  hits="113" /></lines>
+			<method name="getLidoLocator"  hits="132"  signature="()V" >
+				<lines><line number="507"  hits="132" /></lines>
 			</method>
 			<method name="getBeaconStat"  hits="6"  signature="()V" >
 				<lines><line number="517"  hits="6" /></lines>
@@ -180,17 +180,20 @@
 			<method name="_auth"  hits="103"  signature="()V" >
 				<lines><line number="1022"  hits="103" /></lines>
 			</method>
-			<method name="_auth"  hits="41"  signature="()V" >
-				<lines><line number="1027"  hits="41" /></lines>
+			<method name="_auth"  hits="22"  signature="()V" >
+				<lines><line number="1027"  hits="22" /></lines>
+			</method>
+			<method name="_authBoth"  hits="19"  signature="()V" >
+				<lines><line number="1031"  hits="19" /></lines>
 			</method>
 			<method name="_stakingRouter"  hits="3"  signature="()V" >
-				<lines><line number="1031"  hits="3" /></lines>
+				<lines><line number="1035"  hits="3" /></lines>
 			</method>
 			<method name="_withdrawalQueue"  hits="14"  signature="()V" >
-				<lines><line number="1035"  hits="14" /></lines>
+				<lines><line number="1039"  hits="14" /></lines>
 			</method>
 			<method name="_bootstrapInitialHolder"  hits="51"  signature="()V" >
-				<lines><line number="1048"  hits="51" /></lines>
+				<lines><line number="1052"  hits="51" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -253,7 +256,7 @@
 			<line number="485"  hits="7"  branch="false" />
 			<line number="492"  hits="11"  branch="false" />
 			<line number="501"  hits="6"  branch="false" />
-			<line number="508"  hits="113"  branch="false" />
+			<line number="508"  hits="132"  branch="false" />
 			<line number="522"  hits="6"  branch="false" />
 			<line number="523"  hits="6"  branch="false" />
 			<line number="524"  hits="6"  branch="false" />
@@ -386,15 +389,16 @@
 			<line number="1014"  hits="2"  branch="false" />
 			<line number="1017"  hits="17"  branch="false" />
 			<line number="1023"  hits="103"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1028"  hits="41"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1032"  hits="3"  branch="false" />
-			<line number="1036"  hits="14"  branch="false" />
-			<line number="1049"  hits="51"  branch="false" />
-			<line number="1050"  hits="51"  branch="false" />
-			<line number="1052"  hits="49"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1055"  hits="48"  branch="false" />
-			<line number="1057"  hits="48"  branch="false" />
-			<line number="1058"  hits="48"  branch="false" />
+			<line number="1028"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="1032"  hits="19"  branch="true"  condition-coverage="100% (4/4)" />
+			<line number="1036"  hits="3"  branch="false" />
+			<line number="1040"  hits="14"  branch="false" />
+			<line number="1053"  hits="51"  branch="false" />
+			<line number="1054"  hits="51"  branch="false" />
+			<line number="1056"  hits="49"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="1059"  hits="48"  branch="false" />
+			<line number="1061"  hits="48"  branch="false" />
+			<line number="1062"  hits="48"  branch="false" />
 		</lines>
 		</class>
 		<class name="StETH.sol"  filename="contracts/0.4.24/StETH.sol"  line-rate="1"  branch-rate="0.9615" >
