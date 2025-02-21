@@ -187,7 +187,7 @@ abstract contract Sideloading is VaultHub {
         }
 
         // extracting check to avoid stack too deep
-        _ensureSufficientValuationAfterSideload(_vault, socket.reserveRatioBP, socket.shareLimit);
+        _ensureSufficientValuationAfterSideload(_vault);
 
         return true;
     }
@@ -216,23 +216,15 @@ abstract contract Sideloading is VaultHub {
     }
 
     /**
-     * @dev Ensures the valuation after sideloading is sufficient to cover the total shares minted after sideloading.
+     * @dev Ensures the valuation after sideloading is sufficient to cover the locked amount.
      * @param _vault The address of the vault.
-     * @param _reserveRatioBP The reserve ratio in basis points.
-     * @param _shareLimit The share limit of the vault.
      */
-    function _ensureSufficientValuationAfterSideload(
-        address _vault,
-        uint256 _reserveRatioBP,
-        uint256 _shareLimit
-    ) private view {
+    function _ensureSufficientValuationAfterSideload(address _vault) private view {
         uint256 currentValuation = IStakingVault(_vault).valuation();
-        uint256 minimalValuationAfterSideload = (STETH.getPooledEthByShares(
-            _maxMintableShares(_vault, _reserveRatioBP, _shareLimit)
-        ) * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - _reserveRatioBP);
+        uint256 lockedAmount = IStakingVault(_vault).locked();
 
-        if (currentValuation < minimalValuationAfterSideload) {
-            revert InsufficientValuationAfterSideload(_vault, minimalValuationAfterSideload, currentValuation);
+        if (lockedAmount > currentValuation) {
+            revert InsufficientValuationAfterSideload(_vault, lockedAmount, currentValuation);
         }
     }
 
