@@ -483,6 +483,7 @@ contract MemUtilsTest is Test, MemUtilsTestHelper {
         assertEq(dst, abi.encodePacked(bytes32(0x2211111111111111111111111111111111111111111111111111111111111111)));
     }
 
+    /// forge-config: default.allow_internal_expect_revert = true
     function test_copyBytes_RevertsWhenSrcArrayIsOutOfBounds() external {
         bytes memory src = abi.encodePacked(
             bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)

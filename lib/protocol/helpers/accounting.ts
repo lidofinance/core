@@ -18,7 +18,6 @@ import {
   log,
   ONE_GWEI,
   streccak,
-  trace,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -447,7 +446,7 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
     });
 
-    const handleReportTx = await lido.connect(accountingOracleAccount).handleOracleReport(
+    await lido.connect(accountingOracleAccount).handleOracleReport(
       reportTimestamp,
       1n * 24n * 60n * 60n, // 1 day
       beaconValidators,
@@ -458,8 +457,6 @@ export const handleOracleReport = async (
       [],
       0n,
     );
-
-    await trace("lido.handleOracleReport", handleReportTx);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
@@ -493,7 +490,13 @@ const getFinalizationBatches = async (
   const MAX_REQUESTS_PER_CALL = 1000n;
 
   if (availableEth === 0n) {
-    log.warning("No available ether to request withdrawals");
+    log.debug("No available ether to request withdrawals", {
+      "Share rate": shareRate,
+      "Available eth": formatEther(availableEth),
+      "Limited withdrawal vault balance": formatEther(limitedWithdrawalVaultBalance),
+      "Limited el rewards vault balance": formatEther(limitedElRewardsVaultBalance),
+      "Reserved buffer": formatEther(reservedBuffer),
+    });
     return [];
   }
 
@@ -629,8 +632,6 @@ export const submitReport = async (
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
 
-  await trace("accountingOracle.submitReportData", reportTx);
-
   log.debug("Pushed oracle report main data", {
     "Ref slot": refSlot,
     "Consensus version": consensusVersion,
@@ -640,10 +641,8 @@ export const submitReport = async (
   let extraDataTx: ContractTransactionResponse;
   if (extraDataFormat) {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataList(extraDataList);
-    await trace("accountingOracle.submitReportExtraDataList", extraDataTx);
   } else {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataEmpty();
-    await trace("accountingOracle.submitReportExtraDataEmpty", extraDataTx);
   }
 
   const state = await accountingOracle.getProcessingState();
@@ -709,11 +708,14 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
-    log.warning(`Adding oracle committee member ${count}`);
-
     const address = getOracleCommitteeMemberAddress(count);
-    const addTx = await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
-    await trace("hashConsensus.addMember", addTx);
+
+    log.debug(`Adding oracle committee member ${count}`, {
+      "Min members count": minMembersCount,
+      "Address": address,
+    });
+
+    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
 
     addresses.push(address);
 
@@ -738,16 +740,16 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
 
   const { initialEpoch } = await hashConsensus.getFrameConfig();
   if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    log.warning("Initializing hash consensus epoch...");
+    log.debug("Initializing hash consensus epoch...", {
+      "Initial epoch": initialEpoch,
+    });
 
     const latestBlockTimestamp = await getCurrentBlockTimestamp();
     const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
     const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
 
     const agentSigner = await ctx.getSigner("agent");
-
-    const tx = await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-    await trace("hashConsensus.updateInitialEpoch", tx);
+    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
 
     log.success("Hash consensus epoch initialized");
   }
@@ -784,8 +786,7 @@ const reachConsensus = async (
       submitter = member;
     }
 
-    const tx = await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
-    await trace("hashConsensus.submitReport", tx);
+    await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();

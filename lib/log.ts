@@ -1,8 +1,6 @@
 import chalk from "chalk";
 import path from "path";
 
-import { TraceableTransaction } from "./type";
-
 // @ts-expect-error TS2339: Property 'toJSON' does not exist on type 'BigInt'.
 BigInt.prototype.toJSON = function () {
   return this.toString();
@@ -125,26 +123,5 @@ log.debug = (title: string, records: Record<string, ConvertibleToString>) => {
 
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
-  log.emptyLine();
-};
-
-log.traceTransaction = (name: string, tx: TraceableTransaction) => {
-  const value = tx.value === "0.0" ? "" : `Value: ${yl(tx.value)} ETH`;
-  const from = `From: ${yl(tx.from)}`;
-  const to = `To: ${yl(tx.to)}`;
-  const gasPrice = `Gas price: ${yl(tx.gasPrice)} gwei`;
-  const gasLimit = `Gas limit: ${yl(tx.gasLimit)}`;
-  const gasUsed = `Gas used: ${yl(tx.gasUsed)} (${yl(tx.gasUsedPercent)})`;
-  const block = `Block: ${yl(tx.blockNumber)}`;
-  const nonce = `Nonce: ${yl(tx.nonce)}`;
-
-  const color = tx.status ? gr : rd;
-  const status = `${color(name)} ${color(tx.status ? "confirmed" : "failed")}`;
-
-  log(`Transaction sent:`, yl(tx.hash));
-  log(`   ${from}   ${to}   ${value}`);
-  log(`   ${gasPrice}   ${gasLimit}   ${gasUsed}`);
-  log(`   ${block}   ${nonce}`);
-  log(`   ${status}`);
   log.emptyLine();
 };

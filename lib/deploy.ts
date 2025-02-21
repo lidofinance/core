@@ -5,7 +5,7 @@ import { FactoryOptions } from "hardhat/types";
 import { LidoLocator } from "typechain-types";
 
 import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { ConvertibleToString, cy, gr, log, yl } from "lib/log";
+import { ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
@@ -36,14 +36,10 @@ export async function makeTx(
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
-  log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})...`);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed, withStateFile);
-
-  log(` Executed (gas used: ${yl(gasUsed)})`);
-  log.emptyLine();
 
   return receipt;
 }
@@ -80,8 +76,6 @@ async function deployContractType2(
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
 
-  log(` Transaction: ${tx.hash} (nonce ${yl(tx.nonce)})`);
-
   const receipt = await tx.wait();
   if (!receipt) {
     throw new Error(`Failed to wait till the transaction ${tx.hash} execution!`);
@@ -91,9 +85,6 @@ async function deployContractType2(
   incrementGasUsed(gasUsed, withStateFile);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
-
-  log(` Deployed: ${gr(receipt.contractAddress!)} (gas used: ${yl(gasUsed)})`);
-  log.emptyLine();
 
   await addContractHelperFields(contract, artifactName);
 

@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, log, ONE_GWEI, trace, updateBalance } from "lib";
+import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { getReportTimeElapsed, report } from "lib/protocol/helpers";
 
@@ -103,8 +103,7 @@ describe("Accounting", () => {
     const { lido, wstETH } = ctx.contracts;
     if (!(await lido.sharesOf(wstETH.address))) {
       const wstEthSigner = await impersonate(wstETH.address, ether("10001"));
-      const submitTx = await lido.connect(wstEthSigner).submit(ZeroAddress, { value: ether("10000") });
-      await trace("lido.submit", submitTx);
+      await lido.connect(wstEthSigner).submit(ZeroAddress, { value: ether("10000") });
     }
   }
 
@@ -116,8 +115,7 @@ describe("Accounting", () => {
 
     while ((await withdrawalQueue.getLastRequestId()) != (await withdrawalQueue.getLastFinalizedRequestId())) {
       await report(ctx);
-      const submitTx = await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-      await trace("lido.submit", submitTx);
+      await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
     }
   }
 
@@ -742,8 +740,7 @@ describe("Accounting", () => {
     const stethOfShares = await lido.getPooledEthByShares(sharesLimit);
 
     const wstEthSigner = await impersonate(wstETH.address, ether("1"));
-    const approveTx = await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
-    await trace("lido.approve", approveTx);
+    await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
 
     const coverShares = sharesLimit / 3n;
     const noCoverShares = sharesLimit - sharesLimit / 3n;
@@ -751,7 +748,7 @@ describe("Accounting", () => {
     const lidoSigner = await impersonate(lido.address);
 
     const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
-    const burnTxReceipt = await trace<ContractTransactionReceipt>("burner.requestBurnShares", burnTx);
+    const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
     const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntEvent.args.amountOfShares).to.equal(noCoverShares, "StETHBurnRequested: amountOfShares mismatch");
@@ -762,10 +759,7 @@ describe("Accounting", () => {
     );
 
     const burnForCoverTx = await burner.connect(lidoSigner).requestBurnSharesForCover(wstETH.address, coverShares);
-    const burnForCoverTxReceipt = await trace<ContractTransactionReceipt>(
-      "burner.requestBurnSharesForCover",
-      burnForCoverTx,
-    );
+    const burnForCoverTxReceipt = (await burnForCoverTx.wait()) as ContractTransactionReceipt;
     const sharesBurntForCoverEvent = getFirstEvent(burnForCoverTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntForCoverEvent.args.amountOfShares).to.equal(coverShares);
@@ -819,8 +813,7 @@ describe("Accounting", () => {
     const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
 
     const wstEthSigner = await impersonate(wstETH.address, ether("1"));
-    const approveTx = await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
-    await trace("lido.approve", approveTx);
+    await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
 
     const coverShares = limit / 3n;
     const noCoverShares = limit - limit / 3n + excess;
@@ -828,7 +821,7 @@ describe("Accounting", () => {
     const lidoSigner = await impersonate(lido.address);
 
     const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
-    const burnTxReceipt = await trace<ContractTransactionReceipt>("burner.requestBurnShares", burnTx);
+    const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
     const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
 
     expect(sharesBurntEvent.args.amountOfShares).to.equal(noCoverShares, "StETHBurnRequested: amountOfShares mismatch");

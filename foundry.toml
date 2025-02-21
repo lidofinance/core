@@ -15,7 +15,7 @@ test = 'test'
 cache = true
 
 # The cache directory if enabled
-cache_path  = 'foundry/cache'
+cache_path = 'foundry/cache'
 
 # Only run tests in contracts matching the specified glob pattern
 match_path = '**/test/**/*.t.sol'

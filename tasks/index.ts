@@ -1,3 +1,4 @@
-export * from "./verify-contracts";
-export * from "./extract-abis";
-export * from "./solidity-get-source";
+import "./logger";
+import "./solidity-get-source";
+import "./extract-abis";
+import "./verify-contracts";
