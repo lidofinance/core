@@ -14,7 +14,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, MAX_UINT256, randomAddress } from "lib";
+import { BigIntMath, ether, findEvents, impersonate, randomAddress } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, Tracing, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -35,6 +35,7 @@ describe("VaultHub.sol:hub", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let whale: HardhatEthersSigner;
 
   let locator: LidoLocator;
   let vaultHub: VaultHub;
@@ -84,7 +85,7 @@ describe("VaultHub.sol:hub", () => {
   }
 
   before(async () => {
-    [deployer, user, stranger] = await ethers.getSigners();
+    [deployer, user, stranger, whale] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
@@ -95,7 +96,7 @@ describe("VaultHub.sol:hub", () => {
     await lido.connect(user).resume();
     await lido.connect(user).setMaxExternalRatioBP(TOTAL_BASIS_POINTS);
 
-    await lido.submit(deployer, { value: ether("1000.0") });
+    await lido.connect(whale).submit(deployer, { value: ether("1000.0") });
 
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
@@ -250,130 +251,136 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("vaultHealthRatio", () => {
-    before(() => Tracing.enable());
-
+  context("isHealthy", () => {
     it("reverts if vault is not connected", async () => {
-      await expect(vaultHub.vaultHealthRatio(randomAddress())).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
+      await expect(vaultHub.isHealthy(randomAddress())).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
 
-    it("returns the MAX_UINT256 if the vault has no shares minted", async () => {
+    it("returns true if the vault has no shares minted", async () => {
       const vault = await createAndConnectVault(vaultFactory);
       const vaultAddress = await vault.getAddress();
 
       await vault.fund({ value: ether("1") });
 
-      expect(await vaultHub.vaultHealthRatio(vaultAddress)).to.equal(MAX_UINT256);
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
     });
 
-    context("health ratio calculations", () => {
-      const marks = [10_00n, 50_00n, 100_00n]; // 10%, 50%, 100% LTV
-      const runs = [
-        {
-          reserveRatio: 50_00n, // 50%
-          reserveRatioThreshold: 40_00n, // 40%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-        {
-          reserveRatio: 10_00n, // 10%
-          reserveRatioThreshold: 8_00n, // 8%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-        {
-          reserveRatio: 2_00n, // 2%
-          reserveRatioThreshold: 1_00n, // 1%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-      ];
+    // Looks like fuzzing but it's not [:}
+    it("returns correct value for various parameters", async () => {
+      const tbi = (n: number | bigint, min: number = 0) => BigInt(Math.floor(Math.random() * Number(n)) + min);
 
-      for (const run of runs) {
-        for (const ltvRatio of marks) {
-          const cap = (run.valuation * (TOTAL_BASIS_POINTS - run.reserveRatio)) / TOTAL_BASIS_POINTS;
-          const mintedStETH = (cap * ltvRatio) / TOTAL_BASIS_POINTS;
-          const expectedHealthRatio = (run.valuation * (TOTAL_BASIS_POINTS - run.reserveRatioThreshold)) / mintedStETH;
-          const title =
-            `${ethers.formatEther(mintedStETH)}/${ethers.formatEther(run.valuation)} ETH vault (` +
-            `RR: ${run.reserveRatio / 100n}%, ` +
-            `RRT: ${run.reserveRatioThreshold / 100n}%) => ` +
-            `${expectedHealthRatio / 100n}%`;
+      for (let i = 0; i < 50; i++) {
+        const snapshot = await Snapshot.take();
+        const reserveRatioThresholdBP = tbi(10000);
+        const reserveRatioBP = BigIntMath.min(reserveRatioThresholdBP + tbi(1000), TOTAL_BASIS_POINTS);
 
-          it(`calculates health ratio correctly for ${title}`, async () => {
-            const vault = await createAndConnectVault(vaultFactory, {
-              shareLimit: ether("100"),
-              reserveRatioBP: run.reserveRatio,
-              reserveRatioThresholdBP: run.reserveRatioThreshold,
-            });
+        const valuationEth = tbi(100);
+        const valuation = ether(valuationEth.toString());
 
-            await vault.fund({ value: run.valuation });
-            expect(await vault.valuation()).to.equal(run.valuation);
+        const mintable = (valuation * (TOTAL_BASIS_POINTS - reserveRatioBP)) / TOTAL_BASIS_POINTS;
 
-            const sharesToMint = await lido.getSharesByPooledEth(mintedStETH);
-            await vaultHub.mintShares(await vault.getAddress(), user, sharesToMint);
+        const isSlashing = Math.random() < 0.5;
+        const slashed = isSlashing ? ether(tbi(valuationEth).toString()) : 0n;
+        const treashold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - reserveRatioThresholdBP)) / TOTAL_BASIS_POINTS;
+        const expectedHealthy = treashold >= mintable;
 
-            const healthRatio = await vaultHub.vaultHealthRatio(await vault.getAddress());
-            expect(healthRatio).to.equal(expectedHealthRatio);
-          });
+        const vault = await createAndConnectVault(vaultFactory, {
+          shareLimit: ether("100"), // just to bypass the share limit check
+          reserveRatioBP: reserveRatioBP,
+          reserveRatioThresholdBP: reserveRatioThresholdBP,
+        });
+
+        const vaultAddress = await vault.getAddress();
+
+        await vault.fund({ value: valuation });
+
+        if (mintable > 0n) {
+          const sharesToMint = await lido.getSharesByPooledEth(mintable);
+          await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
         }
+
+        await vault.report(valuation - slashed, valuation, BigIntMath.max(mintable, ether("1")));
+
+        const actualHealthy = await vaultHub.isHealthy(vaultAddress);
+        try {
+          expect(actualHealthy).to.equal(expectedHealthy);
+        } catch (error) {
+          console.log(`Test failed with parameters:
+            Reserve Ratio Threshold: ${Number(reserveRatioThresholdBP) / 100}%
+            Reserve Ratio: ${Number(reserveRatioBP) / 100}%
+            Valuation: ${ethers.formatEther(valuation)} ETH
+            Minted: ${ethers.formatEther(mintable)} stETH
+            Slashed: ${ethers.formatEther(slashed)} ETH
+            Threshold: ${ethers.formatEther(treashold)} stETH
+            Expected Healthy: ${expectedHealthy}
+          `);
+          throw error;
+        }
+
+        await Snapshot.restore(snapshot);
       }
     });
 
-    context("health ratio calculations for unhealthy vaults", () => {
-      const runs = [
-        {
-          reserveRatio: 50_00n, // 50%
-          reserveRatioThreshold: 40_00n, // 40%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-        {
-          reserveRatio: 10_00n, // 10%
-          reserveRatioThreshold: 8_00n, // 8%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-        {
-          reserveRatio: 2_00n, // 2%
-          reserveRatioThreshold: 1_00n, // 1%
-          valuation: ether(Math.floor(Math.random() * 100 + 1).toString()),
-        },
-      ];
+    it("returns correct value close to the threshold border cases", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        reserveRatioThresholdBP: 50_00n, // 50%
+      });
 
-      for (const run of runs) {
-        const drops = [1n, run.reserveRatioThreshold, run.reserveRatio];
+      const vaultAddress = await vault.getAddress();
 
-        for (const drop of drops) {
-          const cap = (run.valuation * (TOTAL_BASIS_POINTS - run.reserveRatio)) / TOTAL_BASIS_POINTS;
-          const slashedStETH = (run.valuation * drop) / TOTAL_BASIS_POINTS;
-          const expectedHealthRatio =
-            ((run.valuation - slashedStETH) * (TOTAL_BASIS_POINTS - run.reserveRatioThreshold)) / cap;
+      await vault.fund({ value: ether("1") });
+      await vaultHub.connect(user).mintShares(vaultAddress, user, ether("0.25"));
 
-          const title =
-            `${ethers.formatEther(cap)}/${ethers.formatEther(run.valuation - slashedStETH)} ETH vault (` +
-            `RR: ${run.reserveRatio / 100n}%, ` +
-            `RRT: ${run.reserveRatioThreshold / 100n}%) => ` +
-            `${expectedHealthRatio / 100n}%`;
+      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
 
-          it(`calculates health ratio correctly for ${title}`, async () => {
-            const vault = await createAndConnectVault(vaultFactory, {
-              shareLimit: ether("100"),
-              reserveRatioBP: run.reserveRatio,
-              reserveRatioThresholdBP: run.reserveRatioThreshold,
-            });
+      await vault.report(ether("0.5") + 1n, ether("1"), ether("1")); // above the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
 
-            await vault.fund({ value: run.valuation });
-            expect(await vault.valuation()).to.equal(run.valuation);
+      await vault.report(ether("0.5"), ether("1"), ether("1")); // at the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
 
-            const sharesToMint = await lido.getSharesByPooledEth(cap);
-            await vaultHub.mintShares(await vault.getAddress(), user, sharesToMint);
+      await vault.report(ether("0.5") - 1n, ether("1"), ether("1")); // below the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(false);
+    });
 
-            await vault.report(run.valuation - slashedStETH, run.valuation, BigIntMath.max(cap, ether("1")));
+    it("returns correct value for different share rates", async () => {
+      Tracing.enable();
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        reserveRatioThresholdBP: 50_00n, // 50%
+      });
 
-            const healthRatio = await vaultHub.vaultHealthRatio(await vault.getAddress());
-            expect(healthRatio).to.equal(expectedHealthRatio);
-          });
-        }
-      }
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("1") });
+      const mintingEth = ether("0.5");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      // Burn some shares to make share rate fractional
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("100"));
+      await lido.connect(burner).burnShares(ether("100"));
+
+      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(false); // old valuation is not enough
+
+      const mintedEthChange = await lido.getPooledEthBySharesRoundUp(sharesToMint);
+      const diff = mintedEthChange - mintingEth;
+      const report = ether("1") + diff * 2n; // 2x because the 50% reserve ratio
+
+      await vault.report(report - 1n, ether("1"), ether("1")); // below the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(false);
+
+      await vault.report(report, ether("1"), ether("1")); // at the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
+
+      await vault.report(report + 1n, ether("1"), ether("1")); // above the threshold
+      expect(await vaultHub.isHealthy(vaultAddress)).to.equal(true);
     });
   });
 

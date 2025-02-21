@@ -12,7 +12,7 @@ import {
   VaultHub__Harness,
 } from "typechain-types";
 
-import { impersonate, MAX_UINT256 } from "lib";
+import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
@@ -159,7 +159,7 @@ describe("VaultHub.sol:forceExit", () => {
     it("reverts if called for a healthy vault", async () => {
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "AlreadyHealthy")
-        .withArgs(vaultAddress, MAX_UINT256);
+        .withArgs(vaultAddress);
     });
 
     context("unhealthy vault", () => {
@@ -223,7 +223,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 
-      expect(await vaultHub.vaultHealthRatio(demoVault)).to.be.lt(TOTAL_BASIS_POINTS); // < 100%
+      expect(await vaultHub.isHealthy(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "ForceValidatorExitTriggered")
