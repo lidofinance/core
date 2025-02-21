@@ -157,15 +157,25 @@ abstract contract Sideloading is VaultHub {
         // * * * sufficiency checks * * *
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        // cannot result in shares exceeding the share limit
         uint256 totalSharesAfterSideload = socket.sharesMinted + _amountOfShares;
+
+        // cannot result in shares exceeding the share limit
         if (totalSharesAfterSideload > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
 
-        uint256 totalEtherLocked = (STETH.getPooledEthByShares(totalSharesAfterSideload) * TOTAL_BASIS_POINTS) /
+        uint256 totalStETHAfterSideload = STETH.getPooledEthByShares(totalSharesAfterSideload);
+        uint256 minimalReserveAfterSideload = (totalStETHAfterSideload * socket.reserveRatioBP) /
             (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
-        // extracting check to avoid stack too deep
-        _ensureSufficientValuationBeforeSideload(_vault, totalSharesAfterSideload, totalEtherLocked);
+        // ensure the valuation before sideloading is sufficient to cover the minimal reserve after sideloading
+        if (IStakingVault(_vault).valuation() < minimalReserveAfterSideload) {
+            revert InsufficientValuationBeforeSideload(
+                _vault,
+                minimalReserveAfterSideload,
+                IStakingVault(_vault).valuation()
+            );
+        }
+
+        uint256 totalEtherLocked = totalStETHAfterSideload + minimalReserveAfterSideload;
 
         // update the shares minted BEFORE sideloading
         socket.sharesMinted = uint96(totalSharesAfterSideload);
@@ -186,46 +196,16 @@ abstract contract Sideloading is VaultHub {
             revert SideloaderCallbackFailed(_sideloader, _data);
         }
 
-        // extracting check to avoid stack too deep
-        _ensureSufficientValuationAfterSideload(_vault);
-
-        return true;
-    }
-
-    /**
-     * @dev Ensures the valuation before sideloading is sufficient to cover the minimum reserve after sideloading.
-     * @param _vault The address of the vault.
-     * @param _totalSharesAfterSideload The total number of shares after sideloading.
-     * @param _totalEtherLocked The total amount of ether to be locked in the vault.
-     */
-    function _ensureSufficientValuationBeforeSideload(
-        address _vault,
-        uint256 _totalSharesAfterSideload,
-        uint256 _totalEtherLocked
-    ) private view {
-        uint256 minimumReserveAfterSideload = _totalEtherLocked - STETH.getPooledEthByShares(_totalSharesAfterSideload);
-
-        // ensures the valuation BEFORE sideloading is sufficient to cover the minimum reserve AFTER sideloading
-        if (IStakingVault(_vault).valuation() < minimumReserveAfterSideload) {
-            revert InsufficientValuationBeforeSideload(
+        // ensure the valuation after sideloading is sufficient to cover the locked amount
+        if (IStakingVault(_vault).locked() > IStakingVault(_vault).valuation()) {
+            revert InsufficientValuationAfterSideload(
                 _vault,
-                minimumReserveAfterSideload,
+                IStakingVault(_vault).locked(),
                 IStakingVault(_vault).valuation()
             );
         }
-    }
 
-    /**
-     * @dev Ensures the valuation after sideloading is sufficient to cover the locked amount.
-     * @param _vault The address of the vault.
-     */
-    function _ensureSufficientValuationAfterSideload(address _vault) private view {
-        uint256 currentValuation = IStakingVault(_vault).valuation();
-        uint256 lockedAmount = IStakingVault(_vault).locked();
-
-        if (lockedAmount > currentValuation) {
-            revert InsufficientValuationAfterSideload(_vault, lockedAmount, currentValuation);
-        }
+        return true;
     }
 
     /**
