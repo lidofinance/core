@@ -9,8 +9,6 @@ import {ISideloader} from "contracts/0.8.25/interfaces/ISideloader.sol";
 import {StETH__MockForSideloading} from "./StETH__MockForSideloading.sol";
 import {Swapper__Mock} from "./Swapper__Mock.sol";
 
-import "hardhat/console.sol";
-
 // Dumb contract to test leverage
 contract SwapperAdapter__MockForSideloading is ISideloader {
     event Mock__Received(address _sender, uint256 _amount);
@@ -28,7 +26,6 @@ contract SwapperAdapter__MockForSideloading is ISideloader {
     }
 
     receive() external payable {
-        console.log("received");
         emit Mock__Received(msg.sender, msg.value);
     }
 

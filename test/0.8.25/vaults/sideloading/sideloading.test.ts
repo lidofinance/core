@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { formatEther, keccak256,parseEther as ether } from "ethers";
+import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -13,7 +13,7 @@ import {
   SwapperAdapter__MockForSideloading,
 } from "typechain-types";
 
-import { proxify } from "lib";
+import { ether, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -108,12 +108,8 @@ describe("Sideloading.sol", () => {
         .to.emit(steth, "Mock__ExternalSharesMinted")
         .withArgs(adapter, sharesToSideload);
 
-      console.log(formatEther(await vault.locked()));
-      console.log(formatEther(await vault.valuation()));
       expect(await vault.locked()).to.equal(expectedLocked);
       expect(await vault.valuation()).to.equal(expectedLocked);
-      // expect(await steth.balanceOf(sideloader)).to.equal(sharesToSideload);
-      // expect(await vault.locked()).to.equal(expectedLocked);
     });
   });
 });
