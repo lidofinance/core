@@ -38,4 +38,6 @@ export const provision = async (ctx: ProtocolContext) => {
   await ensureStakeLimit(ctx);
 
   alreadyProvisioned = true;
+
+  log.success("Provisioned");
 };
