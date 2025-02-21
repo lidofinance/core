@@ -91,7 +91,10 @@ contract Accounting is VaultHub {
     /// @notice Lido contract
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator, ILido _lido) VaultHub(_lido) {
+    constructor(
+        ILidoLocator _lidoLocator,
+        ILido _lido
+    ) VaultHub(_lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -217,27 +220,22 @@ contract Accounting is VaultHub {
             update.withdrawals -
             update.principalClBalance + // total cl rewards (or penalty)
             update.elRewards + // ELRewards
-            postExternalEther -
-            _pre.externalEther - // vaults rebase
-            update.etherToFinalizeWQ; // withdrawals
+            postExternalEther - _pre.externalEther // vaults rebase
+            - update.etherToFinalizeWQ; // withdrawals
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (
-            update.vaultsLockedEther,
-            update.vaultsTreasuryFeeShares,
-            update.totalVaultsTreasuryFeeShares
-        ) = _calculateVaultsRebase(
-            update.postTotalShares,
-            update.postTotalPooledEther,
-            _pre.totalShares,
-            _pre.totalPooledEther,
-            update.sharesToMintAsFees
-        );
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+            _calculateVaultsRebase(
+                update.postTotalShares,
+                update.postTotalPooledEther,
+                _pre.totalShares,
+                _pre.totalPooledEther,
+                update.sharesToMintAsFees
+            );
 
         update.postTotalPooledEther +=
-            (update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther) /
-            update.postTotalShares;
+            update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
         update.postTotalShares += update.totalVaultsTreasuryFeeShares;
     }
 
@@ -310,7 +308,12 @@ contract Accounting is VaultHub {
             ];
         }
 
-        LIDO.processClStateUpdate(_report.timestamp, _pre.clValidators, _report.clValidators, _report.clBalance);
+        LIDO.processClStateUpdate(
+            _report.timestamp,
+            _pre.clValidators,
+            _report.clValidators,
+            _report.clBalance
+        );
 
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
