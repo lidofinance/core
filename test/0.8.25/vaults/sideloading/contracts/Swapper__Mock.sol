@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: UNLICENSED
+// for testing purposes only
+
+pragma solidity 0.8.25;
+
+import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {ISideloader} from "contracts/0.8.25/interfaces/ISideloader.sol";
+
+import "hardhat/console.sol";
+
+// Dumb contract to test leverage
+contract Swapper__Mock {
+    address public steth;
+    event Mock__Swapped(address _vault, address _sideloader, uint256 _amountOfShares, bytes _data);
+
+    constructor(address _steth) {
+        steth = _steth;
+    }
+
+    function swap(uint256 _amountOfSteth) external returns (bool) {
+        IERC20(steth).transferFrom(msg.sender, address(this), _amountOfSteth);
+        console.log("swap");
+        console.logUint(_amountOfSteth);
+        console.logUint(address(this).balance);
+        (bool success, ) = msg.sender.call{value: _amountOfSteth}("");
+        require(success, "Swap failed");
+
+        return true;
+    }
+}
