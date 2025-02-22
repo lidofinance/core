@@ -33,6 +33,9 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
+    "holesky": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+    },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
