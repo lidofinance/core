@@ -227,22 +227,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
       .withArgs("0x" + concatenatedPubKeys);
   });
 
-  it("someone submitted exit report data and triggered exit again", async () => {
-    const tx = await oracle.triggerExitHashVerify(reportFields.data, [0, 1], { value: 2 });
-
-    const pubkeys = [PUBKEYS[0], PUBKEYS[1]];
-    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
-    await expect(tx)
-      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
-      .withArgs("0x" + concatenatedPubKeys);
-  });
-
-  it("someone triggered exit on unpacked key", async () => {
-    await expect(oracle.triggerExitHashVerify(reportFields.data, [0, 2, 4], { value: 3 }))
-      .to.be.revertedWithCustomError(oracle, "KeyWasNotUnpacked")
-      .withArgs(4, 3);
-  });
-
   it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
     const tx = await oracle.triggerExitHashVerify(reportFields.data, [0, 1, 3], { value: 3 });
 
@@ -257,5 +241,21 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
     await expect(oracle.triggerExitHashVerify(reportFields.data, [0, 1], { value: 1 }))
       .to.be.revertedWithCustomError(oracle, "FeeNotEnough")
       .withArgs(1, 2, 1);
+  });
+
+  it("Should trigger withdrawals only for validators that were requested for voluntary exit by trusted entities earlier", async () => {
+    await expect(
+      oracle.triggerExitHashVerify(
+        "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
+        [0],
+        { value: 2 },
+      ),
+    ).to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted");
+  });
+
+  it("Requested index out of range", async () => {
+    await expect(oracle.triggerExitHashVerify(reportFields.data, [5], { value: 2 }))
+      .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
+      .withArgs(5, 4);
   });
 });
