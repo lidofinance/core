@@ -6,7 +6,6 @@ export function getHardhatForkingConfig() {
 
   switch (mode) {
     case "scratch":
-      process.env.INTEGRATION_ON_SCRATCH = "on";
       process.env.INTEGRATION_WITH_CSM = "off";
       return undefined;
 
