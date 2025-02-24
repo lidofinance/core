@@ -251,6 +251,16 @@ describe("VaultHubViewerV1", () => {
       expect(vaults[2]).to.equal(stakingVault);
       expect(vaults[3]).to.equal(vaultCustom);
     });
+
+    it("returns all connected vaults after disconnect the vaultCustom", async () => {
+      await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
+
+      const vaults = await vaultHubViewer.vaultsConnected();
+      expect(vaults.length).to.equal(3);
+      expect(vaults[0]).to.equal(vaultDelegation);
+      expect(vaults[1]).to.equal(vaultDashboard);
+      expect(vaults[2]).to.equal(stakingVault);
+    });
   });
 
   context("vaultsConnectedBound", () => {

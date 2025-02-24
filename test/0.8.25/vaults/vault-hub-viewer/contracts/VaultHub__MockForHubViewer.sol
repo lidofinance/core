@@ -61,6 +61,11 @@ contract VaultHub__MockForHubViewer {
     }
 
     function disconnectVault(address _vault) external {
+        // Just disconnectVault, without additional checks!!!
+        VaultHub.VaultHubStorage storage $ = _getVaultHubStorage();
+        uint256 index = $.vaultIndex[_vault];
+        $.sockets[index].isDisconnected = true;
+
         emit Mock__VaultDisconnected(_vault);
     }
 
