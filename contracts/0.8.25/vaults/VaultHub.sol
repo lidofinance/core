@@ -253,18 +253,17 @@ abstract contract VaultHub is PausableUntilWithRoles {
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        uint256 mintingBasisPoints = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
-        uint256 mintingCapacity = (vault_.valuation() * mintingBasisPoints) / TOTAL_BASIS_POINTS;
-        uint256 ethRequiredForMint = STETH.getPooledEthByShares(vaultSharesAfterMint);
-
-        if (ethRequiredForMint > mintingCapacity) {
+        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
+        uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 etherToLock = STETH.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
+        if (etherToLock > maxMintableEther) {
             revert InsufficientValuationToMint(_vault, vault_.valuation());
         }
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
 
         // Calculate the total ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 totalEtherLocked = (ethRequiredForMint * TOTAL_BASIS_POINTS) / mintingBasisPoints;
+        uint256 totalEtherLocked = (etherToLock * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
         if (totalEtherLocked > vault_.locked()) {
             vault_.lock(totalEtherLocked);
         }
