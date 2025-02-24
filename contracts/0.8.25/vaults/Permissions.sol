@@ -160,11 +160,11 @@ abstract contract Permissions is AccessControlVoteable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _withdrawDisputedValidatorFromPDG(
+    function _withdrawDisprovenValidatorFromPDG(
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {
-        return PredepositGuarantee(stakingVault().depositGuardian()).withdrawDisprovenPredeposit(_pubkey, _recipient);
+        return PredepositGuarantee(stakingVault().depositor()).withdrawDisprovenPredeposit(_pubkey, _recipient);
     }
 
     function _transferStakingVaultOwnership(address _newOwner) internal onlyIfVotedBy(_votingCommittee()) {
