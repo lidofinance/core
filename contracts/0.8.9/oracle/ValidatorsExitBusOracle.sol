@@ -51,6 +51,14 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint256 requestsCount
     );
 
+    event StoredOracleTWExitRequestHash(
+        bytes32 exitRequestHash
+    );
+
+    event StoreOracleExitRequestHashStart(
+        bytes32 exitRequestHash
+    );
+
     struct DataProcessingState {
         uint64 refSlot;
         uint64 requestsCount;
@@ -219,7 +227,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        bytes32 dataHash = keccak256(abi.encode(data.data));
+        bytes32 dataHash = keccak256(data.data);
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
@@ -447,6 +455,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
+        emit StoreOracleExitRequestHashStart(exitRequestHash);
+
         if (report.requestsCount == 0) {
             return;
         }
@@ -458,6 +468,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         request.deliveredItemsCount = report.requestsCount;
         request.contractVersion = contractVersion;
         request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.requestsCount - 1}));
+
+        emit StoredOracleTWExitRequestHash(exitRequestHash);
     }
 
     ///
