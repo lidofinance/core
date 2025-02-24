@@ -170,9 +170,9 @@ contract VaultHubViewerV1 {
                 }
             }
 
-//            if (resultIndex >= resultVaultsCount) {
-//                break;
-//            }
+            if (resultIndex >= resultVaultsCount) {
+                break;
+            }
         }
 
         // It does not take into account that there may be disconnected volts
