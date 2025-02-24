@@ -86,6 +86,7 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
+  triggerableWithdrawals = "triggerableWithdrawals",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -108,6 +109,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
       return state[contractKey].proxy.address;
+    case Sk.triggerableWithdrawals:
     case Sk.apmRegistryFactory:
     case Sk.burner:
     case Sk.callsScript:
