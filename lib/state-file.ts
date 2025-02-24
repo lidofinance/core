@@ -86,6 +86,7 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
+  clProofVerifier = "clProofVerifier",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

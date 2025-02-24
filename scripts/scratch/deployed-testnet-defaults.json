@@ -147,5 +147,15 @@
       "symbol": "unstETH",
       "baseUri": null
     }
+  },
+  "clProofVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1
+    }
   }
 }
