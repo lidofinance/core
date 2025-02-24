@@ -223,7 +223,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 
-      expect(await vaultHub.isHealthy(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "ForceValidatorExitTriggered")

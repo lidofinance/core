@@ -141,7 +141,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     ///      the reserve ratio threshold.
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
-    function isHealthy(address _vault) public view returns (bool) {
+    function isVaultHealthy(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (socket.sharesMinted == 0) return true;
 
@@ -541,7 +541,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     }
 
     function _requireUnhealthy(address _vault) internal view {
-        if (isHealthy(_vault)) revert AlreadyHealthy(_vault);
+        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
     }
 
     event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 reserveRatioThreshold, uint256 treasuryFeeBP);
