@@ -1,21 +1,21 @@
 declare namespace NodeJS {
   export interface ProcessEnv {
-    /* iternal logging verbosity (used in scratch deploy / integration tests) */
+    /* internal logging verbosity (used in scratch deploy / integration tests) */
     LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none"; // default: "info"
 
     /**
      * Flags for changing the behavior of the Hardhat Network
      */
 
-    /* RPC URL for Hardhat Network forking, required for running tests on mainnet fork with tracing */
-    HARDHAT_FORKING_URL?: string;
+    /* Test execution mode: 'scratch' for fresh network, 'fork' for forked network */
+    MODE?: "scratch" | "forking"; // default: "scratch"
+
+    /* URL of the network to fork from */
+    FORK_RPC_URL?: string; // default: "https://eth.drpc.org"
 
     /**
      * Flags for changing the behavior of the integration tests
      */
-
-    /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
-    INTEGRATION_ON_SCRATCH?: "on" | "off"; // default: "off"
 
     /* if "on" the integration tests will assume CSM module is present in the StakingRouter, and adjust accordingly */
     INTEGRATION_WITH_CSM?: "on" | "off"; // default: "off"

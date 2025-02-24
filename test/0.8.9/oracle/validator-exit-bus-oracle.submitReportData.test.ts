@@ -501,7 +501,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("SUBMIT_DATA_ROLE is allowed", async () => {
-      oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), stranger, { from: admin });
+      await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), stranger, { from: admin });
       await consensus.advanceTimeToNextFrameStart();
       const { reportData } = await prepareReportAndSubmitHash();
       await oracle.connect(stranger).submitReportData(reportData, oracleVersion);

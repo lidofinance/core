@@ -60,7 +60,7 @@ task("verify:deployed", "Verifies deployed contracts based on state file").setAc
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
   if (!contract.contract) {
     // TODO: In the case of state processing on the local devnet there are skips, we need to find the cause
-    return
+    return;
   }
   const contractName = contract.contract.split("/").pop()?.split(".")[0];
   const verificationParams = {
