@@ -29,7 +29,7 @@ const TREASURY_FEE_BP = 5_00n;
 
 const FEE = 2n;
 
-describe("VaultHub.sol:forceWithdrawals", () => {
+describe("VaultHub.sol:forceExit", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -111,39 +111,39 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
-  context("forceValidatorWithdrawal", () => {
+  context("forceValidatorExit", () => {
     it("reverts if msg.value is 0", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 0n }))
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 0n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("msg.value");
     });
 
     it("reverts if the vault is zero address", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(ZeroAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorExit(ZeroAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_vault");
     });
 
     it("reverts if zero pubkeys", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, "0x", feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorExit(vaultAddress, "0x", feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_pubkeys");
     });
 
     it("reverts if zero refund recipient", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_refundRecepient");
     });
 
     it("reverts if pubkeys are not valid", async () => {
       await expect(
-        vaultHub.forceValidatorWithdrawal(vaultAddress, "0x" + "01".repeat(47), feeRecipient, { value: 1n }),
+        vaultHub.forceValidatorExit(vaultAddress, "0x" + "01".repeat(47), feeRecipient, { value: 1n }),
       ).to.be.revertedWithCustomError(vaultHub, "InvalidPubkeysLength");
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorExit(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(stranger.address);
     });
@@ -151,23 +151,23 @@ describe("VaultHub.sol:forceWithdrawals", () => {
     it("reverts if called for a disconnected vault", async () => {
       await vaultHub.connect(user).disconnect(vaultAddress);
 
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(vaultAddress);
     });
 
     it("reverts if called for a healthy vault", async () => {
-      await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "AlreadyBalanced")
-        .withArgs(vaultAddress, 0n, 0n);
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "AlreadyHealthy")
+        .withArgs(vaultAddress);
     });
 
     context("unhealthy vault", () => {
       beforeEach(async () => await makeVaultUnhealthy());
 
       it("initiates force validator withdrawal", async () => {
-        await expect(vaultHub.forceValidatorWithdrawal(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+        await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
+          .to.emit(vaultHub, "ForceValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);
       });
 
@@ -176,9 +176,9 @@ describe("VaultHub.sol:forceWithdrawals", () => {
         const pubkeys = "0x" + "ab".repeat(numPubkeys * 48);
 
         await expect(
-          vaultHub.forceValidatorWithdrawal(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
+          vaultHub.forceValidatorExit(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
         )
-          .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+          .to.emit(vaultHub, "ForceValidatorExitTriggered")
           .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
     });
@@ -196,7 +196,7 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       const valuation = ether("100");
       await demoVault.fund({ value: valuation });
-      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_01n)) / TOTAL_BASIS_POINTS);
+      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
       await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
@@ -223,10 +223,10 @@ describe("VaultHub.sol:forceWithdrawals", () => {
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 
-      expect(await vaultHub.isVaultBalanced(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.isHealthy(demoVaultAddress)).to.be.false;
 
-      await expect(vaultHub.forceValidatorWithdrawal(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-        .to.emit(vaultHub, "VaultForceWithdrawalTriggered")
+      await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
+        .to.emit(vaultHub, "ForceValidatorExitTriggered")
         .withArgs(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient);
     });
   });
