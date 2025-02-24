@@ -235,33 +235,33 @@ describe("VaultHubViewerV1", () => {
     });
   });
 
-  context("vaultsConnected", () => {
-    beforeEach(async () => {
-      await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
-    });
-
-    it("returns all connected vaults", async () => {
-      const vaults = await vaultHubViewer.vaultsConnected();
-      expect(vaults.length).to.equal(4);
-      expect(vaults[0]).to.equal(vaultDelegation);
-      expect(vaults[1]).to.equal(vaultDashboard);
-      expect(vaults[2]).to.equal(stakingVault);
-      expect(vaults[3]).to.equal(vaultCustom);
-    });
-
-    it("returns all connected vaults after disconnect the vaultCustom", async () => {
-      await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
-
-      const vaults = await vaultHubViewer.vaultsConnected();
-      expect(vaults.length).to.equal(3);
-      expect(vaults[0]).to.equal(vaultDelegation);
-      expect(vaults[1]).to.equal(vaultDashboard);
-      expect(vaults[2]).to.equal(stakingVault);
-    });
-  });
+  // context("vaultsConnected", () => {
+  //   beforeEach(async () => {
+  //     await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
+  //     await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
+  //     await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
+  //     await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
+  //   });
+  //
+  //   it("returns all connected vaults", async () => {
+  //     const vaults = await vaultHubViewer.vaultsConnected();
+  //     expect(vaults.length).to.equal(4);
+  //     expect(vaults[0]).to.equal(vaultDelegation);
+  //     expect(vaults[1]).to.equal(vaultDashboard);
+  //     expect(vaults[2]).to.equal(stakingVault);
+  //     expect(vaults[3]).to.equal(vaultCustom);
+  //   });
+  //
+  //   it("returns all connected vaults after disconnect the vaultCustom", async () => {
+  //     await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
+  //
+  //     const vaults = await vaultHubViewer.vaultsConnected();
+  //     expect(vaults.length).to.equal(3);
+  //     expect(vaults[0]).to.equal(vaultDelegation);
+  //     expect(vaults[1]).to.equal(vaultDashboard);
+  //     expect(vaults[2]).to.equal(stakingVault);
+  //   });
+  // });
 
   context("vaultsConnectedBound", () => {
     beforeEach(async () => {
