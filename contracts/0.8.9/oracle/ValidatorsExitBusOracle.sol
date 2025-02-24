@@ -55,6 +55,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         bytes32 exitRequestHash
     );
 
+    event StoreOracleExitRequestHashStart(
+        bytes32 exitRequestHash
+    );
+
     struct DataProcessingState {
         uint64 refSlot;
         uint64 requestsCount;
@@ -451,6 +455,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
+        emit StoreOracleExitRequestHashStart(exitRequestHash);
+
         if (report.requestsCount == 0) {
             return;
         }
