@@ -92,7 +92,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
-        bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
+        bytes memory pubkeys;
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
@@ -104,10 +104,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
             }
 
             uint256 requestOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
-
-            for (uint256 j = 0; j < PUBLIC_KEY_LENGTH; j++) {
-                pubkeys[i * PUBLIC_KEY_LENGTH + j] = data[requestOffset + j];
-            }
+            pubkeys = bytes.concat(pubkeys, data[requestOffset:requestOffset + PUBLIC_KEY_LENGTH]);
         }
 
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: requestsFee}(pubkeys);
