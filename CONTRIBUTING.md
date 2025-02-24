@@ -143,7 +143,7 @@ integration tests follows the `*.integration.ts` postfix, for example, `myScenar
 Foundry's Solidity tests are specifically used for fuzzing library contracts or functions that perform complex
 calculations or byte manipulation. These Solidity tests are located under `/tests` and organized into appropriate
 subdirectories. The naming conventions follow
-Foundry's [documentation](https://book.getfoundry.sh/tutorials/best-practices#general-test-guidance):
+Foundry's [documentation](https://book.getfoundry.sh/guides/best-practices#general-test-guidance):
 
 - For tests, use the `.t.sol` postfix (e.g., `MyContract.t.sol`).
 - For scripts, use the `.s.sol` postfix (e.g., `MyScript.s.sol`).

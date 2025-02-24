@@ -1,6 +1,6 @@
-import { ZeroAddress } from "ethers";
+import { ethers, ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log, trace } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 
 import { ZERO_HASH } from "test/deploy";
 
@@ -14,11 +14,8 @@ import { report } from "./accounting";
 export const unpauseStaking = async (ctx: ProtocolContext) => {
   const { lido } = ctx.contracts;
   if (await lido.isStakingPaused()) {
-    log.warning("Unpausing staking contract");
-
     const votingSigner = await ctx.getSigner("voting");
-    const tx = await lido.connect(votingSigner).resume();
-    await trace("lido.resume", tx);
+    await lido.connect(votingSigner).resume();
 
     log.success("Staking contract unpaused");
   }
@@ -29,14 +26,16 @@ export const ensureStakeLimit = async (ctx: ProtocolContext) => {
 
   const stakeLimitInfo = await lido.getStakeLimitFullInfo();
   if (!stakeLimitInfo.isStakingLimitSet) {
-    log.warning("Setting staking limit");
-
     const maxStakeLimit = ether("150000");
     const stakeLimitIncreasePerBlock = ether("20"); // this is an arbitrary value
 
+    log.debug("Setting staking limit", {
+      "Max stake limit": ethers.formatEther(maxStakeLimit),
+      "Stake limit increase per block": ethers.formatEther(stakeLimitIncreasePerBlock),
+    });
+
     const votingSigner = await ctx.getSigner("voting");
-    const tx = await lido.connect(votingSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
-    await trace("lido.setStakingLimit", tx);
+    await lido.connect(votingSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
 
     log.success("Staking limit set");
   }
