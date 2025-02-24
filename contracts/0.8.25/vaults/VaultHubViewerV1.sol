@@ -160,6 +160,8 @@ contract VaultHubViewerV1 {
         uint256 resultVaultsCount = _to - _from;
         IVault[] memory resultVaults = new IVault[](resultVaultsCount);
         uint256 resultIndex = 0;
+        uint256 skip = 0;
+
 
         uint256 allVaultsCount = vaultHub.vaultsCount();
         for (uint256 i = 0; i < allVaultsCount; i++) {
@@ -171,13 +173,13 @@ contract VaultHubViewerV1 {
             }
 
             if (resultIndex >= resultVaultsCount) {
+                skip = i + 1;
                 break;
             }
         }
 
         // It does not take into account that there may be disconnected volts
-//        uint256 leftover = cycleIndex > _to ? cycleIndex - _to : 0;
-        uint256 leftover = 0;
+        uint256 leftover = allVaultsCount - skip;
         return (resultVaults, leftover);
     }
 
