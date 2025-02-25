@@ -20,6 +20,8 @@ contract SwapperAdapter__MockForSideloading is ISideloader {
     address public steth;
     address public swapper;
 
+    bool public onSideloadShouldReturnIncorrectHash = false;
+
     constructor(address _steth, address _swapper) {
         steth = _steth;
         swapper = _swapper;
@@ -27,6 +29,10 @@ contract SwapperAdapter__MockForSideloading is ISideloader {
 
     receive() external payable {
         emit Mock__Received(msg.sender, msg.value);
+    }
+
+    function makeHookReturnIncorrectHash() external {
+        onSideloadShouldReturnIncorrectHash = true;
     }
 
     function onSideload(
@@ -48,6 +54,6 @@ contract SwapperAdapter__MockForSideloading is ISideloader {
 
         emit Mock__Sideloaded(_vault, _sideloader, _amountOfShares, _data);
 
-        return keccak256("Sideloader.onSideload");
+        return onSideloadShouldReturnIncorrectHash ? keccak256("Incorrect") : keccak256("Sideloader.onSideload");
     }
 }
