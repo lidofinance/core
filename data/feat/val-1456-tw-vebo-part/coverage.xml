@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3080"  lines-covered="3046"  line-rate="0.9890000000000001"  branches-valid="1358"  branches-covered="1319"  branch-rate="0.9712999999999999"  timestamp="1740481394322" complexity="0" version="0.1">
+<coverage lines-valid="3079"  lines-covered="3045"  line-rate="0.9890000000000001"  branches-valid="1358"  branches-covered="1319"  branch-rate="0.9712999999999999"  timestamp="1740482234520" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4665,7 +4665,7 @@
 			<line number="125"  hits="28"  branch="false" />
 		</lines>
 		</class>
-		<class name="ValidatorsExitBusOracle.sol"  filename="contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol"  line-rate="0.9811"  branch-rate="0.88" >
+		<class name="ValidatorsExitBusOracle.sol"  filename="contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol"  line-rate="0.981"  branch-rate="0.88" >
 		<methods>
 			<method name="constructor"  hits="8"  signature="()V" >
 				<lines><line number="103"  hits="8" /></lines>
@@ -4716,10 +4716,10 @@
 				<lines><line number="457"  hits="25" /></lines>
 			</method>
 			<method name="_storageLastRequestedValidatorIndices"  hits="2400"  signature="()V" >
-				<lines><line number="479"  hits="2400" /></lines>
+				<lines><line number="477"  hits="2400" /></lines>
 			</method>
 			<method name="_storageDataProcessingState"  hits="86"  signature="()V" >
-				<lines><line number="490"  hits="86" /></lines>
+				<lines><line number="488"  hits="86" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -4815,20 +4815,19 @@
 			<line number="448"  hits="25"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="449"  hits="23"  branch="false" />
 			<line number="454"  hits="3216"  branch="false" />
-			<line number="458"  hits="25"  branch="false" />
-			<line number="460"  hits="25"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="461"  hits="2"  branch="false" />
+			<line number="458"  hits="25"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="459"  hits="2"  branch="false" />
+			<line number="462"  hits="23"  branch="false" />
 			<line number="464"  hits="23"  branch="false" />
+			<line number="465"  hits="23"  branch="false" />
 			<line number="466"  hits="23"  branch="false" />
 			<line number="467"  hits="23"  branch="false" />
 			<line number="468"  hits="23"  branch="false" />
-			<line number="469"  hits="23"  branch="false" />
 			<line number="470"  hits="23"  branch="false" />
-			<line number="472"  hits="23"  branch="false" />
-			<line number="482"  hits="2400"  branch="false" />
-			<line number="483"  hits="2400"  branch="false" />
-			<line number="493"  hits="86"  branch="false" />
-			<line number="494"  hits="86"  branch="false" />
+			<line number="480"  hits="2400"  branch="false" />
+			<line number="481"  hits="2400"  branch="false" />
+			<line number="491"  hits="86"  branch="false" />
+			<line number="492"  hits="86"  branch="false" />
 		</lines>
 		</class>
 	</classes>
