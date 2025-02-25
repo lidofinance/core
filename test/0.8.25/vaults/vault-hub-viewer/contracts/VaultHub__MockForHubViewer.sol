@@ -16,7 +16,7 @@ contract VaultHub__MockForHubViewer {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
+    bytes32 private constant VAULT_HUB_STORAGE_SLOT =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
     constructor(IStETH _steth) {
@@ -104,7 +104,7 @@ contract VaultHub__MockForHubViewer {
 
     function _getVaultHubStorage() private pure returns (VaultHub.VaultHubStorage storage $) {
         assembly {
-            $.slot := VAULT_HUB_STORAGE_LOCATION
+            $.slot := VAULT_HUB_STORAGE_SLOT
         }
     }
 }
