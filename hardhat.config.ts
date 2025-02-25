@@ -22,6 +22,8 @@ import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
 
 const RPC_URL: string = process.env.RPC_URL || "";
 
+export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
@@ -46,6 +48,14 @@ const config: HardhatUserConfig = {
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
+    "local-devnet": {
+      url: process.env.LOCAL_RPC_URL || RPC_URL,
+      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
+    },
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
     "holesky": {
       url: process.env.HOLESKY_RPC_URL || RPC_URL,
       chainId: 17000,
@@ -60,13 +70,23 @@ const config: HardhatUserConfig = {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
     },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
+    customChains: [
+      {
+        network: "local-devnet",
+        chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
+        urls: {
+          apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
+          browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
+        },
+      },
+    ],
+    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
+      ? {
+          "local-devnet": "local-devnet",
+        }
+      : process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [
