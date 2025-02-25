@@ -4,90 +4,242 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {AccessControl} from "@openzeppelin/contracts-v5.2/access/AccessControl.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
-contract OperatorGrid {
-    struct Node {
+contract OperatorGrid is AccessControl {
+    bytes32 public constant REGISTRY_ROLE = keccak256("REGISTRY_ROLE");
+
+    struct VaultData {
+        bool exists;
+        uint256 tierId;
+        uint256 mintedShares;
+    }
+
+    struct OperatorData {
+        bool exists;
+        uint256 groupId;
+        mapping(address => VaultData) vaults;
+        uint256 vaultCount;
+    }
+
+    struct TierData {
+        bool exists;
         uint256 shareLimit;
+        uint256 mintedShares;
         uint256 reserveRatio;
+        uint256 reserveRatioThreshold;
+        uint256 treasuryFee;
     }
 
-    struct Config {
-        uint256 maxVaults;
-        uint256 maxShareLimit;
-        Node[] reserveRatioVaultIndex;
+    struct GroupData {
+        bool exists;
+        uint256 shareLimit;
+        uint256 mintedShares;
+        mapping(uint256 => TierData) tiers;
+        uint256 tiersCount;
     }
 
-    struct NodeOperator {
-        uint256 configId;
-        mapping(address => uint256) vaultIndex;
-        uint256 vaultsCount;
+    mapping(uint256 => GroupData) public groups;
+    mapping(address => OperatorData) public operators;
+
+    // -----------------------------
+    //            EVENTS
+    // -----------------------------
+
+    event GroupAdded(uint256 indexed groupId, uint256 shareLimit);
+    event TierAddedOrUpdated(uint256 indexed groupId, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatio, uint256 reserveRatioThreshold);
+    event OperatorAdded(uint256 indexed groupId, address indexed operatorAddr);
+    event VaultAdded(uint256 indexed groupId, address indexed operatorAddr, uint256 tierId);
+    event Minted(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
+    event Burned(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
+
+    // -----------------------------
+    //        GROUPS
+    // -----------------------------
+
+    function addGroup(uint256 groupId, uint256 shareLimit) external {
+        GroupData storage g = groups[groupId];
+        require(!g.exists, "Group already exists");
+
+        g.exists = true;
+        g.shareLimit = shareLimit;
+        g.mintedShares = 0;
+
+        emit GroupAdded(groupId, shareLimit);
     }
 
-    mapping(uint256 => Config) public configs;
-    mapping(address => NodeOperator) public nodeOperators;
-    uint8 public configCount;
+    function updateGroupShareLimit(uint256 groupId, uint256 newShareLimit) external {
+        GroupData storage g = groups[groupId];
+        require(g.exists, "Group does not exist");
 
-    function initialize() external {
-        Node[] memory basisNodes = new Node[](1);
-        basisNodes[0] = Node({shareLimit: 0, reserveRatio: 2_000});
-        addConfig(type(uint16).max, 1_000_000, basisNodes);
-
-        Node[] memory curatedNodes = new Node[](5);
-        curatedNodes[0] = Node({shareLimit: 50_000, reserveRatio: 500});
-        curatedNodes[1] = Node({shareLimit: 100_000, reserveRatio: 600});
-        curatedNodes[2] = Node({shareLimit: 200_000, reserveRatio: 900});
-        curatedNodes[3] = Node({shareLimit: 300_000, reserveRatio: 1_400});
-        curatedNodes[4] = Node({shareLimit: 400_000, reserveRatio: 2_000});
-
-        addConfig(5, 3_300_000, curatedNodes);
+        g.shareLimit = newShareLimit;
     }
 
-    function addConfig(uint256 maxVaults, uint256 maxShareLimit, Node[] memory nodes) public {
-        configs[configCount].maxVaults = maxVaults;
-        configs[configCount].maxShareLimit = maxShareLimit;
-        for (uint256 i = 0; i < nodes.length; i++) {
-            configs[configCount].reserveRatioVaultIndex.push(nodes[i]);
+    // -----------------------------
+    //        TIERS
+    // -----------------------------
+
+    function addTier(
+        uint256 groupId,
+        uint256 tierId,
+        uint256 shareLimit,
+        uint256 reserveRatio,
+        uint256 reserveRatioThreshold
+    ) external {
+        GroupData storage g = groups[groupId];
+        require(g.exists, "Group does not exist");
+
+        TierData storage t = g.tiers[tierId];
+        if (!t.exists) {
+            t.exists = true;
+            t.mintedShares = 0;
         }
-        configCount++;
+
+        t.shareLimit = shareLimit;
+        t.reserveRatio = reserveRatio;
+        t.reserveRatioThreshold = reserveRatioThreshold;
+        g.tiersCount++;
+
+        emit TierAddedOrUpdated(groupId, tierId, shareLimit, reserveRatio, reserveRatioThreshold);
     }
 
-    function updateConfig(uint256 index, uint256 maxVaults, uint256 maxShareLimit, Node[] memory nodes) external {
-        require(index < configCount, "Invalid config index");
-        Config storage config = configs[index];
-        config.maxVaults = maxVaults;
-        config.maxShareLimit = maxShareLimit;
-        delete config.reserveRatioVaultIndex;
-        for (uint256 i = 0; i < nodes.length; i++) {
-            config.reserveRatioVaultIndex.push(nodes[i]);
-        }
+    // -----------------------------
+    //      NO
+    // -----------------------------
+
+    function addOperator(address operatorAddr) external {
+        _addOperator(0, operatorAddr);
+    }
+    function addOperator(address operatorAddr, uint256 groupId) external {
+        require(hasRole(REGISTRY_ROLE, msg.sender));
+        _addOperator(groupId, operatorAddr);
     }
 
-    function removeConfig(uint256 index) public {
-        require(index < configCount, "Invalid config index");
-        delete configs[index];
+    function _addOperator(uint256 groupId, address operatorAddr) internal {
+        GroupData storage g = groups[groupId];
+        require(g.exists, "Group does not exist");
+
+        OperatorData storage op = operators[operatorAddr];
+        require(!op.exists, "Operator already exists in this group");
+
+        op.exists = true;
+        op.groupId = groupId;
+
+        emit OperatorAdded(groupId, operatorAddr);
     }
 
-    function addVault(address vault, uint256 vaultIndex) public {
-        address operator = IStakingVault(vault).nodeOperator();
+    // -----------------------------
+    //       VAULS
+    // -----------------------------
 
-        NodeOperator storage nodeOperator = nodeOperators[operator];
-        nodeOperator.vaultIndex[vault] = vaultIndex;
-        nodeOperator.vaultsCount++;
+    function addVault(address vault, uint256 groupId) external {
+        GroupData storage g = groups[groupId];
+        require(g.exists, "Group does not exist");
+
+        OperatorData storage op = operators[IStakingVault(vault).nodeOperator()];
+        require(op.exists, "Operator does not exist");
+
+        VaultData storage v = op.vaults[vault];
+        require(!v.exists, "Vault already exists");
+
+        uint256 nextTierIndex = op.vaultCount;
+        require(nextTierIndex < g.tiersCount, "No more tiers available");
+
+        v.exists = true;
+        v.tierId = nextTierIndex;
+        v.mintedShares = 0;
+
+        op.vaultCount += 1;
+
+        emit VaultAdded(groupId, vault, nextTierIndex);
     }
 
-    function updateNodeOperatorConfig(address operator, uint256 newConfigId) public {
-        require(newConfigId < configCount, "Invalid config ID");
-        nodeOperators[operator].configId = newConfigId;
+    // -----------------------------
+    //     MINT / BURN
+    // -----------------------------
+
+    /**
+     *
+     *   group limit: group.mintedShares + amount <= group.shareLimit
+     *   tier limit: tier.mintedShares + amount <= tier.shareLimit
+     *   update shares on group/tier/vault
+     */
+    function mintShares(
+        address vault,
+        uint256 amount
+    ) external {
+        address operatorAddr = IStakingVault(vault).nodeOperator();
+        OperatorData storage op = operators[operatorAddr];
+        require(op.exists, "Operator does not exist in this group");
+
+        GroupData storage g = groups[op.groupId];
+        require(g.exists, "Group does not exist");
+
+        VaultData storage v = op.vaults[vault];
+        require(v.exists, "Vault does not exist under this operator");
+
+        // group limit
+        require(g.mintedShares + amount <= g.shareLimit, "Group limit exceeded");
+
+        TierData storage t = g.tiers[v.tierId];
+        require(t.exists, "Tier does not exist");
+        require(v.mintedShares + amount <= t.shareLimit, "Vault tier limit exceeded");
+
+        g.mintedShares += amount;
+        v.mintedShares += amount;
+
+        emit Minted(op.groupId, operatorAddr, vault, amount);
     }
 
-    function getNodeOperatorLimits(address vault) external view returns (Node memory) {
-        address operator = IStakingVault(vault).nodeOperator();
-        NodeOperator storage nodeOperator = nodeOperators[operator];
+    function burnShares(
+        address vault,
+        uint256 amount
+    ) external {
+        address operatorAddr = IStakingVault(vault).nodeOperator();
+        OperatorData storage op = operators[operatorAddr];
+        require(op.exists, "Operator does not exist in this group");
 
-        uint256 vaultIndex = nodeOperator.vaultIndex[vault];
+        GroupData storage g = groups[op.groupId];
+        require(g.exists, "Group does not exist");
 
-        require(vaultIndex < configs[nodeOperator.configId].reserveRatioVaultIndex.length, "Invalid vault index");
-        return configs[nodeOperator.configId].reserveRatioVaultIndex[vaultIndex];
+        VaultData storage v = op.vaults[vault];
+        require(v.exists, "Vault does not exist under this operator");
+        require(v.mintedShares >= amount, "Not enough vault shares to burn");
+
+        g.mintedShares -= amount;
+        v.mintedShares -= amount;
+
+        emit Burned(op.groupId, operatorAddr, vault, amount);
+    }
+
+    function getVaultLimits(address vault)
+    external
+    view
+    returns (
+        uint256 shareLimit,
+        uint256 reserveRatio,
+        uint256 reserveRatioThreshold,
+        uint256 treasuryFee
+    )
+    {
+        address operatorAddr = IStakingVault(vault).nodeOperator();
+        OperatorData storage op = operators[operatorAddr];
+        require(op.exists, "Operator does not exist in this group");
+
+        VaultData storage v = op.vaults[vault];
+        require(v.exists, "Vault not found in OperatorGrid");
+
+        GroupData storage g = groups[op.groupId];
+        require(g.exists, "Group does not exist?");
+
+        TierData storage t = g.tiers[v.tierId];
+        require(t.exists, "Tier not found?");
+
+        shareLimit = t.shareLimit;
+        reserveRatio = t.reserveRatio;
+        reserveRatioThreshold = t.reserveRatioThreshold;
+        treasuryFee = t.treasuryFee;
     }
 }

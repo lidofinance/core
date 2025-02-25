@@ -13,6 +13,7 @@ import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 interface IOperatorGrid {
     function getVaultLimits(address vault) external returns(
@@ -82,11 +83,12 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
 
-    IOperatorGrid public immutable OPERATOR_GRID;
+    OperatorGrid public immutable OPERATOR_GRID;
 
     /// @param _stETH Lido stETH contract
-    constructor(IStETH _stETH) {
+    constructor(IStETH _stETH, address _operatorGrid) {
         STETH = _stETH;
+        OPERATOR_GRID = OperatorGrid(_operatorGrid);
 
         _disableInitializers();
     }
@@ -274,6 +276,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         }
 
         STETH.mintExternalShares(_recipient, _amountOfShares);
+        OPERATOR_GRID.mintShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -296,6 +299,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         STETH.burnExternalShares(_amountOfShares);
+        OPERATOR_GRID.burnShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
