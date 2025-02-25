@@ -124,37 +124,48 @@ contract VaultHubViewerV1 {
         return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
-    /// @notice Returns all connected vaults
+    /// @notice Returns all connected vaults (not optimized)
     /// @return array of connected vaults
-//    function vaultsConnected() public view returns (IVault[] memory) {
-//        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
-//
-//        return _filterNonZeroVaults(vaults, 0, valid);
-//    }
+    function vaultsConnected() public view returns (IVault[] memory) {
+        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+
+        return _filterNonZeroVaults(vaults, 0, valid);
+    }
 
     /// @notice Returns all connected vaults within a range
     /// @param _from Index to start from inclisive
     /// @param _to Index to end at non-inculsive
     /// @return array of connected vaults
-    /// @return number of leftover connected vaults
+    /// @return number of leftover connected vaults (it does not take into account that there may be disconnected volts)
     function vaultsConnectedBound(
         uint256 _from,
         uint256 _to
     ) public view returns (IVault[] memory, uint256) {
-        (IVault[] memory vaults, uint256 valid) = _vaultsConnected(_from, _to);
+        (IVault[] memory vaults, uint256 leftover) = _vaultsConnected(_from, _to);
 
-//        uint256 count = valid > _to ? _to : valid;
-//        uint256 leftover = valid > _to ? valid - _to : 0;
-
-        return (vaults, valid);
-//        return (_filterNonZeroVaults(vaults, _from, count), leftover);
+        return (vaults, leftover);
     }
 
     // ==================== Internal Functions ====================
 
-    /// @dev common logic for vaultsConnected and vaultsConnectedBound
+    /// @dev common logic for vaultsConnected (not optimized)
+    function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
+        uint256 count = vaultHub.vaultsCount();
+        IVault[] memory vaults = new IVault[](count);
+
+        uint256 valid = 0;
+        for (uint256 i = 0; i < count; i++) {
+            if (!vaultHub.vaultSocket(i).isDisconnected) {
+                vaults[valid] = IVault(vaultHub.vault(i));
+                valid++;
+            }
+        }
+
+        return (vaults, valid);
+    }
+
+    /// @dev common logic for vaultsConnectedBound
     function _vaultsConnected(uint256 _from, uint256 _to) internal view returns (IVault[] memory, uint256) {
-        //require(_to > _from, "Invalid range");
         if (_to < _from) revert WrongPaginationRange(_from, _to);
 
         uint256 resultVaultsCount = _to - _from;
