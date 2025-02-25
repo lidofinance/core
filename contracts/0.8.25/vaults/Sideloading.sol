@@ -144,7 +144,7 @@ abstract contract Sideloading is VaultHub {
         _vaultAuth(_vault, "sideload");
 
         SideloadingStorage storage $ = _getSideloadingStorage();
-        if ($.isSideloaderRegistryIgnored || !$.sideloaderRegistry[_sideloader]) {
+        if (!$.isSideloaderRegistryIgnored && !$.sideloaderRegistry[_sideloader]) {
             revert SideloaderNotRegistered(_sideloader);
         }
 
