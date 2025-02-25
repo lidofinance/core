@@ -271,14 +271,28 @@ describe("VaultHubViewerV1", () => {
       await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
     });
 
+    it("checks gas estimation for vaultsConnectedBound(0, 4)", async () => {
+      const gasEstimate = await ethers.provider.estimateGas({
+        to: await vaultHubViewer.getAddress(),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnectedBound", [0, 4]),
+      });
+      expect(gasEstimate).to.lte(50_000_000n);
+    });
+
     it("returns all connected vaults", async () => {
       const vaults = await vaultHubViewer.vaultsConnectedBound(0, 4);
+      // check a vaults length
       expect(vaults[0].length).to.equal(4);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
     });
 
     it("returns all connected vaults in a given range", async () => {
       const vaults = await vaultHubViewer.vaultsConnectedBound(1, 3);
+      // check a vaults length
       expect(vaults[0].length).to.equal(2);
+      // check a leftover (4 - 3 = 1)
+      expect(vaults[1]).to.equal(1);
     });
 
     it("reverts if from is greater than to", async () => {
