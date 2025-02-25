@@ -455,8 +455,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
-        emit StoreOracleExitRequestHashStart(exitRequestHash);
-
         if (report.requestsCount == 0) {
             return;
         }
