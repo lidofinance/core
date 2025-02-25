@@ -74,16 +74,18 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
+    address public immutable accounting;
 
     /// @param _stETH Lido stETH contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(IStETH _stETH, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
+    constructor(IStETH _stETH, address _accounting, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         STETH = _stETH;
+        accounting = _accounting;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
@@ -482,12 +484,13 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
     }
 
-    function _updateVaults(
+    function updateVaults(
         uint256[] memory _valuations,
         int256[] memory _inOutDeltas,
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
-    ) internal {
+    ) external {
+        if (msg.sender != accounting) revert NotAuthorized("updateVaults", msg.sender);
         VaultHubStorage storage $ = _getVaultHubStorage();
 
         for (uint256 i = 0; i < _valuations.length; i++) {

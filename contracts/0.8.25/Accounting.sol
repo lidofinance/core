@@ -333,12 +333,12 @@ contract Accounting {
         );
 
         // TODO: Remove this once decide on vaults reporting
-        // _updateVaults(
-        //     _report.vaultValues,
-        //     _report.inOutDeltas,
-        //     _update.vaultsLockedEther,
-        //     _update.vaultsTreasuryFeeShares
-        // );
+        _contracts.vaultHub.updateVaults(
+            _report.vaultValues,
+            _report.inOutDeltas,
+            _update.vaultsLockedEther,
+            _update.vaultsTreasuryFeeShares
+        );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {
             LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);

@@ -76,7 +76,7 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [steth, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [steth, ZeroAddress, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);

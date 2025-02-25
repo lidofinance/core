@@ -148,6 +148,7 @@ export async function main() {
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     lidoAddress,
+    accounting.address,
   ]);
 
   // Deploy AccountingOracle

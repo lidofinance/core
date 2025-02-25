@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -26,7 +27,7 @@ describe("VaultHub.sol:pausableUntil", () => {
 
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [steth, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [steth, ZeroAddress, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
