@@ -61,10 +61,6 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
     bytes32 private constant LOCATOR_CONTRACT_POSITION = keccak256("lido.ValidatorsExitBus.locatorContract");
 
-    constructor(address locatorAddr) {
-      _setLocatorAddress(locatorAddr);
-    }
-
     function _setLocatorAddress(address addr) internal {
         if (addr == address(0)) revert ZeroAddress();
 

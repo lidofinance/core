@@ -101,7 +101,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
         BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator)
     {
         LOCATOR = ILidoLocator(lidoLocator);
     }
@@ -121,6 +120,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
+        _setLocatorAddress(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
