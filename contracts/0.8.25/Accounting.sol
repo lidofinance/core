@@ -93,8 +93,9 @@ contract Accounting is VaultHub {
 
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido
-    ) VaultHub(_lido) {
+        ILido _lido,
+        address _operatorGrid
+    ) VaultHub(_lido, _operatorGrid) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }

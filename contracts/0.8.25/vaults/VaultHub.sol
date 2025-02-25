@@ -13,6 +13,16 @@ import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
+
+interface IOperatorGrid {
+    function getVaultLimits(address vault) external returns(
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _reserveRatioThresholdBP,
+        uint256 _treasuryFeeBP
+    );
+}
 
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
 /// It allows to connect vaults, disconnect them, mint and burn stETH
@@ -73,9 +83,12 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
 
+    OperatorGrid public immutable OPERATOR_GRID;
+
     /// @param _stETH Lido stETH contract
-    constructor(IStETH _stETH) {
+    constructor(IStETH _stETH, address _operatorGrid) {
         STETH = _stETH;
+        OPERATOR_GRID = OperatorGrid(_operatorGrid);
 
         _disableInitializers();
     }
@@ -124,6 +137,16 @@ abstract contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
+    function connectVault(address _vault) external {
+        (
+            uint256 shareLimit,
+            uint256 reserveRatioBP,
+            uint256 reserveRatioThresholdBP,
+            uint256 treasuryFeeBP
+        ) = OPERATOR_GRID.getVaultLimits(_vault);
+        _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
+    }
+
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
@@ -138,6 +161,16 @@ abstract contract VaultHub is PausableUntilWithRoles {
         uint256 _reserveRatioThresholdBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
+        _connectVault(_vault, _shareLimit, _reserveRatioBP, _reserveRatioThresholdBP, _treasuryFeeBP);
+    }
+
+    function _connectVault(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _reserveRatioThresholdBP,
+        uint256 _treasuryFeeBP
+    ) internal {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
@@ -243,6 +276,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         }
 
         STETH.mintExternalShares(_recipient, _amountOfShares);
+        OPERATOR_GRID.mintShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -265,6 +299,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         STETH.burnExternalShares(_amountOfShares);
+        OPERATOR_GRID.burnShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
