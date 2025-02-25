@@ -96,7 +96,7 @@ abstract contract Sideloading is VaultHub {
 
     /**
      * @notice Register an address as a sideloader.
-     * @param _sideloader The address of the recipient to register.
+     * @param _sideloader The address of the sideloader to register.
      */
     function registerSideloader(address _sideloader) external onlyRole(SIDELOADER_REGISTRY_RECORD_ROLE) {
         if (_sideloader == address(0)) revert ZeroArgument("_sideloader");
@@ -179,10 +179,10 @@ abstract contract Sideloading is VaultHub {
             IStakingVault(_vault).lock(totalEtherLocked);
         }
 
-        // mint the shares to the recipient
+        // mint the shares to the sideloader
         STETH.mintExternalShares(_sideloader, _amountOfShares);
 
-        // call the recipient with the provided data
+        // call the sideloader with the provided data
         if (
             ISideloader(_sideloader).onSideload(_vault, _sideloader, _amountOfShares, _data) !=
             SIDELOADER_CALLBACK_SUCCESS
