@@ -644,9 +644,9 @@ describe("Dashboard.sol", () => {
     it("signals the requested exit of a validator", async () => {
       await expect(dashboard.requestValidatorExit(pubkeysConcat))
         .to.emit(vault, "ValidatorExitRequested")
-        .withArgs(dashboard, `0x${pubkeys[0]}`)
+        .withArgs(dashboard, `0x${pubkeys[0]}`, `0x${pubkeys[0]}`)
         .to.emit(vault, "ValidatorExitRequested")
-        .withArgs(dashboard, `0x${pubkeys[1]}`);
+        .withArgs(dashboard, `0x${pubkeys[1]}`, `0x${pubkeys[1]}`);
     });
   });
 

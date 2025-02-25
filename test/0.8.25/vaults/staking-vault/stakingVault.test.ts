@@ -676,7 +676,7 @@ describe("StakingVault.sol", () => {
     it("emits the `ValidatorExitRequested` event for a single validator key", async () => {
       await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
         .to.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(vaultOwner, SAMPLE_PUBKEY);
+        .withArgs(vaultOwner, SAMPLE_PUBKEY, SAMPLE_PUBKEY);
     });
 
     it("emits the exact number of `ValidatorExitRequested` events as the number of validator keys", async () => {
@@ -686,9 +686,9 @@ describe("StakingVault.sol", () => {
       const tx = await stakingVault.connect(vaultOwner).requestValidatorExit(keys.stringified);
       await expect(tx.wait())
         .to.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(vaultOwner, keys.pubkeys[0])
+        .withArgs(vaultOwner, keys.pubkeys[0], keys.pubkeys[0])
         .and.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(vaultOwner, keys.pubkeys[1]);
+        .withArgs(vaultOwner, keys.pubkeys[1], keys.pubkeys[1]);
 
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
       expect(receipt.logs.length).to.equal(numberOfKeys);

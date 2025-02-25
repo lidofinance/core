@@ -562,7 +562,7 @@ describe("Permissions", () => {
       const pubkeys = "0x" + "beef".repeat(24);
       await expect(permissions.connect(exitRequester).requestValidatorExit(pubkeys))
         .to.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(permissions, pubkeys);
+        .withArgs(permissions, pubkeys, pubkeys);
     });
 
     it("reverts if the caller is not a member of the request exit role", async () => {
