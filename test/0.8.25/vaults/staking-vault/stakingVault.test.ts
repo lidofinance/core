@@ -22,8 +22,6 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const MAX_UINT128 = 2n ** 128n - 1n;
 
 const PUBLIC_KEY_LENGTH = 48;
-const MAX_PUBLIC_KEYS_PER_REQUEST = 5000;
-
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
@@ -134,7 +132,6 @@ describe("StakingVault.sol", () => {
     it("returns the correct initial state and constants", async () => {
       expect(await stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
       expect(await stakingVault.PUBLIC_KEY_LENGTH()).to.equal(PUBLIC_KEY_LENGTH);
-      expect(await stakingVault.MAX_PUBLIC_KEYS_PER_REQUEST()).to.equal(MAX_PUBLIC_KEYS_PER_REQUEST);
 
       expect(await stakingVault.owner()).to.equal(await vaultOwner.getAddress());
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
@@ -665,14 +662,6 @@ describe("StakingVault.sol", () => {
       ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
     });
 
-    it("reverts if the number of validator keys is too large", async () => {
-      const numberOfKeys = Number(await stakingVault.MAX_PUBLIC_KEYS_PER_REQUEST()) + 1;
-      const keys = getPubkeys(numberOfKeys);
-      await expect(
-        stakingVault.connect(vaultOwner).requestValidatorExit(keys.stringified),
-      ).to.be.revertedWithCustomError(stakingVault, "TooManyPubkeys");
-    });
-
     it("emits the `ValidatorExitRequested` event for a single validator key", async () => {
       await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
         .to.emit(stakingVault, "ValidatorExitRequested")
@@ -692,13 +681,6 @@ describe("StakingVault.sol", () => {
 
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
       expect(receipt.logs.length).to.equal(numberOfKeys);
-    });
-
-    it("handles up to MAX_PUBLIC_KEYS_PER_REQUEST validator keys", async () => {
-      const numberOfKeys = 5000; // uses ~16300771 gas (>54% from the 30000000 gas limit)
-      const keys = getPubkeys(numberOfKeys);
-
-      await stakingVault.connect(vaultOwner).requestValidatorExit(keys.stringified);
     });
   });
 

@@ -103,11 +103,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     uint256 public constant PUBLIC_KEY_LENGTH = 48;
 
     /**
-     * @notice The maximum number of pubkeys per request (to avoid burning too much gas)
-     */
-    uint256 public constant MAX_PUBLIC_KEYS_PER_REQUEST = 5000;
-
-    /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
@@ -451,7 +446,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
-        if (keysCount > MAX_PUBLIC_KEYS_PER_REQUEST) revert TooManyPubkeys();
         for (uint256 i = 0; i < keysCount; i++) {
             bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH];
             emit ValidatorExitRequested(msg.sender, pubkey, pubkey);
@@ -737,11 +731,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the length of the amounts is not equal to the length of the pubkeys
      */
     error InvalidAmountsLength();
-
-    /**
-     * @notice Thrown when the number of pubkeys is too large
-     */
-    error TooManyPubkeys();
 
     /**
      * @notice Thrown when the validator withdrawal fee is insufficient
