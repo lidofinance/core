@@ -177,13 +177,13 @@ contract VaultHubViewerV1 {
                 resultIndex++;
             }
 
-            if (resultIndex > _limit) {
+            if (resultIndex >= _limit) {
                 break;
             }
         }
 
         // It does not take into account that there may be disconnected volts
-        uint256 leftover = allVaultsCount - i;
+        uint256 leftover = i < allVaultsCount ? allVaultsCount - (i + 1) : 0;
         return (_filterNonZeroVaults(resultVaults, 0, resultIndex), leftover);
     }
 

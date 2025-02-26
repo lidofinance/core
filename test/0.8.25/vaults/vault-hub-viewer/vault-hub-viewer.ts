@@ -411,7 +411,7 @@ describe("VaultHubViewerV1", () => {
       expect(vaults[1]).to.equal(0);
     });
 
-    it("returns all connected vaults (the given range does not include vaults)", async () => {
+    it("returns all connected vaults (the given limits does not include vaults)", async () => {
       const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 2_000);
       // check a vaults length
       expect(vaults[0].length).to.equal(0);
@@ -430,10 +430,74 @@ describe("VaultHubViewerV1", () => {
   context("vaultsConnected 'highload'", () => {
     beforeEach(async () => {
       await Promise.all(
-        stakingVaultArray.map(async (vault) => {
+        stakingVaultArray.map(async (vault, index) => {
           await hub.connect(hubSigner).mock_connectVault(vault.getAddress());
+
+          if (index % 2 === 0) {
+            await hub.connect(hubSigner).disconnectVault(vault.getAddress());
+          }
         }),
       );
+    });
+
+    it("returns connected vaults (the given limits are greater than the number of vaults)", async () => {
+      // Add a 2 second delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 0);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(10);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns all connected vaults (the given limits does not include vaults)", async () => {
+      // Add a 2 second delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 1_000);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(0);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns connected vaults with limit=2 and offset=2", async () => {
+      // Add a 2 second delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 2);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(2);
+      // check a leftover
+      expect(vaults[1]).to.equal(14);
+    });
+
+    it("returns connected vaults with limit=2 and offset=10", async () => {
+      // Add a 2 second delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 10);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(2);
+      // check a leftover
+      expect(vaults[1]).to.equal(6);
+    });
+
+    // - vaults count = 4, gasEstimate: 61_198n
+    // - vaults count = 20, gasEstimate: 197_195n
+    // - vaults count = 100, gasEstimate: 882_041n
+    // - vaults count = 200, gasEstimate: 1_749_489n
+    // - vaults count = 300, gasEstimate: 2_629_593n
+    // - vaults count = 400, gasEstimate: 3_522_353n
+    // - vaults count = 500, gasEstimate: 4_427_769n
+
+    it(`checks gas estimation for vaultsConnected`, async () => {
+      const gasEstimate = await ethers.provider.estimateGas({
+        to: await vaultHubViewer.getAddress(),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnected", []),
+      });
+      expect(gasEstimate).to.lte(50_000_000n);
     });
 
     it(`checks gas estimation for vaultsConnectedBound(${stakingVaultArrayCount}, 0)`, async () => {
