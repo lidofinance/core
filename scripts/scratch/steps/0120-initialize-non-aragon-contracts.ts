@@ -36,6 +36,7 @@ export async function main() {
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
+  const withdrawalVaultAdmin = testnetAdmin;
   const accountingAdmin = testnetAdmin;
 
   // Initialize NodeOperatorsRegistry
@@ -112,7 +113,7 @@ export async function main() {
 
   // Initialize WithdrawalVault
   const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [], { from: deployer });
+  await makeTx(withdrawalVault, "initialize", [withdrawalVaultAdmin], { from: deployer });
 
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);

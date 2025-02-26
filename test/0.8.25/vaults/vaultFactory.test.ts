@@ -24,7 +24,7 @@ import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/
 import { createVaultProxy, days, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -76,7 +76,13 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    accountingImpl = await ethers.deployContract("Accounting", [
+      locator,
+      steth,
+      VAULTS_CONNECTED_VAULTS_LIMIT,
+      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+    ]);
+
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
@@ -123,7 +129,8 @@ describe("VaultFactory.sol", () => {
       rebalancers: [await vaultOwner1.getAddress()],
       depositPausers: [await vaultOwner1.getAddress()],
       depositResumers: [await vaultOwner1.getAddress()],
-      exitRequesters: [await vaultOwner1.getAddress()],
+      validatorExitRequesters: [await vaultOwner1.getAddress()],
+      validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
     };
   });
@@ -170,9 +177,6 @@ describe("VaultFactory.sol", () => {
 
   context("createVaultWithDelegation", () => {
     it("works with empty `params`", async () => {
-      console.log({
-        delegationParams,
-      });
       const {
         tx,
         vault,
@@ -204,13 +208,13 @@ describe("VaultFactory.sol", () => {
       const config1 = {
         shareLimit: 10n,
         minReserveRatioBP: 500n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 500n,
       };
       const config2 = {
         shareLimit: 20n,
         minReserveRatioBP: 200n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 600n,
       };
 
@@ -238,7 +242,7 @@ describe("VaultFactory.sol", () => {
             await vault1.getAddress(),
             config1.shareLimit,
             config1.minReserveRatioBP,
-            config1.thresholdReserveRatioBP,
+            config1.rebalanceThresholdBP,
             config1.treasuryFeeBP,
           ),
       ).to.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
@@ -255,7 +259,7 @@ describe("VaultFactory.sol", () => {
           await vault1.getAddress(),
           config1.shareLimit,
           config1.minReserveRatioBP,
-          config1.thresholdReserveRatioBP,
+          config1.rebalanceThresholdBP,
           config1.treasuryFeeBP,
         );
 
@@ -285,7 +289,7 @@ describe("VaultFactory.sol", () => {
             await vault2.getAddress(),
             config2.shareLimit,
             config2.minReserveRatioBP,
-            config2.thresholdReserveRatioBP,
+            config2.rebalanceThresholdBP,
             config2.treasuryFeeBP,
           ),
       ).to.not.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
@@ -312,18 +316,15 @@ describe("VaultFactory.sol", () => {
       const version3AfterV2 = await vault3WithNewImpl.getInitializedVersion();
 
       expect(version1Before).to.eq(1);
+      expect(version1After).to.eq(2);
       expect(version1AfterV2).to.eq(2);
 
       expect(version2Before).to.eq(1);
+      expect(version2After).to.eq(2);
       expect(version2AfterV2).to.eq(1);
 
       expect(version3After).to.eq(2);
-
-      const v1 = { version: version1After, getInitializedVersion: version1AfterV2 };
-      const v2 = { version: version2After, getInitializedVersion: version2AfterV2 };
-      const v3 = { version: version3After, getInitializedVersion: version3AfterV2 };
-
-      console.table([v1, v2, v3]);
+      expect(version3AfterV2).to.eq(2);
     });
   });
 

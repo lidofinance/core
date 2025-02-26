@@ -91,10 +91,16 @@ contract Accounting is VaultHub {
     /// @notice Lido contract
     ILido public immutable LIDO;
 
+    /// @param _lidoLocator Lido Locator contract
+    /// @param _lido Lido contract
+    /// @param _connectedVaultsLimit Maximum number of active vaults that can be connected to the hub
+    /// @param _relativeShareLimitBP Maximum share limit for a single vault relative to Lido TVL in basis points
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido
-    ) VaultHub(_lido) {
+        ILido _lido,
+        uint256 _connectedVaultsLimit,
+        uint256 _relativeShareLimitBP
+    ) VaultHub(_lido, _connectedVaultsLimit, _relativeShareLimitBP) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }

@@ -19,8 +19,9 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     uint64 private constant _version = 2;
-    address public immutable beaconChainDepositContract;
     VaultHub private immutable VAULT_HUB;
+
+    address public immutable DEPOSIT_CONTRACT;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -30,7 +31,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        beaconChainDepositContract = _beaconChainDepositContract;
+        DEPOSIT_CONTRACT = _beaconChainDepositContract;
         VAULT_HUB = VaultHub(_vaultHub);
 
         // Prevents reinitialization of the implementation
@@ -40,7 +41,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        bytes calldata _params
+        bytes calldata // _params
     ) external reinitializer(_version) {
         if (owner() != address(0)) {
             revert VaultAlreadyInitialized();
@@ -68,10 +69,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return _version;
     }
 
-    function depositContract() external view returns (address) {
-        return beaconChainDepositContract;
-    }
-
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
         return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
@@ -85,28 +82,26 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function depositToBeaconChain(Deposit[] calldata _deposits) external {}
     function fund() external payable {}
-    function inOutDelta() external view returns (int256) {
+
+    function inOutDelta() external pure returns (int256) {
         return -1;
     }
-    function isBalanced() external view returns (bool) {
-        return true;
-    }
+
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
     function rebalance(uint256 _ether) external {}
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
-    function requestValidatorExit(bytes calldata _pubkeys) external {}
     function lock(uint256 _locked) external {}
 
-    function locked() external view returns (uint256) {
+    function locked() external pure returns (uint256) {
         return 0;
     }
-    function unlocked() external view returns (uint256) {
+    function unlocked() external pure returns (uint256) {
         return 0;
     }
 
-    function valuation() external view returns (uint256) {
+    function valuation() external pure returns (uint256) {
         return 0;
     }
 
@@ -117,15 +112,26 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function withdraw(address _recipient, uint256 _ether) external {}
 
     function withdrawalCredentials() external view returns (bytes32) {
-        return bytes32((0x01 << 248) + uint160(address(this)));
+        return bytes32((0x02 << 248) + uint160(address(this)));
     }
 
-    function beaconChainDepositsPaused() external view returns (bool) {
+    function beaconChainDepositsPaused() external pure returns (bool) {
         return false;
     }
 
     function pauseBeaconChainDeposits() external {}
     function resumeBeaconChainDeposits() external {}
+
+    function calculateValidatorWithdrawalFee(uint256) external pure returns (uint256) {
+        return 1;
+    }
+
+    function requestValidatorExit(bytes calldata _pubkeys) external {}
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _recipient
+    ) external payable {}
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
