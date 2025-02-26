@@ -65,7 +65,7 @@ describe("VaultHub.sol:hub", () => {
     options?: {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
-      reserveRatioThresholdBP?: bigint;
+      rebalanceThresholdBP?: bigint;
       treasuryFeeBP?: bigint;
     },
   ) {
@@ -77,7 +77,7 @@ describe("VaultHub.sol:hub", () => {
         await vault.getAddress(),
         options?.shareLimit ?? SHARE_LIMIT,
         options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        options?.reserveRatioThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+        options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
         options?.treasuryFeeBP ?? TREASURY_FEE_BP,
       );
 
@@ -216,7 +216,7 @@ describe("VaultHub.sol:hub", () => {
       expect(lastVaultSocket.sharesMinted).to.equal(0n);
       expect(lastVaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(lastVaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
-      expect(lastVaultSocket.reserveRatioThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
+      expect(lastVaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(lastVaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
       expect(lastVaultSocket.pendingDisconnect).to.equal(false);
     });
@@ -231,7 +231,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.sharesMinted).to.equal(0n);
       expect(vaultSocket.shareLimit).to.equal(0n);
       expect(vaultSocket.reserveRatioBP).to.equal(0n);
-      expect(vaultSocket.reserveRatioThresholdBP).to.equal(0n);
+      expect(vaultSocket.rebalanceThresholdBP).to.equal(0n);
       expect(vaultSocket.treasuryFeeBP).to.equal(0n);
       expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
@@ -245,7 +245,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.sharesMinted).to.equal(0n);
       expect(vaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(vaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
-      expect(vaultSocket.reserveRatioThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
+      expect(vaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(vaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
       expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
@@ -274,8 +274,8 @@ describe("VaultHub.sol:hub", () => {
 
       for (let i = 0; i < 50; i++) {
         const snapshot = await Snapshot.take();
-        const reserveRatioThresholdBP = tbi(10000);
-        const reserveRatioBP = BigIntMath.min(reserveRatioThresholdBP + tbi(1000), TOTAL_BASIS_POINTS);
+        const rebalanceThresholdBP = tbi(10000);
+        const reserveRatioBP = BigIntMath.min(rebalanceThresholdBP + tbi(1000), TOTAL_BASIS_POINTS);
 
         const valuationEth = tbi(100);
         const valuation = ether(valuationEth.toString());
@@ -284,13 +284,13 @@ describe("VaultHub.sol:hub", () => {
 
         const isSlashing = Math.random() < 0.5;
         const slashed = isSlashing ? ether(tbi(valuationEth).toString()) : 0n;
-        const treashold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - reserveRatioThresholdBP)) / TOTAL_BASIS_POINTS;
+        const treashold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
         const expectedHealthy = treashold >= mintable;
 
         const vault = await createAndConnectVault(vaultFactory, {
           shareLimit: ether("100"), // just to bypass the share limit check
           reserveRatioBP: reserveRatioBP,
-          reserveRatioThresholdBP: reserveRatioThresholdBP,
+          rebalanceThresholdBP: rebalanceThresholdBP,
         });
 
         const vaultAddress = await vault.getAddress();
@@ -309,7 +309,7 @@ describe("VaultHub.sol:hub", () => {
           expect(actualHealthy).to.equal(expectedHealthy);
         } catch (error) {
           console.log(`Test failed with parameters:
-            Reserve Ratio Threshold: ${reserveRatioThresholdBP}
+            Rebalance Threshold: ${rebalanceThresholdBP}
             Reserve Ratio: ${reserveRatioBP}
             Valuation: ${valuation} ETH
             Minted: ${mintable} stETH
@@ -328,7 +328,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        reserveRatioThresholdBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
       });
 
       const vaultAddress = await vault.getAddress();
@@ -353,7 +353,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        reserveRatioThresholdBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
       });
 
       const vaultAddress = await vault.getAddress();
@@ -392,7 +392,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 1n, // 0.01%
-        reserveRatioThresholdBP: 1n, // 0.01%
+        rebalanceThresholdBP: 1n, // 0.01%
       });
 
       const vaultAddress = await vault.getAddress();
@@ -429,7 +429,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"),
         reserveRatioBP: 50_00n, // 50%
-        reserveRatioThresholdBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
       });
 
       const vaultAddress = await vault.getAddress();
@@ -484,7 +484,7 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
     });
 
-    it("reverts if reserve ration is too high", async () => {
+    it("reverts if reserve ratio is too high", async () => {
       const tooHighReserveRatioBP = TOTAL_BASIS_POINTS + 1n;
       await expect(
         vaultHub
@@ -495,19 +495,19 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress, tooHighReserveRatioBP, TOTAL_BASIS_POINTS);
     });
 
-    it("reverts if reserve ratio threshold BP is zero", async () => {
+    it("reverts if rebalance threshold BP is zero", async () => {
       await expect(
         vaultHub.connect(user).connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, 0n, TREASURY_FEE_BP),
       ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
     });
 
-    it("reverts if reserve ratio threshold BP is higher than reserve ratio BP", async () => {
+    it("reverts if rebalance threshold BP is higher than reserve ratio BP", async () => {
       await expect(
         vaultHub
           .connect(user)
           .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_BP + 1n, TREASURY_FEE_BP),
       )
-        .to.be.revertedWithCustomError(vaultHub, "ReserveRatioThresholdTooHigh")
+        .to.be.revertedWithCustomError(vaultHub, "RebalanceThresholdTooHigh")
         .withArgs(vaultAddress, RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
     });
 

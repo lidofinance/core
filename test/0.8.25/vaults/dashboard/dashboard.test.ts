@@ -182,7 +182,7 @@ describe("Dashboard.sol", () => {
         sharesMinted: 555n,
         shareLimit: 1000n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -193,7 +193,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.shareLimit()).to.equal(sockets.shareLimit);
       expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
-      expect(await dashboard.thresholdReserveRatioBP()).to.equal(sockets.reserveRatioThresholdBP);
+      expect(await dashboard.rebalanceThresholdBP()).to.equal(sockets.rebalanceThresholdBP);
       expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
     });
   });
@@ -218,7 +218,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000000000n,
         sharesMinted: 555n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -240,7 +240,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 100n,
         sharesMinted: 0n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -260,7 +260,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000000000n,
         sharesMinted: 555n,
         reserveRatioBP: 10_000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -280,7 +280,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         sharesMinted: 555n,
         reserveRatioBP: 0n,
-        reserveRatioThresholdBP: 0n,
+        rebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -308,7 +308,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         sharesMinted: 0n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -334,7 +334,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         sharesMinted: 900n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -357,7 +357,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         sharesMinted: 10000n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -378,7 +378,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         sharesMinted: 500n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };
@@ -402,7 +402,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 500n,
         sharesMinted: 500n,
         reserveRatioBP: 1000n,
-        reserveRatioThresholdBP: 800n,
+        rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
       };

@@ -49,7 +49,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
-  const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
+  const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
   const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let delegation: Delegation;
@@ -220,7 +220,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await accounting
       .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFeeBP);
+      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
     expect(await accounting.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);

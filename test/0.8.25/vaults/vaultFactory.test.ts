@@ -208,13 +208,13 @@ describe("VaultFactory.sol", () => {
       const config1 = {
         shareLimit: 10n,
         minReserveRatioBP: 500n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 500n,
       };
       const config2 = {
         shareLimit: 20n,
         minReserveRatioBP: 200n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 600n,
       };
 
@@ -242,7 +242,7 @@ describe("VaultFactory.sol", () => {
             await vault1.getAddress(),
             config1.shareLimit,
             config1.minReserveRatioBP,
-            config1.thresholdReserveRatioBP,
+            config1.rebalanceThresholdBP,
             config1.treasuryFeeBP,
           ),
       ).to.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
@@ -259,7 +259,7 @@ describe("VaultFactory.sol", () => {
           await vault1.getAddress(),
           config1.shareLimit,
           config1.minReserveRatioBP,
-          config1.thresholdReserveRatioBP,
+          config1.rebalanceThresholdBP,
           config1.treasuryFeeBP,
         );
 
@@ -289,7 +289,7 @@ describe("VaultFactory.sol", () => {
             await vault2.getAddress(),
             config2.shareLimit,
             config2.minReserveRatioBP,
-            config2.thresholdReserveRatioBP,
+            config2.rebalanceThresholdBP,
             config2.treasuryFeeBP,
           ),
       ).to.not.revertedWithCustomError(accounting, "VaultProxyNotAllowed");

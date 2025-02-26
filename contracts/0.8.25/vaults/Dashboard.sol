@@ -135,18 +135,18 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Returns the reserve ratio of the vault in basis points
-     * @return The reserve ratio as a uint16
+     * @return The reserve ratio in basis points as a uint16
      */
     function reserveRatioBP() public view returns (uint16) {
         return vaultSocket().reserveRatioBP;
     }
 
     /**
-     * @notice Returns the threshold reserve ratio of the vault in basis points.
-     * @return The threshold reserve ratio as a uint16.
+     * @notice Returns the rebalance threshold of the vault in basis points.
+     * @return The rebalance threshold in basis points as a uint16.
      */
-    function thresholdReserveRatioBP() external view returns (uint16) {
-        return vaultSocket().reserveRatioThresholdBP;
+    function rebalanceThresholdBP() external view returns (uint16) {
+        return vaultSocket().rebalanceThresholdBP;
     }
 
     /**
