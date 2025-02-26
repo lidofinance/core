@@ -77,6 +77,12 @@
       "epochsPerFrame": 12
     }
   },
+  "accounting": {
+    "deployParameters": {
+      "connectedVaultsLimit": 500,
+      "relativeShareLimitBP": 1000
+    }
+  },
   "accountingOracle": {
     "deployParameters": {
       "consensusVersion": 2
@@ -90,7 +96,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "depositSecurityModule": {
@@ -138,7 +144,7 @@
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "simple-dvt-onchain-v1",
+      "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },

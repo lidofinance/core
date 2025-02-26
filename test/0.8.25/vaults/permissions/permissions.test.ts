@@ -71,7 +71,7 @@ describe("Permissions", () => {
     // 3. Deploy StakingVault implementation
     stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
     expect(await stakingVaultImpl.vaultHub()).to.equal(vaultHub);
-    expect(await stakingVaultImpl.depositContract()).to.equal(depositContract);
+    expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
     // 4. Deploy Beacon and use StakingVault implementation as initial implementation
     beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
@@ -559,9 +559,10 @@ describe("Permissions", () => {
 
   context("requestValidatorExit()", () => {
     it("requests a validator exit", async () => {
-      await expect(permissions.connect(exitRequester).requestValidatorExit("0xabcdef"))
-        .to.emit(stakingVault, "ValidatorsExitRequest")
-        .withArgs(permissions, "0xabcdef");
+      const pubkeys = "0x" + "beef".repeat(24);
+      await expect(permissions.connect(exitRequester).requestValidatorExit(pubkeys))
+        .to.emit(stakingVault, "ValidatorExitRequested")
+        .withArgs(permissions, pubkeys, pubkeys);
     });
 
     it("reverts if the caller is not a member of the request exit role", async () => {
