@@ -166,7 +166,7 @@ describe("VaultHubViewerV1", () => {
   let hub: VaultHub__MockForHubViewer;
   let depositContract: DepositContract__MockForStakingVault;
   let stakingVault: StakingVault;
-  const stakingVaultArray: StakingVault[] = [];
+  let stakingVaultArray: StakingVault[] = [];
   const stakingVaultArrayCount = 20;
   let vaultDashboard: StakingVault;
   let vaultDelegation: StakingVault;
@@ -211,10 +211,11 @@ describe("VaultHubViewerV1", () => {
     stakingVault = await deployStakingVault(vaultImpl, vaultOwner, operator);
 
     // For "highload" testing
-    for (let i = 0; i <= stakingVaultArrayCount - 1; i++) {
-      const _stakingVault = await deployStakingVault(vaultImpl, vaultOwner, operator);
-      stakingVaultArray.push(_stakingVault);
+    const deployPromises = [];
+    for (let i = 0; i < stakingVaultArrayCount; i++) {
+      deployPromises.push(deployStakingVault(vaultImpl, vaultOwner, operator));
     }
+    stakingVaultArray = await Promise.all(deployPromises);
 
     // Custom owner controlled vault
     const customdResult = await deployCustomOwner(vaultImpl, operator);
@@ -428,15 +429,17 @@ describe("VaultHubViewerV1", () => {
 
   context("vaultsConnected 'highload'", () => {
     beforeEach(async () => {
-      stakingVaultArray.forEach(async (valult) => {
-        await hub.connect(hubSigner).mock_connectVault(valult.getAddress());
-      });
+      await Promise.all(
+        stakingVaultArray.map(async (vault) => {
+          await hub.connect(hubSigner).mock_connectVault(vault.getAddress());
+        }),
+      );
     });
 
-    it(`checks gas estimation for vaultsConnectedBound(0, ${stakingVaultArrayCount - 1})`, async () => {
+    it(`checks gas estimation for vaultsConnectedBound(${stakingVaultArrayCount}, 0)`, async () => {
       const gasEstimate = await ethers.provider.estimateGas({
         to: await vaultHubViewer.getAddress(),
-        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnectedBound", [0, stakingVaultArrayCount - 1]),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnectedBound", [stakingVaultArrayCount, 0]),
       });
       expect(gasEstimate).to.lte(50_000_000n);
     });
