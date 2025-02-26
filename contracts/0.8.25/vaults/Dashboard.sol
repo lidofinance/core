@@ -432,14 +432,14 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
-     *         Both partial withdrawals (disabled for unbalanced `StakingVault`) and full validator exits are supported.
+     *         Both partial withdrawals (disabled for unhealthy `StakingVault`) and full validator exits are supported.
      * @param _pubkeys Concatenated validator public keys (48 bytes each).
      * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
      *         Set amount to 0 for a full validator exit.
      *         For partial withdrawals, amounts will be capped to maintain the minimum stake of 32 ETH on the validator.
      * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
-     * @dev    A withdrawal fee (calculated on block-by-block basis) must be paid via msg.value.
-     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee.
+     * @dev    A withdrawal fee must be paid via msg.value.
+     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
     function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
