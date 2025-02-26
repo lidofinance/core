@@ -171,11 +171,10 @@ contract VaultHubViewerV1 {
         uint256 resultVaultsCount = _to - _from;
         IVault[] memory resultVaults = new IVault[](resultVaultsCount);
         uint256 resultIndex = 0;
-        uint256 skip = 0;
-
 
         uint256 allVaultsCount = vaultHub.vaultsCount();
-        for (uint256 i = 0; i < allVaultsCount; i++) {
+        uint256 i;
+        for (i = 0; i < allVaultsCount; i++) {
             if (!vaultHub.vaultSocket(i).isDisconnected) {
                 if (i >= _from && i < _to) {
                     resultVaults[resultIndex] = IVault(vaultHub.vault(i));
@@ -184,14 +183,13 @@ contract VaultHubViewerV1 {
             }
 
             if (resultIndex >= resultVaultsCount) {
-                skip = i + 1;
                 break;
             }
         }
 
         // It does not take into account that there may be disconnected volts
-        uint256 leftover = allVaultsCount - skip;
-        return (resultVaults, leftover);
+        uint256 leftover = allVaultsCount - i;
+        return (_filterNonZeroVaults(resultVaults, 0, resultIndex), leftover);
     }
 
     /// @dev common logic for vaultsByRole and vaultsByRoleBound
