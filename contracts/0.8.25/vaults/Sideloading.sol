@@ -10,17 +10,23 @@ import {ILido as IStETH} from "../interfaces/ILido.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ISideloader} from "../interfaces/ISideloader.sol";
 
+/**
+ * @title Sideloading
+ * @author Lido
+ * @notice Sideloading is a feature that allows vaults to mint unbacked stETH shares which,
+ *         after invoking the callback, must be retroactively backed by the vault.
+ */
 abstract contract Sideloading is VaultHub {
     /**
      * @notice The storage structure:
-     * - isSideloaderRegistryIgnored: whether the registry is ignored;
-     *   if set to true, any address can be used as a sideloader;
      * - sideloaderRegistry: the registry of sideloaders;
      *   Returns true if the address can be used as a sideloader.
+     * - isSideloaderRegistryIgnored: whether the registry is ignored;
+     *   if set to true, any address can be used as a sideloader.
      */
     struct SideloadingStorage {
-        bool isSideloaderRegistryIgnored;
         mapping(address sideloader => bool isRegistered) sideloaderRegistry;
+        bool isSideloaderRegistryIgnored;
     }
 
     /**
@@ -125,7 +131,36 @@ abstract contract Sideloading is VaultHub {
     }
 
     /**
-     * @notice Sideloads the vault valuation by minting shares to a sideloader.
+     * @notice Sideloads the vault valuation by minting shares to a sideloader and invoking the callback.
+     * Sideloading:
+     *  - Mints unbacked shares to a sideloader (typically an adapter for another protocol, e.g. DEX);
+     *  - Invokes the callback function on the sideloader, which uses the shares to obtain the required valuation
+     *     to retroactively back the minted shares.
+     *
+     * The full flow is as follows:
+     *
+     *   +---------------+              +-------------+    2. check minimal reserve
+     *   |               |  1. sideload |             |    6. check required valuation
+     *   | StVault Owner |+------------>| Sideloading |-------------|
+     *   |               |              |             |             |
+     *   +---------------+              +-------------+             |
+     *                                   |                          |
+     *                                   |  3. mint stETH (shares)  |
+     *                                   |     & callback           |
+     *                                   |                          |
+     *                                   v                          v
+     *   +---------------+              +------------+            +---------+
+     *   |               |              |            |            |         |
+     *   |   e.g. DEX    |<------------ | Sideloader |----------->| stVault |
+     *   |               |   4. swap    |            |  5. fund   |         |
+     *   +---------------+      to ETH  +------------+            +---------+
+     *
+     * NB: Sideloading conservatively assumes that the sideloader will not be able to
+     *     obtain more ETH than the amount of stETH minted. This is why the initial valuation
+     *     must cover the minimal reserve after sideloading.
+     *     For example, if the vault reserve ratio is 10% and the vault owner wants to mint 900 stETH,
+     *     the initial valuation of the vault must be at least 100 ETH (10% of 1000 ETH).
+     *
      * @param _vault The address of the vault.
      * @param _sideloader The address of the sideloader.
      * @param _amountOfShares The amount of shares to mint for sideloading.
