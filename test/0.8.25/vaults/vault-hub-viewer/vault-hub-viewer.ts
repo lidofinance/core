@@ -441,7 +441,7 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("returns connected vaults (the given limits are greater than the number of vaults)", async () => {
-      // Add a 2 second delay to remove side effects
+      // Add a 2 seconds delay to remove side effects
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 0);
@@ -452,7 +452,7 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("returns all connected vaults (the given limits does not include vaults)", async () => {
-      // Add a 2 second delay to remove side effects
+      // Add a 2 seconds delay to remove side effects
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 1_000);
@@ -463,7 +463,7 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("returns connected vaults with limit=2 and offset=2", async () => {
-      // Add a 2 second delay to remove side effects
+      // Add a 2 seconds delay to remove side effects
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const vaults = await vaultHubViewer.vaultsConnectedBound(2, 2);
@@ -474,7 +474,7 @@ describe("VaultHubViewerV1", () => {
     });
 
     it("returns connected vaults with limit=2 and offset=10", async () => {
-      // Add a 2 second delay to remove side effects
+      // Add a 2 seconds delay to remove side effects
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       const vaults = await vaultHubViewer.vaultsConnectedBound(2, 10);
