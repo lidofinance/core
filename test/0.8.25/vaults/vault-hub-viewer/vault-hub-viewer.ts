@@ -495,7 +495,7 @@ describe("VaultHubViewerV1", () => {
     it(`checks gas estimation for vaultsConnected`, async () => {
       const gasEstimate = await ethers.provider.estimateGas({
         to: await vaultHubViewer.getAddress(),
-        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnected", []),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnected"),
       });
       expect(gasEstimate).to.lte(50_000_000n);
     });
