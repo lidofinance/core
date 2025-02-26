@@ -59,7 +59,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION =
         keccak256("lido.ValidatorsExitBus.reportHashes");
 
-    bytes32 private constant LOCATOR_CONTRACT_POSITION = keccak256("lido.ValidatorsExitBus.locatorContract");
+    bytes32 internal constant LOCATOR_CONTRACT_POSITION = keccak256("lido.ValidatorsExitBus.locatorContract");
 
     constructor(address locatorAddr) {
       _setLocatorAddress(locatorAddr);

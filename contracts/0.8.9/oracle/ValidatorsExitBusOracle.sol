@@ -11,6 +11,7 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
 import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
+import {ICLProofVerifier, ProvableBeaconBlockHeader, ValidatorWitness} from "../interfaces/ICLProofVerifier.sol";
 
 
 interface IOracleReportSanityChecker {
@@ -36,6 +37,9 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint256 prevRequestedValidatorIndex,
         uint256 requestedValidatorIndex
     );
+    error MismatchedArrayLengths(uint256 keysCount, uint256 witnessesCount);
+    error PubkeyMismatch(bytes exitReportPubkey, bytes witnessPubkey);
+
 
     event ValidatorExitRequest(
         uint256 indexed stakingModuleId,
@@ -470,6 +474,61 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.requestsCount - 1}));
 
         emit StoredOracleTWExitRequestHash(exitRequestHash);
+    }
+
+    function submitProofOfDelinquent(
+        bytes calldata data,
+        ProvableBeaconBlockHeader calldata beaconBlock,
+        uint256[] calldata keyIndexes,
+        ValidatorWitness[] calldata validatorWitnesses
+    ) external {
+        if (validatorWitnesses.length != keyIndexes.length) {
+            revert MismatchedArrayLengths(keyIndexes.length, validatorWitnesses.length);
+        }
+
+        bytes32 dataHash = keccak256(data);
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[dataHash];
+
+        if (requestStatus.contractVersion == 0) {
+            revert ExitHashWasNotSubmitted();
+        }
+
+        ICLProofVerifier clProofVerifier = ICLProofVerifier(getLocator().clProofVerifier());
+
+        uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
+
+        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+        for (uint256 i = 0; i < keyIndexes.length; i++) {
+            if (keyIndexes[i] >= requestStatus.totalItemsCount) {
+                revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
+            }
+
+            if (keyIndexes[i] > lastDeliveredKeyIndex) {
+                revert KeyWasNotUnpacked(keyIndexes[i], lastDeliveredKeyIndex);
+            }
+
+            _copyPubkeyToMemory(data, pubkey, i);
+
+            if (keccak256(pubkey) != keccak256(validatorWitnesses[i].validator.pubkey)) {
+                revert PubkeyMismatch(pubkey, validatorWitnesses[i].validator.pubkey);
+            }
+
+            clProofVerifier.verifyValidatorProof(beaconBlock, validatorWitnesses[i]);
+        }
+    }
+
+    function _copyPubkeyToMemory(bytes calldata exitReport, bytes memory target, uint256 keyIndex) private pure {
+        assembly {
+            calldatacopy(
+                add(target, 32),
+                add(exitReport.offset, mul(keyIndex, PACKED_REQUEST_LENGTH)),
+                PUBLIC_KEY_LENGTH
+            )
+        }
+    }
+
+    function getLocator() public view returns (ILidoLocator) {
+        return ILidoLocator(LOCATOR_CONTRACT_POSITION.getStorageAddress());
     }
 
     ///
