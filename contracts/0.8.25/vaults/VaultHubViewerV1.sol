@@ -124,7 +124,7 @@ contract VaultHubViewerV1 {
         return (_filterNonZeroVaults(vaults, _from, count), leftover);
     }
 
-    /// @notice Returns all connected vaults
+    /// @notice Returns all connected vaults (not optimized)
     /// @return array of connected vaults
     function vaultsConnected() public view returns (IVault[] memory) {
         (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
@@ -132,28 +132,24 @@ contract VaultHubViewerV1 {
         return _filterNonZeroVaults(vaults, 0, valid);
     }
 
-    /// @notice Returns all connected vaults within a range
-    /// @param _from Index to start from inclisive
-    /// @param _to Index to end at non-inculsive
+    /// @notice Returns connected vaults with limits
+    /// @param _limit A limited number of vaults in the result
+    /// @param _offset A number how many vaults (connected and not connected) need to be skipped
     /// @return array of connected vaults
-    /// @return number of leftover connected vaults
+    /// @return number of leftover vaults (connected and not connected)
     function vaultsConnectedBound(
-        uint256 _from,
-        uint256 _to
+        uint256 _limit,
+        uint256 _offset
     ) public view returns (IVault[] memory, uint256) {
-        (IVault[] memory vaults, uint256 valid) = _vaultsConnected();
+        (IVault[] memory vaults, uint256 leftover) = _vaultsConnected(_limit, _offset);
 
-        uint256 count = valid > _to ? _to : valid;
-        uint256 leftover = valid > _to ? valid - _to : 0;
-
-        return (_filterNonZeroVaults(vaults, _from, count), leftover);
+        return (vaults, leftover);
     }
 
     // ==================== Internal Functions ====================
 
-    /// @dev common logic for vaultsConnected and vaultsConnectedBound
+    /// @dev common logic for vaultsConnected (not optimized)
     function _vaultsConnected() internal view returns (IVault[] memory, uint256) {
-        // TODO: get vaults by pages, not all vaults
         uint256 count = vaultHub.vaultsCount();
         IVault[] memory vaults = new IVault[](count);
 
@@ -166,6 +162,30 @@ contract VaultHubViewerV1 {
         }
 
         return (vaults, valid);
+    }
+
+    /// @dev common logic for vaultsConnectedBound
+    function _vaultsConnected(uint256 _limit, uint256 _offset) internal view returns (IVault[] memory, uint256) {
+        IVault[] memory resultVaults = new IVault[](_limit);
+        uint256 resultIndex = 0;
+
+        uint256 allVaultsCount = vaultHub.vaultsCount();
+        uint256 i;
+        for (i = _offset; i < allVaultsCount; i++) {
+            if (!vaultHub.vaultSocket(i).isDisconnected) {
+                resultVaults[resultIndex] = IVault(vaultHub.vault(i));
+                resultIndex++;
+            }
+
+            if (resultIndex >= _limit) {
+                break;
+            }
+        }
+
+        // It does not take into account that there may be disconnected volts
+        // Calc a leftover of ONLY connected vaults is expensive by gas
+        uint256 leftover = i < allVaultsCount ? allVaultsCount - (i + 1) : 0;
+        return (_filterNonZeroVaults(resultVaults, 0, resultIndex), leftover);
     }
 
     /// @dev common logic for vaultsByRole and vaultsByRoleBound

@@ -166,6 +166,8 @@ describe("VaultHubViewerV1", () => {
   let hub: VaultHub__MockForHubViewer;
   let depositContract: DepositContract__MockForStakingVault;
   let stakingVault: StakingVault;
+  let stakingVaultArray: StakingVault[] = [];
+  const stakingVaultArrayCount = 20;
   let vaultDashboard: StakingVault;
   let vaultDelegation: StakingVault;
   let vaultCustom: StakingVault;
@@ -208,6 +210,13 @@ describe("VaultHubViewerV1", () => {
     // EOA controlled vault
     stakingVault = await deployStakingVault(vaultImpl, vaultOwner, operator);
 
+    // For "highload" testing
+    const deployPromises = [];
+    for (let i = 0; i < stakingVaultArrayCount; i++) {
+      deployPromises.push(deployStakingVault(vaultImpl, vaultOwner, operator));
+    }
+    stakingVaultArray = await Promise.all(deployPromises);
+
     // Custom owner controlled vault
     const customdResult = await deployCustomOwner(vaultImpl, operator);
     vaultCustom = customdResult.stakingVault;
@@ -232,50 +241,6 @@ describe("VaultHubViewerV1", () => {
       await expect(ethers.deployContract("VaultHubViewerV1", [ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(vaultHubViewer, "ZeroArgument")
         .withArgs("_vaultHubAddress");
-    });
-  });
-
-  context("vaultsConnected", () => {
-    beforeEach(async () => {
-      await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
-    });
-
-    it("returns all connected vaults", async () => {
-      const vaults = await vaultHubViewer.vaultsConnected();
-      expect(vaults.length).to.equal(4);
-      expect(vaults[0]).to.equal(vaultDelegation);
-      expect(vaults[1]).to.equal(vaultDashboard);
-      expect(vaults[2]).to.equal(stakingVault);
-      expect(vaults[3]).to.equal(vaultCustom);
-    });
-  });
-
-  context("vaultsConnectedBound", () => {
-    beforeEach(async () => {
-      await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
-      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
-    });
-
-    it("returns all connected vaults", async () => {
-      const vaults = await vaultHubViewer.vaultsConnectedBound(0, 4);
-      expect(vaults[0].length).to.equal(4);
-    });
-
-    it("returns all connected vaults in a given range", async () => {
-      const vaults = await vaultHubViewer.vaultsConnectedBound(1, 3);
-      expect(vaults[0].length).to.equal(2);
-    });
-
-    it("reverts if from is greater than to", async () => {
-      await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithCustomError(
-        vaultHubViewer,
-        "WrongPaginationRange",
-      );
     });
   });
 
@@ -388,6 +353,159 @@ describe("VaultHubViewerV1", () => {
         4,
       );
       expect(vaults[0].length).to.equal(1);
+    });
+  });
+
+  context("vaultsConnected", () => {
+    beforeEach(async () => {
+      await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
+    });
+
+    it("returns all connected vaults", async () => {
+      const vaults = await vaultHubViewer.vaultsConnected();
+      expect(vaults.length).to.equal(4);
+      expect(vaults[0]).to.equal(vaultDelegation);
+      expect(vaults[1]).to.equal(vaultDashboard);
+      expect(vaults[2]).to.equal(stakingVault);
+      expect(vaults[3]).to.equal(vaultCustom);
+    });
+
+    it("returns all connected vaults after disconnect the vaultCustom", async () => {
+      await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
+
+      const vaults = await vaultHubViewer.vaultsConnected();
+      expect(vaults.length).to.equal(3);
+      expect(vaults[0]).to.equal(vaultDelegation);
+      expect(vaults[1]).to.equal(vaultDashboard);
+      expect(vaults[2]).to.equal(stakingVault);
+    });
+  });
+
+  context("vaultsConnectedBound", () => {
+    beforeEach(async () => {
+      await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
+
+      await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
+      await hub.connect(hubSigner).disconnectVault(vaultDashboard.getAddress());
+
+      await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
+      await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
+    });
+
+    it("returns connected vaults (the given limits are greater than the number of vaults)", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 0);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(3);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns connected vaults with limit and offset", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 1);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(2);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns all connected vaults (the given limits does not include vaults)", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 2_000);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(0);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+    //
+    // it("reverts if from is greater than to", async () => {
+    //   await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithCustomError(
+    //     vaultHubViewer,
+    //     "WrongPaginationRange",
+    //   );
+    // });
+  });
+
+  context("vaultsConnected 'highload'", () => {
+    beforeEach(async () => {
+      await Promise.all(
+        stakingVaultArray.map(async (vault, index) => {
+          await hub.connect(hubSigner).mock_connectVault(vault.getAddress());
+
+          if (index % 2 === 0) {
+            await hub.connect(hubSigner).disconnectVault(vault.getAddress());
+          }
+        }),
+      );
+    });
+
+    it("returns connected vaults (the given limits are greater than the number of vaults)", async () => {
+      // Add a 4 seconds delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 0);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(10);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns all connected vaults (the given limits does not include vaults)", async () => {
+      // Add a 4 seconds delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 1_000);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(0);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
+    });
+
+    it("returns connected vaults with limit=2 and offset=2", async () => {
+      // Add a 4 seconds delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 2);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(2);
+      // check a leftover
+      expect(vaults[1]).to.equal(14);
+    });
+
+    it("returns connected vaults with limit=2 and offset=10", async () => {
+      // Add a 4 seconds delay to remove side effects
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 10);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(2);
+      // check a leftover
+      expect(vaults[1]).to.equal(6);
+    });
+
+    // - vaults count = 4, gasEstimate: 61_198n
+    // - vaults count = 20, gasEstimate: 197_195n
+    // - vaults count = 100, gasEstimate: 882_041n
+    // - vaults count = 200, gasEstimate: 1_749_489n
+    // - vaults count = 300, gasEstimate: 2_629_593n
+    // - vaults count = 400, gasEstimate: 3_522_353n
+    // - vaults count = 500, gasEstimate: 4_427_769n
+
+    it(`checks gas estimation for vaultsConnected`, async () => {
+      const gasEstimate = await ethers.provider.estimateGas({
+        to: await vaultHubViewer.getAddress(),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnected"),
+      });
+      expect(gasEstimate).to.lte(50_000_000n);
+    });
+
+    it(`checks gas estimation for vaultsConnectedBound(${stakingVaultArrayCount}, 0)`, async () => {
+      const gasEstimate = await ethers.provider.estimateGas({
+        to: await vaultHubViewer.getAddress(),
+        data: vaultHubViewer.interface.encodeFunctionData("vaultsConnectedBound", [stakingVaultArrayCount, 0]),
+      });
+      expect(gasEstimate).to.lte(50_000_000n);
     });
   });
 });
