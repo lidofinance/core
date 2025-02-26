@@ -393,7 +393,7 @@ describe("VaultHubViewerV1", () => {
       await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
     });
 
-    it("returns all connected vaults", async () => {
+    it("returns all connected vaults (the given range is greater than the number of vaults)", async () => {
       const vaults = await vaultHubViewer.vaultsConnectedBound(0, 1_000);
       // check a vaults length
       expect(vaults[0].length).to.equal(3);
@@ -407,6 +407,14 @@ describe("VaultHubViewerV1", () => {
       expect(vaults[0].length).to.equal(2);
       // check a leftover
       expect(vaults[1]).to.equal(2);
+    });
+
+    it("returns all connected vaults (the given range does not include vaults)", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 2_000);
+      // check a vaults length
+      expect(vaults[0].length).to.equal(0);
+      // check a leftover
+      expect(vaults[1]).to.equal(0);
     });
 
     it("reverts if from is greater than to", async () => {
