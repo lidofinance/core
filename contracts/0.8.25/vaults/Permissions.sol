@@ -223,7 +223,7 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
-     * @param _pubkeys The public keys of the validators to request exit for.
+     * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
     function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
         stakingVault().requestValidatorExit(_pubkeys);
@@ -231,9 +231,7 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
-     * @param _pubkeys The public keys of the validators to trigger withdrawal for.
-     * @param _amounts The amounts of ether to trigger withdrawal for.
-     * @param _refundRecipient The address to refund the excess ether to.
+     * @dev The zero checks for parameters are performed in the StakingVault contract.
      */
     function _triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
         stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);

@@ -595,7 +595,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("makes multiple deposits to the beacon chain and emits the `DepositedToBeaconChain` event", async () => {
-      const numberOfKeys = 2; // number because of Array.from
+      const numberOfKeys = 300; // number because of Array.from
       const totalAmount = ether("32") * BigInt(numberOfKeys);
       const withdrawalCredentials = await stakingVault.withdrawalCredentials();
 
@@ -612,7 +612,7 @@ describe("StakingVault.sol", () => {
 
       await expect(stakingVault.connect(operator).depositToBeaconChain(deposits))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(operator, 2, totalAmount);
+        .withArgs(operator, numberOfKeys, totalAmount);
     });
   });
 
@@ -857,7 +857,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("requests a multiple validator withdrawals", async () => {
-      const numberOfKeys = 2;
+      const numberOfKeys = 300;
       const pubkeys = getPubkeys(numberOfKeys);
       const value = baseFee * BigInt(numberOfKeys);
       const amounts = Array(numberOfKeys)

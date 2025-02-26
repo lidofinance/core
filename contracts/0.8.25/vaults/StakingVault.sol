@@ -20,14 +20,19 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * StakingVault is a private staking pool that enables staking with a designated node operator.
  * Each StakingVault includes an accounting system that tracks its valuation via reports.
  *
- * The StakingVault can be used as a backing for minting new stETH if the StakingVault is connected to the VaultHub.
- * When minting stETH backed by the StakingVault, the VaultHub locks a portion of the StakingVault's valuation,
- * which cannot be withdrawn by the owner. If the locked amount exceeds the StakingVault's valuation,
- * the StakingVault enters the unhealthy state.
- * In this state, the VaultHub can force-rebalance the StakingVault by withdrawing a portion of the locked amount
- * and writing off the locked amount to restore the healthy state.
- * The owner can voluntarily rebalance the StakingVault in any state or by simply
- * supplying more ether to increase the valuation.
+ * The StakingVault can be used as a backing for minting new stETH through integration with the VaultHub.
+ * When minting stETH backed by the StakingVault, the VaultHub designates a portion of the StakingVault's
+ * valuation as locked, which cannot be withdrawn by the owner. This locked portion represents the
+ * backing for the minted stETH.
+ *
+ * If the locked amount exceeds the StakingVault's current valuation, the VaultHub has the ability to
+ * rebalance the StakingVault. This rebalancing process involves withdrawing a portion of the staked amount
+ * and adjusting the locked amount to align with the current valuation.
+ *
+ * The owner may proactively maintain the vault's backing ratio by either:
+ * - Voluntarily rebalancing the StakingVault at any time
+ * - Adding more ether to increase the valuation
+ * - Triggering validator withdrawals to increase the valuation
  *
  * Access
  * - Owner:
@@ -141,16 +146,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the highest version that has been initialized
-     * @return Highest initialized version number as uint64
+     * @notice Returns the highest version that has been initialized as uint64
      */
     function getInitializedVersion() external view returns (uint64) {
         return _getInitializedVersion();
     }
 
     /**
-     * @notice Returns the version of the contract
-     * @return Version number as uint64
+     * @notice Returns the version of the contract as uint64
      */
     function version() external pure returns (uint64) {
         return _VERSION;
@@ -162,15 +165,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Returns the address of `VaultHub`
-     * @return Address of `VaultHub`
      */
     function vaultHub() external view returns (address) {
         return address(VAULT_HUB);
     }
 
     /**
-     * @notice Returns the total valuation of `StakingVault`
-     * @return Total valuation in ether
+     * @notice Returns the total valuation of `StakingVault` in ether
      * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
     function valuation() public view returns (uint256) {
@@ -179,8 +180,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the amount of ether locked in `StakingVault`.
-     * @return Amount of locked ether
+     * @notice Returns the amount of ether locked in `StakingVault` in ether
      * @dev Locked amount is updated by `VaultHub` with reports
      *      and can also be increased by `VaultHub` outside of reports
      */
@@ -189,8 +189,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the unlocked amount, which is the valuation minus the locked amount
-     * @return Amount of unlocked ether
+     * @notice Returns the unlocked amount of ether, which is the valuation minus the locked ether amount
      * @dev Unlocked amount is the total amount that can be withdrawn from `StakingVault`,
      *      including ether currently being staked on validators
      */
@@ -205,7 +204,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Returns the net difference between funded and withdrawn ether.
-     * @return Delta between funded and withdrawn ether
      * @dev This counter is only updated via:
      *      - `fund()`,
      *      - `withdraw()`,
@@ -220,8 +218,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the latest report data for the vault
-     * @return Report struct containing valuation and inOutDelta from last report
+     * @notice Returns the latest report data for the vault (valuation and inOutDelta)
      */
     function latestReport() external view returns (IStakingVault.Report memory) {
         return _getStorage().report;
@@ -233,7 +230,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         In the context of this contract, the node operator performs deposits to the beacon chain
      *         and processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
      *         Node operator address is set in the initialization and can never be changed.
-     * @return Address of the node operator
      */
     function nodeOperator() external view returns (address) {
         return _getStorage().nodeOperator;
@@ -265,9 +261,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _recipient Address to receive the withdrawn ether.
      * @param _ether Amount of ether to withdraw.
      * @dev Cannot withdraw more than the unlocked amount or the balance of the contract, whichever is less.
-     * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether
-     * @dev Checks that valuation remains greater than locked amount after withdrawal to maintain
-     *      `StakingVault` health and prevent reentrancy attacks.
+     * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether.
+     * @dev Checks that valuation remains greater or equal than locked amount and prevents reentrancy attacks.
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
@@ -305,7 +300,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Rebalances StakingVault by withdrawing ether to VaultHub
-     * @dev Can only be called by VaultHub if StakingVault is unhealthy, or by owner at any moment
+     * @dev Can only be called by VaultHub if StakingVault valuation is less than locked amount
      * @param _ether Amount of ether to rebalance
      */
     function rebalance(uint256 _ether) external {
@@ -348,7 +343,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
      *         All consensus layer rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported
-     * @return Withdrawal credentials as bytes32
      */
     function withdrawalCredentials() public view returns (bytes32) {
         return bytes32(WC_0X02_PREFIX | uint160(address(this)));
@@ -356,7 +350,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Returns whether deposits are paused
-     * @return True if deposits are paused
      */
     function beaconChainDepositsPaused() external view returns (bool) {
         return _getStorage().beaconChainDepositsPaused;
@@ -408,11 +401,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
+        bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             IStakingVault.Deposit calldata deposit = _deposits[i];
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
-                bytes.concat(withdrawalCredentials()),
+                withdrawalCredentials_,
                 deposit.signature,
                 deposit.depositDataRoot
             );
@@ -448,7 +442,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         for (uint256 i = 0; i < keysCount; i++) {
             bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH];
-            emit ValidatorExitRequested(msg.sender, pubkey, pubkey);
+            emit ValidatorExitRequested(msg.sender, /* indexed */ pubkey, pubkey);
         }
     }
 
@@ -460,9 +454,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
     function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
-        uint256 value = msg.value;
-
-        if (value == 0) revert ZeroArgument("msg.value");
+        if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
@@ -493,11 +485,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = feePerRequest * keysCount;
-        if (value < totalFee) revert InsufficientValidatorWithdrawalFee(value, totalFee);
+        if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
 
         TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
-        uint256 excess = value - totalFee;
+        uint256 excess = msg.value - totalFee;
         if (excess > 0) {
             (bool success,) = _refundRecipient.call{value: excess}("");
             if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
@@ -638,13 +630,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event ValidatorWithdrawalTriggered(address indexed _sender, bytes _pubkeys, uint64[] _amounts, address _refundRecipient, uint256 _excess);
 
     /**
-     * @notice Emitted when an excess fee is refunded back to the sender.
-     * @param _sender Address that received the refund.
-     * @param _amount Amount of ether refunded.
-     */
-    event ValidatorWithdrawalFeeRefunded(address indexed _sender, uint256 _amount);
-
-    /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
      */
@@ -747,7 +732,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error WithdrawalFeeRefundFailed(address _sender, uint256 _amount);
 
     /**
-     * @notice Thrown when partial withdrawals are not allowed on an unbalanced vault
+     * @notice Thrown when partial withdrawals are not allowed when valuation is below locked
      */
     error PartialWithdrawalNotAllowed();
 }

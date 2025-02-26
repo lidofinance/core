@@ -76,7 +76,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     IStETH public immutable STETH;
 
     /// @param _stETH Lido stETH contract
-    /// @param _connectedVaultsLimit Maximum number of vaults that can be connected
+    /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(IStETH _stETH, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
@@ -136,9 +136,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice checks if the vault is healthy by comparing its valuation against minted shares
-    /// @dev A vault is considered healthy if it has no shares minted, or if its valuation minus required reserves
-    ///      is sufficient to cover the current value of minted shares. The required reserves are determined by
-    ///      the reserve ratio threshold.
+    /// @dev    A vault is considered healthy when its valuation is sufficient to cover the current value of minted shares
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
     function isVaultHealthy(address _vault) public view returns (bool) {
@@ -354,11 +352,11 @@ abstract contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
 
-    /// @notice Forces validator exit from the beacon chain when vault health ratio is below 100%
+    /// @notice Forces validator exit from the beacon chain when vault is unhealthy
     /// @param _vault The address of the vault to exit validators from
     /// @param _pubkeys The public keys of the validators to exit
     /// @param _refundRecepient The address that will receive the refund for transaction costs
-    /// @dev    When a vault's health ratio drops below 100%, anyone can force its validators to exit the beacon chain
+    /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(
         address _vault,
@@ -532,7 +530,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    /// @dev check if the share limit is within the upper bound set by relativeShareLimitBP
+    /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP
     function _checkShareLimitUpperBound(address _vault, uint256 _shareLimit) internal view {
         uint256 relativeMaxShareLimitPerVault = (STETH.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > relativeMaxShareLimitPerVault) {

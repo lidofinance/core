@@ -436,7 +436,7 @@ contract Dashboard is Permissions {
      * @param _pubkeys Concatenated validator public keys (48 bytes each).
      * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
      *         Set amount to 0 for a full validator exit.
-     *         For partial withdrawals, amounts will be capped to maintain the minimum stake of 32 ETH on the validator.
+     *         For partial withdrawals, amounts will be trimmed to keep MIN_ACTIVATION_BALANCE on the validator to avoid deactivation
      * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
