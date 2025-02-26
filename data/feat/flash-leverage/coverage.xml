@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3641"  lines-covered="3460"  line-rate="0.9503"  branches-valid="1690"  branches-covered="1532"  branch-rate="0.9065000000000001"  timestamp="1740478310752" complexity="0" version="0.1">
+<coverage lines-valid="3641"  lines-covered="3460"  line-rate="0.9503"  branches-valid="1690"  branches-covered="1532"  branch-rate="0.9065000000000001"  timestamp="1740556433303" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2473,78 +2473,78 @@
 		<class name="Sideloading.sol"  filename="contracts/0.8.25/vaults/Sideloading.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
 			<method name="constructor"  hits="1"  signature="()V" >
-				<lines><line number="52"  hits="1" /></lines>
+				<lines><line number="58"  hits="1" /></lines>
 			</method>
 			<method name="isSideloaderRegistryIgnored"  hits="6"  signature="()V" >
-				<lines><line number="58"  hits="6" /></lines>
+				<lines><line number="64"  hits="6" /></lines>
 			</method>
 			<method name="isRegisteredSideloader"  hits="7"  signature="()V" >
-				<lines><line number="67"  hits="7" /></lines>
+				<lines><line number="73"  hits="7" /></lines>
 			</method>
 			<method name="ignoreSideloaderRegistry"  hits="6"  signature="()V" >
-				<lines><line number="75"  hits="6" /></lines>
+				<lines><line number="81"  hits="6" /></lines>
 			</method>
 			<method name="respectSideloaderRegistry"  hits="2"  signature="()V" >
-				<lines><line number="88"  hits="2" /></lines>
+				<lines><line number="94"  hits="2" /></lines>
 			</method>
 			<method name="registerSideloader"  hits="6"  signature="()V" >
-				<lines><line number="101"  hits="6" /></lines>
+				<lines><line number="107"  hits="6" /></lines>
 			</method>
 			<method name="unregisterSideloader"  hits="4"  signature="()V" >
-				<lines><line number="116"  hits="4" /></lines>
+				<lines><line number="122"  hits="4" /></lines>
 			</method>
 			<method name="sideload"  hits="12"  signature="()V" >
-				<lines><line number="140"  hits="12" /></lines>
+				<lines><line number="175"  hits="12" /></lines>
 			</method>
 			<method name="_getSideloadingStorage"  hits="38"  signature="()V" >
-				<lines><line number="209"  hits="38" /></lines>
+				<lines><line number="244"  hits="38" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="59"  hits="6"  branch="false" />
-			<line number="68"  hits="7"  branch="false" />
-			<line number="76"  hits="6"  branch="false" />
-			<line number="77"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="79"  hits="5"  branch="false" />
-			<line number="81"  hits="5"  branch="false" />
-			<line number="89"  hits="2"  branch="false" />
-			<line number="90"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="92"  hits="1"  branch="false" />
-			<line number="94"  hits="1"  branch="false" />
-			<line number="102"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="104"  hits="5"  branch="false" />
-			<line number="105"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="107"  hits="4"  branch="false" />
-			<line number="109"  hits="4"  branch="false" />
-			<line number="117"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="119"  hits="3"  branch="false" />
-			<line number="120"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="122"  hits="2"  branch="false" />
-			<line number="124"  hits="2"  branch="false" />
-			<line number="142"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="143"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="144"  hits="10"  branch="false" />
-			<line number="146"  hits="9"  branch="false" />
-			<line number="147"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="148"  hits="1"  branch="false" />
-			<line number="152"  hits="8"  branch="false" />
-			<line number="154"  hits="7"  branch="false" />
-			<line number="157"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="159"  hits="6"  branch="false" />
-			<line number="160"  hits="6"  branch="false" />
-			<line number="164"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="165"  hits="1"  branch="false" />
-			<line number="172"  hits="5"  branch="false" />
-			<line number="175"  hits="5"  branch="false" />
-			<line number="178"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="179"  hits="4"  branch="false" />
-			<line number="183"  hits="5"  branch="false" />
-			<line number="186"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="190"  hits="1"  branch="false" />
-			<line number="194"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="195"  hits="1"  branch="false" />
-			<line number="202"  hits="3"  branch="false" />
-			<line number="210"  hits="38"  branch="false" />
+			<line number="65"  hits="6"  branch="false" />
+			<line number="74"  hits="7"  branch="false" />
+			<line number="82"  hits="6"  branch="false" />
+			<line number="83"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="85"  hits="5"  branch="false" />
+			<line number="87"  hits="5"  branch="false" />
+			<line number="95"  hits="2"  branch="false" />
+			<line number="96"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="98"  hits="1"  branch="false" />
+			<line number="100"  hits="1"  branch="false" />
+			<line number="108"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="110"  hits="5"  branch="false" />
+			<line number="111"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="113"  hits="4"  branch="false" />
+			<line number="115"  hits="4"  branch="false" />
+			<line number="123"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="125"  hits="3"  branch="false" />
+			<line number="126"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="128"  hits="2"  branch="false" />
+			<line number="130"  hits="2"  branch="false" />
+			<line number="177"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="178"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="179"  hits="10"  branch="false" />
+			<line number="181"  hits="9"  branch="false" />
+			<line number="182"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="183"  hits="1"  branch="false" />
+			<line number="187"  hits="8"  branch="false" />
+			<line number="189"  hits="7"  branch="false" />
+			<line number="192"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="194"  hits="6"  branch="false" />
+			<line number="195"  hits="6"  branch="false" />
+			<line number="199"  hits="6"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="200"  hits="1"  branch="false" />
+			<line number="207"  hits="5"  branch="false" />
+			<line number="210"  hits="5"  branch="false" />
+			<line number="213"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="214"  hits="4"  branch="false" />
+			<line number="218"  hits="5"  branch="false" />
+			<line number="221"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="225"  hits="1"  branch="false" />
+			<line number="229"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="230"  hits="1"  branch="false" />
+			<line number="237"  hits="3"  branch="false" />
+			<line number="245"  hits="38"  branch="false" />
 		</lines>
 		</class>
 		<class name="StakingVault.sol"  filename="contracts/0.8.25/vaults/StakingVault.sol"  line-rate="1"  branch-rate="0.9843999999999999" >
