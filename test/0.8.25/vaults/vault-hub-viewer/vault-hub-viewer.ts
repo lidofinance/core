@@ -386,27 +386,28 @@ describe("VaultHubViewerV1", () => {
   context("vaultsConnectedBound", () => {
     beforeEach(async () => {
       await hub.connect(hubSigner).mock_connectVault(vaultDelegation.getAddress());
+
       await hub.connect(hubSigner).mock_connectVault(vaultDashboard.getAddress());
+      await hub.connect(hubSigner).disconnectVault(vaultDashboard.getAddress());
+
       await hub.connect(hubSigner).mock_connectVault(stakingVault.getAddress());
       await hub.connect(hubSigner).mock_connectVault(vaultCustom.getAddress());
-
-      await hub.connect(hubSigner).disconnectVault(vaultCustom.getAddress());
     });
 
-    it("returns all connected vaults (the given range is greater than the number of vaults)", async () => {
-      const vaults = await vaultHubViewer.vaultsConnectedBound(0, 1_000);
+    it("returns connected vaults (the given limits are greater than the number of vaults)", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(1_000, 0);
       // check a vaults length
       expect(vaults[0].length).to.equal(3);
       // check a leftover
       expect(vaults[1]).to.equal(0);
     });
 
-    it("returns all connected vaults in a given range", async () => {
-      const vaults = await vaultHubViewer.vaultsConnectedBound(1, 3);
+    it("returns connected vaults with limit and offset", async () => {
+      const vaults = await vaultHubViewer.vaultsConnectedBound(2, 1);
       // check a vaults length
       expect(vaults[0].length).to.equal(2);
       // check a leftover
-      expect(vaults[1]).to.equal(2);
+      expect(vaults[1]).to.equal(0);
     });
 
     it("returns all connected vaults (the given range does not include vaults)", async () => {
@@ -416,13 +417,13 @@ describe("VaultHubViewerV1", () => {
       // check a leftover
       expect(vaults[1]).to.equal(0);
     });
-
-    it("reverts if from is greater than to", async () => {
-      await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithCustomError(
-        vaultHubViewer,
-        "WrongPaginationRange",
-      );
-    });
+    //
+    // it("reverts if from is greater than to", async () => {
+    //   await expect(vaultHubViewer.vaultsConnectedBound(3, 1)).to.be.revertedWithCustomError(
+    //     vaultHubViewer,
+    //     "WrongPaginationRange",
+    //   );
+    // });
   });
 
   context("vaultsConnected 'highload'", () => {

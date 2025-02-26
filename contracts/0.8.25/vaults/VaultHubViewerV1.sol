@@ -132,16 +132,16 @@ contract VaultHubViewerV1 {
         return _filterNonZeroVaults(vaults, 0, valid);
     }
 
-    /// @notice Returns all connected vaults within a range
-    /// @param _from Index to start from inclisive
-    /// @param _to Index to end at non-inculsive
+    /// @notice Returns connected vaults with limits
+    /// @param _limit A limited number of vaults in the result
+    /// @param _offset Number shows how many vaults need to be passed
     /// @return array of connected vaults
     /// @return number of leftover connected vaults (it does not take into account that there may be disconnected volts)
     function vaultsConnectedBound(
-        uint256 _from,
-        uint256 _to
+        uint256 _limit,
+        uint256 _offset
     ) public view returns (IVault[] memory, uint256) {
-        (IVault[] memory vaults, uint256 leftover) = _vaultsConnected(_from, _to);
+        (IVault[] memory vaults, uint256 leftover) = _vaultsConnected(_limit, _offset);
 
         return (vaults, leftover);
     }
@@ -165,24 +165,19 @@ contract VaultHubViewerV1 {
     }
 
     /// @dev common logic for vaultsConnectedBound
-    function _vaultsConnected(uint256 _from, uint256 _to) internal view returns (IVault[] memory, uint256) {
-        if (_to < _from) revert WrongPaginationRange(_from, _to);
-
-        uint256 resultVaultsCount = _to - _from;
-        IVault[] memory resultVaults = new IVault[](resultVaultsCount);
+    function _vaultsConnected(uint256 _limit, uint256 _offset) internal view returns (IVault[] memory, uint256) {
+        IVault[] memory resultVaults = new IVault[](_limit);
         uint256 resultIndex = 0;
 
         uint256 allVaultsCount = vaultHub.vaultsCount();
         uint256 i;
         for (i = 0; i < allVaultsCount; i++) {
-            if (!vaultHub.vaultSocket(i).isDisconnected) {
-                if (i >= _from && i < _to) {
-                    resultVaults[resultIndex] = IVault(vaultHub.vault(i));
-                    resultIndex++;
-                }
+            if (i >= _offset && !vaultHub.vaultSocket(i).isDisconnected) {
+                resultVaults[resultIndex] = IVault(vaultHub.vault(i));
+                resultIndex++;
             }
 
-            if (resultIndex >= resultVaultsCount) {
+            if (resultIndex > _limit) {
                 break;
             }
         }
