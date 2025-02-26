@@ -15,9 +15,18 @@ import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecke
 
 import {StakingRouter__MockForLidoAccountingFuzzing} from "./contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
 import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
+import {WithdrawalQueue, IWstETH} from "../../contracts/0.8.9/WithdrawalQueue.sol";
+import {WithdrawalQueueERC721} from "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 
 interface IAccounting {
     function initialize(address _admin) external;
+}
+
+struct StakeLimitStateData {
+    uint32 prevStakeBlockNumber; // block number of the previous stake submit
+    uint96 prevStakeLimit; // limit value (<= `maxStakeLimit`) obtained on the previous stake submit
+    uint32 maxStakeLimitGrowthBlocks; // limit regeneration speed expressed in blocks
+    uint96 maxStakeLimit; // maximum limit value
 }
 
 interface ILido {
@@ -38,6 +47,23 @@ interface ILido {
     function resume() external;
 
     function setStakingLimit(uint256 _maxStakeLimit, uint256 _stakeLimitIncreasePerBlock) external;
+
+    function transfer(address _recipient, uint256 _amount) external returns (bool);
+
+    function submit(address _referral) external payable returns (uint256);
+
+    function getStakeLimitFullInfo()
+        external
+        view
+        returns (
+            bool isStakingPaused_,
+            bool isStakingLimitSet,
+            uint256 currentStakeLimit,
+            uint256 maxStakeLimit,
+            uint256 maxStakeLimitGrowthBlocks,
+            uint256 prevStakeLimit,
+            uint256 prevStakeBlockNumber
+        );
 }
 
 interface IKernel {
@@ -85,6 +111,7 @@ struct LidoLocatorConfig {
 contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
+    WithdrawalQueue public wq;
     IACL public acl;
     SecondOpinionOracle__MockForAccountingFuzzing public secondOpinionOracleMock;
     IKernel private dao;
@@ -98,8 +125,10 @@ contract BaseProtocolTest is Test {
     address public daoFactoryAdr;
 
     uint256 public genesisTimestamp = 1_695_902_400;
-    address private depositContract = address(0x4242424242424242424242424242424242424242);
-    address public lidoTreasury = makeAddr("dummy-lido:treasury");
+    address private depositContractAdr = address(0x4242424242424242424242424242424242424242);
+    address private withdrawalQueueAdr = makeAddr("dummy-locator:withdrawalQueue");
+    address public lidoTreasuryAdr = makeAddr("dummy-lido:treasury");
+    address public wstETHAdr = makeAddr("dummy-locator:wstETH");
 
     LimitsList public limitList =
         LimitsList({
@@ -124,6 +153,7 @@ contract BaseProtocolTest is Test {
 
         vm.startPrank(rootAccount);
         (dao, acl) = createAragonDao();
+
         address lidoProxyAddress = addAragonApp(dao, impl);
 
         lidoContract = ILido(lidoProxyAddress);
@@ -197,7 +227,7 @@ contract BaseProtocolTest is Test {
         // Add burner contract to the protocol
         deployCodeTo(
             "LidoExecutionLayerRewardsVault.sol:LidoExecutionLayerRewardsVault",
-            abi.encode(lidoProxyAddress, lidoTreasury),
+            abi.encode(lidoProxyAddress, lidoTreasuryAdr),
             lidoLocator.elRewardsVault()
         );
 
@@ -237,6 +267,15 @@ contract BaseProtocolTest is Test {
         address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
 
         lidoContract.initialize(address(lidoLocator), address(eip712steth));
+
+        deployCodeTo("WstETH.sol:WstETH", abi.encode(lidoProxyAddress), wstETHAdr);
+
+        wq = new WithdrawalQueueERC721(wstETHAdr, "withdrawalQueueERC721", "wstETH");
+        vm.store(address(wq), keccak256("lido.Versioned.contractVersion"), bytes32(0));
+        wq.initialize(rootAccount);
+        wq.grantRole(keccak256("RESUME_ROLE"), rootAccount);
+
+        wq.resume();
 
         vm.stopPrank();
     }
@@ -291,11 +330,11 @@ contract BaseProtocolTest is Test {
             stakingRouter: stakingRouterAddress,
             treasury: makeAddr("dummy-locator:treasury"),
             validatorsExitBusOracle: makeAddr("dummy-locator:validatorsExitBusOracle"),
-            withdrawalQueue: makeAddr("dummy-locator:withdrawalQueue"),
+            withdrawalQueue: withdrawalQueueAdr,
             withdrawalVault: makeAddr("dummy-locator:withdrawalVault"),
             oracleDaemonConfig: makeAddr("dummy-locator:oracleDaemonConfig"),
             accounting: makeAddr("dummy-locator:accounting"),
-            wstETH: makeAddr("dummy-locator:wstETH")
+            wstETH: wstETHAdr
         });
 
         return ILidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
