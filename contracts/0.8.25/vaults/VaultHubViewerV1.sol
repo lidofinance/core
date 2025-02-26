@@ -134,9 +134,9 @@ contract VaultHubViewerV1 {
 
     /// @notice Returns connected vaults with limits
     /// @param _limit A limited number of vaults in the result
-    /// @param _offset Number shows how many vaults need to be passed
+    /// @param _offset A number how many vaults (connected and not connected) need to be skipped
     /// @return array of connected vaults
-    /// @return number of leftover connected vaults (it does not take into account that there may be disconnected volts)
+    /// @return number of leftover vaults (connected and not connected)
     function vaultsConnectedBound(
         uint256 _limit,
         uint256 _offset
@@ -183,6 +183,7 @@ contract VaultHubViewerV1 {
         }
 
         // It does not take into account that there may be disconnected volts
+        // Calc a leftover of ONLY connected vaults is expensive by gas
         uint256 leftover = i < allVaultsCount ? allVaultsCount - (i + 1) : 0;
         return (_filterNonZeroVaults(resultVaults, 0, resultIndex), leftover);
     }
