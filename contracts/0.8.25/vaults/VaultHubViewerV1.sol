@@ -171,8 +171,8 @@ contract VaultHubViewerV1 {
 
         uint256 allVaultsCount = vaultHub.vaultsCount();
         uint256 i;
-        for (i = 0; i < allVaultsCount; i++) {
-            if (i >= _offset && !vaultHub.vaultSocket(i).isDisconnected) {
+        for (i = _offset; i < allVaultsCount; i++) {
+            if (!vaultHub.vaultSocket(i).isDisconnected) {
                 resultVaults[resultIndex] = IVault(vaultHub.vault(i));
                 resultIndex++;
             }
