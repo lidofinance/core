@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3635"  lines-covered="3320"  line-rate="0.9133"  branches-valid="1690"  branches-covered="1462"  branch-rate="0.8651000000000001"  timestamp="1740550744332" complexity="0" version="0.1">
+<coverage lines-valid="3635"  lines-covered="3320"  line-rate="0.9133"  branches-valid="1690"  branches-covered="1462"  branch-rate="0.8651000000000001"  timestamp="1740556725929" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2946,10 +2946,10 @@
 			<line number="172"  hits="5"  branch="false" />
 			<line number="173"  hits="5"  branch="false" />
 			<line number="174"  hits="5"  branch="false" />
-			<line number="175"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="176"  hits="5"  branch="false" />
-			<line number="177"  hits="5"  branch="false" />
-			<line number="180"  hits="12"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="175"  hits="52"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="176"  hits="45"  branch="false" />
+			<line number="177"  hits="45"  branch="false" />
+			<line number="180"  hits="52"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="181"  hits="0"  branch="false" />
 			<line number="186"  hits="5"  branch="false" />
 			<line number="187"  hits="5"  branch="false" />
@@ -2980,7 +2980,7 @@
 			<line number="254"  hits="17"  branch="false" />
 			<line number="255"  hits="17"  branch="false" />
 			<line number="256"  hits="17"  branch="false" />
-			<line number="257"  hits="14"  branch="false" />
+			<line number="257"  hits="16"  branch="false" />
 		</lines>
 		</class>
 	</classes>
