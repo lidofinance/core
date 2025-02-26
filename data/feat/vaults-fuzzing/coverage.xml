@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3597"  lines-covered="3382"  line-rate="0.9401999999999999"  branches-valid="1652"  branches-covered="1478"  branch-rate="0.8946999999999999"  timestamp="1739970790927" complexity="0" version="0.1">
+<coverage lines-valid="3597"  lines-covered="3382"  line-rate="0.9401999999999999"  branches-valid="1652"  branches-covered="1478"  branch-rate="0.8946999999999999"  timestamp="1740582795088" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2740,13 +2740,13 @@
 			<method name="voluntaryDisconnect"  hits="0"  signature="()V" >
 				<lines><line number="204"  hits="0" /></lines>
 			</method>
-			<method name="mintSharesBackedByVault"  hits="0"  signature="()V" >
+			<method name="mintShares"  hits="0"  signature="()V" >
 				<lines><line number="216"  hits="0" /></lines>
 			</method>
-			<method name="burnSharesBackedByVault"  hits="0"  signature="()V" >
+			<method name="burnShares"  hits="0"  signature="()V" >
 				<lines><line number="255"  hits="0" /></lines>
 			</method>
-			<method name="transferAndBurnSharesBackedByVault"  hits="1"  signature="()V" >
+			<method name="transferAndBurnShares"  hits="1"  signature="()V" >
 				<lines><line number="274"  hits="1" /></lines>
 			</method>
 			<method name="forceRebalance"  hits="0"  signature="()V" >
