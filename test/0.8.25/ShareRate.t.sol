@@ -2,19 +2,19 @@
 // for testing purposes only
 pragma solidity ^0.8.0;
 
-import "./Protocol__Deployment.t.sol";
-import "@openzeppelin/contracts-v4.4/utils/StorageSlot.sol";
 import "contracts/0.8.9/EIP712StETH.sol";
-import {BaseProtocolTest, ILido} from "./Protocol__Deployment.t.sol";
-import {CommonBase} from "forge-std/Base.sol";
 
-import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
+import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
-import {StorageSlot} from "@openzeppelin/contracts-v4.4/utils/StorageSlot.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 import {console2} from "forge-std/console2.sol";
+
+import {StorageSlot} from "@openzeppelin/contracts-v4.4/utils/StorageSlot.sol";
+
+import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
+
+import {BaseProtocolTest, WithdrawalQueue, ILido} from "./Protocol__Deployment.t.sol";
 
 uint256 constant ONE_DAY_IN_BLOCKS = 7_200;
 
@@ -108,16 +108,6 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
             return false;
         }
 
-        (
-            bool isStakingPaused_,
-            bool isStakingLimitSet,
-            uint256 currentStakeLimit,
-            uint256 maxStakeLimit,
-            uint256 maxStakeLimitGrowthBlocks,
-            uint256 prevStakeLimit,
-            uint256 prevStakeBlockNumber
-        ) = lidoContract.getStakeLimitFullInfo();
-
         if (_amountETH > 1000 ether || _amountETH == 0) {
             _amountETH = bound(_amountETH, 1, 1000 ether);
         }
@@ -199,7 +189,6 @@ contract ShareRateTest is BaseProtocolTest {
     address private userAccount = address(0x321);
 
     function setUp() public {
-        keccak256("lido.StETH.totalShares");
         BaseProtocolTest.setUpProtocol(protocolStartBalance, rootAccount, userAccount);
 
         address accountingContract = lidoLocator.accounting();
