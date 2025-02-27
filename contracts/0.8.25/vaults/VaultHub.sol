@@ -74,7 +74,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
-    address public immutable accounting;
+    address public immutable ACCOUNTING;
 
     /// @param _stETH Lido stETH contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
@@ -85,7 +85,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         STETH = _stETH;
-        accounting = _accounting;
+        ACCOUNTING = _accounting;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
@@ -490,7 +490,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
     ) external {
-        if (msg.sender != accounting) revert NotAuthorized("updateVaults", msg.sender);
+        if (msg.sender != ACCOUNTING) revert NotAuthorized("updateVaults", msg.sender);
         VaultHubStorage storage $ = _getVaultHubStorage();
 
         for (uint256 i = 0; i < _valuations.length; i++) {
