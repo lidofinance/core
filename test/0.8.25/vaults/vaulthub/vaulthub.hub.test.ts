@@ -16,7 +16,7 @@ import {
 
 import { BigIntMath, ether, findEvents, impersonate, randomAddress } from "lib";
 
-import { deployLidoDao } from "test/deploy";
+import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
 
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
@@ -118,7 +118,7 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    // await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
