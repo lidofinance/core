@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3675"  lines-covered="3530"  line-rate="0.9605"  branches-valid="1712"  branches-covered="1578"  branch-rate="0.9217"  timestamp="1740674612605" complexity="0" version="0.1">
+<coverage lines-valid="3675"  lines-covered="3530"  line-rate="0.9605"  branches-valid="1712"  branches-covered="1578"  branch-rate="0.9217"  timestamp="1740678274964" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2815,7 +2815,7 @@
 			<method name="updateVaults"  hits="12"  signature="()V" >
 				<lines><line number="487"  hits="12" /></lines>
 			</method>
-			<method name="mintExternalSharesForFees"  hits="0"  signature="()V" >
+			<method name="mintVaultsTreasuryFeeShares"  hits="0"  signature="()V" >
 				<lines><line number="525"  hits="0" /></lines>
 			</method>
 			<method name="_vaultAuth"  hits="59"  signature="()V" >
@@ -2905,7 +2905,7 @@
 			<line number="269"  hits="56"  branch="false" />
 			<line number="272"  hits="56"  branch="false" />
 			<line number="273"  hits="56"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="274"  hits="46"  branch="false" />
+			<line number="274"  hits="48"  branch="false" />
 			<line number="277"  hits="56"  branch="false" />
 			<line number="279"  hits="56"  branch="false" />
 			<line number="288"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
