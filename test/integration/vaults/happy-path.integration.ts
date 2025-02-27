@@ -6,16 +6,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, impersonate, log, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
 import {
+  getProtocolContext,
   getReportTimeElapsed,
   norEnsureOperators,
   OracleReportParams,
+  ProtocolContext,
   report,
   sdvtEnsureOperators,
-} from "lib/protocol/helpers";
-import { ether } from "lib/units";
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";

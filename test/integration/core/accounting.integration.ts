@@ -6,8 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { getReportTimeElapsed, report } from "lib/protocol/helpers";
+import { getProtocolContext, getReportTimeElapsed, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 import { LIMITER_PRECISION_BASE, MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";

@@ -5,8 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
