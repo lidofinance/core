@@ -1,30 +1,43 @@
-import { ethers } from "hardhat";
+import { expect } from "chai";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-
-import { BLS__Harness } from "typechain-types";
+import { PointG1, PointG2, sign, verify } from "@noble/bls12-381";
 
 import { ether } from "lib";
 
+import { computeDepositMessageRoot } from "./ssz-utils";
+
+const BLS_TEST_KEY = "18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4";
+
 const STATIC_DEPOSIT = {
-  pubkey: "0xa1d1ad0714035353258038e964ae9675dc0252ee22cea896825c01458e1807bfad2f9969338798548d9858a571f7425c",
-  withdrawalCredentials: "0x0092c20062cee70389f1cb4fa566a2be5e2319ff43965db26dbaa3ce90b9df99",
   amount: ether("1"),
-  signature:
-    "0x985f365b3459176da437560337cc074d153663f65e3c6bab28197e34cd7f926fa940176ba43484fb5297f679bc869f5d10ee62f64a119d756182005fbb28046c0541f627b430cabfeb3599ebaa1b8efd08de562ec03a8d78c2f9e1b6f01d8aba",
+  withdrawalCredentials: "0xf3d93f9fbc6a229f3b11340b4b52ae53833813efab76e812d1d014163259ef1f",
 };
 
-describe("Accounting.sol", () => {
-  let deployer: HardhatEthersSigner;
-  let BLS: BLS__Harness;
+describe("BLS.sol", () => {
+  it("can create a deposit from test key", async () => {
+    const pubkeyG1 = PointG1.fromPrivateKey(BLS_TEST_KEY);
+    const pubkeyShort = pubkeyG1.toHex(true);
+    const withdrawalCredentials = STATIC_DEPOSIT.withdrawalCredentials;
+    const amount = STATIC_DEPOSIT.amount;
 
-  before(async () => {
-    [deployer] = await ethers.getSigners();
-    BLS = await ethers.deployContract("BLS__Harness", [], deployer);
-  });
+    const messageRoot = await computeDepositMessageRoot(pubkeyShort, withdrawalCredentials, amount);
+    const messageHex = Buffer.from(messageRoot).toString("hex");
 
-  it("can verify of static validator", async () => {
-    const { pubkey, withdrawalCredentials, amount, signature } = STATIC_DEPOSIT;
-    await BLS.verifySignature(pubkey, withdrawalCredentials, amount, signature);
+    const sig = await sign(messageRoot, BLS_TEST_KEY);
+    const sigG2 = PointG2.fromSignature(sig);
+    const sigShort = sigG2.toHex(true);
+
+    const result = await verify(sigShort, messageHex, pubkeyG1);
+    expect(result).to.be.true;
+
+    console.log({
+      pubkey: pubkeyShort,
+      withdrawalCredentials: withdrawalCredentials,
+      amount: amount.toString(),
+      signature: sigShort,
+      pubkeyY: pubkeyG1.toAffine()[1].value.toString(16),
+      signatureY: { c0: sigG2.toAffine()[1].c0.value.toString(16), c1: sigG2.toAffine()[1].c1.value.toString(16) },
+      messageHex,
+    });
   });
 });

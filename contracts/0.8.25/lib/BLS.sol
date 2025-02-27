@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "hardhat/console.sol";
+import {SSZ} from "./SSZ.sol";
 
-// https://github.com/paradigmxyz/forge-alphanet/blob/main/src/sign/BLS.sol
+// for base structs & operations: https://github.com/paradigmxyz/forge-alphanet/blob/main/src/sign/BLS.sol
+// for decodeG1Point/decodeG2Point: https://github.com/ralexstokes/deposit-verifier
 library BLS {
     /// @dev A base field element (Fp) is encoded as 64 bytes by performing the
     /// BigEndian encoding of the corresponding (unsigned) integer. Due to the size of p,
@@ -35,6 +36,21 @@ library BLS {
         Fp2 y;
     }
 
+    bytes1 constant BLS_BYTE_WITHOUT_FLAGS_MASK = bytes1(0x1f);
+
+    /// @notice PRECOMPILED CONTRACT ADDRESSES
+    address constant MOD_EXP = address(0x05);
+    // forge
+    address constant BLS12_G2ADD = address(0x0e);
+    address constant BLS12_PAIRING_CHECK = address(0x10);
+    address constant BLS12_MAP_FP2_TO_G2 = address(0x13);
+
+    // revm
+    // address constant BLS12_G2ADD = address(0x0d);
+    // address constant BLS12_PAIRING_CHECK = address(0x0f);
+    // address constant BLS12_MAP_FP2_TO_G2 = address(0x11);
+
+    // TODO make constant
     function NEGATED_G1_GENERATOR() internal pure returns (G1Point memory) {
         return
             G1Point(
@@ -49,22 +65,51 @@ library BLS {
             );
     }
 
-    function _u(uint256 x) internal pure returns (bytes32) {
-        return bytes32(x);
+    function sliceToUint(bytes memory data, uint256 start, uint256 end) internal pure returns (uint256 result) {
+        require(end >= start, "Invalid slice");
+        uint256 len = end - start;
+        require(len <= 32, "Slice length exceeds 32 bytes");
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // The bytes array in memory begins with its length at the first 32 bytes.
+            // So we add 32 to get the pointer to the actual data.
+            let ptr := add(data, 32)
+            // Load 32 bytes from memory starting at dataPtr+start.
+            let word := mload(add(ptr, start))
+            // Shift right by (32 - len)*8 bits to discard any extra bytes.
+            result := shr(mul(sub(32, len), 8), word)
+        }
     }
 
-    function unwrapG2(G2Point memory p) internal pure returns (bytes memory) {
-        return abi.encodePacked(p.x.c0.a, p.x.c0.b, p.x.c1.a, p.x.c1.b, p.y.c0.a, p.y.c0.b, p.y.c1.a, p.y.c1.b);
+    function decodeG1Point(bytes memory encodedX, Fp memory Y) internal pure returns (G1Point memory) {
+        encodedX[0] = encodedX[0] & BLS_BYTE_WITHOUT_FLAGS_MASK;
+        uint256 a = sliceToUint(encodedX, 0, 16);
+        uint256 b = sliceToUint(encodedX, 16, 48);
+        Fp memory X = Fp(a, b);
+        return G1Point(X, Y);
     }
 
-    function MapFp2ToG2(Fp2 memory element) internal view returns (G2Point memory result) {
-        // MAP_FP2_TO_G2 address is 0x13
-        (bool success, bytes memory output) = address(0x13).staticcall(abi.encode(element));
+    function decodeG2Point(bytes memory encodedX, Fp2 memory Y) internal pure returns (G2Point memory) {
+        encodedX[0] = encodedX[0] & BLS_BYTE_WITHOUT_FLAGS_MASK;
+        // NOTE: the "flag bits" of the second half of `encodedX` are always == 0x0
+
+        // NOTE: order is important here for decoding point...
+        uint256 aa = sliceToUint(encodedX, 48, 64);
+        uint256 ab = sliceToUint(encodedX, 64, 96);
+        uint256 ba = sliceToUint(encodedX, 0, 16);
+        uint256 bb = sliceToUint(encodedX, 16, 48);
+        Fp2 memory X = Fp2(Fp(aa, ab), Fp(ba, bb));
+        return G2Point(X, Y);
+    }
+
+    function mapFp2ToG2(Fp2 memory element) public view returns (G2Point memory result) {
+        (bool success, bytes memory output) = BLS12_MAP_FP2_TO_G2.staticcall(abi.encode(element));
         require(success, "MAP_FP2_TO_G2 failed");
         return abi.decode(output, (G2Point));
     }
 
-    function hashToFieldFp2(bytes memory message, bytes memory dst) private view returns (Fp2[2] memory) {
+    function hashToFieldFp2(bytes32 message, bytes memory dst) private view returns (Fp2[2] memory) {
         // 1. len_in_bytes = count * m * L
         // so always 2 * 2 * 64 = 256
         uint16 lenInBytes = 256;
@@ -92,7 +137,7 @@ library BLS {
     // passing two bytes32 instead of bytes memory saves approx 700 gas per call
     // Computes the mod against the bls12-381 field modulus
     function _modfield(bytes32 _b1, bytes32 _b2) private view returns (Fp memory r) {
-        (bool success, bytes memory output) = address(0x5).staticcall(
+        (bool success, bytes memory output) = MOD_EXP.staticcall(
             abi.encode(
                 // arg[0] = base.length
                 0x40,
@@ -120,24 +165,17 @@ library BLS {
         return abi.decode(output, (Fp));
     }
 
-    function hashToCurveG2(bytes memory message) internal view returns (G2Point memory) {
+    function hashToCurveG2(bytes32 message) internal view returns (G2Point memory) {
         // 1. u = hash_to_field(msg, 2)
         Fp2[2] memory u = hashToFieldFp2(message, bytes("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_"));
         // 2. Q0 = map_to_curve(u[0])
-        G2Point memory q0 = MapFp2ToG2(u[0]);
+        G2Point memory q0 = mapFp2ToG2(u[0]);
         // 3. Q1 = map_to_curve(u[1])
-        G2Point memory q1 = MapFp2ToG2(u[1]);
+        G2Point memory q1 = mapFp2ToG2(u[1]);
         // 4. R = Q0 + Q1
-        return G2Add(q0, q1);
-    }
 
-    /// @notice G2ADD operation
-    /// @param a First G2 point
-    /// @param b Second G2 point
-    /// @return result Resulted G2 point
-    function G2Add(G2Point memory a, G2Point memory b) internal view returns (G2Point memory result) {
         // G2ADD address is 0x0e
-        (bool success, bytes memory output) = address(0x0e).staticcall(abi.encode(a, b));
+        (bool success, bytes memory output) = BLS12_G2ADD.staticcall(abi.encode(q0, q1));
         require(success, "G2ADD failed");
         return abi.decode(output, (G2Point));
     }
@@ -150,7 +188,7 @@ library BLS {
     /// @param lenInBytes The length of the requested output in bytes
     /// @return A field point
     function expandMsgXmd(
-        bytes memory message,
+        bytes32 message,
         bytes memory dst,
         uint16 lenInBytes
     ) private pure returns (bytes32[] memory) {
@@ -199,102 +237,47 @@ library BLS {
         return b;
     }
 
-    uint256 constant WEI_PER_GWEI = 1e9;
-    uint256 constant PUBLIC_KEY_LENGTH = 48;
-    bytes32 constant DEPOSIT_DOMAIN = 0x0300000000000000000000000000000000000000000000000000000000000000;
-
-    // Return a `wei` value in units of Gwei and serialize as a (LE) `bytes8`.
-    function serializeAmount(uint256 amount) private pure returns (bytes memory) {
-        uint256 depositAmount = amount / WEI_PER_GWEI;
-
-        bytes memory encodedAmount = new bytes(8);
-
-        for (uint256 i = 0; i < 8; i++) {
-            encodedAmount[i] = bytes1(uint8(depositAmount / (2 ** (8 * i))));
-        }
-
-        return encodedAmount;
-    }
-
-    function computeSigningRoot(
-        bytes memory publicKey,
-        bytes32 withdrawalCredentials,
-        uint256 amount
-    ) public pure returns (bytes32) {
-        bytes memory serializedPublicKey = new bytes(64);
-        for (uint256 i = 0; i < PUBLIC_KEY_LENGTH; i++) {
-            serializedPublicKey[i] = publicKey[i];
-        }
-
-        bytes32 publicKeyRoot = sha256(serializedPublicKey);
-        bytes32 firstNode = sha256(abi.encodePacked(publicKeyRoot, withdrawalCredentials));
-
-        bytes memory amountRoot = new bytes(64);
-        bytes memory serializedAmount = serializeAmount(amount);
-        for (uint256 i = 0; i < 8; i++) {
-            amountRoot[i] = serializedAmount[i];
-        }
-        bytes32 secondNode = sha256(amountRoot);
-
-        bytes32 depositMessageRoot = sha256(abi.encodePacked(firstNode, secondNode));
-
-        return sha256(abi.encodePacked(depositMessageRoot, DEPOSIT_DOMAIN));
-    }
-
-    /// @notice PAIRING operation
-    /// @param g1Points Array of G1 points
-    /// @param g2Points Array of G2 points
-    /// @return result Returns whether pairing result is equal to the multiplicative identity (1).
-    function Pairing(G1Point[] memory g1Points, G2Point[] memory g2Points) internal view returns (bool result) {
+    function pairing(G1Point[] memory g1Points, G2Point[] memory g2Points) internal view returns (bool result) {
         bytes memory input;
         for (uint256 i = 0; i < g1Points.length; i++) {
             input = bytes.concat(input, abi.encode(g1Points[i], g2Points[i]));
         }
 
-        // PAIRING address is 0x11
-        (bool success, bytes memory output) = address(0x11).staticcall(input);
-        require(success, "Pairing failed");
+        (bool success, bytes memory output) = BLS12_PAIRING_CHECK.staticcall(input);
+        if (!success) {
+            revert InvalidSignature();
+        }
         return abi.decode(output, (bool));
     }
 
     function verifyDeposit(
-        bytes memory pubkey, // must be 48 bytes
+        bytes calldata pubkey, // must be 48 bytes
         bytes32 withdrawal, // 32 bytes
         uint256 amount,
-        bytes memory signature // must be 96 bytes
+        bytes memory signature, // must be 96 bytes
+        Fp memory pubkeyYComponent,
+        Fp2 memory signatureYComponent
     ) internal view {
         require(pubkey.length == 48, "Invalid pubkey length");
         require(signature.length == 96, "Invalid signature length");
 
         // In the Ethereum deposit contract the “signing root” is computed as the SSZ hash_tree_root
-        // of DepositMessage.
-        bytes memory msgHash = abi.encodePacked(computeSigningRoot(pubkey, withdrawal, amount));
+        bytes32 msgHash = SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
+        G2Point memory msgG2 = hashToCurveG2(msgHash);
 
-        // Compute the “hash-to-G2” of the message.
-        // In a real implementation, use a proper hash_to_curve per the BLS12-381 spec.
-        G2Point memory msgG2 = hashToCurveG2(msgHash); // expected to be 96 bytes
+        G2Point memory signatureG2 = decodeG2Point(signature, signatureYComponent);
+        G1Point memory pubkeyG1 = decodeG1Point(pubkey, pubkeyYComponent);
 
-        // The pairing precompile expects an input consisting of the concatenation of:
-        //   (pubkey, msgG2) and (NEG_G1_GENERATOR , signature)
-        // where each G1 element is 48 bytes and each G2 element is 96 bytes.
-        //require(abi.encode(msgG2).length == 96, "Invalid msgG2 length");
-        //require(abi.encode(NEGATED_G1_GENERATOR()).length == 96, "Invalid NEG_G1_GENERATOR length");
-        bytes memory input;
-        bytes.concat(input, abi.encode(pubkey, msgG2));
-        bytes.concat(input, abi.encode(NEGATED_G1_GENERATOR(), signature));
+        G1Point[] memory g1Points = new BLS.G1Point[](2);
+        G2Point[] memory g2Points = new BLS.G2Point[](2);
 
-        require(input.length == 48 + 96 + 48 + 96, "Invalid input length");
+        g1Points[0] = pubkeyG1;
+        g1Points[1] = NEGATED_G1_GENERATOR();
 
-        // Call the pairing precompile (using staticcall)
-        (bool success, bytes memory result) = address(0x11).staticcall(input);
-        if (!success) {
-            revert InvalidSignature();
-        }
-        // The precompile returns a 32-byte value. A nonzero value indicates a valid pairing check.
-        uint256 output = abi.decode(result, (uint256));
-        if (output == 0) {
-            revert InvalidSignature();
-        }
+        g2Points[0] = msgG2;
+        g2Points[1] = signatureG2;
+
+        pairing(g1Points, g2Points);
     }
 
     error InvalidSignature();

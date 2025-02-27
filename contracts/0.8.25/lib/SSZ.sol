@@ -25,6 +25,84 @@ library SSZ {
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
 
+    /// @notice computed fork agnostic computed DEPOSIT_DOMAIN
+    /// per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9;
+
+    /// @notice ssz signing root for deposit message
+    /// @dev used for verifying BLS deposit signature
+    function depositMessageSigningRoot(
+        bytes calldata publicKey,
+        bytes32 withdrawalCredentials,
+        uint256 amount
+    ) internal view returns (bytes32) {
+        bytes32[4] memory headerNodes = [
+            pubkeyRoot(publicKey),
+            withdrawalCredentials,
+            toLittleEndian(amount / 1 gwei),
+            bytes32(0)
+        ];
+
+        bytes32 root;
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Count of nodes to hash
+            let count := 4
+
+            // Loop over levels
+            // prettier-ignore
+            for { } 1 { } {
+                // Loop over nodes at the given depth
+
+                // Initialize `offset` to the offset of `proof` elements in memory.
+                let target := headerNodes
+                let source := headerNodes
+                let end := add(source, shl(5, count))
+
+                // prettier-ignore
+                for { } 1 { } {
+                    // Read next two hashes to hash
+                    mcopy(0x00, source, 0x40)
+
+                    // Call sha256 precompile
+                    let result := staticcall(
+                        gas(),
+                        0x02,
+                        0x00,
+                        0x40,
+                        0x00,
+                        0x20
+                    )
+
+                    if iszero(result) {
+                        // Precompiles returns no data on OutOfGas error.
+                        revert(0, 0)
+                    }
+
+                    // Store the resulting hash at the target location
+                    mstore(target, mload(0x00))
+
+                    // Advance the pointers
+                    target := add(target, 0x20)
+                    source := add(source, 0x40)
+
+                    if iszero(lt(source, end)) {
+                        break
+                    }
+                }
+
+                count := shr(1, count)
+                if eq(count, 1) {
+                    root := mload(0x00)
+                    break
+                }
+            }
+        }
+
+        return sha256Pair(root, DEPOSIT_DOMAIN);
+    }
+
     /// @notice Modified version of `hashTreeRoot` from CSM to verify beacon block header against beacon root
     /// @dev Reverts with  InvalidBlockHeader` if calculated root doesn't match expected root
     function verifyBeaconBlockHeader(BeaconBlockHeader calldata header, bytes32 expectedRoot) internal view {
