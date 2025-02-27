@@ -586,7 +586,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev can be called only by accounting
      */
     function mintShares(address _recipient, uint256 _amountOfShares) public {
-        _authBoth(getLidoLocator().accounting(), getLidoLocator().vaultHub());
+        require(msg.sender == getLidoLocator().accounting() || msg.sender == getLidoLocator().vaultHub(), "APP_AUTH_FAILED");
         _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
@@ -1026,10 +1026,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev simple address-based auth
     function _auth(address _address) internal view {
         require(msg.sender == _address, "APP_AUTH_FAILED");
-    }
-
-    function _authBoth(address _address1, address _address2) internal view {
-        require(msg.sender == _address1 || msg.sender == _address2, "APP_AUTH_FAILED");
     }
 
     function _stakingRouter() internal view returns (IStakingRouter) {
