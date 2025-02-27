@@ -13,8 +13,8 @@ import {ISideloader} from "../interfaces/ISideloader.sol";
 /**
  * @title Sideloading
  * @author Lido
- * @notice Sideloading is a feature that allows vaults to mint unbacked stETH shares which,
- *         after invoking the callback, must be retroactively backed by the vault.
+ * @notice Inspired by ERC-3156: Flash Loans, Sideloading allows a vault to sideload its valuation
+ *         by minting stETH that must be retroactively backed within the same transaction.
  */
 contract Sideloading is VaultHub {
     /**
@@ -142,10 +142,24 @@ contract Sideloading is VaultHub {
 
     /**
      * @notice Sideloads the vault valuation by minting shares to a sideloader and invoking the callback.
-     * Sideloading:
-     *  - Mints unbacked shares to a sideloader (typically an adapter for another protocol, e.g. DEX);
-     *  - Invokes the callback function on the sideloader, which uses the shares to obtain the required valuation
-     *     to retroactively back the minted shares.
+     *
+     * @dev Sideloading is a mechanism that allows vaults to temporarily mint unbacked stETH
+     * shares for immediate use, with the requirement that sufficient backing must be added to the vault
+     * during the same transaction. This creates a flash-loan-like mechanism specific to stVaults.
+     *
+     * Sideloading process:
+     *  1. Verifies sufficient valuation on the vault to cover the post-sideloaded minimal reserve
+     *  2. Mints unbacked stETH shares directly to a registered sideloader contract
+     *  3. Invokes the callback function on the sideloader, which must use these shares to obtain
+     *     sufficient ETH to retroactively back the newly minted shares
+     *  4. Verifies that the vault's final valuation meets the required backing
+     *
+     *
+     * NB: While it might appear redundant to verify both initial and final valuations (since only the final state
+     * matters for solvency), the initial reserve check serves as a critical security measure for preventing
+     * "free value extraction" scenarios by ensuring the vault already has substantial skin in the game.
+     * Sideloading is specifically designed for boosting vault valuation, not for value extraction opportunities,
+     * and this check ensures that value cannot be bootstrapped out of nothing.
      *
      * The full flow is as follows:
      *
@@ -165,17 +179,23 @@ contract Sideloading is VaultHub {
      *   |               |   4. swap    |            |  5. fund   |         |
      *   +---------------+      to ETH  +------------+            +---------+
      *
-     * NB: Sideloading conservatively assumes that the sideloader will not be able to
-     *     obtain more ETH than the amount of stETH minted. This is why the initial valuation
-     *     must cover the minimal reserve after sideloading.
-     *     For example, if the vault reserve ratio is 10% and the vault owner wants to mint 900 stETH,
-     *     the initial valuation of the vault must be at least 100 ETH (10% of 1000 ETH).
+     * Practical example:
+     *  - Vault has 100 ETH current valuation, and the limit of 1000 stETH mintable
+     *  - Reserve ratio (RR) is 10%, meaning vault must have 10% of the total value as a safety margin
+     *  - Vault owner wants to mint 900 more stETH
+     *  - Total value after minting: 1000 ETH (900 stETH + 100 ETH)
+     *  - Minimal reserve needed: 1000 * 10% = 100 ETH
+     *  - Initial valuation check: Is current valuation (100 ETH) >= minimal reserve (100 ETH)? Yes
+     *  - StETH is minted to the sideloader
+     *  - Sideloader swaps/borrows 900 stETH for ETH, and funds the vault
+     *  - Vault now has 1000 ETH of valuation, exact amount of required backing for 900 stETH (at 10% RR)
+     *  - Sideloading succeeds
      *
-     * @param _vault The address of the vault.
-     * @param _sideloader The address of the sideloader.
-     * @param _amountOfShares The amount of shares to mint for sideloading.
-     * @param _data The data to pass to the sideloader.
-     * @return True if the sideload was successful.
+     * @param _vault The address of the vault to sideload from.
+     * @param _sideloader The address of the registered sideloader contract that will receive the minted shares.
+     * @param _amountOfShares The amount of stETH shares to mint for sideloading.
+     * @param _data The arbitrary data to pass to the sideloader's callback function.
+     * @return True if the sideload operation was successful.
      */
     function sideload(
         address _vault,
