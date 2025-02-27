@@ -64,11 +64,7 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const accountingImpl = await ethers.deployContract(
-      "Accounting",
-      [locator, lido, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
-      deployer,
-    );
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido], deployer);
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],
@@ -76,7 +72,20 @@ describe("Accounting.sol:report", () => {
     );
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
-    await accounting.initialize(deployer);
+
+    const vaultHubImpl = await ethers.deployContract(
+      "VaultHub",
+      [lido, accounting, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      deployer,
+    );
+    const vaultHubProxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [vaultHubImpl, deployer, new Uint8Array()],
+      deployer,
+    );
+    const vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
+    await vaultHub.initialize(deployer);
 
     const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
     accounting = accounting.connect(accountingOracleSigner);

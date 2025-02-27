@@ -77,7 +77,7 @@
       "epochsPerFrame": 12
     }
   },
-  "accounting": {
+  "vaultHub": {
     "deployParameters": {
       "connectedVaultsLimit": 500,
       "relativeShareLimitBP": 1000

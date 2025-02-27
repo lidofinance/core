@@ -16,7 +16,6 @@ import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
-import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
@@ -51,12 +50,10 @@ describe("VaultHub.sol:forceExit", () => {
   before(async () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
 
-    const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
     const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [
-      locator,
       steth,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
@@ -64,14 +61,14 @@ describe("VaultHub.sol:forceExit", () => {
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("VaultHub__Harness", proxy);
-    await accounting.initialize(deployer);
+    const vaultHubAdmin = await ethers.getContractAt("VaultHub__Harness", proxy);
+    await vaultHubAdmin.initialize(deployer);
 
     vaultHub = await ethers.getContractAt("VaultHub__Harness", proxy, user);
     vaultHubAddress = await vaultHub.getAddress();
 
-    await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),

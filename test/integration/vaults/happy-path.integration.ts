@@ -142,7 +142,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
     const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
     expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
@@ -206,7 +205,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
-    const { lido, accounting } = ctx.contracts;
+    const { lido, vaultHub } = ctx.contracts;
 
     expect(await stakingVault.locked()).to.equal(0); // no ETH locked yet
 
@@ -218,11 +217,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const agentSigner = await ctx.getSigner("agent");
 
-    await accounting
+    await vaultHub
       .connect(agentSigner)
       .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
-    expect(await accounting.vaultsCount()).to.equal(1n);
+    expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
@@ -268,7 +267,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Token Master to mint max stETH", async () => {
-    const { accounting, lido } = ctx.contracts;
+    const { vaultHub, lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -284,7 +283,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Validate minting with the cap
     const mintOverLimitTx = delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares + 1n);
     await expect(mintOverLimitTx)
-      .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
+      .to.be.revertedWithCustomError(vaultHub, "InsufficientValuationToMint")
       .withArgs(stakingVault, stakingVault.valuation());
 
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
@@ -434,9 +433,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
-    const { accounting, lido } = ctx.contracts;
+    const { vaultHub, lido } = ctx.contracts;
 
-    const socket = await accounting["vaultSocket(address)"](stakingVaultAddress);
+    const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
     const sharesMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
     await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });

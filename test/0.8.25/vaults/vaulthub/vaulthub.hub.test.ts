@@ -100,25 +100,25 @@ describe("VaultHub.sol:hub", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [
-      locator,
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
       lido,
+      ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("Accounting", proxy);
-    await accounting.initialize(deployer);
+    const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
+    await vaultHubAdmin.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("Accounting", proxy, user);
-    await accounting.grantRole(await vaultHub.PAUSE_ROLE(), user);
-    await accounting.grantRole(await vaultHub.RESUME_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
+    await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
@@ -446,7 +446,7 @@ describe("VaultHub.sol:hub", () => {
       await vault.report(1n, ether("1"), ether("1")); // Below minimal required valuation
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
 
-      await lido.connect(user).transferShares(await locator.accounting(), 1n);
+      await lido.connect(user).transferShares(await locator.vaultHub(), 1n);
       await vaultHub.connect(user).burnShares(vaultAddress, 1n);
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true); // Should be healthy with no shares

@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -8,7 +9,6 @@ import { StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 
 import { ether, MAX_UINT256 } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultHub.sol:pausableUntil", () => {
@@ -16,6 +16,7 @@ describe("VaultHub.sol:pausableUntil", () => {
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
+  let vaultHubAdmin: VaultHub;
   let vaultHub: VaultHub;
   let steth: StETH__HarnessForVaultHub;
 
@@ -24,24 +25,17 @@ describe("VaultHub.sol:pausableUntil", () => {
   before(async () => {
     [deployer, user, stranger] = await ethers.getSigners();
 
-    const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [
-      locator,
-      steth,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
-
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [steth, ZeroAddress, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("Accounting", proxy);
-    await accounting.initialize(deployer);
+    vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
+    await vaultHubAdmin.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("Accounting", proxy, user);
-    await accounting.grantRole(await vaultHub.PAUSE_ROLE(), user);
-    await accounting.grantRole(await vaultHub.RESUME_ROLE(), user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
+    await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
