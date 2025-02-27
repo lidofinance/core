@@ -1,6 +1,6 @@
 import { expect } from "chai";
 
-import { PointG1, PointG2, sign, verify } from "@noble/bls12-381";
+import { getPublicKey, PointG1, PointG2, sign, verify } from "@noble/bls12-381";
 
 import { ether } from "lib";
 
@@ -15,28 +15,35 @@ const STATIC_DEPOSIT = {
 
 describe("BLS.sol", () => {
   it("can create a deposit from test key", async () => {
-    const pubkeyG1 = PointG1.fromPrivateKey(BLS_TEST_KEY);
-    const pubkeyShort = pubkeyG1.toHex(true);
+    // deposit message
+    const pubkey = Buffer.from(getPublicKey(BLS_TEST_KEY)).toString("hex");
     const withdrawalCredentials = STATIC_DEPOSIT.withdrawalCredentials;
     const amount = STATIC_DEPOSIT.amount;
 
-    const messageRoot = await computeDepositMessageRoot(pubkeyShort, withdrawalCredentials, amount);
-    const messageHex = Buffer.from(messageRoot).toString("hex");
+    // deposit message + domain
+    const messageHex = Buffer.from(await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount)).toString(
+      "hex",
+    );
 
-    const sig = await sign(messageRoot, BLS_TEST_KEY);
+    const sig = await sign(messageHex, BLS_TEST_KEY);
+    const signature = Buffer.from(sig).toString("hex");
     const sigG2 = PointG2.fromSignature(sig);
-    const sigShort = sigG2.toHex(true);
 
-    const result = await verify(sigShort, messageHex, pubkeyG1);
+    const result = await verify(sig, messageHex, pubkey);
     expect(result).to.be.true;
 
+    const pubkeyG1 = PointG1.fromHex(pubkey);
+
     console.log({
-      pubkey: pubkeyShort,
+      pubkey,
       withdrawalCredentials: withdrawalCredentials,
       amount: amount.toString(),
-      signature: sigShort,
-      pubkeyY: pubkeyG1.toAffine()[1].value.toString(16),
-      signatureY: { c0: sigG2.toAffine()[1].c0.value.toString(16), c1: sigG2.toAffine()[1].c1.value.toString(16) },
+      signature,
+      pubkeyX: pubkeyG1.x.value.toString(16),
+      pubkeyY: pubkeyG1.y.value.toString(16),
+      signatureX: { c0: sigG2.x.c0.value.toString(16), c1: sigG2.x.c1.value.toString(16) },
+      signatureY: { c0: sigG2.y.c0.value.toString(16), c1: sigG2.y.c1.value.toString(16) },
+
       messageHex,
     });
   });
