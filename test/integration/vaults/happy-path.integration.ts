@@ -142,7 +142,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
     const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await _stakingVault.depositContract()).to.equal(depositContract);
+    expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here

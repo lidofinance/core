@@ -64,11 +64,7 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const accountingImpl = await ethers.deployContract(
-      "Accounting",
-      [locator, lido, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
-      deployer,
-    );
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido], deployer);
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],
@@ -77,7 +73,11 @@ describe("Accounting.sol:report", () => {
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [lido, accounting], deployer);
+    const vaultHubImpl = await ethers.deployContract(
+      "VaultHub",
+      [lido, accounting, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      deployer,
+    );
     const vaultHubProxy = await ethers.deployContract(
       "OssifiableProxy",
       [vaultHubImpl, deployer, new Uint8Array()],

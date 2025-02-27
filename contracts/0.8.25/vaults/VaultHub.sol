@@ -408,7 +408,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) external view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
+    ) public view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/

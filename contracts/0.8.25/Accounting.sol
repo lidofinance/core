@@ -96,7 +96,7 @@ contract Accounting {
     /// @param _lido Lido contract
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido,
+        ILido _lido
     ) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;

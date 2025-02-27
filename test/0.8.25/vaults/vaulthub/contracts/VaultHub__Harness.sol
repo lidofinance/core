@@ -3,18 +3,15 @@
 
 pragma solidity ^0.8.0;
 
-import {Accounting} from "contracts/0.8.25/Accounting.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-
-contract VaultHub__Harness is Accounting {
+contract VaultHub__Harness is VaultHub {
     constructor(
-        address _locator,
         address _steth,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) Accounting(ILidoLocator(_locator), ILido(_steth), _connectedVaultsLimit, _relativeShareLimitBP) {}
+    ) VaultHub(IStETH(_steth), address(0), _connectedVaultsLimit, _relativeShareLimitBP) {}
 
     function mock__calculateVaultsRebase(
         uint256 _postTotalShares,
@@ -28,7 +25,7 @@ contract VaultHub__Harness is Accounting {
         returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares)
     {
         return
-            _calculateVaultsRebase(
+            calculateVaultsRebase(
                 _postTotalShares,
                 _postTotalPooledEther,
                 _preTotalShares,
