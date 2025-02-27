@@ -36,6 +36,8 @@ library BLS {
         Fp2 y;
     }
 
+    bytes constant DST = bytes("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_");
+
     bytes1 constant BLS_BYTE_WITHOUT_FLAGS_MASK = bytes1(0x1f);
 
     /// @notice PRECOMPILED CONTRACT ADDRESSES
@@ -94,12 +96,14 @@ library BLS {
         encodedX[0] = encodedX[0] & BLS_BYTE_WITHOUT_FLAGS_MASK;
         // NOTE: the "flag bits" of the second half of `encodedX` are always == 0x0
 
-        // NOTE: order is important here for decoding point...
-        uint256 aa = sliceToUint(encodedX, 48, 64);
-        uint256 ab = sliceToUint(encodedX, 64, 96);
-        uint256 ba = sliceToUint(encodedX, 0, 16);
-        uint256 bb = sliceToUint(encodedX, 16, 48);
-        Fp2 memory X = Fp2(Fp(aa, ab), Fp(ba, bb));
+        // Signature encoding has first Fp compnenet in the second half of the byte array
+        // With Fp components packed as 48 bytes
+        uint256 c0_a = sliceToUint(encodedX, 48, 64); // first Fp.a is 16 bytes
+        uint256 c0_b = sliceToUint(encodedX, 64, 96); // second Fp.b uint256 is 32 bytes
+        // and the second Fp component in the first half
+        uint256 c1_a = sliceToUint(encodedX, 0, 16);
+        uint256 c2_b = sliceToUint(encodedX, 16, 48);
+        Fp2 memory X = Fp2(Fp(c0_a, c0_b), Fp(c1_a, c2_b));
         return G2Point(X, Y);
     }
 
@@ -109,7 +113,7 @@ library BLS {
         return abi.decode(output, (G2Point));
     }
 
-    function hashToFieldFp2(bytes32 message, bytes memory dst) private view returns (Fp2[2] memory) {
+    function hashToFieldFp2(bytes32 message, bytes memory dst) internal view returns (Fp2[2] memory) {
         // 1. len_in_bytes = count * m * L
         // so always 2 * 2 * 64 = 256
         uint16 lenInBytes = 256;
@@ -167,7 +171,7 @@ library BLS {
 
     function hashToCurveG2(bytes32 message) internal view returns (G2Point memory) {
         // 1. u = hash_to_field(msg, 2)
-        Fp2[2] memory u = hashToFieldFp2(message, bytes("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_"));
+        Fp2[2] memory u = hashToFieldFp2(message, DST);
         // 2. Q0 = map_to_curve(u[0])
         G2Point memory q0 = mapFp2ToG2(u[0]);
         // 3. Q1 = map_to_curve(u[1])
@@ -191,7 +195,7 @@ library BLS {
         bytes32 message,
         bytes memory dst,
         uint16 lenInBytes
-    ) private pure returns (bytes32[] memory) {
+    ) internal pure returns (bytes32[] memory) {
         // 1.  ell = ceil(len_in_bytes / b_in_bytes)
         // b_in_bytes seems to be 32 for sha256
         // ceil the division
@@ -244,6 +248,7 @@ library BLS {
         }
 
         (bool success, bytes memory output) = BLS12_PAIRING_CHECK.staticcall(input);
+
         if (!success) {
             revert InvalidSignature();
         }
@@ -252,7 +257,7 @@ library BLS {
 
     function verifyDeposit(
         bytes calldata pubkey, // must be 48 bytes
-        bytes32 withdrawal, // 32 bytes
+        bytes32 withdrawal,
         uint256 amount,
         bytes memory signature, // must be 96 bytes
         Fp memory pubkeyYComponent,

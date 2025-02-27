@@ -1,6 +1,6 @@
 import { expect } from "chai";
 
-import { getPublicKey, PointG1, PointG2, sign, verify } from "@noble/bls12-381";
+import { SecretKey, verify } from "@chainsafe/blst";
 
 import { ether } from "lib";
 
@@ -16,34 +16,42 @@ const STATIC_DEPOSIT = {
 describe("BLS.sol", () => {
   it("can create a deposit from test key", async () => {
     // deposit message
-    const pubkey = Buffer.from(getPublicKey(BLS_TEST_KEY)).toString("hex");
+    const privateKey = SecretKey.fromHex(BLS_TEST_KEY);
+    const pubkey = privateKey.toPublicKey();
+    const pubkeyCompressed = pubkey.toHex(true);
+
     const withdrawalCredentials = STATIC_DEPOSIT.withdrawalCredentials;
     const amount = STATIC_DEPOSIT.amount;
 
     // deposit message + domain
-    const messageHex = Buffer.from(await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount)).toString(
-      "hex",
-    );
+    const message = await computeDepositMessageRoot(pubkey.toHex(true), withdrawalCredentials, amount);
+    const messageHex = Buffer.from(message).toString("hex");
 
-    const sig = await sign(messageHex, BLS_TEST_KEY);
-    const signature = Buffer.from(sig).toString("hex");
-    const sigG2 = PointG2.fromSignature(sig);
+    const signature = privateKey.sign(message);
+    const signatureCompressed = signature.toHex(true);
 
-    const result = await verify(sig, messageHex, pubkey);
+    const result = verify(message, pubkey, signature);
     expect(result).to.be.true;
 
-    const pubkeyG1 = PointG1.fromHex(pubkey);
+    // Y coordinate of Fp component of pubkey is last 48 bytes of uncompressed pubkey(g1 point)
+    const pubkeyY = Buffer.from(pubkey.toBytes(false).slice(48)).toString("hex");
+    // the signature is a G2 point, so we need to extract the two components of Y coordinate (which is Fp2) from it
+    // first Fp of Y coordinate is last 48 bytes of signature
+    const sigY_c0 = Buffer.from(signature.toBytes(false).slice(96 + 48, 96 + 48 * 2)).toString("hex");
+    // second Fp is 48 bytes before first one
+    const sigY_c1 = Buffer.from(signature.toBytes(false).slice(96, 96 + 48)).toString("hex");
 
     console.log({
-      pubkey,
+      pubkey: pubkeyCompressed,
       withdrawalCredentials: withdrawalCredentials,
       amount: amount.toString(),
-      signature,
-      pubkeyX: pubkeyG1.x.value.toString(16),
-      pubkeyY: pubkeyG1.y.value.toString(16),
-      signatureX: { c0: sigG2.x.c0.value.toString(16), c1: sigG2.x.c1.value.toString(16) },
-      signatureY: { c0: sigG2.y.c0.value.toString(16), c1: sigG2.y.c1.value.toString(16) },
-
+      signature: signatureCompressed,
+      signatureFull: Buffer.from(signature.toBytes(false)).toString("hex"),
+      pubkeyY,
+      sigY: {
+        c0: sigY_c0,
+        c1: sigY_c1,
+      },
       messageHex,
     });
   });

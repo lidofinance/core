@@ -35,12 +35,29 @@ contract BLSHarness {
     ) public view returns (bytes32) {
         return SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
     }
+
+    function hashToFieldFp2(
+        bytes calldata pubkey,
+        bytes32 withdrawal,
+        uint64 amount
+    ) public view returns (BLS.Fp2[2] memory) {
+        bytes32 _msg = SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
+        return BLS.hashToFieldFp2(_msg, BLS.DST);
+    }
+
+    function hashToCurveG2(
+        bytes calldata pubkey,
+        bytes32 withdrawal,
+        uint64 amount
+    ) public view returns (BLS.G2Point memory) {
+        return BLS.hashToCurveG2(SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount));
+    }
 }
 
 struct PrecomputedDepositMessage {
     bytes pubkey;
     bytes32 withdrawal;
-    uint64 amount;
+    uint256 amount;
     bytes signature;
     BLS.Fp pubkeyYComponent;
     BLS.Fp2 signatureYComponent;
@@ -72,29 +89,6 @@ contract BLSVerifyingKeyTest is Test {
         StdAssertions.assertEq32(root, deposit.validMsgHash);
     }
 
-    function test_decodeG2Point() public view {
-        PrecomputedDepositMessage memory deposit = STATIC_DEPOSIT_MESSAGE();
-        BLS.G2Point memory g2 = harness.decodeG2Point(deposit.signature, deposit.signatureYComponent);
-
-        BLS.Fp memory computed_x_c0 = wrapFp(
-            hex"12273c21949d56e83c491af148c760f9b38b233eb782c293a60fa2ffe0ee109db23aa9d8c69305c758bb229a1132a365"
-        );
-
-        StdAssertions.assertEq(abi.encode(g2.x.c0), abi.encode(computed_x_c0));
-
-        BLS.Fp memory computed_x_c1 = wrapFp(
-            hex"15a4323c090fb311b0f4f082b1b1004c5efb7a3b283415aac499be6045a8d3840ab57e714f2144fabe761e1fde46d1d5"
-        );
-
-        StdAssertions.assertEq(abi.encode(g2.x.c1), abi.encode(computed_x_c1));
-
-        // SignatureY is put into G2 as is
-        // SignatureY c0
-        StdAssertions.assertEq(abi.encode(g2.y.c0), abi.encode(deposit.signatureYComponent.c0));
-        // SignatureY c1
-        StdAssertions.assertEq(abi.encode(g2.y.c1), abi.encode(deposit.signatureYComponent.c1));
-    }
-
     function wrapFp(bytes memory data) internal pure returns (BLS.Fp memory) {
         require(data.length == 48, "Invalid Fp length");
         uint256 a = BLS.sliceToUint(data, 0, 16);
@@ -102,8 +96,8 @@ contract BLSVerifyingKeyTest is Test {
         return BLS.Fp(a, b);
     }
 
-    function pad16(bytes memory data) internal pure returns (bytes memory) {
-        return bytes.concat(hex"00000000000000000000000000000000", data);
+    function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS.Fp2 memory) {
+        return BLS.Fp2(wrapFp(x), wrapFp(y));
     }
 
     function STATIC_DEPOSIT_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
@@ -112,17 +106,13 @@ contract BLSVerifyingKeyTest is Test {
                 hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
                 0xf3d93f9fbc6a229f3b11340b4b52ae53833813efab76e812d1d014163259ef1f,
                 1 ether,
-                hex"95a4323c090fb311b0f4f082b1b1004c5efb7a3b283415aac499be6045a8d3840ab57e714f2144fabe761e1fde46d1d512273c21949d56e83c491af148c760f9b38b233eb782c293a60fa2ffe0ee109db23aa9d8c69305c758bb229a1132a365",
+                hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
                 wrapFp(
                     hex"19b71bd2a9ebf09809b6c380a1d1de0c2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083"
                 ),
-                BLS.Fp2(
-                    wrapFp(
-                        hex"0d12d727285533d0ec733bcd80cd1e15d002c19985aaa3ad40fca85f73e1a7f96f50d0c78add58b7d55a4ebd11051f37"
-                    ),
-                    wrapFp(
-                        hex"0b8cfab59498fbe811a1a5009beb975a5c144acfbd9423a279d75a2cce89312366d1ca701697d05c15689820eb4cd96d"
-                    )
+                wrapFp2(
+                    hex"10d96c5dcc6e32bcd43e472317e18ad94dde89c9361d79bec5378c72214083ea40f3dc43ee759025eb4c25150e1943bf",
+                    hex"160f8d804d277c7a079f451bce224fd42397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb"
                 ),
                 0xa0ea5aa96388d0375c9181eac29fa198cea873c818efe7442bd49c03948f2a69
             );
