@@ -522,8 +522,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function mintExternalSharesForFees(address _recipient, uint256 _amountOfShares) external {
-        if (msg.sender != ACCOUNTING) revert NotAuthorized("mintExternalSharesForFees", msg.sender);
+    function mintVaultsTreasuryFeeShares(address _recipient, uint256 _amountOfShares) external {
+        if (msg.sender != ACCOUNTING) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
         STETH.mintExternalShares(_recipient, _amountOfShares);
     }
 
