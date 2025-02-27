@@ -24,7 +24,7 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
-  const accountingParams = state[Sk.accounting].deployParameters;
+  const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
@@ -142,13 +142,13 @@ export async function main() {
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
-    accountingParams.connectedVaultsLimit,
-    accountingParams.relativeShareLimitBP,
   ]);
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     lidoAddress,
     accounting.address,
+    vaultHubParams.connectedVaultsLimit,
+    vaultHubParams.relativeShareLimitBP,
   ]);
 
   // Deploy AccountingOracle
