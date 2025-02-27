@@ -16,7 +16,7 @@ import {ISideloader} from "../interfaces/ISideloader.sol";
  * @notice Sideloading is a feature that allows vaults to mint unbacked stETH shares which,
  *         after invoking the callback, must be retroactively backed by the vault.
  */
-abstract contract Sideloading is VaultHub {
+contract Sideloading is VaultHub {
     /**
      * @notice The storage structure:
      * - sideloaderRegistry: the registry of sideloaders;
@@ -56,6 +56,16 @@ abstract contract Sideloading is VaultHub {
      * @param _stETH The address of the STETH contract.
      */
     constructor(IStETH _stETH) VaultHub(_stETH) {}
+
+    /**
+     * @notice Initializes the contract.
+     * @param _admin The address of the admin.
+     */
+    function initialize(address _admin) external initializer {
+        if (_admin == address(0)) revert ZeroArgument("_admin");
+
+        __VaultHub_init(_admin);
+    }
 
     /**
      * @notice Returns true if the sideloader registry is ignored and any address can be used as a sideloader.

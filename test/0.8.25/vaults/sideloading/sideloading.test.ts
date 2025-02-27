@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  Sideloading__Harness,
+  Sideloading,
   StakingVault__MockForSideloading,
   StETH__MockForSideloading,
   Swapper__Mock,
@@ -23,7 +23,7 @@ describe("Sideloading.sol", () => {
   let admin: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let sideloading: Sideloading__Harness;
+  let sideloading: Sideloading;
   let steth: StETH__MockForSideloading;
   let vault: StakingVault__MockForSideloading;
   let adapter: SwapperAdapter__MockForSideloading;
@@ -46,7 +46,7 @@ describe("Sideloading.sol", () => {
     await setBalance(await swapper.getAddress(), ether("1000"));
     adapter = await ethers.deployContract("SwapperAdapter__MockForSideloading", [steth, swapper]);
 
-    const sideloadingImpl = await ethers.deployContract("Sideloading__Harness", [steth]);
+    const sideloadingImpl = await ethers.deployContract("Sideloading", [steth]);
     [sideloading] = await proxify({ impl: sideloadingImpl, admin });
 
     await expect(sideloading.initialize(admin))
