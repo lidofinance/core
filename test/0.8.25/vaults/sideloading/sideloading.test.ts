@@ -243,7 +243,6 @@ describe("Sideloading.sol", () => {
     });
   });
 
-  // TODO: test 1 share != 1 steth
   context("sideload", () => {
     it("reverts if the contract is paused", async () => {
       await expect(sideloading.pauseFor(1000)).to.emit(sideloading, "Paused").withArgs(1000);
