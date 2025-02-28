@@ -3,6 +3,8 @@ pragma solidity ^0.8.25;
 
 import {SSZ} from "./SSZ.sol";
 
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
 // for base structs & operations: https://github.com/paradigmxyz/forge-alphanet/blob/main/src/sign/BLS.sol
 // for decodeG1Point/decodeG2Point: https://github.com/ralexstokes/deposit-verifier
 library BLS {
@@ -24,6 +26,7 @@ library BLS {
 
     /// @dev Points of G1 and G2 are encoded as byte concatenation of the respective
     /// encodings of the x and y coordinates.
+    /// total size is 128 bytes
     struct G1Point {
         Fp x;
         Fp y;
@@ -31,19 +34,40 @@ library BLS {
 
     /// @dev Points of G1 and G2 are encoded as byte concatenation of the respective
     /// encodings of the x and y coordinates.
+    /// total size is 256 bytes
     struct G2Point {
         Fp2 x;
         Fp2 y;
     }
 
+    struct DepositYComponents {
+        Fp pubkeyY;
+        Fp2 signatureY;
+    }
+
+    uint256 constant SUBGROUP_ORDER = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001;
+
     bytes constant DST = bytes("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_");
 
     bytes1 constant BLS_BYTE_WITHOUT_FLAGS_MASK = bytes1(0x1f);
+    uint256 constant BLS_UINT256_WITHOUT_FLAGS_MASK =
+        uint256(0x000000000000000000000000000000001f000000000000000000000000000000);
 
     /// @notice PRECOMPILED CONTRACT ADDRESSES
     address constant MOD_EXP = address(0x05);
-    // forge
+    ///  forge
+    // MUL is deprecated in actual EIP in favor of MSM trivial case
+    // We are supposed to use MSM address but change it to MUL because of forge
+    // old MSM will fail on trivial 1 point multiplication
+    //address constant BLS12_G1MUL = 0x000000000000000000000000000000000000000C;
+    //address constant BLS12_G1MSM = 0x000000000000000000000000000000000000000d;
+    address constant BLS12_G1MSM = 0x000000000000000000000000000000000000000C;
+
     address constant BLS12_G2ADD = 0x000000000000000000000000000000000000000E;
+    // Same for G2
+    // address constant BLS12_G2MUL = 0x000000000000000000000000000000000000000F;
+    // address constant BLS12_G2MSM = 0x0000000000000000000000000000000000000010;
+    address constant BLS12_G2MSM = 0x000000000000000000000000000000000000000F;
     address constant BLS12_PAIRING_CHECK = 0x0000000000000000000000000000000000000011;
     address constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000013;
 
@@ -84,6 +108,53 @@ library BLS {
         }
     }
 
+    function isG1Infinity(G1Point memory point) internal pure returns (bool) {
+        return point.x.a == 0 && point.x.b == 0 && point.y.a == 0 && point.y.b == 0;
+    }
+
+    function isG2Infinity(G2Point memory point) internal pure returns (bool) {
+        return
+            point.x.c0.a == 0 &&
+            point.x.c0.b == 0 &&
+            point.x.c1.a == 0 &&
+            point.x.c1.b == 0 &&
+            point.y.c0.a == 0 &&
+            point.y.c0.b == 0 &&
+            point.y.c1.a == 0 &&
+            point.y.c1.b == 0;
+    }
+
+    function validateG1Point(G1Point memory point) internal view {
+        require(!isG1Infinity(point), "G1 point at infinity");
+        G1Point memory check = G1Mul(point, SUBGROUP_ORDER);
+        require(isG1Infinity(check), "G1 point is not in main subgroup");
+    }
+
+    function validateG2Point(G2Point memory point) internal view {
+        require(!isG2Infinity(point), "G2 point at infinity");
+        G2Point memory check = G2Mul(point, SUBGROUP_ORDER);
+        require(isG2Infinity(check), "G1 point is not in main subgroup");
+    }
+
+    function G1Mul(G1Point memory point, uint256 scalar) internal view returns (G1Point memory result) {
+        bytes memory input = bytes.concat(abi.encode(point, scalar));
+
+        (bool success, bytes memory output) = address(BLS12_G1MSM).staticcall(input);
+        require(success, "G1MSM failed");
+        return abi.decode(output, (G1Point));
+    }
+
+    function G2Mul(G2Point memory point, uint256 scalar) internal view returns (G2Point memory result) {
+        bytes memory input = bytes.concat(abi.encode(point, scalar));
+
+        // we have to use deprecated G2MUL because in forge
+        (bool success, bytes memory output) = address(BLS12_G2MSM).staticcall(input);
+        require(success, "G2MSM failed");
+        return abi.decode(output, (G2Point));
+    }
+
+    // TODO change encodeX to calldata to optimize gas
+    // need to play around with FLAG so it can be correctly applied to 16 bytes zero padded uint256 of Fp.a
     function decodeG1Point(bytes memory encodedX, Fp memory Y) internal pure returns (G1Point memory) {
         encodedX[0] = encodedX[0] & BLS_BYTE_WITHOUT_FLAGS_MASK;
         uint256 a = sliceToUint(encodedX, 0, 16);
@@ -92,6 +163,7 @@ library BLS {
         return G1Point(X, Y);
     }
 
+    // TODO memory -> calldata
     function decodeG2Point(bytes memory encodedX, Fp2 memory Y) internal pure returns (G2Point memory) {
         encodedX[0] = encodedX[0] & BLS_BYTE_WITHOUT_FLAGS_MASK;
         // NOTE: the "flag bits" of the second half of `encodedX` are always == 0x0
@@ -241,49 +313,33 @@ library BLS {
         return b;
     }
 
-    function pairing(G1Point[] memory g1Points, G2Point[] memory g2Points) internal view returns (bool result) {
-        bytes memory input;
-        for (uint256 i = 0; i < g1Points.length; i++) {
-            input = bytes.concat(input, abi.encode(g1Points[i], g2Points[i]));
-        }
+    function verifyDepositMessage(
+        IStakingVault.Deposit calldata deposit,
+        DepositYComponents calldata depositY,
+        bytes32 withdrawalCredentials
+    ) internal view {
+        // can we anything wut???
+        bytes32 message = SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials);
+        G2Point memory msgG2 = hashToCurveG2(message);
+        validateG2Point(msgG2);
+
+        G1Point memory pubkeyG1 = decodeG1Point(deposit.pubkey, depositY.pubkeyY);
+        validateG1Point(pubkeyG1);
+
+        G2Point memory signatureG2 = decodeG2Point(deposit.signature, depositY.signatureY);
+        validateG2Point(signatureG2);
+
+        bytes memory input = bytes.concat(abi.encode(pubkeyG1, msgG2, NEGATED_G1_GENERATOR(), signatureG2));
 
         (bool success, bytes memory output) = BLS12_PAIRING_CHECK.staticcall(input);
 
-        if (!success) {
+        bool result = abi.decode(output, (bool));
+
+        if (!success && !result) {
             revert InvalidSignature();
         }
-        return abi.decode(output, (bool));
-    }
-
-    function verifyDeposit(
-        bytes calldata pubkey, // must be 48 bytes
-        bytes32 withdrawal,
-        uint256 amount,
-        bytes memory signature, // must be 96 bytes
-        Fp memory pubkeyYComponent,
-        Fp2 memory signatureYComponent
-    ) internal view {
-        require(pubkey.length == 48, "Invalid pubkey length");
-        require(signature.length == 96, "Invalid signature length");
-
-        // In the Ethereum deposit contract the “signing root” is computed as the SSZ hash_tree_root
-        bytes32 msgHash = SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
-        G2Point memory msgG2 = hashToCurveG2(msgHash);
-
-        G2Point memory signatureG2 = decodeG2Point(signature, signatureYComponent);
-        G1Point memory pubkeyG1 = decodeG1Point(pubkey, pubkeyYComponent);
-
-        G1Point[] memory g1Points = new BLS.G1Point[](2);
-        G2Point[] memory g2Points = new BLS.G2Point[](2);
-
-        g1Points[0] = NEGATED_G1_GENERATOR();
-        g1Points[1] = pubkeyG1;
-
-        g2Points[0] = msgG2;
-        g2Points[1] = signatureG2;
-
-        pairing(g1Points, g2Points);
     }
 
     error InvalidSignature();
+    error SignatureContainsInfinityPoints();
 }

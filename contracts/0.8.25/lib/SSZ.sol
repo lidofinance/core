@@ -6,6 +6,8 @@ pragma solidity 0.8.25;
 
 import {GIndex} from "./GIndex.sol";
 
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
 struct BeaconBlockHeader {
     uint64 slot;
     uint64 proposerIndex;
@@ -32,14 +34,13 @@ library SSZ {
     /// @notice ssz signing root for deposit message
     /// @dev used for verifying BLS deposit signature
     function depositMessageSigningRoot(
-        bytes calldata publicKey,
-        bytes32 withdrawalCredentials,
-        uint256 amount
+        IStakingVault.Deposit calldata deposit,
+        bytes32 withdrawalCredentials
     ) internal view returns (bytes32) {
         bytes32[4] memory headerNodes = [
-            pubkeyRoot(publicKey),
+            pubkeyRoot(deposit.pubkey),
             withdrawalCredentials,
-            toLittleEndian(amount / 1 gwei),
+            toLittleEndian(deposit.amount / 1 gwei),
             bytes32(0)
         ];
 
