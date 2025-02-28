@@ -9,8 +9,14 @@ contract StETH__MockForSideloading is ERC20 {
     event Mock__ExternalSharesMinted(address indexed to, uint256 amount);
     event Mock__ExternalSharesBurned(address indexed from, uint256 amount);
 
+    uint256 shareRate = 1 ether;
+
     constructor() ERC20("Staked Ether", "stETH") {
         _mint(msg.sender, 1_000 ether);
+    }
+
+    function setShareRate(uint256 _shareRate) external {
+        shareRate = _shareRate;
     }
 
     function mint(address to, uint256 amount) external {
@@ -22,7 +28,8 @@ contract StETH__MockForSideloading is ERC20 {
     }
 
     function mintExternalShares(address to, uint256 amount) external {
-        _mint(to, amount);
+        uint256 tokens = getPooledEthBySharesRoundUp(amount);
+        _mint(to, tokens);
 
         emit Mock__ExternalSharesMinted(to, amount);
     }
@@ -38,18 +45,22 @@ contract StETH__MockForSideloading is ERC20 {
         emit Mock__ExternalSharesBurned(msg.sender, amount);
     }
 
-    // for simplicity, 1 share = 1 steth
-    function getPooledEthByShares(uint256 shares) external view returns (uint256) {
-        return shares;
+    function getPooledEthByShares(uint256 shares) public view returns (uint256) {
+        return (shares * shareRate) / 1 ether;
     }
 
-    function getPooledEthBySharesRoundUp(uint256 shares) external view returns (uint256) {
-        return shares;
-    }
+    function getPooledEthBySharesRoundUp(uint256 shares) public view returns (uint256) {
+        uint256 pooledEth = (shares * shareRate) / 1 ether;
 
-    // for simplicity, 1 steth = 1 share
-    function getSharesByPooledEth(uint256 pooledEth) external view returns (uint256) {
+        if ((pooledEth * 1 ether) / shareRate != shares) {
+            return pooledEth + 1;
+        }
+
         return pooledEth;
+    }
+
+    function getSharesByPooledEth(uint256 pooledEth) external view returns (uint256) {
+        return (pooledEth * 1 ether) / shareRate;
     }
 
     function getTotalShares() external view returns (uint256) {

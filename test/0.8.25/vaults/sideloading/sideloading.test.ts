@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { keccak256, ZeroAddress } from "ethers";
+import { formatEther, keccak256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -439,6 +439,42 @@ describe("Sideloading.sol", () => {
       // valuation is the old valuation + eth we got from the swapping sideloaded steth
       expect(await vault.valuation()).to.equal(expectedLocked + stethToSideload);
     });
+  });
+
+  context("sideload with different share rates", () => {
+    const shareRates = [ether("0.9"), ether("0.999"), ether("1.1"), ether("1.1111")];
+    for (const shareRate of shareRates) {
+      it(`sideloads correctly when 1 share equals ${formatEther(shareRate)} stETH`, async () => {
+        // Set share rate
+        await steth.setShareRate(shareRate);
+
+        const sharesToSideload = config.shareLimit;
+
+        // Calculate stETH amount based on share rate
+        const stethToSideload = await steth.getPooledEthByShares(sharesToSideload);
+
+        expect(stethToSideload).to.equal((sharesToSideload * shareRate) / ether("1"));
+
+        // Calculate expected locked amount
+        const expectedLocked = (stethToSideload * BASIS_POINTS) / (BASIS_POINTS - config.reserveRatioBP);
+        const requiredMinimumValuation = expectedLocked - stethToSideload;
+
+        // Fund the vault with the required minimum valuation
+        await expect(vault.connect(vaultOwner).fund({ value: requiredMinimumValuation }))
+          .to.emit(vault, "Mock__Funded")
+          .withArgs(vaultOwner, requiredMinimumValuation);
+        expect(await ethers.provider.getBalance(vault)).to.equal(requiredMinimumValuation);
+
+        // Perform the sideload
+        await expect(sideloading.connect(vaultOwner).sideload(vault, adapter, sharesToSideload, "0x"))
+          .to.emit(steth, "Mock__ExternalSharesMinted")
+          .withArgs(adapter, sharesToSideload);
+
+        // Verify the locked and valuation amounts
+        expect(await vault.locked()).to.equal(expectedLocked);
+        expect(await vault.valuation()).to.equal(expectedLocked);
+      });
+    }
   });
 
   async function grantRolesAndCheck(roles: string[]) {
