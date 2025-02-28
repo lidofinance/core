@@ -12,6 +12,17 @@ import {StdAssertions} from "forge-std/StdAssertions.sol";
 
 import {BLS, SSZ} from "contracts/0.8.25/lib/BLS.sol";
 
+struct PrecomputedDepositMessage {
+    bytes pubkey;
+    bytes32 withdrawal;
+    uint256 amount;
+    bytes signature;
+    BLS.Fp pubkeyYComponent;
+    BLS.Fp2 signatureYComponent;
+    bytes32 validMsgHash;
+}
+
+// harness to test methods with calldata args
 contract BLSHarness is StdUtils {
     function verifyDepositMessage(
         bytes calldata pubkey,
@@ -35,37 +46,6 @@ contract BLSHarness is StdUtils {
     ) public view returns (bytes32) {
         return SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
     }
-
-    function hashToFieldFp2(
-        bytes calldata pubkey,
-        bytes32 withdrawal,
-        uint64 amount
-    ) public view returns (BLS.Fp2[2] memory) {
-        bytes32 _msg = SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount);
-        return BLS.hashToFieldFp2(_msg, BLS.DST);
-    }
-
-    function hashToCurveG2(
-        bytes calldata pubkey,
-        bytes32 withdrawal,
-        uint64 amount
-    ) public view returns (BLS.G2Point memory) {
-        return BLS.hashToCurveG2(SSZ.depositMessageSigningRoot(pubkey, withdrawal, amount));
-    }
-
-    function NEGATED_G1_GENERATOR() public pure returns (BLS.G1Point memory) {
-        return BLS.NEGATED_G1_GENERATOR();
-    }
-}
-
-struct PrecomputedDepositMessage {
-    bytes pubkey;
-    bytes32 withdrawal;
-    uint256 amount;
-    bytes signature;
-    BLS.Fp pubkeyYComponent;
-    BLS.Fp2 signatureYComponent;
-    bytes32 validMsgHash;
 }
 
 contract BLSVerifyingKeyTest is Test {
@@ -79,6 +59,18 @@ contract BLSVerifyingKeyTest is Test {
         PrecomputedDepositMessage memory deposit = STATIC_DEPOSIT_MESSAGE();
         bytes32 root = harness.depositMessageSigningRoot(deposit.pubkey, deposit.withdrawal, deposit.amount);
         StdAssertions.assertEq(root, deposit.validMsgHash);
+    }
+
+    function test_verifyMainnetDeposit() external view {
+        PrecomputedDepositMessage memory deposit = STATIC_MAINNET_MESSAGE();
+        harness.verifyDepositMessage(
+            deposit.pubkey,
+            deposit.withdrawal,
+            deposit.amount,
+            deposit.signature,
+            deposit.pubkeyYComponent,
+            deposit.signatureYComponent
+        );
     }
 
     function test_verifyDeposit() external view {
@@ -137,6 +129,24 @@ contract BLSVerifyingKeyTest is Test {
                 wrapFp2(
                     hex"160f8d8000077c7a079f451bce224fd42397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb",
                     hex"10d96c5dcc6e32bcd43e472317e18ad94dde89c9361d79bec5378c72214083ea40f3dc43ee759025eb4c25150e1943bf"
+                ),
+                0xa0ea5aa96388d0375c9181eac29fa198cea873c818efe7442bd49c03948f2a69
+            );
+    }
+
+    function STATIC_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
+        return
+            PrecomputedDepositMessage(
+                hex"88841e426f271030ad2257537f4eabd216b891da850c1e0e2b92ee0d6e2052b1dac5f2d87bef51b8ac19d425ed024dd1",
+                0x004AAD923FC63B40BE3DDE294BDD1BBB064E34A4A4D51B68843FEA44532D6147,
+                1 ether,
+                hex"99a9e9abd7d4a4de2d33b9c3253ff8440ad237378ce37250d96d5833fe84ba87bbf288bf3825763c04c3b8cdba323a3b02d542cdf5940881f55e5773766b1b185d9ca7b6e239bdd3fb748f36c0f96f6a00d2e1d314760011f2f17988e248541d",
+                wrapFp(
+                    hex"04c46736f0aa8ec7e6e4c1126c12079f09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d"
+                ),
+                wrapFp2(
+                    hex"10e7847980f47ceb3f994a97e246aa1d563dfb50c372156b0eaee0802811cd62da8325ebd37a1a498ad4728b5852872f",
+                    hex"00c4aac6c84c230a670b4d4c53f74c0b2ca4a6a86fe720d0640d725d19d289ce4ac3a9f8a9c8aa345e36577c117e7dd6"
                 ),
                 0xa0ea5aa96388d0375c9181eac29fa198cea873c818efe7442bd49c03948f2a69
             );

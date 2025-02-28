@@ -1,4 +1,8 @@
+import { PublicKey, Signature, verify } from "@chainsafe/blst";
+
 type ByteArray = Uint8Array;
+
+export const sanitazeHex = (hex: string) => hex.replace("0x", "").toLowerCase();
 
 export const toHexString = (value: unknown): string => {
   if (typeof value === "string" && !value.startsWith("0x")) {
@@ -98,4 +102,43 @@ export const computeDepositMessageRoot = async (
     objectRoot: DepositMessage.hashTreeRoot(depositMessage),
     domain,
   });
+};
+
+export const extractYCoordinates = (pubkey: string, signature: string) => {
+  const pubkeyObj = PublicKey.fromHex(sanitazeHex(pubkey));
+  const signatureObj = Signature.fromHex(sanitazeHex(signature));
+
+  // Y coordinate of Fp component of pubkey is last 48 bytes of uncompressed pubkey(g1 point)
+  const pubkeyY = Buffer.from(pubkeyObj.toBytes(false).slice(48)).toString("hex");
+  // the signature is a G2 point, so we need to extract the two components of Y coordinate (which is Fp2) from it
+  // first Fp of Y coordinate is last 48 bytes of signature
+  const sigY_c0 = Buffer.from(signatureObj.toBytes(false).slice(96 + 48, 96 + 48 * 2)).toString("hex");
+  // second Fp is 48 bytes before first one
+  const sigY_c1 = Buffer.from(signatureObj.toBytes(false).slice(96, 96 + 48)).toString("hex");
+
+  return {
+    pubkey: pubkeyObj.toHex(true),
+    pubkeyY,
+    pubkeyFull: pubkeyObj.toHex(false),
+    signature: signatureObj.toHex(true),
+    signatureY: {
+      c0: sigY_c0,
+      c1: sigY_c1,
+    },
+    signatureFull: signatureObj.toHex(false),
+  };
+};
+
+export const verifyDepositMessage = async (
+  pubkey: string,
+  withdrawalCredentials: string,
+  amount: bigint,
+  signature: string,
+) => {
+  const message = await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount);
+
+  const pubkeyObj = PublicKey.fromHex(sanitazeHex(pubkey));
+  const signatureObj = Signature.fromHex(sanitazeHex(signature));
+
+  return verify(message, pubkeyObj, signatureObj);
 };
