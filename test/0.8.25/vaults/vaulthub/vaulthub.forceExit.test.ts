@@ -130,7 +130,7 @@ describe("VaultHub.sol:forceExit", () => {
     it("reverts if zero refund recipient", async () => {
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_refundRecepient");
+        .withArgs("_refundRecipient");
     });
 
     it("reverts if pubkeys are not valid", async () => {

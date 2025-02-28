@@ -341,7 +341,7 @@ contract Accounting {
         );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {
-            LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);

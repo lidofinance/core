@@ -586,7 +586,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev can be called only by accounting
      */
     function mintShares(address _recipient, uint256 _amountOfShares) public {
-        require(msg.sender == getLidoLocator().accounting() || msg.sender == getLidoLocator().vaultHub(), "APP_AUTH_FAILED");
+        _auth(getLidoLocator().accounting());
         _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
@@ -614,12 +614,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @notice Mint shares backed by external ether sources
      * @param _recipient Address to receive the minted shares
      * @param _amountOfShares Amount of shares to mint
-     * @dev Can be called only by accounting (authentication in mintShares method).
+     * @dev Can be called only by VaultHub
      *      NB: Reverts if the the external balance limit is exceeded.
      */
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
         require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
+        _auth(getLidoLocator().vaultHub());
+        _whenNotStopped();
 
         uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_amountOfShares);
         uint256 maxMintableExternalShares = _getMaxMintableExternalShares();
@@ -628,7 +630,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         EXTERNAL_SHARES_POSITION.setStorageUint256(newExternalShares);
 
-        mintShares(_recipient, _amountOfShares);
+        _mintShares(_recipient, _amountOfShares);
+        // emit event after minting shares because we are always having the net new ether under the hood
+        // for vaults we have new locked ether and for fees we have a part of rewards
+        _emitTransferAfterMintingShares(_recipient, _amountOfShares);
 
         emit ExternalSharesMinted(_recipient, _amountOfShares, getPooledEthByShares(_amountOfShares));
     }
