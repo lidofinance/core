@@ -29,26 +29,6 @@ contract BLSHarness is StdUtils {
     function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
         return SSZ.depositMessageSigningRoot(message.deposit, message.withdrawalCredentials);
     }
-
-    function hashToCurve(PrecomputedDepositMessage calldata message) public view {
-        console.log("msgG2");
-        BLS.G2Point memory msgG2 = BLS.hashToCurveG2(depositMessageSigningRoot(message));
-        console.logBytes(abi.encode(msgG2));
-
-        console.log("pubkeyG1");
-        BLS.G1Point memory pubkeyG1 = BLS.decodeG1Point(message.deposit.pubkey, message.depositYComponents.pubkeyY);
-        console.logBytes(abi.encode(pubkeyG1));
-
-        console.log("signatureG2");
-        BLS.G2Point memory signatureG2 = BLS.decodeG2Point(
-            message.deposit.signature,
-            message.depositYComponents.signatureY
-        );
-        console.logBytes(abi.encode(signatureG2));
-
-        console.log("NEGATED_G1_GENERATOR");
-        console.logBytes(abi.encode(BLS.NEGATED_G1_GENERATOR()));
-    }
 }
 
 contract BLSVerifyingKeyTest is Test {
@@ -78,16 +58,6 @@ contract BLSVerifyingKeyTest is Test {
         PrecomputedDepositMessage memory deposit = CORRUPTED_STATIC_DEPOSIT_MESSAGE();
         vm.expectRevert();
         harness.verifyDepositMessage(deposit);
-    }
-
-    function test_hashToCurve() external view {
-        PrecomputedDepositMessage memory message = STATIC_DEPOSIT_MESSAGE();
-        harness.hashToCurve(message);
-
-        console.log("Mainnet message");
-
-        PrecomputedDepositMessage memory _message = STATIC_MAINNET_MESSAGE();
-        harness.hashToCurve(_message);
     }
 
     function STATIC_DEPOSIT_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
