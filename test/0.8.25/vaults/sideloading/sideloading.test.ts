@@ -46,7 +46,8 @@ describe("Sideloading.sol", () => {
     await setBalance(await swapper.getAddress(), ether("1000"));
     adapter = await ethers.deployContract("SwapperAdapter__MockForSideloading", [steth, swapper]);
 
-    const sideloadingImpl = await ethers.deployContract("Sideloading", [steth]);
+    const accounting = certainAddress("accounting");
+    const sideloadingImpl = await ethers.deployContract("Sideloading", [steth, accounting, 100n, 1000n]);
     [sideloading] = await proxify({ impl: sideloadingImpl, admin });
 
     await expect(sideloading.initialize(admin))

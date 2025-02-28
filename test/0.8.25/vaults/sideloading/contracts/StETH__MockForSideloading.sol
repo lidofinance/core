@@ -43,6 +43,10 @@ contract StETH__MockForSideloading is ERC20 {
         return shares;
     }
 
+    function getPooledEthBySharesRoundUp(uint256 shares) external view returns (uint256) {
+        return shares;
+    }
+
     // for simplicity, 1 steth = 1 share
     function getSharesByPooledEth(uint256 pooledEth) external view returns (uint256) {
         return pooledEth;

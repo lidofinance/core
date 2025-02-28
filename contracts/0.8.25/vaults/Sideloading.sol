@@ -55,17 +55,12 @@ contract Sideloading is VaultHub {
      * @notice Constructor.
      * @param _stETH The address of the STETH contract.
      */
-    constructor(IStETH _stETH) VaultHub(_stETH) {}
-
-    /**
-     * @notice Initializes the contract.
-     * @param _admin The address of the admin.
-     */
-    function initialize(address _admin) external initializer {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
-
-        __VaultHub_init(_admin);
-    }
+    constructor(
+        IStETH _stETH,
+        address _accounting,
+        uint256 _connectedVaultsLimit,
+        uint256 _relativeShareLimitBP
+    ) VaultHub(_stETH, _accounting, _connectedVaultsLimit, _relativeShareLimitBP) {}
 
     /**
      * @notice Returns true if the sideloader registry is ignored and any address can be used as a sideloader.
