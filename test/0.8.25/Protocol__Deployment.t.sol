@@ -64,6 +64,9 @@ interface ILido {
             uint256 prevStakeLimit,
             uint256 prevStakeBlockNumber
         );
+
+    function approve(address _spender, uint256 _amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
 }
 
 interface IKernel {
@@ -111,7 +114,7 @@ struct LidoLocatorConfig {
 contract BaseProtocolTest is Test {
     ILido public lidoContract;
     ILidoLocator public lidoLocator;
-    WithdrawalQueue public wq;
+    WithdrawalQueueERC721 public wq;
     IACL public acl;
     SecondOpinionOracle__MockForAccountingFuzzing public secondOpinionOracleMock;
     IKernel private dao;
@@ -274,6 +277,7 @@ contract BaseProtocolTest is Test {
         vm.store(address(wq), keccak256("lido.Versioned.contractVersion"), bytes32(0));
         wq.initialize(rootAccount);
         wq.grantRole(keccak256("RESUME_ROLE"), rootAccount);
+        wq.grantRole(keccak256("FINALIZE_ROLE"), rootAccount);
 
         wq.resume();
 

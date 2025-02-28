@@ -2,18 +2,16 @@
 // for testing purposes only
 pragma solidity ^0.8.0;
 
-import "./Protocol__Deployment.t.sol";
-import "@openzeppelin/contracts-v4.4/utils/StorageSlot.sol";
+import "../../contracts/0.8.9/WithdrawalQueueBase.sol";
+import "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 import "contracts/0.8.9/EIP712StETH.sol";
-import {BaseProtocolTest, ILido} from "./Protocol__Deployment.t.sol";
-import {CommonBase} from "forge-std/Base.sol";
-
 import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
+import {BaseProtocolTest, ILido} from "./Protocol__Deployment.t.sol";
+
+import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
-import {StorageSlot} from "@openzeppelin/contracts-v4.4/utils/StorageSlot.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {console2} from "../../foundry/lib/forge-std/src/console2.sol";
 import {console2} from "forge-std/console2.sol";
 
 uint256 constant ONE_DAY_IN_BLOCKS = 7_200;
@@ -23,32 +21,34 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         address externalSharesRecipient;
         uint256 mintedExternalShares;
         uint256 burnExternalShares;
-        address transferRecipient;
-        uint256 transferAmount;
     }
 
     ILido public lidoContract;
-    WithdrawalQueue public wqContract;
+    WithdrawalQueueERC721 public wqContract;
     address public accounting;
     address public userAccount;
+    address public rootAccount;
 
     BoundaryValues public boundaryValues;
 
     uint256 public maxAmountOfShares;
 
-    mapping(address => uint256) public balances;
     uint256[] public amountsQW;
+    address[] public users;
+    uint256 public constant userCount = 1_000;
 
     constructor(
         ILido _lido,
-        WithdrawalQueue _wqContract,
+        WithdrawalQueueERC721 _wqContract,
         address _accounting,
         address _userAccount,
+        address _rootAccount,
         uint256 _maxAmountOfShares
     ) {
         lidoContract = _lido;
         accounting = _accounting;
         userAccount = _userAccount;
+        rootAccount = _rootAccount;
         maxAmountOfShares = _maxAmountOfShares;
         wqContract = _wqContract;
 
@@ -56,10 +56,15 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         boundaryValues = BoundaryValues({
             externalSharesRecipient: makeAddr("randomRecipient"),
             mintedExternalShares: 0,
-            burnExternalShares: 0,
-            transferRecipient: makeAddr("randomTransferRecipient"),
-            transferAmount: 0
+            burnExternalShares: 0
         });
+
+        for (uint256 i = 0; i <= userCount; i++) {
+            uint256 privateKey = uint256(keccak256(abi.encodePacked(i)));
+            address randomAddr = vm.addr(privateKey);
+
+            users.push(randomAddr);
+        }
     }
 
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
@@ -67,8 +72,6 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         vm.assume(_recipient != address(0));
 
         _amountOfShares = bound(_amountOfShares, 1, maxAmountOfShares);
-        // TODO: We need to make this condition work
-        // _amountOfShares = bound(_amountOfShares, 1, _amountOfShares);
 
         vm.prank(userAccount);
         lidoContract.resumeStaking();
@@ -103,84 +106,155 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         return lidoContract.getTotalShares();
     }
 
-    function submit(address _sender, uint256 _amountETH) external payable returns (bool) {
-        if (_sender == address(0) || _amountETH == 0) {
-            return false;
+    function submit(uint256 _senderId, uint256 _amountETH) external payable returns (bool) {
+        if (_senderId > this.userCount()) {
+            _senderId = bound(_senderId, 0, this.userCount());
         }
 
-        (
-            bool isStakingPaused_,
-            bool isStakingLimitSet,
-            uint256 currentStakeLimit,
-            uint256 maxStakeLimit,
-            uint256 maxStakeLimitGrowthBlocks,
-            uint256 prevStakeLimit,
-            uint256 prevStakeBlockNumber
-        ) = lidoContract.getStakeLimitFullInfo();
+        address sender = users[_senderId];
 
-        if (_amountETH > 1000 ether || _amountETH == 0) {
-            _amountETH = bound(_amountETH, 1, 1000 ether);
-        }
+        _amountETH = bound(_amountETH, 0.0005 ether, 1000 ether);
+        vm.deal(sender, _amountETH);
 
-        balances[_sender] += _amountETH;
-        vm.deal(_sender, _amountETH);
-
-        vm.prank(_sender);
+        vm.prank(sender);
         lidoContract.submit{value: _amountETH}(address(0));
+
         vm.roll(block.number + ONE_DAY_IN_BLOCKS);
         return true;
     }
 
-    function transfer(address _sender, address _recipient, uint256 _amountTokens) external payable returns (bool) {
-        if (
-            _recipient == address(0) ||
-            _sender == address(0) ||
-            _amountTokens == 0 ||
-            _sender == _recipient ||
-            _recipient == address(lidoContract)
-        ) {
+    function getBalanceByUser(address _owner) public returns (uint256) {
+        return lidoContract.balanceOf(_owner);
+    }
+
+    function transfer(uint256 _senderId, uint256 _recipientId, uint256 _amountTokens) external payable returns (bool) {
+        if (_senderId > this.userCount()) {
+            _senderId = bound(_senderId, 0, this.userCount());
+        }
+
+        if (_recipientId > this.userCount()) {
+            _recipientId = bound(_recipientId, 0, this.userCount());
+        }
+
+        if (_recipientId == _senderId) {
             return false;
         }
 
-        _amountTokens = bound(_amountTokens, 1, 1000 ether);
-        if (balances[_sender] == 0) {
-            console2.log("checking_sender_balance");
+        address _sender = users[_senderId];
+        address _recipient = users[_recipientId];
+
+        if (getBalanceByUser(_sender) == 0) {
             vm.prank(_sender);
-            this.submit(_sender, _amountTokens);
-        } else {
-            console2.log("else:", balances[_sender]);
-            console2.log("else:", _sender.balance);
+            this.submit(_senderId, _amountTokens);
         }
 
-        console2.log("sender_balance", _sender.balance);
+        _amountTokens = bound(_amountTokens, 1, getBalanceByUser(_sender));
 
-        _amountTokens = bound(_amountTokens, 1, balances[_sender]);
         vm.prank(_sender);
         lidoContract.transfer(_recipient, _amountTokens);
-        balances[_sender] -= _amountTokens;
-
         vm.roll(block.number + ONE_DAY_IN_BLOCKS);
 
         return true;
     }
 
-    function withdrawStEth(address _owner, uint256 _amountTokens) external payable returns (bool) {
-        if (_owner == address(0) || _amountTokens == 0 || balances[_owner] == 0) {
-            return false;
+    function withdrawStEth(
+        uint256 _ownerId,
+        uint256 _amountTokens,
+        uint256 maxShareRate
+    ) external payable returns (bool) {
+        if (_ownerId > this.userCount()) {
+            _ownerId = bound(_ownerId, 0, this.userCount());
         }
 
-        _amountTokens = bound(_amountTokens, 1, balances[_owner]);
-        vm.prank(_owner);
+        address _owner = users[_ownerId];
+        if (getBalanceByUser(_owner) == 0) {
+            vm.prank(_owner);
+            this.submit(_ownerId, _amountTokens);
+        }
 
-        amountsQW.push(_amountTokens);
-        wqContract.requestWithdrawals(amountsQW, _owner);
-        amountsQW.pop();
+        if (getBalanceByUser(_owner) < wqContract.MIN_STETH_WITHDRAWAL_AMOUNT()) {
+            vm.prank(_owner);
+            this.submit(_ownerId, _amountTokens);
+        }
+
+        uint256 userBalance = getBalanceByUser(_owner);
+
+        vm.prank(_owner);
+        lidoContract.approve(address(wqContract), userBalance);
+        vm.roll(block.number + 1);
+
+        _amountTokens = bound(_amountTokens, wqContract.MIN_STETH_WITHDRAWAL_AMOUNT(), userBalance);
+        if (_amountTokens >= wqContract.MAX_STETH_WITHDRAWAL_AMOUNT()) {
+            while (_amountTokens >= wqContract.MAX_STETH_WITHDRAWAL_AMOUNT()) {
+                amountsQW.push(wqContract.MAX_STETH_WITHDRAWAL_AMOUNT());
+                _amountTokens -= wqContract.MAX_STETH_WITHDRAWAL_AMOUNT();
+            }
+
+            if (_amountTokens > 0 && _amountTokens >= wqContract.MIN_STETH_WITHDRAWAL_AMOUNT()) {
+                amountsQW.push(_amountTokens);
+            }
+        } else {
+            amountsQW.push(_amountTokens);
+        }
+
+        vm.prank(_owner);
+        uint256[] memory requestIds = wqContract.requestWithdrawals(amountsQW, _owner);
+        delete amountsQW;
+
+        vm.roll(block.number + 1_500);
+        vm.warp(block.timestamp + 1 days);
+        this.finalize(maxShareRate, _amountTokens + 10_000 * 1 ether);
+
+        if (wqContract.getLastFinalizedRequestId() > 0) {
+            WithdrawalQueueBase.WithdrawalRequestStatus[] memory requestStatues = wqContract.getWithdrawalStatus(
+                requestIds
+            );
+            for (uint256 i = 0; i < requestIds.length; i++) {
+                if (!requestStatues[i].isClaimed) {
+                    vm.deal(_owner, 1 ether);
+                    vm.prank(_owner);
+                    wqContract.claimWithdrawal(requestIds[i]);
+                }
+            }
+        }
 
         return true;
     }
 
     function getBoundaryValues() public view returns (BoundaryValues memory) {
         return boundaryValues;
+    }
+
+    function finalize(uint256 maxShareRate, uint256 ethBudget) public payable {
+        maxShareRate = bound(maxShareRate, 0.0001 * 10 ** 27, 100 * 10 ** 27);
+
+        uint256[] memory batches = calculateBatches(ethBudget, maxShareRate);
+
+        if (batches.length > 0) {
+            (uint256 eth, ) = wqContract.prefinalize(batches, maxShareRate);
+
+            vm.deal(address(rootAccount), eth);
+            vm.prank(rootAccount);
+            wqContract.finalize{value: eth}(batches[batches.length - 1], maxShareRate);
+        }
+    }
+
+    function calculateBatches(uint256 ethBudget, uint256 maxShareRate) public view returns (uint256[] memory batches) {
+        uint256[36] memory emptyBatches;
+        WithdrawalQueueBase.BatchesCalculationState memory state = WithdrawalQueueBase.BatchesCalculationState(
+            ethBudget * 1 ether,
+            false,
+            emptyBatches,
+            0
+        );
+        while (!state.finished) {
+            state = wqContract.calculateFinalizationBatches(maxShareRate, block.timestamp + 1_000, 3, state);
+        }
+
+        batches = new uint256[](state.batchesLength);
+        for (uint256 i; i < state.batchesLength; ++i) {
+            batches[i] = state.batches[i];
+        }
     }
 }
 
@@ -199,7 +273,6 @@ contract ShareRateTest is BaseProtocolTest {
     address private userAccount = address(0x321);
 
     function setUp() public {
-        keccak256("lido.StETH.totalShares");
         BaseProtocolTest.setUpProtocol(protocolStartBalance, rootAccount, userAccount);
 
         address accountingContract = lidoLocator.accounting();
@@ -210,48 +283,41 @@ contract ShareRateTest is BaseProtocolTest {
         lidoContract.resume();
         vm.stopPrank();
 
-        shareRateHandler = new ShareRateHandler(lidoContract, wq, accountingContract, userAccount, _maxAmountOfShares);
+        shareRateHandler = new ShareRateHandler(
+            lidoContract,
+            wq,
+            accountingContract,
+            userAccount,
+            rootAccount,
+            _maxAmountOfShares
+        );
 
-        bytes4[] memory externalSharesSelectors = new bytes4[](3);
-        // externalSharesSelectors[0] = shareRateHandler.mintExternalShares.selector;
-        // externalSharesSelectors[1] = shareRateHandler.burnExternalShares.selector;
-        externalSharesSelectors[0] = shareRateHandler.submit.selector;
-        externalSharesSelectors[1] = shareRateHandler.transfer.selector;
-        externalSharesSelectors[2] = shareRateHandler.withdrawStEth.selector;
-
-        // TODO: submit - lido
-        // TODO: transfers - steth
-
-        // TODO: withdrawals request - requestWithdrawals - withdrawal queue
-        // TODO: claim - requestWithdrawals - withdrawal queue
+        bytes4[] memory externalSharesSelectors = new bytes4[](5);
+        externalSharesSelectors[0] = shareRateHandler.mintExternalShares.selector;
+        externalSharesSelectors[1] = shareRateHandler.burnExternalShares.selector;
+        externalSharesSelectors[2] = shareRateHandler.submit.selector;
+        externalSharesSelectors[3] = shareRateHandler.transfer.selector;
+        externalSharesSelectors[4] = shareRateHandler.withdrawStEth.selector;
 
         targetContract(address(shareRateHandler));
         targetSelector(FuzzSelector({addr: address(shareRateHandler), selectors: externalSharesSelectors}));
-
-        // bytes4[] memory actionsSelectors = new bytes4[](1);
-        // externalSharesSelectors[0] = shareRateHandler.transfer.selector;
-        // externalSharesSelectors[0] = shareRateHandler.submit.selector;
-
-        // targetSelector(FuzzSelector({addr: address(shareRateHandler), selectors: actionsSelectors}));
 
         // @dev mint 10000 external shares to simulate some shares already minted, so
         //      burnExternalShares will be able to actually burn some shares
         vm.prank(accountingContract);
         lidoContract.mintExternalShares(accountingContract, protocolStartExternalShares);
-        shareRateHandler.submit(makeAddr("randomAdr"), 10 ether);
+        shareRateHandler.submit(0, 10 ether);
 
         vm.roll(block.number + ONE_DAY_IN_BLOCKS);
     }
 
-    function logBoundaryValues() internal view {
+    function logBoundaryValues() public view {
         ShareRateHandler.BoundaryValues memory bounds = shareRateHandler.getBoundaryValues();
 
         console2.log("Boundary Values:");
         console2.log("External shares recipient:", bounds.externalSharesRecipient);
         console2.log("Minted external shares:", bounds.mintedExternalShares);
         console2.log("Burned external shares:", bounds.burnExternalShares);
-        console2.log("transfer recipient:", bounds.transferRecipient);
-        console2.log("transfer amount:", bounds.transferAmount);
     }
 
     /**
@@ -259,14 +325,10 @@ contract ShareRateTest is BaseProtocolTest {
      * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
-     *
-     * TODO: Maybe add an invariant that lido.getExternalShares = startExternalBalance + mintedExternal - burnedExternal?
-     * So we'll know it something is odd inside a math for external shares?
      */
     function invariant_totalShares() public view {
         assertEq(lidoContract.getTotalShares(), shareRateHandler.getTotalShares());
-        // assertEq(true, true);
 
-        // logBoundaryValues();
+        logBoundaryValues();
     }
 }
