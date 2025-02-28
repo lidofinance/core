@@ -43,14 +43,14 @@ library BLS {
     /// @notice PRECOMPILED CONTRACT ADDRESSES
     address constant MOD_EXP = address(0x05);
     // forge
-    address constant BLS12_G2ADD = address(0x0e);
-    address constant BLS12_PAIRING_CHECK = address(0x10);
-    address constant BLS12_MAP_FP2_TO_G2 = address(0x13);
+    address constant BLS12_G2ADD = 0x000000000000000000000000000000000000000E;
+    address constant BLS12_PAIRING_CHECK = 0x0000000000000000000000000000000000000011;
+    address constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000013;
 
     // revm
-    // address constant BLS12_G2ADD = address(0x0d);
-    // address constant BLS12_PAIRING_CHECK = address(0x0f);
-    // address constant BLS12_MAP_FP2_TO_G2 = address(0x11);
+    // address constant BLS12_G2ADD = 0x000000000000000000000000000000000000000B;
+    // address constant BLS12_PAIRING_CHECK = 0x000000000000000000000000000000000000000F;
+    // address constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000011;
 
     // TODO make constant
     function NEGATED_G1_GENERATOR() internal pure returns (G1Point memory) {
@@ -276,8 +276,8 @@ library BLS {
         G1Point[] memory g1Points = new BLS.G1Point[](2);
         G2Point[] memory g2Points = new BLS.G2Point[](2);
 
-        g1Points[0] = pubkeyG1;
-        g1Points[1] = NEGATED_G1_GENERATOR();
+        g1Points[0] = NEGATED_G1_GENERATOR();
+        g1Points[1] = pubkeyG1;
 
         g2Points[0] = msgG2;
         g2Points[1] = signatureG2;

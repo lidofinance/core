@@ -6,17 +6,16 @@ import { ether } from "lib";
 
 import { computeDepositMessageRoot } from "./ssz-utils";
 
-const BLS_TEST_KEY = "18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4";
-
 const STATIC_DEPOSIT = {
   amount: ether("1"),
+  testPrivateKey: "0x18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4",
   withdrawalCredentials: "0xf3d93f9fbc6a229f3b11340b4b52ae53833813efab76e812d1d014163259ef1f",
 };
 
 describe("BLS.sol", () => {
   it("can create a deposit from test key", async () => {
     // deposit message
-    const privateKey = SecretKey.fromHex(BLS_TEST_KEY);
+    const privateKey = SecretKey.fromHex(STATIC_DEPOSIT.testPrivateKey);
     const pubkey = privateKey.toPublicKey();
     const pubkeyCompressed = pubkey.toHex(true);
 
@@ -41,7 +40,8 @@ describe("BLS.sol", () => {
     // second Fp is 48 bytes before first one
     const sigY_c1 = Buffer.from(signature.toBytes(false).slice(96, 96 + 48)).toString("hex");
 
-    console.log({
+    // Mock data for forge test
+    const depositTestObject = {
       pubkey: pubkeyCompressed,
       withdrawalCredentials: withdrawalCredentials,
       amount: amount.toString(),
@@ -53,6 +53,8 @@ describe("BLS.sol", () => {
         c1: sigY_c1,
       },
       messageHex,
-    });
+    };
+
+    expect(depositTestObject).to.not.be.undefined;
   });
 });
