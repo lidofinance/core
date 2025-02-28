@@ -5,22 +5,21 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-// TODO: check why it fails on CI, but works locally
-// e.g. https://github.com/lidofinance/core/actions/runs/12390882454/job/34586841193
-describe.skip("Negative rebase", () => {
+describe("Integration: Negative rebase", () => {
   let ctx: ProtocolContext;
-  let beforeSnapshot: string;
-  let beforeEachSnapshot: string;
   let ethHolder: HardhatEthersSigner;
 
+  let snapshot: string;
+  let originalState: string;
+
   before(async () => {
-    beforeSnapshot = await Snapshot.take();
     ctx = await getProtocolContext();
+
+    snapshot = await Snapshot.take();
 
     [ethHolder] = await ethers.getSigners();
     await setBalance(ethHolder.address, ether("1000000"));
@@ -40,11 +39,11 @@ describe.skip("Negative rebase", () => {
     }
   });
 
-  after(async () => await Snapshot.restore(beforeSnapshot));
+  beforeEach(async () => (originalState = await Snapshot.take()));
 
-  beforeEach(async () => (beforeEachSnapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(originalState));
 
-  afterEach(async () => await Snapshot.restore(beforeEachSnapshot));
+  after(async () => await Snapshot.restore(snapshot)); // Rollback to the initial state pre deployment
 
   const exitedValidatorsCount = async () => {
     const ids = await ctx.contracts.stakingRouter.getStakingModuleIds();
@@ -83,7 +82,9 @@ describe.skip("Negative rebase", () => {
     expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
   });
 
-  it("Should store correctly many negative rebases", async () => {
+  // TODO: check why it fails on CI, but works locally
+  // e.g. https://github.com/lidofinance/core/actions/runs/12390882454/job/34586841193
+  it.skip("Should store correctly many negative rebases", async () => {
     const { locator, oracleReportSanityChecker } = ctx.contracts;
 
     expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);

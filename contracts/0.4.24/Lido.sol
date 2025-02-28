@@ -586,7 +586,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev can be called only by accounting
      */
     function mintShares(address _recipient, uint256 _amountOfShares) public {
-        _auth(getLidoLocator().accounting());
+        require(msg.sender == getLidoLocator().accounting() || msg.sender == getLidoLocator().vaultHub(), "APP_AUTH_FAILED");
         _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
@@ -639,7 +639,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function burnExternalShares(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
-        _auth(getLidoLocator().accounting());
+        _auth(getLidoLocator().vaultHub());
         _whenNotStopped();
 
         uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
@@ -663,7 +663,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function rebalanceExternalEtherToInternal() external payable {
         require(msg.value != 0, "ZERO_VALUE");
-        _auth(getLidoLocator().accounting());
+        _auth(getLidoLocator().vaultHub());
         _whenNotStopped();
 
         uint256 shares = getSharesByPooledEth(msg.value);
