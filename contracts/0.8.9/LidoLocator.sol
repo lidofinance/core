@@ -35,6 +35,7 @@ contract LidoLocator is ILidoLocator {
 
     error ZeroAddress();
 
+    //solhint-disable immutable-vars-naming
     address public immutable accountingOracle;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
@@ -52,6 +53,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable accounting;
     address public immutable wstETH;
     address public immutable vaultHub;
+    //solhint-enable immutable-vars-naming
 
     /**
      * @notice declare service locations
