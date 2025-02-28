@@ -133,6 +133,9 @@ contract BaseProtocolTest is Test {
     address public lidoTreasuryAdr = makeAddr("dummy-lido:treasury");
     address public wstETHAdr = makeAddr("dummy-locator:wstETH");
 
+    uint256 public constant VAULTS_LIMIT = 500;
+    uint256 public constant VAULTS_RELATIVE_SHARE_LIMIT = 10_00;
+
     LimitsList public limitList =
         LimitsList({
             exitedValidatorsPerDayLimit: 9000,
@@ -200,7 +203,7 @@ contract BaseProtocolTest is Test {
         // Add accounting contract with handler to the protocol
         address accountingImpl = deployCode(
             "Accounting.sol:Accounting",
-            abi.encode([address(lidoLocator), lidoProxyAddress])
+            abi.encode(address(lidoLocator), lidoProxyAddress, VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT)
         );
 
         deployCodeTo(

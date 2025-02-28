@@ -49,7 +49,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
-  const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
+  const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
   const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let delegation: Delegation;
@@ -143,7 +143,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
     expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await _stakingVault.depositContract()).to.equal(depositContract);
+    expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
@@ -167,7 +167,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         rebalancers: [curator],
         depositPausers: [curator],
         depositResumers: [curator],
-        exitRequesters: [curator],
+        validatorExitRequesters: [curator],
+        validatorWithdrawalTriggerers: [curator],
         disconnecters: [curator],
         curatorFeeSetters: [curator],
         curatorFeeClaimers: [curator],
@@ -200,6 +201,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await isSoleRoleMember(curator, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
@@ -218,7 +220,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await accounting
       .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFeeBP);
+      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
     expect(await accounting.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
