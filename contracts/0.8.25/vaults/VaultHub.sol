@@ -363,27 +363,27 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Forces validator exit from the beacon chain when vault is unhealthy
     /// @param _vault The address of the vault to exit validators from
     /// @param _pubkeys The public keys of the validators to exit
-    /// @param _refundRecepient The address that will receive the refund for transaction costs
+    /// @param _refundRecipient The address that will receive the refund for transaction costs
     /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
-        address _refundRecepient
+        address _refundRecipient
     ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
-        if (_refundRecepient == address(0)) revert ZeroArgument("_refundRecepient");
+        if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
         _requireUnhealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
 
-        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecepient);
+        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
-        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecepient);
+        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     function _disconnect(address _vault) internal {
@@ -563,7 +563,7 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecepient);
+    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault);
