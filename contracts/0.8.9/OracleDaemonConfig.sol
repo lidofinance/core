@@ -77,7 +77,7 @@ contract OracleDaemonConfig is AccessControlEnumerable {
     error EmptyValue(string key);
     error ValueDoesntExist(string key);
     error ZeroAddress();
-    error ValueIsSame(string key, bytes value);
+    error ValueIsSame(string key, bytes _value);
 
     event ConfigValueSet(string key, bytes value);
     event ConfigValueUpdated(string key, bytes value);
