@@ -66,7 +66,6 @@ describe("VaultHub.sol:forceExit", () => {
 
     const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [
       locator,
-      steth,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);

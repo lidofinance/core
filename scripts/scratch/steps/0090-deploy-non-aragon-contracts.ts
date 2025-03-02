@@ -30,6 +30,7 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+  const lidoLocatorAddress = state[Sk.lidoLocator].proxy.address;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -145,8 +146,7 @@ export async function main() {
   ]);
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
-    locator.address,
-    lidoAddress,
+    lidoLocatorAddress,
     accounting.address,
     vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,

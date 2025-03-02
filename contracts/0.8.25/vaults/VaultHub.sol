@@ -84,13 +84,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _accounting Accounting contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, IStETH _stETH, address _accounting, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
+    constructor(ILidoLocator _locator, address _accounting, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         LIDO_LOCATOR = _locator;
-        STETH = _stETH;
+        STETH = IStETH(_locator.lido());
         ACCOUNTING = _accounting;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;

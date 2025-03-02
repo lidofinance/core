@@ -110,7 +110,6 @@ describe("VaultHub.sol:hub", () => {
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
-      lido,
       ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,

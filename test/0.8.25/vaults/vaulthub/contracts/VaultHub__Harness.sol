@@ -10,10 +10,9 @@ import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 contract VaultHub__Harness is VaultHub {
     constructor(
         address _locator,
-        address _stETH,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) VaultHub(ILidoLocator(_locator), IStETH(_stETH), address(0), _connectedVaultsLimit, _relativeShareLimitBP) {}
+    ) VaultHub(ILidoLocator(_locator), address(0), _connectedVaultsLimit, _relativeShareLimitBP) {}
 
     function mock__calculateVaultsRebase(
         uint256 _postTotalShares,
