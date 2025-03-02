@@ -89,6 +89,7 @@ describe("VaultFactory.sol", () => {
     // Accounting
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
+      steth,
       ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
