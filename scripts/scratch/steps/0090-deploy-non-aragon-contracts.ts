@@ -47,17 +47,7 @@ export async function main() {
   ]);
 
   // Deploy DummyEmptyContract
-  const dummyContract = await deployWithoutProxy(Sk.dummyEmptyContract, "DummyEmptyContract", deployer);
-
-  // Deploy LidoLocator with dummy implementation
-  const locator = await deployBehindOssifiableProxy(
-    Sk.lidoLocator,
-    "DummyEmptyContract",
-    proxyContractsOwner,
-    deployer,
-    [],
-    dummyContract.address,
-  );
+  const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
   // Deploy EIP712StETH
   await deployWithoutProxy(Sk.eip712StETH, "EIP712StETH", deployer, [lidoAddress]);
@@ -140,12 +130,12 @@ export async function main() {
 
   // Deploy Accounting
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
-    locator.address,
+    locatorAddress,
     lidoAddress,
   ]);
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
-    locator.address,
+    locatorAddress,
     accounting.address,
     vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,
@@ -157,7 +147,7 @@ export async function main() {
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+    [locatorAddress, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
   // Deploy HashConsensus for AccountingOracle
@@ -177,7 +167,7 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locatorAddress],
   );
 
   // Deploy HashConsensus for ValidatorsExitBusOracle
@@ -194,7 +184,7 @@ export async function main() {
   // Deploy Burner
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
-    locator.address,
+    locatorAddress,
     lidoAddress,
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,
@@ -220,5 +210,5 @@ export async function main() {
     wstETH.address,
     vaultHub.address,
   ];
-  await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
+  await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locatorAddress, proxyContractsOwner, [locatorConfig]);
 }
