@@ -17,7 +17,6 @@ import {
   impersonate,
   log,
   ONE_GWEI,
-  trace,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -388,8 +387,7 @@ export const handleOracleReport = async (
     });
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
-
-    const handleReportTx = await accounting.connect(accountingOracleAccount).handleOracleReport({
+    await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
       timeElapsed, // 1 day
       clValidators: beaconValidators,
@@ -401,8 +399,6 @@ export const handleOracleReport = async (
       vaultValues,
       inOutDeltas,
     });
-
-    await trace("accounting.handleOracleReport", handleReportTx);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
@@ -596,9 +592,6 @@ const submitReport = async (
   log.debug("Pushed oracle report for reached consensus", data);
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
-
-  await trace("accountingOracle.submitReportData", reportTx);
-
   log.debug("Pushed oracle report main data", {
     "Ref slot": refSlot,
     "Consensus version": consensusVersion,
@@ -608,10 +601,8 @@ const submitReport = async (
   let extraDataTx: ContractTransactionResponse;
   if (extraDataFormat) {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataList(extraDataList);
-    await trace("accountingOracle.submitReportExtraDataList", extraDataTx);
   } else {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataEmpty();
-    await trace("accountingOracle.submitReportExtraDataEmpty", extraDataTx);
   }
 
   const state = await accountingOracle.getProcessingState();
@@ -683,12 +674,10 @@ const reachConsensus = async (
       submitter = member;
     }
 
-    const tx = await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
-    await trace("hashConsensus.submitReport", tx);
+    await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();
-
   expect(consensusReport).to.equal(reportHash, "Consensus report hash is incorrect");
 
   return submitter as HardhatEthersSigner;
@@ -777,8 +766,7 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log.warning(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    const addTx = await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
-    await trace("hashConsensus.addMember", addTx);
+    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
 
     addresses.push(address);
 
@@ -813,9 +801,7 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
     const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
 
     const agentSigner = await ctx.getSigner("agent");
-
-    const tx = await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-    await trace("hashConsensus.updateInitialEpoch", tx);
+    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
 
     log.success("Hash consensus epoch initialized");
   }

@@ -2,16 +2,22 @@ import { existsSync, readFileSync } from "node:fs";
 
 /* Determines the forking configuration for Hardhat */
 export function getHardhatForkingConfig() {
-  const forkingUrl = process.env.HARDHAT_FORKING_URL || "";
+  const mode = process.env.MODE || "scratch";
 
-  if (!forkingUrl) {
-    // Scratch deploy, need to disable CSM
-    process.env.INTEGRATION_ON_SCRATCH = "on";
-    process.env.INTEGRATION_WITH_CSM = "off";
-    return undefined;
+  switch (mode) {
+    case "scratch":
+      process.env.INTEGRATION_WITH_CSM = "off";
+      return undefined;
+
+    case "forking":
+      if (!process.env.FORK_RPC_URL) {
+        throw new Error("FORK_RPC_URL must be set when MODE=forking");
+      }
+      return { url: process.env.FORK_RPC_URL };
+
+    default:
+      throw new Error("MODE must be either 'scratch' or 'forking'");
   }
-
-  return { url: forkingUrl };
 }
 
 // TODO: this plaintext accounts.json private keys management is a subject

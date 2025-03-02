@@ -28,7 +28,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(dashboardImpl, immutableArgs)));
 
-        dashboard.initialize(address(this));
+        dashboard.initialize(address(this), 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.FUND_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.WITHDRAW_ROLE(), msg.sender);
@@ -38,6 +38,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.REQUEST_VALIDATOR_EXIT_ROLE(), msg.sender);
+        dashboard.grantRole(dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.VOLUNTARY_DISCONNECT_ROLE(), msg.sender);
 
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));

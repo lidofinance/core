@@ -20,9 +20,7 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// @notice contract is responsible for handling accounting oracle reports
 /// calculating all the state changes that is required to apply the report
 /// and distributing calculated values to relevant parts of the protocol
-/// @dev accounting is inherited from VaultHub contract to reduce gas costs and
-/// simplify the auth flows, but they are mostly independent
-contract Accounting is VaultHub {
+contract Accounting {
     struct Contracts {
         address accountingOracleAddress;
         IOracleReportSanityChecker oracleReportSanityChecker;
@@ -30,6 +28,7 @@ contract Accounting is VaultHub {
         IWithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         IStakingRouter stakingRouter;
+        VaultHub vaultHub;
     }
 
     struct PreReportState {
@@ -83,20 +82,24 @@ contract Accounting is VaultHub {
         uint256 precisionPoints;
     }
 
+    error NotAuthorized(string operation, address addr);
+
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
+    /// @notice Lido Locator contract
+    ILidoLocator public immutable LIDO_LOCATOR;
     /// @notice Lido contract
     ILido public immutable LIDO;
 
-    constructor(ILidoLocator _lidoLocator) VaultHub(_lidoLocator) {
-        LIDO = ILido(_lidoLocator.lido());
-    }
-
-    function initialize(address _admin) external initializer {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
-
-        __VaultHub_init(_admin);
+    /// @param _lidoLocator Lido Locator contract
+    /// @param _lido Lido contract
+    constructor(
+        ILidoLocator _lidoLocator,
+        ILido _lido
+    ) {
+        LIDO_LOCATOR = _lidoLocator;
+        LIDO = _lido;
     }
 
     /// @notice calculates all the state changes that is required to apply the report
@@ -220,17 +223,14 @@ contract Accounting is VaultHub {
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
-        (
-            update.vaultsLockedEther,
-            update.vaultsTreasuryFeeShares,
-            update.totalVaultsTreasuryFeeShares
-        ) = _calculateVaultsRebase(
-            update.postTotalShares,
-            update.postTotalPooledEther,
-            _pre.totalShares,
-            _pre.totalPooledEther,
-            update.sharesToMintAsFees
-        );
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+            _contracts.vaultHub.calculateVaultsRebase(
+                update.postTotalShares,
+                update.postTotalPooledEther,
+                _pre.totalShares,
+                _pre.totalPooledEther,
+                update.sharesToMintAsFees
+            );
 
         update.postTotalPooledEther +=
             (update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther) /
@@ -329,7 +329,8 @@ contract Accounting is VaultHub {
             _update.etherToFinalizeWQ
         );
 
-        _updateVaults(
+        // TODO: Remove this once decide on vaults reporting
+        _contracts.vaultHub.updateVaults(
             _report.vaultValues,
             _report.inOutDeltas,
             _update.vaultsLockedEther,
@@ -337,7 +338,7 @@ contract Accounting is VaultHub {
         );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {
-            STETH.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
@@ -457,7 +458,8 @@ contract Accounting is VaultHub {
             address burner,
             address withdrawalQueue,
             address postTokenRebaseReceiver,
-            address stakingRouter
+            address stakingRouter,
+            address vaultHub
         ) = LIDO_LOCATOR.oracleReportComponents();
 
         return
@@ -467,7 +469,8 @@ contract Accounting is VaultHub {
                 IBurner(burner),
                 IWithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                IStakingRouter(stakingRouter)
+                IStakingRouter(stakingRouter),
+                VaultHub(vaultHub)
             );
     }
 

@@ -6,16 +6,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, impersonate, log, trace, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
 import {
+  getProtocolContext,
   getReportTimeElapsed,
   norEnsureOperators,
   OracleReportParams,
+  ProtocolContext,
   report,
   sdvtEnsureOperators,
-} from "lib/protocol/helpers";
-import { ether } from "lib/units";
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
@@ -49,7 +49,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
-  const reserveRatioThreshold = 8_00n; // 8% of reserve ratio
+  const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
   const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let delegation: Delegation;
@@ -122,11 +122,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
-    const depositNorTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await trace("lido.deposit", depositNorTx);
-
-    const depositSdvtTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-    await trace("lido.deposit", depositSdvtTx);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     const reportData: Partial<OracleReportParams> = {
       clDiff: LIDO_DEPOSIT,
@@ -145,8 +142,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
     const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
 
-    expect(await _stakingVault.vaultHub()).to.equal(ctx.contracts.accounting.address);
-    expect(await _stakingVault.depositContract()).to.equal(depositContract);
+    expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
@@ -159,26 +155,29 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
         defaultAdmin: owner,
-        funder: curator,
-        withdrawer: curator,
-        minter: curator,
-        burner: curator,
-        curator,
-        rebalancer: curator,
-        depositPauser: curator,
-        depositResumer: curator,
-        exitRequester: curator,
-        disconnecter: curator,
         nodeOperatorManager: nodeOperator,
-        nodeOperatorFeeClaimer: nodeOperator,
         assetRecoverer: curator,
         curatorFeeBP: VAULT_OWNER_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+        confirmExpiry: days(7n),
+        funders: [curator],
+        withdrawers: [curator],
+        minters: [curator],
+        burners: [curator],
+        rebalancers: [curator],
+        depositPausers: [curator],
+        depositResumers: [curator],
+        validatorExitRequesters: [curator],
+        validatorWithdrawalTriggerers: [curator],
+        disconnecters: [curator],
+        curatorFeeSetters: [curator],
+        curatorFeeClaimers: [curator],
+        nodeOperatorFeeClaimers: [nodeOperator],
       },
       "0x",
     );
 
-    const createVaultTxReceipt = await trace<ContractTransactionReceipt>("vaultsFactory.createVault", deployTx);
+    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
     expect(createVaultEvents.length).to.equal(1n);
@@ -188,13 +187,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await isSoleRoleMember(owner, await delegation.DEFAULT_ADMIN_ROLE())).to.be.true;
 
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_SET_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_CLAIM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
 
-    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIMER_ROLE())).to.be.true;
-
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.MINT_ROLE())).to.be.true;
@@ -203,11 +201,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await isSoleRoleMember(curator, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
-    const { lido, accounting } = ctx.contracts;
+    const { lido, vaultHub } = ctx.contracts;
 
     expect(await stakingVault.locked()).to.equal(0); // no ETH locked yet
 
@@ -219,17 +218,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const agentSigner = await ctx.getSigner("agent");
 
-    await accounting
+    await vaultHub
       .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFeeBP);
+      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
-    expect(await accounting.vaultsCount()).to.equal(1n);
+    expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow Staker to fund vault via delegation contract", async () => {
-    const depositTx = await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
-    await trace("delegation.fund", depositTx);
+    await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
@@ -259,9 +257,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       });
     }
 
-    const topUpTx = await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
-
-    await trace("stakingVault.depositToBeaconChain", topUpTx);
+    await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
@@ -272,7 +268,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Token Master to mint max stETH", async () => {
-    const { accounting, lido } = ctx.contracts;
+    const { vaultHub, lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -288,11 +284,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Validate minting with the cap
     const mintOverLimitTx = delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares + 1n);
     await expect(mintOverLimitTx)
-      .to.be.revertedWithCustomError(accounting, "InsufficientValuationToMint")
+      .to.be.revertedWithCustomError(vaultHub, "InsufficientValuationToMint")
       .withArgs(stakingVault, stakingVault.valuation());
 
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
-    const mintTxReceipt = await trace<ContractTransactionReceipt>("delegation.mint", mintTx);
+    const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
     expect(mintEvents.length).to.equal(1n);
@@ -351,10 +347,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
     const claimPerformanceFeesTx = await delegation.connect(nodeOperator).claimNodeOperatorFee(nodeOperator);
-    const claimPerformanceFeesTxReceipt = await trace<ContractTransactionReceipt>(
-      "delegation.claimNodeOperatorFee",
-      claimPerformanceFeesTx,
-    );
+    const claimPerformanceFeesTxReceipt = (await claimPerformanceFeesTx.wait()) as ContractTransactionReceipt;
 
     const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);
     const gasFee = claimPerformanceFeesTxReceipt.gasPrice * claimPerformanceFeesTxReceipt.cumulativeGasUsed;
@@ -399,7 +392,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const managerBalanceBefore = await ethers.provider.getBalance(curator);
 
     const claimEthTx = await delegation.connect(curator).claimCuratorFee(curator);
-    const { gasUsed, gasPrice } = await trace("delegation.claimCuratorFee", claimEthTx);
+    const { gasUsed, gasPrice } = (await claimEthTx.wait()) as ContractTransactionReceipt;
 
     const managerBalanceAfter = await ethers.provider.getBalance(curator);
     const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
@@ -419,13 +412,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { lido } = ctx.contracts;
 
     // Token master can approve the vault to burn the shares
-    const approveVaultTx = await lido
-      .connect(curator)
-      .approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
-    await trace("lido.approve", approveVaultTx);
-
-    const burnTx = await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
-    await trace("delegation.burn", burnTx);
+    await lido.connect(curator).approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
+    await delegation.connect(curator).burnShares(stakingVaultMaxMintingShares);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
@@ -437,12 +425,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       inOutDeltas: [VAULT_DEPOSIT],
     } as OracleReportParams;
 
-    const { reportTx } = (await report(ctx, params)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    await trace("report", reportTx);
+    await report(ctx, params);
 
     const lockedOnVault = await stakingVault.locked();
     expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
@@ -451,20 +434,19 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
-    const { accounting, lido } = ctx.contracts;
+    const { vaultHub, lido } = ctx.contracts;
 
-    const socket = await accounting["vaultSocket(address)"](stakingVaultAddress);
+    const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
     const sharesMinted = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    const rebalanceTx = await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
-    await trace("delegation.rebalanceVault", rebalanceTx);
+    await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
 
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
     const disconnectTx = await delegation.connect(curator).voluntaryDisconnect();
-    const disconnectTxReceipt = await trace<ContractTransactionReceipt>("delegation.voluntaryDisconnect", disconnectTx);
+    const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;
 
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
     expect(disconnectEvents.length).to.equal(1n);

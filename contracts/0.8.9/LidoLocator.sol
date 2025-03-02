@@ -31,10 +31,12 @@ contract LidoLocator is ILidoLocator {
         address accounting;
         address predepositGuarantee;
         address wstETH;
+        address vaultHub;
     }
 
     error ZeroAddress();
 
+    //solhint-disable immutable-vars-naming
     address public immutable accountingOracle;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
@@ -52,6 +54,8 @@ contract LidoLocator is ILidoLocator {
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
+    address public immutable vaultHub;
+    //solhint-enable immutable-vars-naming
 
     /**
      * @notice declare service locations
@@ -76,20 +80,30 @@ contract LidoLocator is ILidoLocator {
         accounting = _assertNonZero(_config.accounting);
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);
+        vaultHub = _assertNonZero(_config.vaultHub);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
         return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponents() external view returns (address, address, address, address, address, address) {
+    function oracleReportComponents() external view returns(
+        address,
+        address,
+        address,
+        address,
+        address,
+        address,
+        address
+    ) {
         return (
             accountingOracle,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
             postTokenRebaseReceiver,
-            stakingRouter
+            stakingRouter,
+            vaultHub
         );
     }
 
