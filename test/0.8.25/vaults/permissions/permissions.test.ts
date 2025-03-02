@@ -80,7 +80,11 @@ describe("Permissions", () => {
     permissionsImpl = await ethers.deployContract("Permissions__Harness");
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
-    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl]);
+    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [
+      beacon,
+      permissionsImpl,
+      depositContract,
+    ]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
     const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions(

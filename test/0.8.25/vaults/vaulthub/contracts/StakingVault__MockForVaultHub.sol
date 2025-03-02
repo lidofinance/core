@@ -9,7 +9,7 @@ contract StakingVault__MockForVaultHub {
 
     address public owner;
     address public nodeOperator;
-
+    address public depositGuardian;
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
@@ -19,9 +19,10 @@ contract StakingVault__MockForVaultHub {
         depositContract = _depositContract;
     }
 
-    function initialize(address _owner, address _nodeOperator, bytes calldata) external {
+    function initialize(address _owner, address _nodeOperator, address _depositGuardian, bytes calldata) external {
         owner = _owner;
         nodeOperator = _nodeOperator;
+        depositGuardian = _depositGuardian;
     }
 
     function lock(uint256 amount) external {
@@ -54,6 +55,10 @@ contract StakingVault__MockForVaultHub {
         $valuation = _valuation;
         $inOutDelta = _inOutDelta;
         $locked = _locked;
+    }
+
+    function depositor() external view returns (address) {
+        return depositGuardian;
     }
 
     function triggerValidatorWithdrawal(

@@ -43,6 +43,7 @@ export async function deployWithdrawalsPreDeployedMock(
 export async function deployStakingVaultBehindBeaconProxy(
   vaultOwner: HardhatEthersSigner,
   operator: HardhatEthersSigner,
+  depositor: HardhatEthersSigner,
 ): Promise<DeployedStakingVault> {
   // deploying implementation
   const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
@@ -59,7 +60,7 @@ export async function deployStakingVaultBehindBeaconProxy(
 
   // deploying beacon proxy
   const vaultCreation = await vaultFactory_
-    .createVault(await vaultOwner.getAddress(), await operator.getAddress(), await depositContract_.getAddress())
+    .createVault(await vaultOwner.getAddress(), await operator.getAddress(), await depositor.getAddress())
     .then((tx) => tx.wait());
   if (!vaultCreation) throw new Error("Vault creation failed");
   const events = findEvents(vaultCreation, "VaultCreated");
@@ -70,6 +71,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, vaultOwner);
   expect(await stakingVault_.owner()).to.equal(await vaultOwner.getAddress());
   expect(await stakingVault_.nodeOperator()).to.equal(await operator.getAddress());
+  expect(await stakingVault_.depositor()).to.equal(await depositor.getAddress());
 
   return {
     depositContract: depositContract_,

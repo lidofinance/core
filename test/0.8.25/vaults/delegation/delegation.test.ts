@@ -102,7 +102,11 @@ describe("Delegation.sol", () => {
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    factory = await ethers.deployContract("VaultFactory", [
+      beacon.getAddress(),
+      delegationImpl.getAddress(),
+      depositContract.getAddress(),
+    ]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);

@@ -9,6 +9,7 @@ import {
   DepositContract__MockForVaultHub,
   Lido,
   LidoLocator,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
@@ -37,6 +38,7 @@ describe("VaultHub.sol:hub", () => {
   let stranger: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
 
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
   let depositContract: DepositContract__MockForVaultHub;
@@ -50,7 +52,7 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(await user.getAddress(), await user.getAddress(), await depositContract.getAddress())
+      .createVault(await user.getAddress(), await user.getAddress(), await locator.predepositGuarantee())
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -88,6 +90,12 @@ describe("VaultHub.sol:hub", () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
+
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
@@ -101,7 +109,7 @@ describe("VaultHub.sol:hub", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
-      lido,
+      locator,
       ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
@@ -118,11 +126,11 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
-      await depositContract.getAddress(),
+      await locator.predepositGuarantee(),
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);

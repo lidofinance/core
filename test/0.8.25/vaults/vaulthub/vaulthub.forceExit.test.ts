@@ -5,7 +5,8 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DepositContract__MockForVaultHub,
+  LidoLocator,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
   VaultFactory__MockForVaultHub,
@@ -16,6 +17,7 @@ import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
@@ -38,7 +40,8 @@ describe("VaultHub.sol:forceExit", () => {
   let vaultFactory: VaultFactory__MockForVaultHub;
   let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
-  let depositContract: DepositContract__MockForVaultHub;
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let locator: LidoLocator;
 
   let vaultAddress: string;
   let vaultHubAddress: string;
@@ -51,10 +54,18 @@ describe("VaultHub.sol:forceExit", () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
-    depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
+    locator = await deployLidoLocator({
+      lido: steth,
+      predepositGuarantee: predepositGuarantee,
+    });
 
     const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [
-      steth,
+      locator,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
@@ -72,13 +83,13 @@ describe("VaultHub.sol:forceExit", () => {
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
-      await depositContract.getAddress(),
+      await locator.predepositGuarantee(),
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
 
     const vaultCreationTx = (await vaultFactory
-      .createVault(user, user, await depositContract.getAddress())
+      .createVault(user, user, await locator.predepositGuarantee())
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -183,7 +194,7 @@ describe("VaultHub.sol:forceExit", () => {
     // https://github.com/lidofinance/core/pull/933#discussion_r1954876831
     it("works for a synthetic example", async () => {
       const vaultCreationTx = (await vaultFactory
-        .createVault(user, user, await depositContract.getAddress())
+        .createVault(user, user, await locator.predepositGuarantee())
         .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
       const events = findEvents(vaultCreationTx, "VaultCreated");

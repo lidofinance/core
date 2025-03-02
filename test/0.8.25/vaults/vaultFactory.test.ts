@@ -10,6 +10,7 @@ import {
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   OssifiableProxy,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
@@ -51,6 +52,8 @@ describe("VaultFactory.sol", () => {
 
   let locator: LidoLocator;
 
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+
   let vaultBeaconProxy: BeaconProxy;
   let vaultBeaconProxyCode: string;
 
@@ -68,16 +71,24 @@ describe("VaultFactory.sol", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
+    //predeposit guarantee
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
+
     locator = await deployLidoLocator({
       lido: steth,
       wstETH: wsteth,
+      predepositGuarantee: predepositGuarantee,
     });
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
     vaultHubImpl = await ethers.deployContract("VaultHub", [
-      steth,
+      locator,
       ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
@@ -99,7 +110,9 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, predepositGuarantee], {
+      from: deployer,
+    });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -107,7 +120,7 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, depositContract, "0x")).to.revertedWithCustomError(
+    await expect(implOld.initialize(stranger, operator, vaultOwner1, "0x")).to.revertedWithCustomError(
       implOld,
       "InvalidInitialization",
     );
@@ -152,15 +165,23 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth, predepositGuarantee], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
 
     it("reverts if `_delegation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress], { from: deployer }))
+      await expect(
+        ethers.deployContract("VaultFactory", [beacon, ZeroAddress, predepositGuarantee], { from: deployer }),
+      )
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_delegation");
+    });
+
+    it("reverts if `_predeposit_guarantee` is zero address", async () => {
+      await expect(ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+        .withArgs("_predeposit_guarantee");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
