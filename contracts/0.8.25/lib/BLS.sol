@@ -54,7 +54,8 @@ library BLS {
     uint256 constant FP_NO_SIGN_BIT_MASK = uint256(0x01fffffffffffffffffffffffffffffff);
 
     /// @notice PRECOMPILED CONTRACT ADDRESSES
-    address constant MOD_EXP = address(0x05);
+    address constant SHA256 = 0x0000000000000000000000000000000000000002;
+    address constant MOD_EXP = 0x0000000000000000000000000000000000000005;
 
     ///  forge
     // MUL is deprecated in actual EIP in favor of MSM trivial case
@@ -220,122 +221,102 @@ library BLS {
         return abi.decode(output, (G2Point));
     }
 
-    function hashToFieldFp2(bytes32 message) internal view returns (Fp2[2] memory) {
-        // 1. len_in_bytes = count * m * L
-        // so always 2 * 2 * 64 = 256
-        // 2. uniform_bytes = expand_message(msg, DST, len_in_bytes)
-        bytes32[] memory pseudoRandomBytes = expandMsgXmd(message);
-        Fp2[2] memory u;
-        // No loop here saves 800 gas hardcoding offset an additional 300
-        // 3. for i in (0, ..., count - 1):
-        // 4.   for j in (0, ..., m - 1):
-        // 5.     elm_offset = L * (j + i * m)
-        // 6.     tv = substr(uniform_bytes, elm_offset, HTF_L)
-        // uint8 HTF_L = 64;
-        // bytes memory tv = new bytes(64);
-        // 7.     e_j = OS2IP(tv) mod p
-        // 8.   u_i = (e_0, ..., e_(m - 1))
-        // tv = bytes.concat(pseudo_random_bytes[0], pseudo_random_bytes[1]);
-        u[0].c0 = modfield(pseudoRandomBytes[0], pseudoRandomBytes[1]);
-        u[0].c1 = modfield(pseudoRandomBytes[2], pseudoRandomBytes[3]);
-        u[1].c0 = modfield(pseudoRandomBytes[4], pseudoRandomBytes[5]);
-        u[1].c1 = modfield(pseudoRandomBytes[6], pseudoRandomBytes[7]);
-        // 9. return (u_0, ..., u_(count - 1))
-        return u;
+    // solady struct is used to avoid memory corruption
+    // TODO: switch to 100% solady lib methods
+    struct _G2Point {
+        bytes32 x_c0_a;
+        bytes32 x_c0_b;
+        bytes32 x_c1_a;
+        bytes32 x_c1_b;
+        bytes32 y_c0_a;
+        bytes32 y_c0_b;
+        bytes32 y_c1_a;
+        bytes32 y_c1_b;
     }
 
-    // passing two bytes32 instead of bytes memory saves approx 700 gas per call
-    // Computes the mod against the bls12-381 field modulus
-    function modfield(bytes32 _b1, bytes32 _b2) internal view returns (Fp memory r) {
-        (bool success, bytes memory output) = MOD_EXP.staticcall(
-            abi.encode(
-                // arg[0] = base.length
-                0x40,
-                // arg[1] = exp.length
-                0x20,
-                // arg[2] = mod.length
-                0x40,
-                // arg[3] = base.bits
-                // places the first 32 bytes of _b1 and the last 32 bytes of _b2
-                _b1,
-                _b2,
-                // arg[4] = exp
-                // exponent always 1
-                1,
-                // arg[5] = mod
-                // this field_modulus as hex 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
-                // we add the 0 prefix so that the result will be exactly 64 bytes
-                // saves 300 gas per call instead of sending it along every time
-                // places the first 32 bytes and the last 32 bytes of the field modulus
-                0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7,
-                0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-            )
-        );
-        if (!success) {
-            revert ModExpFailed();
+    // Solady hashToG2 modified to accept bytes32 instead of bytes
+    function hashToG2(bytes32 message) internal view returns (G2Point memory) {
+        uint256[8] memory result;
+        assembly ("memory-safe") {
+            function dstPrime(o_, i_) -> _o {
+                mstore8(o_, i_) // 1.
+                mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // 32.
+                mstore(add(o_, 0x21), "SWU_RO_POP_\x2b") // 12.
+                _o := add(0x2d, o_)
+            }
+
+            function sha2(data_, n_) -> _h {
+                if iszero(and(eq(returndatasize(), 0x20), staticcall(gas(), SHA256, data_, n_, 0x00, 0x20))) {
+                    revert(calldatasize(), 0x00)
+                }
+                _h := mload(0x00)
+            }
+
+            function modfield(s_, b_) {
+                mcopy(add(s_, 0x60), b_, 0x40)
+                if iszero(and(eq(returndatasize(), 0x40), staticcall(gas(), MOD_EXP, s_, 0x100, b_, 0x40))) {
+                    revert(calldatasize(), 0x00)
+                }
+            }
+
+            function mapToG2(s_, r_) {
+                if iszero(
+                    and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_MAP_FP2_TO_G2, s_, 0x80, r_, 0x100))
+                ) {
+                    mstore(0x00, 0x89083b91) // `MapFp2ToG2Failed()`.
+                    revert(0x1c, 0x04)
+                }
+            }
+
+            let b := mload(0x40)
+            let s := add(b, 0x100)
+            mstore(add(s, 0x40), message)
+            let o := add(add(s, 0x40), 0x20)
+            mstore(o, shl(240, 256))
+            let b0 := sha2(s, sub(dstPrime(add(0x02, o), 0), s))
+            mstore(0x20, b0)
+            mstore(s, b0)
+            mstore(b, sha2(s, sub(dstPrime(add(0x20, s), 1), s)))
+            let j := b
+            for {
+                let i := 2
+            } 1 {
+
+            } {
+                mstore(s, xor(b0, mload(j)))
+                j := add(j, 0x20)
+                mstore(j, sha2(s, sub(dstPrime(add(0x20, s), i), s)))
+                i := add(i, 1)
+                if eq(i, 9) {
+                    break
+                }
+            }
+
+            mstore(add(s, 0x00), 0x40)
+            mstore(add(s, 0x20), 0x20)
+            mstore(add(s, 0x40), 0x40)
+            mstore(add(s, 0xa0), 1)
+            mstore(add(s, 0xc0), 0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7)
+            mstore(add(s, 0xe0), 0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab)
+            modfield(s, add(b, 0x00))
+            modfield(s, add(b, 0x40))
+            modfield(s, add(b, 0x80))
+            modfield(s, add(b, 0xc0))
+
+            mapToG2(b, result)
+            mapToG2(add(0x80, b), add(0x100, result))
+
+            if iszero(and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_G2ADD, result, 0x200, result, 0x100))) {
+                mstore(0x00, 0xc55e5e33) // `G2AddFailed()`.
+                revert(0x1c, 0x04)
+            }
         }
-        return abi.decode(output, (Fp));
-    }
 
-    function hashToCurveG2(bytes32 message) internal view returns (G2Point memory) {
-        // 1. u = hash_to_field(msg, 2)
-        Fp2[2] memory u = hashToFieldFp2(message);
-        // 2. Q0 = map_to_curve(u[0])
-        G2Point memory q0 = mapFp2ToG2(u[0]);
-        // 3. Q1 = map_to_curve(u[1])
-        G2Point memory q1 = mapFp2ToG2(u[1]);
-        // 4. R = Q0 + Q1
-
-        // G2ADD address is 0x0e
-        (bool success, bytes memory output) = BLS12_G2ADD.staticcall(abi.encode(q0, q1));
-        if (!success) {
-            revert BLSG2AddFailed();
-        }
-        return abi.decode(output, (G2Point));
-    }
-
-    /// @notice Computes a field point from a message
-    /// @dev Follows https://datatracker.ietf.org/doc/html/rfc9380#section-5.3
-    /// @dev bytes32[] because len_in_bytes is always a multiple of 32 in our case even 128
-    /// @param message byte32 to be hashed
-    /// @return A field point
-    function expandMsgXmd(bytes32 message) internal pure returns (bytes32[] memory) {
-        // 1.  ell = ceil(len_in_bytes / b_in_bytes)
-        // b_in_bytes seems to be 32 for sha256
-        // ceil the division
-        uint256 ell = (MSG_LENGTH - 1) / 32 + 1;
-
-        bytes memory dstPrime = bytes.concat(DST, bytes1(uint8(DST.length)));
-
-        // 4.  Z_pad = I2OSP(0, s_in_bytes)
-        // this should be sha256 blocksize so 64 bytes
-        bytes memory zPad = new bytes(64);
-
-        // 5.  l_i_b_str = I2OSP(len_in_bytes, 2)
-        // length in byte string?
-        bytes2 libStr = bytes2(MSG_LENGTH);
-
-        // 6.  msg_prime = Z_pad || msg || l_i_b_str || I2OSP(0, 1) || DST_prime
-        bytes memory msgPrime = bytes.concat(zPad, message, libStr, hex"00", dstPrime);
-
-        // 7.  b_0 = H(msg_prime)
-        bytes32 b_0 = sha256(msgPrime);
-
-        bytes32[] memory b = new bytes32[](ell);
-
-        // 8.  b_1 = H(b_0 || I2OSP(1, 1) || DST_prime)
-        b[0] = sha256(bytes.concat(b_0, hex"01", dstPrime));
-
-        // 9.  for i in (2, ..., ell):
-        for (uint8 i = 2; i <= ell; i++) {
-            // 10.    b_i = H(strxor(b_0, b_(i - 1)) || I2OSP(i, 1) || DST_prime)
-            bytes memory tmp = abi.encodePacked(b_0 ^ b[i - 2], i, dstPrime);
-            b[i - 1] = sha256(tmp);
-        }
-        // 11. uniform_bytes = b_1 || ... || b_ell
-        // 12. return substr(uniform_bytes, 0, len_in_bytes)
-        // Here we don't need the uniform_bytes because b is already properly formed
-        return b;
+        return
+            G2Point(
+                Fp2(Fp(result[0], result[1]), Fp(result[2], result[3])),
+                Fp2(Fp(result[4], result[5]), Fp(result[6], result[7]))
+            );
     }
 
     function verifyDepositMessage(
@@ -343,14 +324,17 @@ library BLS {
         DepositYComponents calldata depositY,
         bytes32 withdrawalCredentials
     ) internal view {
-        bytes32 message = SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials);
-        G2Point memory msgG2 = hashToCurveG2(message);
+        bytes32 root = SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials);
+        G2Point memory msgG2 = hashToG2(root);
         // might be exsessive, need to check
         validateG2Point(msgG2);
 
+        // can be optimized by correctly copying calldata bytes to precompile input
+        // pubkeyG1 = ( 16byte pad | flag_mask & deposit.pubkey | depositY.pubkeyY)
         G1Point memory pubkeyG1 = decodeG1Point(deposit.pubkey, depositY.pubkeyY);
         validateG1Point(pubkeyG1);
 
+        // signatureG2 is tricker as signature has Fp
         G2Point memory signatureG2 = decodeG2Point(deposit.signature, depositY.signatureY);
         validateG2Point(signatureG2);
 
