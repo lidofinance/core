@@ -12,7 +12,6 @@ interface IWithdrawalVault {
     function getWithdrawalRequestFee() external view returns (uint256);
 }
 
-
 contract ValidatorsExitBus is AccessControlEnumerable {
     using UnstructuredStorage for bytes32;
 
@@ -75,6 +74,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     /// @dev This function verifies that the hash of the provided exit request data exists in storage
     // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
     function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable {
+        uint256 prevBalance = address(this).balance - msg.value;
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[keccak256(abi.encode(request.data, request.dataFormat))];
         bytes calldata data = request.data;
 
@@ -89,8 +89,6 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         if (msg.value < keyIndexes.length * withdrawalFee ) {
            revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
         }
-
-        // uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
@@ -136,7 +134,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
            emit MadeRefund(msg.sender, refund);
         }
 
-        // assert(address(this).balance == prevBalance);
+        assert(address(this).balance == prevBalance);
     }
 
     function _storeExitRequestHash(
