@@ -5,7 +5,6 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  Accounting,
   BeaconProxy,
   Delegation,
   DepositContract__MockForBeaconChainDepositor,
@@ -16,15 +15,16 @@ import {
   StETH__HarnessForVaultHub,
   UpgradeableBeacon,
   VaultFactory,
+  VaultHub,
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, ether } from "lib";
+import { createVaultProxy, days, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -38,8 +38,8 @@ describe("VaultFactory.sol", () => {
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let proxy: OssifiableProxy;
   let beacon: UpgradeableBeacon;
-  let accountingImpl: Accounting;
-  let accounting: Accounting;
+  let vaultHubImpl: VaultHub;
+  let vaultHub: VaultHub;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
   let delegation: Delegation;
@@ -76,14 +76,19 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
-    proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
-    accounting = await ethers.getContractAt("Accounting", proxy, deployer);
-    await accounting.initialize(admin);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [
+      steth,
+      ZeroAddress,
+      VAULTS_CONNECTED_VAULTS_LIMIT,
+      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+    ]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
+    await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [accounting, depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [accounting, depositContract], {
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
 
@@ -97,9 +102,9 @@ describe("VaultFactory.sol", () => {
     vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
-    await accounting.connect(admin).grantRole(await accounting.VAULT_MASTER_ROLE(), admin);
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
     //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
-    await accounting.connect(admin).grantRole(await accounting.VAULT_REGISTRY_ROLE(), admin);
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(
@@ -109,20 +114,23 @@ describe("VaultFactory.sol", () => {
 
     delegationParams = {
       defaultAdmin: await admin.getAddress(),
-      funder: await vaultOwner1.getAddress(),
-      withdrawer: await vaultOwner1.getAddress(),
-      minter: await vaultOwner1.getAddress(),
-      burner: await vaultOwner1.getAddress(),
-      curator: await vaultOwner1.getAddress(),
-      rebalancer: await vaultOwner1.getAddress(),
-      depositPauser: await vaultOwner1.getAddress(),
-      depositResumer: await vaultOwner1.getAddress(),
-      exitRequester: await vaultOwner1.getAddress(),
-      disconnecter: await vaultOwner1.getAddress(),
       nodeOperatorManager: await operator.getAddress(),
-      nodeOperatorFeeClaimer: await operator.getAddress(),
+      confirmExpiry: days(7n),
       curatorFeeBP: 100n,
       nodeOperatorFeeBP: 200n,
+      funders: [await vaultOwner1.getAddress()],
+      withdrawers: [await vaultOwner1.getAddress()],
+      minters: [await vaultOwner1.getAddress()],
+      burners: [await vaultOwner1.getAddress()],
+      curatorFeeSetters: [await vaultOwner1.getAddress()],
+      curatorFeeClaimers: [await vaultOwner1.getAddress()],
+      nodeOperatorFeeClaimers: [await operator.getAddress()],
+      rebalancers: [await vaultOwner1.getAddress()],
+      depositPausers: [await vaultOwner1.getAddress()],
+      depositResumers: [await vaultOwner1.getAddress()],
+      validatorExitRequesters: [await vaultOwner1.getAddress()],
+      validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
+      disconnecters: [await vaultOwner1.getAddress()],
     };
   });
 
@@ -167,17 +175,7 @@ describe("VaultFactory.sol", () => {
   });
 
   context("createVaultWithDelegation", () => {
-    it("reverts if `curator` is zero address", async () => {
-      const params = { ...delegationParams, curator: ZeroAddress };
-      await expect(createVaultProxy(vaultOwner1, vaultFactory, params))
-        .to.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("curator");
-    });
-
     it("works with empty `params`", async () => {
-      console.log({
-        delegationParams,
-      });
       const {
         tx,
         vault,
@@ -203,19 +201,19 @@ describe("VaultFactory.sol", () => {
 
   context("connect", () => {
     it("connect ", async () => {
-      const vaultsBefore = await accounting.vaultsCount();
+      const vaultsBefore = await vaultHub.vaultsCount();
       expect(vaultsBefore).to.eq(0);
 
       const config1 = {
         shareLimit: 10n,
         minReserveRatioBP: 500n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 500n,
       };
       const config2 = {
         shareLimit: 20n,
         minReserveRatioBP: 200n,
-        thresholdReserveRatioBP: 20n,
+        rebalanceThresholdBP: 20n,
         treasuryFeeBP: 600n,
       };
 
@@ -237,34 +235,34 @@ describe("VaultFactory.sol", () => {
 
       //attempting to add a vault without adding a proxy bytecode to the allowed list
       await expect(
-        accounting
+        vaultHub
           .connect(admin)
           .connectVault(
             await vault1.getAddress(),
             config1.shareLimit,
             config1.minReserveRatioBP,
-            config1.thresholdReserveRatioBP,
+            config1.rebalanceThresholdBP,
             config1.treasuryFeeBP,
           ),
-      ).to.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
+      ).to.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
 
       const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
       //add proxy code hash to whitelist
-      await accounting.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
 
       //connect vault 1 to VaultHub
-      await accounting
+      await vaultHub
         .connect(admin)
         .connectVault(
           await vault1.getAddress(),
           config1.shareLimit,
           config1.minReserveRatioBP,
-          config1.thresholdReserveRatioBP,
+          config1.rebalanceThresholdBP,
           config1.treasuryFeeBP,
         );
 
-      const vaultsAfter = await accounting.vaultsCount();
+      const vaultsAfter = await vaultHub.vaultsCount();
       expect(vaultsAfter).to.eq(1);
 
       const version1Before = await vault1.version();
@@ -284,16 +282,16 @@ describe("VaultFactory.sol", () => {
 
       //we upgrade implementation - we do not check implementation, just proxy bytecode
       await expect(
-        accounting
+        vaultHub
           .connect(admin)
           .connectVault(
             await vault2.getAddress(),
             config2.shareLimit,
             config2.minReserveRatioBP,
-            config2.thresholdReserveRatioBP,
+            config2.rebalanceThresholdBP,
             config2.treasuryFeeBP,
           ),
-      ).to.not.revertedWithCustomError(accounting, "VaultProxyNotAllowed");
+      ).to.not.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
@@ -317,18 +315,15 @@ describe("VaultFactory.sol", () => {
       const version3AfterV2 = await vault3WithNewImpl.getInitializedVersion();
 
       expect(version1Before).to.eq(1);
+      expect(version1After).to.eq(2);
       expect(version1AfterV2).to.eq(2);
 
       expect(version2Before).to.eq(1);
+      expect(version2After).to.eq(2);
       expect(version2AfterV2).to.eq(1);
 
       expect(version3After).to.eq(2);
-
-      const v1 = { version: version1After, getInitializedVersion: version1AfterV2 };
-      const v2 = { version: version2After, getInitializedVersion: version2AfterV2 };
-      const v3 = { version: version3After, getInitializedVersion: version3AfterV2 };
-
-      console.table([v1, v2, v3]);
+      expect(version3AfterV2).to.eq(2);
     });
   });
 

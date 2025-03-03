@@ -1,7 +1,7 @@
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
-import { Accounting } from "typechain-types";
+import { VaultHub } from "typechain-types";
 
 import { loadContract, makeTx } from "lib";
 import { deployWithoutProxy } from "lib/deploy";
@@ -11,7 +11,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const accountingAddress = state[Sk.accounting].proxy.address;
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
@@ -19,7 +19,7 @@ export async function main() {
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
-    accountingAddress,
+    vaultHubAddress,
     depositContract,
   ]);
   const impAddress = await imp.getAddress();
@@ -50,17 +50,17 @@ export async function main() {
   console.log("Factory address", await factory.getAddress());
 
   // Add VaultFactory and Vault implementation to the Accounting contract
-  const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
 
   // Grant roles for the Accounting contract
-  const vaultMasterRole = await accounting.VAULT_MASTER_ROLE();
-  const vaultRegistryRole = await accounting.VAULT_REGISTRY_ROLE();
+  const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
+  const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
 
-  await makeTx(accounting, "grantRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(accounting, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
 
-  await makeTx(accounting, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
+  await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
 
-  await makeTx(accounting, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(accounting, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
 }

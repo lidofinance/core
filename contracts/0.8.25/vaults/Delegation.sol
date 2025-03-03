@@ -12,21 +12,6 @@ import {Dashboard} from "./Dashboard.sol";
 /**
  * @title Delegation
  * @notice This contract is a contract-owner of StakingVault and includes an additional delegation layer.
- *
- * The delegation hierarchy is as follows:
- * - DEFAULT_ADMIN_ROLE is the underlying owner of StakingVault;
- * - NODE_OPERATOR_MANAGER_ROLE is the node operator manager of StakingVault; and itself is the role admin,
- * and the DEFAULT_ADMIN_ROLE cannot assign NODE_OPERATOR_MANAGER_ROLE;
- * - NODE_OPERATOR_FEE_CLAIMER_ROLE is the role that can claim node operator fee; is assigned by NODE_OPERATOR_MANAGER_ROLE;
- *
- * Additionally, the following roles are assigned by DEFAULT_ADMIN_ROLE:
- * - CURATOR_ROLE is the curator of StakingVault and perfoms some operations on behalf of DEFAULT_ADMIN_ROLE;
- * - FUND_WITHDRAW_ROLE funds and withdraws from the StakingVault;
- * - MINT_BURN_ROLE mints and burns shares of stETH backed by the StakingVault;
- *
- * The curator and node operator have their respective fees.
- * The feeBP is the percentage (in basis points) of the StakingVault rewards.
- * The unclaimed fee is the amount of ether that is owed to the curator or node operator based on the feeBP.
  */
 contract Delegation is Dashboard {
     /**
@@ -35,31 +20,28 @@ contract Delegation is Dashboard {
     uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
 
     /**
-     * @notice Curator role:
-     * - sets curator fee;
-     * - claims curator fee;
-     * - votes on vote lifetime;
-     * - votes on node operator fee;
-     * - votes on ownership transfer;
-     * - pauses deposits to beacon chain;
-     * - resumes deposits to beacon chain.
+     * @notice Sets curator fee.
      */
-    bytes32 public constant CURATOR_ROLE = keccak256("Vault.Delegation.CuratorRole");
+    bytes32 public constant CURATOR_FEE_SET_ROLE = keccak256("vaults.Delegation.CuratorFeeSetRole");
+
+    /**
+     * @notice Claims curator fee.
+     */
+    bytes32 public constant CURATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.CuratorFeeClaimRole");
 
     /**
      * @notice Node operator manager role:
-     * - votes on vote lifetime;
-     * - votes on node operator fee;
-     * - votes on ownership transfer;
-     * - assigns NODE_OPERATOR_FEE_CLAIMER_ROLE.
+     * - confirms confirm expiry;
+     * - confirms ownership transfer;
+     * - assigns NODE_OPERATOR_FEE_CONFIRM_ROLE;
+     * - assigns NODE_OPERATOR_FEE_CLAIM_ROLE.
      */
-    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("Vault.Delegation.NodeOperatorManagerRole");
+    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.Delegation.NodeOperatorManagerRole");
 
     /**
-     * @notice Node operator fee claimer role:
-     * - claims node operator fee.
+     * @notice Claims node operator fee.
      */
-    bytes32 public constant NODE_OPERATOR_FEE_CLAIMER_ROLE = keccak256("Vault.Delegation.NodeOperatorFeeClaimerRole");
+    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
 
     /**
      * @notice Curator fee in basis points; combined with node operator fee cannot exceed 100%.
@@ -94,20 +76,20 @@ contract Delegation is Dashboard {
     /**
      * @notice Initializes the contract:
      * - sets up the roles;
-     * - sets the vote lifetime to 7 days (can be changed later by CURATOR_ROLE and NODE_OPERATOR_MANAGER_ROLE).
+     * - sets the confirm expiry to 7 days (can be changed later by DEFAULT_ADMIN_ROLE and NODE_OPERATOR_MANAGER_ROLE).
      * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
      * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
      * All the roles are revoked from VaultFactory by the end of the initialization.
      */
-    function initialize(address _defaultAdmin) external override {
-        _initialize(_defaultAdmin);
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external override {
+        _initialize(_defaultAdmin, _confirmExpiry);
 
         // the next line implies that the msg.sender is an operator
         // however, the msg.sender is the VaultFactory, and the role will be revoked
         // at the end of the initialization
-        _grantRole(NODE_OPERATOR_MANAGER_ROLE, msg.sender);
+        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(NODE_OPERATOR_FEE_CLAIMER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
@@ -164,13 +146,13 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Sets the vote lifetime.
-     * Vote lifetime is a period during which the vote is counted. Once the period is over,
-     * the vote is considered expired, no longer counts and must be recasted for the voting to go through.
-     * @param _newVoteLifetime The new vote lifetime in seconds.
+     * @notice Sets the confirm expiry.
+     * Confirm expiry is a period during which the confirm is counted. Once the period is over,
+     * the confirm is considered expired, no longer counts and must be recasted.
+     * @param _newConfirmExpiry The new confirm expiry in seconds.
      */
-    function setVoteLifetime(uint256 _newVoteLifetime) external onlyIfVotedBy(_votingCommittee()) {
-        _setVoteLifetime(_newVoteLifetime);
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(_confirmingRoles()) {
+        _setConfirmExpiry(_newConfirmExpiry);
     }
 
     /**
@@ -180,7 +162,7 @@ contract Delegation is Dashboard {
      * The function will revert if the curator fee is unclaimed.
      * @param _newCuratorFeeBP The new curator fee in basis points.
      */
-    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external onlyRole(CURATOR_FEE_SET_ROLE) {
         if (_newCuratorFeeBP + nodeOperatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (curatorUnclaimedFee() > 0) revert CuratorFeeUnclaimed();
         uint256 oldCuratorFeeBP = curatorFeeBP;
@@ -193,11 +175,11 @@ contract Delegation is Dashboard {
      * @notice Sets the node operator fee.
      * The node operator fee is the percentage (in basis points) of node operator's share of the StakingVault rewards.
      * The node operator fee combined with the curator fee cannot exceed 100%.
-     * Note that the function reverts if the node operator fee is unclaimed and all the votes must be recasted to execute it again,
-     * which is why the deciding voter must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
+     * Note that the function reverts if the node operator fee is unclaimed and all the confirms must be recasted to execute it again,
+     * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyIfVotedBy(_votingCommittee()) {
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(_confirmingRoles()) {
         if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
@@ -210,7 +192,7 @@ contract Delegation is Dashboard {
      * @notice Claims the curator fee.
      * @param _recipient The address to which the curator fee will be sent.
      */
-    function claimCuratorFee(address _recipient) external onlyRole(CURATOR_ROLE) {
+    function claimCuratorFee(address _recipient) external onlyRole(CURATOR_FEE_CLAIM_ROLE) {
         uint256 fee = curatorUnclaimedFee();
         curatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
@@ -222,7 +204,7 @@ contract Delegation is Dashboard {
      * although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
      * @param _recipient The address to which the node operator fee will be sent.
      */
-    function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIMER_ROLE) {
+    function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIM_ROLE) {
         uint256 fee = nodeOperatorUnclaimedFee();
         nodeOperatorFeeClaimedReport = stakingVault().latestReport();
         _claimFee(_recipient, fee);
@@ -266,20 +248,21 @@ contract Delegation is Dashboard {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        super._unsafeWithdraw(_recipient, _fee);
+        stakingVault().withdraw(_recipient, _fee);
     }
 
     /**
-     * @notice Returns the committee that can:
-     * - change the vote lifetime;
+     * @notice Returns the roles that can:
+     * - change the confirm expiry;
+     * - set the curator fee;
      * - set the node operator fee;
      * - transfer the ownership of the StakingVault.
-     * @return committee is an array of roles that form the voting committee.
+     * @return roles is an array of roles that form the confirming roles.
      */
-    function _votingCommittee() internal pure override returns (bytes32[] memory committee) {
-        committee = new bytes32[](2);
-        committee[0] = CURATOR_ROLE;
-        committee[1] = NODE_OPERATOR_MANAGER_ROLE;
+    function _confirmingRoles() internal pure override returns (bytes32[] memory roles) {
+        roles = new bytes32[](2);
+        roles[0] = DEFAULT_ADMIN_ROLE;
+        roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
     /**

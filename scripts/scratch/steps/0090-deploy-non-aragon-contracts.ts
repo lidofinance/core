@@ -24,6 +24,7 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
+  const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
@@ -143,6 +144,13 @@ export async function main() {
     lidoAddress,
   ]);
 
+  const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    lidoAddress,
+    accounting.address,
+    vaultHubParams.connectedVaultsLimit,
+    vaultHubParams.relativeShareLimitBP,
+  ]);
+
   // Deploy AccountingOracle
   const accountingOracle = await deployBehindOssifiableProxy(
     Sk.accountingOracle,
@@ -210,6 +218,7 @@ export async function main() {
     oracleDaemonConfig.address,
     accounting.address,
     wstETH.address,
+    vaultHub.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

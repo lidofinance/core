@@ -5,3 +5,4 @@ export * from "./dao";
 export * from "./hashConsensus";
 export * from "./withdrawalQueue";
 export * from "./validatorExitBusOracle";
+export * from "./stakingVault";
