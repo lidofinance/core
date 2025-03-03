@@ -126,22 +126,14 @@ abstract contract VaultHub is PausableUntilWithRoles {
 
     /// @notice provides a gap for rebalancing vault
     /// @param _vault vault address
-    /// @return uint256
-    function rebalanceShortfall(address _vault) public view {
+    /// @return amount to rebalance
+    function rebalanceShortfall(address _vault) public view returns (uint256) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
-        uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted <= threshold) {
-        // NOTE!: on connect vault is always balanced
-        revert AlreadyBalanced(_vault, sharesMinted, threshold);
-        }
-
-        uint256 mintedStETH = STETH.getPooledEthByShares(sharesMinted); // TODO: fix rounding issue
-        uint256 reserveRatioBP = socket.reserveRatioBP;
-        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
+        uint256 mintedStETH = STETH.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
+        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // how much ETH should be moved out of the vault to rebalance it to minimal reserve ratio
 
@@ -155,8 +147,7 @@ abstract contract VaultHub is PausableUntilWithRoles {
         // reserveRatio = BPS_BASE - maxMintableRatio
         // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        uint256 amountToRebalance = (mintedStETH * TOTAL_BASIS_POINTS - IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
-        return amountToRebalance;
+        return (mintedStETH * TOTAL_BASIS_POINTS - IStakingVault(_vault).valuation() * maxMintableRatio) / socket.reserveRatioBP;
     }
 
     /// @notice connects a vault to the hub
@@ -317,8 +308,15 @@ abstract contract VaultHub is PausableUntilWithRoles {
     /// @dev permissionless if the vault's min reserve ratio is broken
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        VaultSocket storage socket = _connectedSocket(_vault);
 
+        uint256 sharesMinted = socket.sharesMinted;
+        uint256 threshold = _maxMintableShares(_vault, socket.reserveRatioThresholdBP, socket.shareLimit);
         uint256 amountToRebalance = rebalanceShortfall(_vault);
+        if (sharesMinted <= threshold) {
+            // NOTE!: on connect vault is always balanced
+            revert AlreadyBalanced(_vault, sharesMinted, threshold);
+        }
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
