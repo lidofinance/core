@@ -12,7 +12,15 @@ contract VaultHub__Harness is VaultHub {
         address _locator,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) VaultHub(ILidoLocator(_locator), address(0), _connectedVaultsLimit, _relativeShareLimitBP) {}
+    )
+        VaultHub(
+            ILidoLocator(_locator),
+            ILidoLocator(_locator).lido(),
+            ILidoLocator(_locator).accounting(),
+            _connectedVaultsLimit,
+            _relativeShareLimitBP
+        )
+    {}
 
     function mock__calculateVaultsRebase(
         uint256 _postTotalShares,

@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -31,7 +30,8 @@ describe("VaultHub.sol:pausableUntil", () => {
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
-      ZeroAddress,
+      await locator.lido(),
+      await locator.accounting(),
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);

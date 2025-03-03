@@ -81,16 +81,24 @@ contract VaultHub is PausableUntilWithRoles {
     address public immutable ACCOUNTING;
 
     /// @param _locator Lido Locator contract
+    /// @param _lido Lido stETH contract
     /// @param _accounting Accounting contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, address _accounting, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
+    constructor(
+        ILidoLocator _locator,
+        address _lido,
+        address _accounting,
+        uint256 _connectedVaultsLimit,
+        uint256 _relativeShareLimitBP
+    ) {
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
-        if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
+        if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
+            revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         LIDO_LOCATOR = _locator;
-        STETH = IStETH(_locator.lido());
+        STETH = IStETH(_lido);
         ACCOUNTING = _accounting;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
@@ -157,9 +165,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (socket.sharesMinted == 0) return true;
 
-        return (
-            IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP) / TOTAL_BASIS_POINTS
-        ) >= STETH.getPooledEthBySharesRoundUp(socket.sharesMinted);
+        return
+            ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
+                TOTAL_BASIS_POINTS) >= STETH.getPooledEthBySharesRoundUp(socket.sharesMinted);
     }
 
     /// @notice connects a vault to the hub
@@ -178,9 +186,11 @@ contract VaultHub is PausableUntilWithRoles {
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
+            revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
         if (_rebalanceThresholdBP == 0) revert ZeroArgument("_rebalanceThresholdBP");
-        if (_rebalanceThresholdBP > _reserveRatioBP) revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
+        if (_rebalanceThresholdBP > _reserveRatioBP)
+            revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
         _checkShareLimitUpperBound(_vault, _shareLimit);
@@ -377,11 +387,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _refundRecipient The address that will receive the refund for transaction costs
     /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
-    function forceValidatorExit(
-        address _vault,
-        bytes calldata _pubkeys,
-        address _refundRecipient
-    ) external payable {
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
@@ -419,7 +425,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
         uint256 _sharesToMintAsFees
-    ) public view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
+    )
+        public
+        view
+        returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares)
+    {
         /// HERE WILL BE ACCOUNTING DRAGON
 
         //                 \||/
@@ -568,7 +578,13 @@ contract VaultHub is PausableUntilWithRoles {
         if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
     }
 
-    event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 rebalanceThreshold, uint256 treasuryFeeBP);
+    event VaultConnected(
+        address indexed vault,
+        uint256 capShares,
+        uint256 minReserveRatio,
+        uint256 rebalanceThreshold,
+        uint256 treasuryFeeBP
+    );
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
