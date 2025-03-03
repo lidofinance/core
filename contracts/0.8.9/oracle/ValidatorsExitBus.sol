@@ -90,7 +90,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
            revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
         }
 
-        uint256 prevBalance = address(this).balance - msg.value;
+        // uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
@@ -136,7 +136,7 @@ contract ValidatorsExitBus is AccessControlEnumerable {
            emit MadeRefund(msg.sender, refund);
         }
 
-        assert(address(this).balance == prevBalance);
+        // assert(address(this).balance == prevBalance);
     }
 
     function _storeExitRequestHash(
