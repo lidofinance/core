@@ -17,9 +17,9 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     using UnstructuredStorage for bytes32;
 
     /// @dev Errors
-    error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
+    error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
     error ZeroAddress();
-    error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 msgValue);
+    error InsufficientPayment(uint256 withdrawalFeePerRequest, uint256 requestCount, uint256 msgValue);
     error TriggerableWithdrawalRefundFailed();
     error ExitHashWasNotSubmitted();
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
@@ -29,18 +29,18 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         address sender,
         uint256 refundValue
     );
+    event StoredExitRequestHash(
+        bytes32 exitRequestHash
+    );
 
-    // TODO: make type optimization
     struct DeliveryHistory {
-      uint256 blockNumber;
       /// @dev Key index in exit request array
       uint256 lastDeliveredKeyIndex;
-
-      // TODO: timestamp
+      /// @dev Block timestamp
+      uint256 timestamp;
     }
-    // TODO: make type optimization
     struct RequestStatus {
-      // Total items count in report (by default type(uint32).max, update on first report unpack)
+      // Total items count in report (by default type(uint32).max, update on first report delivery)
       uint256 totalItemsCount;
       // Total processed items in report (by default 0)
       uint256 deliveredItemsCount;
@@ -48,6 +48,10 @@ contract ValidatorsExitBus is AccessControlEnumerable {
       uint256 contractVersion;
 
       DeliveryHistory[] deliverHistory;
+    }
+    struct ExitRequestData {
+      bytes data;
+      uint256 dataFormat;
     }
 
     /// Length in bytes of packed request
@@ -67,9 +71,12 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         LOCATOR_CONTRACT_POSITION.setStorageAddress(addr);
     }
 
-    function triggerExitHashVerify(bytes calldata data, uint256[] calldata keyIndexes) external payable {
-        bytes32 dataHash = keccak256(data);
-        RequestStatus storage requestStatus = _storageExitRequestsHashes()[dataHash];
+    /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
+    /// @dev This function verifies that the hash of the provided exit request data exists in storage
+    // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
+    function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable {
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[keccak256(abi.encode(request.data, request.dataFormat))];
+        bytes calldata data = request.data;
 
         if (requestStatus.contractVersion == 0) {
           revert ExitHashWasNotSubmitted();
@@ -77,18 +84,17 @@ contract ValidatorsExitBus is AccessControlEnumerable {
 
         address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
-        uint256 minFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        uint256 requestsFee = keyIndexes.length * minFee;
+        uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
-        if (msg.value < requestsFee) {
-           revert FeeNotEnough(minFee, keyIndexes.length, msg.value);
+        if (msg.value < keyIndexes.length * withdrawalFee ) {
+           revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
         }
 
-        uint256 refund = msg.value - requestsFee;
+        uint256 prevBalance = address(this).balance - msg.value;
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
-        bytes memory pubkeys;
+        bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
@@ -96,14 +102,29 @@ contract ValidatorsExitBus is AccessControlEnumerable {
             }
 
             if (keyIndexes[i] > lastDeliveredKeyIndex) {
-                revert KeyWasNotUnpacked(keyIndexes[i], lastDeliveredKeyIndex);
+                revert KeyWasNotDelivered(keyIndexes[i], lastDeliveredKeyIndex);
             }
 
-            uint256 requestOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
-            pubkeys = bytes.concat(pubkeys, data[requestOffset:requestOffset + PUBLIC_KEY_LENGTH]);
+            ///
+            /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
+            /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
+            /// 16 bytes - part without pubkey
+            uint256 requestPublicKeyOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
+            uint256 destOffset = i * PUBLIC_KEY_LENGTH;
+
+            assembly {
+                let dest := add(pubkeys, add(32, destOffset))
+                calldatacopy(
+                    dest,
+                    add(data.offset,  requestPublicKeyOffset),
+                    PUBLIC_KEY_LENGTH
+                )
+            }
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: requestsFee}(pubkeys);
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value:  keyIndexes.length *  withdrawalFee}(pubkeys);
+
+        uint256 refund = msg.value - keyIndexes.length *  withdrawalFee;
 
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
@@ -115,6 +136,33 @@ contract ValidatorsExitBus is AccessControlEnumerable {
            emit MadeRefund(msg.sender, refund);
         }
 
+        assert(address(this).balance == prevBalance);
+    }
+
+    function _storeExitRequestHash(
+        bytes32 exitRequestHash,
+        uint256 totalItemsCount,
+        uint256 deliveredItemsCount,
+        uint256 contractVersion,
+        uint256 lastDeliveredKeyIndex
+    ) internal {
+        if (deliveredItemsCount == 0) {
+            return;
+        }
+
+        mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
+
+        RequestStatus storage request = hashes[exitRequestHash];
+
+        request.totalItemsCount = totalItemsCount;
+        request.deliveredItemsCount = deliveredItemsCount;
+        request.contractVersion = contractVersion;
+        request.deliverHistory.push(DeliveryHistory({
+            timestamp: block.timestamp,
+            lastDeliveredKeyIndex: lastDeliveredKeyIndex
+        }));
+
+        emit StoredExitRequestHash(exitRequestHash);
     }
 
     /// Storage helpers

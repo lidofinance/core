@@ -488,7 +488,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           .withArgs(extraDataChunkHashes[1], extraDataChunkHashes[0]);
 
         const tx2 = await oracleMemberSubmitExtraData(extraDataChunks[1]);
-        await expect(tx2).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, anyValue, anyValue);
+        await expect(tx2).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, , anyValue);
       });
 
       it("pass successfully if data hash matches", async () => {
