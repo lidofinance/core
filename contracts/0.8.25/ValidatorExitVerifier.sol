@@ -155,14 +155,7 @@ contract ValidatorExitVerifier {
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness calldata witness
     ) internal view {
-        if (beaconBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(beaconBlock.header.slot);
-        }
-
-        bytes32 trustedHeaderRoot = _getParentBlockRoot(beaconBlock.rootsTimestamp);
-        if (trustedHeaderRoot != beaconBlock.header.hashTreeRoot()) {
-            revert InvalidBlockHeader();
-        }
+        _verifyBeaconBlockRoot(beaconBlock);
 
         SSZ.verifyProof({
             proof: witness.validatorProof,
@@ -180,17 +173,10 @@ contract ValidatorExitVerifier {
         HistoricalHeaderWitness calldata oldBlock,
         ValidatorWitness calldata witness
     ) internal view {
-        if (beaconBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(beaconBlock.header.slot);
-        }
+        _verifyBeaconBlockRoot(beaconBlock);
 
         if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
             revert UnsupportedSlot(oldBlock.header.slot);
-        }
-
-        bytes32 trustedHeaderRoot = _getParentBlockRoot(beaconBlock.rootsTimestamp);
-        if (trustedHeaderRoot != beaconBlock.header.hashTreeRoot()) {
-            revert InvalidBlockHeader();
         }
 
         // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
@@ -212,6 +198,21 @@ contract ValidatorExitVerifier {
             leaf: witness.validator.hashTreeRoot(),
             gI: _getValidatorGI(witness.validatorIndex, oldBlock.header.slot)
         });
+    }
+
+    /**
+     * @dev Verifies a beacon block is trustworthy via EIP-4788 contract.
+     */
+    function _verifyBeaconBlockRoot(ProvableBeaconBlockHeader calldata beaconBlock) internal view {
+        if (beaconBlock.header.slot < FIRST_SUPPORTED_SLOT) {
+            revert UnsupportedSlot(beaconBlock.header.slot);
+        }
+
+        // Check EIP-4788 for known block root
+        bytes32 trustedRoot = _getParentBlockRoot(beaconBlock.rootsTimestamp);
+        if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
+            revert InvalidBlockHeader();
+        }
     }
 
     function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
@@ -261,7 +262,9 @@ contract ValidatorExitVerifier {
         return provableBeaconBlockTimestamp - eligibleExitRequestTimestamp;
     }
 
-    function _getSupportedRequestStatus(bytes calldata exitRequests) returns (RequestStatus memory requestStatus) {
+    function _getSupportedRequestStatus(
+        bytes calldata exitRequests
+    ) internal view returns (RequestStatus memory requestStatus) {
         bytes32 exitRequestsHash = keccak256(exitRequests);
         requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle()).getExitRequestsStatus(
             exitRequestsHash

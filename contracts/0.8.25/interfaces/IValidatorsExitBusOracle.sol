@@ -23,5 +23,5 @@ struct RequestStatus {
 }
 
 interface IValidatorsExitBusOracle {
-    function getExitRequestsStatus(bytes32 exitRequestsHash) external returns (RequestStatus memory);
+    function getExitRequestsStatus(bytes32 exitRequestsHash) external view returns (RequestStatus memory);
 }
