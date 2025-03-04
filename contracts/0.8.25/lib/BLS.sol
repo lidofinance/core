@@ -66,7 +66,7 @@ library BLS {
     }
 
     /// @dev Y coordinates of uncompressed pubkey and signature
-    struct DepositYComponents {
+    struct DepositY {
         Fp pubkeyY;
         Fp2 signatureY;
     }
@@ -208,7 +208,7 @@ library BLS {
 
     function verifyDepositMessage(
         IStakingVault.Deposit calldata deposit,
-        DepositYComponents calldata depositY,
+        DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) internal view {
         // Hash the deposit message and map it to G2 point on the curve

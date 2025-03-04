@@ -69,7 +69,7 @@ contract BLSVerifyingKeyTest is Test {
                     1 ether,
                     bytes32(0) // deposit data root is not checked
                 ),
-                BLS.DepositYComponents(
+                BLS.DepositY(
                     wrapFp(
                         hex"19b71bd2a9ebf09809b6c380a1d1de0c2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083"
                     ),
@@ -96,7 +96,7 @@ contract BLSVerifyingKeyTest is Test {
                     32 ether,
                     bytes32(0)
                 ),
-                BLS.DepositYComponents(
+                BLS.DepositY(
                     wrapFp(
                         hex"04c46736f0aa8ec7e6e4c1126c12079f09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d"
                     ),
