@@ -41,4 +41,15 @@ contract StETH__HarnessForVaultHub is StETH {
     function harness__mintInitialShares(uint256 _sharesAmount) public {
         _mintInitialShares(_sharesAmount);
     }
+
+    function mintExternalShares(address _recipient, uint256 _sharesAmount) public {
+        _mintShares(_recipient, _sharesAmount);
+    }
+
+    function rebalanceExternalEtherToInternal() public payable {
+        require(msg.value != 0, "ZERO_VALUE");
+
+        totalPooledEther += msg.value;
+        externalBalance -= msg.value;
+    }
 }

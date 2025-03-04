@@ -30,20 +30,12 @@ interface IWstETH is IERC20, IERC20Permit {
 
 /**
  * @title Dashboard
- * @notice This contract is meant to be used as the owner of `StakingVault`.
- * This contract improves the vault UX by bundling all functions from the vault and vault hub
- * in this single contract. It provides administrative functions for managing the staking vault,
+ * @notice This contract is a UX-layer for StakingVault and meant to be used as its owner.
+ * This contract improves the vault UX by bundling all functions from the StakingVault and VaultHub
+ * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is Permissions {
-    /**
-     * @notice Struct containing an account and a role for granting/revoking roles.
-     */
-    struct RoleAssignment {
-        address account;
-        bytes32 role;
-    }
-
     /**
      * @notice Total basis points for fee calculations; equals to 100%.
      */
@@ -85,7 +77,7 @@ contract Dashboard is Permissions {
      * @param _wETH Address of the weth token contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _wETH, address _lidoLocator) Permissions() {
+    constructor(address _wETH, address _lidoLocator) {
         if (_wETH == address(0)) revert ZeroArgument("_wETH");
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
@@ -95,20 +87,26 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Initializes the contract with the default admin role
+     * @notice Initializes the contract
+     * @param _defaultAdmin Address of the default admin
+     * @param _confirmExpiry Confirm expiry in seconds
      */
-    function initialize(address _defaultAdmin) external virtual {
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external virtual {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        _initialize(_defaultAdmin);
+        _initialize(_defaultAdmin, _confirmExpiry);
     }
 
     // ==================== View Functions ====================
 
-    function votingCommittee() external pure returns (bytes32[] memory) {
-        return _votingCommittee();
+    /**
+     * @notice Returns the roles that need to confirm multi-role operations.
+     * @return The roles that need to confirm the call.
+     */
+    function confirmingRoles() external pure returns (bytes32[] memory) {
+        return _confirmingRoles();
     }
 
     /**
@@ -137,25 +135,25 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Returns the reserve ratio of the vault in basis points
-     * @return The reserve ratio as a uint16
+     * @return The reserve ratio in basis points as a uint16
      */
     function reserveRatioBP() public view returns (uint16) {
         return vaultSocket().reserveRatioBP;
     }
 
     /**
-     * @notice Returns the threshold reserve ratio of the vault in basis points.
-     * @return The threshold reserve ratio as a uint16.
+     * @notice Returns the rebalance threshold of the vault in basis points.
+     * @return The rebalance threshold in basis points as a uint16.
      */
-    function thresholdReserveRatioBP() external view returns (uint16) {
-        return vaultSocket().reserveRatioThresholdBP;
+    function rebalanceThresholdBP() external view returns (uint16) {
+        return vaultSocket().rebalanceThresholdBP;
     }
 
     /**
      * @notice Returns the treasury fee basis points.
      * @return The treasury fee in basis points as a uint16.
      */
-    function treasuryFee() external view returns (uint16) {
+    function treasuryFeeBP() external view returns (uint16) {
         return vaultSocket().treasuryFeeBP;
     }
 
@@ -192,7 +190,7 @@ contract Dashboard is Permissions {
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
      * @return The amount of ether that can be withdrawn.
      */
-    function withdrawableEther() external view returns (uint256) {
+    function withdrawableEther() external view virtual returns (uint256) {
         return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
     }
 
@@ -214,7 +212,7 @@ contract Dashboard is Permissions {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable fundAndProceed {
+    function voluntaryDisconnect() external payable fundable {
         uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
 
         if (shares > 0) {
@@ -252,7 +250,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Withdraws stETH tokens from the staking vault to wrapped ether.
+     * @notice Withdraws wETH tokens from the staking vault to wrapped ether.
      * @param _recipient Address of the recipient
      * @param _amountOfWETH Amount of WETH to withdraw
      */
@@ -263,19 +261,11 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKey Public key of the validator to exit
-     */
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external {
-        _requestValidatorExit(_validatorPublicKey);
-    }
-
-    /**
-     * @notice Mints stETH tokens backed by the vault to the recipient.
+     * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
      */
-    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundAndProceed {
+    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
         _mintShares(_recipient, _amountOfShares);
     }
 
@@ -285,7 +275,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
-    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundAndProceed {
+    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundable {
         _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
@@ -294,7 +284,7 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfWstETH Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundAndProceed {
+    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
         _mintShares(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
@@ -313,9 +303,9 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects stETH amount approved to this contract.
+     * @notice Burns stETH tokens from the sender backed by the vault. Expects stETH amount approved to this contract.
      * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountOfStETH Amount of stETH shares to burn
+     * @param _amountOfStETH Amount of stETH tokens to burn
      */
     function burnStETH(uint256 _amountOfStETH) external {
         _burnStETH(_amountOfStETH);
@@ -332,40 +322,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
-     */
-    modifier safePermit(
-        address token,
-        address owner,
-        address spender,
-        PermitInput calldata permitInput
-    ) {
-        // Try permit() before allowance check to advance nonce if possible
-        try
-            IERC20Permit(token).permit(
-                owner,
-                spender,
-                permitInput.value,
-                permitInput.deadline,
-                permitInput.v,
-                permitInput.r,
-                permitInput.s
-            )
-        {
-            _;
-            return;
-        } catch {
-            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
-            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
-                _;
-                return;
-            }
-        }
-        revert InvalidPermit(token);
-    }
-
-    /**
-     * @notice Burns stETH tokens (in shares) backed by the vault from the sender using permit (with value in stETH).
+     * @notice Burns stETH shares backed by the vault from the sender using permit (with value in stETH).
      * @param _amountOfShares Amount of stETH shares to burn
      * @param _permit data required for the stETH.permit() with amount in stETH
      */
@@ -407,7 +364,7 @@ contract Dashboard is Permissions {
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable fundAndProceed {
+    function rebalanceVault(uint256 _ether) external payable fundable {
         _rebalanceVault(_ether);
     }
 
@@ -424,13 +381,13 @@ contract Dashboard is Permissions {
      * @notice funds vault with ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      */
-    function refundDisputedValidatorToVault(bytes calldata _pubkey) external {
+    function refundDisprovenValidatorToVault(bytes calldata _pubkey) external {
         uint128 _amount = _withdrawDisprovenValidatorFromPDG(_pubkey, address(this));
         _fund(_amount);
     }
 
     /**
-     * @notice recovers ERC20 tokens or ether from the dashboard contract to sender
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
@@ -484,32 +441,34 @@ contract Dashboard is Permissions {
         _resumeBeaconChainDeposits();
     }
 
-    // ==================== Role Management Functions ====================
-
     /**
-     * @notice Mass-grants multiple roles to multiple accounts.
-     * @param _assignments An array of role assignments.
-     * @dev Performs the role admin checks internally.
+     * @notice Signals to node operators that specific validators should exit from the beacon chain. It DOES NOT
+     *         directly trigger the exit - node operators must monitor for request events and handle the exits.
+     * @param _pubkeys Concatenated validator public keys (48 bytes each).
+     * @dev    Emits `ValidatorExitRequested` event for each validator public key through the `StakingVault`.
+     *         This is a voluntary exit request - node operators can choose whether to act on it or not.
      */
-    function grantRoles(RoleAssignment[] memory _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument("_assignments");
-
-        for (uint256 i = 0; i < _assignments.length; i++) {
-            grantRole(_assignments[i].role, _assignments[i].account);
-        }
+    function requestValidatorExit(bytes calldata _pubkeys) external {
+        _requestValidatorExit(_pubkeys);
     }
 
     /**
-     * @notice Mass-revokes multiple roles from multiple accounts.
-     * @param _assignments An array of role assignments.
-     * @dev Performs the role admin checks internally.
+     * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
+     *         Both partial withdrawals (disabled for unhealthy `StakingVault`) and full validator exits are supported.
+     * @param _pubkeys Concatenated validator public keys (48 bytes each).
+     * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
+     *         Set amount to 0 for a full validator exit.
+     *         For partial withdrawals, amounts will be trimmed to keep MIN_ACTIVATION_BALANCE on the validator to avoid deactivation
+     * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
+     * @dev    A withdrawal fee must be paid via msg.value.
+     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
-    function revokeRoles(RoleAssignment[] memory _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument("_assignments");
-
-        for (uint256 i = 0; i < _assignments.length; i++) {
-            revokeRole(_assignments[i].role, _assignments[i].account);
-        }
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
+        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
     // ==================== Internal Functions ====================
@@ -517,11 +476,44 @@ contract Dashboard is Permissions {
     /**
      * @dev Modifier to fund the staking vault if msg.value > 0
      */
-    modifier fundAndProceed() {
+    modifier fundable() {
         if (msg.value > 0) {
             _fund(msg.value);
         }
         _;
+    }
+
+    /**
+     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
+     */
+    modifier safePermit(
+        address token,
+        address owner,
+        address spender,
+        PermitInput calldata permitInput
+    ) {
+        // Try permit() before allowance check to advance nonce if possible
+        try
+            IERC20Permit(token).permit(
+                owner,
+                spender,
+                permitInput.value,
+                permitInput.deadline,
+                permitInput.v,
+                permitInput.r,
+                permitInput.s
+            )
+        {
+            _;
+            return;
+        } catch {
+            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
+            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
+                _;
+                return;
+            }
+        }
+        revert InvalidPermit(token);
     }
 
     /**
@@ -550,7 +542,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @dev calculates total shares vault can mint
+     * @dev Calculates total shares vault can mint
      * @param _valuation custom vault valuation
      */
     function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {

@@ -4,8 +4,7 @@ import { ethers } from "hardhat";
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 

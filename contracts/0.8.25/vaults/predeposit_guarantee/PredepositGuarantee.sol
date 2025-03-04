@@ -100,6 +100,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     bytes32 private constant ERC7201_STORAGE_LOCATION =
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
+    /**
+     * @param _gIFirstValidator packed GIndex of first validator in CL state tree
+     * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
+     * @param _changeSlot slot of the fork that alters first validator GIndex
+     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
+     * @dev NB! proxy-compatible as immutable vars can be updated via implementation upgrade and will not corrupt the storage
+     */
     constructor(
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
@@ -108,34 +115,80 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         _disableInitializers();
     }
 
-    function initialize(address _admin) external initializer {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
+    function initialize(address _defaultAdmin) external initializer {
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         __AccessControlEnumerable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
     }
 
-    // * * * * * * * * * * * * * * * * * * * * //
-    // * * * Node Operator Accounting Logic * * * //
-    // * * * * * * * * * * * * * * * * * * * * //
+    // * * * * * * * * * * * * * * * * * * * * * //
+    // * * * Node Operator Accounting Logic* * * //
+    // * * * * * * * * * * * * * * * * * * * * * //
 
+    /**
+     * @notice returns total & unlocked balanced for the NO
+     * @param _nodeOperator to withdraw from
+     * @return balance object of the node operator
+     */
     function nodeOperatorBalance(address _nodeOperator) external view returns (NodeOperatorBalance memory) {
         return _getStorage().nodeOperatorBalance[_nodeOperator];
     }
 
+    /**
+     * @notice returns amount of ether that NO can use for predeposit or withdrawal
+     * @param _nodeOperator to check unlocked balance for
+     * @return unlocked amount
+     */
+    function unlockedBalance(address _nodeOperator) external view returns (uint256 unlocked) {
+        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
+        unlocked = balance.total - balance.locked;
+    }
+
+    /**
+     * @notice returns address of guarantor for the NO
+     * @param _nodeOperator to check guarantor for
+     * @return address of guarantor for the NO, zero address means NO is self-guarantor
+     */
     function nodeOperatorGuarantor(address _nodeOperator) external view returns (address) {
         return _getStorage().nodeOperatorGuarantor[_nodeOperator];
     }
 
+    /**
+     * @notice returns amount of ether refund that guarantor can claim
+     * @param _guarantor address of the guarantor
+     * @return amount of ether that guarantor can claim by calling `claimGuarantorRefund(amount)`
+     */
+    function claimableRefund(address _guarantor) external view returns (uint256) {
+        return _getStorage().guarantorClaimableEther[_guarantor];
+    }
+
+    /**
+     * @notice returns PDG status of the validator by pubkey
+     * @param _validatorPubkey to check status for
+     * @return struct of ValidatorStatus
+     * @dev if status.stage == NONE validator has either not been predeposited or has been fully proven invalid & withdrawn
+     */
     function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
         return _getStorage().validatorStatus[_validatorPubkey];
     }
 
+    /**
+     * @notice tops up NO's balance with msg.value ether called by NO(w/o guarantor) or guarantor
+     * @param _nodeOperator address
+     */
     function topUpNodeOperatorBalance(address _nodeOperator) external payable whenResumed {
         _topUpNodeOperatorBalance(_nodeOperator);
     }
 
+    /**
+     * @notice withdraws unlocked NO's balance
+     * @param _nodeOperator to withdraw from
+     * @param _amount amount to withdraw
+     * @param _recipient address to send the funds to
+     * @dev only NO(w/o guarantor) or guarantor can withdraw
+     */
     function withdrawNodeOperatorBalance(
         address _nodeOperator,
         uint128 _amount,
@@ -185,6 +238,10 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         emit NodeOperatorGuarantorSet(msg.sender, _newGuarantor);
     }
 
+    /**
+     * @notice claims refund for the guarantor if NO has changed guarantor with balance
+     * @param _recipient address to send the refund to
+     */
     function claimGuarantorRefund(address _recipient) external returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
 
@@ -249,7 +306,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
                 revert MustBeNewValidatorPubkey(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
             }
 
-            // cannot predeposit a validator with a deposit amount that is not 1 ether
             if (_deposit.amount != PREDEPOSIT_AMOUNT)
                 revert PredepositDepositAmountInvalid(_deposit.pubkey, _deposit.amount);
 
@@ -268,6 +324,11 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Positive Proof Flow  * * * * * //
 
+    /**
+     * @notice permissionless method to prove correct Withdrawal Credentials for the validator on CL
+     * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
+     * @dev will revert if proof is invalid or misformed
+     */
     function proveValidatorWC(ValidatorWitness calldata _witness) public whenResumed {
         bytes32 withdrawalCredentials = _getStorage()
             .validatorStatus[_witness.pubkey]
@@ -279,20 +340,12 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         _processPositiveProof(_witness.pubkey, withdrawalCredentials);
     }
 
-    function proveValidatorWCWithBeaconHeader(
-        ValidatorWitness calldata _witness,
-        BeaconBlockHeader calldata _header
-    ) public whenResumed {
-        bytes32 withdrawalCredentials = _getStorage()
-            .validatorStatus[_witness.pubkey]
-            .stakingVault
-            .withdrawalCredentials();
-
-        proveSlotChange(_header, _witness.childBlockTimestamp);
-
-        _processPositiveProof(_witness.pubkey, withdrawalCredentials);
-    }
-
+    /**
+     * @notice deposits ether to proven validators from staking vault
+     * @param _stakingVault address
+     * @param _deposits array of StakingVault.Deposit structs
+     * @dev only callable by Node Operator of this staking vault
+     */
     function depositToBeaconChain(
         IStakingVaultOwnable _stakingVault,
         IStakingVaultOwnable.Deposit[] calldata _deposits
@@ -319,11 +372,16 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     /**
-     @notice happy path shortcut for the node operator that allows:
-      - prove validators to free up bond
-      - optionally top up NO bond
-      - trigger deposit to proven validators via vault
-     NB! proven and deposited validators sets don't have to match */
+     * @notice happy path shortcut for the node operator that allows:
+     * - prove validators to free up bond
+     * - optionally top up NO bond
+     * - trigger deposit to proven validators via vault
+     * @param _witnesses array of ValidatorWitness structs to prove validators WCs
+     * @param _deposits array of StakingVault.Deposit structs with deposit data for provided _stakingVault
+     * @param _stakingVault address
+     * @param _deposits array of StakingVault.Deposit structs
+     * @dev proven validators and  staking vault + deposited validators don't have to match
+     */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
         IStakingVaultOwnable.Deposit[] calldata _deposits,
@@ -336,8 +394,58 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         depositToBeaconChain(_stakingVault, _deposits);
     }
 
+    /**
+     * @notice shortcut if validator already has valid WC setup
+     * @param _witness  ValidatorWitness struct proving validator WC belong to staking vault
+     * @param _stakingVault address
+     * @dev only callable by staking vault owner & only if validator stage is NONE
+     */
+    function proveUnregisteredValidator(
+        ValidatorWitness calldata _witness,
+        IStakingVaultOwnable _stakingVault
+    ) external whenResumed {
+        if (_stakingVault.owner() != msg.sender) revert WithdrawSenderNotStakingVaultOwner();
+
+        ERC7201Storage storage $ = _getStorage();
+
+        if ($.validatorStatus[_witness.pubkey].stage != validatorStage.NONE) {
+            revert MustBeNewValidatorPubkey(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
+        }
+
+        bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
+
+        // sanity check that vault returns correct WC
+        if (address(_stakingVault) != _wcToAddress(withdrawalCredentials)) {
+            revert StakingVaultWithdrawalCredentialsMismatch(
+                address(_stakingVault),
+                _wcToAddress(withdrawalCredentials)
+            );
+        }
+
+        _validatePubKeyWCProof(_witness, withdrawalCredentials);
+
+        $.validatorStatus[_witness.pubkey] = ValidatorStatus({
+            stage: validatorStage.PROVEN,
+            stakingVault: _stakingVault,
+            nodeOperator: _stakingVault.nodeOperator()
+        });
+
+        emit ValidatorProven(
+            $.validatorStatus[_witness.pubkey].nodeOperator,
+            _witness.pubkey,
+            address(_stakingVault),
+            withdrawalCredentials
+        );
+    }
+
     // * * * * * Negative Proof Flow  * * * * * //
 
+    /**
+     * @notice permissionless method to prove incorrect Withdrawal Credentials for the validator on CL
+     * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
+     * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
+     * @dev will revert if proof is invalid or withdrawal credentials belong to correct vault
+     */
     function proveInvalidValidatorWC(
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials
@@ -347,19 +455,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         _processNegativeProof(_witness.pubkey, _invalidWithdrawalCredentials);
     }
 
-    function proveInvalidValidatorWCWithBeaconHeader(
-        ValidatorWitness calldata _witness,
-        BeaconBlockHeader calldata _header,
-        bytes32 _invalidWithdrawalCredentials
-    ) public whenResumed {
-        proveSlotChange(_header, _witness.childBlockTimestamp);
-        _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
-
-        _processNegativeProof(_witness.pubkey, _invalidWithdrawalCredentials);
-    }
-
-    // called by the staking vault owner if the predeposited validator was proven invalid
-    // i.e. node operator was malicious and has stolen vault ether
+    /**
+     * @notice returns locked ether to the staking vault owner if validator's WC were proven invalid and
+     * @param _validatorPubkey to withdraw locked PREDEPOSIT_AMOUNT ether from
+     * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
+     * @dev can only be called by owner of vault that had deposited to disproven validator
+     * @dev deletes validator status from mapping, freeing up storage and resetting validator stage to NONE
+     */
     function withdrawDisprovenPredeposit(
         bytes calldata _validatorPubkey,
         address _recipient
@@ -388,6 +490,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         return PREDEPOSIT_AMOUNT;
     }
 
+    /**
+     * @notice shortcut for disproving and withdrawing validator
+     * @param _witness ValidatorWitness object containing proof of validator's WC
+     * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
+     * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
+     * @dev can only be called by owner of vault that had deposited to disproven validator
+     */
     function disproveAndWithdraw(
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials,
@@ -397,7 +506,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         return withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
     }
 
-    /// Internal functions
+    // * * * * * * * * * * * * * * * * * * * * //
+    // * * * * * Internal Functions * * * * *  //
+    // * * * * * * * * * * * * * * * * * * * * //
 
     function _processPositiveProof(bytes calldata _pubkey, bytes32 _withdrawalCredentials) internal {
         ERC7201Storage storage $ = _getStorage();

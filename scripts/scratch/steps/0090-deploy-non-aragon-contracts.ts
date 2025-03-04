@@ -24,6 +24,7 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
+  const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
@@ -143,6 +144,14 @@ export async function main() {
     lidoAddress,
   ]);
 
+  const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    locator.address,
+    lidoAddress,
+    accounting.address,
+    vaultHubParams.connectedVaultsLimit,
+    vaultHubParams.relativeShareLimitBP,
+  ]);
+
   // Deploy AccountingOracle
   const accountingOracle = await deployBehindOssifiableProxy(
     Sk.accountingOracle,
@@ -192,6 +201,20 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
+  // TODO: dummy values
+  // Deploy PredepositGuarantee
+  const predepositGuarantee = await deployBehindOssifiableProxy(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    proxyContractsOwner,
+    deployer,
+    [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ],
+  );
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -209,7 +232,9 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     accounting.address,
+    predepositGuarantee.address,
     wstETH.address,
+    vaultHub.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

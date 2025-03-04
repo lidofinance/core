@@ -117,7 +117,7 @@ describe("PredepositGuarantee.sol", () => {
       const pdgLocal = await ethers.getContractAt("PredepositGuarantee", pdgProxy, vaultOperator);
       await expect(pdgLocal.initialize(ZeroAddress))
         .to.be.revertedWithCustomError(pdgImpl, "ZeroArgument")
-        .withArgs("_admin");
+        .withArgs("_defaultAdmin");
     });
   });
 

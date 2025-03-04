@@ -212,15 +212,17 @@ library SSZ {
                 // Store elements to hash contiguously in scratch space.
                 // Scratch space is 64 bytes (0x00 - 0x3f) and both elements are 32 bytes.
                 mstore(scratch, leaf)
+                // load next proof from calldata to the scratch space at 0x00 or 0x20
+                // xor() acts as if
                 mstore(xor(scratch, 0x20), calldataload(offset))
                 // Call sha256 precompile.
                 let result := staticcall(
                     gas(),
-                    0x02,
-                    0x00,
-                    0x40,
-                    0x00,
-                    0x20
+                    0x02, // SHA-256 precompile
+                    0x00, // input from scratch space from 0x00
+                    0x40, // length is 2 leafs of 32 bytes each
+                    0x00, // output back to scratch space at 0x00
+                    0x20  // length of the output is 32 bytes
                 )
 
                 if iszero(result) {

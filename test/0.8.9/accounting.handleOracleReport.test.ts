@@ -25,6 +25,7 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/Accou
 import { certainAddress, ether, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
+import { VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -72,7 +73,20 @@ describe("Accounting.sol:report", () => {
     );
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
-    await accounting.initialize(deployer);
+
+    const vaultHubImpl = await ethers.deployContract(
+      "VaultHub",
+      [locator, lido, accounting, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      deployer,
+    );
+    const vaultHubProxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [vaultHubImpl, deployer, new Uint8Array()],
+      deployer,
+    );
+    const vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
+    await vaultHub.initialize(deployer);
 
     const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
     accounting = accounting.connect(accountingOracleSigner);
