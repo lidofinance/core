@@ -388,6 +388,34 @@ describe("VaultHub.sol:hub", () => {
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
     });
 
+    it("returns correct value for rebalance vault", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      const mintingEth = ether("25");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      await vault.report(ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      // await lido.connect(whale).submit(deployer, { value: ether("1000.0") });
+      // await lido.connect(whale).transfer(burner, ether("1"));
+      // ether("1000.0") / ether("1") === 1000
+      // await vault.fund({ value: ether("50") });
+      // ether("50") / 1000 === ether("0.05")
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(ether("50") / 1000n);
+    });
+
     it("returns correct value for smallest possible reserve ratio", async () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
