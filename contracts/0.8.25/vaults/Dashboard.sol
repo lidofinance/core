@@ -381,7 +381,7 @@ contract Dashboard is Permissions {
      * @notice funds vault with ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      */
-    function refundDisputedValidatorToVault(bytes calldata _pubkey) external {
+    function refundDisprovenValidatorToVault(bytes calldata _pubkey) external {
         uint128 _amount = _withdrawDisprovenValidatorFromPDG(_pubkey, address(this));
         _fund(_amount);
     }
@@ -463,7 +463,11 @@ contract Dashboard is Permissions {
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
-    function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 

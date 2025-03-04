@@ -69,7 +69,8 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
      */
-    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.TriggerValidatorWithdrawal");
+    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE =
+        keccak256("vaults.Permissions.TriggerValidatorWithdrawal");
 
     /**
      * @notice Permission for voluntary disconnecting the StakingVault.
@@ -77,12 +78,12 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for recover assets from Delegate contracts
+     * @notice Permission for withdrawing disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("StakingVault.Permissions.PDGWithdrawal");
 
     /**
-     * @notice Permission for recover assets from Delegate contracts
+     * @notice Permission for assets recovery from Delegate contracts
      */
     bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("StakingVault.Permissions.AssetRecovery");
 
@@ -244,7 +245,11 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
      * @dev The zero checks for parameters are performed in the StakingVault contract.
      */
-    function _triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
+    function _triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
         stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 

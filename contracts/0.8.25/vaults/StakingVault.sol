@@ -66,12 +66,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
-     * @custom: report Latest report containing valuation and inOutDelta
-     * @custom: locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
-     * @custom: inOutDelta Net difference between ether funded and withdrawn from StakingVault
-     * @custom: nodeOperator Address of the node operator
-     * @custom: depositor Address of the depositor
-     * @custom: beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
+     * @custom:report Latest report containing valuation and inOutDelta
+     * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
+     * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
+     * @custom:nodeOperator Address of the node operator
+     * @custom:depositor Address of the depositor
+     * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
         Report report;
@@ -246,11 +246,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Returns the address of the depositor
-     *         Trusted party responsible for securely depositing validators to the beacon chain.
+     *         Trusted party responsible for securely depositing validators to the beacon chain, e.g.
+     *         securing against deposit frontrun vulnerability in ethereum 2.0 deposit contract.
+     *         Can be EOA or contract providing secure deposit functionality.
      *         In the context of this contract, the depositor performs deposits through `depositToBeaconChain()`.
      *         Depositor address is set in the initialization and can be changed by the owner with `setDepositor`
      *         only on the condition that the vault is not connected to the VaultHub.
-     * @return Address of the deposit guardian
+     * @return Address of the depositor
      */
     function depositor() external view returns (address) {
         return _getStorage().depositor;
@@ -466,7 +468,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         for (uint256 i = 0; i < keysCount; i++) {
-            bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH];
+            bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH:(i + 1) * PUBLIC_KEY_LENGTH];
             emit ValidatorExitRequested(msg.sender, /* indexed */ pubkey, pubkey);
         }
     }
@@ -478,7 +480,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
-    function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
@@ -500,11 +506,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             }
         }
 
-        bool isAuthorized = (
-            msg.sender == $.nodeOperator ||
+        bool isAuthorized = (msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB))
-        );
+            (isValuationBelowLocked && msg.sender == address(VAULT_HUB)));
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
@@ -516,7 +520,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 excess = msg.value - totalFee;
         if (excess > 0) {
-            (bool success,) = _refundRecipient.call{value: excess}("");
+            (bool success, ) = _refundRecipient.call{value: excess}("");
             if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
         }
 
@@ -636,7 +640,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive any excess withdrawal fee
      * @param _excess Amount of excess fee refunded to recipient
      */
-    event ValidatorWithdrawalTriggered(address indexed _sender, bytes _pubkeys, uint64[] _amounts, address _refundRecipient, uint256 _excess);
+    event ValidatorWithdrawalTriggered(
+        address indexed _sender,
+        bytes _pubkeys,
+        uint64[] _amounts,
+        address _refundRecipient,
+        uint256 _excess
+    );
 
     /**
      * @notice Thrown when an invalid zero value is passed
