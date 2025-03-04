@@ -41,7 +41,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- * - Deposit Guardian:
+ * - Depositor:
  *   - `depositToBeaconChain()`
  * - Operator:
  *   - `requestValidatorExit()`
@@ -147,6 +147,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bytes calldata /* _params */
     ) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
