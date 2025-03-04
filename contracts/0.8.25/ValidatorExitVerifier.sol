@@ -11,6 +11,9 @@ import {IValidatorsExitBusOracle, RequestStatus} from "./interfaces/IValidatorsE
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ValidatorWitness {
+    // VEBO report item index
+    uint32 exitRequestIndex;
+    // Validator
     uint64 validatorIndex;
     Validator validator;
     bytes32[] validatorProof;
@@ -68,7 +71,6 @@ contract ValidatorExitVerifier {
     error ZeroLidoLocatorAddress();
     error ExitRequestsNotFound(bytes32 exitRequestsHash);
     error UnsupportedReportDataFormat(uint256 reportDataFormat);
-    error MismatchedArrayLengths(uint256 keysCount, uint256 witnessesCount);
     error PubkeyMismatch(bytes exitReportPubkey, bytes witnessPubkey);
     error ExitRequestNotEligibleOnProvableBeaconBlock(
         uint256 keyIndex,
@@ -110,14 +112,9 @@ contract ValidatorExitVerifier {
 
     function verifyActiveValidatorsAfterExitRequest(
         bytes calldata exitRequests,
-        uint256[] calldata activeKeysIndexes,
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses
     ) external {
-        if (validatorWitnesses.length != activeKeysIndexes.length) {
-            revert MismatchedArrayLengths(activeKeysIndexes.length, validatorWitnesses.length);
-        }
-
         bytes32 exitRequestsHash = keccak256(exitRequests);
         RequestStatus memory requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle())
             .getExitRequestsStatus(exitRequestsHash);
@@ -130,10 +127,10 @@ contract ValidatorExitVerifier {
             revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
         }
 
-        for (uint256 i = 0; i < activeKeysIndexes.length; i++) {
+        for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = ExitRequests.unpackItem(
                 exitRequests,
-                activeKeysIndexes[i]
+                validatorWitnesses[i].exitRequestIndex
             );
 
             if (keccak256(pubkey) != keccak256(validatorWitnesses[i].validator.pubkey)) {
@@ -146,7 +143,7 @@ contract ValidatorExitVerifier {
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceEligibleExitRequest(
                 requestStatus,
-                activeKeysIndexes[i],
+                validatorWitnesses[i].exitRequestIndex,
                 beaconBlock.rootsTimestamp,
                 validatorWitnesses[i].validator.activationEpoch
             );
