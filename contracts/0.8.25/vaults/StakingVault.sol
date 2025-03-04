@@ -41,7 +41,6 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- *   - `setDepositor()`
  * - Deposit Guardian:
  *   - `depositToBeaconChain()`
  * - Operator:
@@ -527,33 +526,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
-    /**
-     * @notice Sets the depositor
-     * @param _depositor The address of the deposit guardian
-     * @dev It can only be changed when vault is not connected to the VaultHub
-     *
-     */
-    function setDepositor(address _depositor) external onlyOwner {
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
-
-        if (_depositor == _getStorage().depositor) {
-            revert DepositorAlreadySet();
-        }
-
-        VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
-
-        if (socket.vault == address(this) && !socket.pendingDisconnect) {
-            revert DepositorCannotChangeWhenConnected();
-        }
-
-        ERC7201Storage storage $ = _getStorage();
-        address oldDepositor = $.depositor;
-
-        $.depositor = _depositor;
-
-        emit DepositorSet(oldDepositor, _depositor);
-    }
-
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
@@ -607,13 +579,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Emitted when deposits to beacon chain are resumed
      */
     event BeaconChainDepositsResumed();
-
-    /**
-     * @notice Emitted when the deposit guardian is set
-     * @param oldDepositor The address of the old deposit guardian
-     * @param newDepositor The address of the new deposit guardian
-     */
-    event DepositorSet(address oldDepositor, address newDepositor);
 
     /**
      * @notice Emitted when ether is deposited to `DepositContract`.
@@ -725,16 +690,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to deposit to beacon chain while deposits are paused
      */
     error BeaconChainDepositsArePaused();
-
-    /**
-     * @notice Thrown when trying to update depositor for connected vault
-     */
-    error DepositorCannotChangeWhenConnected();
-
-    /**
-     * @notice Thrown when trying to update depositor for connected vault
-     */
-    error DepositorAlreadySet();
 
     /**
      * @notice Thrown when the length of the validator public keys is invalid
