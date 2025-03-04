@@ -72,6 +72,13 @@ library BLS {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         CONSTANTS                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev mask to remove sign bit from Fp via bitwise AND
+    bytes32 constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    PRECOMPILE ADDRESSES                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -204,8 +211,6 @@ library BLS {
         DepositYComponents calldata depositY,
         bytes32 withdrawalCredentials
     ) internal view {
-        bytes32 FP_NO_SIGN_BIT_MASK = bytes32(0x000000000000000000000000000000001fffffffffffffffffffffffffffffff);
-
         // Hash the deposit message and map it to G2 point on the curve
         G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials));
 
@@ -213,14 +218,32 @@ library BLS {
         // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
         bytes32[24] memory input;
 
-        // pubkeyG1
+        // Load pubkeyG1 directly from calldata to input array
         // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
-        input[0] = (bytes32(deposit.pubkey[0:16]) >> 128) & FP_NO_SIGN_BIT_MASK;
-        //input[0] = bytes32(uint256(1) << 128) | bytes32(deposit.pubkey[0:16]);
-        input[1] = bytes32(deposit.pubkey[16:48]);
-        // pubkeyG1.Y
-        input[2] = depositY.pubkeyY.a;
-        input[3] = depositY.pubkeyY.b;
+        // pubkeyG1.Y as is from calldata
+        bytes calldata pubkey = deposit.pubkey;
+        /// @solidity memory-safe-assembly
+        assembly {
+            // load first 32 bytes of pubkey and apply sign mask
+            mstore(
+                add(input, 0x10), // to input[0.5-1.5] (16-46 bytes)
+                and(calldataload(pubkey.offset), FP_NO_SIGN_MASK)
+            )
+
+            // load rest of 16 bytes of pubkey
+            calldatacopy(
+                add(input, 0x30), // to input[1.5-2]
+                add(pubkey.offset, 0x20), // from last 16 bytes of pubkey
+                0x10 // 16 bytes
+            )
+
+            //  Load all of depositY.pubkeyY
+            calldatacopy(
+                add(input, 0x40), // to input[2-3]
+                depositY, // from depositY.pubkeyY
+                0x40 // 64 bytes
+            )
+        }
 
         // validate that pubkeyG1 is not infinity point
         // required per https://eips.ethereum.org/EIPS/eip-2537#abi-for-pairing-check
@@ -229,6 +252,7 @@ library BLS {
         }
 
         // Message on Curve G2
+        // no way to load directly from function return to memory
         input[4] = msgG2.x_c0_a;
         input[5] = msgG2.x_c0_b;
         input[6] = msgG2.x_c1_a;
@@ -244,18 +268,41 @@ library BLS {
         input[14] = 0x00000000000000000000000000000000114d1d6855d545a8aa7d76c8cf2e21f2;
         input[15] = 0x67816aef1db507c96655b9d5caac42364e6f38ba0ecb751bad54dcd6b939c2ca;
 
-        // Signature G2 (deposit.signature has Fp2 flipped)
-        // signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
-        input[16] = bytes32(deposit.signature[48:64]) >> 128;
-        input[17] = bytes32(deposit.signature[64:96]);
-        // signatureG2.X_c1 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
-        input[18] = (bytes32(deposit.signature[0:16]) >> 128) & FP_NO_SIGN_BIT_MASK;
-        input[19] = bytes32(deposit.signature[16:48]);
+        // Signature G2
+        // Signature G2 X (deposit.signature has Fp2 flipped)
+        //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
+        //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
+        // SignatureG2 Y as is from calldata
+        bytes calldata signature = deposit.signature;
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Load signatureG2.X_c2 skipping 16 bytes of zero padding
+            calldatacopy(
+                add(input, 0x210), // to input[16.5-20]
+                add(signature.offset, 0x30), // from  deposit.signature(48-96 bytes)
+                0x30 // 48 bytes of length
+            )
 
-        input[20] = depositY.signatureY.c0_a;
-        input[21] = depositY.signatureY.c0_b;
-        input[22] = depositY.signatureY.c1_a;
-        input[23] = depositY.signatureY.c1_b;
+            // Load signatureG2.X_c1 first 32 bytes and apply sign mask
+            mstore(
+                add(input, 0x250), // to input[18.5-19.5]
+                and(calldataload(signature.offset), FP_NO_SIGN_MASK)
+            )
+
+            // Load rest of 16 bytes of signatureG2.X_c1
+            calldatacopy(
+                add(input, 0x270), // to input[19.5-20]
+                add(signature.offset, 0x20), // from deposit.signature(32-48 bytes)
+                0x10 // 16 bytes
+            )
+
+            // Load all of depositY.signatureY to input[20-23]
+            calldatacopy(
+                add(input, 0x280), // copy to input[20]
+                add(depositY, 0x40), // from calldata at depositY.signatureY
+                0x80 // data of signatureY length
+            )
+        }
 
         // validate that signatureG2 is not infinity
         if (
