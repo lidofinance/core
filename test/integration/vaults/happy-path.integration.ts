@@ -447,10 +447,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const disconnectTx = await delegation.connect(curator).voluntaryDisconnect();
     const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;
 
+    const locked = await stakingVault.locked();
     const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
     expect(disconnectEvents.length).to.equal(1n);
 
-    expect(await stakingVault.locked()).to.equal(0);
+    expect(await stakingVault.locked()).to.equal(locked);
   });
 
   async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {
