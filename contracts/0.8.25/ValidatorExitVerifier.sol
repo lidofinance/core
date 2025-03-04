@@ -115,19 +115,13 @@ contract ValidatorExitVerifier {
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses
     ) external {
-        bytes32 exitRequestsHash = keccak256(exitRequests);
-        RequestStatus memory requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle())
-            .getExitRequestsStatus(exitRequestsHash);
-
-        if (requestStatus.contractVersion == 0) {
-            revert ExitRequestsNotFound(exitRequestsHash);
-        }
-
-        if (requestStatus.reportDataFormat != 1) {
-            revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
-        }
+        RequestStatus memory requestStatus = _getSupportedRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
+            if (validatorWitnesses[i].validator.exitEpoch != type(uint64).max) {
+                revert ValidatorAlreadyRequestedExit(validatorWitnesses[i].validator.pubkey);
+            }
+
             (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = ExitRequests.unpackItem(
                 exitRequests,
                 validatorWitnesses[i].exitRequestIndex
@@ -137,9 +131,7 @@ contract ValidatorExitVerifier {
                 revert PubkeyMismatch(pubkey, validatorWitnesses[i].validator.pubkey);
             }
 
-            if (validatorWitnesses[i].validator.exitEpoch != type(uint64).max) {
-                revert ValidatorAlreadyRequestedExit(validatorWitnesses[i].validator.pubkey);
-            }
+            _verifyValidatorProof(beaconBlock, validatorWitnesses[i]);
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceEligibleExitRequest(
                 requestStatus,
@@ -147,8 +139,6 @@ contract ValidatorExitVerifier {
                 beaconBlock.rootsTimestamp,
                 validatorWitnesses[i].validator.activationEpoch
             );
-
-            _verifyValidatorProof(beaconBlock, validatorWitnesses[i]);
 
             IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
                 moduleId,
@@ -269,6 +259,21 @@ contract ValidatorExitVerifier {
         }
 
         return provableBeaconBlockTimestamp - eligibleExitRequestTimestamp;
+    }
+
+    function _getSupportedRequestStatus(bytes calldata exitRequests) returns (RequestStatus memory requestStatus) {
+        bytes32 exitRequestsHash = keccak256(exitRequests);
+        requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle()).getExitRequestsStatus(
+            exitRequestsHash
+        );
+
+        if (requestStatus.contractVersion == 0) {
+            revert ExitRequestsNotFound(exitRequestsHash);
+        }
+
+        if (requestStatus.reportDataFormat != 1) {
+            revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
+        }
     }
 }
 
