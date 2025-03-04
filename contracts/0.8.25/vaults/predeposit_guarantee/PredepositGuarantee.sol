@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
+import {BLS} from "contracts/0.8.25/lib/BLS.sol";
 import {BeaconBlockHeader} from "contracts/0.8.25/lib/SSZ.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
@@ -272,7 +273,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function predeposit(
         IStakingVaultOwnable _stakingVault,
-        IStakingVaultOwnable.Deposit[] calldata _deposits
+        IStakingVaultOwnable.Deposit[] calldata _deposits,
+        BLS.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
@@ -284,11 +286,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             _topUpNodeOperatorBalance(_nodeOperator);
         }
 
+        bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
+
         // sanity check that vault returns correct WC
-        if (address(_stakingVault) != _wcToAddress(_stakingVault.withdrawalCredentials())) {
+        if (address(_stakingVault) != _wcToAddress(withdrawalCredentials)) {
             revert StakingVaultWithdrawalCredentialsMismatch(
                 address(_stakingVault),
-                _wcToAddress(_stakingVault.withdrawalCredentials())
+                _wcToAddress(withdrawalCredentials)
             );
         }
 
@@ -301,6 +305,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVaultOwnable.Deposit calldata _deposit = _deposits[i];
+
+            BLS.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             if ($.validatorStatus[_deposit.pubkey].stage != validatorStage.NONE) {
                 revert MustBeNewValidatorPubkey(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);

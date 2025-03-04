@@ -142,16 +142,16 @@ describe("PredepositGuarantee.sol", () => {
       const validator = generateValidator(vaultWC);
 
       // NO runs predeposit for the vault
-      const predepositData = generatePredeposit(validator);
-      const predepositTX = pdg.predeposit(stakingVault, [predepositData]);
+      const { deposit, depositY } = generatePredeposit(validator);
+      const predepositTX = pdg.predeposit(stakingVault, [deposit], [depositY]);
 
       await expect(predepositTX)
         .to.emit(pdg, "ValidatorsPreDeposited")
         .withArgs(vaultOperator, stakingVault, 1)
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(pdg, 1, predepositData.amount)
+        .withArgs(pdg, 1, deposit.amount)
         .to.emit(depositContract, "DepositEvent")
-        .withArgs(predepositData.pubkey, vaultWC, predepositData.signature, predepositData.depositDataRoot);
+        .withArgs(deposit.pubkey, vaultWC, deposit.signature, deposit.depositDataRoot);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
