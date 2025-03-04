@@ -109,14 +109,34 @@ contract BLSVerifyingKeyTest is Test {
             );
     }
 
+    /// @notice Slices a byte array
+    function slice(bytes memory data, uint256 start, uint256 end) internal pure returns (bytes32 result) {
+        uint256 len = end - start;
+        // Slice length exceeds 32 bytes"
+        assert(len <= 32);
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // The bytes array in memory begins with its length at the first 32 bytes.
+            // So we add 32 to get the pointer to the actual data.
+            let ptr := add(data, 32)
+            // Load 32 bytes from memory starting at dataPtr+start.
+            let word := mload(add(ptr, start))
+            // Shift right by (32 - len)*8 bits to discard any extra bytes.
+            result := shr(mul(sub(32, len), 8), word)
+        }
+    }
+
     function wrapFp(bytes memory data) internal pure returns (BLS.Fp memory) {
         require(data.length == 48, "Invalid Fp length");
-        uint256 a = BLS.sliceToUint(data, 0, 16);
-        uint256 b = BLS.sliceToUint(data, 16, 48);
+
+        bytes32 a = slice(data, 0, 16);
+        bytes32 b = slice(data, 16, 48);
+
         return BLS.Fp(a, b);
     }
 
     function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS.Fp2 memory) {
-        return BLS.Fp2(wrapFp(x), wrapFp(y));
+        return BLS.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
     }
 }

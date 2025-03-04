@@ -5,225 +5,56 @@ import {SSZ} from "./SSZ.sol";
 
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
-// for base structs & operations: https://github.com/paradigmxyz/forge-alphanet/blob/main/src/sign/BLS.sol
-// for decodeG1Point/decodeG2Point: https://github.com/ralexstokes/deposit-verifier
+/// @notice modified&stripped Solady BLS Lib to support ETH beacon spec for validator deposit message verification
+/// @author Lido
+/// @author Solady (https://github.com/vectorized/solady/blob/main/src/utils/BLS.sol)
+/// @author Ithaca (https://github.com/ithacaxyz/odyssey-examples/blob/main/chapter1/contracts/src/libraries/BLS.sol)
+///
+/// @dev Precompile addresses come from the BLS addresses submodule in AlphaNet, see
+/// See: (https://github.com/paradigmxyz/alphanet/blob/main/crates/precompile/src/addresses.rs)
+///
+/// Note:
+/// - This implementation uses `mcopy`, since any chain that is edgy enough to
+///   implement the BLS precompiles will definitely have implemented cancun.
+/// - For efficiency, we use the legacy `staticcall` to call the precompiles.
+///   For the intended use case in an entry points that requires gas-introspection,
+///   which requires legacy bytecode, this won't be a blocker.
 library BLS {
-    /// @dev A base field element (Fp) is encoded as 64 bytes by performing the
-    /// BigEndian encoding of the corresponding (unsigned) integer. Due to the size of p,
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                          STRUCTS                           */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // We use flattened structs to make encoding more efficient.
+    // All structs use Big endian encoding.
+    // See: https://eips.ethereum.org/EIPS/eip-2537
+
+    /// @dev A representation of a base field element (Fp) in the BLS12-381 curve.
+    /// Due to the size of `p`,
+    /// `0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
     /// the top 16 bytes are always zeroes.
     struct Fp {
-        uint256 a;
-        uint256 b;
+        bytes32 a; // Upper 32 bytes.
+        bytes32 b; // Lower 32 bytes.
     }
 
-    /// @dev For elements of the quadratic extension field (Fp2), encoding is byte concatenation of
-    /// individual encoding of the coefficients totaling in 128 bytes for a total encoding.
-    /// c0 + c1 * v
+    /// @dev A representation of an extension field element (Fp2) in the BLS12-381 curve.
     struct Fp2 {
-        Fp c0;
-        Fp c1;
+        bytes32 c0_a;
+        bytes32 c0_b;
+        bytes32 c1_a;
+        bytes32 c1_b;
     }
 
-    /// @dev Points of G1 and G2 are encoded as byte concatenation of the respective
-    /// encodings of the x and y coordinates.
-    /// total size is 128 bytes
+    /// @dev A representation of a point on the G1 curve of BLS12-381.
     struct G1Point {
-        Fp x;
-        Fp y;
+        bytes32 x_a;
+        bytes32 x_b;
+        bytes32 y_a;
+        bytes32 y_b;
     }
 
-    /// @dev Points of G1 and G2 are encoded as byte concatenation of the respective
-    /// encodings of the x and y coordinates.
-    /// total size is 256 bytes
+    /// @dev A representation of a point on the G2 curve of BLS12-381.
     struct G2Point {
-        Fp2 x;
-        Fp2 y;
-    }
-
-    struct DepositYComponents {
-        Fp pubkeyY;
-        Fp2 signatureY;
-    }
-
-    uint256 constant SUBGROUP_ORDER = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001;
-
-    bytes constant DST = bytes("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_");
-    uint16 constant MSG_LENGTH = 256;
-
-    bytes1 constant BLS_BYTE_WITHOUT_FLAGS_MASK = bytes1(0x1f);
-    uint256 constant FP_NO_SIGN_BIT_MASK = uint256(0x01fffffffffffffffffffffffffffffff);
-
-    /// @notice PRECOMPILED CONTRACT ADDRESSES
-    address constant SHA256 = 0x0000000000000000000000000000000000000002;
-    address constant MOD_EXP = 0x0000000000000000000000000000000000000005;
-
-    ///  forge
-    // MUL is deprecated in actual EIP in favor of MSM trivial case
-    // We are supposed to use MSM address but change it to MUL because of forge
-    // old MSM will fail on trivial 1 point multiplication
-    //address constant BLS12_G1MUL = 0x000000000000000000000000000000000000000C;
-    //address constant BLS12_G1MSM = 0x000000000000000000000000000000000000000d;
-    address constant BLS12_G1MSM = 0x000000000000000000000000000000000000000C;
-
-    address constant BLS12_G2ADD = 0x000000000000000000000000000000000000000E;
-    // Same for G2
-    // address constant BLS12_G2MUL = 0x000000000000000000000000000000000000000F;
-    // address constant BLS12_G2MSM = 0x0000000000000000000000000000000000000010;
-    address constant BLS12_G2MSM = 0x000000000000000000000000000000000000000F;
-    address constant BLS12_PAIRING_CHECK = 0x0000000000000000000000000000000000000011;
-    address constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000013;
-
-    /** Correct Pectra addresses & gas values for precompile calls
-    address constant BLS12_G2ADD = 0x000000000000000000000000000000000000000b;
-    uint256 constant BLS12_G2ADD_GAS = 600;
-
-    address constant BLS12_G1MSM = 0x000000000000000000000000000000000000000C;
-    uint256 constant BLS12_G1MSM_GAS = 12000;
-
-    address constant BLS12_G2MSM = 0x000000000000000000000000000000000000000E;
-    uint256 constant BLS12_G2MSM_GAS = 22500;
-
-    address constant BLS12_PAIRING_CHECK = 0x000000000000000000000000000000000000000F;
-    uint256 constant BLS12_PAIRING_CHECK_GAS = 102900;
-
-    address constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000011;
-    uint256 constant BLS12_MAP_FP2_TO_G2_GAS = 23800;
-
-    */
-
-    // Negated G1 generator compressed as raw bytes to save gas
-    // per https://eips.ethereum.org/EIPS/eip-2537#curve-parameters
-    // G1Point(
-    //     Fp(
-    //         31827880280837800241567138048534752271,
-    //         88385725958748408079899006800036250932223001591707578097800747617502997169851
-    //     ),
-    //     Fp(
-    //         22997279242622214937712647648895181298,
-    //         46816884707101390882112958134453447585552332943769894357249934112654335001290
-    //     )
-    // );
-    function NEGATED_G1_GENERATOR() internal pure returns (G1Point memory) {
-        return
-            abi.decode(
-                hex"0000000000000000000000000000000017f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb00000000000000000000000000000000114d1d6855d545a8aa7d76c8cf2e21f267816aef1db507c96655b9d5caac42364e6f38ba0ecb751bad54dcd6b939c2ca",
-                (G1Point)
-            );
-    }
-
-    /// @notice Slices a byte array to a uint256
-    function sliceToUint(bytes memory data, uint256 start, uint256 end) internal pure returns (uint256 result) {
-        uint256 len = end - start;
-        // Slice length exceeds 32 bytes"
-        assert(len <= 32);
-
-        /// @solidity memory-safe-assembly
-        assembly {
-            // The bytes array in memory begins with its length at the first 32 bytes.
-            // So we add 32 to get the pointer to the actual data.
-            let ptr := add(data, 32)
-            // Load 32 bytes from memory starting at dataPtr+start.
-            let word := mload(add(ptr, start))
-            // Shift right by (32 - len)*8 bits to discard any extra bytes.
-            result := shr(mul(sub(32, len), 8), word)
-        }
-    }
-
-    /// @notice Checks if provided point is at Infinity on the BLS curve
-    /// @param point G1Point to check
-    function isG1Infinity(G1Point memory point) internal pure returns (bool) {
-        return point.x.a == 0 && point.x.b == 0 && point.y.a == 0 && point.y.b == 0;
-    }
-
-    /// @notice Checks if provided point is at Infinity on the BLS curve
-    /// @param point G2Point to check
-    function isG2Infinity(G2Point memory point) internal pure returns (bool) {
-        return
-            point.x.c0.a == 0 &&
-            point.x.c0.b == 0 &&
-            point.x.c1.a == 0 &&
-            point.x.c1.b == 0 &&
-            point.y.c0.a == 0 &&
-            point.y.c0.b == 0 &&
-            point.y.c1.a == 0 &&
-            point.y.c1.b == 0;
-    }
-
-    function validateG1Point(G1Point memory point) internal view {
-        if (isG1Infinity(point)) {
-            revert InputHasInfinityPoints();
-        }
-        G1Point memory check = G1Mul(point, SUBGROUP_ORDER);
-
-        if (!isG1Infinity(check)) {
-            revert InputNotOnSubgroup();
-        }
-    }
-
-    function validateG2Point(G2Point memory point) internal view {
-        if (isG2Infinity(point)) {
-            revert InputHasInfinityPoints();
-        }
-        G2Point memory check = G2Mul(point, SUBGROUP_ORDER);
-        if (!isG2Infinity(check)) {
-            revert InputNotOnSubgroup();
-        }
-    }
-
-    function G1Mul(G1Point memory point, uint256 scalar) internal view returns (G1Point memory result) {
-        bytes memory input = bytes.concat(abi.encode(point, scalar));
-
-        (bool success, bytes memory output) = address(BLS12_G1MSM).staticcall(input);
-        if (!success) {
-            revert BLSG1MsmFailed();
-        }
-        return abi.decode(output, (G1Point));
-    }
-
-    function G2Mul(G2Point memory point, uint256 scalar) internal view returns (G2Point memory result) {
-        bytes memory input = bytes.concat(abi.encode(point, scalar));
-
-        // we have to use deprecated G2MUL because in forge
-        (bool success, bytes memory output) = address(BLS12_G2MSM).staticcall(input);
-        if (!success) {
-            revert BLSG2MsmFailed();
-        }
-        return abi.decode(output, (G2Point));
-    }
-
-    function decodeG1Point(bytes calldata encodedX, Fp calldata Y) internal pure returns (G1Point memory) {
-        uint256 a = sliceToUint(encodedX, 0, 16) & FP_NO_SIGN_BIT_MASK;
-        uint256 b = sliceToUint(encodedX, 16, 48);
-        Fp memory X = Fp(a, b);
-        return G1Point(X, Y);
-    }
-
-    function decodeG2Point(bytes calldata encodedX, Fp2 calldata Y) internal pure returns (G2Point memory) {
-        // Signature compressed encoding has are X Fp components packed in reverse with Z sign bit at the start
-
-        uint256 c0_a = sliceToUint(encodedX, 48, 64); //  Fp.a is 16 bytes
-        uint256 c0_b = sliceToUint(encodedX, 64, 96); //  Fp.b is 32 bytes
-
-        uint256 c1_a = sliceToUint(encodedX, 0, 16) & FP_NO_SIGN_BIT_MASK;
-        uint256 c2_b = sliceToUint(encodedX, 16, 48);
-        Fp2 memory X = Fp2(Fp(c0_a, c0_b), Fp(c1_a, c2_b));
-        return G2Point(X, Y);
-    }
-
-    function mapFp2ToG2(Fp2 memory element) internal view returns (G2Point memory result) {
-        // exactly 23800 gas per https://eips.ethereum.org/EIPS/eip-2537#gas-schedule
-        (bool success, bytes memory output) = BLS12_MAP_FP2_TO_G2.staticcall(abi.encode(element));
-
-        if (!success) {
-            revert BLSMapFp2ToG2Failed();
-        }
-
-        return abi.decode(output, (G2Point));
-    }
-
-    // solady struct is used to avoid memory corruption
-    // TODO: switch to 100% solady lib methods
-    struct _G2Point {
         bytes32 x_c0_a;
         bytes32 x_c0_b;
         bytes32 x_c1_a;
@@ -234,10 +65,65 @@ library BLS {
         bytes32 y_c1_b;
     }
 
-    // Solady hashToG2 modified to accept bytes32 instead of bytes
-    function hashToG2(bytes32 message) internal view returns (G2Point memory) {
-        uint256[8] memory result;
-        assembly ("memory-safe") {
+    /// @dev Y coordinates of uncompressed pubkey and signature
+    struct DepositYComponents {
+        Fp pubkeyY;
+        Fp2 signatureY;
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    PRECOMPILE ADDRESSES                    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // Correct Pectra addreses are not avaliable in forge
+
+    /// @dev SHA256 precompile address.
+    address internal constant SHA256 = 0x0000000000000000000000000000000000000002;
+
+    /// @dev Mod Exp precompile address.
+    address constant MOD_EXP = 0x0000000000000000000000000000000000000005;
+
+    /// @dev For addition of two points on the BLS12-381 G2 curve.
+    //address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000d;
+    address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000E;
+
+    /// @dev For performing a pairing check on the BLS12-381 curve.
+    //address internal constant BLS12_PAIRING_CHECK = 0x000000000000000000000000000000000000000F;
+    address internal constant BLS12_PAIRING_CHECK = 0x0000000000000000000000000000000000000011;
+
+    /// @dev For mapping a Fp2 to a point on the BLS12-381 G2 curve.
+    //address internal constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000011;
+    address internal constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000013;
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                        CUSTOM ERRORS                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // A custom error for each precompile helps us in debugging which precompile has failed.
+
+    /// @dev The G2Add operation failed.
+    error G2AddFailed();
+
+    /// @dev The pairing operation failed.
+    error PairingFailed();
+
+    /// @dev The MapFpToG2 operation failed.
+    error MapFp2ToG2Failed();
+
+    /// @dev Input has Infinity points (zero points).
+    error InputHasInfinityPoints();
+
+    /// @dev provided BLS signature is invalid
+    error InvalidSignature();
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         OPERATIONS                         */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev Computes a point in G2 from a message. Modified to accept bytes32 and have DSL per ETH 2.0 spec
+    function hashToG2(bytes32 message) internal view returns (G2Point memory result) {
+        /// @solidity memory-safe-assembly
+        assembly {
             function dstPrime(o_, i_) -> _o {
                 mstore8(o_, i_) // 1.
                 mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // 32.
@@ -311,12 +197,6 @@ library BLS {
                 revert(0x1c, 0x04)
             }
         }
-
-        return
-            G2Point(
-                Fp2(Fp(result[0], result[1]), Fp(result[2], result[3])),
-                Fp2(Fp(result[4], result[5]), Fp(result[6], result[7]))
-            );
     }
 
     function verifyDepositMessage(
@@ -324,45 +204,98 @@ library BLS {
         DepositYComponents calldata depositY,
         bytes32 withdrawalCredentials
     ) internal view {
-        bytes32 root = SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials);
-        G2Point memory msgG2 = hashToG2(root);
-        // might be exsessive, need to check
-        validateG2Point(msgG2);
+        bytes32 FP_NO_SIGN_BIT_MASK = bytes32(0x000000000000000000000000000000001fffffffffffffffffffffffffffffff);
 
-        // can be optimized by correctly copying calldata bytes to precompile input
-        // pubkeyG1 = ( 16byte pad | flag_mask & deposit.pubkey | depositY.pubkeyY)
-        G1Point memory pubkeyG1 = decodeG1Point(deposit.pubkey, depositY.pubkeyY);
-        validateG1Point(pubkeyG1);
+        // Hash the deposit message and map it to G2 point on the curve
+        G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials));
 
-        // signatureG2 is tricker as signature has Fp
-        G2Point memory signatureG2 = decodeG2Point(deposit.signature, depositY.signatureY);
-        validateG2Point(signatureG2);
+        // BLS Pairing check input
+        // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
+        bytes32[24] memory input;
 
-        bytes memory input = bytes.concat(abi.encode(pubkeyG1, msgG2, NEGATED_G1_GENERATOR(), signatureG2));
+        // pubkeyG1
+        // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
+        input[0] = (bytes32(deposit.pubkey[0:16]) >> 128) & FP_NO_SIGN_BIT_MASK;
+        //input[0] = bytes32(uint256(1) << 128) | bytes32(deposit.pubkey[0:16]);
+        input[1] = bytes32(deposit.pubkey[16:48]);
+        // pubkeyG1.Y
+        input[2] = depositY.pubkeyY.a;
+        input[3] = depositY.pubkeyY.b;
 
-        (bool success, bytes memory output) = BLS12_PAIRING_CHECK.staticcall(input);
-
-        if (!success) {
-            revert BLSPairingFailed();
+        // validate that pubkeyG1 is not infinity point
+        // required per https://eips.ethereum.org/EIPS/eip-2537#abi-for-pairing-check
+        if (input[0] == 0 && input[1] == 0 && input[2] == 0 && input[3] == 0) {
+            revert InputHasInfinityPoints();
         }
 
-        bool result = abi.decode(output, (bool));
+        // Message on Curve G2
+        input[4] = msgG2.x_c0_a;
+        input[5] = msgG2.x_c0_b;
+        input[6] = msgG2.x_c1_a;
+        input[7] = msgG2.x_c1_b;
+        input[8] = msgG2.y_c0_a;
+        input[9] = msgG2.y_c0_b;
+        input[10] = msgG2.y_c1_a;
+        input[11] = msgG2.y_c1_b;
 
-        if (!result) {
+        // Negate G1 generator
+        input[12] = 0x0000000000000000000000000000000017f1d3a73197d7942695638c4fa9ac0f;
+        input[13] = 0xc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb;
+        input[14] = 0x00000000000000000000000000000000114d1d6855d545a8aa7d76c8cf2e21f2;
+        input[15] = 0x67816aef1db507c96655b9d5caac42364e6f38ba0ecb751bad54dcd6b939c2ca;
+
+        // Signature G2 (deposit.signature has Fp2 flipped)
+        // signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
+        input[16] = bytes32(deposit.signature[48:64]) >> 128;
+        input[17] = bytes32(deposit.signature[64:96]);
+        // signatureG2.X_c1 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
+        input[18] = (bytes32(deposit.signature[0:16]) >> 128) & FP_NO_SIGN_BIT_MASK;
+        input[19] = bytes32(deposit.signature[16:48]);
+
+        input[20] = depositY.signatureY.c0_a;
+        input[21] = depositY.signatureY.c0_b;
+        input[22] = depositY.signatureY.c1_a;
+        input[23] = depositY.signatureY.c1_b;
+
+        // validate that signatureG2 is not infinity
+        if (
+            input[16] == 0 &&
+            input[17] == 0 &&
+            input[18] == 0 &&
+            input[19] == 0 &&
+            input[20] == 0 &&
+            input[21] == 0 &&
+            input[22] == 0 &&
+            input[23] == 0
+        ) {
+            revert InputHasInfinityPoints();
+        }
+
+        bool isPaired;
+        /// @solidity memory-safe-assembly
+        assembly {
+            if iszero(
+                and(
+                    eq(returndatasize(), 0x20), // check that return data is only 32 bytes (executes after staticall)
+                    staticcall(
+                        gas(),
+                        BLS12_PAIRING_CHECK,
+                        input, // full input array
+                        0x300, // 24 * 32 bytes length
+                        0x00, // output to scratch space
+                        0x20 // only 1 slot
+                    )
+                )
+            ) {
+                mstore(0x00, 0x4df45e2f) // `PairingFailed()`.
+                revert(0x1c, 0x04)
+            }
+            // load result to bool
+            isPaired := mload(0x00)
+        }
+
+        if (!isPaired) {
             revert InvalidSignature();
         }
     }
-
-    // Precompile errors
-    error BLSG1MsmFailed();
-    error BLSG2MsmFailed();
-    error ModExpFailed();
-    error BLSG2AddFailed();
-    error BLSPairingFailed();
-    error BLSMapFp2ToG2Failed();
-
-    // Signature errors
-    error InvalidSignature();
-    error InputHasInfinityPoints();
-    error InputNotOnSubgroup();
 }
