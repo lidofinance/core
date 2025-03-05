@@ -47,6 +47,7 @@ contract ValidatorExitVerifier {
     uint64 constant FAR_FUTURE_EPOCH = type(uint64).max;
 
     uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
+    uint32 public immutable SLOTS_PER_EPOCH;
     uint32 public immutable SECONDS_PER_SLOT;
     uint64 public immutable GENESIS_TIME;
 
@@ -82,12 +83,12 @@ contract ValidatorExitVerifier {
     error ExitRequestsNotFound(bytes32 exitRequestsHash);
     error UnsupportedReportDataFormat(uint256 reportDataFormat);
     error ExitRequestNotEligibleOnProvableBeaconBlock(
-        uint256 keyIndex,
         uint64 provableBeaconBlockTimestamp,
         uint64 eligibleExitRequestTimestamp
     );
     error ValidatorAlreadyRequestedExit(uint256 validatorIndex);
     error ExitRequestsCountMismatch(uint256 exitRequestsCount, uint256 exitRequestsCountInExitReportStatus);
+    error ChainTimeConfigurationMismatch();
 
     /// @dev The previous and current forks can be essentially the same.
     constructor(
@@ -98,6 +99,7 @@ contract ValidatorExitVerifier {
         GIndex gIHistoricalSummariesCurr,
         Slot firstSupportedSlot,
         Slot pivotSlot,
+        uint32 slotsPerEpoch,
         uint32 secondsPerSlot,
         uint64 genesisTime,
         uint32 shardCommitteePeriodInSeconds
@@ -115,6 +117,7 @@ contract ValidatorExitVerifier {
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
         PIVOT_SLOT = pivotSlot;
+        SLOTS_PER_EPOCH = slotsPerEpoch;
         SECONDS_PER_SLOT = secondsPerSlot;
         GENESIS_TIME = genesisTime;
         SHARD_COMMITTEE_PERIOD_IN_SECONDS = shardCommitteePeriodInSeconds;
@@ -133,14 +136,62 @@ contract ValidatorExitVerifier {
                 validatorWitnesses[i].exitRequestIndex
             );
 
-            _verifyValidatorIsActive(beaconBlock, validatorWitnesses[i], pubkey);
-
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
-                requestStatus,
-                validatorWitnesses[i].exitRequestIndex,
+                requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
                 beaconBlock.rootsTimestamp,
                 validatorWitnesses[i].activationEpoch
             );
+
+            _verifyValidatorIsActive(beaconBlock.header, validatorWitnesses[i], pubkey);
+
+            IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
+                moduleId,
+                nodeOpId,
+                pubkey,
+                secondsSinceEligibleExitRequest
+            );
+        }
+    }
+
+    function verifyHistoricalActiveValidatorsAfterExitRequest(
+        bytes calldata exitRequests,
+        ProvableBeaconBlockHeader calldata beaconBlock,
+        HistoricalHeaderWitness calldata oldBlock,
+        ValidatorWitness[] calldata validatorWitnesses
+    ) external {
+        _verifyBeaconBlockRoot(beaconBlock);
+
+        if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
+            revert UnsupportedSlot(oldBlock.header.slot);
+        }
+
+        // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
+        // Ensuring the provided generalized index is for a node somewhere below the historical_summaries root.
+        if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
+            revert InvalidGIndex();
+        }
+
+        SSZ.verifyProof({
+            proof: oldBlock.proof,
+            root: beaconBlock.header.stateRoot,
+            leaf: oldBlock.header.hashTreeRoot(),
+            gI: oldBlock.rootGIndex
+        });
+
+        RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
+
+        for (uint256 i = 0; i < validatorWitnesses.length; i++) {
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = exitRequests.unpackExitRequest(
+                validatorWitnesses[i].exitRequestIndex
+            );
+
+            uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+                requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
+                GENESIS_TIME + oldBlock.header.slot.unwrap() * SECONDS_PER_SLOT,
+                validatorWitnesses[i].activationEpoch
+            );
+
+            _verifyValidatorIsActive(oldBlock.header, validatorWitnesses[i], pubkey);
 
             IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
                 moduleId,
@@ -152,9 +203,9 @@ contract ValidatorExitVerifier {
     }
 
     /// @notice Verify withdrawal proof
-    /// @param beaconBlock Beacon block header
+    /// @param header Beacon block header
     function _verifyValidatorIsActive(
-        ProvableBeaconBlockHeader calldata beaconBlock,
+        BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
         bytes calldata pubkey
     ) internal view {
@@ -175,46 +226,11 @@ contract ValidatorExitVerifier {
 
         SSZ.verifyProof({
             proof: witness.validatorProof,
-            root: beaconBlock.header.stateRoot,
+            root: header.stateRoot,
             leaf: validator.hashTreeRoot(),
-            gI: _getValidatorGI(witness.validatorIndex, beaconBlock.header.slot)
+            gI: _getValidatorGI(witness.validatorIndex, header.slot)
         });
     }
-
-    // /// @notice Verify withdrawal proof against historical summaries data and report withdrawal to the module for valid proofs
-    // /// @param beaconBlock Beacon block header
-    // /// @param oldBlock Historical block header witness
-    // function _verifyHistoricalValidatorProof(
-    //     ProvableBeaconBlockHeader calldata beaconBlock,
-    //     HistoricalHeaderWitness calldata oldBlock,
-    //     ValidatorWitness calldata witness
-    // ) internal view {
-    //     _verifyBeaconBlockRoot(beaconBlock);
-
-    //     if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-    //         revert UnsupportedSlot(oldBlock.header.slot);
-    //     }
-
-    //     // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
-    //     // Ensuring the provided generalized index is for a node somewhere below the historical_summaries root.
-    //     if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
-    //         revert InvalidGIndex();
-    //     }
-
-    //     SSZ.verifyProof({
-    //         proof: oldBlock.proof,
-    //         root: beaconBlock.header.stateRoot,
-    //         leaf: oldBlock.header.hashTreeRoot(),
-    //         gI: oldBlock.rootGIndex
-    //     });
-
-    //     SSZ.verifyProof({
-    //         proof: witness.validatorProof,
-    //         root: oldBlock.header.stateRoot,
-    //         leaf: witness.validator.hashTreeRoot(),
-    //         gI: _getValidatorGI(witness.validatorIndex, oldBlock.header.slot)
-    //     });
-    // }
 
     /**
      * @dev Verifies a beacon block is trustworthy via EIP-4788 contract.
@@ -235,6 +251,15 @@ contract ValidatorExitVerifier {
         if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
             revert InvalidBlockHeader();
         }
+
+        // Perform simple sanity checks to make sure that provided GENESIS_TIME & SECONDS_PER_SLOT consistent
+        // against EIP-4788 contract data.
+        if (
+            beaconBlock.rootsTimestamp < GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT ||
+            beaconBlock.rootsTimestamp > GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT
+        ) {
+            revert ChainTimeConfigurationMismatch();
+        }
     }
 
     function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
@@ -247,16 +272,12 @@ contract ValidatorExitVerifier {
     }
 
     function _getSecondsSinceExitRequestEligible(
-        RequestStatus memory requestStatus,
-        uint256 keyIndex,
+        uint64 validatorExitRequestTimestamp,
         uint64 provableBeaconBlockTimestamp,
         uint64 validatorActivationEpoch
     ) internal view returns (uint64) {
-        uint64 validatorExitRequestTimestamp = requestStatus.getValidatorExitRequestTimestamp(keyIndex);
-
         uint64 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
-            validatorActivationEpoch *
-            SECONDS_PER_SLOT +
+            (validatorActivationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
             SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
         uint64 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
@@ -265,7 +286,6 @@ contract ValidatorExitVerifier {
 
         if (provableBeaconBlockTimestamp < eligibleExitRequestTimestamp) {
             revert ExitRequestNotEligibleOnProvableBeaconBlock(
-                keyIndex,
                 provableBeaconBlockTimestamp,
                 eligibleExitRequestTimestamp
             );
@@ -290,7 +310,7 @@ contract ValidatorExitVerifier {
             revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
         }
 
-        // Perform simple sanity checks in order to make sure that provided exit requests data consistent.
+        // Perform simple sanity checks to make sure that provided exit requests data consistent.
         if (exitRequests.count() != requestStatus.totalItemsCount) {
             revert ExitRequestsCountMismatch(exitRequests.count(), requestStatus.totalItemsCount);
         }
@@ -324,8 +344,6 @@ library ExitRequestStatus {
         assert(false);
     }
 }
-
-//error IndexOutOfRange(uint256 index, uint256 totalItemsCount);
 
 library ExitRequests {
     /// Length in bytes of packed request
@@ -370,15 +388,3 @@ library ExitRequests {
         return exitRequests.length / PACKED_REQUEST_LENGTH;
     }
 }
-
-// error NoExitRequests();
-// error MalformedExitRequest(uint256 length);
-// function checkLength(bytes calldata exitRequest) internal pure {
-//     if(exitRequest.length == 0) {
-//         revert NoExitRequests();
-//     }
-
-//     if (exitRequest.length % PACKED_REQUEST_LENGTH != 0) {
-//         revert MalformedExitRequest(exitRequest.length);
-//     }
-// }
