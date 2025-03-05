@@ -89,7 +89,7 @@ describe("VaultHub.sol:forceExit", () => {
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
 
     const vaultCreationTx = (await vaultFactory
-      .createVault(user, user, await locator.predepositGuarantee())
+      .createVault(user, user)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -194,7 +194,7 @@ describe("VaultHub.sol:forceExit", () => {
     // https://github.com/lidofinance/core/pull/933#discussion_r1954876831
     it("works for a synthetic example", async () => {
       const vaultCreationTx = (await vaultFactory
-        .createVault(user, user, await locator.predepositGuarantee())
+        .createVault(user, user)
         .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
       const events = findEvents(vaultCreationTx, "VaultCreated");

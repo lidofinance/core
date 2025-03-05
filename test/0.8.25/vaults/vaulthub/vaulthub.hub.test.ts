@@ -52,7 +52,7 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(await user.getAddress(), await user.getAddress(), await locator.predepositGuarantee())
+      .createVault(await user.getAddress(), await user.getAddress())
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -147,7 +147,7 @@ describe("VaultHub.sol:hub", () => {
 
   context("Constants", () => {
     it("returns the STETH address", async () => {
-      expect(await vaultHub.STETH()).to.equal(await lido.getAddress());
+      expect(await vaultHub.LIDO()).to.equal(await lido.getAddress());
     });
   });
 

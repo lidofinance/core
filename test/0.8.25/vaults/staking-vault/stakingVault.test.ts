@@ -116,13 +116,13 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, ZeroAddress, "0x")).to.be.revertedWithCustomError(
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
         stakingVaultImplementation,
         "ZeroArgument",
       );

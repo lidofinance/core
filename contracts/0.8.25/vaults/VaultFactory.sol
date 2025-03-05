@@ -34,20 +34,16 @@ struct DelegationConfig {
 
 contract VaultFactory {
     address public immutable BEACON;
-    address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable DELEGATION_IMPL;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    /// @param _predeposit_guarantee The address of the PredepositGuarantee contract
-    constructor(address _beacon, address _delegationImpl, address _predeposit_guarantee) {
+    constructor(address _beacon, address _delegationImpl) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
-        if (_predeposit_guarantee == address(0)) revert ZeroArgument("_predeposit_guarantee");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
-        PREDEPOSIT_GUARANTEE = _predeposit_guarantee;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -68,7 +64,6 @@ contract VaultFactory {
         vault.initialize(
             address(delegation),
             _delegationConfig.nodeOperatorManager,
-            PREDEPOSIT_GUARANTEE,
             _stakingVaultInitializerExtraParams
         );
 
@@ -103,10 +98,16 @@ contract VaultFactory {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
-            delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.validatorExitRequesters[i]);
+            delegation.grantRole(
+                delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+                _delegationConfig.validatorExitRequesters[i]
+            );
         }
         for (uint256 i = 0; i < _delegationConfig.validatorWithdrawalTriggerers.length; i++) {
-            delegation.grantRole(delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.validatorWithdrawalTriggerers[i]);
+            delegation.grantRole(
+                delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+                _delegationConfig.validatorWithdrawalTriggerers[i]
+            );
         }
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);

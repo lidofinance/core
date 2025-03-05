@@ -60,7 +60,7 @@ export async function deployStakingVaultBehindBeaconProxy(
 
   // deploying beacon proxy
   const vaultCreation = await vaultFactory_
-    .createVault(await vaultOwner.getAddress(), await operator.getAddress(), await depositor.getAddress())
+    .createVault(await vaultOwner.getAddress(), await operator.getAddress())
     .then((tx) => tx.wait());
   if (!vaultCreation) throw new Error("Vault creation failed");
   const events = findEvents(vaultCreation, "VaultCreated");

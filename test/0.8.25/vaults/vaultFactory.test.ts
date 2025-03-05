@@ -121,7 +121,7 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, vaultOwner1, "0x")).to.revertedWithCustomError(
+    await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(
       implOld,
       "InvalidInitialization",
     );
@@ -324,7 +324,7 @@ describe("VaultFactory.sol", () => {
       await vault1WithNewImpl.finalizeUpgrade_v2();
 
       //try to initialize the second vault
-      await expect(vault2WithNewImpl.initialize(admin, operator, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault2WithNewImpl.initialize(admin, operator, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -358,7 +358,7 @@ describe("VaultFactory.sol", () => {
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
 
-      await expect(vault1.initialize(ZeroAddress, ZeroAddress, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault1.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault1WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -372,7 +372,7 @@ describe("VaultFactory.sol", () => {
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 
-      await expect(vault2.initialize(ZeroAddress, ZeroAddress, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault2.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "InvalidInitialization",
       );

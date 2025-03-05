@@ -10,7 +10,7 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
-import {IStakingVaultOwnable} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 
 /**
  * @title PredepositGuarantee
@@ -71,7 +71,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     struct ValidatorStatus {
         validatorStage stage;
-        IStakingVaultOwnable stakingVault;
+        IStakingVault stakingVault;
         address nodeOperator;
     }
 
@@ -271,8 +271,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param _deposits StakingVault deposit struct that has amount as PREDEPOSIT_AMOUNT
      */
     function predeposit(
-        IStakingVaultOwnable _stakingVault,
-        IStakingVaultOwnable.Deposit[] calldata _deposits
+        IStakingVault _stakingVault,
+        IStakingVault.Deposit[] calldata _deposits
     ) external payable whenResumed {
         if (_deposits.length == 0) revert PredepositNoDeposits();
 
@@ -300,7 +300,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (unlocked < totalDepositAmount) revert NotEnoughUnlockedBondToPredeposit(unlocked, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVaultOwnable.Deposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             if ($.validatorStatus[_deposit.pubkey].stage != validatorStage.NONE) {
                 revert MustBeNewValidatorPubkey(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
@@ -347,17 +347,16 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @dev only callable by Node Operator of this staking vault
      */
     function depositToBeaconChain(
-        IStakingVaultOwnable _stakingVault,
-        IStakingVaultOwnable.Deposit[] calldata _deposits
+        IStakingVault _stakingVault,
+        IStakingVault.Deposit[] calldata _deposits
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert MustBeNodeOperator();
         }
-
         ERC7201Storage storage $ = _getStorage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVaultOwnable.Deposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             if ($.validatorStatus[_deposit.pubkey].stage != validatorStage.PROVEN) {
                 revert DepositToUnprovenValidator(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
@@ -384,8 +383,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
-        IStakingVaultOwnable.Deposit[] calldata _deposits,
-        IStakingVaultOwnable _stakingVault
+        IStakingVault.Deposit[] calldata _deposits,
+        IStakingVault _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
             proveValidatorWC(_witnesses[i]);
@@ -402,7 +401,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function proveUnregisteredValidator(
         ValidatorWitness calldata _witness,
-        IStakingVaultOwnable _stakingVault
+        IStakingVault _stakingVault
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert WithdrawSenderNotStakingVaultOwner();
 
@@ -468,7 +467,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     ) public whenResumed returns (uint128) {
         ValidatorStatus storage validator = _getStorage().validatorStatus[_validatorPubkey];
 
-        IStakingVaultOwnable _stakingVault = validator.stakingVault;
+        IStakingVault _stakingVault = validator.stakingVault;
         address _nodeOperator = validator.nodeOperator;
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");

@@ -372,18 +372,10 @@ contract Dashboard is Permissions {
      * @notice withdraws ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
      */
     function withdrawDisprovenValidator(bytes calldata _pubkey, address _recipient) external {
         _withdrawDisprovenValidatorFromPDG(_pubkey, _recipient);
-    }
-
-    /**
-     * @notice funds vault with ether of disproven validator from PDG
-     * @param _pubkey of validator that was proven invalid in PDG
-     */
-    function refundDisprovenValidatorToVault(bytes calldata _pubkey) external {
-        uint128 _amount = _withdrawDisprovenValidatorFromPDG(_pubkey, address(this));
-        _fund(_amount);
     }
 
     /**

@@ -52,6 +52,7 @@ describe("PredepositGuarantee.sol", () => {
   async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
     const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
       vaultHub,
+
       await depositContract.getAddress(),
     ]);
 
@@ -62,7 +63,7 @@ describe("PredepositGuarantee.sol", () => {
     );
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_.createVault(owner, operator).then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
