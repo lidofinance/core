@@ -208,7 +208,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         (bool success, ) = _recipient.call{value: uint256(_amount)}("");
         if (!success) revert WithdrawalFailed();
 
-        emit NodeOperatorBalanceWithdrawn(_nodeOperator, _recipient, _amount);
+        emit BalanceWithdrawn(_nodeOperator, _recipient, _amount);
     }
 
     /**
@@ -221,7 +221,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[msg.sender];
 
-        if (_newGuarantor == msg.sender) revert CannotSetSelfAsGuarantor();
+        if (_newGuarantor == msg.sender) revert SelfGuarantorMustBeZeroAddress();
 
         if (balance.locked != 0) revert LockedIsNotZero(balance.locked);
 
@@ -240,7 +240,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         $.nodeOperatorGuarantor[msg.sender] = _newGuarantor;
 
-        emit NodeOperatorGuarantorSet(msg.sender, _newGuarantor);
+        emit GuarantorSet(msg.sender, _newGuarantor, prevGuarantor);
     }
 
     /**
@@ -374,8 +374,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     /**
      * @notice happy path shortcut for the node operator that allows:
-     * - prove validators to free up bond
-     * - optionally top up NO bond
+     * - prove validators to unlock NO balance
+     * - optionally top up NO balance
      * - trigger deposit to proven validators via vault
      * @param _witnesses array of ValidatorWitness structs to prove validators WCs
      * @param _deposits array of StakingVault.Deposit structs with deposit data for provided _stakingVault
@@ -570,7 +570,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(msg.value);
 
-        emit NodeOperatorBalanceToppedUp(_nodeOperator, msg.sender, msg.value);
+        emit BalanceToppedUp(_nodeOperator, msg.sender, msg.value);
     }
 
     modifier onlyGuarantorOf(address _nodeOperator) {
@@ -602,13 +602,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Events  * * * * * //
 
-    event NodeOperatorBalanceToppedUp(address indexed nodeOperator, address indexed sender, uint256 amount);
-    event NodeOperatorBalanceWithdrawn(address indexed nodeOperator, address indexed recipient, uint256 amount);
+    event BalanceToppedUp(address indexed nodeOperator, address indexed sender, uint256 amount);
+    event BalanceWithdrawn(address indexed nodeOperator, address indexed recipient, uint256 amount);
+
+    event GuarantorSet(address indexed nodeOperator, address indexed newGuarantor, address indexed prevGuarantor);
 
     event GuarantorRefunded(address indexed guarantor, address indexed nodeOperator, uint256 amount);
     event GuarantorRefundClaimed(address indexed guarantor, address indexed recipient, uint256 amount);
-
-    event NodeOperatorGuarantorSet(address indexed nodeOperator, address indexed guarantor);
 
     /// Validator lifecycle events
 
@@ -629,7 +629,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         bytes indexed validatorPubkey,
         address indexed nodeOperator,
         address indexed stakingVault,
-        bytes32 withdrawalCredentials
+        bytes32 invalidWithdrawalCredentials
     );
     event ValidatorWithdrawn(
         bytes indexed validatorPubkey,
@@ -642,7 +642,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // node operator accounting
     error LockedIsNotZero(uint256 locked);
-    error CannotSetSelfAsGuarantor();
+    error SelfGuarantorMustBeZeroAddress();
     error ValueMustBeMultipleOfPredepositAmount(uint256 value);
     error EmptyRefund();
     error RefundFailed();
@@ -650,14 +650,14 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // predeposit errors
     error PredepositNoDeposits();
     error PredepositDepositAmountInvalid(bytes validatorPubkey, uint256 depositAmount);
-    error MustBeNewValidatorPubkey(bytes validatorPubkey, validatorStage bondStatus);
+    error MustBeNewValidatorPubkey(bytes validatorPubkey, validatorStage stage);
     error NotEnoughUnlocked(uint256 unlocked, uint256 amount);
     error WithdrawalCredentialsMismatch(address stakingVault, address withdrawalCredentialsAddress);
 
     // depositing errors
-    error DepositToUnprovenValidator(bytes validatorPubkey, validatorStage bondStatus);
+    error DepositToUnprovenValidator(bytes validatorPubkey, validatorStage stage);
     error DepositToWrongVault(bytes validatorPubkey, address stakingVault);
-    error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage bondStatus);
+    error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
 
     // prove
     error WithdrawalCredentialsAreInvalid();
@@ -665,7 +665,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     error WithdrawalCredentialsInvalidVersion(uint64 version);
 
     // withdrawal disproven
-    error ValidatorNotProvenInvalid(validatorStage bondStatus);
+    error ValidatorNotProvenInvalid(validatorStage stage);
     error WithdrawSenderNotStakingVaultOwner();
     /// withdrawal generic
     error WithdrawalFailed();
