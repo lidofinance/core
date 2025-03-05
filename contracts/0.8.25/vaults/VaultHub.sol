@@ -165,7 +165,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 mintedStETH = STETH.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
-        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+        uint256 reserveRatioBP = socket.reserveRatioBP;
+        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
         // how much ETH should be moved out of the vault to rebalance it to minimal reserve ratio
 
@@ -179,7 +180,7 @@ contract VaultHub is PausableUntilWithRoles {
         // reserveRatio = BPS_BASE - maxMintableRatio
         // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        return (mintedStETH * TOTAL_BASIS_POINTS - IStakingVault(_vault).valuation() * maxMintableRatio) / socket.reserveRatioBP;
+        return (mintedStETH * TOTAL_BASIS_POINTS - IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
     }
 
     /// @notice connects a vault to the hub
