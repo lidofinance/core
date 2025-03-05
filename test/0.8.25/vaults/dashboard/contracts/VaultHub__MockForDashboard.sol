@@ -37,7 +37,7 @@ contract VaultHub__MockForDashboard {
         return vaultSockets[vault];
     }
 
-    function disconnect(address vault) external {
+    function queueDisconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
     }
 
@@ -57,7 +57,7 @@ contract VaultHub__MockForDashboard {
         vaultSockets[_vault].sharesMinted = uint96(vaultSockets[_vault].sharesMinted - _amountOfShares);
     }
 
-    function voluntaryDisconnect(address _vault) external {
+    function queueSelfDisconnect(address _vault) external {
         emit Mock__VaultDisconnected(_vault);
     }
 

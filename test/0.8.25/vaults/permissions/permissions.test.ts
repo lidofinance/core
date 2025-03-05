@@ -576,7 +576,7 @@ describe("Permissions", () => {
 
   context("voluntaryDisconnect()", () => {
     it("voluntarily disconnects the StakingVault", async () => {
-      await expect(permissions.connect(disconnecter).voluntaryDisconnect())
+      await expect(permissions.connect(disconnecter).selfDisconnect())
         .to.emit(vaultHub, "Mock__VoluntaryDisconnect")
         .withArgs(stakingVault);
     });
@@ -584,7 +584,7 @@ describe("Permissions", () => {
     it("reverts if the caller is not a member of the disconnect role", async () => {
       expect(await permissions.hasRole(await permissions.VOLUNTARY_DISCONNECT_ROLE(), stranger)).to.be.false;
 
-      await expect(permissions.connect(stranger).voluntaryDisconnect())
+      await expect(permissions.connect(stranger).selfDisconnect())
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.VOLUNTARY_DISCONNECT_ROLE());
     });

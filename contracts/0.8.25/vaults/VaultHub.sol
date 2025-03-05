@@ -223,21 +223,21 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `mintedShares` should be zero
-    function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
+    function queueDisconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
-        _disconnect(_vault);
+        _queueDisconnect(_vault);
     }
 
     /// @notice disconnects a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `mintedShares` should be zero
-    function voluntaryDisconnect(address _vault) external whenResumed {
+    function queueSelfDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _vaultAuth(_vault, "disconnect");
 
-        _disconnect(_vault);
+        _queueDisconnect(_vault);
     }
 
     /// @notice mint StETH shares backed by vault external balance to the receiver address
@@ -386,7 +386,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecepient);
     }
 
-    function _disconnect(address _vault) internal {
+    function _queueDisconnect(address _vault) internal {
         VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 sharesMinted = socket.sharesMinted;

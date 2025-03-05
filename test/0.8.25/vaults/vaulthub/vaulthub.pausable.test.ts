@@ -158,8 +158,8 @@ describe("VaultHub.sol:pausableUntil", () => {
       expect(await vaultHub.isPaused()).to.equal(true);
     });
 
-    it("reverts voluntaryDisconnect() if paused", async () => {
-      await expect(vaultHub.voluntaryDisconnect(user)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
+    it("reverts queueSelfDisconnect() if paused", async () => {
+      await expect(vaultHub.queueSelfDisconnect(user)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
     it("reverts mintShares() if paused", async () => {

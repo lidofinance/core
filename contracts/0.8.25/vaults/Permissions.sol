@@ -240,8 +240,8 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
-    function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        vaultHub.voluntaryDisconnect(address(stakingVault()));
+    function _selfDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
+        vaultHub.queueSelfDisconnect(address(stakingVault()));
     }
 
     /**

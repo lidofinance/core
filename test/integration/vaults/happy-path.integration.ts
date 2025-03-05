@@ -444,7 +444,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
-    const disconnectTx = await delegation.connect(curator).voluntaryDisconnect();
+    const disconnectTx = await delegation.connect(curator).selfDisconnect();
     const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;
 
     const locked = await stakingVault.locked();

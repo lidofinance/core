@@ -673,21 +673,21 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
-      await expect(vaultHub.connect(stranger).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(stranger).queueDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("reverts if vault address is zero", async () => {
-      await expect(vaultHub.connect(user).disconnect(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ZeroArgument",
       );
     });
 
     it("reverts if vault is not connected", async () => {
-      await expect(vaultHub.connect(user).disconnect(randomAddress())).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueDisconnect(randomAddress())).to.be.revertedWithCustomError(
         vaultHub,
         "NotConnectedToHub",
       );
@@ -697,14 +697,14 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoMintedSharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await expect(vaultHub.connect(user).disconnect(vaultAddress))
+      await expect(vaultHub.connect(user).queueDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnected")
         .withArgs(vaultAddress);
 
@@ -725,29 +725,29 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if minting paused", async () => {
       await vaultHub.connect(user).pauseFor(1000n);
 
-      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueSelfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ResumedExpected",
       );
     });
 
     it("reverts if vault is zero address", async () => {
-      await expect(vaultHub.connect(user).voluntaryDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueSelfDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ZeroArgument",
       );
     });
 
     it("reverts if called as non-vault owner", async () => {
-      await expect(vaultHub.connect(stranger).voluntaryDisconnect(vaultAddress))
+      await expect(vaultHub.connect(stranger).queueSelfDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotAuthorized")
         .withArgs("disconnect", stranger);
     });
 
     it("reverts if vault is not connected", async () => {
-      await vaultHub.connect(user).disconnect(vaultAddress);
+      await vaultHub.connect(user).queueDisconnect(vaultAddress);
 
-      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
+      await expect(vaultHub.connect(user).queueSelfDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(vaultAddress);
     });
@@ -756,14 +756,14 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).queueSelfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoMintedSharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await expect(vaultHub.connect(user).disconnect(vaultAddress))
+      await expect(vaultHub.connect(user).queueSelfDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnected")
         .withArgs(vaultAddress);
 
