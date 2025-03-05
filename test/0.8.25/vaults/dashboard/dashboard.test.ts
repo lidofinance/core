@@ -498,16 +498,16 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("selfDisconnect", () => {
+  context("queueSelfDisconnect", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).selfDisconnect())
+      await expect(dashboard.connect(stranger).queueSelfDisconnect())
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.VOLUNTARY_DISCONNECT_ROLE());
+        .withArgs(stranger, await dashboard.QUEUE_SELF_DISCONNECT_ROLE());
     });
 
     context("when vault has no debt", () => {
       it("disconnects the staking vault from the vault hub", async () => {
-        await expect(dashboard.selfDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
+        await expect(dashboard.queueSelfDisconnect()).to.emit(hub, "Mock__VaultDisconnectQueued").withArgs(vault);
       });
     });
 
@@ -524,14 +524,14 @@ describe("Dashboard.sol", () => {
       });
 
       it("reverts on disconnect attempt", async () => {
-        await expect(dashboard.selfDisconnect()).to.be.reverted;
+        await expect(dashboard.queueSelfDisconnect()).to.be.reverted;
       });
 
       it("succeeds with rebalance when providing sufficient ETH", async () => {
-        await expect(dashboard.selfDisconnect({ value: amountSteth }))
+        await expect(dashboard.queueSelfDisconnect({ value: amountSteth }))
           .to.emit(hub, "Mock__Rebalanced")
           .withArgs(amountSteth)
-          .to.emit(hub, "Mock__VaultDisconnected")
+          .to.emit(hub, "Mock__VaultDisconnectQueued")
           .withArgs(vault);
       });
     });

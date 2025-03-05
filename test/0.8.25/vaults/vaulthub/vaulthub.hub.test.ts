@@ -705,7 +705,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("disconnects the vault", async () => {
       await expect(vaultHub.connect(user).queueDisconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectQueued")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
@@ -713,7 +713,7 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("voluntaryDisconnect", () => {
+  context("self-disconnect", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
 
@@ -764,7 +764,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("disconnects the vault", async () => {
       await expect(vaultHub.connect(user).queueSelfDisconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectQueued")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);

@@ -13,11 +13,11 @@ contract VaultHub__MockForDelegation {
         steth = _steth;
     }
 
-    event Mock__VaultDisconnected(address vault);
+    event Mock__DisconnectQueued(address vault);
     event Mock__Rebalanced(uint256 amount);
 
-    function disconnect(address vault) external {
-        emit Mock__VaultDisconnected(vault);
+    function queueDisconnect(address vault) external {
+        emit Mock__DisconnectQueued(vault);
     }
 
     function mintShares(address /* vault */, address recipient, uint256 amount) external {
@@ -28,8 +28,8 @@ contract VaultHub__MockForDelegation {
         steth.burn(amount);
     }
 
-    function voluntaryDisconnect(address _vault) external {
-        emit Mock__VaultDisconnected(_vault);
+    function queueSelfDisconnect(address _vault) external {
+        emit Mock__DisconnectQueued(_vault);
     }
 
     function rebalance() external payable {

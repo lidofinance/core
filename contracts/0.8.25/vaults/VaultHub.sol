@@ -396,7 +396,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
-        emit VaultDisconnected(_vault);
+        emit VaultDisconnectQueued(_vault);
     }
 
     function calculateVaultsRebase(
@@ -548,7 +548,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultConnected(address indexed vault, uint256 capShares, uint256 minReserveRatio, uint256 rebalanceThreshold, uint256 treasuryFeeBP);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultDisconnected(address indexed vault);
+    event VaultDisconnectQueued(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
