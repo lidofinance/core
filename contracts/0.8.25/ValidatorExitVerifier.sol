@@ -11,9 +11,9 @@ import {IValidatorsExitBusOracle, RequestStatus} from "./interfaces/IValidatorsE
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ValidatorWitness {
-    // VEBO report item index
+    // The index of an exit request in the VEBO exit requests data
     uint32 exitRequestIndex;
-    // ── Validator fields ──
+    // -------------------- Validator details -------------------
     uint64 validatorIndex;
     bytes32 withdrawalCredentials;
     uint64 effectiveBalance;
@@ -22,54 +22,72 @@ struct ValidatorWitness {
     uint64 activationEpoch;
     uint64 exitEpoch;
     uint64 withdrawableEpoch;
-    // ── Proof ──
+    // ------------------------ Proof ---------------------------
     bytes32[] validatorProof;
 }
 
 struct ProvableBeaconBlockHeader {
-    BeaconBlockHeader header; // Header of a block which root is a root at rootsTimestamp.
-    uint64 rootsTimestamp; // To be passed to the EIP-4788 block roots contract.
+    BeaconBlockHeader header; // Header of the block which root is known at 'rootsTimestamp'.
+    uint64 rootsTimestamp; // Timestamp passed to EIP-4788 block roots contract to retrieve the known block root.
 }
 
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    GIndex rootGIndex;
-    bytes32[] proof;
+    GIndex rootGIndex; // The generalized index of the old block root in the historical_summaries.
+    bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
+/**
+ * @title ValidatorExitVerifier
+ * @notice Verifies validator proofs to ensure they are active or unexited during or after an exit request.
+ *         Allows Lido to accurately report the status of validators which are assumed to have exited but have not.
+ * @dev Uses EIP-4788 to confirm the correctness of a given beacon block root.
+ */
 contract ValidatorExitVerifier {
     using SSZ for Validator;
     using SSZ for BeaconBlockHeader;
     using ExitRequestStatus for RequestStatus;
     using ExitRequests for bytes;
 
-    uint64 constant FAR_FUTURE_EPOCH = type(uint64).max;
-
-    uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
-    uint32 public immutable SLOTS_PER_EPOCH;
-    uint32 public immutable SECONDS_PER_SLOT;
-    uint64 public immutable GENESIS_TIME;
-
-    // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
+    /// @notice EIP-4788 contract address that provides a mapping of timestamp -> known beacon block root.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
+    uint64 constant FAR_FUTURE_EPOCH = type(uint64).max;
+
+    uint64 public immutable GENESIS_TIME;
+    uint32 public immutable SLOTS_PER_EPOCH;
+    uint32 public immutable SECONDS_PER_SLOT;
+    uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
+
+    /**
+     * @notice The GIndex pointing to BeaconState.validators[0] for the "previous" fork.
+     * @dev Used to derive the correct GIndex when verifying proofs for a block prior to pivot.
+     */
     GIndex public immutable GI_FIRST_VALIDATOR_PREV;
 
-    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
+    /**
+     * @notice The GIndex pointing to BeaconState.validators[0] for the "current" fork.
+     * @dev Used to derive the correct GIndex when verifying proofs for a block after the pivot slot.
+     */
     GIndex public immutable GI_FIRST_VALIDATOR_CURR;
 
-    /// @dev This index is relative to a state like: `BeaconState.historical_summaries`.
+    /**
+     * @notice The GIndex pointing to BeaconState.historical_summaries for the "previous" fork.
+     * @dev Used when verifying old blocks (i.e., blocks with slot < PIVOT_SLOT).
+     */
     GIndex public immutable GI_HISTORICAL_SUMMARIES_PREV;
 
-    /// @dev This index is relative to a state like: `BeaconState.historical_summaries`.
+    /**
+     * @notice The GIndex pointing to BeaconState.historical_summaries for the "current" fork.
+     * @dev Used when verifying old blocks (i.e., blocks with slot >= PIVOT_SLOT).
+     */
     GIndex public immutable GI_HISTORICAL_SUMMARIES_CURR;
 
-    /// @dev The very first slot the verifier is supposed to accept proofs for.
+    /// @notice The first slot this verifier will accept proofs for.
     Slot public immutable FIRST_SUPPORTED_SLOT;
 
-    /// @dev The first slot of the currently compatible fork.
+    /// @notice The first slot of the currently-compatible fork.
     Slot public immutable PIVOT_SLOT;
 
     ILidoLocator public immutable LOCATOR;
@@ -90,7 +108,20 @@ contract ValidatorExitVerifier {
     error ExitRequestsCountMismatch(uint256 exitRequestsCount, uint256 exitRequestsCountInExitReportStatus);
     error ChainTimeConfigurationMismatch();
 
-    /// @dev The previous and current forks can be essentially the same.
+    /**
+     * @dev The previous and current forks can be essentially the same.
+     * @param lidoLocator The address of the LidoLocator contract.
+     * @param gIFirstValidatorPrev GIndex pointing to validators[0] on the previous fork.
+     * @param gIFirstValidatorCurr GIndex pointing to validators[0] on the current fork.
+     * @param gIHistoricalSummariesPrev GIndex pointing to the historical_summaries on the previous fork.
+     * @param gIHistoricalSummariesCurr GIndex pointing to the historical_summaries on the current fork.
+     * @param firstSupportedSlot The earliest slot number that proofs can be submitted for verification.
+     * @param pivotSlot The pivot slot number used to differentiate "previous" vs "current" fork indexing.
+     * @param slotsPerEpoch Number of slots per epoch in Ethereum consensus.
+     * @param secondsPerSlot Duration of a single slot, in seconds, in Ethereum consensus.
+     * @param genesisTime Genesis timestamp of the Ethereum Beacon chain.
+     * @param shardCommitteePeriodInSeconds The length of the shard committee period, in seconds.
+     */
     constructor(
         address lidoLocator,
         GIndex gIFirstValidatorPrev,
@@ -123,12 +154,22 @@ contract ValidatorExitVerifier {
         SHARD_COMMITTEE_PERIOD_IN_SECONDS = shardCommitteePeriodInSeconds;
     }
 
+    // ------------------------- External Functions -------------------------
+
+    /**
+     * @notice Verifies that provided validators are still active (not exited) at the given beacon block.
+     *         If they are unexpectedly still active, it reports them back to the Staking Router.
+     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
+     * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
+     * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
+     */
     function verifyActiveValidatorsAfterExitRequest(
         bytes calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
+
         RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -153,6 +194,15 @@ contract ValidatorExitVerifier {
         }
     }
 
+    /**
+     * @notice Verifies historical blocks (via historical_summaries) and checks that certain validators
+     *         are still active at that old block. If they're still active, it reports them to Staking Router.
+     * @dev The oldBlock.header must have slot >= FIRST_SUPPORTED_SLOT.
+     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
+     * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
+     * @param oldBlock Historical block header witness data and its proof.
+     * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited in oldBlock.header.
+     */
     function verifyHistoricalActiveValidatorsAfterExitRequest(
         bytes calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
@@ -165,8 +215,6 @@ contract ValidatorExitVerifier {
             revert UnsupportedSlot(oldBlock.header.slot);
         }
 
-        // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
-        // Ensuring the provided generalized index is for a node somewhere below the historical_summaries root.
         if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
             revert InvalidGIndex();
         }
@@ -202,8 +250,37 @@ contract ValidatorExitVerifier {
         }
     }
 
-    /// @notice Verify withdrawal proof
-    /// @param header Beacon block header
+    /**
+     * @dev Verifies the beacon block header is known in EIP-4788.
+     * @param beaconBlock The provable beacon block header and the EIP-4788 timestamp.
+     */
+    function _verifyBeaconBlockRoot(ProvableBeaconBlockHeader calldata beaconBlock) internal view {
+        if (beaconBlock.header.slot < FIRST_SUPPORTED_SLOT) {
+            revert UnsupportedSlot(beaconBlock.header.slot);
+        }
+
+        (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(beaconBlock.rootsTimestamp));
+        if (!success || data.length == 0) {
+            revert RootNotFound();
+        }
+
+        bytes32 trustedRoot = abi.decode(data, (bytes32));
+        if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
+            revert InvalidBlockHeader();
+        }
+
+        // Sanity check. Ensure the chain-time configuration is consistent with the block slot
+        if (
+            beaconBlock.rootsTimestamp < (GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT) ||
+            beaconBlock.rootsTimestamp > (GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT)
+        ) {
+            revert ChainTimeConfigurationMismatch();
+        }
+    }
+
+    /**
+     * @dev Verifies that a validator is still active (exitEpoch == FAR_FUTURE_EPOCH) and proves it against the state root.
+     */
     function _verifyValidatorIsActive(
         BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
@@ -233,67 +310,40 @@ contract ValidatorExitVerifier {
     }
 
     /**
-     * @dev Verifies a beacon block is trustworthy via EIP-4788 contract.
+     * @dev Determines how many seconds have passed since a validator was first eligible to exit after ValidatorsExitBusOracle exit request.
+     * @param validatorExitRequestTimestamp The timestamp when the validator's exit request was submitted.
+     * @param referenceTimestamp A reference point in time, used to measure the elapsed duration since the validator became eligible to exit.
+     * @param validatorActivationEpoch The epoch in which the validator was activated.
+     * @return uint64 The elapsed seconds since the earliest eligible exit request time.
      */
-    function _verifyBeaconBlockRoot(ProvableBeaconBlockHeader calldata beaconBlock) internal view {
-        if (beaconBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(beaconBlock.header.slot);
-        }
-
-        // Check EIP-4788 for known block root
-        (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(beaconBlock.rootsTimestamp));
-
-        if (!success || data.length == 0) {
-            revert RootNotFound();
-        }
-
-        bytes32 trustedRoot = abi.decode(data, (bytes32));
-        if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
-            revert InvalidBlockHeader();
-        }
-
-        // Perform simple sanity checks to make sure that provided GENESIS_TIME & SECONDS_PER_SLOT consistent
-        // against EIP-4788 contract data.
-        if (
-            beaconBlock.rootsTimestamp < GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT ||
-            beaconBlock.rootsTimestamp > GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT
-        ) {
-            revert ChainTimeConfigurationMismatch();
-        }
-    }
-
-    function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
-        GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.shr(offset);
-    }
-
-    function _getHistoricalSummariesGI(Slot stateSlot) internal view returns (GIndex) {
-        return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
-    }
-
     function _getSecondsSinceExitRequestEligible(
         uint64 validatorExitRequestTimestamp,
-        uint64 provableBeaconBlockTimestamp,
+        uint64 referenceTimestamp,
         uint64 validatorActivationEpoch
     ) internal view returns (uint64) {
+        // The earliest a validator can voluntarily exit is after the Shard Committee Period
+        // subsequent to its activation epoch.
         uint64 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
             (validatorActivationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
             SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
+        // The actual eligible timestamp is the max between the exit request submission time
+        // and the earliest possible voluntary exit time.
         uint64 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
             ? validatorExitRequestTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
-        if (provableBeaconBlockTimestamp < eligibleExitRequestTimestamp) {
-            revert ExitRequestNotEligibleOnProvableBeaconBlock(
-                provableBeaconBlockTimestamp,
-                eligibleExitRequestTimestamp
-            );
+        if (referenceTimestamp < eligibleExitRequestTimestamp) {
+            revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceTimestamp, eligibleExitRequestTimestamp);
         }
 
-        return provableBeaconBlockTimestamp - eligibleExitRequestTimestamp;
+        return referenceTimestamp - eligibleExitRequestTimestamp;
     }
 
+    /**
+     * @dev Retrieves the status of the provided exit requests from the ValidatorsExitBusOracle,
+     *      and performs consistency checks against the data.
+     */
     function _verifyRequestStatus(
         bytes calldata exitRequests
     ) internal view returns (RequestStatus memory requestStatus) {
@@ -310,17 +360,36 @@ contract ValidatorExitVerifier {
             revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
         }
 
-        // Perform simple sanity checks to make sure that provided exit requests data consistent.
-        if (exitRequests.count() != requestStatus.totalItemsCount) {
-            revert ExitRequestsCountMismatch(exitRequests.count(), requestStatus.totalItemsCount);
+        // Sanity check. Verify that the number of exit requests matches the oracle's record
+        uint256 exitRequestsCount = exitRequests.count();
+        if (exitRequestsCount != requestStatus.totalItemsCount) {
+            revert ExitRequestsCountMismatch(exitRequestsCount, requestStatus.totalItemsCount);
         }
+    }
+
+    function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
+        GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
+        return gI.shr(offset);
+    }
+
+    function _getHistoricalSummariesGI(Slot stateSlot) internal view returns (GIndex) {
+        return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
 }
 
+/**
+ * @notice Library for fetching validator exit request timestamps from a RequestStatus struct.
+ */
 library ExitRequestStatus {
     error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
 
+    /**
+     * @dev Retrieves the block timestamp at which a particular key (i.e., exit request) was delivered.
+     * @param requestStatus The RequestStatus struct containing delivery history.
+     * @param keyIndex The index of the exit request to look up.
+     * @return validatorExitRequestTimestamp The timestamp when this key was delivered.
+     */
     function getValidatorExitRequestTimestamp(
         RequestStatus memory requestStatus,
         uint256 keyIndex
@@ -345,13 +414,20 @@ library ExitRequestStatus {
     }
 }
 
+/**
+ * @notice Library for unpacking validator exit request data.
+ */
 library ExitRequests {
-    /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     error ExitRequestIndexOutOfRange(uint256 exitRequestIndex);
 
+    /**
+     * @dev Unpacks a single exit request from a batch of exit requests.
+     * @param exitRequests The concatenated exit requests data.
+     * @param exitRequestIndex The index of the request to extract from the batch.
+     */
     function unpackExitRequest(
         bytes calldata exitRequests,
         uint256 exitRequestIndex
@@ -362,14 +438,15 @@ library ExitRequests {
 
         uint256 itemOffset;
         uint256 dataWithoutPubkey;
+
         assembly {
             // Compute the start of the selected item
             itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, exitRequestIndex))
 
-            // 16 most significant bytes are taken by module id, node op id, and val index
+            // Load the first 16 bytes (moduleId, nodeOpId, part of valIndex)
             dataWithoutPubkey := shr(128, calldataload(itemOffset))
 
-            // Next 48 bytes are taken by the pubkey
+            // The next 48 bytes are the validator's public key
             pubkey.length := PUBLIC_KEY_LENGTH
             pubkey.offset := add(itemOffset, 16)
         }
@@ -377,13 +454,15 @@ library ExitRequests {
         //                              dataWithoutPubkey
         // MSB <---------------------------------------------------------------------- LSB
         // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-
         nodeOpId = uint40(dataWithoutPubkey >> 64);
         moduleId = uint24(dataWithoutPubkey >> (64 + 40));
 
         return (pubkey, nodeOpId, moduleId);
     }
 
+    /**
+     * @dev Counts how many exit requests are packed in the given calldata array.
+     */
     function count(bytes calldata exitRequests) internal pure returns (uint256) {
         return exitRequests.length / PACKED_REQUEST_LENGTH;
     }
