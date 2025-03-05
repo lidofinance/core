@@ -13,9 +13,16 @@ import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 struct ValidatorWitness {
     // VEBO report item index
     uint32 exitRequestIndex;
-    // Validator
+    // ── Validator fields ──
     uint64 validatorIndex;
-    Validator validator;
+    bytes32 withdrawalCredentials;
+    uint64 effectiveBalance;
+    bool slashed;
+    uint64 activationEligibilityEpoch;
+    uint64 activationEpoch;
+    uint64 exitEpoch;
+    uint64 withdrawableEpoch;
+    // ── Proof ──
     bytes32[] validatorProof;
 }
 
@@ -35,6 +42,9 @@ contract ValidatorExitVerifier {
     using SSZ for Validator;
     using SSZ for BeaconBlockHeader;
     using ExitRequestStatus for RequestStatus;
+    using ExitRequests for bytes;
+
+    uint64 constant FAR_FUTURE_EPOCH = type(uint64).max;
 
     uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
     uint32 public immutable SECONDS_PER_SLOT;
@@ -71,13 +81,13 @@ contract ValidatorExitVerifier {
     error ZeroLidoLocatorAddress();
     error ExitRequestsNotFound(bytes32 exitRequestsHash);
     error UnsupportedReportDataFormat(uint256 reportDataFormat);
-    error PubkeyMismatch(bytes exitReportPubkey, bytes witnessPubkey);
     error ExitRequestNotEligibleOnProvableBeaconBlock(
         uint256 keyIndex,
         uint64 provableBeaconBlockTimestamp,
         uint64 eligibleExitRequestTimestamp
     );
-    error ValidatorAlreadyRequestedExit(bytes pubkey);
+    error ValidatorAlreadyRequestedExit(uint256 validatorIndex);
+    error ExitRequestsCountMismatch(uint256 exitRequestsCount, uint256 exitRequestsCountInExitReportStatus);
 
     /// @dev The previous and current forks can be essentially the same.
     constructor(
@@ -115,29 +125,21 @@ contract ValidatorExitVerifier {
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses
     ) external {
-        RequestStatus memory requestStatus = _getSupportedRequestStatus(exitRequests);
+        _verifyBeaconBlockRoot(beaconBlock);
+        RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            if (validatorWitnesses[i].validator.exitEpoch != type(uint64).max) {
-                revert ValidatorAlreadyRequestedExit(validatorWitnesses[i].validator.pubkey);
-            }
-
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = ExitRequests.unpackItem(
-                exitRequests,
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = exitRequests.unpackExitRequest(
                 validatorWitnesses[i].exitRequestIndex
             );
 
-            if (keccak256(pubkey) != keccak256(validatorWitnesses[i].validator.pubkey)) {
-                revert PubkeyMismatch(pubkey, validatorWitnesses[i].validator.pubkey);
-            }
+            _verifyValidatorIsActive(beaconBlock, validatorWitnesses[i], pubkey);
 
-            _verifyValidatorProof(beaconBlock, validatorWitnesses[i]);
-
-            uint64 secondsSinceEligibleExitRequest = _getSecondsSinceEligibleExitRequest(
+            uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestStatus,
                 validatorWitnesses[i].exitRequestIndex,
                 beaconBlock.rootsTimestamp,
-                validatorWitnesses[i].validator.activationEpoch
+                validatorWitnesses[i].activationEpoch
             );
 
             IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
@@ -149,56 +151,70 @@ contract ValidatorExitVerifier {
         }
     }
 
-    /// @notice Verify withdrawal proof and report withdrawal to the module for valid proofs
+    /// @notice Verify withdrawal proof
     /// @param beaconBlock Beacon block header
-    function _verifyValidatorProof(
+    function _verifyValidatorIsActive(
         ProvableBeaconBlockHeader calldata beaconBlock,
-        ValidatorWitness calldata witness
+        ValidatorWitness calldata witness,
+        bytes calldata pubkey
     ) internal view {
-        _verifyBeaconBlockRoot(beaconBlock);
+        if (witness.exitEpoch != FAR_FUTURE_EPOCH) {
+            revert ValidatorAlreadyRequestedExit(witness.validatorIndex);
+        }
+
+        Validator memory validator = Validator({
+            pubkey: pubkey,
+            withdrawalCredentials: witness.withdrawalCredentials,
+            effectiveBalance: witness.effectiveBalance,
+            slashed: witness.slashed,
+            activationEligibilityEpoch: witness.activationEligibilityEpoch,
+            activationEpoch: witness.activationEpoch,
+            exitEpoch: witness.exitEpoch,
+            withdrawableEpoch: witness.withdrawableEpoch
+        });
 
         SSZ.verifyProof({
             proof: witness.validatorProof,
             root: beaconBlock.header.stateRoot,
-            leaf: witness.validator.hashTreeRoot(),
+            leaf: validator.hashTreeRoot(),
             gI: _getValidatorGI(witness.validatorIndex, beaconBlock.header.slot)
         });
     }
 
-    /// @notice Verify withdrawal proof against historical summaries data and report withdrawal to the module for valid proofs
-    /// @param beaconBlock Beacon block header
-    /// @param oldBlock Historical block header witness
-    function _verifyHistoricalValidatorProof(
-        ProvableBeaconBlockHeader calldata beaconBlock,
-        HistoricalHeaderWitness calldata oldBlock,
-        ValidatorWitness calldata witness
-    ) internal view {
-        _verifyBeaconBlockRoot(beaconBlock);
+    // /// @notice Verify withdrawal proof against historical summaries data and report withdrawal to the module for valid proofs
+    // /// @param beaconBlock Beacon block header
+    // /// @param oldBlock Historical block header witness
+    // function _verifyHistoricalValidatorProof(
+    //     ProvableBeaconBlockHeader calldata beaconBlock,
+    //     HistoricalHeaderWitness calldata oldBlock,
+    //     ValidatorWitness calldata witness
+    // ) internal view {
+    //     _verifyBeaconBlockRoot(beaconBlock);
 
-        if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(oldBlock.header.slot);
-        }
+    //     if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
+    //         revert UnsupportedSlot(oldBlock.header.slot);
+    //     }
 
-        // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
-        // Ensuring the provided generalized index is for a node somewhere below the historical_summaries root.
-        if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
-            revert InvalidGIndex();
-        }
+    //     // It's up to a user to provide a valid generalized index of a historical block root in a summaries list.
+    //     // Ensuring the provided generalized index is for a node somewhere below the historical_summaries root.
+    //     if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
+    //         revert InvalidGIndex();
+    //     }
 
-        SSZ.verifyProof({
-            proof: oldBlock.proof,
-            root: beaconBlock.header.stateRoot,
-            leaf: oldBlock.header.hashTreeRoot(),
-            gI: oldBlock.rootGIndex
-        });
+    //     SSZ.verifyProof({
+    //         proof: oldBlock.proof,
+    //         root: beaconBlock.header.stateRoot,
+    //         leaf: oldBlock.header.hashTreeRoot(),
+    //         gI: oldBlock.rootGIndex
+    //     });
 
-        SSZ.verifyProof({
-            proof: witness.validatorProof,
-            root: oldBlock.header.stateRoot,
-            leaf: witness.validator.hashTreeRoot(),
-            gI: _getValidatorGI(witness.validatorIndex, oldBlock.header.slot)
-        });
-    }
+    //     SSZ.verifyProof({
+    //         proof: witness.validatorProof,
+    //         root: oldBlock.header.stateRoot,
+    //         leaf: witness.validator.hashTreeRoot(),
+    //         gI: _getValidatorGI(witness.validatorIndex, oldBlock.header.slot)
+    //     });
+    // }
 
     /**
      * @dev Verifies a beacon block is trustworthy via EIP-4788 contract.
@@ -209,20 +225,16 @@ contract ValidatorExitVerifier {
         }
 
         // Check EIP-4788 for known block root
-        bytes32 trustedRoot = _getParentBlockRoot(beaconBlock.rootsTimestamp);
-        if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
-            revert InvalidBlockHeader();
-        }
-    }
-
-    function _getParentBlockRoot(uint64 blockTimestamp) internal view returns (bytes32) {
-        (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(blockTimestamp));
+        (bool success, bytes memory data) = BEACON_ROOTS.staticcall(abi.encode(beaconBlock.rootsTimestamp));
 
         if (!success || data.length == 0) {
             revert RootNotFound();
         }
 
-        return abi.decode(data, (bytes32));
+        bytes32 trustedRoot = abi.decode(data, (bytes32));
+        if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
+            revert InvalidBlockHeader();
+        }
     }
 
     function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
@@ -234,7 +246,7 @@ contract ValidatorExitVerifier {
         return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
 
-    function _getSecondsSinceEligibleExitRequest(
+    function _getSecondsSinceExitRequestEligible(
         RequestStatus memory requestStatus,
         uint256 keyIndex,
         uint64 provableBeaconBlockTimestamp,
@@ -262,7 +274,7 @@ contract ValidatorExitVerifier {
         return provableBeaconBlockTimestamp - eligibleExitRequestTimestamp;
     }
 
-    function _getSupportedRequestStatus(
+    function _verifyRequestStatus(
         bytes calldata exitRequests
     ) internal view returns (RequestStatus memory requestStatus) {
         bytes32 exitRequestsHash = keccak256(exitRequests);
@@ -276,6 +288,11 @@ contract ValidatorExitVerifier {
 
         if (requestStatus.reportDataFormat != 1) {
             revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
+        }
+
+        // Perform simple sanity checks in order to make sure that provided exit requests data consistent.
+        if (exitRequests.count() != requestStatus.totalItemsCount) {
+            revert ExitRequestsCountMismatch(exitRequests.count(), requestStatus.totalItemsCount);
         }
     }
 }
@@ -308,26 +325,33 @@ library ExitRequestStatus {
     }
 }
 
+//error IndexOutOfRange(uint256 index, uint256 totalItemsCount);
+
 library ExitRequests {
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
-    //function verifyReportStatus
+    error ExitRequestIndexOutOfRange(uint256 exitRequestIndex);
 
-    function unpackItem(
+    function unpackExitRequest(
         bytes calldata exitRequests,
-        uint256 itemIndex
+        uint256 exitRequestIndex
     ) internal pure returns (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) {
+        if (exitRequestIndex >= count(exitRequests)) {
+            revert ExitRequestIndexOutOfRange(exitRequestIndex);
+        }
+
         uint256 itemOffset;
         uint256 dataWithoutPubkey;
         assembly {
-            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, itemIndex))
+            // Compute the start of the selected item
+            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, exitRequestIndex))
 
             // 16 most significant bytes are taken by module id, node op id, and val index
             dataWithoutPubkey := shr(128, calldataload(itemOffset))
 
-            // the next 48 bytes are taken by the pubkey
+            // Next 48 bytes are taken by the pubkey
             pubkey.length := PUBLIC_KEY_LENGTH
             pubkey.offset := add(itemOffset, 16)
         }
@@ -341,4 +365,20 @@ library ExitRequests {
 
         return (pubkey, nodeOpId, moduleId);
     }
+
+    function count(bytes calldata exitRequests) internal pure returns (uint256) {
+        return exitRequests.length / PACKED_REQUEST_LENGTH;
+    }
 }
+
+// error NoExitRequests();
+// error MalformedExitRequest(uint256 length);
+// function checkLength(bytes calldata exitRequest) internal pure {
+//     if(exitRequest.length == 0) {
+//         revert NoExitRequests();
+//     }
+
+//     if (exitRequest.length % PACKED_REQUEST_LENGTH != 0) {
+//         revert MalformedExitRequest(exitRequest.length);
+//     }
+// }
