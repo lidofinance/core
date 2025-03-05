@@ -64,7 +64,9 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido], deployer);
+    const operatorGrid = certainAddress("accounting:operatorGrid");
+
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, operatorGrid], deployer);
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],

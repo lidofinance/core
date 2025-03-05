@@ -10,7 +10,8 @@
  *  - Визуализируем структуру с помощью "ascii прогрессбаров" и раскраски (chalk)
  *****/
 
-import chalk from 'chalk'; // Если используете CommonJS, замените на: const chalk = require('chalk');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const chalk = require("chalk"); // Если используете CommonJS, замените на: const chalk = require('chalk');
 
 /********************************
  *    СТРУКТУРА ДАННЫХ operatorGrid
@@ -47,7 +48,7 @@ import chalk from 'chalk'; // Если используете CommonJS, заме
  * }
  */
 const operatorGrid = {
-  groups: {}
+  groups: {},
 };
 
 /********************************
@@ -66,9 +67,9 @@ function addGroup(groupId, shareLimit) {
   }
   operatorGrid.groups[groupId] = {
     shareLimit,
-    mintedShares: 0,        // общее кол-во заминченных в группе
-    tiers: {},              // словарь tierId -> { shareLimit, mintedShares, ... }
-    operators: {}           // словарь operatorId -> { vaults: { vaultId -> { mintedShares, tierId } } }
+    mintedShares: 0, // общее кол-во заминченных в группе
+    tiers: {}, // словарь tierId -> { shareLimit, mintedShares, ... }
+    operators: {}, // словарь operatorId -> { vaults: { vaultId -> { mintedShares, tierId } } }
   };
   console.log(chalk.green(`Added group: ${groupId} (shareLimit=${shareLimit})`));
 }
@@ -96,7 +97,11 @@ function addOrUpdateTier(groupId, tierId, shareLimit, reserveRatio, reserveRatio
   tier.mintedShares = tier.mintedShares || 0;
   group.tiers[tierId] = tier;
 
-  console.log(chalk.green(`Tier ${tierId} in group ${groupId}: shareLimit=${shareLimit}, reserveRatio=${reserveRatio}, threshold=${reserveRatioThreshold}`));
+  console.log(
+    chalk.green(
+      `Tier ${tierId} in group ${groupId}: shareLimit=${shareLimit}, reserveRatio=${reserveRatio}, threshold=${reserveRatioThreshold}`,
+    ),
+  );
 }
 
 /**
@@ -116,7 +121,7 @@ function addOperator(groupId, operatorId) {
   }
 
   group.operators[operatorId] = {
-    vaults: {} // vaultId -> { mintedShares, tierId }
+    vaults: {}, // vaultId -> { mintedShares, tierId }
   };
 
   console.log(chalk.green(`Added operator ${operatorId} in group ${groupId}`));
@@ -160,10 +165,14 @@ function addVault(groupId, operatorId, vaultId) {
   // Создаём новый vault
   operator.vaults[vaultId] = {
     mintedShares: 0,
-    tierId: assignedTierId
+    tierId: assignedTierId,
   };
 
-  console.log(chalk.green(`Vault ${vaultId} added to operator ${operatorId} in group ${groupId}, assigned to Tier=${assignedTierId}`));
+  console.log(
+    chalk.green(
+      `Vault ${vaultId} added to operator ${operatorId} in group ${groupId}, assigned to Tier=${assignedTierId}`,
+    ),
+  );
 }
 
 /**
@@ -191,7 +200,9 @@ function mintShares(groupId, operatorId, vaultId, amount) {
 
   // Проверка лимита группы
   if (group.mintedShares + amount > group.shareLimit) {
-    throw new Error(chalk.red(`Group limit exceeded for ${groupId}. minted=${group.mintedShares}, limit=${group.shareLimit}`));
+    throw new Error(
+      chalk.red(`Group limit exceeded for ${groupId}. minted=${group.mintedShares}, limit=${group.shareLimit}`),
+    );
   }
 
   // Проверка лимита тира
@@ -200,7 +211,11 @@ function mintShares(groupId, operatorId, vaultId, amount) {
     throw new Error(`Tier ${vault.tierId} not found in group ${groupId}`);
   }
   if (tierData.mintedShares + amount > tierData.shareLimit) {
-    throw new Error(chalk.red(`Tier limit exceeded for tier=${vault.tierId}. minted=${tierData.mintedShares}, limit=${tierData.shareLimit}`));
+    throw new Error(
+      chalk.red(
+        `Tier limit exceeded for tier=${vault.tierId}. minted=${tierData.mintedShares}, limit=${tierData.shareLimit}`,
+      ),
+    );
   }
 
   // Всё ок: обновляем mintedShares
@@ -208,7 +223,11 @@ function mintShares(groupId, operatorId, vaultId, amount) {
   tierData.mintedShares += amount;
   vault.mintedShares += amount;
 
-  console.log(chalk.cyanBright(`mintShares: +${amount} to vault ${vaultId} (tier=${vault.tierId}) of operator ${operatorId} in group ${groupId}`));
+  console.log(
+    chalk.cyanBright(
+      `mintShares: +${amount} to vault ${vaultId} (tier=${vault.tierId}) of operator ${operatorId} in group ${groupId}`,
+    ),
+  );
 }
 
 /**
@@ -229,7 +248,9 @@ function burnShares(groupId, operatorId, vaultId, amount) {
   }
 
   if (vault.mintedShares < amount) {
-    throw new Error(chalk.red(`Not enough shares in vault ${vaultId} to burn. have=${vault.mintedShares}, want=${amount}`));
+    throw new Error(
+      chalk.red(`Not enough shares in vault ${vaultId} to burn. have=${vault.mintedShares}, want=${amount}`),
+    );
   }
 
   // Проверяем, что на тирах/группе тоже хватит "заминченных" (в теории, конечно, хватит, если vault ок)
@@ -239,7 +260,11 @@ function burnShares(groupId, operatorId, vaultId, amount) {
   tierData.mintedShares -= amount;
   group.mintedShares -= amount;
 
-  console.log(chalk.cyanBright(`burnShares: -${amount} from vault ${vaultId} (tier=${vault.tierId}) of operator ${operatorId} in group ${groupId}`));
+  console.log(
+    chalk.cyanBright(
+      `burnShares: -${amount} from vault ${vaultId} (tier=${vault.tierId}) of operator ${operatorId} in group ${groupId}`,
+    ),
+  );
 }
 
 /********************************
@@ -272,6 +297,7 @@ function makeProgressBar(current, max, barLength = 20) {
 /**
  * Визуализируем всё дерево: Group -> Tier -> Operators -> Vaults
  */
+// eslint-disable-next-line @typescript-eslint/no-shadow
 function visualizeOperatorGrid(operatorGrid) {
   console.log(chalk.bold("\n===== OPERATOR GRID STATUS =====\n"));
 
@@ -293,7 +319,7 @@ function visualizeOperatorGrid(operatorGrid) {
       const tierBar = makeProgressBar(tier.mintedShares, tier.shareLimit);
       console.log(
         `  ├─ Tier: ${chalk.magenta(tierId)}  ${tierBar} ` +
-        chalk.gray(`(reserveRatio=${tier.reserveRatio}, threshold=${tier.reserveRatioThreshold})`)
+          chalk.gray(`(reserveRatio=${tier.reserveRatio}, threshold=${tier.reserveRatioThreshold})`),
       );
     }
 
@@ -306,7 +332,7 @@ function visualizeOperatorGrid(operatorGrid) {
 
     const lastOperatorIndex = operatorIds.length - 1;
     operatorIds.forEach((operatorId, idx) => {
-      const prefix = (idx === lastOperatorIndex) ? "└" : "├";
+      const prefix = idx === lastOperatorIndex ? "└" : "├";
       console.log(`  ${prefix}─ Operator: ${chalk.blue(operatorId)}`);
 
       const operatorData = group.operators[operatorId];
@@ -318,13 +344,12 @@ function visualizeOperatorGrid(operatorGrid) {
 
       const lastVaultIndex = vaultIds.length - 1;
       vaultIds.forEach((vaultId, vaultIdx) => {
-        const vaultPrefix = (vaultIdx === lastVaultIndex) ? "└" : "├";
+        const vaultPrefix = vaultIdx === lastVaultIndex ? "└" : "├";
         const vaultData = operatorData.vaults[vaultId];
         const tier = group.tiers[vaultData.tierId];
         const vaultBar = makeProgressBar(vaultData.mintedShares, tier ? tier.shareLimit : 0);
         console.log(
-          `      ${vaultPrefix}─ Vault: ${chalk.yellow(vaultId)}, ` +
-          `tier=${vaultData.tierId}, minted=${vaultBar}`
+          `      ${vaultPrefix}─ Vault: ${chalk.yellow(vaultId)}, ` + `tier=${vaultData.tierId}, minted=${vaultBar}`,
         );
       });
     });
@@ -380,6 +405,7 @@ function mainDemo() {
     // Попробуем динамические обновления
     console.log(chalk.yellowBright("Starting dynamic mint/burn every 2s...\n"));
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const intervalId = setInterval(() => {
       console.clear();
 
@@ -387,12 +413,11 @@ function mainDemo() {
       const possibleGroupOperators = [
         ["Group0", "operatorA", ["vaultA1"]],
         ["Group1", "operatorX", ["vaultX1", "vaultX2"]],
-        ["Group1", "operatorY", ["vaultY1", "vaultY2", "vaultY3"]]
+        ["Group1", "operatorY", ["vaultY1", "vaultY2", "vaultY3"]],
       ];
       // Выбираем случайно
-      const [groupId, operatorId, vaultArr] = possibleGroupOperators[
-        Math.floor(Math.random() * possibleGroupOperators.length)
-        ];
+      const [groupId, operatorId, vaultArr] =
+        possibleGroupOperators[Math.floor(Math.random() * possibleGroupOperators.length)];
       const vaultId = vaultArr[Math.floor(Math.random() * vaultArr.length)];
       const amount = Math.floor(Math.random() * 8_000) + 1_000; // 1k..9k
 
@@ -423,7 +448,6 @@ function mainDemo() {
     //   visualizeOperatorGrid(operatorGrid);
     //   process.exit(0);
     // }, 20_000);
-
   } catch (err) {
     console.error(chalk.red("Error in mainDemo:"), err);
   }

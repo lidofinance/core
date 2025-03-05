@@ -7,6 +7,7 @@ pragma solidity 0.8.25;
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
+import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Delegation} from "./Delegation.sol";
 
@@ -64,6 +65,7 @@ contract VaultFactory {
             _delegationConfig.nodeOperatorManager,
             _stakingVaultInitializerExtraParams
         );
+        VaultHub(vault.vaultHub()).connectVault(address(vault));
 
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmExpiry);

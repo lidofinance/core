@@ -6,7 +6,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 
-import { ether, MAX_UINT256 } from "lib";
+import { certainAddress, ether, MAX_UINT256 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -27,7 +27,9 @@ describe("VaultHub.sol:pausableUntil", () => {
     const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    const operatorGrid = certainAddress("accounting:operatorGrid");
+
+    const vaultHubImpl = await ethers.deployContract("Accounting", [locator, steth, operatorGrid]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const accounting = await ethers.getContractAt("Accounting", proxy);

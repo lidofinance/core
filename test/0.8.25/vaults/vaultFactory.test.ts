@@ -21,7 +21,7 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether } from "lib";
+import { certainAddress, createVaultProxy, days, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -75,8 +75,10 @@ describe("VaultFactory.sol", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
+    const operatorGrid = certainAddress("accounting:operatorGrid");
+
     // Accounting
-    accountingImpl = await ethers.deployContract("Accounting", [locator, steth]);
+    accountingImpl = await ethers.deployContract("Accounting", [locator, steth, operatorGrid]);
     proxy = await ethers.deployContract("OssifiableProxy", [accountingImpl, admin, new Uint8Array()], admin);
     accounting = await ethers.getContractAt("Accounting", proxy, deployer);
     await accounting.initialize(admin);
