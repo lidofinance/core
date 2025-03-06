@@ -200,40 +200,37 @@ contract Accounting {
             update.sharesToFinalizeWQ
         );
 
-        // Pre-calculate total amount of protocol fees for this rebase
-        // amount of shares that will be minted to pay it
-        uint256 postExternalEther;
-        (update.sharesToMintAsFees, postExternalEther) = _calculateFeesAndExternalEther(_report, _pre, update);
+        uint256 internalSharesBeforeFees =
+            _pre.totalShares - _pre.externalShares // internal shares before
+            - update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
-        // Calculate the new total shares and total pooled ether after the rebase
-        update.postTotalShares =
-            _pre.totalShares + // totalShares already includes externalShares
-            update.sharesToMintAsFees - // new shares minted to pay fees
-            update.totalSharesToBurn; // shares burned for withdrawals and cover
-
-        update.postTotalPooledEther =
-            _pre.totalPooledEther + // was before the report (includes externalEther)
-            _report.clBalance +
-            update.withdrawals -
-            update.principalClBalance + // total cl rewards (or penalty)
-            update.elRewards + // ELRewards
-            postExternalEther - _pre.externalEther // vaults rebase
+        uint256 internalEther =
+            _pre.totalPooledEther - _pre.externalEther // internal ether before
+            + _report.clBalance + update.withdrawals - update.principalClBalance // total cl rewards (or penalty)
+            + update.elRewards // MEV and tips
             - update.etherToFinalizeWQ; // withdrawals
+
+        // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
+        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, internalSharesBeforeFees, internalEther);
+
+        uint256 internalShares = internalSharesBeforeFees + update.sharesToMintAsFees;
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vaults
         (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
             _contracts.vaultHub.calculateVaultsRebase(
-                update.postTotalShares,
-                update.postTotalPooledEther,
+                _report.vaultValues,
                 _pre.totalShares,
                 _pre.totalPooledEther,
+                internalShares,
+                internalEther,
                 update.sharesToMintAsFees
             );
 
-        update.postTotalPooledEther +=
-            update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
-        update.postTotalShares += update.totalVaultsTreasuryFeeShares;
+        uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
+
+        update.postTotalShares = internalShares + externalShares;
+        update.postTotalPooledEther = internalEther + externalShares * internalEther / internalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -251,19 +248,17 @@ contract Accounting {
     }
 
     /// @dev calculates shares that are minted as the protocol fees
-    function _calculateFeesAndExternalEther(
+    function _calculateLidoProtocolFeeShares(
         ReportValues calldata _report,
-        PreReportState memory _pre,
-        CalculatedValues memory _update
-    ) internal pure returns (uint256 sharesToMintAsFees, uint256 postExternalEther) {
+        CalculatedValues memory _update,
+        uint256 _internalSharesBeforeFees,
+        uint256 _internalEther
+    ) internal pure returns (uint256 sharesToMintAsFees) {
         // we are calculating the share rate equal to the post-rebase share rate
-        // but with fees taken as eth deduction
-        // and without externalBalance taken into account
-        uint256 shares = _pre.totalShares - _update.totalSharesToBurn - _pre.externalShares;
-        uint256 eth = _pre.totalPooledEther - _update.etherToFinalizeWQ - _pre.externalEther;
+        // but with fees taken as ether deduction instead of minting shares
+        // to learn the amount of shares we need to mint to compensate for this fee
 
         uint256 unifiedClBalance = _report.clBalance + _update.withdrawals;
-
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
@@ -272,18 +267,15 @@ contract Accounting {
             uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewards;
             uint256 totalFee = _update.rewardDistribution.totalFee;
             uint256 precision = _update.rewardDistribution.precisionPoints;
+            // amount of fees in ether
             uint256 feeEther = (totalRewards * totalFee) / precision;
-            eth += totalRewards - feeEther;
-
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
-            sharesToMintAsFees = (feeEther * shares) / eth;
-        } else {
-            uint256 clPenalty = _update.principalClBalance - unifiedClBalance;
-            eth = eth - clPenalty + _update.elRewards;
+            // using the share rate that takes fees into account
+            // the share rate is the same as the post-rebase share rate
+            // but with fees taken as ether deduction instead of minting shares
+            // to learn the amount of shares we need to mint to compensate for this fee
+            sharesToMintAsFees = (feeEther * _internalSharesBeforeFees) / (_internalEther - feeEther);
         }
-
-        // externalBalance is rebasing at the same rate as the primary balance does
-        postExternalEther = (_pre.externalShares * eth) / shares;
     }
 
     /// @dev applies the precalculated changes to the protocol state

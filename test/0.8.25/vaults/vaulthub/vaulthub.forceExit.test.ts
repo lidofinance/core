@@ -9,7 +9,7 @@ import {
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
   VaultFactory__MockForVaultHub,
-  VaultHub__Harness,
+  VaultHub,
 } from "typechain-types";
 
 import { impersonate } from "lib";
@@ -34,7 +34,7 @@ describe("VaultHub.sol:forceExit", () => {
   let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
 
-  let vaultHub: VaultHub__Harness;
+  let vaultHub: VaultHub;
   let vaultFactory: VaultFactory__MockForVaultHub;
   let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
@@ -53,18 +53,19 @@ describe("VaultHub.sol:forceExit", () => {
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
       steth,
+      stranger,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const vaultHubAdmin = await ethers.getContractAt("VaultHub__Harness", proxy);
+    const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("VaultHub__Harness", proxy, user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
     vaultHubAddress = await vaultHub.getAddress();
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
@@ -204,7 +205,8 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
-      const rebase = await vaultHub.mock__calculateVaultsRebase(
+      const rebase = await vaultHub.calculateVaultsRebase(
+        [0n, valuation - penalty],
         await steth.getTotalShares(),
         await steth.getTotalPooledEther(),
         await steth.getTotalShares(),
