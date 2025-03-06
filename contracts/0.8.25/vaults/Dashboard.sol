@@ -212,14 +212,14 @@ contract Dashboard is Permissions {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function queueSelfDisconnect() external payable fundable {
+    function selfDisconnect() external payable fundable {
         uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
         }
 
-        _queueSelfDisconnect();
+        _selfDisconnect();
     }
 
     /**

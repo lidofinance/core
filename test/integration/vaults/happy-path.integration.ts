@@ -201,7 +201,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.QUEUE_SELF_DISCONNECT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.SELF_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -444,11 +444,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
-    const disconnectTx = await delegation.connect(curator).queueSelfDisconnect();
+    const disconnectTx = await delegation.connect(curator).selfDisconnect();
     const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;
 
     const locked = await stakingVault.locked();
-    const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnectQueued");
+    const disconnectEvents = ctx.getEvents(disconnectTxReceipt, "VaultDisconnected");
     expect(disconnectEvents.length).to.equal(1n);
 
     expect(await stakingVault.locked()).to.equal(locked);

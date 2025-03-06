@@ -20,7 +20,7 @@ contract VaultHub__MockForDashboard {
         steth = _steth;
     }
 
-    event Mock__VaultDisconnectQueued(address vault);
+    event Mock__VaultDisconnected(address vault);
     event Mock__Rebalanced(uint256 amount);
 
     mapping(address => VaultHub.VaultSocket) public vaultSockets;
@@ -37,8 +37,8 @@ contract VaultHub__MockForDashboard {
         return vaultSockets[vault];
     }
 
-    function queueDisconnect(address vault) external {
-        emit Mock__VaultDisconnectQueued(vault);
+    function disconnect(address vault) external {
+        emit Mock__VaultDisconnected(vault);
     }
 
     function mintShares(address vault, address recipient, uint256 amount) external {
@@ -57,8 +57,8 @@ contract VaultHub__MockForDashboard {
         vaultSockets[_vault].sharesMinted = uint96(vaultSockets[_vault].sharesMinted - _amountOfShares);
     }
 
-    function queueSelfDisconnect(address _vault) external {
-        emit Mock__VaultDisconnectQueued(_vault);
+    function selfDisconnect(address _vault) external {
+        emit Mock__VaultDisconnected(_vault);
     }
 
     function rebalance() external payable {

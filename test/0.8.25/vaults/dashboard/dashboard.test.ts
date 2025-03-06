@@ -184,7 +184,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -220,7 +220,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -242,7 +242,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -262,7 +262,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 10_000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -282,7 +282,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 0n,
         rebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -310,7 +310,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -336,7 +336,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -359,7 +359,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -380,7 +380,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -404,7 +404,7 @@ describe("Dashboard.sol", () => {
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
-        pendingDisconnect: false,
+        isDisconnected: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -498,16 +498,16 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("queueSelfDisconnect", () => {
+  context("selfDisconnect", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).queueSelfDisconnect())
+      await expect(dashboard.connect(stranger).selfDisconnect())
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.QUEUE_SELF_DISCONNECT_ROLE());
+        .withArgs(stranger, await dashboard.SELF_DISCONNECT_ROLE());
     });
 
     context("when vault has no debt", () => {
       it("disconnects the staking vault from the vault hub", async () => {
-        await expect(dashboard.queueSelfDisconnect()).to.emit(hub, "Mock__VaultDisconnectQueued").withArgs(vault);
+        await expect(dashboard.selfDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
       });
     });
 
@@ -524,14 +524,14 @@ describe("Dashboard.sol", () => {
       });
 
       it("reverts on disconnect attempt", async () => {
-        await expect(dashboard.queueSelfDisconnect()).to.be.reverted;
+        await expect(dashboard.selfDisconnect()).to.be.reverted;
       });
 
       it("succeeds with rebalance when providing sufficient ETH", async () => {
-        await expect(dashboard.queueSelfDisconnect({ value: amountSteth }))
+        await expect(dashboard.selfDisconnect({ value: amountSteth }))
           .to.emit(hub, "Mock__Rebalanced")
           .withArgs(amountSteth)
-          .to.emit(hub, "Mock__VaultDisconnectQueued")
+          .to.emit(hub, "Mock__VaultDisconnected")
           .withArgs(vault);
       });
     });
