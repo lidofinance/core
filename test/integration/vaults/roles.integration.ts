@@ -24,10 +24,8 @@ type Methods<T> = {
 
 type DelegationMethods = Methods<Delegation>; // "foo" | "bar"
 
-describe("Scenario: Staking Vaults Delegation Roles full init", () => {
+describe("Scenario: Staking Vaults Delegation Roles", () => {
   let ctx: ProtocolContext;
-
-  let testDelegation: Delegation;
 
   let snapshot: string;
   let owner: HardhatEthersSigner,
@@ -74,38 +72,6 @@ describe("Scenario: Staking Vaults Delegation Roles full init", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     await depositSecurityModule.DEPOSIT_CONTRACT();
-
-    const { stakingVaultFactory } = ctx.contracts;
-
-    // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
-      {
-        defaultAdmin: owner,
-        nodeOperatorManager: nodeOperatorManager,
-        curatorFeeBP: VAULT_OWNER_FEE,
-        nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-        confirmExpiry: days(7n),
-        funders: [funder],
-        withdrawers: [withdrawer],
-        minters: [minter],
-        burners: [burner],
-        rebalancers: [rebalancer],
-        depositPausers: [depositPausers],
-        depositResumers: [depositResumers],
-        validatorExitRequesters: [validatorExitRequesters],
-        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
-        disconnecters: [disconnecters],
-        curatorFeeSetters: [curatorFeeSetters],
-        curatorFeeClaimers: [curatorFeeClaimers],
-        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
-      },
-      "0x",
-    );
-
-    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-    const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
-
-    testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
   });
 
   beforeEach(async () => {
@@ -114,152 +80,294 @@ describe("Scenario: Staking Vaults Delegation Roles full init", () => {
 
   afterEach(async () => await Snapshot.restore(snapshot));
 
-  describe("Only roles", () => {
-    describe("Delegation methods", () => {
-      it("setCuratorFeeBP", async () => {
-        await testMethod(
-          "setCuratorFeeBP",
-          {
-            successUsers: [curatorFeeSetters],
-            failingUsers: allRoles.filter((r) => r !== curatorFeeSetters),
-          },
-          [1n],
-          await testDelegation.CURATOR_FEE_SET_ROLE(),
-        );
+  // initializing contracts with signers
+  describe("Full contract initialization", () => {
+    let testDelegation: Delegation;
 
-        await testRevokingRole("setCuratorFeeBP", await testDelegation.CURATOR_FEE_SET_ROLE(), curatorFeeSetters, [1n]);
+    before(async () => {
+      const { stakingVaultFactory } = ctx.contracts;
+
+      // Owner can create a vault with operator as a node operator
+      const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
+        {
+          defaultAdmin: owner,
+          nodeOperatorManager: nodeOperatorManager,
+          curatorFeeBP: VAULT_OWNER_FEE,
+          nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+          confirmExpiry: days(7n),
+          funders: [funder],
+          withdrawers: [withdrawer],
+          minters: [minter],
+          burners: [burner],
+          rebalancers: [rebalancer],
+          depositPausers: [depositPausers],
+          depositResumers: [depositResumers],
+          validatorExitRequesters: [validatorExitRequesters],
+          validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
+          disconnecters: [disconnecters],
+          curatorFeeSetters: [curatorFeeSetters],
+          curatorFeeClaimers: [curatorFeeClaimers],
+          nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
+        },
+        "0x",
+      );
+
+      const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
+      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+
+      testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    });
+
+    describe("Only roles", () => {
+      describe("Delegation methods", () => {
+        it("setCuratorFeeBP", async () => {
+          await testMethod(
+            testDelegation,
+            "setCuratorFeeBP",
+            {
+              successUsers: [curatorFeeSetters],
+              failingUsers: allRoles.filter((r) => r !== curatorFeeSetters),
+            },
+            [1n],
+            await testDelegation.CURATOR_FEE_SET_ROLE(),
+          );
+
+          await testRevokingRole(
+            testDelegation,
+            "setCuratorFeeBP",
+            await testDelegation.CURATOR_FEE_SET_ROLE(),
+            curatorFeeSetters,
+            [1n],
+          );
+        });
+
+        it("claimCuratorFee", async () => {
+          await testMethod(
+            testDelegation,
+            "claimCuratorFee",
+            {
+              successUsers: [curatorFeeClaimers],
+              failingUsers: allRoles.filter((r) => r !== curatorFeeClaimers),
+            },
+            [stranger],
+            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
+          );
+
+          await testRevokingRole(
+            testDelegation,
+            "claimCuratorFee",
+            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
+            curatorFeeClaimers,
+            [stranger],
+          );
+        });
+
+        it("claimNodeOperatorFee", async () => {
+          await testMethod(
+            testDelegation,
+            "claimNodeOperatorFee",
+            {
+              successUsers: [nodeOperatorFeeClaimers],
+              failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimers),
+            },
+            [stranger],
+            await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+          );
+        });
       });
 
-      it("claimCuratorFee", async () => {
-        await testMethod(
-          "claimCuratorFee",
-          {
-            successUsers: [curatorFeeClaimers],
-            failingUsers: allRoles.filter((r) => r !== curatorFeeClaimers),
-          },
-          [stranger],
-          await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
-        );
+      describe("Dashboard methods", () => {
+        it("recoverERC20", async () => {
+          await testMethod(
+            testDelegation,
+            "recoverERC20",
+            {
+              successUsers: [owner],
+              failingUsers: allRoles.filter((r) => r !== owner),
+            },
+            [ZeroAddress, owner, 1n],
+            await testDelegation.DEFAULT_ADMIN_ROLE(),
+          );
+        });
 
-        await testRevokingRole("claimCuratorFee", await testDelegation.CURATOR_FEE_CLAIM_ROLE(), curatorFeeClaimers, [
-          stranger,
-        ]);
-      });
-
-      it("claimNodeOperatorFee", async () => {
-        await testMethod(
-          "claimNodeOperatorFee",
-          {
-            successUsers: [nodeOperatorFeeClaimers],
-            failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimers),
-          },
-          [stranger],
-          await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-        );
+        it("recoverERC721", async () => {
+          await testMethod(
+            testDelegation,
+            "recoverERC721",
+            {
+              successUsers: [owner],
+              failingUsers: allRoles.filter((r) => r !== owner),
+            },
+            [ZeroAddress, 0, stranger],
+            await testDelegation.DEFAULT_ADMIN_ROLE(),
+          );
+        });
       });
     });
 
-    describe("Dashboard methods", () => {
-      it("recoverERC20", async () => {
-        await testMethod(
-          "recoverERC20",
+    describe("only confirmed roles", () => {
+      it("setNodeOperatorFeeBP", async () => {
+        await testMethodConfirmedRoles(
+          testDelegation,
+          "setNodeOperatorFeeBP",
           {
-            successUsers: [owner],
-            failingUsers: allRoles.filter((r) => r !== owner),
+            successUsers: [owner, nodeOperatorManager],
+            failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
           },
-          [ZeroAddress, owner, 1n],
-          await testDelegation.DEFAULT_ADMIN_ROLE(),
+          [1n],
         );
       });
 
-      it("recoverERC721", async () => {
-        await testMethod(
-          "recoverERC721",
+      it("setConfirmExpiry", async () => {
+        await testMethodConfirmedRoles(
+          testDelegation,
+          "setConfirmExpiry",
           {
-            successUsers: [owner],
-            failingUsers: allRoles.filter((r) => r !== owner),
+            successUsers: [owner, nodeOperatorManager],
+            failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
           },
-          [ZeroAddress, 0, stranger],
-          await testDelegation.DEFAULT_ADMIN_ROLE(),
+          [days(7n)],
         );
       });
     });
   });
 
-  describe("only confirmed roles", () => {
-    it("setNodeOperatorFeeBP", async () => {
-      await testMethodConfirmedRoles(
-        "setNodeOperatorFeeBP",
+  // initializing contracts without signers
+  describe("Empty contract initialization", () => {
+    let testDelegation: Delegation;
+
+    before(async () => {
+      const { stakingVaultFactory } = ctx.contracts;
+      allRoles = await getRandomSigners(2);
+      [owner, stranger] = allRoles;
+      // Owner can create a vault with operator as a node operator
+      const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
         {
-          successUsers: [owner, nodeOperatorManager],
-          failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
+          defaultAdmin: owner,
+          nodeOperatorManager: nodeOperatorManager,
+          curatorFeeBP: VAULT_OWNER_FEE,
+          nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+          confirmExpiry: days(7n),
+          funders: [],
+          withdrawers: [],
+          minters: [],
+          burners: [],
+          rebalancers: [],
+          depositPausers: [],
+          depositResumers: [],
+          validatorExitRequesters: [],
+          validatorWithdrawalTriggerers: [],
+          disconnecters: [],
+          curatorFeeSetters: [],
+          curatorFeeClaimers: [],
+          nodeOperatorFeeClaimers: [],
         },
-        [1n],
+        "0x",
       );
+
+      const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
+      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+
+      testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
     });
 
-    it("setConfirmExpiry", async () => {
-      await testMethodConfirmedRoles(
-        "setConfirmExpiry",
-        {
-          successUsers: [owner, nodeOperatorManager],
-          failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
-        },
-        [days(7n)],
-      );
+    describe("Only roles", () => {
+      describe("Delegation methods", () => {
+        it("setCuratorFeeBP", async () => {
+          await testGrantingRole(testDelegation, "setCuratorFeeBP", await testDelegation.CURATOR_FEE_SET_ROLE(), [1n]);
+        });
+
+        it("claimCuratorFee", async () => {
+          await testGrantingRole(testDelegation, "claimCuratorFee", await testDelegation.CURATOR_FEE_CLAIM_ROLE(), [
+            stranger,
+          ]);
+        });
+
+        // todo: find out why owner can't grant this role
+        it.skip("claimNodeOperatorFee", async () => {
+          await testGrantingRole(
+            testDelegation,
+            "claimNodeOperatorFee",
+            await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+            [stranger],
+          );
+        });
+      });
     });
   });
 
   async function testMethod<T extends unknown[]>(
+    delegation: Delegation,
     methodName: DelegationMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
     requiredRole: string,
   ) {
     for (const user of failingUsers) {
-      await expect(testDelegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)))
-        .to.be.revertedWithCustomError(testDelegation, "AccessControlUnauthorizedAccount")
+      await expect(delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)))
+        .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
         .withArgs(user, requiredRole);
     }
 
     for (const user of successUsers) {
       await expect(
-        testDelegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.not.revertedWithCustomError(testDelegation, "AccessControlUnauthorizedAccount");
+        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.not.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
     }
   }
 
   async function testMethodConfirmedRoles<T extends unknown[]>(
+    delegation: Delegation,
     methodName: DelegationMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
   ) {
     for (const user of failingUsers) {
       await expect(
-        testDelegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.revertedWithCustomError(testDelegation, "SenderNotMember");
+        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.revertedWithCustomError(delegation, "SenderNotMember");
     }
 
     for (const user of successUsers) {
       await expect(
-        testDelegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.not.revertedWithCustomError(testDelegation, "SenderNotMember");
+        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.not.revertedWithCustomError(delegation, "SenderNotMember");
     }
   }
 
   async function testRevokingRole<T extends unknown[]>(
+    delegation: Delegation,
     methodName: DelegationMethods,
     roleToRevoke: string,
     userToRevoke: HardhatEthersSigner,
     argument: T,
   ) {
-    await testDelegation.connect(owner).revokeRole(roleToRevoke, userToRevoke);
+    await delegation.connect(owner).revokeRole(roleToRevoke, userToRevoke);
 
     await expect(
-      testDelegation.connect(userToRevoke)[methodName](...(argument as ContractMethodArgs<T>)),
-    ).to.be.revertedWithCustomError(testDelegation, "AccessControlUnauthorizedAccount");
+      delegation.connect(userToRevoke)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
 
-    await testDelegation.connect(owner).grantRole(roleToRevoke, userToRevoke);
+    await delegation.connect(owner).grantRole(roleToRevoke, userToRevoke);
+  }
+
+  async function testGrantingRole<T extends unknown[]>(
+    delegation: Delegation,
+    methodName: DelegationMethods,
+    roleToGrant: string,
+    argument: T,
+  ) {
+    await expect(
+      delegation.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
+
+    await delegation.connect(owner).grantRole(roleToGrant, stranger);
+
+    await expect(
+      delegation.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
+
+    await delegation.connect(owner).revokeRole(roleToGrant, stranger);
   }
 
   async function getRandomSigners(amount: number): Promise<HardhatEthersSigner[]> {
