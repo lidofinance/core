@@ -403,11 +403,12 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function calculateVaultsRebase(
-        uint256 _postTotalShares,
-        uint256 _postTotalPooledEther,
+        uint256[] memory vaultsValuations,
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
-        uint256 _sharesToMintAsFees
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
+        uint256 _sharesToMintAsLidoCoreFees
     ) public view returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares) {
         /// HERE WILL BE ACCOUNTING DRAGON
 
@@ -433,20 +434,23 @@ contract VaultHub is PausableUntilWithRoles {
         for (uint256 i = 0; i < length; ++i) {
             VaultSocket memory socket = $.sockets[i + 1];
             if (!socket.pendingDisconnect) {
-                treasuryFeeShares[i] = _calculateTreasuryFees(
+                treasuryFeeShares[i] = calculateVaultTreasuryFees(
+                    vaultsValuations[i],
                     socket,
-                    _postTotalShares - _sharesToMintAsFees,
-                    _postTotalPooledEther,
                     _preTotalShares,
-                    _preTotalPooledEther
+                    _preTotalPooledEther,
+                    _postInternalShares,
+                    _postInternalEther,
+                    _sharesToMintAsLidoCoreFees
                 );
 
                 totalTreasuryFeeShares += treasuryFeeShares[i];
 
                 uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
-                uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
                 lockedEther[i] = Math256.max(
-                    (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
+                    // uint256 mintedStETH = (totalMintedShares * _postInternalEther) / _postInternalShares;
+                    (totalMintedShares * _postInternalEther * TOTAL_BASIS_POINTS)
+                        / (_postInternalShares *  (TOTAL_BASIS_POINTS - socket.reserveRatioBP)),
                     CONNECT_DEPOSIT
                 );
             }
@@ -454,34 +458,43 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @dev impossible to invoke this method under negative rebase
-    function _calculateTreasuryFees(
-        VaultSocket memory _socket,
-        uint256 _postTotalSharesNoFees,
-        uint256 _postTotalPooledEther,
-        uint256 _preTotalShares,
-        uint256 _preTotalPooledEther
-    ) internal view returns (uint256 treasuryFeeShares) {
-        IStakingVault vault_ = IStakingVault(_socket.vault);
+    function calculateVaultTreasuryFees(
+        uint256 _reportValuation,
+        VaultSocket memory socket,
 
-        uint256 chargeableValue = Math256.min(
-            vault_.valuation(),
-            (_socket.shareLimit * _preTotalPooledEther) / _preTotalShares
+        uint256 _preTotalShares,
+        uint256 _preTotalPooledEther,
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
+        uint256 _sharesToMintAsLidoCoreFees
+    ) public pure returns (uint256 treasuryFeeShares) {
+        uint256 mintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+        // we are charging fees over the mintable part of the vault's valuation
+        uint256 mintableValuation = _reportValuation * mintableRatio / TOTAL_BASIS_POINTS;
+
+        uint256 chargeableValuation = Math256.min(
+            // internal share rate is equal to total share rate, so we can use internal values here
+            socket.shareLimit * _postInternalEther / _postInternalShares,
+            mintableValuation
         );
 
-        // treasury fee is calculated as a share of potential rewards that
-        // Lido curated validators could earn if vault's ETH was staked in Lido
-        // itself and minted as stETH shares
+        // Here is the fee calculations made step by step:
         //
-        // treasuryFeeShares = value * lidoGrossAPR * treasuryFeeRate / preShareRate
-        // lidoGrossAPR = postShareRateWithoutFees / preShareRate - 1
-        // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
+        // we factor in the Lido core reward rate as to calculate the potential fee base
+        // potentialRewards = chargeableValuation * lidoCoreRewardRate (validator rewards Lido earns per eth of TVL in a day)
+        // lidoCoreRewardRate = shareRateAfterRebaseWithNoFeesCharged / shareRateBeforeRebase
+        //
+        // shareRateAfterRebaseWithNoFeesCharged = _postInternalEther / (_postInternalShares - _sharesToMintAsLidoCoreFees)
+        // shareRateBeforeRebase = _preTotalPooledEther / _preTotalShares
+        // treasuryFee = potentialRewards * _treasuryFeeBP / TOTAL_BASIS_POINTS
+        // treasuryFeeShares = treasuryFee * _postInternalShares / _postInternalEther
 
-        // TODO: optimize potential rewards calculation
-        uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) - chargeableValue);
-        uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
-
-        treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
+        // Combining it into a huge one-liner to save some precision
+        return (
+            chargeableValuation * _preTotalShares * _postInternalShares * socket.treasuryFeeBP
+            /
+            (_preTotalPooledEther * (_postInternalShares - _sharesToMintAsLidoCoreFees) * TOTAL_BASIS_POINTS)
+        );
     }
 
     function updateVaults(
