@@ -80,13 +80,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
      * @param nodeOperatorBalance - balance of NO in PDG
-     * @param nodeOperatorGuarantor - mapping of NO to guarantor, where zero address means NO is self-guarantor
+     * @param nodeOperatorExternalGuarantor - mapping of NO to its' guarantor (zero address means NO is self-guarantor)
      * @param guarantorClaimableEther - ether that guarantor can claim back if NO has changed guarantor with balance
      * @param validatorStatus - status of the validators in PDG
      */
     struct ERC7201Storage {
         mapping(address nodeOperator => NodeOperatorBalance balance) nodeOperatorBalance;
-        mapping(address nodeOperator => address guarantor) nodeOperatorGuarantor;
+        mapping(address nodeOperator => address guarantor) nodeOperatorExternalGuarantor;
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
     }
@@ -147,13 +147,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     /**
-     * @notice returns address of guarantor for the NO
+     * @notice returns address of external guarantor for the NO
      * @param _nodeOperator to check guarantor for
      * @return address of guarantor for the NO
      * @dev zero address means NO is self-guarantor
      */
-    function nodeOperatorGuarantor(address _nodeOperator) external view returns (address) {
-        return _getStorage().nodeOperatorGuarantor[_nodeOperator];
+    function nodeOperatorExternalGuarantor(address _nodeOperator) external view returns (address) {
+        return _getStorage().nodeOperatorExternalGuarantor[_nodeOperator];
     }
 
     /**
@@ -217,7 +217,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @dev reverts if a NO has non-zero locked balance
      * @dev refunded ether can be claimed by previous guarantor with `claimGuarantorRefund()`
      */
-    function setNodeOperatorGuarantor(address _newGuarantor) external whenResumed {
+    function setNodeOperatorExternalGuarantor(address _newGuarantor) external whenResumed {
         ERC7201Storage storage $ = _getStorage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[msg.sender];
 
@@ -225,8 +225,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         if (balance.locked != 0) revert LockedIsNotZero(balance.locked);
 
-        address prevGuarantor = $.nodeOperatorGuarantor[msg.sender] != address(0)
-            ? $.nodeOperatorGuarantor[msg.sender]
+        address prevGuarantor = $.nodeOperatorExternalGuarantor[msg.sender] != address(0)
+            ? $.nodeOperatorExternalGuarantor[msg.sender]
             : msg.sender;
 
         if (balance.total > 0) {
@@ -238,7 +238,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             emit GuarantorRefunded(_newGuarantor, msg.sender, refund);
         }
 
-        $.nodeOperatorGuarantor[msg.sender] = _newGuarantor;
+        $.nodeOperatorExternalGuarantor[msg.sender] = _newGuarantor;
 
         emit GuarantorSet(msg.sender, _newGuarantor, prevGuarantor);
     }
@@ -576,8 +576,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     modifier onlyGuarantorOf(address _nodeOperator) {
         ERC7201Storage storage $ = _getStorage();
         if (
-            !($.nodeOperatorGuarantor[_nodeOperator] == msg.sender ||
-                ($.nodeOperatorGuarantor[_nodeOperator] == address(0) && msg.sender == _nodeOperator))
+            !($.nodeOperatorExternalGuarantor[_nodeOperator] == msg.sender ||
+                ($.nodeOperatorExternalGuarantor[_nodeOperator] == address(0) && msg.sender == _nodeOperator))
         ) {
             revert MustBeNodeOperatorOrGuarantor();
         }
