@@ -7,13 +7,15 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation } from "typechain-types";
 
-import { days } from "lib";
+import { days, impersonate, randomAddress } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
+import { ether } from "../../../lib/units";
+
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
-const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
+const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,7 +24,7 @@ type Methods<T> = {
 
 type DelegationMethods = Methods<Delegation>; // "foo" | "bar"
 
-describe("Scenario: Staking Vaults Delegation  Roles", () => {
+describe("Scenario: Staking Vaults Delegation Roles full init", () => {
   let ctx: ProtocolContext;
 
   let testDelegation: Delegation;
@@ -49,7 +51,8 @@ describe("Scenario: Staking Vaults Delegation  Roles", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
-    allRoles = await ethers.getSigners();
+
+    allRoles = await getRandomSigners(16);
     [
       owner,
       nodeOperatorManager,
@@ -68,6 +71,7 @@ describe("Scenario: Staking Vaults Delegation  Roles", () => {
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
+
     const { depositSecurityModule } = ctx.contracts;
     await depositSecurityModule.DEPOSIT_CONTRACT();
 
@@ -256,5 +260,13 @@ describe("Scenario: Staking Vaults Delegation  Roles", () => {
     ).to.be.revertedWithCustomError(testDelegation, "AccessControlUnauthorizedAccount");
 
     await testDelegation.connect(owner).grantRole(roleToRevoke, userToRevoke);
+  }
+
+  async function getRandomSigners(amount: number): Promise<HardhatEthersSigner[]> {
+    const signers = [];
+    for (let i = 0; i < amount; i++) {
+      signers.push(await impersonate(randomAddress(), ether("1")));
+    }
+    return signers;
   }
 });
