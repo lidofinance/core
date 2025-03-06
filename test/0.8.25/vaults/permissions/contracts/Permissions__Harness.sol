@@ -51,8 +51,8 @@ contract Permissions__Harness is Permissions {
         _requestValidatorExit(_pubkey);
     }
 
-    function voluntaryDisconnect() external {
-        _voluntaryDisconnect();
+    function selfDisconnect() external {
+        _selfDisconnect();
     }
 
     function transferStakingVaultOwnership(address _newOwner) external {

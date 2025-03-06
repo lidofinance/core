@@ -47,7 +47,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
-        bool pendingDisconnect;
+        bool isDisconnected;
         /// @notice unused gap in the slot 2
         /// uint104 _unused_gap_;
     }
@@ -192,7 +192,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // pendingDisconnect
+            false // isDisconnected
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -233,7 +233,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `mintedShares` should be zero
-    function voluntaryDisconnect(address _vault) external whenResumed {
+    function selfDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _vaultAuth(_vault, "disconnect");
 
@@ -388,16 +388,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _disconnect(address _vault) internal {
         VaultSocket storage socket = _connectedSocket(_vault);
-        IStakingVault vault_ = IStakingVault(socket.vault);
 
         uint256 sharesMinted = socket.sharesMinted;
         if (sharesMinted > 0) {
             revert NoMintedSharesShouldBeLeft(_vault, sharesMinted);
         }
 
-        socket.pendingDisconnect = true;
-
-        vault_.report(vault_.valuation(), vault_.inOutDelta(), 0);
+        socket.isDisconnected = true;
 
         emit VaultDisconnected(_vault);
     }
@@ -432,7 +429,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         for (uint256 i = 0; i < length; ++i) {
             VaultSocket memory socket = $.sockets[i + 1];
-            if (!socket.pendingDisconnect) {
+            if (!socket.isDisconnected) {
                 treasuryFeeShares[i] = _calculateTreasuryFees(
                     socket,
                     _postTotalShares - _sharesToMintAsFees,
@@ -496,8 +493,6 @@ contract VaultHub is PausableUntilWithRoles {
         for (uint256 i = 0; i < _valuations.length; i++) {
             VaultSocket storage socket = $.sockets[i + 1];
 
-            if (socket.pendingDisconnect) continue; // we skip disconnected vaults
-
             uint256 treasuryFeeShares = _treasureFeeShares[i];
             if (treasuryFeeShares > 0) {
                 socket.sharesMinted += uint96(treasuryFeeShares);
@@ -510,7 +505,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         for (uint256 i = 1; i < length; i++) {
             VaultSocket storage socket = $.sockets[i];
-            if (socket.pendingDisconnect) {
+            if (socket.isDisconnected) {
                 // remove disconnected vault from the list
                 VaultSocket memory lastSocket = $.sockets[length - 1];
                 $.sockets[i] = lastSocket;
@@ -534,7 +529,7 @@ contract VaultHub is PausableUntilWithRoles {
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 index = $.vaultIndex[_vault];
-        if (index == 0 || $.sockets[index].pendingDisconnect) revert NotConnectedToHub(_vault);
+        if (index == 0 || $.sockets[index].isDisconnected) revert NotConnectedToHub(_vault);
         return $.sockets[index];
     }
 

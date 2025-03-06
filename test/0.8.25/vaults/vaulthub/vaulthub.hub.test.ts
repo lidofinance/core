@@ -218,7 +218,7 @@ describe("VaultHub.sol:hub", () => {
       expect(lastVaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(lastVaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(lastVaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
-      expect(lastVaultSocket.pendingDisconnect).to.equal(false);
+      expect(lastVaultSocket.isDisconnected).to.equal(false);
     });
   });
 
@@ -233,7 +233,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.reserveRatioBP).to.equal(0n);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(0n);
       expect(vaultSocket.treasuryFeeBP).to.equal(0n);
-      expect(vaultSocket.pendingDisconnect).to.equal(false);
+      expect(vaultSocket.isDisconnected).to.equal(false);
     });
 
     it("returns the vault socket for a vault that was connected", async () => {
@@ -247,7 +247,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(vaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
-      expect(vaultSocket.pendingDisconnect).to.equal(false);
+      expect(vaultSocket.isDisconnected).to.equal(false);
     });
   });
 
@@ -578,7 +578,7 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultSocketBefore = await vaultHub["vaultSocket(address)"](vaultAddress);
       expect(vaultSocketBefore.vault).to.equal(ZeroAddress);
-      expect(vaultSocketBefore.pendingDisconnect).to.be.false;
+      expect(vaultSocketBefore.isDisconnected).to.be.false;
 
       await expect(
         vaultHub
@@ -592,7 +592,7 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultSocketAfter = await vaultHub["vaultSocket(address)"](vaultAddress);
       expect(vaultSocketAfter.vault).to.equal(vaultAddress);
-      expect(vaultSocketAfter.pendingDisconnect).to.be.false;
+      expect(vaultSocketAfter.isDisconnected).to.be.false;
 
       expect(await vault.locked()).to.equal(CONNECT_DEPOSIT);
     });
@@ -709,11 +709,11 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
-      expect(vaultSocket.pendingDisconnect).to.be.true;
+      expect(vaultSocket.isDisconnected).to.be.true;
     });
   });
 
-  context("voluntaryDisconnect", () => {
+  context("self-disconnect", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
 
@@ -725,21 +725,21 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if minting paused", async () => {
       await vaultHub.connect(user).pauseFor(1000n);
 
-      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ResumedExpected",
       );
     });
 
     it("reverts if vault is zero address", async () => {
-      await expect(vaultHub.connect(user).voluntaryDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).selfDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ZeroArgument",
       );
     });
 
     it("reverts if called as non-vault owner", async () => {
-      await expect(vaultHub.connect(stranger).voluntaryDisconnect(vaultAddress))
+      await expect(vaultHub.connect(stranger).selfDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotAuthorized")
         .withArgs("disconnect", stranger);
     });
@@ -747,7 +747,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if vault is not connected", async () => {
       await vaultHub.connect(user).disconnect(vaultAddress);
 
-      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
+      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(vaultAddress);
     });
@@ -756,19 +756,19 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoMintedSharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await expect(vaultHub.connect(user).disconnect(vaultAddress))
+      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnected")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
-      expect(vaultSocket.pendingDisconnect).to.be.true;
+      expect(vaultSocket.isDisconnected).to.be.true;
     });
   });
 });
