@@ -21,27 +21,27 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { certainAddress, /*createVaultProxy,*/ ether, impersonate } from "lib";
+import { certainAddress, createVaultProxy, days, /*createVaultProxy,*/ ether, impersonate } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("OperatorGrid.sol", () => {
   let deployer: HardhatEthersSigner;
-  // let vaultOwner: HardhatEthersSigner;
-  // let funder: HardhatEthersSigner;
-  // let withdrawer: HardhatEthersSigner;
-  // let minter: HardhatEthersSigner;
-  // let burner: HardhatEthersSigner;
-  // let rebalancer: HardhatEthersSigner;
-  // let depositPauser: HardhatEthersSigner;
-  // let depositResumer: HardhatEthersSigner;
-  // let exitRequester: HardhatEthersSigner;
-  // let disconnecter: HardhatEthersSigner;
-  // let curatorFeeSetter: HardhatEthersSigner;
-  // let curatorFeeClaimer: HardhatEthersSigner;
-  // let nodeOperatorManager: HardhatEthersSigner;
-  // let nodeOperatorFeeClaimer: HardhatEthersSigner;
+  let vaultOwner: HardhatEthersSigner;
+  let funder: HardhatEthersSigner;
+  let withdrawer: HardhatEthersSigner;
+  let minter: HardhatEthersSigner;
+  let burner: HardhatEthersSigner;
+  let rebalancer: HardhatEthersSigner;
+  let depositPauser: HardhatEthersSigner;
+  let depositResumer: HardhatEthersSigner;
+  let exitRequester: HardhatEthersSigner;
+  let disconnecter: HardhatEthersSigner;
+  let curatorFeeSetter: HardhatEthersSigner;
+  let curatorFeeClaimer: HardhatEthersSigner;
+  let nodeOperatorManager: HardhatEthersSigner;
+  let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let dao: HardhatEthersSigner;
   let vaultHubAsSigner: HardhatEthersSigner;
 
@@ -88,7 +88,6 @@ describe("OperatorGrid.sol", () => {
       nodeOperatorFeeClaimer,
       stranger,
       beaconOwner,
-      rewarder,
       dao,
     ] = await ethers.getSigners();
 
@@ -131,41 +130,10 @@ describe("OperatorGrid.sol", () => {
     await accounting.connect(dao).addVaultProxyCodehash(vaultProxyCodeHash);
 
     delegation = await ethers.deployContract("Delegation", [weth, lidoLocator], { from: deployer });
-    factory = await ethers.deployContract("VaultFactory", [beacon, delegation]);
+    factory = await ethers.deployContract("VaultFactory", [beacon, delegation, operatorGrid]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegation);
-
-    // const delegationParams = {
-    //   defaultAdmin: vaultOwner,
-    //   nodeOperatorManager,
-    //   confirmExpiry: days(7n),
-    //   curatorFeeBP: 0n,
-    //   nodeOperatorFeeBP: 0n,
-    //   funders: [funder],
-    //   withdrawers: [withdrawer],
-    //   minters: [minter],
-    //   burners: [burner],
-    //   rebalancers: [rebalancer],
-    //   depositPausers: [depositPauser],
-    //   depositResumers: [depositResumer],
-    //   exitRequesters: [exitRequester],
-    //   disconnecters: [disconnecter],
-    //   curatorFeeSetters: [curatorFeeSetter],
-    //   curatorFeeClaimers: [curatorFeeClaimer],
-    //   nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
-    // }
-    //
-    // const {
-    //   vault,
-    // } = await createVaultProxy(vaultOwner, factory, delegationParams);
-    //
-    // const limits = await operatorGrid.getVaultLimits(vault)
-    //
-    // console.log({
-    //   vault: await vault.getAddress(),
-    //   limits
-    // })
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -643,6 +611,54 @@ describe("OperatorGrid.sol", () => {
 
       const [retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
         await operatorGrid.getVaultLimits(vaultMock);
+
+      expect(retShareLimit).to.equal(tierShareLimit);
+      expect(retReserveRatio).to.equal(reserveRatio);
+      expect(retReserveRatioThreshold).to.equal(reserveRatioThreshold);
+      expect(retTreasuryFee).to.equal(treasuryFee);
+    });
+  });
+
+  context("VaultFactory - createVault", async function () {
+    it("creates a vault", async function () {
+      const groupId = 1;
+      const shareLimit = 2000;
+      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+
+      const tierId = 2;
+      const tierShareLimit = 1000;
+      const reserveRatio = 2000;
+      const reserveRatioThreshold = 1800;
+      const treasuryFee = 500;
+      await operatorGrid
+        .connect(dao)
+        .registerTier(groupId, tierId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(stranger)["registerOperator(address)"](nodeOperatorManager);
+
+      const delegationParams = {
+        defaultAdmin: vaultOwner,
+        nodeOperatorManager,
+        confirmExpiry: days(7n),
+        curatorFeeBP: 0n,
+        nodeOperatorFeeBP: 0n,
+        funders: [funder],
+        withdrawers: [withdrawer],
+        minters: [minter],
+        burners: [burner],
+        rebalancers: [rebalancer],
+        depositPausers: [depositPauser],
+        depositResumers: [depositResumer],
+        exitRequesters: [exitRequester],
+        disconnecters: [disconnecter],
+        curatorFeeSetters: [curatorFeeSetter],
+        curatorFeeClaimers: [curatorFeeClaimer],
+        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
+      };
+
+      const { vault } = await createVaultProxy(vaultOwner, factory, delegationParams);
+
+      const [retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
+        await operatorGrid.getVaultLimits(vault);
 
       expect(retShareLimit).to.equal(tierShareLimit);
       expect(retReserveRatio).to.equal(reserveRatio);
