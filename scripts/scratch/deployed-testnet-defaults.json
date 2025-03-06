@@ -148,7 +148,7 @@
       "baseUri": null
     }
   },
-  "clProofVerifier": {
+  "validatorExitVerifier": {
     "deployParameters": {
       "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",

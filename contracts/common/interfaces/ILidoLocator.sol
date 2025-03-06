@@ -20,7 +20,7 @@ interface ILidoLocator {
     function withdrawalVault() external view returns (address);
     function postTokenRebaseReceiver() external view returns (address);
     function oracleDaemonConfig() external view returns (address);
-    function clProofVerifier() external view returns (address);
+    function validatorExitVerifier() external view returns (address);
     function coreComponents()
         external
         view

@@ -21,7 +21,7 @@ const services = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
-  "clProofVerifier",
+  "validatorExitVerifier",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];

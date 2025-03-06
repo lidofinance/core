@@ -28,7 +28,7 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
-  const clProofVerifierParams = state[Sk.clProofVerifier].deployParameters;
+  const validatorExitVerifierParams = state[Sk.validatorExitVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -192,13 +192,13 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
-  const clProofVerifier = await deployWithoutProxy(Sk.clProofVerifier, "CLProofVerifier", deployer, [
-    clProofVerifierParams.gIFirstValidatorPrev,
-    clProofVerifierParams.gIFirstValidatorCurr,
-    clProofVerifierParams.gIHistoricalSummariesPrev,
-    clProofVerifierParams.gIHistoricalSummariesCurr,
-    clProofVerifierParams.firstSupportedSlot,
-    clProofVerifierParams.pivotSlot,
+  const validatorExitVerifier = await deployWithoutProxy(Sk.validatorExitVerifier, "CLProofVerifier", deployer, [
+    validatorExitVerifierParams.gIFirstValidatorPrev,
+    validatorExitVerifierParams.gIFirstValidatorCurr,
+    validatorExitVerifierParams.gIHistoricalSummariesPrev,
+    validatorExitVerifierParams.gIHistoricalSummariesCurr,
+    validatorExitVerifierParams.firstSupportedSlot,
+    validatorExitVerifierParams.pivotSlot,
   ]);
 
   // Update LidoLocator with valid implementation
@@ -217,7 +217,7 @@ export async function main() {
     withdrawalQueueERC721.address,
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
-    clProofVerifier.address,
+    validatorExitVerifier.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

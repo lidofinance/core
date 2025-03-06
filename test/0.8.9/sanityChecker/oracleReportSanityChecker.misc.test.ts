@@ -92,7 +92,7 @@ describe("OracleReportSanityChecker.sol:misc", () => {
         withdrawalVault: withdrawalVault,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
-        clProofVerifier: deployer.address,
+        validatorExitVerifier: deployer.address,
       },
     ]);
     managersRoster = {

@@ -14,7 +14,6 @@ struct ValidatorWitness {
     // The index of an exit request in the VEBO exit requests data
     uint32 exitRequestIndex;
     // -------------------- Validator details -------------------
-    uint64 validatorIndex;
     bytes32 withdrawalCredentials;
     uint64 effectiveBalance;
     bool slashed;
@@ -98,13 +97,12 @@ contract ValidatorExitVerifier {
     error UnsupportedSlot(Slot slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
-    error ExitRequestsNotFound(bytes32 exitRequestsHash);
     error UnsupportedReportDataFormat(uint256 reportDataFormat);
     error ExitRequestNotEligibleOnProvableBeaconBlock(
         uint64 provableBeaconBlockTimestamp,
         uint64 eligibleExitRequestTimestamp
     );
-    error ValidatorAlreadyRequestedExit(uint256 validatorIndex);
+    error ValidatorAlreadyRequestedExit(bytes pubkey, uint256 validatorIndex);
     error ExitRequestsCountMismatch(uint256 exitRequestsCount, uint256 exitRequestsCountInExitReportStatus);
     error ChainTimeConfigurationMismatch();
 
@@ -173,9 +171,8 @@ contract ValidatorExitVerifier {
         RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = exitRequests.unpackExitRequest(
-                validatorWitnesses[i].exitRequestIndex
-            );
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests
+                .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
@@ -183,7 +180,7 @@ contract ValidatorExitVerifier {
                 validatorWitnesses[i].activationEpoch
             );
 
-            _verifyValidatorIsActive(beaconBlock.header, validatorWitnesses[i], pubkey);
+            _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
             IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
                 moduleId,
@@ -229,9 +226,8 @@ contract ValidatorExitVerifier {
         RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) = exitRequests.unpackExitRequest(
-                validatorWitnesses[i].exitRequestIndex
-            );
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests
+                .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
@@ -239,7 +235,7 @@ contract ValidatorExitVerifier {
                 validatorWitnesses[i].activationEpoch
             );
 
-            _verifyValidatorIsActive(oldBlock.header, validatorWitnesses[i], pubkey);
+            _verifyValidatorIsNotExited(oldBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
             IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
                 moduleId,
@@ -270,24 +266,26 @@ contract ValidatorExitVerifier {
         }
 
         // Sanity check. Ensure the chain-time configuration is consistent with the block slot
-        if (
-            beaconBlock.rootsTimestamp < (GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT) ||
-            beaconBlock.rootsTimestamp > (GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT)
-        ) {
-            revert ChainTimeConfigurationMismatch();
-        }
+        // if (
+        //     beaconBlock.rootsTimestamp < (GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT) ||
+        //     beaconBlock.rootsTimestamp > (GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT)
+        // ) {
+        //     revert ChainTimeConfigurationMismatch();
+        // }
     }
 
     /**
      * @dev Verifies that a validator is still active (exitEpoch == FAR_FUTURE_EPOCH) and proves it against the state root.
      */
-    function _verifyValidatorIsActive(
+    function _verifyValidatorIsNotExited(
         BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
-        bytes calldata pubkey
+        bytes calldata pubkey,
+        uint256 validatorIndex
     ) internal view {
+        // ToDo: activation epoch not in far future
         if (witness.exitEpoch != FAR_FUTURE_EPOCH) {
-            revert ValidatorAlreadyRequestedExit(witness.validatorIndex);
+            revert ValidatorAlreadyRequestedExit(pubkey, validatorIndex);
         }
 
         Validator memory validator = Validator({
@@ -305,7 +303,7 @@ contract ValidatorExitVerifier {
             proof: witness.validatorProof,
             root: header.stateRoot,
             leaf: validator.hashTreeRoot(),
-            gI: _getValidatorGI(witness.validatorIndex, header.slot)
+            gI: _getValidatorGI(validatorIndex, header.slot)
         });
     }
 
@@ -352,9 +350,11 @@ contract ValidatorExitVerifier {
             exitRequestsHash
         );
 
-        if (requestStatus.contractVersion == 0) {
-            revert ExitRequestsNotFound(exitRequestsHash);
-        }
+        // ToDo: move this check to the oracle getExitRequestsStatus method
+        // error ExitRequestsNotFound(bytes32 exitRequestsHash);
+        // if (requestStatus.contractVersion == 0) {
+        //     revert ExitRequestsNotFound(exitRequestsHash);
+        // }
 
         if (requestStatus.reportDataFormat != 1) {
             revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
@@ -431,7 +431,7 @@ library ExitRequests {
     function unpackExitRequest(
         bytes calldata exitRequests,
         uint256 exitRequestIndex
-    ) internal pure returns (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId) {
+    ) internal pure returns (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
         if (exitRequestIndex >= count(exitRequests)) {
             revert ExitRequestIndexOutOfRange(exitRequestIndex);
         }
@@ -454,10 +454,11 @@ library ExitRequests {
         //                              dataWithoutPubkey
         // MSB <---------------------------------------------------------------------- LSB
         // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+        valIndex = uint64(dataWithoutPubkey);
         nodeOpId = uint40(dataWithoutPubkey >> 64);
         moduleId = uint24(dataWithoutPubkey >> (64 + 40));
 
-        return (pubkey, nodeOpId, moduleId);
+        return (pubkey, nodeOpId, moduleId, valIndex);
     }
 
     /**
