@@ -4,7 +4,6 @@ import hre from "hardhat";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
-import { isNonForkingHardhatNetwork } from "./networks";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -14,8 +13,11 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  if (isNonForkingHardhatNetwork()) {
-    await deployScratchProtocol(hre.network.name);
+  if (hre.network.name === "hardhat") {
+    const networkConfig = hre.config.networks[hre.network.name];
+    if (!networkConfig.forking?.enabled) {
+      await deployScratchProtocol(hre.network.name);
+    }
   } else {
     await deployUpgrade(hre.network.name);
   }
@@ -25,12 +27,11 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
 
   // By default, all flags are "on"
   const flags = {
-    onScratch: process.env.INTEGRATION_ON_SCRATCH === "on",
     withCSM: process.env.INTEGRATION_WITH_CSM !== "off",
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {
-    "On scratch": flags.onScratch,
+    "With CSM": flags.withCSM,
   });
 
   const context = {

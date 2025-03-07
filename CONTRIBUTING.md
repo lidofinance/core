@@ -143,7 +143,7 @@ integration tests follows the `*.integration.ts` postfix, for example, `myScenar
 Foundry's Solidity tests are specifically used for fuzzing library contracts or functions that perform complex
 calculations or byte manipulation. These Solidity tests are located under `/tests` and organized into appropriate
 subdirectories. The naming conventions follow
-Foundry's [documentation](https://book.getfoundry.sh/tutorials/best-practices#general-test-guidance):
+Foundry's [documentation](https://book.getfoundry.sh/guides/best-practices#general-test-guidance):
 
 - For tests, use the `.t.sol` postfix (e.g., `MyContract.t.sol`).
 - For scripts, use the `.s.sol` postfix (e.g., `MyScript.s.sol`).
@@ -327,7 +327,7 @@ This is the most common method for running integration tests. It uses an instanc
 mainnet environment, allowing you to run integration tests with trace logging.
 
 > [!NOTE]
-> Ensure that `HARDHAT_FORKING_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
+> Ensure that `FORK_RPC_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
 > `.env` file (refer to `.env.example` for guidance). Otherwise, the tests will run against the Scratch deployment.
 
 ```bash
