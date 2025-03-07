@@ -96,13 +96,19 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositor, depositContractAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress, depositContractAddress]))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_depositor");
+    });
+
+    it("reverts on construction if the deposit contract address is zero", async () => {
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, depositor, ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });

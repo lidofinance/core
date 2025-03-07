@@ -50,6 +50,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
   const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
     await vaultHub_.getAddress(),
+    depositor,
     await depositContract_.getAddress(),
   ]);
 

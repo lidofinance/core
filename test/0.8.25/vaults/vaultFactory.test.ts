@@ -90,7 +90,7 @@ describe("VaultFactory.sol", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
-      ZeroAddress,
+      await locator.accounting(),
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
@@ -99,7 +99,9 @@ describe("VaultFactory.sol", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, predepositGuarantee, depositContract], {
+      from: deployer,
+    });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
@@ -111,7 +113,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, predepositGuarantee], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], {
       from: deployer,
     });
 
@@ -166,23 +168,15 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth, predepositGuarantee], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
 
     it("reverts if `_delegation` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [beacon, ZeroAddress, predepositGuarantee], { from: deployer }),
-      )
+      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_delegation");
-    });
-
-    it("reverts if `_predeposit_guarantee` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_predeposit_guarantee");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {

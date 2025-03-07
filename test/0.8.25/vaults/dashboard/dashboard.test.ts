@@ -70,7 +70,8 @@ describe("Dashboard.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    // TODO: PDG harness
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, nodeOperator, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);

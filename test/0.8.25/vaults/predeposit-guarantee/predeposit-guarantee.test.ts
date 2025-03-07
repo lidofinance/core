@@ -52,7 +52,7 @@ describe("PredepositGuarantee.sol", () => {
   async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
     const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
       vaultHub,
-
+      pdg,
       await depositContract.getAddress(),
     ]);
 
@@ -125,8 +125,8 @@ describe("PredepositGuarantee.sol", () => {
   context("happy path", () => {
     it("can use PDG happy path", async () => {
       // NO sets guarantor
-      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
-      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
+      await pdg.setNodeOperatorExternalGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorExternalGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
 
       // guarantor funds PDG for operator
       await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
@@ -147,8 +147,8 @@ describe("PredepositGuarantee.sol", () => {
       const predepositTX = pdg.predeposit(stakingVault, [predepositData]);
 
       await expect(predepositTX)
-        .to.emit(pdg, "ValidatorsPreDeposited")
-        .withArgs(vaultOperator, stakingVault, 1)
+        .to.emit(pdg, "ValidatorPreDeposited")
+        .withArgs(predepositData.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, predepositData.amount)
         .to.emit(depositContract, "DepositEvent")
@@ -185,7 +185,7 @@ describe("PredepositGuarantee.sol", () => {
 
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
-        .withArgs(vaultOperator, validator.pubkey, stakingVault, vaultWC)
+        .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, postDepositData.amount)
         .to.emit(depositContract, "DepositEvent")

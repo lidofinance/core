@@ -52,7 +52,7 @@ describe("VaultHub.sol:forceExit", () => {
 
   before(async () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
-
+    const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
       "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -84,6 +84,7 @@ describe("VaultHub.sol:forceExit", () => {
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
       await locator.predepositGuarantee(),
+      depositContract,
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
