@@ -176,7 +176,7 @@ contract ValidatorExitVerifier {
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
-                beaconBlock.rootsTimestamp,
+                beaconBlock.header.slot,
                 validatorWitnesses[i].activationEpoch
             );
 
@@ -231,7 +231,7 @@ contract ValidatorExitVerifier {
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
-                GENESIS_TIME + oldBlock.header.slot.unwrap() * SECONDS_PER_SLOT,
+                oldBlock.header.slot,
                 validatorWitnesses[i].activationEpoch
             );
 
@@ -283,7 +283,6 @@ contract ValidatorExitVerifier {
         bytes calldata pubkey,
         uint256 validatorIndex
     ) internal view {
-        // ToDo: activation epoch not in far future
         if (witness.exitEpoch != FAR_FUTURE_EPOCH) {
             revert ValidatorAlreadyRequestedExit(pubkey, validatorIndex);
         }
@@ -310,13 +309,13 @@ contract ValidatorExitVerifier {
     /**
      * @dev Determines how many seconds have passed since a validator was first eligible to exit after ValidatorsExitBusOracle exit request.
      * @param validatorExitRequestTimestamp The timestamp when the validator's exit request was submitted.
-     * @param referenceTimestamp A reference point in time, used to measure the elapsed duration since the validator became eligible to exit.
+     * @param referenceSlot A reference slot, used to measure the elapsed duration since the validator became eligible to exit.
      * @param validatorActivationEpoch The epoch in which the validator was activated.
      * @return uint64 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitRequestEligible(
         uint64 validatorExitRequestTimestamp,
-        uint64 referenceTimestamp,
+        Slot referenceSlot,
         uint64 validatorActivationEpoch
     ) internal view returns (uint64) {
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
@@ -330,6 +329,8 @@ contract ValidatorExitVerifier {
         uint64 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
             ? validatorExitRequestTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
+
+        uint64 referenceTimestamp = GENESIS_TIME + referenceSlot.unwrap() * SECONDS_PER_SLOT;
 
         if (referenceTimestamp < eligibleExitRequestTimestamp) {
             revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceTimestamp, eligibleExitRequestTimestamp);
