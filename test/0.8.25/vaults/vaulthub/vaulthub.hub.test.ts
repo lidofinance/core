@@ -50,14 +50,13 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(await user.getAddress(), await user.getAddress())
+      .createVault(user, user, vaultHub)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
     const vaultCreatedEvent = events[0];
 
-    const vault = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
-    return vault;
+    return await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
   }
 
   async function createAndConnectVault(
@@ -121,7 +120,6 @@ describe("VaultHub.sol:hub", () => {
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
-      await vaultHub.getAddress(),
       await depositContract.getAddress(),
     ]);
 
@@ -552,7 +550,6 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if proxy codehash is not added", async () => {
       const stakingVault2Impl = await ethers.deployContract("StakingVault__MockForVaultHub", [
-        await vaultHub.getAddress(),
         await depositContract.getAddress(),
       ]);
       const vault2Factory = await ethers.deployContract("VaultFactory__MockForVaultHub", [

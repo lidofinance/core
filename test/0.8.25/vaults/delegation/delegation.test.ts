@@ -97,15 +97,15 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
-    expect(await vaultImpl.vaultHub()).to.equal(hub);
+    vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    factory = await ethers.deployContract("VaultFactory", [beacon, delegationImpl, hub]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+    expect(await factory.VAULT_HUB()).to.equal(hub);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
@@ -139,6 +139,7 @@ describe("Delegation.sol", () => {
 
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
+    expect(await vault.vaultHub()).to.equal(hub);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);

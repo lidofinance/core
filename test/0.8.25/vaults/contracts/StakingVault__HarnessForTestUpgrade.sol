@@ -16,10 +16,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address vaultHub;
     }
 
     uint64 private constant _version = 2;
-    VaultHub private immutable VAULT_HUB;
 
     address public immutable DEPOSIT_CONTRACT;
 
@@ -27,12 +27,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
 
-    constructor(address _vaultHub, address _beaconChainDepositContract) {
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+    constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         DEPOSIT_CONTRACT = _beaconChainDepositContract;
-        VAULT_HUB = VaultHub(_vaultHub);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -41,15 +39,16 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
+        address _vaultHub,
         bytes calldata // _params
     ) external reinitializer(_version) {
-        if (owner() != address(0)) {
-            revert VaultAlreadyInitialized();
-        }
+        if (owner() != address(0)) revert VaultAlreadyInitialized();
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         __StakingVault_init_v2();
         __Ownable_init(_owner);
         _getVaultStorage().nodeOperator = _nodeOperator;
+        _getVaultStorage().vaultHub = _vaultHub;
     }
 
     function finalizeUpgrade_v2() public reinitializer(_version) {
@@ -106,7 +105,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function vaultHub() external view returns (address) {
-        return address(VAULT_HUB);
+        VaultStorage storage $ = _getVaultStorage();
+        return $.vaultHub;
     }
 
     function withdraw(address _recipient, uint256 _ether) external {}

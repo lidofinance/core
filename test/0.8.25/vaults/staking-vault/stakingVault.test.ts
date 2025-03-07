@@ -86,22 +86,12 @@ describe("StakingVault.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("sets the vault hub address in the implementation", async () => {
-      expect(await stakingVaultImplementation.vaultHub()).to.equal(vaultHubAddress);
-    });
-
     it("sets the deposit contract address in the implementation", async () => {
       expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
     });
 
-    it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_vaultHub");
-    });
-
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -115,13 +105,21 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, vaultHubAddress, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, vaultHubAddress, "0x")).to.be.revertedWithCustomError(
+        stakingVaultImplementation,
+        "ZeroArgument",
+      );
+    });
+
+    it("reverts if the `_vaultHub` is zero address", async () => {
+      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
+      await expect(vault_.initialize(vaultOwner, operator, ZeroAddress, "0x")).to.be.revertedWithCustomError(
         stakingVaultImplementation,
         "ZeroArgument",
       );

@@ -4,10 +4,14 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {IBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/IBeacon.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts-v5.2/proxy/ERC1967/ERC1967Utils.sol";
+import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -69,6 +73,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
+     * @custom:vaultHub Address of VaultHub
      * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -76,6 +81,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address vaultHub;
         bool beaconChainDepositsPaused;
     }
 
@@ -84,12 +90,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         The implementation is petrified to this version
      */
     uint64 private constant _VERSION = 1;
-
-    /**
-     * @notice Address of `VaultHub`
-     *         Set immutably in the constructor to avoid storage costs
-     */
-    VaultHub private immutable VAULT_HUB;
 
     /**
      * @notice Address of `BeaconChainDepositContract`
@@ -117,15 +117,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Constructs the implementation of `StakingVault`
-     * @param _vaultHub Address of `VaultHub`
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _vaultHub, address _beaconChainDepositContract) {
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+    constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        VAULT_HUB = VaultHub(_vaultHub);
         DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
@@ -136,13 +133,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
      * @param _nodeOperator Address of the node operator
+     * @param _vaultHub Address of VaultHub
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
+    function initialize(address _owner, address _nodeOperator, address _vaultHub, bytes calldata /* _params */) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
+        _getStorage().vaultHub = _vaultHub;
     }
 
     /**
@@ -167,7 +167,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Returns the address of `VaultHub`
      */
     function vaultHub() external view returns (address) {
-        return address(VAULT_HUB);
+        return _getStorage().vaultHub;
+    }
+
+    function detachHub() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        $.vaultHub = address(0);
+
+        address currentImplementation = IBeacon(ERC1967Utils.getBeacon()).implementation();
+        PinnedBeaconUtils.setPinnedImplementation(currentImplementation);
+
+        emit VaultHubDetached($.vaultHub, currentImplementation);
     }
 
     /**
@@ -288,9 +298,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _locked New amount to lock
      */
     function lock(uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
-
         ERC7201Storage storage $ = _getStorage();
+        if (msg.sender != $.vaultHub) revert NotAuthorized("lock", msg.sender);
         if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
 
         $.locked = uint128(_locked);
@@ -311,12 +320,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
-        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == address(VAULT_HUB))) {
+        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == $.vaultHub)) {
             $.inOutDelta -= int128(int256(_ether));
 
-            emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+            emit Withdrawn(msg.sender,$.vaultHub, _ether);
 
-            VAULT_HUB.rebalance{value: _ether}();
+            VaultHub($.vaultHub).rebalance{value: _ether}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
@@ -329,9 +338,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _locked New amount of locked ether
      */
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
-
         ERC7201Storage storage $ = _getStorage();
+        if (msg.sender != $.vaultHub) revert NotAuthorized("report", msg.sender);
 
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
@@ -478,7 +486,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bool isAuthorized = (
             msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB))
+            (isValuationBelowLocked && msg.sender == $.vaultHub)
         );
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
@@ -553,6 +561,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             $.slot := ERC7201_STORAGE_LOCATION
         }
     }
+
+    event VaultHubDetached(address indexed vaultHub, address indexed vaultImplementation);
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
