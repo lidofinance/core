@@ -10,23 +10,29 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
 
 contract VaultFactory__MockForDashboard is UpgradeableBeacon {
-    address public immutable dashboardImpl;
+    address public immutable DASHBOARD_IMPL;
+    address public immutable VAULT_HUB;
 
     constructor(
         address _owner,
         address _stakingVaultImpl,
-        address _dashboardImpl
+        address _dashboardImpl,
+        address _vaultHub
     ) UpgradeableBeacon(_stakingVaultImpl, _owner) {
         if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
-        dashboardImpl = _dashboardImpl;
+        DASHBOARD_IMPL = _dashboardImpl;
+        VAULT_HUB = _vaultHub;
     }
 
     function createVault(address _operator) external returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new BeaconProxy(address(this), "")));
 
         bytes memory immutableArgs = abi.encode(vault);
-        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(dashboardImpl, immutableArgs)));
+        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
+
+        vault.initialize(address(dashboard), _operator, VAULT_HUB, "");
 
         dashboard.initialize(address(this), 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
@@ -42,8 +48,6 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.VOLUNTARY_DISCONNECT_ROLE(), msg.sender);
 
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
-
-        vault.initialize(address(dashboard), _operator, "");
 
         emit VaultCreated(address(dashboard), address(vault));
         emit DashboardCreated(msg.sender, address(dashboard));

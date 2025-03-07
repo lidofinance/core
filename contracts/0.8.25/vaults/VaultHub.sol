@@ -185,6 +185,8 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
+        //todo add check stakingVault.VaultHub() == address(this)
+
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             0, // sharesMinted

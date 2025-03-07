@@ -70,7 +70,7 @@ export async function createVaultProxy(
 
   const { delegation: delegationAddress } = delegationEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("BeaconProxy", vault, caller)) as BeaconProxy;
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as BeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
   const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
 
