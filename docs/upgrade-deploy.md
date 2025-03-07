@@ -18,16 +18,16 @@ E. g. to deploy `LidoLocator` implementation with new addresses for `legacyOracl
 on Sepolia run
 
 ```shell
-legacyOracle=<PUT-YOU-VALUE> \
-postTokenRebaseReceiver=<PUT-YOU-VALUE> \
+legacyOracle=<PUT-YOUR-VALUE> \
+postTokenRebaseReceiver=<PUT-YOUR-VALUE> \
 GAS_MAX_FEE=100 GAS_PRIORITY_FEE=2 \
-DEPLOYER=<PUT-YOU-VALUE> \
-RPC_URL=<PUT-YOU-VALUE> \
+DEPLOYER=<PUT-YOUR-VALUE> \
+RPC_URL=<PUT-YOUR-VALUE> \
 STEPS_FILE=scripts/upgrade/steps.json \
 yarn hardhat --network sepolia run --no-compile scripts/utils/migrate.ts
 ```
 
-specifying require values under `<PUT-YOU-VALUE>`.
+specifying required values under `<PUT-YOUR-VALUE>`.
 
 Names of env variables specifying new addresses (e.g. `postTokenRebaseReceiver`) correspond to immutables names of
 `LidoLocator` contract.
