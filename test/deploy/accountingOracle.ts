@@ -33,11 +33,11 @@ export async function deployMockLegacyOracle({
   return legacyOracle;
 }
 
-async function deployMockLidoAndStakingRouter() {
+async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
-  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
-  return { lido, stakingRouter, withdrawalQueue };
+  const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
+  return { accounting, stakingRouter, withdrawalQueue };
 }
 
 export async function deployAccountingOracleSetup(
@@ -48,16 +48,15 @@ export async function deployAccountingOracleSetup(
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
-    getLidoAndStakingRouter = deployMockLidoAndStakingRouter,
+    getLidoAndStakingRouter = deployMockAccountingAndStakingRouter,
     getLegacyOracle = deployMockLegacyOracle,
     lidoLocatorAddr = null as string | null,
     legacyOracleAddr = null as string | null,
-    lidoAddr = null as string | null,
   } = {},
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
-  const { lido, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
+  const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
 
   const legacyOracle = await getLegacyOracle();
 
@@ -67,7 +66,6 @@ export async function deployAccountingOracleSetup(
 
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
-    lidoAddr || (await lido.getAddress()),
     legacyOracleAddr || (await legacyOracle.getAddress()),
     secondsPerSlot,
     genesisTime,
@@ -83,10 +81,10 @@ export async function deployAccountingOracleSetup(
   });
 
   await updateLidoLocatorImplementation(locatorAddr, {
-    lido: lidoAddr || (await lido.getAddress()),
     stakingRouter: await stakingRouter.getAddress(),
     withdrawalQueue: await withdrawalQueue.getAddress(),
     accountingOracle: await oracle.getAddress(),
+    accounting: await accounting.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
@@ -99,7 +97,7 @@ export async function deployAccountingOracleSetup(
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
   return {
-    lido,
+    accounting,
     stakingRouter,
     withdrawalQueue,
     locatorAddr,
@@ -158,9 +156,21 @@ export async function initAccountingOracle({
 async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
   const exitedValidatorsPerDayLimit = 55;
   const appearedValidatorsPerDayLimit = 100;
-  const limitsList = [exitedValidatorsPerDayLimit, appearedValidatorsPerDayLimit, 0, 0, 32 * 12, 15, 16, 0, 0, 0, 0, 0];
-
-  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
+  return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
+    f.deploy(lidoLocator, admin, {
+      exitedValidatorsPerDayLimit,
+      appearedValidatorsPerDayLimit,
+      annualBalanceIncreaseBPLimit: 0n,
+      maxValidatorExitRequestsPerReport: 32n * 12n,
+      maxItemsPerExtraDataTransaction: 15n,
+      maxNodeOperatorsPerExtraDataItem: 16n,
+      requestTimestampMargin: 0n,
+      maxPositiveTokenRebase: 0n,
+      initialSlashingAmountPWei: 0n,
+      inactivityPenaltiesAmountPWei: 0n,
+      clBalanceOraclesErrorUpperBPLimit: 0n,
+    }),
+  );
 }
 
 interface AccountingOracleSetup {

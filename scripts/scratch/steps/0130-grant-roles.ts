@@ -1,6 +1,13 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  Burner,
+  StakingRouter,
+  ValidatorsExitBusOracle,
+  VaultHub,
+  WithdrawalQueueERC721,
+  WithdrawalVault,
+} from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -19,10 +26,12 @@ export async function main() {
   const burnerAddress = state[Sk.burner].address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
+  const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
+  const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
-
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
   await makeTx(
@@ -41,6 +50,9 @@ export async function main() {
     from: deployer,
   });
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
     from: deployer,
   });
 
@@ -77,6 +89,13 @@ export async function main() {
     from: deployer,
   });
 
+  // WithdrawalVault
+  const withdrawalVault = await loadContract<WithdrawalVault>("WithdrawalVault", withdrawalVaultAddress);
+  const fullWithdrawalRequestRole = await withdrawalVault.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
+  await makeTx(withdrawalVault, "grantRole", [fullWithdrawalRequestRole, validatorsExitBusOracleAddress], {
+    from: deployer,
+  });
+
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
@@ -84,6 +103,18 @@ export async function main() {
     from: deployer,
   });
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+    from: deployer,
+  });
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), accountingAddress], {
+    from: deployer,
+  });
+
+  // VaultHub
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_REGISTRY_ROLE(), deployer], {
     from: deployer,
   });
 }

@@ -10,20 +10,11 @@ import {Lido} from "contracts/0.4.24/Lido.sol";
  */
 contract Lido__HarnessForDistributeReward is Lido {
     bytes32 internal constant ALLOW_TOKEN_POSITION = keccak256("lido.Lido.allowToken");
-    uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(- 1);
+    uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(-1);
     uint256 private totalPooledEther;
 
-    function initialize(
-        address _lidoLocator,
-        address _eip712StETH
-    )
-        public
-        payable
-    {
-        super.initialize(
-            _lidoLocator,
-            _eip712StETH
-        );
+    function initialize(address _lidoLocator, address _eip712StETH) public payable {
+        super.initialize(_lidoLocator, _eip712StETH);
 
         _resume();
         // _bootstrapInitialHolder
@@ -77,19 +68,18 @@ contract Lido__HarnessForDistributeReward is Lido {
         return totalPooledEther;
     }
 
-    function mintShares(address _to, uint256 _sharesAmount) public returns (uint256 newTotalShares) {
-        newTotalShares = _mintShares(_to, _sharesAmount);
-        _emitTransferAfterMintingShares(_to, _sharesAmount);
+    function mintShares(address _recipient, uint256 _sharesAmount) public {
+        _mintShares(_recipient, _sharesAmount);
+        _emitTransferAfterMintingShares(_recipient, _sharesAmount);
     }
 
-    function mintSteth(address _to) public payable {
+    function mintSteth(address _recipient) public payable {
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
-        mintShares(_to, sharesAmount);
+        mintShares(_recipient, sharesAmount);
         setTotalPooledEther(_getTotalPooledEther().add(msg.value));
     }
 
-    function burnShares(address _account, uint256 _sharesAmount) public returns (uint256 newTotalShares) {
-        return _burnShares(_account, _sharesAmount);
+    function burnShares(address _account, uint256 _sharesAmount) public {
+        _burnShares(_account, _sharesAmount);
     }
-
 }

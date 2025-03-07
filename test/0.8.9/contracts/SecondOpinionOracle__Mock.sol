@@ -4,14 +4,21 @@
 pragma solidity 0.8.9;
 
 interface ISecondOpinionOracle {
-    function getReport(uint256 refSlot)
+    function getReport(
+        uint256 refSlot
+    )
         external
         view
-        returns (bool success, uint256 clBalanceGwei, uint256 withdrawalVaultBalanceWei, uint256 numValidators, uint256 exitedValidators);
+        returns (
+            bool success,
+            uint256 clBalanceGwei,
+            uint256 withdrawalVaultBalanceWei,
+            uint256 numValidators,
+            uint256 exitedValidators
+        );
 }
 
 contract SecondOpinionOracle__Mock is ISecondOpinionOracle {
-
     struct Report {
         bool success;
         uint256 clBalanceGwei;
@@ -27,7 +34,6 @@ contract SecondOpinionOracle__Mock is ISecondOpinionOracle {
     }
 
     function addPlainReport(uint256 refSlot, uint256 clBalanceGwei, uint256 withdrawalVaultBalanceWei) external {
-
         reports[refSlot] = Report({
             success: true,
             clBalanceGwei: clBalanceGwei,
@@ -41,10 +47,27 @@ contract SecondOpinionOracle__Mock is ISecondOpinionOracle {
         delete reports[refSlot];
     }
 
-    function getReport(uint256 refSlot) external view override
-        returns (bool success, uint256 clBalanceGwei, uint256 withdrawalVaultBalanceWei, uint256 numValidators, uint256 exitedValidators)
+    function getReport(
+        uint256 refSlot
+    )
+        external
+        view
+        override
+        returns (
+            bool success,
+            uint256 clBalanceGwei,
+            uint256 withdrawalVaultBalanceWei,
+            uint256 numValidators,
+            uint256 exitedValidators
+        )
     {
         Report memory report = reports[refSlot];
-        return (report.success, report.clBalanceGwei, report.withdrawalVaultBalanceWei, report.numValidators, report.exitedValidators);
+        return (
+            report.success,
+            report.clBalanceGwei,
+            report.withdrawalVaultBalanceWei,
+            report.numValidators,
+            report.exitedValidators
+        );
     }
 }

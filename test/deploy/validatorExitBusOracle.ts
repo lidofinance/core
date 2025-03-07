@@ -18,7 +18,7 @@ import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 export const DATA_FORMAT_LIST = 1;
 
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
-  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
   const ao = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
     await lido.getAddress(),
     secondsPerSlot,
@@ -28,10 +28,21 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
 }
 
 async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, admin: string) {
-  const maxValidatorExitRequestsPerReport = 2000;
-  const limitsList = [0, 0, 0, 0, maxValidatorExitRequestsPerReport, 0, 0, 0, 0, 0, 0, 0];
-
-  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
+  return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
+    f.deploy(lidoLocator, admin, {
+      exitedValidatorsPerDayLimit: 0n,
+      appearedValidatorsPerDayLimit: 0n,
+      annualBalanceIncreaseBPLimit: 0n,
+      maxValidatorExitRequestsPerReport: 2000,
+      maxItemsPerExtraDataTransaction: 0n,
+      maxNodeOperatorsPerExtraDataItem: 0n,
+      requestTimestampMargin: 0n,
+      maxPositiveTokenRebase: 0n,
+      initialSlashingAmountPWei: 0n,
+      inactivityPenaltiesAmountPWei: 0n,
+      clBalanceOraclesErrorUpperBPLimit: 0n,
+    }),
+  );
 }
 
 export async function deployVEBO(
