@@ -6,6 +6,7 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForSanityChecker,
   AccountingOracle__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
   OracleReportSanityChecker,
@@ -22,6 +23,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
+  let accounting: Accounting__MockForSanityChecker;
   let stakingRouter: StakingRouter__MockForSanityChecker;
   let deployer: HardhatEthersSigner;
   let accountingSigner: HardhatEthersSigner;
@@ -60,7 +62,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     const sanityCheckerAddress = deployer.address;
 
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
-    const accounting = await ethers.deployContract("Accounting__MockForSanityChecker", []);
+    accounting = await ethers.deployContract("Accounting__MockForSanityChecker", []);
 
     accountingOracle = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
       deployer.address,
@@ -92,10 +94,14 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     ]);
 
     const locatorAddress = await locator.getAddress();
+    const accountingOracleAddress = await accountingOracle.getAddress();
+    const accountingAddress = await accounting.getAddress();
 
     checker = await ethers
       .getContractFactory("OracleReportSanityChecker")
-      .then((f) => f.deploy(locatorAddress, deployer.address, defaultLimitsList));
+      .then((f) =>
+        f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, deployer.address, defaultLimitsList),
+      );
 
     accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
   });
@@ -178,6 +184,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     async function newChecker() {
       return await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
+        await accountingOracle.getAddress(),
+        await accounting.getAddress(),
         deployer.address,
         Object.values(defaultLimitsList),
       ]);
@@ -255,7 +263,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
     });
 
-    it("works as accamulation for IncorrectCLBalanceDecrease", async () => {
+    it("works as accumulation for IncorrectCLBalanceDecrease", async () => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       const timestamp = await getCurrentBlockTimestamp();
       const refSlot = (timestamp - genesisTime) / 12n;
@@ -411,7 +419,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
-      // Second opinion balance is almost equal general Oracle's (<0.74%) and withdrawal vauls is the same - should pass
+      // Second opinion balance is almost equal general Oracle's (<0.74%) and withdrawal value is the same - should pass
       await secondOpinionOracle.addReport(refSlot, {
         success: true,
         clBalanceGwei: parseUnits("300", "gwei"),

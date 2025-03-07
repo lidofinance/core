@@ -80,14 +80,22 @@ export async function deployAccountingOracleSetup(
     initialEpoch,
   });
 
+  const accountingOracleAddress = await oracle.getAddress();
+  const accountingAddress = await accounting.getAddress();
+
   await updateLidoLocatorImplementation(locatorAddr, {
     stakingRouter: await stakingRouter.getAddress(),
     withdrawalQueue: await withdrawalQueue.getAddress(),
-    accountingOracle: await oracle.getAddress(),
-    accounting: await accounting.getAddress(),
+    accountingOracle: accountingOracleAddress,
+    accounting: accountingAddress,
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(locatorAddr, admin);
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
+    locatorAddr,
+    accountingOracleAddress,
+    accountingAddress,
+    admin,
+  );
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
@@ -153,11 +161,16 @@ export async function initAccountingOracle({
   return initTx;
 }
 
-async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, admin: string) {
+async function deployOracleReportSanityCheckerForAccounting(
+  lidoLocator: string,
+  accountingOracle: string,
+  accounting: string,
+  admin: string,
+) {
   const exitedValidatorsPerDayLimit = 55;
   const appearedValidatorsPerDayLimit = 100;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, admin, {
+    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
       exitedValidatorsPerDayLimit,
       appearedValidatorsPerDayLimit,
       annualBalanceIncreaseBPLimit: 0n,

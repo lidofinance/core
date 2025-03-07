@@ -27,9 +27,14 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, admin: string) {
+async function deployOracleReportSanityCheckerForExitBus(
+  lidoLocator: string,
+  accountingOracle: string,
+  accounting: string,
+  admin: string,
+) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, admin, {
+    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
       exitedValidatorsPerDayLimit: 0n,
       appearedValidatorsPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
@@ -69,12 +74,20 @@ export async function deployVEBO(
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
+  const accountingOracleAddress = await ao.getAddress();
+  const accountingAddress = await locator.accounting();
+
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
-    accountingOracle: await ao.getAddress(),
+    accountingOracle: accountingOracleAddress,
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
+    locatorAddr,
+    accountingOracleAddress,
+    accountingAddress,
+    admin,
+  );
 
   await updateLidoLocatorImplementation(locatorAddr, {
     validatorsExitBusOracle: await oracle.getAddress(),
