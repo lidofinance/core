@@ -229,6 +229,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             ? $.nodeOperatorExternalGuarantor[msg.sender]
             : msg.sender;
 
+        if (prevGuarantor == _newGuarantor) revert SameGuarantor();
+
         if (balance.total > 0) {
             uint256 refund = balance.total;
             balance.total = 0;
@@ -642,6 +644,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     error SelfGuarantorMustBeZeroAddress();
     error ValueMustBeMultipleOfPredepositAmount(uint256 value);
     error EmptyRefund();
+    error SameGuarantor();
     error RefundFailed();
 
     // predeposit errors
