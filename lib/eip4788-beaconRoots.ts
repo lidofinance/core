@@ -2,7 +2,7 @@ import { impersonate } from "lib";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.
-export const BEACON_BLOCK_STORAGE_CONTRACT = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
+export const BEACON_ROOTS_ADDRESS = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
 
 export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
   const beaconRootUpdater = await impersonate(
@@ -11,7 +11,7 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
   );
 
   const transaction = await beaconRootUpdater.sendTransaction({
-    to: BEACON_BLOCK_STORAGE_CONTRACT,
+    to: BEACON_ROOTS_ADDRESS,
     value: 0,
     data: root,
   });
