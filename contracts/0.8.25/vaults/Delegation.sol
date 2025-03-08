@@ -69,9 +69,10 @@ contract Delegation is Dashboard {
      * @notice Constructs the contract.
      * @dev Stores token addresses in the bytecode to reduce gas costs.
      * @param _weth Address of the weth token contract.
+     * @param _wstETH Address of the wsteth token contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _weth, address _lidoLocator) Dashboard(_weth, _lidoLocator) {}
+    constructor(address _weth, address _wstETH, address _lidoLocator) Dashboard(_weth, _wstETH, _lidoLocator) {}
 
     /**
      * @notice Initializes the contract:

@@ -98,7 +98,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
-    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [weth, wsteth, locator], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
