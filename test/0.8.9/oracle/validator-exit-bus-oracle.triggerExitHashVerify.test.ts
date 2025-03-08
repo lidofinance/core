@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
@@ -25,7 +26,7 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
+describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -218,7 +219,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   });
 
   it("someone submitted exit report data and triggered exit", async () => {
-    const tx = await oracle.triggerExitHashVerify(reportFields.data, [0, 1, 2, 3], { value: 4 });
+    const tx = await oracle.triggerExits(
+      { data: reportFields.data, dataFormat: reportFields.dataFormat },
+      [0, 1, 2, 3],
+      { value: 4 },
+    );
 
     const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
@@ -228,25 +233,36 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   });
 
   it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
-    const tx = await oracle.triggerExitHashVerify(reportFields.data, [0, 1, 3], { value: 3 });
+    const tx = await oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
+      value: 10,
+    });
 
     const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
       .withArgs("0x" + concatenatedPubKeys);
+
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
   });
 
   it("Not enough fee", async () => {
-    await expect(oracle.triggerExitHashVerify(reportFields.data, [0, 1], { value: 1 }))
-      .to.be.revertedWithCustomError(oracle, "FeeNotEnough")
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1], {
+        value: 1,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "InsufficientPayment")
       .withArgs(1, 2, 1);
   });
 
   it("Should trigger withdrawals only for validators that were requested for voluntary exit by trusted entities earlier", async () => {
     await expect(
-      oracle.triggerExitHashVerify(
-        "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
+      oracle.triggerExits(
+        {
+          data: "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
+          dataFormat: reportFields.dataFormat,
+        },
         [0],
         { value: 2 },
       ),
@@ -254,7 +270,9 @@ describe("ValidatorsExitBusOracle.sol:triggerExitHashVerify", () => {
   });
 
   it("Requested index out of range", async () => {
-    await expect(oracle.triggerExitHashVerify(reportFields.data, [5], { value: 2 }))
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], { value: 2 }),
+    )
       .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
       .withArgs(5, 4);
   });

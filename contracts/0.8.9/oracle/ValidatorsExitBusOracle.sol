@@ -52,10 +52,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint256 requestsCount
     );
 
-    event StoredOracleTWExitRequestHash(
-        bytes32 exitRequestHash
-    );
-
     event StoreOracleExitRequestHashStart(
         bytes32 exitRequestHash
     );
@@ -102,7 +98,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
         BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator)
     {
         LOCATOR = ILidoLocator(lidoLocator);
     }
@@ -122,6 +117,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
+        _setLocatorAddress(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
@@ -228,13 +224,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        bytes32 dataHash = keccak256(data.data);
+        bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
-        _storeOracleExitRequestHash(dataHash, data, contractVersion);
+        _storeOracleExitRequestHash(dataHash, data.requestsCount, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -455,22 +451,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         return (moduleId << 40) | nodeOpId;
     }
 
-    function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
-        emit StoreOracleExitRequestHashStart(exitRequestHash);
-
-        if (report.requestsCount == 0) {
+    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+        if (requestsCount == 0) {
             return;
         }
-
-        mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
-
-        RequestStatus storage request = hashes[exitRequestHash];
-        request.totalItemsCount = report.requestsCount;
-        request.deliveredItemsCount = report.requestsCount;
-        request.contractVersion = contractVersion;
-        request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.requestsCount - 1}));
-
-        emit StoredOracleTWExitRequestHash(exitRequestHash);
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
     }
 
 

@@ -327,9 +327,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
 
       const data = encodeExitRequestsDataList(requests);
-      const reportDataHash = ethers.keccak256(data);
 
-      await expect(tx).to.emit(oracle, "StoredOracleTWExitRequestHash").withArgs(reportDataHash);
+      const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, reportData.dataFormat]);
+      const reportDataHash = ethers.keccak256(encodedData);
+
+      await expect(tx).to.emit(oracle, "StoredExitRequestHash").withArgs(reportDataHash);
     });
 
     it("updates processing state", async () => {
