@@ -323,188 +323,160 @@ describe("ValidatorExitVerifier.sol", () => {
         ),
       ).to.be.reverted;
     });
+
+    it("reverts with 'UnsupportedSlot' if beaconBlock slot < FIRST_SUPPORTED_SLOT", async () => {
+      const invalidHeader = {
+        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+        slot: 0,
+      };
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          {
+            rootsTimestamp: 1n,
+            header: invalidHeader,
+          },
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        ),
+      ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
+    });
+
+    it("reverts with 'UnsupportedSlot' if oldBlock slot < FIRST_SUPPORTED_SLOT", async () => {
+      const invalidHeader = {
+        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+        slot: 0,
+      };
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
+          {
+            header: invalidHeader,
+            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
+            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
+          },
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        ),
+      ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
+    });
+
+    it("reverts with 'RootNotFound' if block root contract call fails", async () => {
+      const badTimestamp = 999_999_999;
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, badTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        ),
+      ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
+    });
+
+    it("reverts with 'InvalidBlockHeader' if returned root doesn't match the new block header root", async () => {
+      const bogusBlockRoot = "0xbadbadbad0000000000000000000000000000000000000000000000000000000";
+      const mismatchTimestamp = await updateBeaconBlockRoot(bogusBlockRoot);
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        ),
+      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
+    });
+
+    it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
+      // Provide an obviously wrong rootGIndex that won't match the parent's
+      const invalidRootGIndex = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+
+      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
+          {
+            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
+            rootGIndex: invalidRootGIndex,
+          },
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+        ),
+      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidGIndex");
+    });
+
+    it("reverts if the oldBlock proof is corrupted", async () => {
+      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          "0x",
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
+          {
+            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
+            // Mutate one proof entry to break the historical block proof
+            proof: [
+              ...ACTIVE_VALIDATOR_PROOF.historicalRootProof.slice(0, -1),
+              "0xbadbadbad0000000000000000000000000000000000000000000000000000000",
+            ],
+          },
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+        ),
+      ).to.be.reverted;
+    });
+
+    it("reverts if the validatorProof in the witness is corrupted", async () => {
+      const intervalInSecondsBetweenProvableBlockAndExitRequest = 1000;
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const veboExitRequestTimestamp = blockRootTimestamp - intervalInSecondsBetweenProvableBlockAndExitRequest;
+
+      const moduleId = 1;
+      const nodeOpId = 2;
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          valPubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const encodedExitRequests = encodeExitRequestsDataList(exitRequests);
+      const encodedExitRequestsHash = keccak256(encodedExitRequests);
+      await vebo.setExitRequestsStatus(encodedExitRequestsHash, {
+        totalItemsCount: 1n,
+        deliveredItemsCount: 1n,
+        reportDataFormat: 1n,
+        contractVersion: 1n,
+        deliveryHistory: [{ blockNumber: 1n, blockTimestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+      });
+
+      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      // Mutate one proof entry to break it
+      const badWitness = {
+        exitRequestIndex: 0n,
+        ...ACTIVE_VALIDATOR_PROOF.validator,
+        validatorProof: [
+          ...ACTIVE_VALIDATOR_PROOF.validatorProof.slice(0, -1),
+          "0xbadbadbad0000000000000000000000000000000000000000000000000000000", // corrupt last entry
+        ],
+      };
+
+      await expect(
+        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+          encodedExitRequests,
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [badWitness],
+        ),
+      ).to.be.reverted;
+    });
   });
-
-  // describe("verifyHistoricalActiveValidatorsAfterExitRequest method", () => {
-  //   // Define constants and mock data similar to the validatorExitVerifier tests
-  //   // ...existing code...
-
-  //   let validatorExitVerifier: ValidatorExitVerifier;
-
-  //   before(async () => {
-  //     validatorExitVerifier = await ethers.deployContract("ValidatorExitVerifier", [
-  //       "0x0000000000000000000000000000000000000001", // lidoLocator
-  //       GI_FIRST_VALIDATOR_PREV,
-  //       GI_FIRST_VALIDATOR_CURR,
-  //       GI_HISTORICAL_SUMMARIES_PREV,
-  //       GI_HISTORICAL_SUMMARIES_CURR,
-  //       FIRST_SUPPORTED_SLOT,
-  //       PIVOT_SLOT,
-  //       SLOTS_PER_EPOCH,
-  //       SECONDS_PER_SLOT,
-  //       GENESIS_TIME,
-  //       SHARD_COMMITTEE_PERIOD_IN_SECONDS,
-  //     ]);
-  //   });
-
-  //   it("accepts a valid proof and does not revert", async () => {
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         oldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).not.to.be.reverted;
-  //   });
-
-  //   it("reverts with 'UnsupportedSlot' if beaconBlock slot < FIRST_SUPPORTED_SLOT", async () => {
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-  //     const invalidHeader = {
-  //       ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //       slot: 0,
-  //     };
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: invalidHeader,
-  //         },
-  //         oldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
-  //   });
-
-  //   it("reverts with 'UnsupportedSlot' if oldBlock slot < FIRST_SUPPORTED_SLOT", async () => {
-  //     const oldBlock = {
-  //       ...oldBlock,
-  //       header: {
-  //         ...oldBlock.header,
-  //         slot: 0,
-  //       },
-  //     };
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         oldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
-  //   });
-
-  //   it("reverts with 'RootNotFound' if block root contract call fails", async () => {
-  //     const badTimestamp = 999_999_999;
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: badTimestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         oldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
-  //   });
-
-  //   it("reverts with 'InvalidBlockHeader' if returned root doesn't match the new block header root", async () => {
-  //     // Deploy a mismatch root in the mock
-  //     const bogusBlockRoot = "0xbadbadbad0000000000000000000000000000000000000000000000000000000";
-  //     const mismatchTimestamp = await updateBeaconBlockRoot(bogusBlockRoot);
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: mismatchTimestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         oldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
-  //   });
-
-  //   it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
-  //     // Provide an obviously wrong rootGIndex that won't match the parent's
-  //     const invalidRootGIndex = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
-
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         {
-  //           ...oldBlock,
-  //           rootGIndex: invalidRootGIndex,
-  //         },
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidGIndex");
-  //   });
-
-  //   it("reverts if the oldBlock proof is corrupted", async () => {
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-  //     // Mutate one proof entry to break the historical block proof
-  //     const badOldBlock = {
-  //       ...oldBlock,
-  //       proof: [...oldBlock.proof.slice(0, -1), "0xbadbadbad0000000000000000000000000000000000000000000000000000000"],
-  //     };
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         badOldBlock,
-  //         validatorWitnesses,
-  //       ),
-  //     ).to.be.reverted;
-  //   });
-
-  //   it("reverts if the validatorProof in the witness is corrupted", async () => {
-  //     const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-  //     // Mutate the validator proof
-  //     const badWitness = {
-  //       ...validatorWitnesses[0],
-  //       validatorProof: [
-  //         ...validatorWitnesses[0].validatorProof.slice(0, -1),
-  //         "0xbadbadbad0000000000000000000000000000000000000000000000000000000",
-  //       ],
-  //     };
-
-  //     await expect(
-  //       validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-  //         exitRequests,
-  //         {
-  //           rootsTimestamp: timestamp,
-  //           header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-  //         },
-  //         oldBlock,
-  //         [badWitness],
-  //       ),
-  //     ).to.be.reverted;
-  //   });
-  // });
 });
