@@ -73,7 +73,7 @@ describe("Dashboard.sol", () => {
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
-    dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
+    dashboardImpl = await ethers.deployContract("Dashboard", [weth, wsteth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
     expect(await dashboardImpl.WETH()).to.equal(weth);
     expect(await dashboardImpl.WSTETH()).to.equal(wsteth);
@@ -111,19 +111,19 @@ describe("Dashboard.sol", () => {
 
   context("constructor", () => {
     it("reverts if LidoLocator is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [weth, ethers.ZeroAddress]))
+      await expect(ethers.deployContract("Dashboard", [weth, wsteth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
         .withArgs("_lidoLocator");
     });
 
     it("reverts if WETH is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, lidoLocator]))
+      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, lidoLocator]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
         .withArgs("_wETH");
     });
 
     it("sets the stETH, wETH, and wstETH addresses", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [weth, wsteth, lidoLocator]);
       expect(await dashboard_.STETH()).to.equal(steth);
       expect(await dashboard_.WETH()).to.equal(weth);
       expect(await dashboard_.WSTETH()).to.equal(wsteth);
@@ -139,7 +139,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [weth, wsteth, lidoLocator]);
 
       await expect(dashboard_.initialize(vaultOwner, confirmExpiry)).to.be.revertedWithCustomError(
         dashboard_,

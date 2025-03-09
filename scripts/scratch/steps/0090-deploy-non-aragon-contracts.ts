@@ -1,7 +1,6 @@
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { certainAddress } from "lib";
 import { getContractPath } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -30,6 +29,8 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+
+  const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -200,6 +201,34 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
+  // Deploy OracleReportSanityChecker
+  const oracleReportSanityCheckerArgs = [
+    locator.address,
+    accountingOracle.address,
+    accounting.address,
+    admin,
+    [
+      sanityCheckerParams.exitedValidatorsPerDayLimit,
+      sanityCheckerParams.appearedValidatorsPerDayLimit,
+      sanityCheckerParams.annualBalanceIncreaseBPLimit,
+      sanityCheckerParams.maxValidatorExitRequestsPerReport,
+      sanityCheckerParams.maxItemsPerExtraDataTransaction,
+      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
+      sanityCheckerParams.requestTimestampMargin,
+      sanityCheckerParams.maxPositiveTokenRebase,
+      sanityCheckerParams.initialSlashingAmountPWei,
+      sanityCheckerParams.inactivityPenaltiesAmountPWei,
+      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    ],
+  ];
+
+  const oracleReportSanityChecker = await deployWithoutProxy(
+    Sk.oracleReportSanityChecker,
+    "OracleReportSanityChecker",
+    deployer,
+    oracleReportSanityCheckerArgs,
+  );
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -207,7 +236,7 @@ export async function main() {
     elRewardsVault.address,
     legacyOracleAddress,
     lidoAddress,
-    certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
+    oracleReportSanityChecker.address,
     ZeroAddress,
     burner.address,
     stakingRouter.address,

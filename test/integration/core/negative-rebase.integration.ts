@@ -62,6 +62,16 @@ describe("Integration: Negative rebase", () => {
 
     const currentExited = await exitedValidatorsCount();
     const reportExitedValidators = currentExited.get(1n) ?? 0n;
+
+    // On upgrade OracleReportSanityChecker is new and not provisioned thus has no reports
+    if ((await oracleReportSanityChecker.getReportDataCount()) === 0n) {
+      await report(ctx, {
+        clDiff: ether("0"),
+        skipWithdrawals: true,
+        clAppearedValidators: 0n,
+      });
+    }
+
     await report(ctx, {
       clDiff: ether("0"),
       skipWithdrawals: true,
