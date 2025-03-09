@@ -886,7 +886,7 @@ describe("Integration: Accounting", () => {
     await ensureRequestsFinalized();
 
     const limit = await rebaseLimitWei();
-    const excess = ether("10");
+    const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
     const limitWithExcess = limit + excess;
 
     await setBalance(withdrawalVault.address, limitWithExcess);

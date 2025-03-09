@@ -259,19 +259,19 @@ maintain optimal test performance.
 
 To enable tracing:
 
-- Wrap the code you want to trace with `Tracer.enable()` and `Tracer.disable()` functions.
+- Wrap the code you want to trace with `Tracing.enable()` and `Tracing.disable()` functions.
 - Run the tests with the appropriate command that enables tracing (e.g., `yarn test:trace`).
 
 Here's an example:
 
 ```typescript
-import { Tracer } from "test/suite";
+import { Tracing } from "test/suite";
 
 describe("MyContract", () => {
   it("should do something", async () => {
-    Tracer.enable();
+    Tracing.enable();
     // code to trace
-    Tracer.disable();
+    Tracing.disable();
   });
 });
 ```

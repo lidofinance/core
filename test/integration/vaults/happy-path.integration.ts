@@ -23,8 +23,6 @@ import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HAS
 const PUBKEY_LENGTH = 48n;
 const SIGNATURE_LENGTH = 96n;
 
-const LIDO_DEPOSIT = ether("640");
-
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("32");
 const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
@@ -111,22 +109,27 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   }
 
   it("Should have at least 10 deposited node operators in NOR", async () => {
-    const { depositSecurityModule, lido } = ctx.contracts;
+    const { depositSecurityModule, lido, withdrawalQueue } = ctx.contracts;
 
     await norEnsureOperators(ctx, 10n, 1n);
     await sdvtEnsureOperators(ctx, 10n, 1n);
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(10n);
     expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(10n);
 
-    // Send 640 ETH to lido
-    await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
+    const etherToDeposit = ether("640");
+    const etherToSubmit = (await withdrawalQueue.unfinalizedStETH()) + etherToDeposit;
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
+    // Send enough ether to deposit 640 ETH to lido
+    await lido.connect(ethHolder).submit(ZeroAddress, { value: etherToSubmit });
+
+    expect(await lido.getDepositableEther()).to.be.greaterThanOrEqual(etherToDeposit);
+
+    const dsmSigner = await impersonate(depositSecurityModule.address, etherToDeposit);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     const reportData: Partial<OracleReportParams> = {
-      clDiff: LIDO_DEPOSIT,
+      clDiff: etherToDeposit,
       clAppearedValidators: 20n,
     };
 
