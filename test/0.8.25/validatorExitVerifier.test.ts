@@ -163,7 +163,7 @@ describe("ValidatorExitVerifier.sol", () => {
         deliveredItemsCount: 1n,
         reportDataFormat: 1n,
         contractVersion: 1n,
-        deliveryHistory: [{ blockNumber: 1n, blockTimestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
       });
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
@@ -209,7 +209,7 @@ describe("ValidatorExitVerifier.sol", () => {
         deliveredItemsCount: 1n,
         reportDataFormat: 1n,
         contractVersion: 1n,
-        deliveryHistory: [{ blockNumber: 1n, blockTimestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
       });
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
@@ -300,7 +300,7 @@ describe("ValidatorExitVerifier.sol", () => {
         deliveredItemsCount: 1n,
         reportDataFormat: 1n,
         contractVersion: 1n,
-        deliveryHistory: [{ blockNumber: 1n, blockTimestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
       });
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
@@ -454,7 +454,7 @@ describe("ValidatorExitVerifier.sol", () => {
         deliveredItemsCount: 1n,
         reportDataFormat: 1n,
         contractVersion: 1n,
-        deliveryHistory: [{ blockNumber: 1n, blockTimestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
       });
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);

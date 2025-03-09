@@ -39,8 +39,8 @@ struct HistoricalHeaderWitness {
 
 /**
  * @title ValidatorExitVerifier
- * @notice Verifies validator proofs to ensure they are active or unexited during or after an exit request.
- *         Allows Lido to accurately report the status of validators which are assumed to have exited but have not.
+ * @notice Verifies validator proofs to ensure they are unexited after an exit request.
+ *         Allows permissionless report the status of validators which are assumed to have exited but have not.
  * @dev Uses EIP-4788 to confirm the correctness of a given beacon block root.
  */
 contract ValidatorExitVerifier {
@@ -97,7 +97,6 @@ contract ValidatorExitVerifier {
     error UnsupportedSlot(Slot slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
-    error UnsupportedReportDataFormat(uint256 reportDataFormat);
     error ExitRequestNotEligibleOnProvableBeaconBlock(
         uint64 provableBeaconBlockTimestamp,
         uint64 eligibleExitRequestTimestamp
@@ -357,9 +356,7 @@ contract ValidatorExitVerifier {
         //     revert ExitRequestsNotFound(exitRequestsHash);
         // }
 
-        if (requestStatus.reportDataFormat != 1) {
-            revert UnsupportedReportDataFormat(requestStatus.reportDataFormat);
-        }
+        ExitRequests.verifyDataFormat(requestStatus.reportDataFormat);
 
         // Sanity check. Verify that the number of exit requests matches the oracle's record
         uint256 exitRequestsCount = exitRequests.count();
@@ -405,7 +402,7 @@ library ExitRequestStatus {
 
         for (uint256 i = 0; i < requestStatus.deliveryHistory.length; i++) {
             if (requestStatus.deliveryHistory[i].lastDeliveredKeyIndex >= keyIndex) {
-                return requestStatus.deliveryHistory[i].blockTimestamp;
+                return requestStatus.deliveryHistory[i].timestamp;
             }
         }
 
@@ -419,9 +416,13 @@ library ExitRequestStatus {
  * @notice Library for unpacking validator exit request data.
  */
 library ExitRequests {
+    // The data format version supported by this library
+    uint256 internal constant SUPPORTED_DATA_FORMAT = 1;
+
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
+    error UnsupportedReportDataFormat(uint256 reportDataFormat);
     error ExitRequestIndexOutOfRange(uint256 exitRequestIndex);
 
     /**
@@ -467,5 +468,11 @@ library ExitRequests {
      */
     function count(bytes calldata exitRequests) internal pure returns (uint256) {
         return exitRequests.length / PACKED_REQUEST_LENGTH;
+    }
+
+    function verifyDataFormat(uint256 dataFormat) internal pure {
+        if (dataFormat != SUPPORTED_DATA_FORMAT) {
+            revert UnsupportedReportDataFormat(dataFormat);
+        }
     }
 }
