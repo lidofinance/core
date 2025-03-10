@@ -125,8 +125,8 @@ describe("PredepositGuarantee.sol", () => {
   context("happy path", () => {
     it("can use PDG happy path", async () => {
       // NO sets guarantor
-      await pdg.setNodeOperatorExternalGuarantor(vaultOperatorGuarantor);
-      expect(await pdg.nodeOperatorExternalGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
 
       // guarantor funds PDG for operator
       await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });

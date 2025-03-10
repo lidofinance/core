@@ -80,13 +80,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
      * @param nodeOperatorBalance - balance of NO in PDG
-     * @param nodeOperatorExternalGuarantor - mapping of NO to its' guarantor (zero address means NO is self-guarantor)
+     * @param nodeOperatorGuarantor - mapping of NO to its' guarantor (zero address means NO is self-guarantor)
      * @param guarantorClaimableEther - ether that guarantor can claim back if NO has changed guarantor with balance
      * @param validatorStatus - status of the validators in PDG
      */
     struct ERC7201Storage {
         mapping(address nodeOperator => NodeOperatorBalance balance) nodeOperatorBalance;
-        mapping(address nodeOperator => address guarantor) nodeOperatorExternalGuarantor;
+        mapping(address nodeOperator => address guarantor) nodeOperatorGuarantor;
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
     }
@@ -150,10 +150,10 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @notice returns address of external guarantor for the NO
      * @param _nodeOperator to check guarantor for
      * @return address of guarantor for the NO
-     * @dev zero address means NO is self-guarantor
+     * @dev will return _nodeOperator if NO
      */
-    function nodeOperatorExternalGuarantor(address _nodeOperator) external view returns (address) {
-        return _getStorage().nodeOperatorExternalGuarantor[_nodeOperator];
+    function nodeOperatorGuarantor(address _nodeOperator) external view returns (address) {
+        return _getStorage().nodeOperatorGuarantor[_nodeOperator];
     }
 
     /**
@@ -213,23 +213,21 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     /**
      * @notice changes guarantor for the NO and provides refund to guarantor if NO has balance
-     * @param _newGuarantor address of the new guarantor, zero address to make NO self-guarantor
+     * @param _newGuarantor address of the new guarantor
      * @dev reverts if a NO has non-zero locked balance
      * @dev refunded ether can be claimed by previous guarantor with `claimGuarantorRefund()`
      */
-    function setNodeOperatorExternalGuarantor(address _newGuarantor) external whenResumed {
+    function setNodeOperatorGuarantor(address _newGuarantor) external whenResumed {
         ERC7201Storage storage $ = _getStorage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[msg.sender];
 
-        if ($.nodeOperatorExternalGuarantor[msg.sender] == _newGuarantor) revert SameGuarantor();
+        address prevGuarantor = _guarantorOf(msg.sender);
 
-        if (_newGuarantor == msg.sender) revert SelfGuarantorMustBeZeroAddress();
+        if (_newGuarantor == address(0)) revert ZeroArgument("_newGuarantor");
+
+        if (prevGuarantor == _newGuarantor) revert SameGuarantor();
 
         if (balance.locked != 0) revert LockedIsNotZero(balance.locked);
-
-        address prevGuarantor = $.nodeOperatorExternalGuarantor[msg.sender] != address(0)
-            ? $.nodeOperatorExternalGuarantor[msg.sender]
-            : msg.sender;
 
         if (balance.total > 0) {
             uint256 refund = balance.total;
@@ -240,7 +238,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             emit GuarantorRefunded(_newGuarantor, msg.sender, refund);
         }
 
-        $.nodeOperatorExternalGuarantor[msg.sender] = _newGuarantor;
+        $.nodeOperatorGuarantor[msg.sender] = _newGuarantor != msg.sender ? _newGuarantor : address(0);
 
         emit GuarantorSet(msg.sender, _newGuarantor, prevGuarantor);
     }
@@ -474,7 +472,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     function withdrawDisprovenPredeposit(
         bytes calldata _validatorPubkey,
         address _recipient
-    ) public whenResumed returns (uint128) {
+    ) public whenResumed returns (uint256) {
         ValidatorStatus storage validator = _getStorage().validatorStatus[_validatorPubkey];
 
         IStakingVault stakingVault = validator.stakingVault;
@@ -505,7 +503,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials,
         address _recipient
-    ) external returns (uint128) {
+    ) external returns (uint256) {
         proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
         return withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
     }
@@ -570,12 +568,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         emit BalanceToppedUp(_nodeOperator, msg.sender, msg.value);
     }
 
+    function _guarantorOf(address _nodeOperator) internal view returns (address) {
+        address stored = _getStorage().nodeOperatorGuarantor[_nodeOperator];
+        return stored == address(0) ? _nodeOperator : stored;
+    }
+
     modifier onlyGuarantorOf(address _nodeOperator) {
-        ERC7201Storage storage $ = _getStorage();
-        if (
-            !($.nodeOperatorExternalGuarantor[_nodeOperator] == msg.sender ||
-                ($.nodeOperatorExternalGuarantor[_nodeOperator] == address(0) && msg.sender == _nodeOperator))
-        ) {
+        if (_guarantorOf(_nodeOperator) != msg.sender) {
             revert MustBeNodeOperatorOrGuarantor();
         }
         _;
@@ -584,7 +583,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     /// @notice converts withdrawal credentials to address
     /// @dev will revert if wc version is less than 1 as it cannot be converted to an address
     function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address wcAddress) {
-        uint64 version = uint8(_withdrawalCredentials[0]);
+        uint8 version = uint8(_withdrawalCredentials[0]);
 
         if (version < 1) {
             revert WithdrawalCredentialsInvalidVersion(version);
@@ -641,7 +640,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // node operator accounting
     error LockedIsNotZero(uint256 locked);
-    error SelfGuarantorMustBeZeroAddress();
     error ValueMustBeMultipleOfPredepositAmount(uint256 value);
     error EmptyRefund();
     error SameGuarantor();
@@ -662,7 +660,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // prove
     error WithdrawalCredentialsAreInvalid();
     error WithdrawalCredentialsAreValid();
-    error WithdrawalCredentialsInvalidVersion(uint64 version);
+    error WithdrawalCredentialsInvalidVersion(uint8 version);
 
     // withdrawal disproven
     error ValidatorNotProvenInvalid(validatorStage stage);

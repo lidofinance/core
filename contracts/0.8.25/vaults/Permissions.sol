@@ -263,7 +263,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _withdrawDisprovenValidatorFromPDG(
         bytes calldata _pubkey,
         address _recipient
-    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {
+    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
         return PredepositGuarantee(stakingVault().depositor()).withdrawDisprovenPredeposit(_pubkey, _recipient);
     }
 
