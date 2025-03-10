@@ -216,7 +216,7 @@ contract Accounting {
         update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
 
         // TODO: calculate vaults fees correctly in shares instead of ether
-        update.totalVaultsTreasuryFeeShares = _report.vaultsFees * _pre.totalShares * internalShares
+        update.totalVaultsTreasuryFeeShares = _report.vaultsTotalFees * _pre.totalShares * internalShares
             /
             (_pre.totalPooledEther * (internalShares - update.sharesToMintAsFees));
 
