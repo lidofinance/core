@@ -30,5 +30,5 @@ struct ReportValues {
     /// @notice in-out deltas (deposits - withdrawals) of each Lido vault
     // int256[] inOutDeltas;
     /// @notice overall vaults fees
-    uint256 vaultsFees;
+    uint256 vaultsTotalFees;
 }
