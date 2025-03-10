@@ -75,15 +75,17 @@ contract Dashboard is Permissions {
     /**
      * @notice Constructor sets the stETH, WETH, and WSTETH token addresses.
      * @param _wETH Address of the weth token contract.
+     * @param _wstETH Address of the wsteth token contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _wETH, address _lidoLocator) {
+    constructor(address _wETH, address _wstETH, address _lidoLocator) {
         if (_wETH == address(0)) revert ZeroArgument("_wETH");
+        if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
         WETH = IWETH9(_wETH);
         STETH = IStETH(ILidoLocator(_lidoLocator).lido());
-        WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
+        WSTETH = IWstETH(_wstETH);
     }
 
     /**

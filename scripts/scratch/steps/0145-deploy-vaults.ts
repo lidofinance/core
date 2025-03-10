@@ -16,6 +16,7 @@ export async function main() {
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
+  const wstethAddress = state[Sk.wstETH].address;
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
@@ -27,6 +28,7 @@ export async function main() {
   // Deploy Delegation implementation contract
   const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
     wethContract,
+    wstethAddress,
     locatorAddress,
   ]);
   const delegationAddress = await delegation.getAddress();

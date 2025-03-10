@@ -91,7 +91,7 @@ describe("Delegation.sol", () => {
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
-    delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
+    delegationImpl = await ethers.deployContract("Delegation", [weth, wsteth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
@@ -160,19 +160,19 @@ describe("Delegation.sol", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [weth, ethers.ZeroAddress]))
+      await expect(ethers.deployContract("Delegation", [weth, wsteth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_lidoLocator");
     });
 
     it("reverts if wETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, wsteth, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_wETH");
     });
 
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, wsteth, lidoLocator]);
       expect(await delegation_.STETH()).to.equal(steth);
       expect(await delegation_.WETH()).to.equal(weth);
       expect(await delegation_.WSTETH()).to.equal(wsteth);
@@ -188,7 +188,7 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, wsteth, lidoLocator]);
 
       await expect(delegation_.initialize(vaultOwner, days(7n))).to.be.revertedWithCustomError(
         delegation_,
