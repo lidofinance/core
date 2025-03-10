@@ -221,6 +221,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[msg.sender];
 
+        if ($.nodeOperatorExternalGuarantor[msg.sender] == _newGuarantor) revert SameGuarantor();
+
         if (_newGuarantor == msg.sender) revert SelfGuarantorMustBeZeroAddress();
 
         if (balance.locked != 0) revert LockedIsNotZero(balance.locked);
@@ -228,8 +230,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address prevGuarantor = $.nodeOperatorExternalGuarantor[msg.sender] != address(0)
             ? $.nodeOperatorExternalGuarantor[msg.sender]
             : msg.sender;
-
-        if (prevGuarantor == _newGuarantor) revert SameGuarantor();
 
         if (balance.total > 0) {
             uint256 refund = balance.total;
