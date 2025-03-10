@@ -150,8 +150,8 @@ contract AccountingOracle is BaseOracle {
         _updateContractVersion(2);
     }
 
-    function finalizeUpgrade_v2(uint256 consensusVersion) external {
-        _updateContractVersion(2);
+    function finalizeUpgrade_v3(uint256 consensusVersion) external {
+        _updateContractVersion(3);
         _setConsensusVersion(consensusVersion);
     }
 

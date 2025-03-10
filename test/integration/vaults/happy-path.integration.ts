@@ -116,12 +116,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(10n);
     expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(10n);
 
-    const etherToDeposit = ether("640");
+    const etherToDeposit = ether("640"); // 20 * 32
     const etherToSubmit = (await withdrawalQueue.unfinalizedStETH()) + etherToDeposit;
 
     // Send enough ether to deposit 640 ETH to lido
     await lido.connect(ethHolder).submit(ZeroAddress, { value: etherToSubmit });
-
     expect(await lido.getDepositableEther()).to.be.greaterThanOrEqual(etherToDeposit);
 
     const dsmSigner = await impersonate(depositSecurityModule.address, etherToDeposit);

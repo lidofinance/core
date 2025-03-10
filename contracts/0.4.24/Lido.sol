@@ -227,6 +227,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function _initialize_v3() internal {
         _setContractVersion(3);
+
+        // set infinite allowance for burner from withdrawal queue
+        // to burn finalized requests' shares
+        _approve(getLidoLocator().withdrawalQueue(), getLidoLocator().burner(), INFINITE_ALLOWANCE);
     }
 
     /**
