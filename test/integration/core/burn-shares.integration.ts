@@ -74,6 +74,7 @@ describe("Scenario: Burn Shares", () => {
       sharesRequestedToBurn: sharesToBurn,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
+      vaultsTotalFees: 0n,
     });
 
     const sharesToBurnAfter = await lido.sharesOf(stranger.address);
