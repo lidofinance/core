@@ -866,6 +866,23 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _increaseValidatorsKeysNonce();
     }
 
+    /// @notice Reports the duration a validator has remained eligible for exit after exit request.
+    /// @dev Notify how many seconds have passed since a validator first became eligible
+    ///      to exit following an exit request but has not yet exited.
+    /// @param nodeOperatorId The identifier of the node operator.
+    /// @param publicKey The public key of the validator being reported.
+    /// @param secondsSinceEligibleExitRequest Seconds since the validator first
+    ///        became eligible to exit following an exit request but has not yet exited.
+    function reportUnexitedValidator(
+        uint256 nodeOperatorId,
+        bytes publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+
+        // ToDo: implement...
+    }
+
     function _getNodeOperator(uint256 _nodeOperatorId)
         internal
         view
