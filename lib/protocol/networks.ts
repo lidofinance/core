@@ -3,6 +3,7 @@ import * as process from "node:process";
 import hre from "hardhat";
 
 import { log } from "lib";
+import { readNetworkState } from "lib/state-file";
 
 import { ProtocolNetworkItems } from "./types";
 
@@ -93,14 +94,16 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
 }
 
 async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
+  const state = readNetworkState();
+
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
     locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
     agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
     votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
-    stakingVaultFactory: "",
-    stakingVaultBeacon: "",
+    stakingVaultFactory: state["stakingVaultFactory"].address,
+    stakingVaultBeacon: state["stakingVaultBeacon"].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }

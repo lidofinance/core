@@ -32,6 +32,7 @@ export async function main() {
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
+
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
   await makeTx(

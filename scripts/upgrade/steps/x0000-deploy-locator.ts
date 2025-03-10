@@ -58,6 +58,7 @@ export async function main(): Promise<void> {
   assert.equal(process.env.DEPLOYER, deployer);
 
   const state = readNetworkState();
+  console.debug("state", state);
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const locator = await loadContract("LidoLocator", locatorAddress);
 

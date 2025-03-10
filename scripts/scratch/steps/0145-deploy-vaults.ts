@@ -54,15 +54,9 @@ export async function main() {
   // Add VaultFactory and Vault implementation to the Accounting contract
   const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
 
-  // Grant roles for the Accounting contract
-  const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
+  // Grant VaultHub roles
   const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
-
-  await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
-
   await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
-
-  await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
 }

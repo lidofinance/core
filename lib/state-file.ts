@@ -52,7 +52,6 @@ export enum Sk {
   evmScriptRegistryFactory = "evmScriptRegistryFactory",
   ensSubdomainRegistrar = "ensSubdomainRegistrar",
   ldo = "ldo",
-  // lido = "lido",
   lidoApm = "lidoApm",
   lidoApmEnsName = "lidoApmEnsName",
   lidoApmEnsRegDurationSec = "lidoApmEnsRegDurationSec",
@@ -94,6 +93,7 @@ export enum Sk {
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  upgradeTemplateV3 = "upgradeTemplateV3",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

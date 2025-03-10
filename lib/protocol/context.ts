@@ -4,6 +4,7 @@ import hre from "hardhat";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
+import { isNonForkingHardhatNetwork } from "./networks";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -13,12 +14,9 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  if (hre.network.name === "hardhat") {
-    const networkConfig = hre.config.networks[hre.network.name];
-    if (!networkConfig.forking?.enabled) {
-      await deployScratchProtocol(hre.network.name);
-    }
-  } else {
+  if (isNonForkingHardhatNetwork()) {
+    await deployScratchProtocol(hre.network.name);
+  } else if (process.env.UPGRADE) {
     await deployUpgrade(hre.network.name);
   }
 
@@ -44,7 +42,9 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
-  await provision(context);
+  if (isNonForkingHardhatNetwork()) {
+    await provision(context);
+  }
 
   return context;
 };
