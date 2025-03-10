@@ -40,24 +40,24 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     /**
      * @notice represents validator stages in PDG flow
      * @param NONE  - initial stage
-     * @param AWAITING_PROOF - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
+     * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
      * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
      * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be withdrawn by staking vault owner
-     * @param WITHDRAWN - disproven validator has it's PREDEPOSIT_AMOUNT ether withdrawn by staking vault owner and cannot be used in PDG anymore
+     * @param COMPENSATED - disproven validator has it's PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
      */
     enum validatorStage {
         NONE,
-        AWAITING_PROOF,
+        PREDEPOSITED,
         PROVEN,
         DISPROVEN,
-        WITHDRAWN
+        COMPENSATED
     }
 
     /**
      * @notice represents NO balance in PDG
      * @dev fits into single 32 bytes slot
      * @param total total ether balance of the NO
-     * @param locked ether locked in unproved predeposits
+     * @param locked ether locked in not yet proven predeposits
      */
     struct NodeOperatorBalance {
         uint128 total;
@@ -77,8 +77,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     /**
-     * @notice ERC-7201 storage namespace for the vault
+     * @notice ERC-7201 storage struct
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
+     * @custom:storage-location erc7201:Lido.Vaults.PredepositGuarantee
      * @param nodeOperatorBalance - balance of NO in PDG
      * @param nodeOperatorGuarantor - mapping of NO to its' guarantor (zero address means NO is self-guarantor)
      * @param guarantorClaimableEther - ether that guarantor can claim back if NO has changed guarantor with balance
@@ -102,7 +103,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
     /**
-     * @param _gIFirstValidator packed GIndex of first validator in CL state tree
+     * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
      * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
      * @param _changeSlot slot of the fork that alters first validator GIndex
      * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
@@ -128,7 +129,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // * * * * * * * * * * * * * * * * * * * * * //
 
     /**
-     * @notice returns total & locked balanced for the NO
+     * @notice returns total & locked balances for the NO
      * @param _nodeOperator to withdraw from
      * @return balance object of the node operator
      */
@@ -147,13 +148,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     /**
-     * @notice returns address of external guarantor for the NO
+     * @notice returns address of the guarantor for the NO
      * @param _nodeOperator to check guarantor for
      * @return address of guarantor for the NO
-     * @dev will return _nodeOperator if NO
+     * @dev will return _nodeOperator if NO has no external guarantor
      */
     function nodeOperatorGuarantor(address _nodeOperator) external view returns (address) {
-        return _getStorage().nodeOperatorGuarantor[_nodeOperator];
+        return _guarantorOf(_nodeOperator);
     }
 
     /**
@@ -198,13 +199,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueMustBeMultipleOfPredepositAmount(_amount);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
-        ERC7201Storage storage $ = _getStorage();
+        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
 
-        uint256 unlocked = $.nodeOperatorBalance[_nodeOperator].total - $.nodeOperatorBalance[_nodeOperator].locked;
+        uint256 unlocked = balance.total - balance.locked;
 
         if (unlocked < _amount) revert NotEnoughUnlocked(unlocked, _amount);
 
-        $.nodeOperatorBalance[_nodeOperator].total -= uint128(_amount);
+        balance.total -= uint128(_amount);
         (bool success, ) = _recipient.call{value: uint256(_amount)}("");
         if (!success) revert WithdrawalFailed();
 
@@ -235,7 +236,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
             $.guarantorClaimableEther[prevGuarantor] += refund;
 
-            emit GuarantorRefunded(_newGuarantor, msg.sender, refund);
+            emit GuarantorRefundSet(_newGuarantor, msg.sender, refund);
         }
 
         $.nodeOperatorGuarantor[msg.sender] = _newGuarantor != msg.sender ? _newGuarantor : address(0);
@@ -253,7 +254,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         claimedEther = $.guarantorClaimableEther[msg.sender];
 
-        if (claimedEther == 0) revert EmptyRefund();
+        if (claimedEther == 0) revert NothingToRefund();
 
         $.guarantorClaimableEther[msg.sender] = 0;
 
@@ -313,7 +314,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
                 revert PredepositDepositAmountInvalid(_deposit.pubkey, _deposit.amount);
 
             $.validatorStatus[_deposit.pubkey] = ValidatorStatus({
-                stage: validatorStage.AWAITING_PROOF,
+                stage: validatorStage.PREDEPOSITED,
                 stakingVault: _stakingVault,
                 nodeOperator: nodeOperator
             });
@@ -410,7 +411,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param _stakingVault address
      * @dev only callable by staking vault owner & only if validator stage is NONE
      */
-    function proveUnregisteredValidator(
+    function proveUnknownValidator(
         ValidatorWitness calldata _witness,
         IStakingVault _stakingVault
     ) external whenResumed {
@@ -459,6 +460,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     ) public whenResumed {
         _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
 
+        // validator state and WC incorrectness are enforced inside
         _processNegativeProof(_witness.pubkey, _invalidWithdrawalCredentials);
     }
 
@@ -469,7 +471,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @dev can only be called by owner of vault that had deposited to disproven validator
      * @dev deletes validator status from mapping, freeing up storage and resetting validator stage to NONE
      */
-    function withdrawDisprovenPredeposit(
+    function compensateDisprovenPredeposit(
         bytes calldata _validatorPubkey,
         address _recipient
     ) public whenResumed returns (uint256) {
@@ -483,7 +485,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (msg.sender != stakingVault.owner()) revert SenderNotStakingVaultOwner();
         if (validator.stage != validatorStage.DISPROVEN) revert ValidatorNotProvenInvalid(validator.stage);
 
-        validator.stage = validatorStage.WITHDRAWN;
+        validator.stage = validatorStage.COMPENSATED;
 
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
         if (!success) revert WithdrawalFailed();
@@ -505,7 +507,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address _recipient
     ) external returns (uint256) {
         proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
-        return withdrawDisprovenPredeposit(_witness.pubkey, _recipient);
+        return compensateDisprovenPredeposit(_witness.pubkey, _recipient);
     }
 
     // * * * * * * * * * * * * * * * * * * * * //
@@ -516,7 +518,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
         ValidatorStatus storage validator = $.validatorStatus[_pubkey];
 
-        if (validator.stage != validatorStage.AWAITING_PROOF) {
+        if (validator.stage != validatorStage.PREDEPOSITED) {
             revert ValidatorNotPreDeposited(_pubkey, validator.stage);
         }
 
@@ -535,12 +537,15 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
         ValidatorStatus storage validator = $.validatorStatus[_pubkey];
 
-        if (validator.stage != validatorStage.AWAITING_PROOF) {
+        if (validator.stage != validatorStage.PREDEPOSITED) {
             revert ValidatorNotPreDeposited(_pubkey, validator.stage);
         }
 
-        // 0x00 WC check is inside `_wcToAddress`
-        if (address(validator.stakingVault) == _wcToAddress(_invalidWithdrawalCredentials)) {
+        uint8 wcVersion = uint8(_invalidWithdrawalCredentials[0]);
+        address wcAddress = address(uint160(uint256(_invalidWithdrawalCredentials)));
+
+        // if wc version is 0x00, wcAddress cannot be treated as valid
+        if (wcVersion > 1 && address(validator.stakingVault) == wcAddress) {
             revert WithdrawalCredentialsAreValid();
         }
 
@@ -568,11 +573,14 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         emit BalanceToppedUp(_nodeOperator, msg.sender, msg.value);
     }
 
+    /// @notice returns guarantor of the NO
+    /// @dev if guarantor is not set, returns NO address
     function _guarantorOf(address _nodeOperator) internal view returns (address) {
         address stored = _getStorage().nodeOperatorGuarantor[_nodeOperator];
         return stored == address(0) ? _nodeOperator : stored;
     }
 
+    /// @notice enforces that only NO's guarantor can call the function
     modifier onlyGuarantorOf(address _nodeOperator) {
         if (_guarantorOf(_nodeOperator) != msg.sender) {
             revert MustBeNodeOperatorOrGuarantor();
@@ -605,7 +613,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     event GuarantorSet(address indexed nodeOperator, address indexed newGuarantor, address indexed prevGuarantor);
 
-    event GuarantorRefunded(address indexed guarantor, address indexed nodeOperator, uint256 amount);
+    event GuarantorRefundSet(address indexed guarantor, address indexed nodeOperator, uint256 amount);
     event GuarantorRefundClaimed(address indexed guarantor, address indexed recipient, uint256 amount);
 
     /// Validator lifecycle events
@@ -641,7 +649,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // node operator accounting
     error LockedIsNotZero(uint256 locked);
     error ValueMustBeMultipleOfPredepositAmount(uint256 value);
-    error EmptyRefund();
+    error NothingToRefund();
     error SameGuarantor();
     error RefundFailed();
 

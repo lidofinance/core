@@ -374,8 +374,8 @@ contract Dashboard is Permissions {
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
      * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
      */
-    function withdrawDisprovenValidator(bytes calldata _pubkey, address _recipient) external {
-        _withdrawDisprovenValidatorFromPDG(_pubkey, _recipient);
+    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
+        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
     }
 
     /**

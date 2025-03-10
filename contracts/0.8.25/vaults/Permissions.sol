@@ -260,11 +260,11 @@ abstract contract Permissions is AccessControlConfirmable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _withdrawDisprovenValidatorFromPDG(
+    function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
-        return PredepositGuarantee(stakingVault().depositor()).withdrawDisprovenPredeposit(_pubkey, _recipient);
+        return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**

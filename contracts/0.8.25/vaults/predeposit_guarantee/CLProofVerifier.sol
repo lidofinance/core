@@ -89,7 +89,7 @@ abstract contract CLProofVerifier {
                 │                               │
           ┌─────┴─────┐                   ┌─────┴─────┐
           │           │   ............... │           │
-    [Validator 0]                        ....     [Proven Validator]    **DEPTH = N
+    [Validator 0]                        ....     [Validator to prove]  **DEPTH = N
             ↑                                               ↑
     GI_FIRST_VALIDATOR                   GI_FIRST_VALIDATOR + validator_index
     */
@@ -119,7 +119,7 @@ abstract contract CLProofVerifier {
       ┌─────────┴─────┐   ┌─────┴───────────┐        ┌─────┴─────┐     ┌───┴──┐
       │               │   │                 │        │           │     │      │
     [slot]  [proposerInd] [parentRoot] [stateRoot]  [bodyRoot]  [0]   [0]    [0]   **DEPTH = 3
-                               (proof[0])       ↑
+                           (proof[0])       ↑
                                         what needs to be proven
      */
     uint8 public constant STATE_ROOT_DEPTH = 3;
@@ -127,9 +127,15 @@ abstract contract CLProofVerifier {
     /// @notice GIndex of state root in Beacon block header
     GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
 
-    // See `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
+    /// @notice see `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
+    /**
+     * @param _gIFirstValidator packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in CL state tree
+     * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
+     * @param _changeSlot slot of the fork that alters first validator GIndex
+     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
+     */
     constructor(GIndex _gIFirstValidator, GIndex _gIFirstValidatorAfterChange, uint64 _changeSlot) {
         GI_FIRST_VALIDATOR = _gIFirstValidator;
         GI_FIRST_VALIDATOR_AFTER_CHANGE = _gIFirstValidatorAfterChange;
