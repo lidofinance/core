@@ -169,6 +169,19 @@ interface IStakingModule {
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
     function onWithdrawalCredentialsChanged() external;
 
+    /// @notice Reports the duration a validator has remained unexited after becoming eligible for exit.
+    /// @dev Notify staking module how many seconds have passed since a validator first became eligible
+    ///      to exit following an exit request but has not yet exited.
+    /// @param nodeOperatorId Id of the node operator.
+    /// @param publicKey The public key of the validator being reported.
+    /// @param secondsSinceEligibleExitRequest Seconds since the validator first
+    ///        became eligible to exit following an exit request but has not yet exited.
+    function reportUnexitedValidator(
+        uint256 nodeOperatorId,
+        bytes calldata publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    ) external;
+
     /// @dev Event to be emitted on StakingModule's nonce change
     event NonceChanged(uint256 nonce);
 

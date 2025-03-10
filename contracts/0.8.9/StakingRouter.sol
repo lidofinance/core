@@ -133,6 +133,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
+    bytes32 public constant REPORT_UNEXITED_VALIDATORS_ROLE = keccak256("REPORT_UNEXITED_VALIDATORS_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -1319,6 +1320,29 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         }
 
         emit WithdrawalCredentialsSet(_withdrawalCredentials, msg.sender);
+    }
+
+    /// @notice Reports the duration a validator has remained eligible for exit after exit request.
+    /// @dev Notify staking module how many seconds have passed since a validator first became eligible
+    ///      to exit following an exit request but has not yet exited.
+    /// @param stakingModuleId The identifier of the staking module.
+    /// @param nodeOperatorId The identifier of the node operator.
+    /// @param publicKey The public key of the validator being reported.
+    /// @param secondsSinceEligibleExitRequest Seconds since the validator first
+    ///        became eligible to exit following an exit request but has not yet exited.
+    function reportUnexitedValidator(
+        uint256 stakingModuleId,
+        uint256 nodeOperatorId,
+        bytes calldata publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    ) external onlyRole(REPORT_UNEXITED_VALIDATORS_ROLE)  {
+        StakingModule storage stakingModule = _getStakingModuleById(stakingModuleId);
+
+        IStakingModule(stakingModule.stakingModuleAddress).reportUnexitedValidator(
+            nodeOperatorId,
+            publicKey,
+            secondsSinceEligibleExitRequest
+        );
     }
 
     /// @notice Returns current credentials to withdraw ETH on Consensus Layer side.
