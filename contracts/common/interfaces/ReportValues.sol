@@ -26,7 +26,9 @@ struct ReportValues {
     /// @notice array of combined values for each Lido vault
     ///         (sum of all the balances of Lido validators of the vault
     ///          plus the balance of the vault itself)
-    uint256[] vaultValues;
+    // uint256[] vaultValues;
     /// @notice in-out deltas (deposits - withdrawals) of each Lido vault
-    int256[] inOutDeltas;
+    // int256[] inOutDeltas;
+    /// @notice overall vaults fees
+    uint256 vaultsFees;
 }
