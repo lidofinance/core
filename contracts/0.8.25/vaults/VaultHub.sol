@@ -539,34 +539,34 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
         VaultHubStorage storage $ = _getVaultHubStorage();
 
-        for (uint256 i = 0; i < _valuations.length; i++) {
-            VaultSocket storage socket = $.sockets[i + 1];
+    //     for (uint256 i = 0; i < _valuations.length; i++) {
+    //         VaultSocket storage socket = $.sockets[i + 1];
 
-            if (socket.pendingDisconnect) continue; // we skip disconnected vaults
+    //         if (socket.pendingDisconnect) continue; // we skip disconnected vaults
 
-            uint256 treasuryFeeShares = _treasureFeeShares[i];
-            if (treasuryFeeShares > 0) {
-                socket.sharesMinted += uint96(treasuryFeeShares);
-            }
+    //         uint256 treasuryFeeShares = _treasureFeeShares[i];
+    //         if (treasuryFeeShares > 0) {
+    //             socket.sharesMinted += uint96(treasuryFeeShares);
+    //         }
 
-            IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
-        }
+    //         IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
+    //     }
 
-        uint256 length = $.sockets.length;
+    //     uint256 length = $.sockets.length;
 
-        for (uint256 i = 1; i < length; i++) {
-            VaultSocket storage socket = $.sockets[i];
-            if (socket.pendingDisconnect) {
-                // remove disconnected vault from the list
-                VaultSocket memory lastSocket = $.sockets[length - 1];
-                $.sockets[i] = lastSocket;
-                $.vaultIndex[lastSocket.vault] = i;
-                $.sockets.pop(); // TODO: replace with length--
-                delete $.vaultIndex[socket.vault];
-                --length;
-            }
-        }
-    }
+    //     for (uint256 i = 1; i < length; i++) {
+    //         VaultSocket storage socket = $.sockets[i];
+    //         if (socket.pendingDisconnect) {
+    //             // remove disconnected vault from the list
+    //             VaultSocket memory lastSocket = $.sockets[length - 1];
+    //             $.sockets[i] = lastSocket;
+    //             $.vaultIndex[lastSocket.vault] = i;
+    //             $.sockets.pop(); // TODO: replace with length--
+    //             delete $.vaultIndex[socket.vault];
+    //             --length;
+    //         }
+    //     }
+    // }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
         if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
