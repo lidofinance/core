@@ -145,6 +145,7 @@ export async function main() {
   ]);
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    locator.address,
     lidoAddress,
     accounting.address,
     vaultHubParams.connectedVaultsLimit,
@@ -200,6 +201,20 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
+  // TODO: dummy values
+  // Deploy PredepositGuarantee
+  const predepositGuarantee = await deployBehindOssifiableProxy(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    proxyContractsOwner,
+    deployer,
+    [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ],
+  );
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -217,6 +232,7 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     accounting.address,
+    predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
   ];

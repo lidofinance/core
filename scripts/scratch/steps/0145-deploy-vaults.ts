@@ -20,6 +20,7 @@ export async function main() {
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
     vaultHubAddress,
+    state[Sk.predepositGuarantee].proxy.address,
     depositContract,
   ]);
   const impAddress = await imp.getAddress();

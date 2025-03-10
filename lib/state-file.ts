@@ -90,6 +90,7 @@ export enum Sk {
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
   // Vaults
+  predepositGuarantee = "predepositGuarantee",
   stakingVaultImpl = "stakingVaultImpl",
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
