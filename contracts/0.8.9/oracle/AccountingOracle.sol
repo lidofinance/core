@@ -221,9 +221,11 @@ contract AccountingOracle is BaseOracle {
 
         /// @dev The values of the vaults as observed at the reference slot.
         /// Sum of all the balances of Lido validators of the vault plus the balance of the vault itself.
-        uint256[] vaultsValues;
+        // uint256[] vaultsValues;
         /// @dev The in-out deltas (deposits - withdrawals) of the vaults as observed at the reference slot.
-        int256[] vaultsInOutDeltas;
+        // int256[] vaultsInOutDeltas;
+        /// @dev The total vaults fees as observed at the reference slot.
+        uint256 vaultsTotalFees;
         ///
         /// Extra data — the oracle information that allows asynchronous processing in
         /// chunks, after the main data is processed. The oracle doesn't enforce that extra data
@@ -581,8 +583,7 @@ contract AccountingOracle is BaseOracle {
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
-                data.vaultsValues,
-                data.vaultsInOutDeltas
+                data.vaultsTotalFees
             )
         );
 
