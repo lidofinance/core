@@ -41,6 +41,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
+ *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
  * - Operator:
  *   - `triggerValidatorWithdrawal()`

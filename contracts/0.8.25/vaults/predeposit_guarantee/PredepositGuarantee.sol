@@ -19,7 +19,7 @@ import {IStakingVault} from "../interfaces/IStakingVault.sol";
  *         While only Staking Vault ether is used to deposit to the beacon chain, NO's ether is locked.
  *         And can only be unlocked if the validator is proven to have valid Withdrawal Credentials on Ethereum Consensus Layer.
  *         Merkle proofs against Beacon Block Root are used to prove either validator's validity or invalidity
- *         where invalid validators's ether can be withdrawn by the staking vault owner.
+ *         where invalid validators's ether can be compensated back to the staking vault owner.
  *         A system of NO's guarantors can be used to allow NOs to handle deposits and verifications
  *         while guarantors provide ether.
  *
@@ -42,7 +42,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param NONE  - initial stage
      * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
      * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be withdrawn by staking vault owner
+     * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be compensated to staking vault owner
      * @param COMPENSATED - disproven validator has it's PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
      */
     enum validatorStage {
@@ -196,7 +196,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address _recipient
     ) external onlyGuarantorOf(_nodeOperator) whenResumed {
         if (_amount == 0) revert ZeroArgument("amount");
-        if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueMustBeMultipleOfPredepositAmount(_amount);
+        if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(_amount);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
@@ -206,7 +206,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (unlocked < _amount) revert NotEnoughUnlocked(unlocked, _amount);
 
         balance.total -= uint128(_amount);
-        (bool success, ) = _recipient.call{value: uint256(_amount)}("");
+        (bool success, ) = _recipient.call{value: _amount}("");
         if (!success) revert WithdrawalFailed();
 
         emit BalanceWithdrawn(_nodeOperator, _recipient, _amount);
@@ -236,7 +236,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
             $.guarantorClaimableEther[prevGuarantor] += refund;
 
-            emit GuarantorRefundSet(_newGuarantor, msg.sender, refund);
+            emit BalanceRefunded(msg.sender, _newGuarantor);
+            emit GuarantorRefundAdded(prevGuarantor, msg.sender, refund);
         }
 
         $.nodeOperatorGuarantor[msg.sender] = _newGuarantor != msg.sender ? _newGuarantor : address(0);
@@ -279,21 +280,20 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         IStakingVault _stakingVault,
         IStakingVault.Deposit[] calldata _deposits
     ) external payable whenResumed {
-        if (_deposits.length == 0) revert PredepositNoDeposits();
+        if (_deposits.length == 0) revert EmptyDeposits();
 
         address nodeOperator = _stakingVault.nodeOperator();
-        if (msg.sender != nodeOperator) revert MustBeNodeOperator();
+        if (msg.sender != nodeOperator) revert NotNodeOperator();
 
         if (msg.value != 0) {
             // check that node operator is self-guarantor is inside
             _topUpNodeOperatorBalance(nodeOperator);
         }
 
-        // sanity check that vault returns valid WC
         bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
-        if (address(_stakingVault) != _wcToAddress(withdrawalCredentials)) {
-            revert WithdrawalCredentialsMismatch(address(_stakingVault), _wcToAddress(withdrawalCredentials));
-        }
+
+        // sanity check that vault returns valid WC
+        _validateWC(_stakingVault, withdrawalCredentials);
 
         ERC7201Storage storage $ = _getStorage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
@@ -307,11 +307,10 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             if ($.validatorStatus[_deposit.pubkey].stage != validatorStage.NONE) {
-                revert MustBeNewValidatorPubkey(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
+                revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
             }
 
-            if (_deposit.amount != PREDEPOSIT_AMOUNT)
-                revert PredepositDepositAmountInvalid(_deposit.pubkey, _deposit.amount);
+            if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositAmountInvalid(_deposit.pubkey, _deposit.amount);
 
             $.validatorStatus[_deposit.pubkey] = ValidatorStatus({
                 stage: validatorStage.PREDEPOSITED,
@@ -356,7 +355,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         IStakingVault.Deposit[] calldata _deposits
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
-            revert MustBeNodeOperator();
+            revert NotNodeOperator();
         }
         ERC7201Storage storage $ = _getStorage();
 
@@ -371,7 +370,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
             // sanity check because first check relies on external contract
             if (validator.nodeOperator != msg.sender) {
-                revert MustBeNodeOperator();
+                revert NotNodeOperator();
             }
 
             if (validator.stakingVault != _stakingVault) {
@@ -415,20 +414,18 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ValidatorWitness calldata _witness,
         IStakingVault _stakingVault
     ) external whenResumed {
-        if (_stakingVault.owner() != msg.sender) revert SenderNotStakingVaultOwner();
+        if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
         ERC7201Storage storage $ = _getStorage();
 
         if ($.validatorStatus[_witness.pubkey].stage != validatorStage.NONE) {
-            revert MustBeNewValidatorPubkey(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
+            revert ValidatorNotNew(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
         }
 
         bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
 
-        // sanity check that vault returns correct WC
-        if (address(_stakingVault) != _wcToAddress(withdrawalCredentials)) {
-            revert WithdrawalCredentialsMismatch(address(_stakingVault), _wcToAddress(withdrawalCredentials));
-        }
+        // sanity check that vault returns valid WC
+        _validateWC(_stakingVault, withdrawalCredentials);
 
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
@@ -452,7 +449,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @notice permissionless method to prove incorrect Withdrawal Credentials for the validator on CL
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
-     * @dev will revert if proof is invalid or withdrawal credentials belong to correct vault
+     * @dev will revert if proof is invalid, validator is not predeposited or withdrawal credentials belong to correct vault
+     * @dev validator WC versions mismatch (e.g v1 vs v2) wil be treated as invalid WC
      */
     function proveInvalidValidatorWC(
         ValidatorWitness calldata _witness,
@@ -466,10 +464,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     /**
      * @notice returns locked ether to the staking vault owner if validator's WC were proven invalid and
-     * @param _validatorPubkey to withdraw locked PREDEPOSIT_AMOUNT ether from
+     * @param _validatorPubkey to take locked PREDEPOSIT_AMOUNT ether from
      * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
      * @dev can only be called by owner of vault that had deposited to disproven validator
-     * @dev deletes validator status from mapping, freeing up storage and resetting validator stage to NONE
      */
     function compensateDisprovenPredeposit(
         bytes calldata _validatorPubkey,
@@ -481,33 +478,23 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address nodeOperator = validator.nodeOperator;
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_recipient == address(stakingVault)) revert WithdrawalToVaultNotAllowed();
-        if (msg.sender != stakingVault.owner()) revert SenderNotStakingVaultOwner();
-        if (validator.stage != validatorStage.DISPROVEN) revert ValidatorNotProvenInvalid(validator.stage);
+        if (_recipient == address(stakingVault)) revert CompensateToVaultNotAllowed();
+        if (msg.sender != stakingVault.owner()) revert NotStakingVaultOwner();
+        if (validator.stage != validatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
 
         validator.stage = validatorStage.COMPENSATED;
 
+        // reduces total&locked NO deposit
+        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[nodeOperator];
+        balance.total -= PREDEPOSIT_AMOUNT;
+        balance.locked -= PREDEPOSIT_AMOUNT;
+
         (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
-        if (!success) revert WithdrawalFailed();
+        if (!success) revert CompensateFailed();
 
-        emit ValidatorWithdrawn(_validatorPubkey, nodeOperator, address(stakingVault), _recipient);
+        emit BalanceCompensated(nodeOperator, _recipient, balance.total, balance.locked);
+        emit ValidatorCompensated(_validatorPubkey, nodeOperator, address(stakingVault), _recipient);
         return PREDEPOSIT_AMOUNT;
-    }
-
-    /**
-     * @notice shortcut for disproving and withdrawing validator
-     * @param _witness ValidatorWitness object containing proof of validator's WC
-     * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
-     * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
-     * @dev can only be called by owner of vault that had deposited to disproven validator
-     */
-    function disproveAndWithdraw(
-        ValidatorWitness calldata _witness,
-        bytes32 _invalidWithdrawalCredentials,
-        address _recipient
-    ) external returns (uint256) {
-        proveInvalidValidatorWC(_witness, _invalidWithdrawalCredentials);
-        return compensateDisprovenPredeposit(_witness.pubkey, _recipient);
     }
 
     // * * * * * * * * * * * * * * * * * * * * //
@@ -522,14 +509,14 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             revert ValidatorNotPreDeposited(_pubkey, validator.stage);
         }
 
-        // sanity check that vault returns correct WC
-        if (address(validator.stakingVault) != _wcToAddress(_withdrawalCredentials)) {
-            revert WithdrawalCredentialsMismatch(address(validator.stakingVault), _wcToAddress(_withdrawalCredentials));
-        }
+        // sanity check that vault returns valid WC
+        _validateWC(validator.stakingVault, _withdrawalCredentials);
 
         validator.stage = validatorStage.PROVEN;
-        $.nodeOperatorBalance[validator.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
+        NodeOperatorBalance storage balance = $.nodeOperatorBalance[validator.nodeOperator];
+        balance.locked -= PREDEPOSIT_AMOUNT;
 
+        emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_pubkey, validator.nodeOperator, address(validator.stakingVault), _withdrawalCredentials);
     }
 
@@ -541,17 +528,16 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             revert ValidatorNotPreDeposited(_pubkey, validator.stage);
         }
 
-        uint8 wcVersion = uint8(_invalidWithdrawalCredentials[0]);
-        address wcAddress = address(uint160(uint256(_invalidWithdrawalCredentials)));
+        bytes32 vaultWithdrawalCredentials = validator.stakingVault.withdrawalCredentials();
 
-        // if wc version is 0x00, wcAddress cannot be treated as valid
-        if (wcVersion > 1 && address(validator.stakingVault) == wcAddress) {
-            revert WithdrawalCredentialsAreValid();
+        // sanity check that vault returns valid WC
+        _validateWC(validator.stakingVault, vaultWithdrawalCredentials);
+
+        // this check enforces full WC(version + address) equality
+        if (_invalidWithdrawalCredentials == vaultWithdrawalCredentials) {
+            revert WithdrawalCredentialsMatch();
         }
 
-        // reduces total&locked NO deposit
-        $.nodeOperatorBalance[validator.nodeOperator].total -= PREDEPOSIT_AMOUNT;
-        $.nodeOperatorBalance[validator.nodeOperator].locked -= PREDEPOSIT_AMOUNT;
         // freed ether only will returned to owner of the vault with this validator
         validator.stage = validatorStage.DISPROVEN;
 
@@ -565,7 +551,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (msg.value % PREDEPOSIT_AMOUNT != 0) revert ValueMustBeMultipleOfPredepositAmount(msg.value);
+        if (msg.value % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(msg.value);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(msg.value);
@@ -583,21 +569,23 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     /// @notice enforces that only NO's guarantor can call the function
     modifier onlyGuarantorOf(address _nodeOperator) {
         if (_guarantorOf(_nodeOperator) != msg.sender) {
-            revert MustBeNodeOperatorOrGuarantor();
+            revert NotGuarantor();
         }
         _;
     }
 
-    /// @notice converts withdrawal credentials to address
-    /// @dev will revert if wc version is less than 1 as it cannot be converted to an address
-    function _wcToAddress(bytes32 _withdrawalCredentials) internal pure returns (address wcAddress) {
+    /// @notice validates that WC belong to the vault
+    function _validateWC(IStakingVault _stakingVault, bytes32 _withdrawalCredentials) internal pure {
         uint8 version = uint8(_withdrawalCredentials[0]);
+        address wcAddress = address(uint160(uint256(_withdrawalCredentials)));
 
         if (version < 1) {
             revert WithdrawalCredentialsInvalidVersion(version);
         }
 
-        wcAddress = address(uint160(uint256(_withdrawalCredentials)));
+        if (address(_stakingVault) != wcAddress) {
+            revert WithdrawalCredentialsMismatch(address(_stakingVault), wcAddress);
+        }
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -608,12 +596,19 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // * * * * * Events  * * * * * //
 
+    /// NO balance change events
+
     event BalanceToppedUp(address indexed nodeOperator, address indexed sender, uint256 amount);
     event BalanceWithdrawn(address indexed nodeOperator, address indexed recipient, uint256 amount);
+    event BalanceLocked(address indexed nodeOperator, uint128 total, uint128 locked);
+    event BalanceUnlocked(address indexed nodeOperator, uint128 total, uint128 locked);
+    event BalanceCompensated(address indexed nodeOperator, address indexed to, uint128 total, uint128 locked);
+    event BalanceRefunded(address indexed nodeOperator, address indexed to);
+
+    /// NO Guarantor events
 
     event GuarantorSet(address indexed nodeOperator, address indexed newGuarantor, address indexed prevGuarantor);
-
-    event GuarantorRefundSet(address indexed guarantor, address indexed nodeOperator, uint256 amount);
+    event GuarantorRefundAdded(address indexed guarantor, address indexed nodeOperator, uint256 amount);
     event GuarantorRefundClaimed(address indexed guarantor, address indexed recipient, uint256 amount);
 
     /// Validator lifecycle events
@@ -637,7 +632,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address indexed stakingVault,
         bytes32 invalidWithdrawalCredentials
     );
-    event ValidatorWithdrawn(
+    event ValidatorCompensated(
         bytes indexed validatorPubkey,
         address indexed nodeOperator,
         address indexed stakingVault,
@@ -648,37 +643,37 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
     // node operator accounting
     error LockedIsNotZero(uint256 locked);
-    error ValueMustBeMultipleOfPredepositAmount(uint256 value);
+    error ValueNotMultipleOfPredepositAmount(uint256 value);
     error NothingToRefund();
+    error WithdrawalFailed();
     error SameGuarantor();
     error RefundFailed();
 
     // predeposit errors
-    error PredepositNoDeposits();
-    error PredepositDepositAmountInvalid(bytes validatorPubkey, uint256 depositAmount);
-    error MustBeNewValidatorPubkey(bytes validatorPubkey, validatorStage stage);
+    error EmptyDeposits();
+    error PredepositAmountInvalid(bytes validatorPubkey, uint256 depositAmount);
+    error ValidatorNotNew(bytes validatorPubkey, validatorStage stage);
     error NotEnoughUnlocked(uint256 unlocked, uint256 amount);
     error WithdrawalCredentialsMismatch(address stakingVault, address withdrawalCredentialsAddress);
 
     // depositing errors
     error DepositToUnprovenValidator(bytes validatorPubkey, validatorStage stage);
     error DepositToWrongVault(bytes validatorPubkey, address stakingVault);
-    error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
 
     // prove
-    error WithdrawalCredentialsAreValid();
+    error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
+    error WithdrawalCredentialsMatch();
     error WithdrawalCredentialsInvalidVersion(uint8 version);
 
-    // withdrawal disproven
-    error ValidatorNotProvenInvalid(validatorStage stage);
-    error SenderNotStakingVaultOwner();
-    /// withdrawal generic
-    error WithdrawalFailed();
-    error WithdrawalToVaultNotAllowed();
+    // compensate
+    error ValidatorNotDisproven(validatorStage stage);
+    error CompensateFailed();
+    error CompensateToVaultNotAllowed();
 
     // auth
-    error MustBeNodeOperatorOrGuarantor();
-    error MustBeNodeOperator();
+    error NotStakingVaultOwner();
+    error NotGuarantor();
+    error NotNodeOperator();
 
     // general
     error ZeroArgument(string argument);

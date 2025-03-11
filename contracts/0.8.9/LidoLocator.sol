@@ -83,8 +83,22 @@ contract LidoLocator is ILidoLocator {
         vaultHub = _assertNonZero(_config.vaultHub);
     }
 
-    function coreComponents() external view returns (address, address, address, address, address, address) {
-        return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
+    function coreComponents() external view returns (
+        address,
+        address,
+        address,
+        address, 
+        address,
+        address
+    ) {
+        return (
+            elRewardsVault,
+            oracleReportSanityChecker,
+            stakingRouter,
+            treasury,
+            withdrawalQueue,
+            withdrawalVault
+        );
     }
 
     function oracleReportComponents() external view returns(
