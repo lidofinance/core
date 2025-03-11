@@ -273,6 +273,9 @@
     "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   },
   "ensAddress": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+  "easyTrackEVMScriptExecutor": {
+    "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
+  },
   "executionLayerRewardsVault": {
     "address": "0x388C818CA8B9251b393131C08a736A67ccB19297",
     "contract": "contracts/0.8.9/LidoExecutionLayerRewardsVault.sol",

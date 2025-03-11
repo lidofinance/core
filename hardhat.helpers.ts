@@ -14,10 +14,10 @@ export function getHardhatForkingConfig() {
       return undefined;
 
     case "forking":
-      if (!process.env.FORK_RPC_URL) {
-        throw new Error("FORK_RPC_URL must be set when MODE=forking");
+      if (!process.env.RPC_URL) {
+        throw new Error("RPC_URL must be set when MODE=forking");
       }
-      return { url: process.env.FORK_RPC_URL };
+      return { url: process.env.RPC_URL };
 
     default:
       throw new Error("MODE must be either 'scratch' or 'forking'");
