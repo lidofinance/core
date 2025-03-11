@@ -7,7 +7,7 @@ contract VaultHub__MockPermissions {
     event Mock__SharesMinted(address indexed _stakingVault, address indexed _recipient, uint256 _shares);
     event Mock__SharesBurned(address indexed _stakingVault, uint256 _shares);
     event Mock__Rebalanced(uint256 _ether);
-    event Mock__Disconnected(address indexed _stakingVault);
+    event Mock__VoluntaryDisconnect(address indexed _stakingVault);
 
     function mintShares(address _stakingVault, address _recipient, uint256 _shares) external {
         emit Mock__SharesMinted(_stakingVault, _recipient, _shares);
@@ -22,6 +22,6 @@ contract VaultHub__MockPermissions {
     }
 
     function voluntaryDisconnect(address _stakingVault) external {
-        emit Mock__Disconnected(_stakingVault);
+        emit Mock__VoluntaryDisconnect(_stakingVault);
     }
 }

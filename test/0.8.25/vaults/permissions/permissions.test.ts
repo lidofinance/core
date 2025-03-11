@@ -575,9 +575,9 @@ describe("Permissions", () => {
   });
 
   context("voluntaryDisconnect()", () => {
-    it("disconnects the StakingVault", async () => {
+    it("voluntarily disconnects the StakingVault", async () => {
       await expect(permissions.connect(disconnecter).voluntaryDisconnect())
-        .to.emit(vaultHub, "Mock__Disconnected")
+        .to.emit(vaultHub, "Mock__VoluntaryDisconnect")
         .withArgs(stakingVault);
     });
 

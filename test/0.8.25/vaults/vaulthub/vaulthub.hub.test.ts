@@ -713,7 +713,7 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("self-disconnect", () => {
+  context("voluntaryDisconnect", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
 

@@ -146,7 +146,7 @@ describe("VaultHub.sol:forceExit", () => {
     });
 
     it("reverts if called for a disconnected vault", async () => {
-      await vaultHub.connect(user).voluntaryDisconnect(vaultAddress);
+      await vaultHub.connect(user).disconnect(vaultAddress);
 
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
