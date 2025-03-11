@@ -369,7 +369,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
                 revert DepositToUnprovenValidator(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
             }
 
-            // sanity check
+            // sanity check because first check relies on external contract
             if (validator.nodeOperator != msg.sender) {
                 revert MustBeNodeOperator();
             }
@@ -666,7 +666,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
 
     // prove
-    error WithdrawalCredentialsAreInvalid();
     error WithdrawalCredentialsAreValid();
     error WithdrawalCredentialsInvalidVersion(uint8 version);
 

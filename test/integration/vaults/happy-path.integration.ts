@@ -242,8 +242,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const deposits = [];
 
+    const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+
     for (let i = 0; i < keysToAdd; i++) {
-      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
       const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
       const signature = hexlify(
         signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
@@ -257,7 +258,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       });
     }
 
-    await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
+    // TODO: fix PDG integration test
+    const pdg = ctx.contracts.predepositGuarantee;
+    const pdgImperosnator = await impersonate(pdg.address, 1000000000000n);
+    await stakingVault.connect(pdgImperosnator).depositToBeaconChain(deposits);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
