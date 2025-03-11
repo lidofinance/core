@@ -1,8 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 
+export function getMode() {
+  return process.env.MODE || "scratch";
+}
+
 /* Determines the forking configuration for Hardhat */
 export function getHardhatForkingConfig() {
-  const mode = process.env.MODE || "scratch";
+  const mode = getMode();
 
   switch (mode) {
     case "scratch":
