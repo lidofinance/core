@@ -21,6 +21,14 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     error ZeroAddress();
     error FeeNotEnough(uint256 minFeePerRequest, uint256 requestCount, uint256 msgValue);
     error TriggerableWithdrawalRefundFailed();
+    error ExitHashWasNotSubmitted();
+    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+
+    /// @dev Events
+    event MadeRefund(
+        address sender,
+        uint256 refundValue
+    );
 
     // TODO: make type optimization
     struct DeliveryHistory {
@@ -64,8 +72,12 @@ contract ValidatorsExitBus is AccessControlEnumerable {
     }
 
     function triggerExitHashVerify(bytes calldata data, uint256[] calldata keyIndexes) external payable {
-        bytes32 dataHash = keccak256(abi.encode(data));
+        bytes32 dataHash = keccak256(data);
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[dataHash];
+
+        if (requestStatus.contractVersion == 0) {
+          revert ExitHashWasNotSubmitted();
+        }
 
         address locatorAddr = LOCATOR_CONTRACT_POSITION.getStorageAddress();
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
@@ -83,14 +95,18 @@ contract ValidatorsExitBus is AccessControlEnumerable {
         bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
+            if (keyIndexes[i] >= requestStatus.totalItemsCount) {
+               revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
+            }
+
             if (keyIndexes[i] > lastDeliveredKeyIndex) {
                 revert KeyWasNotUnpacked(keyIndexes[i], lastDeliveredKeyIndex);
             }
+
             uint256 requestOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
 
             for (uint256 j = 0; j < PUBLIC_KEY_LENGTH; j++) {
                 pubkeys[i * PUBLIC_KEY_LENGTH + j] = data[requestOffset + j];
-
             }
         }
 
@@ -102,6 +118,8 @@ contract ValidatorsExitBus is AccessControlEnumerable {
            if (!success) {
                 revert TriggerableWithdrawalRefundFailed();
            }
+
+           emit MadeRefund(msg.sender, refund);
         }
 
     }

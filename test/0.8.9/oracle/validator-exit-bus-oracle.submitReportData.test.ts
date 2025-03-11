@@ -325,6 +325,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await expect(tx)
         .to.emit(oracle, "ValidatorExitRequest")
         .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
+
+      const data = encodeExitRequestsDataList(requests);
+      const reportDataHash = ethers.keccak256(data);
+
+      await expect(tx).to.emit(oracle, "StoredOracleTWExitRequestHash").withArgs(reportDataHash);
     });
 
     it("updates processing state", async () => {
