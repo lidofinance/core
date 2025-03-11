@@ -72,6 +72,7 @@ describe("StakingRouter.sol:module-sync", () => {
       stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE(), admin),
       stakingRouter.grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), admin),
+      stakingRouter.grantRole(await stakingRouter.REPORT_UNEXITED_VALIDATORS_ROLE(), admin),
     ]);
 
     // add staking module
@@ -861,6 +862,30 @@ describe("StakingRouter.sol:module-sync", () => {
       )
         .to.emit(stakingModule, "Mock__StuckValidatorsCountUpdated")
         .withArgs(NODE_OPERATOR_IDS, STUCK_VALIDATOR_COUNTS);
+    });
+  });
+
+  context("reportUnexitedValidator", () => {
+    const nodeOperatorId = 2n;
+    const pubkey = "0x" + "01".repeat(48);
+    const secondsSinceEligibleExitRequest = 100;
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(
+        stakingRouter
+          .connect(user)
+          .reportUnexitedValidator(moduleId, nodeOperatorId, pubkey, secondsSinceEligibleExitRequest),
+      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_UNEXITED_VALIDATORS_ROLE());
+    });
+
+    it("Report unexited stuck validator", async () => {
+      await expect(
+        stakingRouter
+          .connect(admin)
+          .reportUnexitedValidator(moduleId, nodeOperatorId, pubkey, secondsSinceEligibleExitRequest),
+      )
+        .to.emit(stakingModule, "Mock__UnexitedValidatorReported")
+        .withArgs(nodeOperatorId, pubkey, secondsSinceEligibleExitRequest);
     });
   });
 
