@@ -202,10 +202,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
-        // set infinite allowance for burner from withdrawal queue
-        // to burn finalized requests' shares
-        _approve(ILidoLocator(_lidoLocator).withdrawalQueue(), ILidoLocator(_lidoLocator).burner(), INFINITE_ALLOWANCE);
-
         _initialize_v3();
         initialized();
     }

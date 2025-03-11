@@ -1,10 +1,4 @@
 {
-  "burner": {
-    "deployParameters": {
-      "totalCoverSharesBurnt": "0",
-      "totalNonCoverSharesBurnt": "0"
-    }
-  },
   "vaultHub": {
     "deployParameters": {
       "connectedVaultsLimit": 500,

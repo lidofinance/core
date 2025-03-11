@@ -58,6 +58,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
+    error AlreadyInitialized();
     error DirectETHTransfer();
     error ZeroRecoveryAmount();
     error StETHRecoveryWrongFunc();
@@ -73,6 +74,8 @@ contract Burner is IBurner, AccessControlEnumerable {
 
     uint256 private totalCoverSharesBurnt;
     uint256 private totalNonCoverSharesBurnt;
+
+    bool public isInitialized;
 
     ILidoLocator public immutable LOCATOR;
     ILido public immutable LIDO;
@@ -116,16 +119,8 @@ contract Burner is IBurner, AccessControlEnumerable {
      * @param _admin the Lido DAO Aragon agent contract address
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
-     * @param _totalCoverSharesBurnt Shares burnt counter init value (cover case)
-     * @param _totalNonCoverSharesBurnt Shares burnt counter init value (non-cover case)
      */
-    constructor(
-        address _admin,
-        address _locator,
-        address _stETH,
-        uint256 _totalCoverSharesBurnt,
-        uint256 _totalNonCoverSharesBurnt
-    ) {
+    constructor(address _admin, address _locator, address _stETH) {
         if (_admin == address(0)) revert ZeroAddress("_admin");
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
@@ -135,7 +130,22 @@ contract Burner is IBurner, AccessControlEnumerable {
 
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
+    }
 
+    /**
+     * @param _totalCoverSharesBurnt Shares burnt counter init value (cover case)
+     * @param _totalNonCoverSharesBurnt Shares burnt counter init value (non-cover case)
+     * @dev Although there is initialize function, the contract is not supposed to be upgradeable.
+     *      The initialization is moved from the constructor to be able to set the shares burnt counters
+     *      to the up-to-date values from the old Burner upon the upgrade.
+     */
+    function initialize(
+        uint256 _totalCoverSharesBurnt,
+        uint256 _totalNonCoverSharesBurnt
+    ) onlyRole(DEFAULT_ADMIN_ROLE) external {
+        if (isInitialized) revert AlreadyInitialized();
+
+        isInitialized = true;
         totalCoverSharesBurnt = _totalCoverSharesBurnt;
         totalNonCoverSharesBurnt = _totalNonCoverSharesBurnt;
     }

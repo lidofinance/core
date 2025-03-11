@@ -40,11 +40,17 @@ interface IAccountingOracle is IBaseOracle, IOssifiableProxy {
     function initialize(address admin, address consensusContract, uint256 consensusVersion) external;
 }
 
+interface IAccounting is IOssifiableProxy {
+}
+
 interface IAragonAppRepo {
     function getLatest() external view returns (uint16[3] memory, address, bytes memory);
 }
 
 interface IBurner is IAccessControlEnumerable {
+    function getCoverSharesBurnt() external view returns (uint256);
+    function getNonCoverSharesBurnt() external view returns (uint256);
+    function initialize(uint256 _totalCoverSharesBurnt, uint256 _totalNonCoverSharesBurnt) external;
 }
 
 interface IWithdrawalsManagerProxy {
@@ -56,7 +62,7 @@ interface IWithdrawalVault is IAccessControlEnumerable, IVersioned, IWithdrawals
     function getConsensusContract() external view returns (address);
 }
 
-interface IVaultHub is IPausableUntilWithRoles {
+interface IVaultHub is IPausableUntilWithRoles, IOssifiableProxy {
 }
 
 interface ILido is IVersioned {
@@ -102,7 +108,7 @@ contract UpgradeTemplateV3 {
     IOracleReportSanityChecker public constant _oldOracleReportSanityChecker = IOracleReportSanityChecker(0x6232397ebac4f5772e53285B26c47914E9461E75);
 
     // New proxy contracts
-    address public constant _accounting = 0x9015957A2210BB8B10e27d8BBEEF8d9498f123eF;
+    IAccounting public constant _accounting = IAccounting(0x9015957A2210BB8B10e27d8BBEEF8d9498f123eF);
     IVaultHub public constant _vaultHub = IVaultHub(0x9C6c49E1a5108eC5A2111c0b9B62624100d11e3a);
 
     // New non-proxy contracts
@@ -229,17 +235,6 @@ contract UpgradeTemplateV3 {
         }
     }
 
-    function _assertInitialACL() internal view {
-        _assertOracleReportSanityCheckerRoles();
-
-        IBurner burner = _burner;
-        _assertSingleOZRoleHolder(burner, DEFAULT_ADMIN_ROLE, address(this));
-        _assertZeroOZRoleHolders(burner, REQUEST_BURN_MY_STETH_ROLE);
-        _assertSingleOZRoleHolder(burner, REQUEST_BURN_SHARES_ROLE, address(_lido));
-
-        _assertZeroOZRoleHolders(_accountingOracle, DEFAULT_ADMIN_ROLE);
-    }
-
     function _assertLocatorAddresses() internal view {
         ILidoLocator locator = _locator;
         if (
@@ -347,17 +342,18 @@ contract UpgradeTemplateV3 {
         if (_isUpgradeFinished) revert CanOnlyFinishOnce();
         _isUpgradeFinished = true;
 
-        // _passAdminRoleFromTemplateToAgent();
+        _burner.initialize(
+            _oldBurner.getCoverSharesBurnt(),
+            _oldBurner.getNonCoverSharesBurnt()
+        );
+
+        _passAdminRoleFromTemplateToAgent();
 
         _assertUpgradeIsFinishedCorrectly();
     }
 
     function _passAdminRoleFromTemplateToAgent() internal {
-        // NB: No need to pass OracleDaemonConfig and OracleReportSanityChecker admin roles
-        // because they were Agent at the beginning and are not needed by the template
-
         _transferOZAdminFromThisToAgent(_burner);
-        _transferOZAdminFromThisToAgent(_accountingOracle);
     }
 
     function _assertUpgradeIsFinishedCorrectly() internal view {
@@ -392,7 +388,7 @@ contract UpgradeTemplateV3 {
         holders[0] = address(_lido);
         holders[1] = _nodeOperatorsRegistry;
         holders[2] = _simpleDvt;
-        holders[3] = _accounting;
+        holders[3] = address(_accounting);
         _assertOZRoleHolders(burner, REQUEST_BURN_SHARES_ROLE, holders);
 
         // WithdrawalVault
@@ -403,6 +399,7 @@ contract UpgradeTemplateV3 {
         _assertSingleOZRoleHolder(_vaultHub, DEFAULT_ADMIN_ROLE, _agent);
         _assertSingleOZRoleHolder(_vaultHub, VAULT_MASTER_ROLE, _agent);
         _assertZeroOZRoleHolders(_vaultHub, VAULT_REGISTRY_ROLE);
+        _assertProxyAdmin(_vaultHub, _agent);
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle
@@ -410,6 +407,9 @@ contract UpgradeTemplateV3 {
 
         // OracleReportSanityChecker
         _assertOracleReportSanityCheckerRoles();
+
+        // Accounting
+        _assertProxyAdmin(_accounting, _agent);
     }
 
     function _checkContractVersions() internal view {

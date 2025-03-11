@@ -66,8 +66,5 @@ export async function main(): Promise<void> {
   await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], { from: deployer });
-
-  // TODO: pass the role to the upgrade template to migrate shares burnt counters
-  await makeTx(burner, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
-  await makeTx(burner, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+  // NB: admin role is kept on deployer to transfer it to the upgrade template on the next steps
 }

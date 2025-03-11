@@ -20,14 +20,13 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
-  const burnerParams = parameters[Sk.burner].deployParameters;
   const depositContract = state.chainSpec.depositContractAddress;
   const wethContract = parameters["delegation"].deployParameters.wethContract;
 
   // TODO: maybe take the parameters from current sanity checker
   const sanityCheckerParams = parameters[Sk.oracleReportSanityChecker].deployParameters;
 
-  const proxyContractsOwner = deployer;
+  const proxyContractsOwner = agentAddress;
   const burnerAdmin = deployer;
 
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
@@ -63,14 +62,7 @@ export async function main() {
   ]);
 
   // Deploy Burner
-  // TODO: take burner shares burnt from current burner
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
-    burnerAdmin,
-    locatorAddress,
-    lidoAddress,
-    burnerParams.totalCoverSharesBurnt,
-    burnerParams.totalNonCoverSharesBurnt,
-  ]);
+  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [burnerAdmin, locatorAddress, lidoAddress]);
 
   // Deploy OracleReportSanityChecker
   const oracleReportSanityCheckerArgs = [

@@ -10,7 +10,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const agent = state["app:aragon-agent"].proxy.address;
+  const agent = state[Sk.appAgent].proxy.address;
 
   // Transfer OZ admin roles for various contracts
   const ozAdminTransfers = [

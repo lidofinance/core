@@ -3,6 +3,7 @@
     "upgrade/steps/0100-deploy-contracts",
     "upgrade/steps/0200-initialize-contracts",
     "upgrade/steps/0300-deploy-upgrade-template",
-    "upgrade/steps/0400-mock-dao-upgrade"
+    "upgrade/steps/0400-transfer-roles",
+    "upgrade/steps/0500-mock-dao-upgrade"
   ]
 }
