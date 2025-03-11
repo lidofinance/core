@@ -388,7 +388,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _disconnect(address _vault) internal {
         VaultSocket storage socket = _connectedSocket(_vault);
-        IStakingVault vault_ = IStakingVault(socket.vault);
 
         uint256 sharesMinted = socket.sharesMinted;
         if (sharesMinted > 0) {
@@ -396,8 +395,6 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         socket.pendingDisconnect = true;
-
-        vault_.report(vault_.valuation(), vault_.inOutDelta(), 0);
 
         emit VaultDisconnected(_vault);
     }
@@ -495,8 +492,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         for (uint256 i = 0; i < _valuations.length; i++) {
             VaultSocket storage socket = $.sockets[i + 1];
-
-            if (socket.pendingDisconnect) continue; // we skip disconnected vaults
 
             uint256 treasuryFeeShares = _treasureFeeShares[i];
             if (treasuryFeeShares > 0) {

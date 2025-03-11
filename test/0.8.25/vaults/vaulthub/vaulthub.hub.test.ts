@@ -756,14 +756,14 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoMintedSharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await expect(vaultHub.connect(user).disconnect(vaultAddress))
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnected")
         .withArgs(vaultAddress);
 
