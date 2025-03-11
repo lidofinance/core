@@ -260,7 +260,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // TODO: fix PDG integration test
     const pdg = ctx.contracts.predepositGuarantee;
-    const pdgImperosnator = await impersonate(pdg.address, 1000000000000n);
+    const pdgImperosnator = await impersonate(pdg.address, ether("100"));
     await stakingVault.connect(pdgImperosnator).depositToBeaconChain(deposits);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
