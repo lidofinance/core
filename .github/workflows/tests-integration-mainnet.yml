@@ -37,6 +37,8 @@ jobs:
 
       - name: Finalize scratch deployment
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+        env:
+          RPC_URL: http://localhost:8555
 
       - name: Run integration tests
         run: yarn test:integration
