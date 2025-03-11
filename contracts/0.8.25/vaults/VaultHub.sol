@@ -192,7 +192,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // isDisconnected
+            false // pendingDisconnect
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
