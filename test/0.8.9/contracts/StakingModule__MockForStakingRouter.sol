@@ -216,6 +216,20 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     event Mock__onExitedAndStuckValidatorsCountsUpdated();
 
+    function reportUnexitedValidator(
+        uint256 nodeOperatorId,
+        bytes calldata publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    ) external {
+        emit Mock__UnexitedValidatorReported(nodeOperatorId, publicKey, secondsSinceEligibleExitRequest);
+    }
+
+    event Mock__UnexitedValidatorReported(
+        uint256 nodeOperatorId,
+        bytes publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    );
+
     bool private onExitedAndStuckValidatorsCountsUpdatedShouldRevert = false;
     bool private onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = false;
 
