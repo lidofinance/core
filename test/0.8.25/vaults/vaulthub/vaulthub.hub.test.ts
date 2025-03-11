@@ -218,7 +218,7 @@ describe("VaultHub.sol:hub", () => {
       expect(lastVaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(lastVaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(lastVaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
-      expect(lastVaultSocket.isDisconnected).to.equal(false);
+      expect(lastVaultSocket.pendingDisconnect).to.equal(false);
     });
   });
 
@@ -233,7 +233,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.reserveRatioBP).to.equal(0n);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(0n);
       expect(vaultSocket.treasuryFeeBP).to.equal(0n);
-      expect(vaultSocket.isDisconnected).to.equal(false);
+      expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
 
     it("returns the vault socket for a vault that was connected", async () => {
@@ -247,7 +247,7 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(vaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
-      expect(vaultSocket.isDisconnected).to.equal(false);
+      expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
   });
 
@@ -578,7 +578,7 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultSocketBefore = await vaultHub["vaultSocket(address)"](vaultAddress);
       expect(vaultSocketBefore.vault).to.equal(ZeroAddress);
-      expect(vaultSocketBefore.isDisconnected).to.be.false;
+      expect(vaultSocketBefore.pendingDisconnect).to.be.false;
 
       await expect(
         vaultHub
@@ -592,7 +592,7 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultSocketAfter = await vaultHub["vaultSocket(address)"](vaultAddress);
       expect(vaultSocketAfter.vault).to.equal(vaultAddress);
-      expect(vaultSocketAfter.isDisconnected).to.be.false;
+      expect(vaultSocketAfter.pendingDisconnect).to.be.false;
 
       expect(await vault.locked()).to.equal(CONNECT_DEPOSIT);
     });
@@ -709,7 +709,7 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
-      expect(vaultSocket.isDisconnected).to.be.true;
+      expect(vaultSocket.pendingDisconnect).to.be.true;
     });
   });
 
@@ -768,7 +768,7 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
-      expect(vaultSocket.isDisconnected).to.be.true;
+      expect(vaultSocket.pendingDisconnect).to.be.true;
     });
   });
 });

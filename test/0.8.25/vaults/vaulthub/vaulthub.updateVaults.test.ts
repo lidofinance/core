@@ -13,6 +13,7 @@ import { certainAddress } from "lib/address";
 import { Snapshot } from "test/suite";
 
 const BASIS_POINTS = 10_000n;
+
 describe("VaultHub.sol:updateVaults", () => {
   let admin: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
