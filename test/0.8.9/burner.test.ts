@@ -91,6 +91,7 @@ describe("Burner.sol", () => {
           .then((f) => f.connect(deployer).deploy(admin.address, locator, steth));
 
         await deployed.connect(admin).initialize(coverSharesBurnt, nonCoverSharesBurnt);
+        expect(await deployed.isInitialized()).to.equal(true);
 
         await expect(
           deployed.connect(admin).initialize(coverSharesBurnt, nonCoverSharesBurnt),
@@ -105,6 +106,8 @@ describe("Burner.sol", () => {
         await expect(
           deployed.connect(stranger).initialize(coverSharesBurnt, nonCoverSharesBurnt),
         ).to.be.revertedWithOZAccessControlError(stranger.address, await deployed.DEFAULT_ADMIN_ROLE());
+
+        expect(await deployed.isInitialized()).to.equal(false);
       });
     });
 
@@ -135,6 +138,7 @@ describe("Burner.sol", () => {
 
       await deployed.connect(admin).initialize(differentCoverSharesBurnt, differentNonCoverSharesBurntNonZero);
 
+      expect(await deployed.isInitialized()).to.equal(true);
       expect(await deployed.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
       expect(await deployed.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
     });

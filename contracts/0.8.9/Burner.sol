@@ -142,7 +142,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     function initialize(
         uint256 _totalCoverSharesBurnt,
         uint256 _totalNonCoverSharesBurnt
-    ) onlyRole(DEFAULT_ADMIN_ROLE) external {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (isInitialized) revert AlreadyInitialized();
 
         isInitialized = true;

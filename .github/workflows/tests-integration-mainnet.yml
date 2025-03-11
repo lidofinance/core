@@ -1,4 +1,4 @@
-name: Integration Tests On Mainnet Upgrade
+name: Integration Tests On Upgrade
 
 on: [push]
 

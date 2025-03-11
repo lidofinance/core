@@ -24,7 +24,6 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
-  const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
@@ -193,13 +192,7 @@ export async function main() {
   ]);
 
   // Deploy Burner
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
-    admin,
-    locator.address,
-    lidoAddress,
-    burnerParams.totalCoverSharesBurnt,
-    burnerParams.totalNonCoverSharesBurnt,
-  ]);
+  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [admin, locator.address, lidoAddress]);
 
   // Deploy OracleReportSanityChecker
   const oracleReportSanityCheckerArgs = [
