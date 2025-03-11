@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3716"  lines-covered="3584"  line-rate="0.9645"  branches-valid="1748"  branches-covered="1619"  branch-rate="0.9262"  timestamp="1741680684394" complexity="0" version="0.1">
+<coverage lines-valid="3716"  lines-covered="3584"  line-rate="0.9645"  branches-valid="1748"  branches-covered="1619"  branch-rate="0.9262"  timestamp="1741681701684" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2123,7 +2123,7 @@
 			<method name="transferStakingVaultOwnership"  hits="5"  signature="()V" >
 				<lines><line number="208"  hits="5" /></lines>
 			</method>
-			<method name="selfDisconnect"  hits="4"  signature="()V" >
+			<method name="voluntaryDisconnect"  hits="4"  signature="()V" >
 				<lines><line number="215"  hits="4" /></lines>
 			</method>
 			<method name="fund"  hits="30"  signature="()V" >
@@ -2431,7 +2431,7 @@
 			<method name="_triggerValidatorWithdrawal"  hits="2"  signature="()V" >
 				<lines><line number="236"  hits="2" /></lines>
 			</method>
-			<method name="_selfDisconnect"  hits="3"  signature="()V" >
+			<method name="_voluntaryDisconnect"  hits="3"  signature="()V" >
 				<lines><line number="243"  hits="3" /></lines>
 			</method>
 			<method name="_transferStakingVaultOwnership"  hits="3"  signature="()V" >
@@ -2865,7 +2865,7 @@
 			<method name="disconnect"  hits="5"  signature="()V" >
 				<lines><line number="226"  hits="5" /></lines>
 			</method>
-			<method name="selfDisconnect"  hits="7"  signature="()V" >
+			<method name="voluntaryDisconnect"  hits="7"  signature="()V" >
 				<lines><line number="236"  hits="7" /></lines>
 			</method>
 			<method name="mintShares"  hits="59"  signature="()V" >
