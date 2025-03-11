@@ -197,7 +197,10 @@ contract VaultHub is PausableUntilWithRoles {
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        IStakingVault(_vault).lock(CONNECT_DEPOSIT);
+        // Ensure the vault has at least CONNECT_DEPOSIT locked
+        if (IStakingVault(_vault).locked() < CONNECT_DEPOSIT) {
+            revert InsufficientLockedAmount(_vault, IStakingVault(_vault).locked(), CONNECT_DEPOSIT);
+        }
 
         emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
@@ -266,13 +269,13 @@ contract VaultHub is PausableUntilWithRoles {
             revert InsufficientValuationToMint(_vault, vault_.valuation());
         }
 
-        socket.sharesMinted = uint96(vaultSharesAfterMint);
-
         // Calculate the total ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 totalEtherLocked = (etherToLock * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
         if (totalEtherLocked > vault_.locked()) {
-            vault_.lock(totalEtherLocked);
+            revert InsufficientLockedAmount(_vault, vault_.locked(), totalEtherLocked);
         }
+
+        socket.sharesMinted = uint96(vaultSharesAfterMint);
 
         STETH.mintExternalShares(_recipient, _amountOfShares);
 
@@ -588,4 +591,5 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidPubkeysLength();
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
+    error InsufficientLockedAmount(address vault, uint256 lockedAmount, uint256 requiredAmount);
 }

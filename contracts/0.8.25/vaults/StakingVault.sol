@@ -43,11 +43,11 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
+ *   - `lock()`
  * - Operator:
  *   - `depositToBeaconChain()`
  *   - `triggerValidatorWithdrawal()`
  * - VaultHub:
- *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
  *   - `triggerValidatorWithdrawal()`
@@ -284,14 +284,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Locks ether in StakingVault
-     * @dev Can only be called by VaultHub; locked amount can only be increased
+     * @dev Can only be called by the vault owner; locked amount can only be increased
      * @param _locked New amount to lock
      */
-    function lock(uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
-
+    function increaseLocked(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
+        if (_locked <= $.locked) revert NewLockedLowerThanCurrent($.locked, _locked);
 
         $.locked = uint128(_locked);
 
@@ -674,11 +672,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error NotAuthorized(string operation, address sender);
 
     /**
-     * @notice Thrown when attempting to decrease the locked amount outside of a report
+     * @notice Thrown when the owner attempts to set a locked amount that is not larger than the current one
      * @param currentlyLocked Current amount of locked ether
      * @param attemptedLocked Attempted new locked amount
      */
-    error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
+    error NewLockedLowerThanCurrent(uint256 currentlyLocked, uint256 attemptedLocked);
 
     /**
      * @notice Thrown when called on the implementation contract
