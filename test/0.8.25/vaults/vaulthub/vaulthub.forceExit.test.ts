@@ -205,20 +205,24 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
+      const preTotalPooledEther = await steth.getTotalPooledEther();
+      const preTotalShares = await steth.getTotalShares();
+
       const rebase = await vaultHub.calculateVaultsRebase(
         [0n, valuation - penalty],
-        await steth.getTotalShares(),
-        await steth.getTotalPooledEther(),
-        await steth.getTotalShares(),
-        await steth.getTotalPooledEther(),
+        preTotalShares,
+        preTotalPooledEther,
+        preTotalShares - cap,
+        preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares,
         0n,
       );
 
-      const totalMintedShares = (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted;
-      const mintedSteth = (totalMintedShares * (await steth.getTotalPooledEther())) / (await steth.getTotalShares());
-      const lockedEtherPredicted = (mintedSteth * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
+      const totalMintedShares =
+        (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted + rebase.treasuryFeeShares[1];
+      const withReserve = (totalMintedShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
+      const predictedLockedEther = await steth.getPooledEthByShares(withReserve);
 
-      expect(lockedEtherPredicted).to.equal(rebase.lockedEther[1]);
+      expect(predictedLockedEther).to.equal(rebase.lockedEther[1]);
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 
