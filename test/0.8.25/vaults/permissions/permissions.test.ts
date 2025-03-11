@@ -145,7 +145,7 @@ describe("Permissions", () => {
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(exitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
-      await checkSoleMember(disconnecter, await permissions.SELF_DISCONNECT_ROLE());
+      await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
     });
   });
 
@@ -232,7 +232,7 @@ describe("Permissions", () => {
         permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
         permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
         permissions.REQUEST_VALIDATOR_EXIT_ROLE(),
-        permissions.SELF_DISCONNECT_ROLE(),
+        permissions.VOLUNTARY_DISCONNECT_ROLE(),
       ]);
 
       const [
@@ -342,7 +342,7 @@ describe("Permissions", () => {
         permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
         permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
         permissions.REQUEST_VALIDATOR_EXIT_ROLE(),
-        permissions.SELF_DISCONNECT_ROLE(),
+        permissions.VOLUNTARY_DISCONNECT_ROLE(),
       ]);
 
       const assignments = [
@@ -574,19 +574,19 @@ describe("Permissions", () => {
     });
   });
 
-  context("selfDisconnect()", () => {
+  context("voluntaryDisconnect()", () => {
     it("disconnects the StakingVault", async () => {
-      await expect(permissions.connect(disconnecter).selfDisconnect())
+      await expect(permissions.connect(disconnecter).voluntaryDisconnect())
         .to.emit(vaultHub, "Mock__Disconnected")
         .withArgs(stakingVault);
     });
 
     it("reverts if the caller is not a member of the disconnect role", async () => {
-      expect(await permissions.hasRole(await permissions.SELF_DISCONNECT_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.VOLUNTARY_DISCONNECT_ROLE(), stranger)).to.be.false;
 
-      await expect(permissions.connect(stranger).selfDisconnect())
+      await expect(permissions.connect(stranger).voluntaryDisconnect())
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.SELF_DISCONNECT_ROLE());
+        .withArgs(stranger, await permissions.VOLUNTARY_DISCONNECT_ROLE());
     });
   });
 

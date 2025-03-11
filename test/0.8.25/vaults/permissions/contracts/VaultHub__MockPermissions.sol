@@ -21,7 +21,7 @@ contract VaultHub__MockPermissions {
         emit Mock__Rebalanced(msg.value);
     }
 
-    function selfDisconnect(address _stakingVault) external {
+    function voluntaryDisconnect(address _stakingVault) external {
         emit Mock__Disconnected(_stakingVault);
     }
 }

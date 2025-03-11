@@ -725,21 +725,21 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if minting paused", async () => {
       await vaultHub.connect(user).pauseFor(1000n);
 
-      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ResumedExpected",
       );
     });
 
     it("reverts if vault is zero address", async () => {
-      await expect(vaultHub.connect(user).selfDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).voluntaryDisconnect(ZeroAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "ZeroArgument",
       );
     });
 
     it("reverts if called as non-vault owner", async () => {
-      await expect(vaultHub.connect(stranger).selfDisconnect(vaultAddress))
+      await expect(vaultHub.connect(stranger).voluntaryDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotAuthorized")
         .withArgs("disconnect", stranger);
     });
@@ -747,7 +747,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if vault is not connected", async () => {
       await vaultHub.connect(user).disconnect(vaultAddress);
 
-      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress))
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(vaultAddress);
     });
@@ -756,14 +756,14 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoMintedSharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await expect(vaultHub.connect(user).selfDisconnect(vaultAddress))
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnected")
         .withArgs(vaultAddress);
 

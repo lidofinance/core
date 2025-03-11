@@ -28,7 +28,7 @@ contract VaultHub__MockForDelegation {
         steth.burn(amount);
     }
 
-    function selfDisconnect(address _vault) external {
+    function voluntaryDisconnect(address _vault) external {
         emit Mock__Disconnected(_vault);
     }
 

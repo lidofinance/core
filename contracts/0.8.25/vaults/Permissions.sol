@@ -73,7 +73,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for self-disconnecting the StakingVault.
      */
-    bytes32 public constant SELF_DISCONNECT_ROLE = keccak256("vaults.Permissions.SelfDisconnect");
+    bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
      * @notice Address of the implementation contract
@@ -238,10 +238,10 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the SELF_DISCONNECT_ROLE and disconnects the StakingVault.
+     * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and disconnects the StakingVault.
      */
-    function _selfDisconnect() internal onlyRole(SELF_DISCONNECT_ROLE) {
-        vaultHub.selfDisconnect(address(stakingVault()));
+    function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
+        vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
     /**

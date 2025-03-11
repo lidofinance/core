@@ -102,7 +102,7 @@ contract VaultFactory {
             delegation.grantRole(delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.validatorWithdrawalTriggerers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
-            delegation.grantRole(delegation.SELF_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
+            delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.curatorFeeSetters.length; i++) {
             delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), _delegationConfig.curatorFeeSetters[i]);

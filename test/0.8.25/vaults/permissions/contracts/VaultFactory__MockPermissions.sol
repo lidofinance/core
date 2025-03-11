@@ -68,7 +68,7 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.SELF_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -105,7 +105,7 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.SELF_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -140,7 +140,7 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.SELF_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 

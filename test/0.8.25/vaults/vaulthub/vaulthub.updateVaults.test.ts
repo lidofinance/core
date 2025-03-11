@@ -116,7 +116,7 @@ describe("VaultHub.sol:updateVaults", () => {
     expect(await steth.balanceOf(vaultOwner)).to.equal(0);
     expect(await vault.locked()).to.equal(expectedLocked);
 
-    await vaultHub.connect(vaultOwner).selfDisconnect(vault);
+    await vaultHub.connect(vaultOwner).voluntaryDisconnect(vault);
     expect(await vaultHub["vaultSocket(address)"](vault)).to.deep.equal([
       await vault.getAddress(),
       0, // sharesMinted
