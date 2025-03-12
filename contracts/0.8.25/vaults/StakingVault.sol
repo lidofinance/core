@@ -170,8 +170,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return _getStorage().vaultHub;
     }
 
+    /**
+     * @notice Disconnects a `VaultHub` from the vault
+     * @dev Sets `vaultHub` to the zero address, fully detaching it from the vault
+     * @dev Pins the current vault implementation to prevent further upgrades
+     */
     function detachHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
+        if (VaultHub($.vaultHub).vaultSocket(address(this)).sharesMinted != 0) revert DetachVaultWithMintedSharesNotAllowed();
+
         $.vaultHub = address(0);
 
         address currentImplementation = IBeacon(ERC1967Utils.getBeacon()).implementation();
@@ -745,4 +752,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when partial withdrawals are not allowed when valuation is below locked
      */
     error PartialWithdrawalNotAllowed();
+
+    /**
+     * @notice Thrown when try to detach vaultHub from vault with mintedShares
+     */
+    error DetachVaultWithMintedSharesNotAllowed();
 }

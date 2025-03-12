@@ -151,7 +151,7 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth, vaultHub], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, delegation, vaultHub], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
@@ -163,9 +163,9 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_vaultHub` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress, ZeroAddress], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [beacon, delegation, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_delegation");
+        .withArgs("_vaultHub");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {

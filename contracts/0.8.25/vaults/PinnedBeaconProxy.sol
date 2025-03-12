@@ -26,7 +26,7 @@ contract PinnedBeaconProxy is BeaconProxy {
         return IBeacon(_getBeacon()).implementation();
     }
 
-    function implementation() external returns(address) {
+    function implementation() external view returns(address) {
         return _implementation();
     }
 }

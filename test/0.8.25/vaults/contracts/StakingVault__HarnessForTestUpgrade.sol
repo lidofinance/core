@@ -11,21 +11,24 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
-    struct VaultStorage {
-        IStakingVault.Report report;
+    struct ERC7201Storage {
+        Report report;
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
         address vaultHub;
+        bool beaconChainDepositsPaused;
     }
 
     uint64 private constant _version = 2;
 
     address public immutable DEPOSIT_CONTRACT;
 
+    uint256 public constant PUBLIC_KEY_LENGTH = 48;
+
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
-        0xe1d42fabaca5dacba3545b34709222773cbdae322fef5b060e1d691bf0169000;
+        0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
@@ -69,11 +72,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function latestReport() external view returns (IStakingVault.Report memory) {
-        VaultStorage storage $ = _getVaultStorage();
+        ERC7201Storage storage $ = _getVaultStorage();
         return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
     }
 
-    function _getVaultStorage() private pure returns (VaultStorage storage $) {
+    function _getVaultStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := VAULT_STORAGE_LOCATION
         }
@@ -105,7 +108,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function vaultHub() external view returns (address) {
-        VaultStorage storage $ = _getVaultStorage();
+        ERC7201Storage storage $ = _getVaultStorage();
         return $.vaultHub;
     }
 
@@ -132,6 +135,17 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         uint64[] calldata _amounts,
         address _recipient
     ) external payable {}
+
+    function detachHub() external {}
+
+    function computeDepositDataRoot(
+        bytes calldata _pubkey,
+        bytes calldata _withdrawalCredentials,
+        bytes calldata _signature,
+        uint256 _amount
+    ) external pure returns (bytes32) {
+        return keccak256("computeDepositDataRoot");
+    }
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();

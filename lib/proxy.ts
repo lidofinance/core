@@ -4,10 +4,10 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconProxy,
   Delegation,
   OssifiableProxy,
   OssifiableProxy__factory,
+  PinnedBeaconProxy,
   StakingVault,
   VaultFactory,
 } from "typechain-types";
@@ -40,7 +40,7 @@ export async function proxify<T extends BaseContract>({
 
 interface CreateVaultResponse {
   tx: ContractTransactionResponse;
-  proxy: BeaconProxy;
+  proxy: PinnedBeaconProxy;
   vault: StakingVault;
   delegation: Delegation;
 }
@@ -70,7 +70,7 @@ export async function createVaultProxy(
 
   const { delegation: delegationAddress } = delegationEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as BeaconProxy;
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
   const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
 
