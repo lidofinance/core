@@ -11,9 +11,17 @@ import {SSZHelpers} from "./SSZHelpers.sol";
 /// Merkle tree Implementation that aligns with CL implementation
 /// NOT gas optimized, for testing proposes only
 contract SSZMerkleTree is SSZHelpers {
-    uint256 public constant TREE_DEPTH = 40; // Adjustable tree depth
+    uint256 public immutable TREE_DEPTH; // Adjustable tree depth
     uint256 public leafCount = 0; // Number of leaves in the tree
     mapping(uint256 => bytes32) public nodes; // Merkle tree nodes mapping
+
+    /// @notice Initializes the Merkle tree with a given depth and pre-filled nodes so GIndex can closesly match CL
+    constructor(uint256 _treeDepth, uint256 _preFilledNodes) {
+        TREE_DEPTH = _treeDepth;
+        for (uint256 i = 0; i < _preFilledNodes; i++) {
+            addLeaf(keccak256(abi.encodePacked(i)));
+        }
+    }
 
     /// @notice Adds a new leaf to the tree
     /// @param leaf The leaf value (hashed data)
@@ -56,7 +64,7 @@ contract SSZMerkleTree is SSZHelpers {
     /// @notice Returns the SSZ generalized index of a given leaf position
     /// @param position The position of the leaf (0-based)
     /// @return generalizedIndex The SSZ generalized index
-    function getGeneralizedIndex(uint256 position) public pure returns (GIndex) {
+    function getGeneralizedIndex(uint256 position) public view returns (GIndex) {
         require(position < (1 << TREE_DEPTH), "Invalid position");
 
         return pack((1 << TREE_DEPTH) + position, uint8(TREE_DEPTH));
