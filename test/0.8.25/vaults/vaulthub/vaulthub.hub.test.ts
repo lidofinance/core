@@ -284,8 +284,8 @@ describe("VaultHub.sol:hub", () => {
 
         const isSlashing = Math.random() < 0.5;
         const slashed = isSlashing ? ether(tbi(valuationEth).toString()) : 0n;
-        const treashold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
-        const expectedHealthy = treashold >= mintable;
+        const threshold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
+        const expectedHealthy = threshold >= mintable;
 
         const vault = await createAndConnectVault(vaultFactory, {
           shareLimit: ether("100"), // just to bypass the share limit check
@@ -314,7 +314,7 @@ describe("VaultHub.sol:hub", () => {
             Valuation: ${valuation} ETH
             Minted: ${mintable} stETH
             Slashed: ${slashed} ETH
-            Threshold: ${treashold} stETH
+            Threshold: ${threshold} stETH
             Expected Healthy: ${expectedHealthy}
           `);
           throw error;

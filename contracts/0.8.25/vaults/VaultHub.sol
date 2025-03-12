@@ -434,15 +434,17 @@ contract VaultHub is PausableUntilWithRoles {
         for (uint256 i = 0; i < length; ++i) {
             VaultSocket memory socket = $.sockets[i + 1];
             if (!socket.pendingDisconnect) {
-                treasuryFeeShares[i] = calculateVaultTreasuryFees(
-                    vaultsValuations[i],
-                    socket,
-                    _preTotalShares,
-                    _preTotalPooledEther,
-                    _postInternalShares,
-                    _postInternalEther,
-                    _sharesToMintAsLidoCoreFees
-                );
+                if (_sharesToMintAsLidoCoreFees > 0) {
+                    treasuryFeeShares[i] = calculateVaultTreasuryFees(
+                        vaultsValuations[i],
+                        socket,
+                        _preTotalShares,
+                        _preTotalPooledEther,
+                        _postInternalShares,
+                        _postInternalEther,
+                        _sharesToMintAsLidoCoreFees
+                    );
+                }
 
                 totalTreasuryFeeShares += treasuryFeeShares[i];
 
@@ -470,31 +472,29 @@ contract VaultHub is PausableUntilWithRoles {
     ) public pure returns (uint256 treasuryFeeShares) {
         uint256 mintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
         // we are charging fees over the mintable part of the vault's valuation
-        uint256 mintableValuation = _reportValuation * mintableRatio / TOTAL_BASIS_POINTS;
 
         uint256 chargeableValuation = Math256.min(
             // internal share rate is equal to total share rate, so we can use internal values here
             socket.shareLimit * _postInternalEther / _postInternalShares,
-            mintableValuation
+            _reportValuation * mintableRatio / TOTAL_BASIS_POINTS
         );
 
-        // Here is the fee calculations made step by step:
-        //
-        // we factor in the Lido core reward rate as to calculate the potential fee base
-        // potentialRewards = chargeableValuation * lidoCoreRewardRate (validator rewards Lido earns per eth of TVL in a day)
-        // lidoCoreRewardRate = shareRateAfterRebaseWithNoFeesCharged / shareRateBeforeRebase
-        //
-        // shareRateAfterRebaseWithNoFeesCharged = _postInternalEther / (_postInternalShares - _sharesToMintAsLidoCoreFees)
-        // shareRateBeforeRebase = _preTotalPooledEther / _preTotalShares
-        // treasuryFee = potentialRewards * _treasuryFeeBP / TOTAL_BASIS_POINTS
-        // treasuryFeeShares = treasuryFee * _postInternalShares / _postInternalEther
+        // We are charging potential rewards that is chargeableValuation * LidoCoreGrossRewardRate
+        // LidoCoreGrossRewardRate is the Lido core protocol validation reward rate for the day without fees charged
+        // LidoCoreGrossRewardRate = shareRateAfterReportWithoutFeesCharged / shareRateBeforeReport - 1
+        // shareRateAfterReportWithoutFeesCharged = _postInternalEther / (_postInternalShares - _sharesToMintAsLidoCoreFees)
+        // shareRateBeforeReport = _preTotalPooledEther / _preTotalShares
+        uint256 chargeableValuationWithPotentialRewards = chargeableValuation * _postInternalEther * _preTotalShares
+            / ((_postInternalShares - _sharesToMintAsLidoCoreFees) * _preTotalPooledEther);
 
-        // Combining it into a huge one-liner to save some precision
-        return (
-            chargeableValuation * _preTotalShares * _postInternalShares * socket.treasuryFeeBP
-            /
-            (_preTotalPooledEther * (_postInternalShares - _sharesToMintAsLidoCoreFees) * TOTAL_BASIS_POINTS)
-        );
+        // if Lido reward rate is negative, we don't charge anything
+        if (chargeableValuationWithPotentialRewards < chargeableValuation) {
+            return 0;
+        }
+
+        uint256 potentialRewards = chargeableValuationWithPotentialRewards - chargeableValuation;
+
+        treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
     function updateVaults(
