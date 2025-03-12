@@ -47,6 +47,8 @@ describe("PredepositGuarantee.sol", () => {
   let stakingVault: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
 
+  let firstValidatorLeafIndex: bigint;
+
   let originalState: string;
 
   async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
@@ -81,6 +83,7 @@ describe("PredepositGuarantee.sol", () => {
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
     sszMerkleTree = localMerkle.sszMerkleTree;
+    firstValidatorLeafIndex = localMerkle.firstValidatorLeafIndex;
 
     // ether deposit contract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -160,7 +163,8 @@ describe("PredepositGuarantee.sol", () => {
 
       // Validator is added to CL merkle tree
       await sszMerkleTree.addValidatorLeaf(validator);
-      const validatorIndex = (await sszMerkleTree.leafCount()) - 1n;
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
 
       // Beacon Block is generated with new CL state
       const stateRoot = await sszMerkleTree.getMerkleRoot();
@@ -172,13 +176,22 @@ describe("PredepositGuarantee.sol", () => {
 
       // NO collects validator proof
       const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
-      const stateProof = await sszMerkleTree.getMerkleProof(validatorIndex);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       // NO posts proof and triggers deposit to total of 32 ether
       const postDepositData = generatePostDeposit(validator, ether("31"));
       const proveAndDepositTx = pdg.proveAndDeposit(
-        [{ pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
+        [
+          {
+            pubkey: validator.pubkey,
+            validatorIndex,
+            childBlockTimestamp,
+            proof: concatenatedProof,
+            slot: beaconBlockHeader.slot,
+            proposerIndex: beaconBlockHeader.proposerIndex,
+          },
+        ],
         [postDepositData],
         stakingVault,
       );

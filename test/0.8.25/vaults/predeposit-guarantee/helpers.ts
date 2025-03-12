@@ -44,9 +44,9 @@ export const generatePostDeposit = (
   };
 };
 
-export const generateBeaconHeader = (stateRoot: string) => {
+export const generateBeaconHeader = (stateRoot: string, slot?: number) => {
   return {
-    slot: randomInt(1743359),
+    slot: slot ?? randomInt(1743359),
     proposerIndex: randomInt(1337),
     parentRoot: randomBytes32(),
     stateRoot,
@@ -72,6 +72,7 @@ export const setBeaconBlockRoot = async (root: string) => {
 export const prepareLocalMerkleTree = async (depth = 0x28, prefillCount = 0x56) => {
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [depth, prefillCount], {});
   await sszMerkleTree.addValidatorLeaf(generateValidator());
-  const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(0n);
-  return { sszMerkleTree, gIFirstValidator };
+  const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
+  const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(firstValidatorLeafIndex);
+  return { sszMerkleTree, gIFirstValidator, firstValidatorLeafIndex };
 };

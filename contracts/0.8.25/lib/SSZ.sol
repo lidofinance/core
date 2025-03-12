@@ -6,14 +6,6 @@ pragma solidity 0.8.25;
 
 import {GIndex} from "./GIndex.sol";
 
-struct BeaconBlockHeader {
-    uint64 slot;
-    uint64 proposerIndex;
-    bytes32 parentRoot;
-    bytes32 stateRoot;
-    bytes32 bodyRoot;
-}
-
 /*
  Cut and modified version of SSZ library from CSM only has methods for merkilized SSZ proof validation
  original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
@@ -24,82 +16,6 @@ library SSZ {
     error InvalidProof();
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
-
-    /// @notice Modified version of `hashTreeRoot` from CSM to verify beacon block header against beacon root
-    /// @dev Reverts with  InvalidBlockHeader` if calculated root doesn't match expected root
-    function verifyBeaconBlockHeader(BeaconBlockHeader calldata header, bytes32 expectedRoot) internal view {
-        bytes32[8] memory nodes = [
-            toLittleEndian(header.slot),
-            toLittleEndian(header.proposerIndex),
-            header.parentRoot,
-            header.stateRoot,
-            header.bodyRoot,
-            bytes32(0),
-            bytes32(0),
-            bytes32(0)
-        ];
-
-        bytes32 root;
-
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Count of nodes to hash
-            let count := 8
-
-            // Loop over levels
-            // prettier-ignore
-            for { } 1 { } {
-                // Loop over nodes at the given depth
-
-                // Initialize `offset` to the offset of `proof` elements in memory.
-                let target := nodes
-                let source := nodes
-                let end := add(source, shl(5, count))
-
-                // prettier-ignore
-                for { } 1 { } {
-                    // Read next two hashes to hash
-                    mcopy(0x00, source, 0x40)
-
-                    // Call sha256 precompile
-                    let result := staticcall(
-                        gas(),
-                        0x02,
-                        0x00,
-                        0x40,
-                        0x00,
-                        0x20
-                    )
-
-                    if iszero(result) {
-                        // Precompiles returns no data on OutOfGas error.
-                        revert(0, 0)
-                    }
-
-                    // Store the resulting hash at the target location
-                    mstore(target, mload(0x00))
-
-                    // Advance the pointers
-                    target := add(target, 0x20)
-                    source := add(source, 0x40)
-
-                    if iszero(lt(source, end)) {
-                        break
-                    }
-                }
-
-                count := shr(1, count)
-                if eq(count, 1) {
-                    root := mload(0x00)
-                    break
-                }
-            }
-        }
-
-        if (root != expectedRoot) {
-            revert InvalidProof();
-        }
-    }
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
@@ -218,7 +134,7 @@ library SSZ {
     }
 
     // See https://github.com/succinctlabs/telepathy-contracts/blob/5aa4bb7/src/libraries/SimpleSerialize.sol#L17-L28
-    function toLittleEndian(uint256 v) public pure returns (bytes32) {
+    function toLittleEndian(uint256 v) internal pure returns (bytes32) {
         v =
             ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
             ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
