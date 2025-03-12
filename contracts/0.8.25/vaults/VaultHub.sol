@@ -177,6 +177,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_rebalanceThresholdBP > _reserveRatioBP) revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
+        if (IStakingVault(_vault).vaultHub() != address(this)) revert InvalidVaultHubAddress(_vault, IStakingVault(_vault).vaultHub());
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -184,6 +185,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
+
+        //todo add check stakingVault.VaultHub() == address(this)
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
@@ -588,4 +591,5 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidPubkeysLength();
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
+    error InvalidVaultHubAddress(address vault, address vaultHub);
 }

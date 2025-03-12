@@ -70,18 +70,23 @@ describe("Dashboard.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
-    expect(await vaultImpl.vaultHub()).to.equal(hub);
+    vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
     expect(await dashboardImpl.WETH()).to.equal(weth);
     expect(await dashboardImpl.WSTETH()).to.equal(wsteth);
 
-    factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
+    factory = await ethers.deployContract("VaultFactory__MockForDashboard", [
+      factoryOwner,
+      vaultImpl,
+      dashboardImpl,
+      hub,
+    ]);
     expect(await factory.owner()).to.equal(factoryOwner);
     expect(await factory.implementation()).to.equal(vaultImpl);
-    expect(await factory.dashboardImpl()).to.equal(dashboardImpl);
+    expect(await factory.DASHBOARD_IMPL()).to.equal(dashboardImpl);
+    expect(await factory.VAULT_HUB()).to.equal(hub);
 
     const createVaultTx = await factory.connect(vaultOwner).createVault(nodeOperator);
     const createVaultReceipt = await createVaultTx.wait();
@@ -92,6 +97,7 @@ describe("Dashboard.sol", () => {
 
     const vaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", vaultAddress, vaultOwner);
+    expect(await vault.vaultHub()).to.equal(hub);
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);

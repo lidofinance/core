@@ -27,15 +27,18 @@ struct PermissionsConfig {
 contract VaultFactory__MockPermissions {
     address public immutable BEACON;
     address public immutable PERMISSIONS_IMPL;
+    address public immutable VAULT_HUB;
 
     /// @param _beacon The address of the beacon contract
     /// @param _permissionsImpl The address of the Permissions implementation
-    constructor(address _beacon, address _permissionsImpl) {
+    constructor(address _beacon, address _permissionsImpl, address _vaultHub) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_permissionsImpl == address(0)) revert ZeroArgument("_permissionsImpl");
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         BEACON = _beacon;
         PERMISSIONS_IMPL = _permissionsImpl;
+        VAULT_HUB = _vaultHub;
     }
 
     /// @notice Creates a new StakingVault and Permissions contracts
@@ -53,7 +56,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            VAULT_HUB,
+            _stakingVaultInitializerExtraParams
+        );
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -88,7 +96,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            VAULT_HUB,
+            _stakingVaultInitializerExtraParams
+        );
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -125,7 +138,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            VAULT_HUB,
+            _stakingVaultInitializerExtraParams
+        );
 
         // should revert here
         permissions.initialize(address(0), _permissionsConfig.confirmExpiry);

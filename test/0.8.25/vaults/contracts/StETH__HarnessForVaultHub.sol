@@ -52,4 +52,8 @@ contract StETH__HarnessForVaultHub is StETH {
         totalPooledEther += msg.value;
         externalBalance -= msg.value;
     }
+
+    function burnExternalShares(uint256 _sharesAmount) public {
+        _burnShares(msg.sender, _sharesAmount);
+    }
 }
