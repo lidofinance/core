@@ -13,11 +13,11 @@ struct DeliveryHistory {
 struct RequestStatus {
     uint256 totalItemsCount;
     uint256 deliveredItemsCount;
-    uint256 reportDataFormat;
     uint256 contractVersion;
     DeliveryHistory[] deliveryHistory;
 }
 
 interface IValidatorsExitBusOracle {
     function getExitRequestsStatus(bytes32 exitRequestsHash) external view returns (RequestStatus memory);
+
 }

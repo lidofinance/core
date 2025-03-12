@@ -10,6 +10,11 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IValidatorsExitBusOracle, RequestStatus} from "./interfaces/IValidatorsExitBusOracle.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
+struct ExitRequestData {
+    bytes data;
+    uint256 dataFormat;
+}
+
 struct ValidatorWitness {
     // The index of an exit request in the VEBO exit requests data
     uint32 exitRequestIndex;
@@ -161,7 +166,7 @@ contract ValidatorExitVerifier {
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
      */
     function verifyActiveValidatorsAfterExitRequest(
-        bytes calldata exitRequests,
+        ExitRequestData calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses
     ) external {
@@ -170,7 +175,7 @@ contract ValidatorExitVerifier {
         RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests.data
                 .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
@@ -200,7 +205,7 @@ contract ValidatorExitVerifier {
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited in oldBlock.header.
      */
     function verifyHistoricalActiveValidatorsAfterExitRequest(
-        bytes calldata exitRequests,
+        ExitRequestData calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
         HistoricalHeaderWitness calldata oldBlock,
         ValidatorWitness[] calldata validatorWitnesses
@@ -225,7 +230,7 @@ contract ValidatorExitVerifier {
         RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests
+            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests.data
                 .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
@@ -343,17 +348,18 @@ contract ValidatorExitVerifier {
      *      and performs consistency checks against the data.
      */
     function _verifyRequestStatus(
-        bytes calldata exitRequests
+        ExitRequestData calldata exitRequests
     ) internal view returns (RequestStatus memory requestStatus) {
-        bytes32 exitRequestsHash = keccak256(exitRequests);
+        ExitRequests.verifyDataFormat(exitRequests.dataFormat);
+
+
+        bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
         requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle()).getExitRequestsStatus(
             exitRequestsHash
         );
 
-        ExitRequests.verifyDataFormat(requestStatus.reportDataFormat);
-
         // Sanity check. Verify that the number of exit requests matches the oracle's record
-        uint256 exitRequestsCount = exitRequests.count();
+        uint256 exitRequestsCount = exitRequests.data.count();
         if (exitRequestsCount != requestStatus.totalItemsCount) {
             revert ExitRequestsCountMismatch(exitRequestsCount, requestStatus.totalItemsCount);
         }
