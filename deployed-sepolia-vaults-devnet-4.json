@@ -354,7 +354,7 @@
   },
   "delegationImpl": {
     "contract": "contracts/0.8.25/vaults/Delegation.sol",
-    "address": "0xdd3c10884dccD142e754576aD3C409AC460901B1",
+    "address": "0xde7f3bE740CAF19e2316254E19325A9DE632E72E",
     "constructorArgs": ["0x94373a4919B3240D86eA41593D5eBa789FEF3848", "0x1b1B8748d24077122923037747Ad0E0D9d91F842"]
   },
   "deployer": "0x7034Da7f105C9B104f50f0EcC427EE7382D7286D",
@@ -635,20 +635,20 @@
   },
   "stakingVaultBeacon": {
     "contract": "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol",
-    "address": "0xedCDD89f36EdB0b907C94BaE3674b534cE22f9F1",
-    "constructorArgs": ["0x271Aa33D369689C54a2D4CE31BAa038bf050A44d", "0x7034Da7f105C9B104f50f0EcC427EE7382D7286D"]
+    "address": "0xa3d7D20E48fF65b2B9B97D39555eD5FB30F61Afb",
+    "constructorArgs": ["0xB14fA379c9321BAC5ecBeb05b18095b1D46eddCE", "0x7034Da7f105C9B104f50f0EcC427EE7382D7286D"]
   },
   "stakingVaultFactory": {
     "contract": "contracts/0.8.25/vaults/VaultFactory.sol",
-    "address": "0x19987F920b9531c0b8d71D2BFE97594Cc83af185",
-    "constructorArgs": ["0xedCDD89f36EdB0b907C94BaE3674b534cE22f9F1", "0xdd3c10884dccD142e754576aD3C409AC460901B1"]
+    "address": "0xe235F78B426b090bb5e8975B48D89FeC4d8887e2",
+    "constructorArgs": ["0xa3d7D20E48fF65b2B9B97D39555eD5FB30F61Afb", "0xde7f3bE740CAF19e2316254E19325A9DE632E72E"]
   },
   "stakingVaultImpl": {
     "contract": "contracts/0.8.25/vaults/StakingVault.sol",
-    "address": "0x271Aa33D369689C54a2D4CE31BAa038bf050A44d",
+    "address": "0xB14fA379c9321BAC5ecBeb05b18095b1D46eddCE",
     "constructorArgs": [
       "0x16083732e563762D33AeeB4673Bc6222F91EbED4",
-      "0x935b089d9a4F1789783C3db0F466817bB4c9Ac16",
+      "0x10Ad2A1fcF570Df741BCCba86701045fd1dC1FA5",
       "0x80b5DC88C98E528bF9cb4B7F0f076aC41da24651"
     ]
   },
