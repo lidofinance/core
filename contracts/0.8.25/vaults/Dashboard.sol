@@ -381,7 +381,7 @@ contract Dashboard is Permissions {
         uint256 totalAmount;
         IStakingVault stakingVault = stakingVault();
 
-        for (uint i = 0; i < _deposits.length; i++) {
+        for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
         }
 
@@ -392,7 +392,7 @@ contract Dashboard is Permissions {
         IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
 
         IStakingVault.Deposit calldata deposit;
-        for (uint i = 0; i < _deposits.length; i++) {
+        for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
             depositContract.deposit{value: deposit.amount}(
                 deposit.pubkey,
