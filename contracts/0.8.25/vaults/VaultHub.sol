@@ -11,6 +11,7 @@ import {ILido as IStETH} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
@@ -74,18 +75,18 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Lido stETH contract
     IStETH public immutable STETH;
-    address public immutable ACCOUNTING;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     /// @param _stETH Lido stETH contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(IStETH _stETH, address _accounting, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
+    constructor(IStETH _stETH, ILidoLocator _lidoLocator, uint256 _connectedVaultsLimit, uint256 _relativeShareLimitBP) {
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS) revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         STETH = _stETH;
-        ACCOUNTING = _accounting;
+        LIDO_LOCATOR = _lidoLocator;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
@@ -520,7 +521,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
     ) external {
-        if (msg.sender != ACCOUNTING) revert NotAuthorized("updateVaults", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
         VaultHubStorage storage $ = _getVaultHubStorage();
 
         for (uint256 i = 0; i < _valuations.length; i++) {
@@ -552,9 +553,9 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function mintVaultsTreasuryFeeShares(address _recipient, uint256 _amountOfShares) external {
-        if (msg.sender != ACCOUNTING) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
-        STETH.mintExternalShares(_recipient, _amountOfShares);
+    function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
+        STETH.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
     }
 
     function _vaultAuth(address _vault, string memory _operation) internal view {

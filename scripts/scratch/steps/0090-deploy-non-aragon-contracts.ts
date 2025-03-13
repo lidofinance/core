@@ -146,7 +146,7 @@ export async function main() {
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     lidoAddress,
-    accounting.address,
+    locator.address,
     vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,
   ]);
