@@ -44,8 +44,9 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
  * - Operator:
- *   - `depositToBeaconChain()`
  *   - `triggerValidatorWithdrawal()`
+ * - Depositor:
+ *   - `depositToBeaconChain()`
  * - VaultHub:
  *   - `lock()`
  *   - `report()`
@@ -92,6 +93,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     VaultHub private immutable VAULT_HUB;
 
     /**
+     * @notice Address of depositor
+     *         Set immutably in the constructor to avoid storage costs
+     */
+    address private immutable DEPOSITOR;
+
+    /**
      * @notice Address of `BeaconChainDepositContract`
      *         Set immutably in the constructor to avoid storage costs
      */
@@ -118,14 +125,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
+     * @param _depositor Address of the depositor
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _vaultHub, address _beaconChainDepositContract) {
+    constructor(address _vaultHub, address _depositor, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
+        DEPOSITOR = _depositor;
         DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
@@ -157,6 +167,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function version() external pure returns (uint64) {
         return _VERSION;
+    }
+
+    /**
+     * @notice returns owner of the contract
+     * @dev fixes solidity interface inference
+     */
+    function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
+        return OwnableUpgradeable.owner();
     }
 
     // * * * * * * * * * * * * * * * * * * * *  //
@@ -227,12 +245,22 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
-     *         In the context of this contract, the node operator performs deposits to the beacon chain
-     *         and processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
      *         Node operator address is set in the initialization and can never be changed.
      */
     function nodeOperator() external view returns (address) {
         return _getStorage().nodeOperator;
+    }
+
+    /**
+     * @notice Returns the address of the depositor
+     *         Trusted party responsible for securely depositing validators to the beacon chain, e.g.
+     *         securing against deposit frontrun vulnerability in ethereum deposit contract
+     *         (for reference see LIP-5 - https://research.lido.fi/t/lip-5-mitigations-for-deposit-front-running-vulnerability/1269).
+     *         In the context of this contract, the depositor performs deposits through `depositToBeaconChain()`.
+     * @return Address of the depositor
+     */
+    function depositor() external view returns (address) {
+        return DEPOSITOR;
     }
 
     /**
@@ -388,28 +416,31 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Performs a deposit to the beacon chain deposit contract
      * @param _deposits Array of deposit structs
-     * @dev    Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
+     * @dev Can only be called by the depositor address
+     * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
         ERC7201Storage storage $ = _getStorage();
-
-        if (msg.sender != $.nodeOperator) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
+        if (msg.sender != DEPOSITOR) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
-        uint256 totalAmount = 0;
         uint256 numberOfDeposits = _deposits.length;
+        uint256 totalAmount = 0;
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
+
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            IStakingVault.Deposit calldata deposit = _deposits[i];
+            Deposit calldata deposit = _deposits[i];
+
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 withdrawalCredentials_,
                 deposit.signature,
                 deposit.depositDataRoot
             );
+
             totalAmount += deposit.amount;
         }
 
@@ -441,7 +472,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         for (uint256 i = 0; i < keysCount; i++) {
-            bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH : (i + 1) * PUBLIC_KEY_LENGTH];
+            bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH:(i + 1) * PUBLIC_KEY_LENGTH];
             emit ValidatorExitRequested(msg.sender, /* indexed */ pubkey, pubkey);
         }
     }
@@ -453,7 +484,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
-    function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
@@ -475,11 +510,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             }
         }
 
-        bool isAuthorized = (
-            msg.sender == $.nodeOperator ||
+        bool isAuthorized = (msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB))
-        );
+            (isValuationBelowLocked && msg.sender == address(VAULT_HUB)));
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
@@ -491,61 +524,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         uint256 excess = msg.value - totalFee;
         if (excess > 0) {
-            (bool success,) = _refundRecipient.call{value: excess}("");
+            (bool success, ) = _refundRecipient.call{value: excess}("");
             if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
-    }
-
-    /**
-     * @notice Computes the deposit data root for a validator deposit
-     * @param _pubkey Validator public key, 48 bytes
-     * @param _withdrawalCredentials Withdrawal credentials, 32 bytes
-     * @param _signature Signature of the deposit, 96 bytes
-     * @param _amount Amount of ether to deposit, in wei
-     * @return Deposit data root as bytes32
-     * @dev This function computes the deposit data root according to the deposit contract's specification.
-     *      The deposit data root is check upon deposit to the deposit contract as a protection against malformed deposit data.
-     *      See more: https://etherscan.io/address/0x00000000219ab540356cbb839cbe05303d7705fa#code
-     */
-    function computeDepositDataRoot(
-        bytes calldata _pubkey,
-        bytes calldata _withdrawalCredentials,
-        bytes calldata _signature,
-        uint256 _amount
-    ) external pure returns (bytes32) {
-        // Step 1. Convert the deposit amount in wei to gwei in 64-bit bytes
-        bytes memory amountBE64 = abi.encodePacked(uint64(_amount / 1 gwei));
-
-        // Step 2. Convert the amount to little-endian format by flipping the bytes 🧠
-        bytes memory amountLE64 = new bytes(8);
-        amountLE64[0] = amountBE64[7];
-        amountLE64[1] = amountBE64[6];
-        amountLE64[2] = amountBE64[5];
-        amountLE64[3] = amountBE64[4];
-        amountLE64[4] = amountBE64[3];
-        amountLE64[5] = amountBE64[2];
-        amountLE64[6] = amountBE64[1];
-        amountLE64[7] = amountBE64[0];
-
-        // Step 3. Compute the root of the pubkey
-        bytes32 pubkeyRoot = sha256(abi.encodePacked(_pubkey, bytes16(0)));
-
-        // Step 4. Compute the root of the signature
-        bytes32 sigSlice1Root = sha256(abi.encodePacked(_signature[0 : 64]));
-        bytes32 sigSlice2Root = sha256(abi.encodePacked(_signature[64 :], bytes32(0)));
-        bytes32 signatureRoot = sha256(abi.encodePacked(sigSlice1Root, sigSlice2Root));
-
-        // Step 5. Compute the root-toot-toorootoo of the deposit data
-        bytes32 depositDataRoot = sha256(
-            abi.encodePacked(
-                sha256(abi.encodePacked(pubkeyRoot, _withdrawalCredentials)),
-                sha256(abi.encodePacked(amountLE64, bytes24(0), signatureRoot))
-            )
-        );
-
-        return depositDataRoot;
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -627,7 +610,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive any excess withdrawal fee
      * @param _excess Amount of excess fee refunded to recipient
      */
-    event ValidatorWithdrawalTriggered(address indexed _sender, bytes _pubkeys, uint64[] _amounts, address _refundRecipient, uint256 _excess);
+    event ValidatorWithdrawalTriggered(
+        address indexed _sender,
+        bytes _pubkeys,
+        uint64[] _amounts,
+        address _refundRecipient,
+        uint256 _excess
+    );
 
     /**
      * @notice Thrown when an invalid zero value is passed

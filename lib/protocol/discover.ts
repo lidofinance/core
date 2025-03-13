@@ -163,6 +163,10 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
     stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
     stakingVaultBeacon: loadContract("UpgradeableBeacon", config.get("stakingVaultBeacon")),
     vaultHub: loadContract("VaultHub", config.get("vaultHub") || (await locator.vaultHub())),
+    predepositGuarantee: loadContract(
+      "PredepositGuarantee",
+      config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
+    ),
   })) as VaultsContracts;
 };
 
@@ -206,6 +210,7 @@ export async function discover() {
     "Staking Vault Factory": contracts.stakingVaultFactory.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
     "Vault Hub": contracts.vaultHub.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee.address,
   });
 
   const signers = {

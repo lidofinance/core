@@ -4,14 +4,23 @@
 pragma solidity ^0.8.0;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
 contract VaultHub__Harness is VaultHub {
     constructor(
-        address _steth,
+        address _locator,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) VaultHub(IStETH(_steth), address(0), _connectedVaultsLimit, _relativeShareLimitBP) {}
+    )
+        VaultHub(
+            ILidoLocator(_locator),
+            ILidoLocator(_locator).lido(),
+            ILidoLocator(_locator).accounting(),
+            _connectedVaultsLimit,
+            _relativeShareLimitBP
+        )
+    {}
 
     function mock__calculateVaultsRebase(
         uint256 _postTotalShares,
