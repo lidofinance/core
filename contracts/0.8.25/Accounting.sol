@@ -216,7 +216,7 @@ contract Accounting {
         uint256 internalShares = internalSharesBeforeFees + update.sharesToMintAsFees;
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
-        // and the amount of shares to mint as fees to the treasury for each vaults
+        // and the amount of shares to mint as fees to the treasury for each vault
         (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
             _contracts.vaultHub.calculateVaultsRebase(
                 _report.vaultValues,
