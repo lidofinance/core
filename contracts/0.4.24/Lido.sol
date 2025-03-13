@@ -174,6 +174,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // The `amount` of ether was sent to the deposit_contract.deposit function
     event Unbuffered(uint256 amount);
 
+    // Internal share rate updated
+    event InternalShareRateUpdated(
+        uint256 indexed reportTimestamp,
+        uint256 postInternalShares,
+        uint256 postInternalEther,
+        uint256 sharesMintedAsFees
+    );
+
     // External shares minted for receiver
     event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 amountOfStETH);
 
@@ -787,6 +795,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _preTotalEther,
         uint256 _postTotalShares,
         uint256 _postTotalEther,
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
         uint256 _sharesMintedAsFees
     ) external {
         _auth(getLidoLocator().accounting());
@@ -800,6 +810,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _postTotalEther,
             _sharesMintedAsFees
         );
+
+        emit InternalShareRateUpdated(_reportTimestamp, _postInternalShares, _postInternalEther, _sharesMintedAsFees);
     }
 
     ////////////////////////////////////////////////////////////////////////////

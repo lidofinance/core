@@ -62,6 +62,10 @@ contract Accounting {
         /// @notice amount of CL ether that is not rewards earned during this report period
         /// the sum of CL balance on the previous report and the amount of fresh deposits since then
         uint256 principalClBalance;
+        /// @notice total number of internal (not backed by vaults) stETH shares after the report is applied
+        uint256 postInternalShares;
+        /// @notice amount of ether under the protocol after the report is applied
+        uint256 postInternalEther;
         /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
@@ -200,20 +204,20 @@ contract Accounting {
             update.sharesToFinalizeWQ
         );
 
-        uint256 internalSharesBeforeFees =
+        uint256 postInternalSharesBeforeFees =
             _pre.totalShares - _pre.externalShares // internal shares before
             - update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
-        uint256 internalEther =
+        update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther // internal ether before
             + _report.clBalance + update.withdrawals - update.principalClBalance // total cl rewards (or penalty)
             + update.elRewards // MEV and tips
             - update.etherToFinalizeWQ; // withdrawals
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
-        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, internalSharesBeforeFees, internalEther);
+        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
 
-        uint256 internalShares = internalSharesBeforeFees + update.sharesToMintAsFees;
+        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vault
@@ -222,15 +226,15 @@ contract Accounting {
                 _report.vaultValues,
                 _pre.totalShares,
                 _pre.totalPooledEther,
-                internalShares,
-                internalEther,
+                update.postInternalShares,
+                update.postInternalEther,
                 update.sharesToMintAsFees
             );
 
         uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
 
-        update.postTotalShares = internalShares + externalShares;
-        update.postTotalPooledEther = internalEther + externalShares * internalEther / internalShares;
+        update.postTotalShares = update.postInternalShares + externalShares;
+        update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -345,6 +349,8 @@ contract Accounting {
             _pre.totalPooledEther,
             _update.postTotalShares,
             _update.postTotalPooledEther,
+            _update.postInternalShares,
+            _update.postInternalEther,
             _update.sharesToMintAsFees
         );
     }
