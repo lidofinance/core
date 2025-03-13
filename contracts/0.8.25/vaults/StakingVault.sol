@@ -41,11 +41,12 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `rebalance()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
- * - Depositor:
- *   - `depositToBeaconChain()`
- * - Operator:
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
+ * - Operator:
+ *   - `triggerValidatorWithdrawal()`
+ * - Depositor:
+ *   - `depositToBeaconChain()`
  * - VaultHub:
  *   - `lock()`
  *   - `report()`
@@ -69,7 +70,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
-     * @custom:depositor Address of the depositor
      * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -77,7 +77,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
-        address depositor;
         bool beaconChainDepositsPaused;
     }
 
@@ -92,6 +91,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         Set immutably in the constructor to avoid storage costs
      */
     VaultHub private immutable VAULT_HUB;
+
+    /**
+     * @notice Address of depositor
+     *         Set immutably in the constructor to avoid storage costs
+     */
+    address private immutable DEPOSITOR;
 
     /**
      * @notice Address of `BeaconChainDepositContract`
@@ -120,14 +125,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
+     * @param _depositor Address of the depositor
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _vaultHub, address _beaconChainDepositContract) {
+    constructor(address _vaultHub, address _depositor, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
+        DEPOSITOR = _depositor;
         DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
@@ -140,18 +148,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _nodeOperator Address of the node operator
      * @param - Additional initialization parameters
      */
-    function initialize(
-        address _owner,
-        address _nodeOperator,
-        address _depositor,
-        bytes calldata /* _params */
-    ) external initializer {
+    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
-        _getStorage().depositor = _depositor;
     }
 
     /**
@@ -166,6 +167,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function version() external pure returns (uint64) {
         return _VERSION;
+    }
+
+    /**
+     * @notice returns owner of the contract
+     * @dev fixes solidity interface inference
+     */
+    function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
+        return OwnableUpgradeable.owner();
     }
 
     // * * * * * * * * * * * * * * * * * * * *  //
@@ -236,8 +245,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the address of the node operator
      *         Node operator is the party responsible for managing the validators.
-     *         In the context of this contract, the node operator runs vault validators on CL and
-     *         processes validator exit requests submitted by `owner` through `requestValidatorExit()`.
      *         Node operator address is set in the initialization and can never be changed.
      */
     function nodeOperator() external view returns (address) {
@@ -247,15 +254,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the address of the depositor
      *         Trusted party responsible for securely depositing validators to the beacon chain, e.g.
-     *         securing against deposit frontrun vulnerability in ethereum 2.0 deposit contract.
-     *         Can be EOA or contract providing secure deposit functionality.
+     *         securing against deposit frontrun vulnerability in ethereum deposit contract
+     *         (for reference see LIP-5 - https://research.lido.fi/t/lip-5-mitigations-for-deposit-front-running-vulnerability/1269).
      *         In the context of this contract, the depositor performs deposits through `depositToBeaconChain()`.
-     *         Depositor address is set in the initialization and can be changed by the owner with `setDepositor`
-     *         only on the condition that the vault is not connected to the VaultHub.
      * @return Address of the depositor
      */
     function depositor() external view returns (address) {
-        return _getStorage().depositor;
+        return DEPOSITOR;
     }
 
     /**
@@ -411,14 +416,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Performs a deposit to the beacon chain deposit contract
      * @param _deposits Array of deposit structs
-     * @dev    Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
+     * @dev Can only be called by the depositor address
+     * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
     function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != DEPOSITOR) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
@@ -427,8 +433,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             Deposit calldata deposit = _deposits[i];
-
-            //TODO: check BLS signature
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,

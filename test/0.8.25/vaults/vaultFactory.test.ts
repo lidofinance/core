@@ -90,7 +90,7 @@ describe("VaultFactory.sol", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
-      ZeroAddress,
+      await locator.accounting(),
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
@@ -99,7 +99,9 @@ describe("VaultFactory.sol", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, predepositGuarantee, depositContract], {
+      from: deployer,
+    });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
@@ -111,7 +113,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, predepositGuarantee], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation], {
       from: deployer,
     });
 
@@ -121,7 +123,7 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, vaultOwner1, "0x")).to.revertedWithCustomError(
+    await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(
       implOld,
       "InvalidInitialization",
     );
@@ -166,23 +168,15 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth, predepositGuarantee], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
 
     it("reverts if `_delegation` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [beacon, ZeroAddress, predepositGuarantee], { from: deployer }),
-      )
+      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_delegation");
-    });
-
-    it("reverts if `_predeposit_guarantee` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_predeposit_guarantee");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
@@ -324,7 +318,7 @@ describe("VaultFactory.sol", () => {
       await vault1WithNewImpl.finalizeUpgrade_v2();
 
       //try to initialize the second vault
-      await expect(vault2WithNewImpl.initialize(admin, operator, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault2WithNewImpl.initialize(admin, operator, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -358,7 +352,7 @@ describe("VaultFactory.sol", () => {
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
 
-      await expect(vault1.initialize(ZeroAddress, ZeroAddress, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault1.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault1WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -372,7 +366,7 @@ describe("VaultFactory.sol", () => {
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 
-      await expect(vault2.initialize(ZeroAddress, ZeroAddress, depositContract, "0x")).to.revertedWithCustomError(
+      await expect(vault2.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "InvalidInitialization",
       );

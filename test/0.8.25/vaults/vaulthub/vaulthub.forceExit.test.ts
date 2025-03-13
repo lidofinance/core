@@ -52,7 +52,7 @@ describe("VaultHub.sol:forceExit", () => {
 
   before(async () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
-
+    const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
       "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -84,12 +84,13 @@ describe("VaultHub.sol:forceExit", () => {
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
       await locator.predepositGuarantee(),
+      depositContract,
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
 
     const vaultCreationTx = (await vaultFactory
-      .createVault(user, user, await locator.predepositGuarantee())
+      .createVault(user, user)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -194,7 +195,7 @@ describe("VaultHub.sol:forceExit", () => {
     // https://github.com/lidofinance/core/pull/933#discussion_r1954876831
     it("works for a synthetic example", async () => {
       const vaultCreationTx = (await vaultFactory
-        .createVault(user, user, await locator.predepositGuarantee())
+        .createVault(user, user)
         .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
       const events = findEvents(vaultCreationTx, "VaultCreated");

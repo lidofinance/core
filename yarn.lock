@@ -1325,13 +1325,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/bls12-381@npm:^1.4.0":
-  version: 1.4.0
-  resolution: "@noble/bls12-381@npm:1.4.0"
-  checksum: 10c0/03495379fd3e2035c01e6ffa2062d6e925bcc00c940bda2842329557a78f022ecab67a608d4133375da3f70e653312a354e425827a726e50b18fdedd2cd05f7c
-  languageName: node
-  linkType: hard
-
 "@noble/curves@npm:1.2.0":
   version: 1.2.0
   resolution: "@noble/curves@npm:1.2.0"
@@ -8498,7 +8491,6 @@ __metadata:
     "@commitlint/config-conventional": "npm:19.7.1"
     "@eslint/compat": "npm:1.2.7"
     "@eslint/js": "npm:9.21.0"
-    "@noble/bls12-381": "npm:^1.4.0"
     "@nomicfoundation/hardhat-chai-matchers": "npm:2.0.8"
     "@nomicfoundation/hardhat-ethers": "npm:3.0.8"
     "@nomicfoundation/hardhat-ignition": "npm:0.15.10"

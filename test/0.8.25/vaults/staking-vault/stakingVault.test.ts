@@ -96,13 +96,19 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositor, depositContractAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress, depositContractAddress]))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_depositor");
+    });
+
+    it("reverts on construction if the deposit contract address is zero", async () => {
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, depositor, ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -116,13 +122,13 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, ZeroAddress, "0x")).to.be.revertedWithCustomError(
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
         stakingVaultImplementation,
         "ZeroArgument",
       );

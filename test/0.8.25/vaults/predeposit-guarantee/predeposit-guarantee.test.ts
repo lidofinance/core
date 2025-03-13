@@ -47,11 +47,14 @@ describe("PredepositGuarantee.sol", () => {
   let stakingVault: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
 
+  let firstValidatorLeafIndex: bigint;
+
   let originalState: string;
 
   async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
     const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
       vaultHub,
+      pdg,
       await depositContract.getAddress(),
     ]);
 
@@ -62,7 +65,7 @@ describe("PredepositGuarantee.sol", () => {
     );
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_.createVault(owner, operator).then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
@@ -80,6 +83,7 @@ describe("PredepositGuarantee.sol", () => {
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
     sszMerkleTree = localMerkle.sszMerkleTree;
+    firstValidatorLeafIndex = localMerkle.firstValidatorLeafIndex;
 
     // ether deposit contract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -146,8 +150,8 @@ describe("PredepositGuarantee.sol", () => {
       const predepositTX = pdg.predeposit(stakingVault, [deposit], [depositY]);
 
       await expect(predepositTX)
-        .to.emit(pdg, "ValidatorsPreDeposited")
-        .withArgs(vaultOperator, stakingVault, 1)
+        .to.emit(pdg, "ValidatorPreDeposited")
+        .withArgs(deposit.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, deposit.amount)
         .to.emit(depositContract, "DepositEvent")
@@ -159,7 +163,8 @@ describe("PredepositGuarantee.sol", () => {
 
       // Validator is added to CL merkle tree
       await sszMerkleTree.addValidatorLeaf(validator);
-      const validatorIndex = (await sszMerkleTree.leafCount()) - 1n;
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
 
       // Beacon Block is generated with new CL state
       const stateRoot = await sszMerkleTree.getMerkleRoot();
@@ -171,7 +176,7 @@ describe("PredepositGuarantee.sol", () => {
 
       // NO collects validator proof
       const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
-      const stateProof = await sszMerkleTree.getMerkleProof(validatorIndex);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       // NO posts proof and triggers deposit to total of 32 ether
@@ -184,7 +189,7 @@ describe("PredepositGuarantee.sol", () => {
 
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
-        .withArgs(vaultOperator, validator.pubkey, stakingVault, vaultWC)
+        .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, postDepositData.amount)
         .to.emit(depositContract, "DepositEvent")

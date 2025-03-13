@@ -43,7 +43,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
 
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        vault.initialize(address(dashboard), _operator, _operator, "");
+        vault.initialize(address(dashboard), _operator, "");
 
         emit VaultCreated(address(dashboard), address(vault));
         emit DashboardCreated(msg.sender, address(dashboard));

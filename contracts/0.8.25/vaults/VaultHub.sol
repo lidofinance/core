@@ -8,7 +8,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ILido as IStETH} from "../interfaces/ILido.sol";
+import {ILido} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
@@ -74,7 +74,7 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
 
     /// @notice Lido stETH contract
-    IStETH public immutable STETH;
+    ILido public immutable LIDO;
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
     /// @notice Accounting contract
@@ -98,7 +98,7 @@ contract VaultHub is PausableUntilWithRoles {
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         LIDO_LOCATOR = _locator;
-        STETH = IStETH(_lido);
+        LIDO = ILido(_lido);
         ACCOUNTING = _accounting;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
@@ -167,7 +167,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         return
             ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
-                TOTAL_BASIS_POINTS) >= STETH.getPooledEthBySharesRoundUp(socket.sharesMinted);
+                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
     }
 
     /// @notice connects a vault to the hub
@@ -202,7 +202,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
         if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositGuardianNotAllowed(IStakingVault(_vault).depositor());
+            revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
@@ -280,7 +280,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault vault_ = IStakingVault(_vault);
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
         uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        uint256 etherToLock = STETH.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
+        uint256 etherToLock = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (etherToLock > maxMintableEther) {
             revert InsufficientValuationToMint(_vault, vault_.valuation());
         }
@@ -293,7 +293,7 @@ contract VaultHub is PausableUntilWithRoles {
             vault_.lock(totalEtherLocked);
         }
 
-        STETH.mintExternalShares(_recipient, _amountOfShares);
+        LIDO.mintExternalShares(_recipient, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -315,7 +315,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
-        STETH.burnExternalShares(_amountOfShares);
+        LIDO.burnExternalShares(_amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -323,7 +323,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
     /// @dev msg.sender should be vault's owner
     function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(this), _amountOfShares);
+        LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
 
         burnShares(_vault, _amountOfShares);
     }
@@ -337,7 +337,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 mintedStETH = STETH.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
+        uint256 mintedStETH = LIDO.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
@@ -370,13 +370,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket storage socket = _connectedSocket(msg.sender);
 
-        uint256 sharesToBurn = STETH.getSharesByPooledEth(msg.value);
+        uint256 sharesToBurn = LIDO.getSharesByPooledEth(msg.value);
         uint256 sharesMinted = socket.sharesMinted;
         if (sharesMinted < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, sharesMinted);
 
         socket.sharesMinted = uint96(sharesMinted - sharesToBurn);
 
-        STETH.rebalanceExternalEtherToInternal{value: msg.value}();
+        LIDO.rebalanceExternalEtherToInternal{value: msg.value}();
 
         emit VaultRebalanced(msg.sender, sharesToBurn);
     }
@@ -546,7 +546,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function mintVaultsTreasuryFeeShares(address _recipient, uint256 _amountOfShares) external {
         if (msg.sender != ACCOUNTING) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
-        STETH.mintExternalShares(_recipient, _amountOfShares);
+        LIDO.mintExternalShares(_recipient, _amountOfShares);
     }
 
     function _vaultAuth(address _vault, string memory _operation) internal view {
@@ -568,7 +568,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP
     function _checkShareLimitUpperBound(address _vault, uint256 _shareLimit) internal view {
-        uint256 relativeMaxShareLimitPerVault = (STETH.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
+        uint256 relativeMaxShareLimitPerVault = (LIDO.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
@@ -616,5 +616,5 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidPubkeysLength();
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
-    error VaultDepositGuardianNotAllowed(address depositGuardian);
+    error VaultDepositorNotAllowed(address depositor);
 }

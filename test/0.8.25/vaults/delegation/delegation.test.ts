@@ -41,6 +41,7 @@ describe("Delegation.sol", () => {
   let curatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
+  let vaultDepositor: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
@@ -83,12 +84,14 @@ describe("Delegation.sol", () => {
       stranger,
       beaconOwner,
       rewarder,
+      vaultDepositor,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
     delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
@@ -97,16 +100,12 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, vaultDepositor, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [
-      beacon.getAddress(),
-      delegationImpl.getAddress(),
-      depositContract.getAddress(),
-    ]);
+    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);

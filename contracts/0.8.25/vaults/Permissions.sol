@@ -80,12 +80,12 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for withdrawing disproven validator predeposit from PDG
      */
-    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("StakingVault.Permissions.PDGWithdrawal");
+    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
 
     /**
-     * @notice Permission for assets recovery from Delegate contracts
+     * @notice Permission for assets recovery
      */
-    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("StakingVault.Permissions.AssetRecovery");
+    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
 
     /**
      * @notice Address of the implementation contract
@@ -260,11 +260,11 @@ abstract contract Permissions is AccessControlConfirmable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
-    function _withdrawDisprovenValidatorFromPDG(
+    function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
-    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint128) {
-        return PredepositGuarantee(stakingVault().depositor()).withdrawDisprovenPredeposit(_pubkey, _recipient);
+    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
+        return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**

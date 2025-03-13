@@ -95,16 +95,24 @@ describe("CLProofVerifier.sol", () => {
   let CLProofVerifier: CLProofVerifier__Harness;
   let sszMerkleTree: SSZMerkleTree;
 
+  let firstValidatorLeafIndex: bigint;
+  let lastValidatorIndex: bigint;
+
   let snapshotState: string;
 
   before(async () => {
     const localTree = await prepareLocalMerkleTree();
     sszMerkleTree = localTree.sszMerkleTree;
 
+    firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
+
     // populate merkle tree with validators
     for (let i = 1; i < 100; i++) {
       await sszMerkleTree.addValidatorLeaf(generateValidator());
     }
+
+    // after adding validators, all newly added validator indexes will +n from this
+    lastValidatorIndex = (await sszMerkleTree.leafCount()) - 1n - firstValidatorLeafIndex;
 
     CLProofVerifier = await ethers.deployContract(
       "CLProofVerifier__Harness",
@@ -136,7 +144,6 @@ describe("CLProofVerifier.sol", () => {
     const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(STATIC_VALIDATOR.witness.validator);
     const beaconHeaderMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(STATIC_VALIDATOR.beaconBlockHeader);
     const validatorGIndex = await StaticCLProofVerifier.TEST_getValidatorGI(STATIC_VALIDATOR.witness.validatorIndex);
-
     // raw proof verification with same input as CSM
     await sszMerkleTree.verifyProof(
       STATIC_VALIDATOR.witness.proof,
@@ -180,10 +187,14 @@ describe("CLProofVerifier.sol", () => {
 
     // add validator to CL state merkle tree
     await sszMerkleTree.addValidatorLeaf(validator);
+    const validatorIndex = lastValidatorIndex + 1n;
     const stateRoot = await sszMerkleTree.getMerkleRoot();
-    const validatorIndex = (await sszMerkleTree.leafCount()) - 1n;
-    const stateProof = await sszMerkleTree.getMerkleProof(validatorIndex);
-    const validatorGIndex = await sszMerkleTree.getGeneralizedIndex(validatorIndex);
+
+    const validatorLeafIndex = firstValidatorLeafIndex + validatorIndex;
+    const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
+    const validatorGIndex = await sszMerkleTree.getGeneralizedIndex(validatorLeafIndex);
+
+    expect(await CLProofVerifier.TEST_getValidatorGI(validatorIndex)).to.equal(validatorGIndex);
 
     // verify just the state tree
     await sszMerkleTree.verifyProof([...stateProof], stateRoot, validatorMerkle.root, validatorGIndex);

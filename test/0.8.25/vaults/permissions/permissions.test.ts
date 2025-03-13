@@ -69,7 +69,8 @@ describe("Permissions", () => {
     vaultHub = await ethers.deployContract("VaultHub__MockPermissions");
 
     // 3. Deploy StakingVault implementation
-    stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
+    // TODO: PDG harness
+    stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, nodeOperator, depositContract]);
     expect(await stakingVaultImpl.vaultHub()).to.equal(vaultHub);
     expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
