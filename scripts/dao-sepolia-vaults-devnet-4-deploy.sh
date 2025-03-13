@@ -7,7 +7,6 @@ export NETWORK=sepolia
 export NETWORK_STATE_FILE="deployed-${NETWORK}-vaults-devnet-4.json"
 export NETWORK_STATE_DEFAULTS_FILE="testnet-defaults.json"
 
-# Accounting Oracle args
 export GAS_PRIORITY_FEE=2
 # https://github.com/eth-clients/sepolia?tab=readme-ov-file#meta-data-bepolia
 export GENESIS_TIME=1655733600
