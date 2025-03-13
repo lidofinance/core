@@ -13,8 +13,10 @@ import {VaultHub} from "./VaultHub.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;
@@ -369,6 +371,39 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice withdraws ether from vault and deposits directly to provided validators,
+     *         so later validators can be proven by `PDG.proveUnknownValidator` for direct vault deposits
+     * @param _deposits array of StakingVault.Deposit structs containing deposit data
+     * @dev requires the caller to have the `WITHDRAW_ROLE`
+     * @dev used as a shortcut if validators are trusted
+     */
+    function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) external {
+        uint256 totalAmount;
+        IStakingVault stakingVault = stakingVault();
+
+        for (uint i = 0; i < _deposits.length; i++) {
+            totalAmount += _deposits[i].amount;
+        }
+
+        _withdraw(address(this), totalAmount);
+
+        bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
+
+        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+
+        IStakingVault.Deposit calldata deposit;
+        for (uint i = 0; i < _deposits.length; i++) {
+            deposit = _deposits[i];
+            depositContract.deposit{value: deposit.amount}(
+                deposit.pubkey,
+                withdrawalCredentials,
+                deposit.signature,
+                deposit.depositDataRoot
+            );
+        }
+    }
+
+    /**
      * @notice withdraws ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
@@ -399,7 +434,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
+     * @notice Transfers a given token_id of anх ERC721-compatible NFT (defined by the token contract address)
      * from the dashboard contract to sender
      *
      * @param _token an ERC721-compatible token

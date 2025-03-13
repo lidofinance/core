@@ -8,6 +8,7 @@ import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
@@ -21,7 +22,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     uint64 private constant _version = 2;
     VaultHub private immutable VAULT_HUB;
 
-    address public immutable DEPOSIT_CONTRACT;
+    IDepositContract public immutable DEPOSIT_CONTRACT;
 
     /// keccak256(abi.encode(uint256(keccak256("StakingVault.Vault")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant VAULT_STORAGE_LOCATION =
@@ -31,7 +32,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        DEPOSIT_CONTRACT = _beaconChainDepositContract;
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
         VAULT_HUB = VaultHub(_vaultHub);
 
         // Prevents reinitialization of the implementation
