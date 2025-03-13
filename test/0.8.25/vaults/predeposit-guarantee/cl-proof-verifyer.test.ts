@@ -106,6 +106,8 @@ describe("CLProofVerifier.sol", () => {
     sszMerkleTree = localTree.sszMerkleTree;
     firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
 
+    firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
+
     // populate merkle tree with validators
     for (let i = 1; i < 100; i++) {
       await sszMerkleTree.addValidatorLeaf(generateValidator());
