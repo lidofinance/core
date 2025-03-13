@@ -497,7 +497,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _postInternalEther,
         uint256 _sharesToMintAsLidoCoreFees
     ) public pure returns (uint256 treasuryFeeShares) {
-        // if lido don't charge the protocol fees, vault's don't charge either
+        // if lido doesn't charge the protocol fees, vaults don't charge either
         if (_sharesToMintAsLidoCoreFees == 0) {
             return 0;
         }
