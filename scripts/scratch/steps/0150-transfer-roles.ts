@@ -40,6 +40,8 @@ export async function main() {
     state.accountingOracle.proxy.address,
     state.validatorsExitBusOracle.proxy.address,
     state.withdrawalQueueERC721.proxy.address,
+    state.vaultHub.proxy.address,
+    state.predepositGuarantee.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {

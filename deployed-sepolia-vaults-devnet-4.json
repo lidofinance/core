@@ -586,21 +586,26 @@
     ]
   },
   "predepositGuarantee": {
+    "deployParameters": {
+      "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "changeSlot": 0
+    },
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
-      "address": "0x935b089d9a4F1789783C3db0F466817bB4c9Ac16",
+      "address": "0x10Ad2A1fcF570Df741BCCba86701045fd1dC1FA5",
       "constructorArgs": [
-        "0x7A972Ea03ca47A6fbF9CD9E8cBCf1D5277674ACB",
+        "0x0d7400b2613bf7216e8F10dB21b30B10E1F45497",
         "0x7034Da7f105C9B104f50f0EcC427EE7382D7286D",
         "0x"
       ]
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
-      "address": "0x7A972Ea03ca47A6fbF9CD9E8cBCf1D5277674ACB",
+      "address": "0x0d7400b2613bf7216e8F10dB21b30B10E1F45497",
       "constructorArgs": [
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "0x0000000000000000000000000000000000000000000000000096000000000028",
         0
       ]
     }
