@@ -588,8 +588,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             revert WithdrawalCredentialsInvalidVersion(version);
         }
 
-        //
-        if ((_withdrawalCredentials >> 160) << 8 == bytes32(0))
+        // extract zero bytes between version and address in WC
+        if (((_withdrawalCredentials << 8) >> 168) != bytes32(0))
             revert WithdrawalCredentialsMisformed(_withdrawalCredentials);
 
         if (address(_stakingVault) != wcAddress) {
