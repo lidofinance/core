@@ -30,8 +30,7 @@ describe("VaultHub.sol:pausableUntil", () => {
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
-      await locator.lido(),
-      await locator.accounting(),
+      steth,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
