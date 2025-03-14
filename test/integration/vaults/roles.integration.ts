@@ -304,6 +304,27 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
     });
 
+    it("Verify that roles are not assigned", async () => {
+      const roles = [
+        await testDelegation.CURATOR_FEE_SET_ROLE(),
+        await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
+        await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+        await testDelegation.FUND_ROLE(),
+        await testDelegation.WITHDRAW_ROLE(),
+        await testDelegation.MINT_ROLE(),
+        await testDelegation.BURN_ROLE(),
+        await testDelegation.REBALANCE_ROLE(),
+        await testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+        await testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+        await testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+        await testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+        await testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
+      ];
+
+      for (const role of roles) {
+        expect(await testDelegation.getRoleMembers(role)).to.deep.equal([]);
+      }
+    });
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("setCuratorFeeBP", async () => {
