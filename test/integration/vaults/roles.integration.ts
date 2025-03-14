@@ -23,7 +23,7 @@ type Methods<T> = {
 
 type DelegationMethods = Methods<Delegation>; // "foo" | "bar"
 
-describe("Scenario: Staking Vaults Delegation Roles", () => {
+describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -83,7 +83,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   // initializing contracts with signers
-  describe("Full contract initialization", () => {
+  describe("Vault created with all the roles", () => {
     let testDelegation: Delegation;
 
     before(async () => {
@@ -119,9 +119,9 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
-          });
+    });
 
-    describe("Only roles", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("setCuratorFeeBP", async () => {
           await testMethod(
@@ -208,7 +208,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
       });
     });
 
-    describe("Only confirmed roles", () => {
+    describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
         await expect(testDelegation.connect(owner).setNodeOperatorFeeBP(1n)).not.to.emit(
           testDelegation,
@@ -265,7 +265,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
   });
 
   // initializing contracts without signers
-  describe("Empty contract initialization", () => {
+  describe('"Vault created with no roles', () => {
     let testDelegation: Delegation;
 
     before(async () => {
@@ -304,16 +304,26 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
     });
 
-    describe("Only roles", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("setCuratorFeeBP", async () => {
-          await testGrantingRole(testDelegation, "setCuratorFeeBP", await testDelegation.CURATOR_FEE_SET_ROLE(), [1n], owner);
+          await testGrantingRole(
+            testDelegation,
+            "setCuratorFeeBP",
+            await testDelegation.CURATOR_FEE_SET_ROLE(),
+            [1n],
+            owner,
+          );
         });
 
         it("claimCuratorFee", async () => {
-          await testGrantingRole(testDelegation, "claimCuratorFee", await testDelegation.CURATOR_FEE_CLAIM_ROLE(), [
-            stranger,
-          ], owner);
+          await testGrantingRole(
+            testDelegation,
+            "claimCuratorFee",
+            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
+            [stranger],
+            owner,
+          );
         });
 
         it("claimNodeOperatorFee", async () => {
@@ -322,7 +332,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
             "claimNodeOperatorFee",
             await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
             [stranger],
-            nodeOperatorManager
+            nodeOperatorManager,
           );
         });
       });
