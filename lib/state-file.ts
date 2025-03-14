@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
 
-const NETWORK_STATE_FILE_BASENAME = "deployed";
+const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
 
 export type DeploymentState = {
@@ -86,6 +86,15 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
+  accounting = "accounting",
+  vaultHub = "vaultHub",
+  tokenRebaseNotifier = "tokenRebaseNotifier",
+  // Vaults
+  predepositGuarantee = "predepositGuarantee",
+  stakingVaultImpl = "stakingVaultImpl",
+  stakingVaultFactory = "stakingVaultFactory",
+  delegationImpl = "delegationImpl",
+  stakingVaultBeacon = "stakingVaultBeacon",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -130,6 +139,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
+    case Sk.accounting:
+    case Sk.tokenRebaseNotifier:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
@@ -143,13 +154,8 @@ export function readNetworkState({
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const networkName = hardhatNetwork.name;
   const networkChainId = hardhatNetwork.config.chainId;
-
-  const fileName = networkStateFile
-    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
-
+  const fileName = _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
   // Validate the deployer
@@ -196,7 +202,7 @@ export function incrementGasUsed(increment: bigint | number, useStateFile = true
 }
 
 export async function resetStateFile(networkName: string = hardhatNetwork.name): Promise<void> {
-  const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+  const fileName = _getFileName(NETWORK_STATE_FILE_DIR, networkName);
   try {
     await access(fileName, fsPromisesConstants.R_OK | fsPromisesConstants.W_OK);
   } catch (error) {
@@ -205,14 +211,14 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
     }
     // If file does not exist, create it with default values
   } finally {
-    const templateFileName = _getFileName("testnet-defaults", NETWORK_STATE_FILE_BASENAME, "scripts/scratch");
+    const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
     const templateData = readFileSync(templateFileName, "utf8");
     writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
   }
 }
 
-export function persistNetworkState(state: DeploymentState, networkName: string = hardhatNetwork.name): void {
-  const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+export function persistNetworkState(state: DeploymentState): void {
+  const fileName = _getStateFileFileName();
   const stateSorted = _sortKeysAlphabetically(state);
   const data = JSON.stringify(stateSorted, null, 2);
 
@@ -223,8 +229,17 @@ export function persistNetworkState(state: DeploymentState, networkName: string 
   }
 }
 
-function _getFileName(networkName: string, baseName: string, dir: string) {
-  return resolve(dir, `${baseName}-${networkName}.json`);
+function _getStateFileFileName(networkStateFile = "") {
+  // Use the specified network state file or the one from the environment
+  networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
+
+  return networkStateFile
+    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
+    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);
+}
+
+function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {
+  return resolve(dir, `${prefix}${networkName}.json`);
 }
 
 function _readStateFile(fileName: string) {
