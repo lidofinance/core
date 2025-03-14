@@ -50,10 +50,9 @@ export async function deployUpgrade(networkName: string): Promise<void> {
     networkName = "mainnet-fork";
   }
 
-  const stepsFile = `upgrade/steps.json`;
+  const stepsFile = `upgrade/steps-upgrade-for-tests.json`;
   try {
     const steps = loadSteps(stepsFile);
-
     await applySteps(steps);
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {

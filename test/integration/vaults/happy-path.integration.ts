@@ -131,7 +131,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await lido.getDepositableEther()).to.be.greaterThanOrEqual(etherToDeposit);
 
     const dsmSigner = await impersonate(depositSecurityModule.address, etherToDeposit);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    const tx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    // NB: the next check might fail if StakingRouter.getStakingModuleMaxDepositsCount(...)
+    // called inside Lido.deposit() returns 0 for the live mainnet fork contract
+    // and nothing is actually deposited
+    await expect(tx).to.emit(lido, "DepositedValidatorsChanged");
+
     await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
 
     const reportData: Partial<OracleReportParams> = {
