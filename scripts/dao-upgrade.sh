@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e +u
+set -eu
 set -o pipefail
 
 # Check for required environment variables
