@@ -70,7 +70,8 @@ describe("Dashboard.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    // TODO: PDG harness
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, nodeOperator, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, wsteth, lidoLocator]);
@@ -1641,13 +1642,14 @@ describe("Dashboard.sol", () => {
       await vaultOwner.sendTransaction({ to: dashboardAddress, value: amount });
       await wethContract.transfer(dashboardAddress, amount);
       await erc721.mint(dashboardAddress, 0);
+      await dashboard.grantRole(await dashboard.ASSET_RECOVERY_ROLE(), vaultOwner);
 
       expect(await ethers.provider.getBalance(dashboardAddress)).to.equal(amount);
       expect(await wethContract.balanceOf(dashboardAddress)).to.equal(amount);
       expect(await erc721.ownerOf(0)).to.equal(dashboardAddress);
     });
 
-    it("allows only admin to recover", async () => {
+    it("allows only ASSET_RECOVERY_ROLE to recover", async () => {
       await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",

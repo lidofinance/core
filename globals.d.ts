@@ -77,7 +77,6 @@ declare namespace NodeJS {
 
     HOLESKY_RPC_URL?: string;
     SEPOLIA_RPC_URL?: string;
-    MEKONG_RPC_URL?: string;
 
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;

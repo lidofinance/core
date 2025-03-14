@@ -371,11 +371,21 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice withdraws ether of disproven validator from PDG
+     * @param _pubkey of validator that was proven invalid in PDG
+     * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
+     */
+    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
+        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
+    }
+
+    /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -398,7 +408,11 @@ contract Dashboard is Permissions {
      * @param _tokenId token id to recover
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC721(address _token, uint256 _tokenId, address _recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC721(
+        address _token,
+        uint256 _tokenId,
+        address _recipient
+    ) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -443,7 +457,11 @@ contract Dashboard is Permissions {
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
-    function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 

@@ -22,6 +22,7 @@ export async function main() {
   const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
   const depositContract = state.chainSpec.depositContractAddress;
   const wethContract = parameters["delegation"].deployParameters.wethContract;
+  const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
 
   // TODO: maybe take the parameters from current sanity checker
   const sanityCheckerParams = parameters[Sk.oracleReportSanityChecker].deployParameters;
@@ -44,11 +45,20 @@ export async function main() {
 
   // Deploy VaultHub
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    locatorAddress,
     lidoAddress,
-    accounting.address,
     vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,
   ]);
+
+  // Deploy PredepositGuarantee
+  const predepositGuarantee = await deployBehindOssifiableProxy(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    proxyContractsOwner,
+    deployer,
+    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+  );
 
   // Deploy WithdrawalVault new implementation
   await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [lidoAddress, treasuryAddress]);
@@ -115,6 +125,7 @@ export async function main() {
     await locator.withdrawalVault(),
     await locator.oracleDaemonConfig(),
     accounting.address,
+    predepositGuarantee.address,
     wstethAddress,
     vaultHub.address,
   ];
@@ -123,6 +134,7 @@ export async function main() {
   // Deploy StakingVault implementation contract
   const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
     vaultHub.address,
+    predepositGuarantee.address,
     depositContract,
   ]);
   const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
@@ -143,9 +155,9 @@ export async function main() {
   const beaconAddress = await beacon.getAddress();
 
   // Deploy VaultFactory contract
-  const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+  const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     beaconAddress,
     delegationAddress,
   ]);
-  console.log("Factory address", await factory.getAddress());
+  console.log("VaultFactory address", await vaultFactory.getAddress());
 }

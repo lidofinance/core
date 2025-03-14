@@ -1,12 +1,22 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Delegation, StakingVault } from "typechain-types";
+import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  ether,
+  generateValidator,
+  impersonate,
+  log,
+  prepareLocalMerkleTree,
+  updateBalance,
+} from "lib";
 import {
   getProtocolContext,
   getReportTimeElapsed,
@@ -20,9 +30,6 @@ import {
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
-const PUBKEY_LENGTH = 48n;
-const SIGNATURE_LENGTH = 96n;
-
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("32");
 const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
@@ -33,8 +40,8 @@ const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
-const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
-const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
+const VAULT_CURATOR_FEE = 1_00n; // 1% curator performance fee
+const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
@@ -58,9 +65,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
-  let pubKeysBatch: Uint8Array;
-  let signaturesBatch: Uint8Array;
-
   let snapshot: string;
 
   before(async () => {
@@ -70,6 +74,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    // add ETH to NO for PDG deposit + gas
+    await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
 
     snapshot = await Snapshot.take();
   });
@@ -150,7 +157,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // TODO: check what else should be validated here
   });
 
-  it("Should allow Owner to create vault and assign Operator and Manager roles", async () => {
+  it("Should allow Owner to create vault and assign NodeOperator and Curator roles", async () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     // Owner can create a vault with operator as a node operator
@@ -158,7 +165,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       {
         defaultAdmin: owner,
         nodeOperatorManager: nodeOperator,
-        curatorFeeBP: VAULT_OWNER_FEE,
+        assetRecoverer: curator,
+        curatorFeeBP: VAULT_CURATOR_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
         confirmExpiry: days(7n),
         funders: [curator],
@@ -227,7 +235,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
-  it("Should allow Staker to fund vault via delegation contract", async () => {
+  it("Should allow Curator to fund vault via delegation contract", async () => {
     await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
@@ -236,29 +244,79 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow Operator to deposit validators from the vault", async () => {
+  it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
     const keysToAdd = VALIDATORS_PER_VAULT;
-    pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
-    signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
 
-    const deposits = [];
+    const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+    const predepositAmount = await ctx.contracts.predepositGuarantee.PREDEPOSIT_AMOUNT();
 
+    const validators: {
+      container: SSZHelpers.ValidatorStruct;
+      index: number;
+      proof: string[];
+    }[] = [];
+
+    // TODO: BLS signature support
     for (let i = 0; i < keysToAdd; i++) {
-      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
-      const signature = hexlify(
-        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
-      );
-
-      deposits.push({
-        pubkey: pubkey,
-        signature: signature,
-        amount: VALIDATOR_DEPOSIT_SIZE,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
-      });
+      validators.push({ container: generateValidator(withdrawalCredentials), index: 0, proof: [] });
     }
 
-    await stakingVault.connect(nodeOperator).depositToBeaconChain(deposits);
+    const predeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+      return {
+        pubkey: pubkey,
+        signature: signature,
+        amount: predepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, predepositAmount),
+      };
+    });
+
+    const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
+
+    // top up PDG balance
+    await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
+
+    // predeposit validators
+    await pdg.predeposit(stakingVault, predeposits);
+
+    const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+
+    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.index = (await mockCLtree.addValidator(validator.container)).validatorIndex;
+    }
+
+    const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.proof = await mockCLtree.buildProof(validator.index, beaconBlockHeader);
+    }
+
+    const witnesses = validators.map((validator) => ({
+      proof: validator.proof,
+      pubkey: hexlify(validator.container.pubkey),
+      validatorIndex: validator.index,
+      childBlockTimestamp,
+    }));
+
+    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
+    const postdeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+
+      return {
+        pubkey,
+        signature,
+        amount: postDepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, postDepositAmount),
+      };
+    });
+
+    await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
@@ -268,7 +326,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow Token Master to mint max stETH", async () => {
+  it("Should allow Curator to mint max stETH", async () => {
     const { vaultHub, lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
@@ -309,7 +367,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
   });
 
-  it("Should rebase simulating 3% APR", async () => {
+  it("Should rebase simulating 3% stETH APR", async () => {
+    const { vaultHub } = ctx.contracts;
+
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward);
 
@@ -325,6 +385,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       extraDataTx: TransactionResponse;
     };
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+    const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
+    expect(socket.sharesMinted).to.be.gt(stakingVaultMaxMintingShares);
 
     const errorReportingEvent = ctx.getEvents(reportTxReceipt, "OnReportFailed", [stakingVault.interface]);
     expect(errorReportingEvent.length).to.equal(0n);
@@ -364,27 +427,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(operatorBalanceAfter).to.equal(operatorBalanceBefore + performanceFee - gasFee);
   });
 
-  it("Should allow Owner to trigger validator exit to cover fees", async () => {
-    // simulate validator exit
-    const secondValidatorKey = pubKeysBatch.slice(Number(PUBKEY_LENGTH), Number(PUBKEY_LENGTH) * 2);
-    await delegation.connect(curator).requestValidatorExit(secondValidatorKey);
-    await updateBalance(stakingVaultAddress, VALIDATOR_DEPOSIT_SIZE);
-
-    const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
-    const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value to simulate the validator exit
-
-    const params = {
-      clDiff: elapsedProtocolReward,
-      excludeVaultsBalances: true,
-      vaultValues: [vaultValue],
-      inOutDeltas: [VAULT_DEPOSIT],
-    } as OracleReportParams;
-
-    await report(ctx, params);
-  });
-
-  it("Should allow Manager to claim manager rewards in ETH after rebase with exited validator", async () => {
+  it("Should allow Curator to claim performance fees", async () => {
     const feesToClaim = await delegation.curatorUnclaimedFee();
+    expect(feesToClaim).to.be.gt(0n);
 
     log.debug("Staking Vault stats after operator exit", {
       "Staking Vault management fee": ethers.formatEther(feesToClaim),
@@ -410,8 +455,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(managerBalanceAfter).to.equal(managerBalanceBefore + feesToClaim - gasUsed * gasPrice);
   });
 
-  it("Should allow Token Master to burn shares to repay debt", async () => {
-    const { lido } = ctx.contracts;
+  it("Should allow Curator to burn minted shares", async () => {
+    const { lido, vaultHub } = ctx.contracts;
 
     // Token master can approve the vault to burn the shares
     await lido.connect(curator).approve(delegation, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
@@ -429,19 +474,21 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await report(ctx, params);
 
-    const lockedOnVault = await stakingVault.locked();
-    expect(lockedOnVault).to.be.gt(0n); // lockedOnVault should be greater than 0, because of the debt
+    const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
+    const mintedShares = socket.sharesMinted;
+    expect(mintedShares).to.be.gt(0n); // we still have the protocol fees minted
 
-    // TODO: add more checks here
+    const lockedOnVault = await stakingVault.locked();
+    expect(lockedOnVault).to.be.gt(0n);
   });
 
   it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
     const { vaultHub, lido } = ctx.contracts;
 
     const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-    const sharesMinted = await lido.getPooledEthByShares(socket.sharesMinted);
+    const stETHToRebalance = await lido.getPooledEthByShares(socket.sharesMinted);
 
-    await delegation.connect(curator).rebalanceVault(sharesMinted, { value: sharesMinted });
+    await delegation.connect(curator).rebalanceVault(stETHToRebalance, { value: stETHToRebalance });
 
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });

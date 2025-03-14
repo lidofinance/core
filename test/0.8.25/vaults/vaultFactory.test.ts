@@ -10,6 +10,7 @@ import {
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   OssifiableProxy,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
@@ -51,6 +52,8 @@ describe("VaultFactory.sol", () => {
 
   let locator: LidoLocator;
 
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+
   let vaultBeaconProxy: BeaconProxy;
   let vaultBeaconProxyCode: string;
 
@@ -68,17 +71,25 @@ describe("VaultFactory.sol", () => {
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
+    //predeposit guarantee
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
+
     locator = await deployLidoLocator({
       lido: steth,
       wstETH: wsteth,
+      predepositGuarantee: predepositGuarantee,
     });
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
     vaultHubImpl = await ethers.deployContract("VaultHub", [
+      locator,
       steth,
-      ZeroAddress,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
@@ -87,7 +98,9 @@ describe("VaultFactory.sol", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, predepositGuarantee, depositContract], {
+      from: deployer,
+    });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
@@ -131,6 +144,7 @@ describe("VaultFactory.sol", () => {
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
+      assetRecoverer: await vaultOwner1.getAddress(),
     };
   });
 

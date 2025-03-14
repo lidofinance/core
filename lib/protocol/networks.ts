@@ -110,7 +110,6 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }
 
-
 async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
   const state = readNetworkState();
 

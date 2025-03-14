@@ -1,7 +1,7 @@
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
-import { Burner, VaultHub } from "typechain-types";
+import { Burner, PredepositGuarantee, VaultHub } from "typechain-types";
 
 import { log } from "lib";
 import { loadContract } from "lib/contract";
@@ -20,6 +20,7 @@ export async function main(): Promise<void> {
   const stakingVaultBeaconAddress = state[Sk.stakingVaultBeacon].address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
+  const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
   const vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [stakingVaultBeaconAddress, "0x"]);
@@ -67,4 +68,14 @@ export async function main(): Promise<void> {
   await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], { from: deployer });
   // NB: admin role is kept on deployer to transfer it to the upgrade template on the next steps
+
+  //
+  // PredepositGuarantee
+  //
+
+  const predepositGuarantee = await loadContract<PredepositGuarantee>(
+    "PredepositGuarantee",
+    predepositGuaranteeAddress,
+  );
+  await makeTx(predepositGuarantee, "initialize", [agentAddress], { from: deployer });
 }

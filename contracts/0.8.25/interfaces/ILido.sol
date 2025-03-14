@@ -62,6 +62,8 @@ interface ILido is IERC20, IERC20Permit {
         uint256 _preTotalEther,
         uint256 _postTotalShares,
         uint256 _postTotalEther,
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
         uint256 _sharesMintedAsFees
     ) external;
 
