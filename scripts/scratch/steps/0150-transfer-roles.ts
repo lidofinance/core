@@ -10,7 +10,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const agent = state["app:aragon-agent"].proxy.address;
+  const agent = state[Sk.appAgent].proxy.address;
 
   // Transfer OZ admin roles for various contracts
   const ozAdminTransfers = [
@@ -24,6 +24,7 @@ export async function main() {
     { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
     { name: "VaultHub", address: state.vaultHub.proxy.address },
+    { name: "WithdrawalVault", address: state.withdrawalVault.proxy.address },
     { name: "PredepositGuarantee", address: state.predepositGuarantee.proxy.address },
   ];
 

@@ -40,6 +40,7 @@ export enum Sk {
   aragonId = "aragonID",
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
+  aragonLidoAppRepo = "aragon-lido-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -52,7 +53,6 @@ export enum Sk {
   evmScriptRegistryFactory = "evmScriptRegistryFactory",
   ensSubdomainRegistrar = "ensSubdomainRegistrar",
   ldo = "ldo",
-  // lido = "lido",
   lidoApm = "lidoApm",
   lidoApmEnsName = "lidoApmEnsName",
   lidoApmEnsRegDurationSec = "lidoApmEnsRegDurationSec",
@@ -95,6 +95,7 @@ export enum Sk {
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  upgradeTemplateV3 = "upgradeTemplateV3",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

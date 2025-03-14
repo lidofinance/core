@@ -1,5 +1,6 @@
 import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
+import { getMode } from "hardhat.helpers";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
@@ -13,12 +14,9 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  if (hre.network.name === "hardhat") {
-    const networkConfig = hre.config.networks[hre.network.name];
-    if (!networkConfig.forking?.enabled) {
-      await deployScratchProtocol(hre.network.name);
-    }
-  } else {
+  if (getMode() === "scratch") {
+    await deployScratchProtocol(hre.network.name);
+  } else if (process.env.UPGRADE) {
     await deployUpgrade(hre.network.name);
   }
 
@@ -44,7 +42,9 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
-  await provision(context);
+  if (getMode() === "scratch") {
+    await provision(context);
+  }
 
   return context;
 };

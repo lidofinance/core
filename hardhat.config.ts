@@ -45,16 +45,15 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "custom": {
+      url: RPC_URL,
+    },
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
-    },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
     },
     "holesky": {
       url: process.env.HOLESKY_RPC_URL || RPC_URL,
@@ -65,10 +64,6 @@ const config: HardhatUserConfig = {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
-    },
-    "sepolia-fork": {
-      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
-      chainId: 11155111,
     },
   },
   etherscan: {

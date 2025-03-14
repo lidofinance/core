@@ -16,6 +16,7 @@ export async function main() {
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
+  const wstethAddress = state[Sk.wstETH].address;
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
@@ -28,6 +29,7 @@ export async function main() {
   // Deploy Delegation implementation contract
   const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
     wethContract,
+    wstethAddress,
     locatorAddress,
   ]);
   const delegationAddress = await delegation.getAddress();
@@ -53,15 +55,9 @@ export async function main() {
   // Add VaultFactory and Vault implementation to the Accounting contract
   const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
 
-  // Grant roles for the Accounting contract
-  const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
+  // Grant VaultHub roles
   const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
-
-  await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
-
   await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
-
-  await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
 }

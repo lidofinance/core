@@ -47,7 +47,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       .and.to.emit(lido, "ContractVersionSet")
       .withArgs(initialVersion);
 
-    await expect(lido.finalizeUpgrade_v3()).to.be.revertedWith("NOT_INITIALIZED");
+    await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.revertedWith("NOT_INITIALIZED");
   });
 
   context("initialized", () => {
@@ -75,7 +75,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     });
 
     it("Reverts if initialized from scratch", async () => {
-      await expect(lido.finalizeUpgrade_v3()).to.be.reverted;
+      await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
     });
 
     it("Reverts if contract version does not equal 2", async () => {
@@ -85,7 +85,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(unexpectedVersion);
 
-      await expect(lido.finalizeUpgrade_v3()).to.be.reverted;
+      await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
     });
 
     it("Sets contract version to 3", async () => {
@@ -93,7 +93,9 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(initialVersion);
 
-      await expect(lido.finalizeUpgrade_v3()).and.to.emit(lido, "ContractVersionSet").withArgs(finalizeVersion);
+      await expect(lido.finalizeUpgrade_v3(ZeroAddress))
+        .and.to.emit(lido, "ContractVersionSet")
+        .withArgs(finalizeVersion);
 
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
     });

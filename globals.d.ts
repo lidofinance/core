@@ -51,7 +51,6 @@ declare namespace NodeJS {
     LOCAL_STAKING_VAULT_FACTORY_ADDRESS?: string;
 
     /* for mainnet fork testing */
-    MAINNET_RPC_URL: string;
     MAINNET_LOCATOR_ADDRESS: string;
     MAINNET_AGENT_ADDRESS: string;
     MAINNET_VOTING_ADDRESS: string;

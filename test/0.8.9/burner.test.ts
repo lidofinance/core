@@ -39,7 +39,7 @@ describe("Burner.sol", () => {
 
     burner = await ethers
       .getContractFactory("Burner")
-      .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, coverSharesBurnt, nonCoverSharesBurnt));
+      .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, false));
 
     steth = steth.connect(holder);
     burner = burner.connect(holder);
@@ -61,9 +61,7 @@ describe("Burner.sol", () => {
         await expect(
           ethers
             .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(ZeroAddress, locator, steth, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
+            .then((f) => f.connect(deployer).deploy(ZeroAddress, locator, steth, false)),
         )
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_admin");
@@ -73,9 +71,7 @@ describe("Burner.sol", () => {
         await expect(
           ethers
             .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(admin.address, ZeroAddress, steth, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
+            .then((f) => f.connect(deployer).deploy(admin.address, ZeroAddress, steth, false)),
         )
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_locator");
@@ -85,12 +81,38 @@ describe("Burner.sol", () => {
         await expect(
           ethers
             .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(admin.address, locator, ZeroAddress, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
+            .then((f) => f.connect(deployer).deploy(admin.address, locator, ZeroAddress, false)),
         )
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_stETH");
+      });
+
+      it("if initialized repeatedly", async () => {
+        const deployed = await ethers
+          .getContractFactory("Burner")
+          .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
+
+        await deployed.connect(admin).migrate(ZeroAddress);
+        expect(await deployed.isMigrationAllowed()).to.equal(false);
+
+        await expect(deployed.connect(admin).migrate(ZeroAddress)).to.be.revertedWithCustomError(
+          deployed,
+          "MigrationNotAllowedOrAlreadyMigrated",
+        );
+      });
+
+      it("if stranger calls initialize", async () => {
+        const deployed = await ethers
+          .getContractFactory("Burner")
+          .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
+        expect(await deployed.isMigrationAllowed()).to.equal(true);
+
+        await expect(deployed.connect(stranger).migrate(ZeroAddress)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          await deployed.DEFAULT_ADMIN_ROLE(),
+        );
+
+        expect(await deployed.isMigrationAllowed()).to.equal(false);
       });
     });
 
@@ -117,12 +139,11 @@ describe("Burner.sol", () => {
 
       const deployed = await ethers
         .getContractFactory("Burner")
-        .then((f) =>
-          f
-            .connect(deployer)
-            .deploy(admin.address, locator, steth, differentCoverSharesBurnt, differentNonCoverSharesBurntNonZero),
-        );
+        .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
 
+      await deployed.connect(admin).migrate(ZeroAddress);
+
+      expect(await deployed.isMigrationAllowed()).to.equal(false);
       expect(await deployed.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
       expect(await deployed.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
     });
