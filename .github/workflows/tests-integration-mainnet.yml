@@ -10,11 +10,12 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.22.19
+        image: ghcr.io/lidofinance/hardhat-node:2.22.19.3
         ports:
           - 8555:8545
         env:
           ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+          DONT_SET_CHAIN_ID: true
 
     steps:
       - uses: actions/checkout@v4
