@@ -119,7 +119,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
-          });
+    });
 
     describe("Only roles", () => {
       describe("Delegation methods", () => {
@@ -250,6 +250,29 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
           [days(7n)],
         );
       });
+
+      it.skip("transferStakingVaultOwnership", async () => {
+        // todo:      AssertionError: Event "OwnershipTransferred" doesn't exist in the contract
+        await expect(testDelegation.connect(owner).transferStakingVaultOwnership(stranger)).not.to.emit(
+          testDelegation,
+          "OwnershipTransferred",
+        );
+
+        await expect(testDelegation.connect(nodeOperatorManager).transferStakingVaultOwnership(stranger)).to.emit(
+          testDelegation,
+          "OwnershipTransferred",
+        );
+
+        await testMethodConfirmedRoles(
+          testDelegation,
+          "transferStakingVaultOwnership",
+          {
+            successUsers: [],
+            failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
+          },
+          [stranger],
+        );
+      });
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
@@ -261,6 +284,22 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
 
     it("Allows to retrieve roles addresses", async () => {
       expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+    });
+
+    it("Allows NO Manager to add and remove new managers", async () => {
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .grantRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+        stranger.address,
+      ]);
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .revokeRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+      ]);
     });
   });
 
@@ -307,13 +346,23 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
     describe("Only roles", () => {
       describe("Delegation methods", () => {
         it("setCuratorFeeBP", async () => {
-          await testGrantingRole(testDelegation, "setCuratorFeeBP", await testDelegation.CURATOR_FEE_SET_ROLE(), [1n], owner);
+          await testGrantingRole(
+            testDelegation,
+            "setCuratorFeeBP",
+            await testDelegation.CURATOR_FEE_SET_ROLE(),
+            [1n],
+            owner,
+          );
         });
 
         it("claimCuratorFee", async () => {
-          await testGrantingRole(testDelegation, "claimCuratorFee", await testDelegation.CURATOR_FEE_CLAIM_ROLE(), [
-            stranger,
-          ], owner);
+          await testGrantingRole(
+            testDelegation,
+            "claimCuratorFee",
+            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
+            [stranger],
+            owner,
+          );
         });
 
         it("claimNodeOperatorFee", async () => {
@@ -322,7 +371,7 @@ describe("Scenario: Staking Vaults Delegation Roles", () => {
             "claimNodeOperatorFee",
             await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
             [stranger],
-            nodeOperatorManager
+            nodeOperatorManager,
           );
         });
       });
