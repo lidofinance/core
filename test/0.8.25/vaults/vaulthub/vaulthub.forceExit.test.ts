@@ -5,11 +5,12 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DepositContract__MockForVaultHub,
+  LidoLocator,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
   VaultFactory__MockForVaultHub,
-  VaultHub__Harness,
+  VaultHub,
 } from "typechain-types";
 
 import { impersonate } from "lib";
@@ -35,11 +36,12 @@ describe("VaultHub.sol:forceExit", () => {
   let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
 
-  let vaultHub: VaultHub__Harness;
+  let vaultHub: VaultHub;
   let vaultFactory: VaultFactory__MockForVaultHub;
   let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
-  let depositContract: DepositContract__MockForVaultHub;
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let locator: LidoLocator;
 
   let vaultAddress: string;
   let vaultHubAddress: string;
@@ -50,12 +52,19 @@ describe("VaultHub.sol:forceExit", () => {
 
   before(async () => {
     [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
-
-    const locator = await deployLidoLocator();
+    const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
-    depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
+    locator = await deployLidoLocator({
+      lido: steth,
+      predepositGuarantee: predepositGuarantee,
+    });
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub__Harness", [
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
       VAULTS_CONNECTED_VAULTS_LIMIT,
@@ -64,18 +73,19 @@ describe("VaultHub.sol:forceExit", () => {
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("VaultHub__Harness", proxy);
-    await accounting.initialize(deployer);
+    const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
+    await vaultHubAdmin.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("VaultHub__Harness", proxy, user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
     vaultHubAddress = await vaultHub.getAddress();
 
-    await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
-      await depositContract.getAddress(),
+      await locator.predepositGuarantee(),
+      depositContract,
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
@@ -133,7 +143,7 @@ describe("VaultHub.sol:forceExit", () => {
     it("reverts if zero refund recipient", async () => {
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_refundRecepient");
+        .withArgs("_refundRecipient");
     });
 
     it("reverts if pubkeys are not valid", async () => {
@@ -207,19 +217,24 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
-      const rebase = await vaultHub.mock__calculateVaultsRebase(
-        await steth.getTotalShares(),
-        await steth.getTotalPooledEther(),
-        await steth.getTotalShares(),
-        await steth.getTotalPooledEther(),
+      const preTotalPooledEther = await steth.getTotalPooledEther();
+      const preTotalShares = await steth.getTotalShares();
+
+      const rebase = await vaultHub.calculateVaultsRebase(
+        [0n, valuation - penalty],
+        preTotalShares,
+        preTotalPooledEther,
+        preTotalShares - cap,
+        preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares,
         0n,
       );
 
-      const totalMintedShares = (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted;
-      const mintedSteth = (totalMintedShares * (await steth.getTotalPooledEther())) / (await steth.getTotalShares());
-      const lockedEtherPredicted = (mintedSteth * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
+      const totalMintedShares =
+        (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted + rebase.treasuryFeeShares[1];
+      const withReserve = (totalMintedShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
+      const predictedLockedEther = await steth.getPooledEthByShares(withReserve);
 
-      expect(lockedEtherPredicted).to.equal(rebase.lockedEther[1]);
+      expect(predictedLockedEther).to.equal(rebase.lockedEther[1]);
 
       await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
 

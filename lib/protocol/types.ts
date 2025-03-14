@@ -17,10 +17,12 @@ import {
   NodeOperatorsRegistry,
   OracleDaemonConfig,
   OracleReportSanityChecker,
+  PredepositGuarantee,
   StakingRouter,
   UpgradeableBeacon,
   ValidatorsExitBusOracle,
   VaultFactory,
+  VaultHub,
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
@@ -58,6 +60,8 @@ export type ProtocolNetworkItems = {
   // vaults
   stakingVaultFactory: string;
   stakingVaultBeacon: string;
+  vaultHub: string;
+  predepositGuarantee: string;
 };
 
 export interface ContractTypes {
@@ -78,10 +82,12 @@ export interface ContractTypes {
   Kernel: Kernel;
   ACL: ACL;
   HashConsensus: HashConsensus;
+  PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
+  VaultHub: VaultHub;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -133,6 +139,8 @@ export type WstETHContracts = {
 export type VaultsContracts = {
   stakingVaultFactory: LoadedContract<VaultFactory>;
   stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
+  vaultHub: LoadedContract<VaultHub>;
+  predepositGuarantee: LoadedContract<PredepositGuarantee>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &

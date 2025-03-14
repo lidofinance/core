@@ -9,6 +9,7 @@ import {
   DepositContract__MockForVaultHub,
   Lido,
   LidoLocator,
+  PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
@@ -37,6 +38,7 @@ describe("VaultHub.sol:hub", () => {
   let stranger: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
 
+  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
   let depositContract: DepositContract__MockForVaultHub;
@@ -87,7 +89,18 @@ describe("VaultHub.sol:hub", () => {
   before(async () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
-    ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "0x0000000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ]);
+
+    ({ lido, acl } = await deployLidoDao({
+      rootAccount: deployer,
+      initialized: true,
+      locatorConfig: { predepositGuarantee },
+    }));
+
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
 
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
@@ -100,29 +113,30 @@ describe("VaultHub.sol:hub", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    const vaultHubImpl = await ethers.deployContract("Accounting", [
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
-      lido,
+      await locator.lido(),
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
-    const accounting = await ethers.getContractAt("Accounting", proxy);
-    await accounting.initialize(deployer);
+    const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
+    await vaultHubAdmin.initialize(deployer);
 
-    vaultHub = await ethers.getContractAt("Accounting", proxy, user);
-    await accounting.grantRole(await vaultHub.PAUSE_ROLE(), user);
-    await accounting.grantRole(await vaultHub.RESUME_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await accounting.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
+    await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
-      await depositContract.getAddress(),
+      predepositGuarantee,
+      depositContract,
     ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
@@ -138,7 +152,7 @@ describe("VaultHub.sol:hub", () => {
 
   context("Constants", () => {
     it("returns the STETH address", async () => {
-      expect(await vaultHub.STETH()).to.equal(await lido.getAddress());
+      expect(await vaultHub.LIDO()).to.equal(await lido.getAddress());
     });
   });
 
@@ -270,7 +284,7 @@ describe("VaultHub.sol:hub", () => {
 
     // Looks like fuzzing but it's not [:}
     it("returns correct value for various parameters", async () => {
-      const tbi = (n: number | bigint, min: number = 0) => BigInt(Math.floor(Math.random() * Number(n)) + min);
+      const tbi = (n: number | bigint, min: number = 1) => BigInt(Math.floor(Math.random() * Number(n)) + min);
 
       for (let i = 0; i < 50; i++) {
         const snapshot = await Snapshot.take();
@@ -284,8 +298,8 @@ describe("VaultHub.sol:hub", () => {
 
         const isSlashing = Math.random() < 0.5;
         const slashed = isSlashing ? ether(tbi(valuationEth).toString()) : 0n;
-        const treashold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
-        const expectedHealthy = treashold >= mintable;
+        const threshold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
+        const expectedHealthy = threshold >= mintable;
 
         const vault = await createAndConnectVault(vaultFactory, {
           shareLimit: ether("100"), // just to bypass the share limit check
@@ -314,7 +328,7 @@ describe("VaultHub.sol:hub", () => {
             Valuation: ${valuation} ETH
             Minted: ${mintable} stETH
             Slashed: ${slashed} ETH
-            Threshold: ${treashold} stETH
+            Threshold: ${threshold} stETH
             Expected Healthy: ${expectedHealthy}
           `);
           throw error;
@@ -446,7 +460,7 @@ describe("VaultHub.sol:hub", () => {
       await vault.report(1n, ether("1"), ether("1")); // Below minimal required valuation
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
 
-      await lido.connect(user).transferShares(await locator.accounting(), 1n);
+      await lido.connect(user).transferShares(await locator.vaultHub(), 1n);
       await vaultHub.connect(user).burnShares(vaultAddress, 1n);
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true); // Should be healthy with no shares
@@ -553,6 +567,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if proxy codehash is not added", async () => {
       const stakingVault2Impl = await ethers.deployContract("StakingVault__MockForVaultHub", [
         await vaultHub.getAddress(),
+        await predepositGuarantee.getAddress(),
         await depositContract.getAddress(),
       ]);
       const vault2Factory = await ethers.deployContract("VaultFactory__MockForVaultHub", [

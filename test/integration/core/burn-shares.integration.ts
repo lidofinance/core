@@ -5,8 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ether, impersonate, log } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { handleOracleReport } from "lib/protocol/helpers";
+import { getProtocolContext, handleOracleReport, ProtocolContext } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 

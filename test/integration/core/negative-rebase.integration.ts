@@ -5,8 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -33,10 +32,10 @@ describe("Integration: Negative rebase", () => {
       const BEPOLIA_TO_TRANSFER = 20;
 
       const bepoliaToken = await ethers.getContractAt("ISepoliaDepositContract", sepoliaDepositContractAddress);
-      const bepiloaSigner = await ethers.getImpersonatedSigner(bepoliaWhaleHolder);
+      const bepoliaSigner = await ethers.getImpersonatedSigner(bepoliaWhaleHolder);
 
       const adapterAddr = await ctx.contracts.stakingRouter.DEPOSIT_CONTRACT();
-      await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
+      await bepoliaToken.connect(bepoliaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
     }
   });
 

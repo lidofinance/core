@@ -77,7 +77,7 @@
       "epochsPerFrame": 12
     }
   },
-  "accounting": {
+  "vaultHub": {
     "deployParameters": {
       "connectedVaultsLimit": 500,
       "relativeShareLimitBP": 1000
@@ -158,6 +158,13 @@
   "delegation": {
     "deployParameters": {
       "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
+    }
+  },
+  "predepositGuarantee": {
+    "deployParameters": {
+      "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "changeSlot": 0
     }
   }
 }
