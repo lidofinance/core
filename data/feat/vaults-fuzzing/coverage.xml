@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3879"  lines-covered="3625"  line-rate="0.9345"  branches-valid="1850"  branches-covered="1630"  branch-rate="0.8811"  timestamp="1741943691319" complexity="0" version="0.1">
+<coverage lines-valid="3879"  lines-covered="3625"  line-rate="0.9345"  branches-valid="1850"  branches-covered="1630"  branch-rate="0.8811"  timestamp="1741956453212" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2007,14 +2007,14 @@
 			<method name="pack"  hits="32"  signature="()V" >
 				<lines><line number="20"  hits="32" /></lines>
 			</method>
-			<method name="unwrap"  hits="52"  signature="()V" >
-				<lines><line number="29"  hits="52" /></lines>
+			<method name="unwrap"  hits="56"  signature="()V" >
+				<lines><line number="29"  hits="56" /></lines>
 			</method>
 			<method name="isRoot"  hits="0"  signature="()V" >
 				<lines><line number="33"  hits="0" /></lines>
 			</method>
-			<method name="index"  hits="36"  signature="()V" >
-				<lines><line number="37"  hits="36" /></lines>
+			<method name="index"  hits="40"  signature="()V" >
+				<lines><line number="37"  hits="40" /></lines>
 			</method>
 			<method name="width"  hits="5"  signature="()V" >
 				<lines><line number="41"  hits="5" /></lines>
@@ -2034,17 +2034,17 @@
 			<method name="isParentOf"  hits="0"  signature="()V" >
 				<lines><line number="85"  hits="0" /></lines>
 			</method>
-			<method name="fls"  hits="12"  signature="()V" >
-				<lines><line number="109"  hits="12" /></lines>
+			<method name="fls"  hits="14"  signature="()V" >
+				<lines><line number="109"  hits="14" /></lines>
 			</method>
 		</methods>
 		<lines>
 			<line number="21"  hits="32"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="22"  hits="0"  branch="false" />
 			<line number="26"  hits="32"  branch="false" />
-			<line number="30"  hits="52"  branch="false" />
+			<line number="30"  hits="56"  branch="false" />
 			<line number="34"  hits="0"  branch="false" />
-			<line number="38"  hits="36"  branch="false" />
+			<line number="38"  hits="40"  branch="false" />
 			<line number="42"  hits="5"  branch="false" />
 			<line number="46"  hits="16"  branch="false" />
 			<line number="51"  hits="5"  branch="false" />
@@ -2071,7 +2071,7 @@
 			<line number="95"  hits="0"  branch="false" />
 			<line number="98"  hits="0"  branch="false" />
 			<line number="101"  hits="0"  branch="false" />
-			<line number="111"  hits="12"  branch="false" />
+			<line number="111"  hits="14"  branch="false" />
 		</lines>
 		</class>
 		<class name="SSZ.sol"  filename="contracts/0.8.25/lib/SSZ.sol"  line-rate="0.3125"  branch-rate="0.25" >
@@ -3019,7 +3019,7 @@
 			<line number="284"  hits="56"  branch="false" />
 			<line number="287"  hits="56"  branch="false" />
 			<line number="288"  hits="56"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="289"  hits="48"  branch="false" />
+			<line number="289"  hits="47"  branch="false" />
 			<line number="292"  hits="56"  branch="false" />
 			<line number="294"  hits="56"  branch="false" />
 			<line number="303"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
