@@ -69,10 +69,66 @@ export const setBeaconBlockRoot = async (root: string) => {
 };
 
 // Default mainnet values for validator state tree
-export const prepareLocalMerkleTree = async (depth = 0x28, prefillCount = 0x56) => {
-  const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [depth, prefillCount], {});
-  await sszMerkleTree.addValidatorLeaf(generateValidator());
+export const prepareLocalMerkleTree = async (
+  gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
+) => {
+  const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
+  const firstValidator = generateValidator();
+  await sszMerkleTree.addValidatorLeaf(firstValidator);
+  const validators: SSZHelpers.ValidatorStruct[] = [firstValidator];
+
   const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
   const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(firstValidatorLeafIndex);
-  return { sszMerkleTree, gIFirstValidator, firstValidatorLeafIndex };
+
+  // compare GIndex.index()
+  if (BigInt(gIFirstValidator) >> 8n !== BigInt(gIndex) >> 8n)
+    throw new Error("Invariant: sszMerkleTree implementation is broken");
+
+  const addValidator = async (validator: SSZHelpers.ValidatorStruct) => {
+    await sszMerkleTree.addValidatorLeaf(validator);
+    validators.push(validator);
+
+    return {
+      validatorIndex: validators.length - 1,
+    };
+  };
+
+  const validatorAtIndex = (index: number) => {
+    return validators[index];
+  };
+
+  const commitChangesToBeaconRoot = async (slot?: number) => {
+    const beaconBlockHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot(), slot);
+    const beaconBlockHeaderHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
+    return {
+      childBlockTimestamp: await setBeaconBlockRoot(beaconBlockHeaderHash),
+      beaconBlockHeader,
+    };
+  };
+
+  const buildProof = async (
+    validatorIndex: number,
+    beaconBlockHeader: SSZHelpers.BeaconBlockHeaderStruct,
+  ): Promise<string[]> => {
+    const [validatorProof, stateProof, beaconBlockProof] = await Promise.all([
+      sszMerkleTree.getValidatorPubkeyWCParentProof(validators[Number(validatorIndex)]).then((r) => r.proof),
+      sszMerkleTree.getMerkleProof(BigInt(validatorIndex) + firstValidatorLeafIndex),
+      sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader).then((r) => r.proof),
+    ]);
+
+    return [...validatorProof, ...stateProof, ...beaconBlockProof];
+  };
+
+  return {
+    sszMerkleTree,
+    gIFirstValidator,
+    firstValidatorLeafIndex,
+    get totalValidators(): number {
+      return validators.length;
+    },
+    addValidator,
+    validatorAtIndex,
+    commitChangesToBeaconRoot,
+    buildProof,
+  };
 };
