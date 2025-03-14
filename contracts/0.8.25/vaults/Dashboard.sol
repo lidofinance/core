@@ -374,7 +374,7 @@ contract Dashboard is Permissions {
      * @notice withdraws ether from vault and deposits directly to provided validators,
      *         so later validators can be proven by `PDG.proveUnknownValidator` for direct vault deposits
      * @param _deposits array of StakingVault.Deposit structs containing deposit data
-     * @dev requires the caller to have the `WITHDRAW_ROLE`
+     * @dev requires the caller to have the `UNSAFE_DEPOSIT_ROLE`
      * @dev used as a shortcut if validators are trusted
      */
     function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) external {
@@ -385,7 +385,7 @@ contract Dashboard is Permissions {
             totalAmount += _deposits[i].amount;
         }
 
-        _withdraw(address(this), totalAmount);
+        _withdrawForDeposit(totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
 

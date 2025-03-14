@@ -85,6 +85,11 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for assets recovery
      */
+    bytes32 public constant UNSAFE_DEPOSIT_ROLE = keccak256("vaults.Permissions.UnsafeDeposit");
+
+    /**
+     * @notice Permission for assets recovery
+     */
     bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
 
     /**
@@ -260,11 +265,21 @@ abstract contract Permissions is AccessControlConfirmable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
+    /**
+     * @dev claims disproven predeposit from PDG
+     */
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
         return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+    }
+
+    /**
+     * @dev withdraws ether from vault to this contract for deposit to trusted validators
+     */
+    function _withdrawForDeposit(uint256 _ether) internal onlyRole(UNSAFE_DEPOSIT_ROLE) {
+        stakingVault().withdraw(address(this), _ether);
     }
 
     /**
