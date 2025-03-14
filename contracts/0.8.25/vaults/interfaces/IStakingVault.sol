@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+
 /**
  * @title IStakingVault
  * @author Lido
@@ -26,6 +28,8 @@ interface IStakingVault {
         uint256 amount;
         bytes32 depositDataRoot;
     }
+
+    function  DEPOSIT_CONTRACT() external view returns (IDepositContract);
 
     function initialize(address _owner, address _operator, bytes calldata _params) external;
     function version() external pure returns (uint64);
