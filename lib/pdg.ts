@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { computeDepositDataRoot, ether, impersonate } from "lib";
 
 export const randomBytes32 = (): string => hexlify(randomBytes(32));
 export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
@@ -24,11 +24,18 @@ export const generateValidator = (customWC?: string, customPukey?: string): SSZH
 };
 
 export const generatePredeposit = (validator: SSZHelpers.ValidatorStruct): IStakingVault.DepositStruct => {
+  const signature = randomBytes(96);
+  const amount = ether("1");
   return {
     pubkey: validator.pubkey,
-    amount: ether("1"),
-    signature: randomBytes(96),
-    depositDataRoot: randomBytes32(),
+    amount,
+    signature: signature,
+    depositDataRoot: computeDepositDataRoot(
+      hexlify(validator.withdrawalCredentials),
+      hexlify(validator.pubkey),
+      hexlify(signature),
+      amount,
+    ),
   };
 };
 

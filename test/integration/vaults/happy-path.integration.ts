@@ -7,7 +7,16 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  ether,
+  generateValidator,
+  impersonate,
+  log,
+  prepareLocalMerkleTree,
+  updateBalance,
+} from "lib";
 import {
   getProtocolContext,
   getReportTimeElapsed,
@@ -18,7 +27,6 @@ import {
   sdvtEnsureOperators,
 } from "lib/protocol";
 
-import { generateValidator, prepareLocalMerkleTree } from "test/0.8.25/vaults/predeposit-guarantee/helpers";
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
