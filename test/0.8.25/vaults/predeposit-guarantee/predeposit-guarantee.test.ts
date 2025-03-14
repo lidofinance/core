@@ -181,7 +181,16 @@ describe("PredepositGuarantee.sol", () => {
       // NO posts proof and triggers deposit to total of 32 ether
       const postDepositData = generatePostDeposit(validator, ether("31"));
       const proveAndDepositTx = pdg.proveAndDeposit(
-        [{ pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
+        [
+          {
+            pubkey: validator.pubkey,
+            validatorIndex,
+            childBlockTimestamp,
+            proof: concatenatedProof,
+            slot: beaconBlockHeader.slot,
+            proposerIndex: beaconBlockHeader.proposerIndex,
+          },
+        ],
         [postDepositData],
         stakingVault,
       );
