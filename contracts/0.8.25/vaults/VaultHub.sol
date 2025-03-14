@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -12,6 +12,7 @@ import {ILido} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
@@ -77,18 +78,14 @@ contract VaultHub is PausableUntilWithRoles {
     ILido public immutable LIDO;
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
-    /// @notice Accounting contract
-    address public immutable ACCOUNTING;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
-    /// @param _accounting Accounting contract
     /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(
         ILidoLocator _locator,
-        address _lido,
-        address _accounting,
+        ILido _lido,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
     ) {
@@ -98,8 +95,7 @@ contract VaultHub is PausableUntilWithRoles {
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         LIDO_LOCATOR = _locator;
-        LIDO = ILido(_lido);
-        ACCOUNTING = _accounting;
+        LIDO = _lido;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
@@ -420,11 +416,12 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function calculateVaultsRebase(
-        uint256 _postTotalShares,
-        uint256 _postTotalPooledEther,
+        uint256[] memory vaultsValuations,
         uint256 _preTotalShares,
         uint256 _preTotalPooledEther,
-        uint256 _sharesToMintAsFees
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
+        uint256 _sharesToMintAsLidoCoreFees
     )
         public
         view
@@ -454,56 +451,84 @@ contract VaultHub is PausableUntilWithRoles {
         for (uint256 i = 0; i < length; ++i) {
             VaultSocket memory socket = $.sockets[i + 1];
             if (!socket.pendingDisconnect) {
-                treasuryFeeShares[i] = _calculateTreasuryFees(
-                    socket,
-                    _postTotalShares - _sharesToMintAsFees,
-                    _postTotalPooledEther,
-                    _preTotalShares,
-                    _preTotalPooledEther
-                );
+                uint256 newMintedShares = socket.sharesMinted;
+                if (_sharesToMintAsLidoCoreFees > 0) {
+                    treasuryFeeShares[i] = calculateVaultTreasuryFees(
+                        vaultsValuations[i],
+                        socket,
+                        _preTotalShares,
+                        _preTotalPooledEther,
+                        _postInternalShares,
+                        _postInternalEther,
+                        _sharesToMintAsLidoCoreFees
+                    );
+                    totalTreasuryFeeShares += treasuryFeeShares[i];
+                    newMintedShares += treasuryFeeShares[i];
+                }
 
-                totalTreasuryFeeShares += treasuryFeeShares[i];
-
-                uint256 totalMintedShares = socket.sharesMinted + treasuryFeeShares[i];
-                uint256 mintedStETH = (totalMintedShares * _postTotalPooledEther) / _postTotalShares; //TODO: check rounding
                 lockedEther[i] = Math256.max(
-                    (mintedStETH * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
+                    // combining two division into one here:
+                    // uint256 newMintedStETH = (newMintedShares * _postInternalEther) / _postInternalShares;
+                    // uint256 lockedEther = newMintedStETH * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+                    (newMintedShares * _postInternalEther * TOTAL_BASIS_POINTS)
+                        / (_postInternalShares * (TOTAL_BASIS_POINTS - socket.reserveRatioBP)),
                     CONNECT_DEPOSIT
                 );
             }
         }
     }
 
-    /// @dev impossible to invoke this method under negative rebase
-    function _calculateTreasuryFees(
-        VaultSocket memory _socket,
-        uint256 _postTotalSharesNoFees,
-        uint256 _postTotalPooledEther,
-        uint256 _preTotalShares,
-        uint256 _preTotalPooledEther
-    ) internal view returns (uint256 treasuryFeeShares) {
-        IStakingVault vault_ = IStakingVault(_socket.vault);
+    /// @notice calculates the amount of shares to mint as treasury fees for the vault
+    /// @param _reportValuation the valuation of the vault from the report
+    /// @param socket the socket of the vault
+    /// @param _preTotalShares the total shares of the Lido protocol before the report
+    /// @param _preTotalPooledEther the total pooled ether of the Lido protocol before the report
+    /// @param _postInternalShares the internal shares of the Lido protocol after the report
+    /// @param _postInternalEther the internal ether of the Lido protocol after the report
+    /// @param _sharesToMintAsLidoCoreFees the amount of shares that is minted as the total Lido core fees (treasury and NO)
+    /// @return treasuryFeeShares the amount of shares to mint as treasury fees or 0 if _sharesToMintAsLidoCoreFees is 0
+    function calculateVaultTreasuryFees(
+        uint256 _reportValuation,
+        VaultSocket memory socket,
 
-        uint256 chargeableValue = Math256.min(
-            vault_.valuation(),
-            (_socket.shareLimit * _preTotalPooledEther) / _preTotalShares
+        uint256 _preTotalShares,
+        uint256 _preTotalPooledEther,
+        uint256 _postInternalShares,
+        uint256 _postInternalEther,
+        uint256 _sharesToMintAsLidoCoreFees
+    ) public pure returns (uint256 treasuryFeeShares) {
+        // if lido doesn't charge the protocol fees, vaults don't charge either
+        if (_sharesToMintAsLidoCoreFees == 0) {
+            return 0;
+        }
+
+        uint256 mintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+
+        uint256 chargeableValuation = Math256.min(
+            // we are charging fees over the mintable part of the vault's valuation
+            _reportValuation * mintableRatio / TOTAL_BASIS_POINTS,
+            // capped by the vault's shareLimit
+            socket.shareLimit * _postInternalEther / _postInternalShares
         );
 
-        // treasury fee is calculated as a share of potential rewards that
-        // Lido curated validators could earn if vault's ETH was staked in Lido
-        // itself and minted as stETH shares
-        //
-        // treasuryFeeShares = value * lidoGrossAPR * treasuryFeeRate / preShareRate
-        // lidoGrossAPR = postShareRateWithoutFees / preShareRate - 1
-        // = value  * (postShareRateWithoutFees / preShareRate - 1) * treasuryFeeRate / preShareRate
+        // We are charging `socket.treasuryFeeBP` of the vault's `potentialRewards`
+        // that is equal to `chargeableValuation * (LidoCoreGrossRewardRate - 1)`
+        // TODO: maybe use net APR for simplicity ?
 
-        // TODO: optimize potential rewards calculation
-        uint256 potentialRewards = ((chargeableValue * (_postTotalPooledEther * _preTotalShares)) /
-            (_postTotalSharesNoFees * _preTotalPooledEther) -
-            chargeableValue);
-        uint256 treasuryFee = (potentialRewards * _socket.treasuryFeeBP) / TOTAL_BASIS_POINTS;
+        // `LidoCoreGrossRewardRate` is the Lido core protocol validation reward rate for the day without fees charged
+        // It's calculated as a change of share rate before and after the report without the protocol fees charged
+        // `LidoCoreGrossRewardRate = shareRateAfterReportWithoutFeesCharged / shareRateBeforeReport`
+        // `shareRateAfterReportWithoutFeesCharged = _postInternalEther / (_postInternalShares - _sharesToMintAsLidoCoreFees)`
+        // `shareRateBeforeReport = _preTotalPooledEther / _preTotalShares`
+        uint256 potentialRewards = chargeableValuation * _postInternalEther * _preTotalShares
+                            / ((_postInternalShares - _sharesToMintAsLidoCoreFees) * _preTotalPooledEther)
+                            - chargeableValuation;
 
-        treasuryFeeShares = (treasuryFee * _preTotalShares) / _preTotalPooledEther;
+        // We are charging `socket.treasuryFeeBP` of the vault's `potentialRewards`
+        // and convert them in shares using postShareRate (_postInternalEther/_postInternalShares)
+        // we can use the postShareRate here, because charging fees for the vaults does not change shareRate
+        // like in the the case of internal treasury fees
+        treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
     function updateVaults(
@@ -512,7 +537,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256[] memory _locked,
         uint256[] memory _treasureFeeShares
     ) external {
-        if (msg.sender != ACCOUNTING) revert NotAuthorized("updateVaults", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
         VaultHubStorage storage $ = _getVaultHubStorage();
 
         for (uint256 i = 0; i < _valuations.length; i++) {
@@ -544,9 +569,9 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function mintVaultsTreasuryFeeShares(address _recipient, uint256 _amountOfShares) external {
-        if (msg.sender != ACCOUNTING) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
-        LIDO.mintExternalShares(_recipient, _amountOfShares);
+    function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
+        LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
     }
 
     function _vaultAuth(address _vault, string memory _operation) internal view {
