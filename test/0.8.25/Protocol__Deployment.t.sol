@@ -174,11 +174,6 @@ contract BaseProtocolTest is Test {
 
         StakingRouter__MockForLidoAccountingFuzzing stakingRouter = new StakingRouter__MockForLidoAccountingFuzzing();
 
-        uint256[] memory stakingModuleIds = new uint256[](3);
-        stakingModuleIds[0] = 1;
-        stakingModuleIds[1] = 2;
-        stakingModuleIds[2] = 3;
-
         uint96[] memory stakingModuleFees = new uint96[](3);
         stakingModuleFees[0] = 4876942047684326532;
         stakingModuleFees[1] = 145875332634464962;
@@ -191,7 +186,6 @@ contract BaseProtocolTest is Test {
 
         stakingRouter.mock__getStakingRewardsDistribution(
             recipients,
-            stakingModuleIds,
             stakingModuleFees,
             9999999999999999996,
             100000000000000000000

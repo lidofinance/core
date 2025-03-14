@@ -26,10 +26,67 @@ contract StakingRouter__MockForLidoAccountingFuzzing {
     event Mock__MintedTotalShares(uint256 indexed _totalShares);
 
     address[] private recipients__mocked;
-    uint256[] private stakingModuleIds__mocked;
     uint96[] private stakingModuleFees__mocked;
     uint96 private totalFee__mocked;
     uint256 private precisionPoint__mocked;
+
+    mapping(uint256 => IStakingRouter.StakingModule) private stakingModules;
+    uint256[] private stakingModulesIds;
+
+    constructor() {
+        stakingModules[1] = IStakingRouter.StakingModule({
+            id: 1,
+            stakingModuleAddress: 0x55032650b14df07b85bF18A3a3eC8E0Af2e028d5,
+            stakingModuleFee: 500,
+            treasuryFee: 500,
+            stakeShareLimit: 10000,
+            status: 0,
+            name: "curated-onchain-v1",
+            lastDepositAt: 1732694279,
+            lastDepositBlock: 21277744,
+            exitedValidatorsCount: 88207,
+            priorityExitShareThreshold: 10000,
+            maxDepositsPerBlock: 150,
+            minDepositBlockDistance: 25
+        });
+
+        stakingModulesIds.push(1);
+
+        stakingModules[2] = IStakingRouter.StakingModule({
+            id: 2,
+            stakingModuleAddress: 0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433,
+            stakingModuleFee: 800,
+            treasuryFee: 200,
+            stakeShareLimit: 400,
+            status: 0,
+            name: "SimpleDVT",
+            lastDepositAt: 1735217831,
+            lastDepositBlock: 21486781,
+            exitedValidatorsCount: 5,
+            priorityExitShareThreshold: 444,
+            maxDepositsPerBlock: 150,
+            minDepositBlockDistance: 25
+        });
+        stakingModulesIds.push(2);
+
+        stakingModules[3] = IStakingRouter.StakingModule({
+            id: 3,
+            stakingModuleAddress: 0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F,
+            stakingModuleFee: 600,
+            treasuryFee: 400,
+            stakeShareLimit: 100,
+            status: 0,
+            name: "Community Staking",
+            lastDepositAt: 1735217387,
+            lastDepositBlock: 21486745,
+            exitedValidatorsCount: 104,
+            priorityExitShareThreshold: 125,
+            maxDepositsPerBlock: 30,
+            minDepositBlockDistance: 25
+        });
+
+        stakingModulesIds.push(3);
+    }
 
     function getStakingRewardsDistribution()
         public
@@ -43,8 +100,8 @@ contract StakingRouter__MockForLidoAccountingFuzzing {
         )
     {
         recipients = recipients__mocked;
-        stakingModuleIds = stakingModuleIds__mocked;
         stakingModuleFees = stakingModuleFees__mocked;
+        stakingModuleIds = stakingModulesIds;
         totalFee = totalFee__mocked;
         precisionPoints = precisionPoint__mocked;
     }
@@ -62,20 +119,18 @@ contract StakingRouter__MockForLidoAccountingFuzzing {
 
     function mock__getStakingRewardsDistribution(
         address[] calldata _recipients,
-        uint256[] calldata _stakingModuleIds,
         uint96[] calldata _stakingModuleFees,
         uint96 _totalFee,
         uint256 _precisionPoints
     ) external {
         recipients__mocked = _recipients;
-        stakingModuleIds__mocked = _stakingModuleIds;
         stakingModuleFees__mocked = _stakingModuleFees;
         totalFee__mocked = _totalFee;
         precisionPoint__mocked = _precisionPoints;
     }
 
     function getStakingModuleIds() public view returns (uint256[] memory) {
-        return stakingModuleIds__mocked;
+        return stakingModulesIds;
     }
 
     function getRecipients() public view returns (address[] memory) {
@@ -84,63 +139,11 @@ contract StakingRouter__MockForLidoAccountingFuzzing {
 
     function getStakingModule(
         uint256 _stakingModuleId
-    ) public pure returns (IStakingRouter.StakingModule memory stakingModule) {
+    ) public view returns (IStakingRouter.StakingModule memory stakingModule) {
         if (_stakingModuleId >= 4) {
             revert("Staking module does not exist");
         }
 
-        if (_stakingModuleId == 1) {
-            stakingModule = IStakingRouter.StakingModule({
-                id: 1,
-                stakingModuleAddress: 0x55032650b14df07b85bF18A3a3eC8E0Af2e028d5,
-                stakingModuleFee: 500,
-                treasuryFee: 500,
-                stakeShareLimit: 10000,
-                status: 0,
-                name: "curated-onchain-v1",
-                lastDepositAt: 1732694279,
-                lastDepositBlock: 21277744,
-                exitedValidatorsCount: 88207,
-                priorityExitShareThreshold: 10000,
-                maxDepositsPerBlock: 150,
-                minDepositBlockDistance: 25
-            });
-        }
-
-        if (_stakingModuleId == 2) {
-            stakingModule = IStakingRouter.StakingModule({
-                id: 2,
-                stakingModuleAddress: 0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433,
-                stakingModuleFee: 800,
-                treasuryFee: 200,
-                stakeShareLimit: 400,
-                status: 0,
-                name: "SimpleDVT",
-                lastDepositAt: 1735217831,
-                lastDepositBlock: 21486781,
-                exitedValidatorsCount: 5,
-                priorityExitShareThreshold: 444,
-                maxDepositsPerBlock: 150,
-                minDepositBlockDistance: 25
-            });
-        }
-
-        if (_stakingModuleId == 3) {
-            stakingModule = IStakingRouter.StakingModule({
-                id: 3,
-                stakingModuleAddress: 0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F,
-                stakingModuleFee: 600,
-                treasuryFee: 400,
-                stakeShareLimit: 100,
-                status: 0,
-                name: "Community Staking",
-                lastDepositAt: 1735217387,
-                lastDepositBlock: 21486745,
-                exitedValidatorsCount: 104,
-                priorityExitShareThreshold: 125,
-                maxDepositsPerBlock: 30,
-                minDepositBlockDistance: 25
-            });
-        }
+        return stakingModules[_stakingModuleId];
     }
 }
