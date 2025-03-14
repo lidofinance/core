@@ -2,6 +2,7 @@ import { hexlify, parseUnits, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
+import { BLS } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import { ether, impersonate } from "lib";
 
@@ -23,12 +24,28 @@ export const generateValidator = (customWC?: string, customPukey?: string): SSZH
   };
 };
 
-export const generatePredeposit = (validator: SSZHelpers.ValidatorStruct): IStakingVault.DepositStruct => {
+export const generatePredeposit = (
+  validator: SSZHelpers.ValidatorStruct,
+): { deposit: IStakingVault.DepositStruct; depositY: BLS.DepositYStruct } => {
   return {
-    pubkey: validator.pubkey,
-    amount: ether("1"),
-    signature: randomBytes(96),
-    depositDataRoot: randomBytes32(),
+    deposit: {
+      pubkey: validator.pubkey,
+      amount: ether("1"),
+      signature: randomBytes(96),
+      depositDataRoot: randomBytes32(),
+    },
+    depositY: {
+      pubkeyY: {
+        a: randomBytes32(),
+        b: randomBytes32(),
+      },
+      signatureY: {
+        c0_a: randomBytes32(),
+        c0_b: randomBytes32(),
+        c1_a: randomBytes32(),
+        c1_b: randomBytes32(),
+      },
+    },
   };
 };
 
