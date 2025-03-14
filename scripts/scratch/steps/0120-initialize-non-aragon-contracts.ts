@@ -29,7 +29,6 @@ export async function main() {
   const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
-  const burnerAddress = state[Sk.burner].address;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -83,10 +82,6 @@ export async function main() {
   await makeTx(legacyOracle, "initialize", [lidoLocatorAddress, hashConsensusForAccountingAddress], { from: deployer });
 
   const zeroLastProcessingRefSlot = 0;
-
-  // Initialize Burner
-  const burner = await loadContract("Burner", burnerAddress);
-  await makeTx(burner, "initialize", [0, 0], { from: deployer });
 
   // Initialize AccountingOracle
   const accountingOracle = await loadContract("AccountingOracle", accountingOracleAddress);

@@ -192,7 +192,13 @@ export async function main() {
   ]);
 
   // Deploy Burner
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [admin, locator.address, lidoAddress]);
+  const isMigrationAllowed = false;
+  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
+    admin,
+    locator.address,
+    lidoAddress,
+    isMigrationAllowed,
+  ]);
 
   // Deploy OracleReportSanityChecker
   const oracleReportSanityCheckerArgs = [

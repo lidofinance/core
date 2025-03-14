@@ -197,6 +197,11 @@
       "contract": "@aragon/os/contracts/kernel/KernelProxy.sol"
     }
   },
+  "aragon-lido-app-repo": {
+    "proxy": {
+      "address": "0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1"
+    }
+  },
   "aragonIDAddress": "0x546aa2eae2514494eeadb7bbb35243348983c59d",
   "burner": {
     "address": "0xD15a672319Cf0352560eE76d9e89eAB0889046D3",

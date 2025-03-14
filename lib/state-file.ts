@@ -40,6 +40,7 @@ export enum Sk {
   aragonId = "aragonID",
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
+  aragonLidoAppRepo = "aragon-lido-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",

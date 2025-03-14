@@ -58,13 +58,14 @@ contract Burner is IBurner, AccessControlEnumerable {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
-    error AlreadyInitialized();
+    error MigrationNotAllowedOrAlreadyMigrated();
     error DirectETHTransfer();
     error ZeroRecoveryAmount();
     error StETHRecoveryWrongFunc();
     error ZeroBurnAmount();
     error BurnAmountExceedsActual(uint256 requestedAmount, uint256 actualAmount);
     error ZeroAddress(string field);
+    error OnlyLidoCanMigrate();
 
     bytes32 public constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 public constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
@@ -75,7 +76,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     uint256 private totalCoverSharesBurnt;
     uint256 private totalNonCoverSharesBurnt;
 
-    bool public isInitialized;
+    bool public isMigrationAllowed;
 
     ILidoLocator public immutable LOCATOR;
     ILido public immutable LIDO;
@@ -119,8 +120,9 @@ contract Burner is IBurner, AccessControlEnumerable {
      * @param _admin the Lido DAO Aragon agent contract address
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
+     * @param _isMigrationAllowed whether migration is allowed initially
      */
-    constructor(address _admin, address _locator, address _stETH) {
+    constructor(address _admin, address _locator, address _stETH, bool _isMigrationAllowed) {
         if (_admin == address(0)) revert ZeroAddress("_admin");
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
@@ -130,24 +132,27 @@ contract Burner is IBurner, AccessControlEnumerable {
 
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
+        isMigrationAllowed = _isMigrationAllowed;
     }
 
     /**
-     * @param _totalCoverSharesBurnt Shares burnt counter init value (cover case)
-     * @param _totalNonCoverSharesBurnt Shares burnt counter init value (non-cover case)
-     * @dev Although there is initialize function, the contract is not supposed to be upgradeable.
-     *      The initialization is moved from the constructor to be able to set the shares burnt counters
-     *      to the up-to-date values from the old Burner upon the upgrade.
+     * @param _oldBurner The address of the old Burner contract
+     * @dev The migration besides setting the shares related state requires transferring the stETH balance
+     *      from the old Burner contract to the new one which is to be performed by the Lido contract
+     *      along with the call of this function.
      */
-    function initialize(
-        uint256 _totalCoverSharesBurnt,
-        uint256 _totalNonCoverSharesBurnt
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (isInitialized) revert AlreadyInitialized();
+    function migrate(address _oldBurner) external {
+        if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();
+        if (_oldBurner == address(0)) revert ZeroAddress("_oldBurner");
+        if (!isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
+        isMigrationAllowed = false;
 
-        isInitialized = true;
-        totalCoverSharesBurnt = _totalCoverSharesBurnt;
-        totalNonCoverSharesBurnt = _totalNonCoverSharesBurnt;
+        IBurner oldBurner = IBurner(_oldBurner);
+        totalCoverSharesBurnt = oldBurner.getCoverSharesBurnt();
+        totalNonCoverSharesBurnt = oldBurner.getNonCoverSharesBurnt();
+        (uint256 coverShares, uint256 nonCoverShares) = oldBurner.getSharesRequestedToBurn();
+        coverSharesBurnRequested = coverShares;
+        nonCoverSharesBurnRequested = nonCoverShares;
     }
 
     /**

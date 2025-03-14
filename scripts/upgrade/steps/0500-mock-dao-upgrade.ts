@@ -2,6 +2,7 @@ import {
   AccountingOracle,
   Kernel,
   Lido,
+  LidoLocator,
   OssifiableProxy,
   Repo,
   StakingRouter,
@@ -37,6 +38,10 @@ export async function main(): Promise<void> {
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const upgradeTemplateV3Address = state[Sk.upgradeTemplateV3].address;
 
+  // while locator is not upgraded yet we can fetch the old burner address
+  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
+  const oldBurnerAddress = locator.burner();
+
   const parameters = readUpgradeParameters();
   const aoConsensusVersion = parameters[Sk.accountingOracle].deployParameters.consensusVersion;
 
@@ -46,6 +51,10 @@ export async function main(): Promise<void> {
   const locatorProxy = await loadContract<OssifiableProxy>("OssifiableProxy", locatorAddress);
   await locatorProxy.connect(agentSigner).proxy__upgradeTo(locatorImplAddress);
   log("LidoLocator upgraded to implementation", locatorImplAddress);
+
+  const upgradeTemplate = await loadContract<UpgradeTemplateV3>("UpgradeTemplateV3", upgradeTemplateV3Address);
+  await upgradeTemplate.connect(votingSigner).startUpgrade();
+  log("UpgradeTemplateV3 startUpgrade");
 
   const withdrawalsManagerProxy = await loadContract<WithdrawalsManagerProxy>(
     "WithdrawalsManagerProxy",
@@ -77,7 +86,8 @@ export async function main(): Promise<void> {
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);
-  await lido.connect(votingSigner).finalizeUpgrade_v3(); // can be called by anyone
+  await lido.connect(votingSigner).finalizeUpgrade_v3(oldBurnerAddress); // can be called by anyone
+  // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
 
   const accountingOracleProxy = await loadContract<OssifiableProxy>("OssifiableProxy", accountingOracleAddress);
@@ -97,7 +107,6 @@ export async function main(): Promise<void> {
     .grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress);
   log("StakingRouter granted REPORT_REWARDS_MINTED_ROLE to Accounting", accountingAddress);
 
-  const upgradeTemplate = await loadContract<UpgradeTemplateV3>("UpgradeTemplateV3", upgradeTemplateV3Address);
   await upgradeTemplate.connect(votingSigner).finishUpgrade();
   log("UpgradeTemplateV3 finishUpgrade");
 }

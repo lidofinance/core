@@ -32,4 +32,12 @@ interface IBurner {
       * Returns the total non-cover shares ever burnt.
       */
     function getNonCoverSharesBurnt() external view returns (uint256);
+
+    /**
+     * @param _oldBurner The address of the old Burner contract
+     * @dev The migration besides setting the shares related state requires transferring the stETH balance
+     *      from the old Burner contract to the new one which is to be performed by the Lido contract
+     *      along with the call of this function.
+     */
+    function migrate(address _oldBurner) external;
 }

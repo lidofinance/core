@@ -50,7 +50,8 @@ interface IAragonAppRepo {
 interface IBurner is IAccessControlEnumerable {
     function getCoverSharesBurnt() external view returns (uint256);
     function getNonCoverSharesBurnt() external view returns (uint256);
-    function initialize(uint256 _totalCoverSharesBurnt, uint256 _totalNonCoverSharesBurnt) external;
+    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares);
+    function isMigrationAllowed() external view returns (bool);
 }
 
 interface IWithdrawalsManagerProxy {
@@ -66,6 +67,7 @@ interface IVaultHub is IPausableUntilWithRoles, IOssifiableProxy {
 }
 
 interface ILido is IVersioned {
+    function balanceOf(address _account) external view returns (uint256);
 }
 
 interface ILidoLocator is IOssifiableProxy {
@@ -103,39 +105,67 @@ contract UpgradeTemplateV3 {
     //
     event UpgradeFinished();
 
+    struct UpgradeTemplateV3Params {
+        // New proxy contracts
+        address accounting;
+        address vaultHub;
+
+        // New non-proxy contracts
+        address burner;
+        address oracleReportSanityChecker;
+
+        // Existing proxies and contracts
+        address locator; // not upgraded at the time of the template creation
+        address agent;
+        address aragonAppLidoRepo;
+        address voting;
+        address nodeOperatorsRegistry;
+        address simpleDvt;
+        address wstETH;
+
+        // Aragon Apps new implementations
+        address lidoImplementation;
+
+        // New non-aragon implementations
+        address accountingOracleImplementation;
+        address newLocatorImplementation;
+        address withdrawalVaultImplementation;
+    }
+
     // Old upgraded non-proxy contracts
-    IBurner public constant _oldBurner = IBurner(0xD15a672319Cf0352560eE76d9e89eAB0889046D3);
-    IOracleReportSanityChecker public constant _oldOracleReportSanityChecker = IOracleReportSanityChecker(0x6232397ebac4f5772e53285B26c47914E9461E75);
+    IBurner public immutable _oldBurner;
+    IOracleReportSanityChecker public immutable _oldOracleReportSanityChecker;
 
     // New proxy contracts
-    IAccounting public constant _accounting = IAccounting(0x9015957A2210BB8B10e27d8BBEEF8d9498f123eF);
-    IVaultHub public constant _vaultHub = IVaultHub(0x9C6c49E1a5108eC5A2111c0b9B62624100d11e3a);
+    IAccounting public immutable _accounting;
+    IVaultHub public immutable _vaultHub;
 
     // New non-proxy contracts
-    IBurner public constant _burner = IBurner(0x897945A56464616a525C9e5F11a8D400a72a8f3A);
-    IOracleReportSanityChecker public constant _oracleReportSanityChecker = IOracleReportSanityChecker(0x633a7eB9b8912b22f3616013F3153de687F96074);
+    IBurner public immutable _burner;
+    IOracleReportSanityChecker public immutable _oracleReportSanityChecker;
 
     // Existing proxies and contracts
-    address public constant _agent = 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c;
-    IAragonAppRepo public constant _aragonAppLidoRepo = IAragonAppRepo(0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1);
-    ILidoLocator public constant _locator = ILidoLocator(0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb);
-    IAccountingOracle public constant _accountingOracle = IAccountingOracle(0x852deD011285fe67063a08005c71a85690503Cee);
-    address public constant _elRewardsVault = 0x388C818CA8B9251b393131C08a736A67ccB19297;
-    ILido public constant _lido = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
-    address public constant _voting = 0x2e59A20f205bB85a89C53f1936454680651E618e;
-    IWithdrawalVault public constant _withdrawalVault = IWithdrawalVault(0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f);
-    address public constant _validatorsExitBusOracle = 0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e;
-    address public constant _nodeOperatorsRegistry = 0x55032650b14df07b85bF18A3a3eC8E0Af2e028d5;
-    address public constant _simpleDvt = 0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433;
-    address public constant _wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
+    address public immutable _agent;
+    IAragonAppRepo public immutable _aragonAppLidoRepo;
+    ILidoLocator public immutable _locator;
+    IAccountingOracle public immutable _accountingOracle;
+    address public immutable _elRewardsVault;
+    ILido public immutable _lido;
+    address public immutable _voting;
+    IWithdrawalVault public immutable _withdrawalVault;
+    address public immutable _validatorsExitBusOracle;
+    address public immutable _nodeOperatorsRegistry;
+    address public immutable _simpleDvt;
+    address public immutable _wstETH;
 
     // Aragon Apps new implementations
-    address public constant _lidoImplementation = 0x267fB71b280FB34B278CedE84180a9A9037C941b;
+    address public immutable _lidoImplementation;
 
     // New non-aragon implementations
-    address public constant _accountingOracleImplementation = 0xF3c5E0A67f32CF1dc07a8817590efa102079a1aF;
-    address public constant _locatorImplementation = 0x1D920cc5bACf7eE506a271a5259f2417CaDeCE1d;
-    address public constant _withdrawalVaultImplementation = 0xCC52f17756C04bBa7E377716d7062fC36D7f69Fd;
+    address public immutable _accountingOracleImplementation;
+    address public immutable _newLocatorImplementation;
+    address public immutable _withdrawalVaultImplementation;
+
 
     // Values to set
 
@@ -147,22 +177,7 @@ contract UpgradeTemplateV3 {
     // Burner
     bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
     bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
-    // HashConsensus
-    bytes32 internal constant MANAGE_MEMBERS_AND_QUORUM_ROLE = keccak256("MANAGE_MEMBERS_AND_QUORUM_ROLE");
-    bytes32 internal constant DISABLE_CONSENSUS_ROLE = keccak256("DISABLE_CONSENSUS_ROLE");
-    bytes32 internal constant MANAGE_FRAME_CONFIG_ROLE = keccak256("MANAGE_FRAME_CONFIG_ROLE");
-    bytes32 internal constant MANAGE_FAST_LANE_CONFIG_ROLE = keccak256("MANAGE_FAST_LANE_CONFIG_ROLE");
-    bytes32 internal constant MANAGE_REPORT_PROCESSOR_ROLE = keccak256("MANAGE_REPORT_PROCESSOR_ROLE");
-    // StakingRouter
-    bytes32 internal constant STAKING_MODULE_PAUSE_ROLE = keccak256("STAKING_MODULE_PAUSE_ROLE");
-    bytes32 internal constant STAKING_MODULE_RESUME_ROLE = keccak256("STAKING_MODULE_RESUME_ROLE");
-    bytes32 internal constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
-    bytes32 internal constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
-    // WithdrawalQueue
-    bytes32 internal constant FINALIZE_ROLE = keccak256("FINALIZE_ROLE");
-    bytes32 internal constant ORACLE_ROLE = keccak256("ORACLE_ROLE");
-    // WithdrawalQueue and ValidatorsExitBusOracle
+    // PauseUntilWithRoles
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     // OracleReportSanityChecker
@@ -196,10 +211,6 @@ contract UpgradeTemplateV3 {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
 
-    // Auxiliary constants
-    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
-    uint256 internal constant UPGRADE_NOT_STARTED = 0;
-
     //
     // Values for checks to compare with or other
     //
@@ -216,42 +227,80 @@ contract UpgradeTemplateV3 {
     // happen in proper time period
     uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1754006400; // 2025-08-01 00:00:00 UTC
 
+    uint256 internal constant UPGRADE_NOT_STARTED = 0;
+
     //
     // Structured storage
     //
+    uint256 private _upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public _isUpgradeFinished;
+
+    uint256 internal INITIAL_OLD_BURNER_STETH_BALANCE;
+
+    constructor(UpgradeTemplateV3Params memory params) {
+        _locator = ILidoLocator(params.locator);
+
+        _oldBurner = IBurner(_locator.burner());
+        _oldOracleReportSanityChecker = IOracleReportSanityChecker(_locator.oracleReportSanityChecker());
+
+        _accounting = IAccounting(params.accounting);
+        _vaultHub = IVaultHub(params.vaultHub);
+
+        _burner = IBurner(params.burner);
+        _oracleReportSanityChecker = IOracleReportSanityChecker(params.oracleReportSanityChecker);
+
+        _agent = params.agent;
+        _aragonAppLidoRepo = IAragonAppRepo(params.aragonAppLidoRepo);
+        _accountingOracle = IAccountingOracle(_locator.accountingOracle());
+        _elRewardsVault = _locator.elRewardsVault();
+        _lido = ILido(_locator.lido());
+        _voting = params.voting;
+        _withdrawalVault = IWithdrawalVault(_locator.withdrawalVault());
+        _validatorsExitBusOracle = _locator.validatorsExitBusOracle();
+        _nodeOperatorsRegistry = params.nodeOperatorsRegistry;
+        _simpleDvt = params.simpleDvt;
+        _wstETH = params.wstETH;
+
+        _lidoImplementation = params.lidoImplementation;
+
+        _accountingOracleImplementation = params.accountingOracleImplementation;
+        _newLocatorImplementation = params.newLocatorImplementation;
+        _withdrawalVaultImplementation = params.withdrawalVaultImplementation;
+    }
+
+    /// @notice Need to be called before LidoOracle implementation is upgraded to LegacyOracle
+    function startUpgrade() external {
+        if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
+        _assertNotExpired();
+        if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
+
+        // Commented till mocking DAO upgrade is not implemented in single block
+        // if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+        // _upgradeBlockNumber = block.number;
+
+        // Save initial state for the check after burner migration
+        INITIAL_OLD_BURNER_STETH_BALANCE = _lido.balanceOf(address(_oldBurner));
+
+        _assertProxyImplementation(_locator, _newLocatorImplementation);
+        _assertNewLocatorAddresses();
+    }
 
     /// @notice Need to be called after LidoOracle implementation is upgraded to LegacyOracle
     function finishUpgrade() external {
+        if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
         _assertNotExpired();
+
+        // Commented till mocking DAO upgrade is not implemented in single block
+        // if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+
         _finishUpgrade();
         emit UpgradeFinished();
     }
 
-    /// @notice Used externally for 2nd Aragon voting (roles revoke) to fail if 1st voting isn't enacted
-    function revertIfUpgradeNotFinished() public view {
-        if (!_isUpgradeFinished) {
-            revert UpgradeNotFinished();
-        }
-    }
-
-    function _assertLocatorAddresses() internal view {
+    function _assertNewLocatorAddresses() internal view {
         ILidoLocator locator = _locator;
-        if (
-            locator.accountingOracle() != address(_accountingOracle)
-         || locator.burner() != address(_burner)
-        //  || locator.depositSecurityModule() != address(_depositSecurityModule)
-         || locator.elRewardsVault() != _elRewardsVault
-         || locator.lido() != address(_lido)
-        //  || locator.legacyOracle() != address(_legacyOracle)
-        //  || locator.oracleDaemonConfig() != address(_oracleDaemonConfig)
+        if (locator.burner() != address(_burner)
          || locator.oracleReportSanityChecker() != address(_oracleReportSanityChecker)
-        //  || locator.postTokenRebaseReceiver() != address(_legacyOracle)
-        //  || locator.stakingRouter() != address(_stakingRouter)
-         || locator.treasury() != _agent
-        //  || locator.validatorsExitBusOracle() != address(_validatorsExitBusOracle)
-        //  || locator.withdrawalQueue() != address(_withdrawalQueue)
-         || locator.withdrawalVault() != address(_withdrawalVault)
          || locator.accounting() != address(_accounting)
          || locator.wstETH() != address(_wstETH)
          || locator.vaultHub() != address(_vaultHub)
@@ -260,18 +309,15 @@ contract UpgradeTemplateV3 {
         }
     }
 
-    function _upgradeOssifiableProxy(IOssifiableProxy proxy, address newImplementation) internal {
-        // NB: Such separation of external call into a separate function saves contract bytecode size
-        proxy.proxy__upgradeTo(newImplementation);
-    }
-
-    function _assertAdminsOfProxies(address admin) internal view {
-        _assertProxyAdmin(_locator, admin);
-        _assertProxyAdmin(_accountingOracle, admin);
-    }
-
     function _assertProxyAdmin(IOssifiableProxy proxy, address admin) internal view {
         if (proxy.proxy__getAdmin() != admin) revert IncorrectProxyAdmin(address(proxy));
+    }
+
+    function _assertProxyImplementation(IOssifiableProxy proxy, address implementation) internal view {
+        address actualImplementation = proxy.proxy__getImplementation();
+        if (actualImplementation != implementation) {
+            revert IncorrectProxyImplementation(address(proxy), actualImplementation);
+        }
     }
 
     function _assertOracleReportSanityCheckerRoles() internal view {
@@ -342,11 +388,6 @@ contract UpgradeTemplateV3 {
         if (_isUpgradeFinished) revert CanOnlyFinishOnce();
         _isUpgradeFinished = true;
 
-        _burner.initialize(
-            _oldBurner.getCoverSharesBurnt(),
-            _oldBurner.getNonCoverSharesBurnt()
-        );
-
         _passAdminRoleFromTemplateToAgent();
 
         _assertUpgradeIsFinishedCorrectly();
@@ -362,9 +403,32 @@ contract UpgradeTemplateV3 {
 
         _checkContractVersions();
 
+        _checkBurnerMigratedCorrectly();
+
         _assertFinalACL();
 
         _assertNewAragonAppImplementations();
+        _assertProxyImplementation(_accountingOracle, _accountingOracleImplementation);
+        if (_withdrawalVault.implementation() != _withdrawalVaultImplementation) {
+            revert IncorrectProxyImplementation(address(_withdrawalVault), _withdrawalVaultImplementation);
+        }
+    }
+
+    function _checkBurnerMigratedCorrectly() internal view {
+        (uint256 oldCoverShares, uint256 oldNonCoverShares) = _oldBurner.getSharesRequestedToBurn();
+        (uint256 newCoverShares, uint256 newNonCoverShares) = _burner.getSharesRequestedToBurn();
+
+        if (
+            _oldBurner.getCoverSharesBurnt() != _burner.getCoverSharesBurnt() ||
+            _oldBurner.getNonCoverSharesBurnt() != _burner.getNonCoverSharesBurnt() ||
+            oldCoverShares != newCoverShares ||
+            oldNonCoverShares != newNonCoverShares ||
+            _lido.balanceOf(address(_oldBurner)) != 0 ||
+            _lido.balanceOf(address(_burner)) != INITIAL_OLD_BURNER_STETH_BALANCE ||
+            _burner.isMigrationAllowed()
+        ) {
+            revert IncorrectBurnerMigration();
+        }
     }
 
     function _assertNewAragonAppImplementations() internal view {
@@ -437,6 +501,7 @@ contract UpgradeTemplateV3 {
 
     error OnlyVotingCanUpgrade();
     error UpgradeAlreadyStarted();
+    error UpgradeAlreadyFinished();
     error CanOnlyFinishOnce();
     error UpgradeNotStarted();
     error UpgradeNotFinished();
@@ -444,6 +509,7 @@ contract UpgradeTemplateV3 {
     error LidoOracleMustBeUpgradedToLegacy();
     error IncorrectDsmOwner();
     error IncorrectProxyAdmin(address proxy);
+    error IncorrectProxyImplementation(address proxy, address implementation);
     error IncorrectInitialImplementation(address proxy);
     error InvalidContractVersion(address contractAddress, uint256 actualVersion);
     error IncorrectOZAccessControlAdmin(address contractAddress);
@@ -464,4 +530,5 @@ contract UpgradeTemplateV3 {
     error IncorrectFeeDistribution();
     error StartAndFinishMustBeInSameBlock();
     error Expired();
+    error IncorrectBurnerMigration();
 }

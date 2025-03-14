@@ -8,6 +8,7 @@ import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonAp
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {IBurner} from "../common/interfaces/IBurner.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
@@ -202,7 +203,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
-        _initialize_v3();
+        _initialize_v3(address(0));
         initialized();
     }
 
@@ -210,23 +211,38 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     * @param _oldBurner The address of the old Burner contract to migrate from
      */
-    function finalizeUpgrade_v3() external {
+    function finalizeUpgrade_v3(address _oldBurner) external {
         require(hasInitialized(), "NOT_INITIALIZED");
+        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
         _checkContractVersion(2);
 
-        _initialize_v3();
+        _initialize_v3(_oldBurner);
     }
 
     /**
      * initializer for the Lido version "3"
+     * @param _oldBurner The address of the old Burner contract to migrate from or zero if no migration is needed
      */
-    function _initialize_v3() internal {
+    function _initialize_v3(address _oldBurner) internal {
         _setContractVersion(3);
 
         // set infinite allowance for burner from withdrawal queue
         // to burn finalized requests' shares
         _approve(getLidoLocator().withdrawalQueue(), getLidoLocator().burner(), INFINITE_ALLOWANCE);
+
+        // migrate burner state and stETH balance
+        if (_oldBurner != address(0)) {
+            address newBurner = getLidoLocator().burner();
+            uint256 oldBurnerBalance = _sharesOf(_oldBurner);
+            if (oldBurnerBalance > 0) {
+                _transferShares(_oldBurner, newBurner, oldBurnerBalance);
+            }
+
+            // initialize new burner with state from old burner
+            IBurner(newBurner).migrate(_oldBurner);
+        }
     }
 
     /**
