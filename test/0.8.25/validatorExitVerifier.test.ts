@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { StakingRouter_Mock, ValidatorExitVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
@@ -11,7 +10,7 @@ import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import {
-  encodeExitRequestsDataList,
+  encodeExitRequestsDataListWithFormat,
   ExitRequest,
   findStakingRouterMockEvents,
   toHistoricalHeaderWitness,
@@ -19,6 +18,8 @@ import {
   toValidatorWitness,
 } from "./validatorExitVerifierHelpers";
 import { ACTIVE_VALIDATOR_PROOF } from "./validatorState";
+
+const EMPTY_REPORT = { data: "0x", dataFormat: 1n };
 
 describe("ValidatorExitVerifier.sol", () => {
   let originalState: string;
@@ -153,25 +154,27 @@ describe("ValidatorExitVerifier.sol", () => {
           moduleId,
           nodeOpId,
           valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          valPubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
         },
       ];
-      const encodedExitRequests = encodeExitRequestsDataList(exitRequests);
-      const encodedExitRequestsHash = keccak256(encodedExitRequests);
-      await vebo.setExitRequestsStatus(encodedExitRequestsHash, {
-        totalItemsCount: 1n,
-        deliveredItemsCount: 1n,
-        reportDataFormat: 1n,
-        contractVersion: 1n,
-        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-      });
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        {
+          totalItemsCount: 1n,
+          deliveredItemsCount: 1n,
+          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        },
+        exitRequests,
+      );
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
       const tx = await validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
-        encodedExitRequests,
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
       );
 
       const receipt = await tx.wait();
@@ -199,26 +202,28 @@ describe("ValidatorExitVerifier.sol", () => {
           moduleId,
           nodeOpId,
           valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          valPubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
         },
       ];
-      const encodedExitRequests = encodeExitRequestsDataList(exitRequests);
-      const encodedExitRequestsHash = keccak256(encodedExitRequests);
-      await vebo.setExitRequestsStatus(encodedExitRequestsHash, {
-        totalItemsCount: 1n,
-        deliveredItemsCount: 1n,
-        reportDataFormat: 1n,
-        contractVersion: 1n,
-        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-      });
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        {
+          totalItemsCount: 1n,
+          deliveredItemsCount: 1n,
+          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        },
+        exitRequests,
+      );
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       const tx = await validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-        encodedExitRequests,
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
         toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
       );
 
       const receipt = await tx.wait();
@@ -241,12 +246,12 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
-          "0x",
           {
             rootsTimestamp: 1n,
             header: invalidHeader,
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
     });
@@ -255,12 +260,12 @@ describe("ValidatorExitVerifier.sol", () => {
       const badTimestamp = 999_999_999;
       await expect(
         validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
-          "0x",
           {
             rootsTimestamp: badTimestamp,
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
     });
@@ -271,9 +276,9 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
     });
@@ -290,18 +295,20 @@ describe("ValidatorExitVerifier.sol", () => {
           moduleId,
           nodeOpId,
           valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          valPubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
         },
       ];
-      const encodedExitRequests = encodeExitRequestsDataList(exitRequests);
-      const encodedExitRequestsHash = keccak256(encodedExitRequests);
-      await vebo.setExitRequestsStatus(encodedExitRequestsHash, {
-        totalItemsCount: 1n,
-        deliveredItemsCount: 1n,
-        reportDataFormat: 1n,
-        contractVersion: 1n,
-        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-      });
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        {
+          totalItemsCount: 1n,
+          deliveredItemsCount: 1n,
+          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        },
+        exitRequests,
+      );
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
@@ -317,9 +324,9 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
-          encodedExitRequests,
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, timestamp),
           [badWitness],
+          encodedExitRequests,
         ),
       ).to.be.reverted;
     });
@@ -332,13 +339,13 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           {
             rootsTimestamp: 1n,
             header: invalidHeader,
           },
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
     });
@@ -353,7 +360,6 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
           {
             header: invalidHeader,
@@ -361,6 +367,7 @@ describe("ValidatorExitVerifier.sol", () => {
             proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
     });
@@ -369,10 +376,10 @@ describe("ValidatorExitVerifier.sol", () => {
       const badTimestamp = 999_999_999;
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, badTimestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
     });
@@ -383,10 +390,10 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
     });
@@ -399,7 +406,6 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           {
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
@@ -407,6 +413,7 @@ describe("ValidatorExitVerifier.sol", () => {
             rootGIndex: invalidRootGIndex,
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+          EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidGIndex");
     });
@@ -416,7 +423,6 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          "0x",
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           {
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
@@ -428,6 +434,7 @@ describe("ValidatorExitVerifier.sol", () => {
             ],
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+          EMPTY_REPORT,
         ),
       ).to.be.reverted;
     });
@@ -444,18 +451,20 @@ describe("ValidatorExitVerifier.sol", () => {
           moduleId,
           nodeOpId,
           valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          valPubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
         },
       ];
-      const encodedExitRequests = encodeExitRequestsDataList(exitRequests);
-      const encodedExitRequestsHash = keccak256(encodedExitRequests);
-      await vebo.setExitRequestsStatus(encodedExitRequestsHash, {
-        totalItemsCount: 1n,
-        deliveredItemsCount: 1n,
-        reportDataFormat: 1n,
-        contractVersion: 1n,
-        deliveryHistory: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-      });
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        {
+          totalItemsCount: 1n,
+          deliveredItemsCount: 1n,
+          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        },
+        exitRequests,
+      );
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -471,10 +480,10 @@ describe("ValidatorExitVerifier.sol", () => {
 
       await expect(
         validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
-          encodedExitRequests,
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [badWitness],
+          encodedExitRequests,
         ),
       ).to.be.reverted;
     });

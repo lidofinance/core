@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ethers } from "ethers";
+import { ContractTransactionReceipt, ethers, keccak256 } from "ethers";
 
 import {
   HistoricalHeaderWitnessStruct,
@@ -12,20 +12,33 @@ import { de0x, findEventsWithInterfaces, numberToHex } from "lib";
 import { BlockHeader, ValidatorStateProof } from "./validatorState";
 
 export interface ExitRequest {
-  moduleId: number;
+  pubkey: string;
   nodeOpId: number;
+  moduleId: number;
   valIndex: number;
-  valPubkey: string;
 }
 
-export const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-  const pubkeyHex = de0x(valPubkey);
+export const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, pubkey }: ExitRequest) => {
+  const pubkeyHex = de0x(pubkey);
   expect(pubkeyHex.length).to.equal(48 * 2);
   return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
 };
 
 export const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
   return "0x" + requests.map(encodeExitRequestHex).join("");
+};
+
+export const encodeExitRequestsDataListWithFormat = (requests: ExitRequest[]) => {
+  const encodedExitRequests = { data: encodeExitRequestsDataList(requests), dataFormat: 1n };
+
+  const encodedExitRequestsHash = keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ["bytes", "uint256"],
+      [encodedExitRequests.data, encodedExitRequests.dataFormat],
+    ),
+  );
+
+  return { encodedExitRequests, encodedExitRequestsHash };
 };
 
 const stakingRouterMockEventABI = [
@@ -58,7 +71,6 @@ export function toValidatorWitness(
     effectiveBalance: validatorStateProof.validator.effectiveBalance,
     activationEligibilityEpoch: validatorStateProof.validator.activationEligibilityEpoch,
     activationEpoch: validatorStateProof.validator.activationEpoch,
-    exitEpoch: validatorStateProof.validator.exitEpoch,
     withdrawableEpoch: validatorStateProof.validator.withdrawableEpoch,
     slashed: validatorStateProof.validator.slashed,
     validatorProof: validatorStateProof.validatorProof,

@@ -7,7 +7,7 @@ import {BeaconBlockHeader, Slot, Validator} from "./lib/Types.sol";
 import {GIndex} from "./lib/GIndex.sol";
 import {SSZ} from "./lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBusOracle, RequestStatus} from "./interfaces/IValidatorsExitBusOracle.sol";
+import {IValidatorsExitBusOracle, DeliveryHistory} from "./interfaces/IValidatorsExitBusOracle.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ExitRequestData {
@@ -24,7 +24,6 @@ struct ValidatorWitness {
     bool slashed;
     uint64 activationEligibilityEpoch;
     uint64 activationEpoch;
-    uint64 exitEpoch;
     uint64 withdrawableEpoch;
     // ------------------------ Proof ---------------------------
     bytes32[] validatorProof;
@@ -51,8 +50,12 @@ struct HistoricalHeaderWitness {
 contract ValidatorExitVerifier {
     using SSZ for Validator;
     using SSZ for BeaconBlockHeader;
-    using ExitRequestStatus for RequestStatus;
-    using ExitRequests for bytes;
+
+    struct ExitRequestsDeliveryHistory {
+        uint256 totalItemsCount;
+        uint256 deliveredItemsCount;
+        DeliveryHistory[] deliveryHistory;
+    }
 
     /// @notice EIP-4788 contract address that provides a mapping of timestamp -> known beacon block root.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
@@ -106,9 +109,8 @@ contract ValidatorExitVerifier {
         uint64 provableBeaconBlockTimestamp,
         uint64 eligibleExitRequestTimestamp
     );
-    error ValidatorAlreadyRequestedExit(bytes pubkey, uint256 validatorIndex);
-    error ExitRequestsCountMismatch(uint256 exitRequestsCount, uint256 exitRequestsCountInExitReportStatus);
-    error ChainTimeConfigurationMismatch();
+    error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
+    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -166,32 +168,33 @@ contract ValidatorExitVerifier {
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
      */
     function verifyActiveValidatorsAfterExitRequest(
-        ExitRequestData calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
-        ValidatorWitness[] calldata validatorWitnesses
+        ValidatorWitness[] calldata validatorWitnesses,
+        ExitRequestData calldata exitRequests
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
 
-        RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
+        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle());
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+
+        ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests.data
-                .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+                exitRequests.data,
+                exitRequests.dataFormat,
+                validatorWitnesses[i].exitRequestIndex
+            );
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
-                requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
+                _getExitRequestTimestamp(requestsDeliveryHistory, validatorWitnesses[i].exitRequestIndex),
                 beaconBlock.header.slot,
                 validatorWitnesses[i].activationEpoch
             );
 
             _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
-                moduleId,
-                nodeOpId,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportUnexitedValidator(moduleId, nodeOpId, pubkey, secondsSinceEligibleExitRequest);
         }
     }
 
@@ -205,48 +208,35 @@ contract ValidatorExitVerifier {
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited in oldBlock.header.
      */
     function verifyHistoricalActiveValidatorsAfterExitRequest(
-        ExitRequestData calldata exitRequests,
         ProvableBeaconBlockHeader calldata beaconBlock,
         HistoricalHeaderWitness calldata oldBlock,
-        ValidatorWitness[] calldata validatorWitnesses
+        ValidatorWitness[] calldata validatorWitnesses,
+        ExitRequestData calldata exitRequests
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
+        _verifyHistoricalBeaconBlockRoot(beaconBlock, oldBlock);
 
-        if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
-            revert UnsupportedSlot(oldBlock.header.slot);
-        }
+        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle());
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
-            revert InvalidGIndex();
-        }
-
-        SSZ.verifyProof({
-            proof: oldBlock.proof,
-            root: beaconBlock.header.stateRoot,
-            leaf: oldBlock.header.hashTreeRoot(),
-            gI: oldBlock.rootGIndex
-        });
-
-        RequestStatus memory requestStatus = _verifyRequestStatus(exitRequests);
+        ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
-            (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = exitRequests.data
-                .unpackExitRequest(validatorWitnesses[i].exitRequestIndex);
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+                exitRequests.data,
+                exitRequests.dataFormat,
+                validatorWitnesses[i].exitRequestIndex
+            );
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
-                requestStatus.getValidatorExitRequestTimestamp(validatorWitnesses[i].exitRequestIndex),
+                _getExitRequestTimestamp(requestsDeliveryHistory, validatorWitnesses[i].exitRequestIndex),
                 oldBlock.header.slot,
                 validatorWitnesses[i].activationEpoch
             );
 
             _verifyValidatorIsNotExited(oldBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            IStakingRouter(LOCATOR.stakingRouter()).reportUnexitedValidator(
-                moduleId,
-                nodeOpId,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportUnexitedValidator(moduleId, nodeOpId, pubkey, secondsSinceEligibleExitRequest);
         }
     }
 
@@ -268,14 +258,26 @@ contract ValidatorExitVerifier {
         if (trustedRoot != beaconBlock.header.hashTreeRoot()) {
             revert InvalidBlockHeader();
         }
+    }
 
-        // Sanity check. Ensure the chain-time configuration is consistent with the block slot
-        // if (
-        //     beaconBlock.rootsTimestamp < (GENESIS_TIME + beaconBlock.header.slot.unwrap() * SECONDS_PER_SLOT) ||
-        //     beaconBlock.rootsTimestamp > (GENESIS_TIME + (beaconBlock.header.slot.unwrap() + 1) * SECONDS_PER_SLOT)
-        // ) {
-        //     revert ChainTimeConfigurationMismatch();
-        // }
+    function _verifyHistoricalBeaconBlockRoot(
+        ProvableBeaconBlockHeader calldata beaconBlock,
+        HistoricalHeaderWitness calldata oldBlock
+    ) internal view {
+        if (oldBlock.header.slot < FIRST_SUPPORTED_SLOT) {
+            revert UnsupportedSlot(oldBlock.header.slot);
+        }
+
+        if (!_getHistoricalSummariesGI(beaconBlock.header.slot).isParentOf(oldBlock.rootGIndex)) {
+            revert InvalidGIndex();
+        }
+
+        SSZ.verifyProof({
+            proof: oldBlock.proof,
+            root: beaconBlock.header.stateRoot,
+            leaf: oldBlock.header.hashTreeRoot(),
+            gI: oldBlock.rootGIndex
+        });
     }
 
     /**
@@ -284,13 +286,9 @@ contract ValidatorExitVerifier {
     function _verifyValidatorIsNotExited(
         BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
-        bytes calldata pubkey,
+        bytes memory pubkey,
         uint256 validatorIndex
     ) internal view {
-        if (witness.exitEpoch != FAR_FUTURE_EPOCH) {
-            revert ValidatorAlreadyRequestedExit(pubkey, validatorIndex);
-        }
-
         Validator memory validator = Validator({
             pubkey: pubkey,
             withdrawalCredentials: witness.withdrawalCredentials,
@@ -298,7 +296,7 @@ contract ValidatorExitVerifier {
             slashed: witness.slashed,
             activationEligibilityEpoch: witness.activationEligibilityEpoch,
             activationEpoch: witness.activationEpoch,
-            exitEpoch: witness.exitEpoch,
+            exitEpoch: FAR_FUTURE_EPOCH,
             withdrawableEpoch: witness.withdrawableEpoch
         });
 
@@ -343,28 +341,6 @@ contract ValidatorExitVerifier {
         return referenceTimestamp - eligibleExitRequestTimestamp;
     }
 
-    /**
-     * @dev Retrieves the status of the provided exit requests from the ValidatorsExitBusOracle,
-     *      and performs consistency checks against the data.
-     */
-    function _verifyRequestStatus(
-        ExitRequestData calldata exitRequests
-    ) internal view returns (RequestStatus memory requestStatus) {
-        ExitRequests.verifyDataFormat(exitRequests.dataFormat);
-
-
-        bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        requestStatus = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle()).getExitRequestsStatus(
-            exitRequestsHash
-        );
-
-        // Sanity check. Verify that the number of exit requests matches the oracle's record
-        uint256 exitRequestsCount = exitRequests.data.count();
-        if (exitRequestsCount != requestStatus.totalItemsCount) {
-            revert ExitRequestsCountMismatch(exitRequestsCount, requestStatus.totalItemsCount);
-        }
-    }
-
     function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
         GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
         return gI.shr(offset);
@@ -373,106 +349,38 @@ contract ValidatorExitVerifier {
     function _getHistoricalSummariesGI(Slot stateSlot) internal view returns (GIndex) {
         return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
-}
 
-/**
- * @notice Library for fetching validator exit request timestamps from a RequestStatus struct.
- */
-library ExitRequestStatus {
-    error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
-    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    function _getExitRequestDeliveryHistory(
+        IValidatorsExitBusOracle vebo,
+        ExitRequestData calldata exitRequests
+    ) internal view returns (ExitRequestsDeliveryHistory memory) {
+        bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
+        (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) = vebo
+            .getExitRequestsDeliveryHistory(exitRequestsHash);
 
-    /**
-     * @dev Retrieves the block timestamp at which a particular key (i.e., exit request) was delivered.
-     * @param requestStatus The RequestStatus struct containing delivery history.
-     * @param keyIndex The index of the exit request to look up.
-     * @return validatorExitRequestTimestamp The timestamp when this key was delivered.
-     */
-    function getValidatorExitRequestTimestamp(
-        RequestStatus memory requestStatus,
-        uint256 keyIndex
+        return ExitRequestsDeliveryHistory(totalItemsCount, deliveredItemsCount, history);
+    }
+
+    function _getExitRequestTimestamp(
+        ExitRequestsDeliveryHistory memory history,
+        uint256 index
     ) internal pure returns (uint64 validatorExitRequestTimestamp) {
-        if (keyIndex >= requestStatus.totalItemsCount) {
-            revert KeyIndexOutOfRange(keyIndex, requestStatus.totalItemsCount);
+        if (index >= history.totalItemsCount) {
+            revert KeyIndexOutOfRange(index, history.totalItemsCount);
         }
 
-        if (keyIndex > requestStatus.deliveredItemsCount - 1) {
-            revert KeyWasNotUnpacked(keyIndex, requestStatus.deliveredItemsCount - 1);
+        if (index > history.deliveredItemsCount - 1) {
+            revert KeyWasNotUnpacked(index, history.deliveredItemsCount - 1);
         }
 
-        for (uint256 i = 0; i < requestStatus.deliveryHistory.length; i++) {
-            if (requestStatus.deliveryHistory[i].lastDeliveredKeyIndex >= keyIndex) {
-                return requestStatus.deliveryHistory[i].timestamp;
+        for (uint256 i = 0; i < history.deliveryHistory.length; i++) {
+            if (history.deliveryHistory[i].lastDeliveredKeyIndex >= index) {
+                return history.deliveryHistory[i].timestamp;
             }
         }
 
         // As the loop should always end prematurely with the `return` statement,
         // this code should be unreachable. We assert `false` just to be safe.
         assert(false);
-    }
-}
-
-/**
- * @notice Library for unpacking validator exit request data.
- */
-library ExitRequests {
-    // The data format version supported by this library
-    uint256 internal constant SUPPORTED_DATA_FORMAT = 1;
-
-    uint256 internal constant PACKED_REQUEST_LENGTH = 64;
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
-
-    error UnsupportedReportDataFormat(uint256 reportDataFormat);
-    error ExitRequestIndexOutOfRange(uint256 exitRequestIndex);
-
-    /**
-     * @dev Unpacks a single exit request from a batch of exit requests.
-     * @param exitRequests The concatenated exit requests data.
-     * @param exitRequestIndex The index of the request to extract from the batch.
-     */
-    function unpackExitRequest(
-        bytes calldata exitRequests,
-        uint256 exitRequestIndex
-    ) internal pure returns (bytes calldata pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
-        if (exitRequestIndex >= count(exitRequests)) {
-            revert ExitRequestIndexOutOfRange(exitRequestIndex);
-        }
-
-        uint256 itemOffset;
-        uint256 dataWithoutPubkey;
-
-        assembly {
-            // Compute the start of the selected item
-            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, exitRequestIndex))
-
-            // Load the first 16 bytes (moduleId, nodeOpId, part of valIndex)
-            dataWithoutPubkey := shr(128, calldataload(itemOffset))
-
-            // The next 48 bytes are the validator's public key
-            pubkey.length := PUBLIC_KEY_LENGTH
-            pubkey.offset := add(itemOffset, 16)
-        }
-
-        //                              dataWithoutPubkey
-        // MSB <---------------------------------------------------------------------- LSB
-        // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-        valIndex = uint64(dataWithoutPubkey);
-        nodeOpId = uint40(dataWithoutPubkey >> 64);
-        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-        return (pubkey, nodeOpId, moduleId, valIndex);
-    }
-
-    /**
-     * @dev Counts how many exit requests are packed in the given calldata array.
-     */
-    function count(bytes calldata exitRequests) internal pure returns (uint256) {
-        return exitRequests.length / PACKED_REQUEST_LENGTH;
-    }
-
-    function verifyDataFormat(uint256 dataFormat) internal pure {
-        if (dataFormat != SUPPORTED_DATA_FORMAT) {
-            revert UnsupportedReportDataFormat(dataFormat);
-        }
     }
 }

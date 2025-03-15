@@ -10,14 +10,14 @@ struct DeliveryHistory {
     uint256 lastDeliveredKeyIndex;
 }
 
-struct RequestStatus {
-    uint256 totalItemsCount;
-    uint256 deliveredItemsCount;
-    uint256 contractVersion;
-    DeliveryHistory[] deliveryHistory;
-}
-
 interface IValidatorsExitBusOracle {
-    function getExitRequestsStatus(bytes32 exitRequestsHash) external view returns (RequestStatus memory);
+    function getExitRequestsDeliveryHistory(
+        bytes32 exitRequestsHash
+    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history);
 
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external view returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
 }
