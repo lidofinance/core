@@ -70,8 +70,8 @@ abstract contract CLProofVerifier {
                 ↑
        data to be proven
     */
-    uint8 public constant WC_PUBKEY_PARENT_DEPTH = 2;
-    uint256 public constant WC_PUBKEY_PARENT_POSITION = 0;
+    uint8 constant WC_PUBKEY_PARENT_DEPTH = 2;
+    uint256 constant WC_PUBKEY_PARENT_POSITION = 0;
 
     /// @notice GIndex of parent node for (Pubkey,WC) in validator container
     GIndex public immutable GI_PUBKEY_WC_PARENT =
@@ -127,12 +127,13 @@ abstract contract CLProofVerifier {
        ↑                   (proof[0])       ↑
     needed for GIndex                  what needs to be proven
      */
-    uint8 public constant STATE_ROOT_DEPTH = 3;
-    uint256 public constant STATE_ROOT_POSITION = 3;
-
-    uint256 public constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
+    uint8 constant STATE_ROOT_DEPTH = 3;
+    uint256 constant STATE_ROOT_POSITION = 3;
     /// @notice GIndex of state root in Beacon block header
     GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
+
+    /// @notice location(from end) of parent node for (slot,proposerInd) in concatenated merkle proof
+    uint256 constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
 
     /// @notice see `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
@@ -162,11 +163,16 @@ abstract contract CLProofVerifier {
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
     function _validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) internal view {
+        // verifies user provided slot against user provided proof
+        // proof verification is done in `SSZ.verifyProof` and is not affected by slot
         uint64 provenSlot = _verifySlot(_witness);
+
         // parent node for first two leaves in validator container tree: pubkey & wc
         // we use 'leaf' instead of 'node' due to proving a subtree where this node is a leaf
         bytes32 leaf = SSZ.sha256Pair(SSZ.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
-        // concatenated index for parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
+
+        // concatenated GIndex for
+        // parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
         GIndex gIndex = concat(
             GI_STATE_ROOT,
             concat(_getValidatorGI(_witness.validatorIndex, provenSlot), GI_PUBKEY_WC_PARENT)
@@ -182,7 +188,7 @@ abstract contract CLProofVerifier {
 
     /**
      * @notice returns parent CL block root for given child block timestamp
-     * @param _witness timestamp of child block
+     * @param _witness object containing proof, slot and proposerIndex
      * @return slot verified against `_witness.proof`
      * @dev checks slot and proposerIndex from against proof[:-2]
      * This is not a case of circular proving - e.g. slot manipulates gIndex and allows to manipulate proof
@@ -204,7 +210,7 @@ abstract contract CLProofVerifier {
             SSZ.toLittleEndian(_witness.slot),
             SSZ.toLittleEndian(_witness.proposerIndex)
         );
-        if (_witness.proof[_witness.proof.length - 2] != parentSlotProposer) {
+        if (_witness.proof[_witness.proof.length - SLOT_PROPOSER_PARENT_PROOF_OFFSET] != parentSlotProposer) {
             revert InvalidSlot();
         }
         return _witness.slot;

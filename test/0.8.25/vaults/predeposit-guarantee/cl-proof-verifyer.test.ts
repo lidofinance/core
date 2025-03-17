@@ -246,12 +246,12 @@ describe("CLProofVerifier.sol", () => {
     const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator);
     const pivotSlot = 1000;
 
-    const prepareCLState = async (depth: number, prefillCount: number, slot: number) => {
+    const prepareCLState = async (gIndex: string, slot: number) => {
       const {
         sszMerkleTree: localTree,
         gIFirstValidator,
         firstValidatorLeafIndex: localFirstValidatorLeafIndex,
-      } = await prepareLocalMerkleTree(depth, prefillCount);
+      } = await prepareLocalMerkleTree(gIndex);
       await localTree.addValidatorLeaf(provenValidator);
 
       const gIndexProven = await localTree.getGeneralizedIndex(localFirstValidatorLeafIndex + 1n);
@@ -271,8 +271,8 @@ describe("CLProofVerifier.sol", () => {
     };
 
     const [prev, curr] = await Promise.all([
-      prepareCLState(0x28, 0x56, pivotSlot - 1),
-      prepareCLState(0x28, 0x96, pivotSlot + 1),
+      prepareCLState("0x0000000000000000000000000000000000000000000000000056000000000028", pivotSlot - 1),
+      prepareCLState("0x0000000000000000000000000000000000000000000000000096000000000028", pivotSlot + 1),
     ]);
 
     // current CL state
