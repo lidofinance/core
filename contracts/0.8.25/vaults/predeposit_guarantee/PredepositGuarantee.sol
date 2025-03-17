@@ -93,6 +93,10 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
     }
 
+    uint8 public constant MIN_SUPPORTED_WC_VERSION = 0x01;
+    uint8 public constant MAX_SUPPORTED_WC_VERSION = 0x02;
+
+    /// @notice amount of ether that is predeposited with each validator
     uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
     /**
@@ -454,7 +458,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
      * @dev will revert if proof is invalid, validator is not predeposited or withdrawal credentials belong to correct vault
-     * @dev validator WC versions mismatch (e.g v1 vs v2) wil be treated as invalid WC
+     * @dev validator WC versions mismatch (e.g 0x01 vs 0x02) will be treated as invalid WC
      */
     function proveInvalidValidatorWC(
         ValidatorWitness calldata _witness,
@@ -467,7 +471,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     /**
-     * @notice returns locked ether to the staking vault owner if validator's WC were proven invalid and
+     * @notice returns locked ether to the staking vault owner if validator's WC were proven invalid
      * @param _validatorPubkey to take locked PREDEPOSIT_AMOUNT ether from
      * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
      * @dev can only be called by owner of vault that had deposited to disproven validator
@@ -488,7 +492,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         validator.stage = validatorStage.COMPENSATED;
 
-        // reduces total&locked NO deposit
+        // reduces total&locked NO balance
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
@@ -537,12 +541,11 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         // sanity check that vault returns valid WC
         _validateWC(validator.stakingVault, vaultWithdrawalCredentials);
 
-        // this check enforces full WC(version + address) equality
+        // this check prevents negative proving for legit deposits
         if (_invalidWithdrawalCredentials == vaultWithdrawalCredentials) {
             revert WithdrawalCredentialsMatch();
         }
 
-        // freed ether only will returned to owner of the vault with this validator
         validator.stage = validatorStage.DISPROVEN;
 
         emit ValidatorDisproven(
@@ -554,13 +557,15 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     }
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (msg.value % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(msg.value);
+        uint128 amount = uint128(msg.value);
+
+        if (amount == 0) revert ZeroArgument("msg.value");
+        if (amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(amount);
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
-        _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(msg.value);
+        _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(amount);
 
-        emit BalanceToppedUp(_nodeOperator, msg.sender, msg.value);
+        emit BalanceToppedUp(_nodeOperator, msg.sender, amount);
     }
 
     /// @notice returns guarantor of the NO
@@ -583,9 +588,13 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         uint8 version = uint8(_withdrawalCredentials[0]);
         address wcAddress = address(uint160(uint256(_withdrawalCredentials)));
 
-        if (version < 1) {
+        if (version < MIN_SUPPORTED_WC_VERSION || version > MAX_SUPPORTED_WC_VERSION) {
             revert WithdrawalCredentialsInvalidVersion(version);
         }
+
+        // extract zero bytes between version and address in WC
+        if (((_withdrawalCredentials << 8) >> 168) != bytes32(0))
+            revert WithdrawalCredentialsMisformed(_withdrawalCredentials);
 
         if (address(_stakingVault) != wcAddress) {
             revert WithdrawalCredentialsMismatch(address(_stakingVault), wcAddress);
@@ -623,7 +632,6 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         address indexed stakingVault,
         bytes32 withdrawalCredentials
     );
-
     event ValidatorProven(
         bytes indexed validatorPubkey,
         address indexed nodeOperator,
@@ -667,6 +675,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // prove
     error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
     error WithdrawalCredentialsMatch();
+    error WithdrawalCredentialsMisformed(bytes32 withdrawalCredentials);
     error WithdrawalCredentialsInvalidVersion(uint8 version);
 
     // compensate

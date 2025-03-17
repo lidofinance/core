@@ -40,7 +40,6 @@ describe("VaultHub.sol", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      await locator.accounting(),
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
