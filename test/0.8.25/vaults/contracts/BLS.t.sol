@@ -14,7 +14,7 @@ import {BLS, SSZ} from "contracts/0.8.25/lib/BLS.sol";
 
 struct PrecomputedDepositMessage {
     IStakingVault.Deposit deposit;
-    BLS.DepositYComponents depositYComponents;
+    BLS.DepositY depositYComponents;
     bytes32 withdrawalCredentials;
 }
 
@@ -36,6 +36,12 @@ contract BLSVerifyingKeyTest is Test {
 
     constructor() {
         harness = new BLSHarness();
+    }
+
+    function setUp() public {
+        // Deploy the mock contract
+        // Set the mock's bytecode to the desired address
+        //vm.etch(0x000000000000000000000000000000000000000d, address(0x000000000000000000000000000000000000000E).code);
     }
 
     function test_verifySigningRoot() external view {

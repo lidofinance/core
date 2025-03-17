@@ -16,7 +16,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { ether, findEvents } from "lib";
+import { deployBLSPrecompileStubs, ether, findEvents } from "lib";
 import {
   generateBeaconHeader,
   generatePostDeposit,
@@ -78,6 +78,8 @@ describe("PredepositGuarantee.sol", () => {
 
   before(async () => {
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, stranger] = await ethers.getSigners();
+
+    await deployBLSPrecompileStubs();
 
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();

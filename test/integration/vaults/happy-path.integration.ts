@@ -9,6 +9,7 @@ import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
 import {
   days,
+  deployBLSPrecompileStubs,
   ether,
   generatePostDeposit,
   generatePredeposit,
@@ -80,6 +81,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
+
+    // deploy stubs for unsupported BLS precompiles
+    await deployBLSPrecompileStubs();
 
     snapshot = await Snapshot.take();
   });
