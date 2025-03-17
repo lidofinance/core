@@ -131,12 +131,14 @@
   },
   "nodeOperatorsRegistry": {
     "deployParameters": {
+      "stakingModuleName": "Curated",
       "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 172800
     }
   },
   "simpleDvt": {
     "deployParameters": {
+      "stakingModuleName": "SimpleDVT",
       "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
