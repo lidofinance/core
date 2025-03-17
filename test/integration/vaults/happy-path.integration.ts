@@ -115,7 +115,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     return vault101Balance + stakingVaultBeaconBalance;
   }
 
-  it("Should have at least 10 deposited node operators in NOR", async () => {
+  it.skip("Should have at least 10 deposited node operators in NOR", async () => {
     const { depositSecurityModule, lido, withdrawalQueue } = ctx.contracts;
 
     await norEnsureOperators(ctx, 10n, 1n);

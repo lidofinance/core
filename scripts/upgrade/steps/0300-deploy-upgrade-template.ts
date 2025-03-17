@@ -7,6 +7,7 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState();
 
+  const allowNonSingleBlockUpgrade = true;
   await deployWithoutProxy(Sk.upgradeTemplateV3, "UpgradeTemplateV3", deployer, [
     [
       // New proxy contracts
@@ -35,5 +36,6 @@ export async function main() {
       state[Sk.lidoLocator].implementation.address,
       state[Sk.withdrawalVault].implementation.address,
     ],
+    allowNonSingleBlockUpgrade,
   ]);
 }

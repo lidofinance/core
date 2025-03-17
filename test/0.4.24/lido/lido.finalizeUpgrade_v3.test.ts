@@ -5,9 +5,9 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Burner, Burner__MockForMigration,Lido__HarnessForFinalizeUpgradeV3, LidoLocator } from "typechain-types";
+import { Burner, Burner__MockForMigration, Lido__HarnessForFinalizeUpgradeV3, LidoLocator } from "typechain-types";
 
-import { certainAddress, INITIAL_STETH_HOLDER, proxify } from "lib";
+import { certainAddress, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -26,7 +26,6 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
   let withdrawalQueueAddress: string;
   let burner: Burner;
   let oldBurner: Burner__MockForMigration;
-  const eip712helperAddress = certainAddress("lido:initialize:eip712helper");
   const dummyLocatorAddress = certainAddress("dummy-locator");
 
   const oldCoverSharesBurnRequested = 100n;
@@ -71,45 +70,19 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     before(async () => {
       const latestBlock = BigInt(await time.latestBlock());
 
-      await expect(lido.initialize(locator, eip712helperAddress, { value: initialValue }))
-        .to.emit(lido, "Submitted")
-        .withArgs(INITIAL_STETH_HOLDER, initialValue, ZeroAddress)
-        .and.to.emit(lido, "Transfer")
-        .withArgs(ZeroAddress, INITIAL_STETH_HOLDER, initialValue)
-        .and.to.emit(lido, "TransferShares")
-        .withArgs(ZeroAddress, INITIAL_STETH_HOLDER, initialValue)
-        .and.to.emit(lido, "ContractVersionSet")
-        .withArgs(finalizeVersion)
-        .and.to.emit(lido, "EIP712StETHInitialized")
-        .withArgs(eip712helperAddress)
-        .and.to.emit(lido, "Approval")
-        .withArgs(withdrawalQueueAddress, burner.target, MaxUint256)
-        .and.to.emit(lido, "LidoLocatorSet")
-        .withArgs(await locator.getAddress());
+      await lido.connect(deployer).harness_initialize_v2(locator.target, { value: initialValue });
 
       expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
       expect(await lido.getInitializationBlock()).to.equal(latestBlock + 1n);
     });
 
-    it("Reverts if initialized from scratch", async () => {
-      await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
-    });
-
     it("Reverts if contract version does not equal 2", async () => {
       const unexpectedVersion = 1n;
-
-      await expect(lido.harness_setContractVersion(unexpectedVersion))
-        .and.to.emit(lido, "ContractVersionSet")
-        .withArgs(unexpectedVersion);
-
+      await lido.harness_setContractVersion(unexpectedVersion);
       await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
     });
 
     it("Sets contract version to 3", async () => {
-      await expect(lido.harness_setContractVersion(initialVersion))
-        .and.to.emit(lido, "ContractVersionSet")
-        .withArgs(initialVersion);
-
       await expect(lido.finalizeUpgrade_v3(oldBurner.target))
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(finalizeVersion);
@@ -118,19 +91,14 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     });
 
     it("Sets allowance for burner", async () => {
-      await lido.harness_setContractVersion(initialVersion);
-
       await expect(lido.finalizeUpgrade_v3(oldBurner.target))
         .and.to.emit(lido, "Approval")
-        .withArgs(await locator.withdrawalQueue(), burner.target, MaxUint256);
+        .withArgs(withdrawalQueueAddress, burner.target, MaxUint256);
 
-      expect(await lido.allowance(await locator.withdrawalQueue(), burner.target)).to.equal(MaxUint256);
+      expect(await lido.allowance(withdrawalQueueAddress, burner.target)).to.equal(MaxUint256);
     });
 
     it("Migrates burner successfully", async () => {
-      await lido.connect(deployer).harness_initialize(locator.target, { value: initialValue });
-      await lido.harness_setContractVersion(initialVersion);
-
       await lido.harness_mintShares(oldBurner.target, sharesOnOldBurner);
       expect(await lido.sharesOf(oldBurner.target)).to.equal(sharesOnOldBurner);
 

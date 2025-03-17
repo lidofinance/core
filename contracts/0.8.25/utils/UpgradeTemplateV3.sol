@@ -86,6 +86,7 @@ interface ILidoLocator is IOssifiableProxy {
     function withdrawalVault() external view returns(address);
     function oracleDaemonConfig() external view returns(address);
     function accounting() external view returns(address);
+    function predepositGuarantee() external view returns(address);
     function wstETH() external view returns(address);
     function vaultHub() external view returns(address);
 }
@@ -93,11 +94,15 @@ interface ILidoLocator is IOssifiableProxy {
 interface IOracleReportSanityChecker is IAccessControlEnumerable {
 }
 
+interface IPredepositGuarantee is IOssifiableProxy {
+}
+
 /**
 * @title Lido V3 Upgrade Template
 *
 * @dev Must be used by means of two calls:
-*   - `finishUpgrade()` after updating implementation
+*   - `startUpgrade()` after upgrading LidoLocator and before everything else
+*   - `finishUpgrade()` as the last step of the upgrade
 */
 contract UpgradeTemplateV3 {
     //
@@ -109,6 +114,7 @@ contract UpgradeTemplateV3 {
         // New proxy contracts
         address accounting;
         address vaultHub;
+        address predepositGuarantee;
 
         // New non-proxy contracts
         address burner;
@@ -139,6 +145,7 @@ contract UpgradeTemplateV3 {
     // New proxy contracts
     IAccounting public immutable _accounting;
     IVaultHub public immutable _vaultHub;
+    IPredepositGuarantee public immutable _predepositGuarantee;
 
     // New non-proxy contracts
     IBurner public immutable _burner;
@@ -220,43 +227,44 @@ contract UpgradeTemplateV3 {
     uint256 internal constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 2;
 
     //
-    // Immutables
+    // Constants
     //
+
     // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
     // happen in proper time period
     uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1754006400; // 2025-08-01 00:00:00 UTC
 
+    // Initial value of _upgradeBlockNumber
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
+
+    //
+    // Immutables
+    //
+    bool immutable public ALLOW_NON_SINGLE_BLOCK_UPGRADE;
 
     //
     // Structured storage
     //
     uint256 private _upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public _isUpgradeFinished;
+    uint256 internal _initialOldBurnerStethBalance;
 
-    uint256 internal INITIAL_OLD_BURNER_STETH_BALANCE;
 
-    constructor(UpgradeTemplateV3Params memory params) {
-        _locator = ILidoLocator(params.locator);
-
-        _oldBurner = IBurner(_locator.burner());
-        _oldOracleReportSanityChecker = IOracleReportSanityChecker(_locator.oracleReportSanityChecker());
+    /// @param allowNonSingleBlockUpgrade Hack to allow mocking DAO upgrade (in multiple blocks)
+    constructor(UpgradeTemplateV3Params memory params, bool allowNonSingleBlockUpgrade) {
+        ALLOW_NON_SINGLE_BLOCK_UPGRADE = allowNonSingleBlockUpgrade;
 
         _accounting = IAccounting(params.accounting);
         _vaultHub = IVaultHub(params.vaultHub);
+        _predepositGuarantee = IPredepositGuarantee(params.predepositGuarantee);
 
         _burner = IBurner(params.burner);
-        _oracleReportSanityChecker = IOracleReportSanityChecker(params.oracleReportSanityChecker);
 
+        _locator = ILidoLocator(params.locator);
         _agent = params.agent;
         _aragonAppLidoRepo = IAragonAppRepo(params.aragonAppLidoRepo);
-        _accountingOracle = IAccountingOracle(_locator.accountingOracle());
-        _elRewardsVault = _locator.elRewardsVault();
-        _lido = ILido(_locator.lido());
         _voting = params.voting;
-        _withdrawalVault = IWithdrawalVault(_locator.withdrawalVault());
-        _validatorsExitBusOracle = _locator.validatorsExitBusOracle();
         _nodeOperatorsRegistry = params.nodeOperatorsRegistry;
         _simpleDvt = params.simpleDvt;
         _wstETH = params.wstETH;
@@ -266,34 +274,49 @@ contract UpgradeTemplateV3 {
         _accountingOracleImplementation = params.accountingOracleImplementation;
         _newLocatorImplementation = params.newLocatorImplementation;
         _withdrawalVaultImplementation = params.withdrawalVaultImplementation;
+
+        _oldBurner = IBurner(_locator.burner());
+        _oldOracleReportSanityChecker = IOracleReportSanityChecker(_locator.oracleReportSanityChecker());
+        _oracleReportSanityChecker = IOracleReportSanityChecker(params.oracleReportSanityChecker);
+        _accountingOracle = IAccountingOracle(_locator.accountingOracle());
+        _elRewardsVault = _locator.elRewardsVault();
+        _lido = ILido(_locator.lido());
+        _withdrawalVault = IWithdrawalVault(_locator.withdrawalVault());
+        _validatorsExitBusOracle = _locator.validatorsExitBusOracle();
     }
 
-    /// @notice Need to be called before LidoOracle implementation is upgraded to LegacyOracle
+    /// @notice Must be called after LidoLocator is upgraded
     function startUpgrade() external {
         if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
         _assertNotExpired();
         if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
 
-        // Commented till mocking DAO upgrade is not implemented in single block
-        // if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
-        // _upgradeBlockNumber = block.number;
+        if (!ALLOW_NON_SINGLE_BLOCK_UPGRADE) {
+            if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+            _upgradeBlockNumber = block.number;
+        }
 
         // Save initial state for the check after burner migration
-        INITIAL_OLD_BURNER_STETH_BALANCE = _lido.balanceOf(address(_oldBurner));
+        _initialOldBurnerStethBalance = _lido.balanceOf(address(_oldBurner));
 
         _assertProxyImplementation(_locator, _newLocatorImplementation);
         _assertNewLocatorAddresses();
     }
 
-    /// @notice Need to be called after LidoOracle implementation is upgraded to LegacyOracle
     function finishUpgrade() external {
         if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
         _assertNotExpired();
+        if (_isUpgradeFinished) revert CanOnlyFinishOnce();
+        _isUpgradeFinished = true;
 
-        // Commented till mocking DAO upgrade is not implemented in single block
-        // if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+        if (!ALLOW_NON_SINGLE_BLOCK_UPGRADE) {
+            if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+        }
 
-        _finishUpgrade();
+        _passAdminRolesFromTemplateToAgent();
+
+        _assertStateAfterUpgrade();
+
         emit UpgradeFinished();
     }
 
@@ -304,6 +327,7 @@ contract UpgradeTemplateV3 {
          || locator.accounting() != address(_accounting)
          || locator.wstETH() != address(_wstETH)
          || locator.vaultHub() != address(_vaultHub)
+         || locator.predepositGuarantee() != address(_predepositGuarantee)
         ) {
             revert IncorrectLocatorAddresses();
         }
@@ -359,17 +383,6 @@ contract UpgradeTemplateV3 {
         }
     }
 
-    function _assertTwoOZRoleHolders(
-        IAccessControlEnumerable accessControlled, bytes32 role, address holder1, address holder2
-    ) internal view {
-        if (accessControlled.getRoleMemberCount(role) != 2
-         || accessControlled.getRoleMember(role, 0) != holder1
-         || accessControlled.getRoleMember(role, 1) != holder2
-        ) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
-        }
-    }
-
     function _assertOZRoleHolders(
         IAccessControlEnumerable accessControlled, bytes32 role, address[] memory holders
     ) internal view {
@@ -383,32 +396,21 @@ contract UpgradeTemplateV3 {
         }
     }
 
-    function _finishUpgrade() internal {
-        if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
-        if (_isUpgradeFinished) revert CanOnlyFinishOnce();
-        _isUpgradeFinished = true;
-
-        _passAdminRoleFromTemplateToAgent();
-
-        _assertUpgradeIsFinishedCorrectly();
-    }
-
-    function _passAdminRoleFromTemplateToAgent() internal {
+    function _passAdminRolesFromTemplateToAgent() internal {
         _transferOZAdminFromThisToAgent(_burner);
     }
 
-    function _assertUpgradeIsFinishedCorrectly() internal view {
-        // if (_upgradeBlockNumber == UPGRADE_NOT_STARTED) revert UpgradeNotStarted();
-        // revertIfUpgradeNotFinished();
+    function _assertStateAfterUpgrade() internal view {
+        _assertFinalACL();
 
         _checkContractVersions();
 
         _checkBurnerMigratedCorrectly();
 
-        _assertFinalACL();
+        _assertAragonAppImplementation(_aragonAppLidoRepo, _lidoImplementation);
 
-        _assertNewAragonAppImplementations();
         _assertProxyImplementation(_accountingOracle, _accountingOracleImplementation);
+
         if (_withdrawalVault.implementation() != _withdrawalVaultImplementation) {
             revert IncorrectProxyImplementation(address(_withdrawalVault), _withdrawalVaultImplementation);
         }
@@ -424,18 +426,14 @@ contract UpgradeTemplateV3 {
             oldCoverShares != newCoverShares ||
             oldNonCoverShares != newNonCoverShares ||
             _lido.balanceOf(address(_oldBurner)) != 0 ||
-            _lido.balanceOf(address(_burner)) != INITIAL_OLD_BURNER_STETH_BALANCE ||
+            _lido.balanceOf(address(_burner)) != _initialOldBurnerStethBalance ||
             _burner.isMigrationAllowed()
         ) {
             revert IncorrectBurnerMigration();
         }
     }
 
-    function _assertNewAragonAppImplementations() internal view {
-        _assertSingleAragonAppImplementation(_aragonAppLidoRepo, _lidoImplementation);
-    }
-
-    function _assertSingleAragonAppImplementation(IAragonAppRepo repo, address implementation) internal view {
+    function _assertAragonAppImplementation(IAragonAppRepo repo, address implementation) internal view {
         (, address actualImplementation, ) = repo.getLatest();
         if (actualImplementation != implementation) {
             revert IncorrectAragonAppImplementation(address(repo), implementation);
@@ -474,6 +472,9 @@ contract UpgradeTemplateV3 {
 
         // Accounting
         _assertProxyAdmin(_accounting, _agent);
+
+        // PredepositGuarantee
+        _assertProxyAdmin(_predepositGuarantee, _agent);
     }
 
     function _checkContractVersions() internal view {

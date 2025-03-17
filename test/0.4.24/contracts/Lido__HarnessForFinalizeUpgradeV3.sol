@@ -6,11 +6,15 @@ pragma solidity 0.4.24;
 import {Lido} from "contracts/0.4.24/Lido.sol";
 
 contract Lido__HarnessForFinalizeUpgradeV3 is Lido {
-    function harness_initialize(address _lidoLocator) external payable {
+    function harness_initialize_v2(address _lidoLocator) external payable {
         _bootstrapInitialHolder(); // stone in the elevator
         LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
 
+        initialized();
+
         _resume();
+
+        _setContractVersion(2);
     }
 
     function harness_setContractVersion(uint256 _version) external {
