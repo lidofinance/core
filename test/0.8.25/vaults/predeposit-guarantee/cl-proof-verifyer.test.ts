@@ -3,15 +3,15 @@ import { ethers } from "hardhat";
 
 import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
 
-import { Snapshot } from "test/suite";
-
 import {
   generateBeaconHeader,
   generateValidator,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
-} from "./helpers";
+} from "lib";
+
+import { Snapshot } from "test/suite";
 
 // CSM "borrowed" prefab validator object with precalculated proofs & root
 // allows us to be sure that core merkle proof validation is working correctly

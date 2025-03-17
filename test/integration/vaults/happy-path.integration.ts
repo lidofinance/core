@@ -1,12 +1,22 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Delegation, StakingVault } from "typechain-types";
+import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  ether,
+  generateValidator,
+  impersonate,
+  log,
+  prepareLocalMerkleTree,
+  updateBalance,
+} from "lib";
 import {
   getProtocolContext,
   getReportTimeElapsed,
@@ -19,9 +29,6 @@ import {
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
-
-const PUBKEY_LENGTH = 48n;
-const SIGNATURE_LENGTH = 96n;
 
 const LIDO_DEPOSIT = ether("640");
 
@@ -60,9 +67,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
-  let pubKeysBatch: Uint8Array;
-  let signaturesBatch: Uint8Array;
-
   let snapshot: string;
 
   before(async () => {
@@ -72,6 +76,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    // add ETH to NO for PDG deposit + gas
+    await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
 
     snapshot = await Snapshot.take();
   });
@@ -235,33 +242,79 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow NodeOperator to deposit validators from the vault", async () => {
+  it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
     const keysToAdd = VALIDATORS_PER_VAULT;
-    pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
-    signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
-
-    const deposits = [];
 
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+    const predepositAmount = await ctx.contracts.predepositGuarantee.PREDEPOSIT_AMOUNT();
 
+    const validators: {
+      container: SSZHelpers.ValidatorStruct;
+      index: number;
+      proof: string[];
+    }[] = [];
+
+    // TODO: BLS signature support
     for (let i = 0; i < keysToAdd; i++) {
-      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
-      const signature = hexlify(
-        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
-      );
-
-      deposits.push({
-        pubkey: pubkey,
-        signature: signature,
-        amount: VALIDATOR_DEPOSIT_SIZE,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
-      });
+      validators.push({ container: generateValidator(withdrawalCredentials), index: 0, proof: [] });
     }
 
-    // TODO: fix PDG integration test
-    const pdg = ctx.contracts.predepositGuarantee;
-    const pdgImperosnator = await impersonate(pdg.address, ether("100"));
-    await stakingVault.connect(pdgImperosnator).depositToBeaconChain(deposits);
+    const predeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+      return {
+        pubkey: pubkey,
+        signature: signature,
+        amount: predepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, predepositAmount),
+      };
+    });
+
+    const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
+
+    // top up PDG balance
+    await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
+
+    // predeposit validators
+    await pdg.predeposit(stakingVault, predeposits);
+
+    const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+
+    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.index = (await mockCLtree.addValidator(validator.container)).validatorIndex;
+    }
+
+    const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.proof = await mockCLtree.buildProof(validator.index, beaconBlockHeader);
+    }
+
+    const witnesses = validators.map((validator) => ({
+      proof: validator.proof,
+      pubkey: hexlify(validator.container.pubkey),
+      validatorIndex: validator.index,
+      childBlockTimestamp,
+    }));
+
+    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
+    const postdeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+
+      return {
+        pubkey,
+        signature,
+        amount: postDepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, postDepositAmount),
+      };
+    });
+
+    await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
