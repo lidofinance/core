@@ -13,8 +13,12 @@ import { getRandomSigners } from "lib/protocol/helpers/get-random-signers";
 
 import { Snapshot } from "test/suite";
 
+import { ether } from "../../../lib/units";
+
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
+
+const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -205,6 +209,220 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.ASSET_RECOVERY_ROLE(),
           );
         });
+
+        it("triggerValidatorWithdrawal", async () => {
+          await testMethod(
+            testDelegation,
+            "triggerValidatorWithdrawal",
+            {
+              successUsers: [validatorWithdrawalTriggerers],
+              failingUsers: allRoles.filter((r) => r !== validatorWithdrawalTriggerers),
+            },
+            ["0x", [0n], stranger],
+            await testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+          );
+        });
+
+        it("requestValidatorExit", async () => {
+          await testMethod(
+            testDelegation,
+            "requestValidatorExit",
+            {
+              successUsers: [validatorExitRequesters],
+              failingUsers: allRoles.filter((r) => r !== validatorExitRequesters),
+            },
+            ["0x" + "ab".repeat(48)],
+            await testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+          );
+        });
+
+        it("resumeBeaconChainDeposits", async () => {
+          await testMethod(
+            testDelegation,
+            "resumeBeaconChainDeposits",
+            {
+              successUsers: [depositResumers],
+              failingUsers: allRoles.filter((r) => r !== depositResumers),
+            },
+            [],
+            await testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+          );
+        });
+
+        it("pauseBeaconChainDeposits", async () => {
+          await testMethod(
+            testDelegation,
+            "pauseBeaconChainDeposits",
+            {
+              successUsers: [depositPausers],
+              failingUsers: allRoles.filter((r) => r !== depositPausers),
+            },
+            [],
+            await testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+          );
+        });
+
+        it("compensateDisprovenPredepositFromPDG", async () => {
+          await testMethod(
+            testDelegation,
+            "compensateDisprovenPredepositFromPDG",
+            {
+              successUsers: [],
+              failingUsers: allRoles,
+            },
+            [SAMPLE_PUBKEY, stranger],
+            await testDelegation.PDG_WITHDRAWAL_ROLE(),
+          );
+        });
+
+        it("rebalanceVault", async () => {
+          await testMethod(
+            testDelegation,
+            "rebalanceVault",
+            {
+              successUsers: [rebalancer],
+              failingUsers: allRoles.filter((r) => r !== rebalancer),
+            },
+            [1n],
+            await testDelegation.REBALANCE_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("burnWstETHWithPermit", async () => {
+          await testMethod(
+            testDelegation,
+            "burnWstETHWithPermit",
+            {
+              successUsers: [burner],
+              failingUsers: allRoles.filter((r) => r !== burner),
+            },
+            [ZeroAddress, 0, stranger],
+            await testDelegation.BURN_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("burnStETHWithPermit", async () => {
+          await testMethod(
+            testDelegation,
+            "burnStETHWithPermit",
+            {
+              successUsers: [burner],
+              failingUsers: allRoles.filter((r) => r !== burner),
+            },
+            [ZeroAddress, 0, stranger],
+            await testDelegation.BURN_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("burnSharesWithPermit", async () => {
+          await testMethod(
+            testDelegation,
+            "burnSharesWithPermit",
+            {
+              successUsers: [burner],
+              failingUsers: allRoles.filter((r) => r !== burner),
+            },
+            [stranger],
+            await testDelegation.BURN_ROLE(),
+          );
+        });
+
+        it("mintWstETH", async () => {
+          await testMethod(
+            testDelegation,
+            "mintWstETH",
+            {
+              successUsers: [minter],
+              failingUsers: allRoles.filter((r) => r !== minter),
+            },
+            [ZeroAddress, 0, stranger],
+            await testDelegation.MINT_ROLE(),
+          );
+        });
+        it("mintStETH", async () => {
+          await testMethod(
+            testDelegation,
+            "mintStETH",
+            {
+              successUsers: [minter],
+              failingUsers: allRoles.filter((r) => r !== minter),
+            },
+            [stranger, 1n],
+            await testDelegation.MINT_ROLE(),
+          );
+        });
+
+        it("mintShares", async () => {
+          await testMethod(
+            testDelegation,
+            "mintShares",
+            {
+              successUsers: [minter],
+              failingUsers: allRoles.filter((r) => r !== minter),
+            },
+            [stranger, 100n],
+            await testDelegation.MINT_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it("withdraw", async () => {
+          await testDelegation.connect(funder).fund({ value: 1n });
+          await testMethod(
+            testDelegation,
+            "withdraw",
+            {
+              successUsers: [withdrawer],
+              failingUsers: allRoles.filter((r) => r !== withdrawer),
+            },
+            [stranger, 1n],
+            await testDelegation.WITHDRAW_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("withdrawWETH", async () => {
+          await testMethod(
+            testDelegation,
+            "withdrawWETH",
+            {
+              successUsers: [withdrawer],
+              failingUsers: allRoles.filter((r) => r !== withdrawer),
+            },
+            [stranger, ether("1")],
+            await testDelegation.WITHDRAW_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("fundWeth", async () => {
+          await testMethod(
+            testDelegation,
+            "fundWeth",
+            {
+              successUsers: [funder],
+              failingUsers: allRoles.filter((r) => r !== funder),
+            },
+            [ether("1"), { from: funder.address }],
+            await testDelegation.FUND_ROLE(),
+          );
+        });
+        it("fund", async () => {
+          await testMethod(
+            testDelegation,
+            "fund",
+            {
+              successUsers: [funder],
+              failingUsers: allRoles.filter((r) => r !== funder),
+            },
+            [{ value: 1n }],
+            await testDelegation.FUND_ROLE(),
+          );
+        });
+        //burnWstETH, burnStETH,burnShares
       });
     });
 
