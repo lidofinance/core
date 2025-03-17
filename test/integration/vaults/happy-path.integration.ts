@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -8,9 +8,10 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
 import {
-  computeDepositDataRoot,
   days,
   ether,
+  generatePostDeposit,
+  generatePredeposit,
   generateValidator,
   impersonate,
   log,
@@ -260,14 +261,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     }
 
     const predeposits = validators.map((validator) => {
-      const pubkey = hexlify(validator.container.pubkey);
-      const signature = hexlify(randomBytes(96));
-      return {
-        pubkey: pubkey,
-        signature: signature,
-        amount: predepositAmount,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, predepositAmount),
-      };
+      return generatePredeposit(validator.container);
     });
 
     const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
@@ -276,7 +270,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
 
     // predeposit validators
-    await pdg.predeposit(stakingVault, predeposits);
+    await pdg.predeposit(
+      stakingVault,
+      predeposits.map((p) => p.deposit),
+      predeposits.map((p) => p.depositY),
+    );
 
     const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
 
@@ -303,15 +301,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
     const postdeposits = validators.map((validator) => {
-      const pubkey = hexlify(validator.container.pubkey);
-      const signature = hexlify(randomBytes(96));
-
-      return {
-        pubkey,
-        signature,
-        amount: postDepositAmount,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, postDepositAmount),
-      };
+      return generatePostDeposit(validator.container, postDepositAmount);
     });
 
     await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
