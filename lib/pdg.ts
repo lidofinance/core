@@ -62,11 +62,17 @@ export const generatePostDeposit = (
   validator: SSZHelpers.ValidatorStruct,
   amount = ether("31"),
 ): IStakingVault.DepositStruct => {
+  const signature = randomBytes(96);
   return {
     pubkey: validator.pubkey,
     amount,
-    signature: randomBytes(96),
-    depositDataRoot: randomBytes32(),
+    signature,
+    depositDataRoot: computeDepositDataRoot(
+      hexlify(validator.withdrawalCredentials),
+      hexlify(validator.pubkey),
+      hexlify(signature),
+      amount,
+    ),
   };
 };
 
