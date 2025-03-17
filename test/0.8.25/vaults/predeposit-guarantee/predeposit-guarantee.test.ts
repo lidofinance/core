@@ -17,10 +17,6 @@ import {
 } from "typechain-types";
 
 import { ether, findEvents } from "lib";
-
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
-
 import {
   generateBeaconHeader,
   generatePostDeposit,
@@ -28,7 +24,10 @@ import {
   generateValidator,
   prepareLocalMerkleTree,
   setBeaconBlockRoot,
-} from "./helpers";
+} from "lib";
+
+import { deployLidoLocator } from "test/deploy";
+import { Snapshot } from "test/suite";
 
 describe("PredepositGuarantee.sol", () => {
   let deployer: HardhatEthersSigner;

@@ -16,11 +16,10 @@ contract SSZMerkleTree is SSZHelpers {
     mapping(uint256 => bytes32) public nodes; // Merkle tree nodes mapping
 
     /// @notice Initializes the Merkle tree with a given depth and pre-filled nodes so GIndex can closesly match CL
-    constructor(uint256 _treeDepth, uint256 _preFilledNodes) {
-        TREE_DEPTH = _treeDepth;
-        for (uint256 i = 0; i < _preFilledNodes; i++) {
-            addLeaf(keccak256(abi.encodePacked(i)));
-        }
+    constructor(GIndex base) {
+        TREE_DEPTH = depth(base);
+        // allows to simulate middle part of the tree
+        leafCount = base.index() - (1 << TREE_DEPTH);
     }
 
     /// @notice Adds a new leaf to the tree
