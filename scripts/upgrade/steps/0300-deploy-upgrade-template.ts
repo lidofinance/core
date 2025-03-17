@@ -12,6 +12,7 @@ export async function main() {
       // New proxy contracts
       state[Sk.accounting].proxy.address,
       state[Sk.vaultHub].proxy.address,
+      state[Sk.predepositGuarantee].proxy.address,
 
       // New non-proxy contracts
       state[Sk.burner].address,

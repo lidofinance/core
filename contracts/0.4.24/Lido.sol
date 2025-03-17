@@ -223,8 +223,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function finalizeUpgrade_v3(address _oldBurner) external {
         require(hasInitialized(), "NOT_INITIALIZED");
-        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
         _checkContractVersion(2);
+        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
 
         _initialize_v3(_oldBurner);
     }
@@ -236,16 +236,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _initialize_v3(address _oldBurner) internal {
         _setContractVersion(3);
 
+        address newBurner = getLidoLocator().burner();
+
         // set infinite allowance for burner from withdrawal queue
         // to burn finalized requests' shares
-        _approve(getLidoLocator().withdrawalQueue(), getLidoLocator().burner(), INFINITE_ALLOWANCE);
+        _approve(getLidoLocator().withdrawalQueue(), newBurner, INFINITE_ALLOWANCE);
 
         // migrate burner state and stETH balance
         if (_oldBurner != address(0)) {
-            address newBurner = getLidoLocator().burner();
-            uint256 oldBurnerBalance = _sharesOf(_oldBurner);
-            if (oldBurnerBalance > 0) {
-                _transferShares(_oldBurner, newBurner, oldBurnerBalance);
+            uint256 oldBurnerShares = _sharesOf(_oldBurner);
+            if (oldBurnerShares > 0) {
+                _transferShares(_oldBurner, newBurner, oldBurnerShares);
+                _emitTransferEvents(_oldBurner, newBurner, oldBurnerShares, oldBurnerShares);
             }
 
             // initialize new burner with state from old burner

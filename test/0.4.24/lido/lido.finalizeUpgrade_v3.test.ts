@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Lido__HarnessForFinalizeUpgradeV3, LidoLocator } from "typechain-types";
+import { Burner, Burner__MockForMigration,Lido__HarnessForFinalizeUpgradeV3, LidoLocator } from "typechain-types";
 
 import { certainAddress, INITIAL_STETH_HOLDER, proxify } from "lib";
 
@@ -24,8 +24,16 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
   const finalizeVersion = 3n;
 
   let withdrawalQueueAddress: string;
-  let burnerAddress: string;
+  let burner: Burner;
+  let oldBurner: Burner__MockForMigration;
   const eip712helperAddress = certainAddress("lido:initialize:eip712helper");
+  const dummyLocatorAddress = certainAddress("dummy-locator");
+
+  const oldCoverSharesBurnRequested = 100n;
+  const oldNonCoverSharesBurnRequested = 200n;
+  const oldTotalCoverSharesBurnt = 300n;
+  const oldTotalNonCoverSharesBurnt = 400n;
+  const sharesOnOldBurner = 1000n;
 
   let originalState: string;
 
@@ -34,8 +42,17 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV3");
     [lido] = await proxify({ impl, admin: deployer });
 
-    locator = await deployLidoLocator();
-    [withdrawalQueueAddress, burnerAddress] = await Promise.all([locator.withdrawalQueue(), locator.burner()]);
+    burner = await ethers.deployContract("Burner", [deployer.address, dummyLocatorAddress, lido.target, true]);
+
+    locator = await deployLidoLocator({ burner: burner.target });
+
+    [withdrawalQueueAddress] = await Promise.all([locator.withdrawalQueue()]);
+
+    oldBurner = await ethers.deployContract("Burner__MockForMigration", []);
+    await oldBurner
+      .connect(deployer)
+      .setSharesRequestedToBurn(oldCoverSharesBurnRequested, oldNonCoverSharesBurnRequested);
+    await oldBurner.connect(deployer).setSharesBurnt(oldTotalCoverSharesBurnt, oldTotalNonCoverSharesBurnt);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -66,7 +83,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
         .and.to.emit(lido, "EIP712StETHInitialized")
         .withArgs(eip712helperAddress)
         .and.to.emit(lido, "Approval")
-        .withArgs(withdrawalQueueAddress, burnerAddress, MaxUint256)
+        .withArgs(withdrawalQueueAddress, burner.target, MaxUint256)
         .and.to.emit(lido, "LidoLocatorSet")
         .withArgs(await locator.getAddress());
 
@@ -93,11 +110,42 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(initialVersion);
 
-      await expect(lido.finalizeUpgrade_v3(ZeroAddress))
+      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(finalizeVersion);
 
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
+    });
+
+    it("Sets allowance for burner", async () => {
+      await lido.harness_setContractVersion(initialVersion);
+
+      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
+        .and.to.emit(lido, "Approval")
+        .withArgs(await locator.withdrawalQueue(), burner.target, MaxUint256);
+
+      expect(await lido.allowance(await locator.withdrawalQueue(), burner.target)).to.equal(MaxUint256);
+    });
+
+    it("Migrates burner successfully", async () => {
+      await lido.connect(deployer).harness_initialize(locator.target, { value: initialValue });
+      await lido.harness_setContractVersion(initialVersion);
+
+      await lido.harness_mintShares(oldBurner.target, sharesOnOldBurner);
+      expect(await lido.sharesOf(oldBurner.target)).to.equal(sharesOnOldBurner);
+
+      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
+        .and.to.emit(lido, "TransferShares")
+        .withArgs(oldBurner.target, burner.target, sharesOnOldBurner);
+
+      expect(await lido.sharesOf(oldBurner.target)).to.equal(0n);
+      expect(await lido.sharesOf(burner.target)).to.equal(sharesOnOldBurner);
+
+      expect(await burner.getCoverSharesBurnt()).to.equal(oldTotalCoverSharesBurnt);
+      expect(await burner.getNonCoverSharesBurnt()).to.equal(oldTotalNonCoverSharesBurnt);
+      const [coverShares, nonCoverShares] = await burner.getSharesRequestedToBurn();
+      expect(coverShares).to.equal(oldCoverSharesBurnRequested);
+      expect(nonCoverShares).to.equal(oldNonCoverSharesBurnRequested);
     });
   });
 });
