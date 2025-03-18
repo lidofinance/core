@@ -91,16 +91,13 @@ library BLS {
     address constant MOD_EXP = 0x0000000000000000000000000000000000000005;
 
     /// @dev For addition of two points on the BLS12-381 G2 curve.
-    //address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000d;
-    address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000E;
+    address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000d;
 
     /// @dev For performing a pairing check on the BLS12-381 curve.
-    //address internal constant BLS12_PAIRING_CHECK = 0x000000000000000000000000000000000000000F;
-    address internal constant BLS12_PAIRING_CHECK = 0x0000000000000000000000000000000000000011;
+    address internal constant BLS12_PAIRING_CHECK = 0x000000000000000000000000000000000000000F;
 
     /// @dev For mapping a Fp2 to a point on the BLS12-381 G2 curve.
-    //address internal constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000011;
-    address internal constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000013;
+    address internal constant BLS12_MAP_FP2_TO_G2 = 0x0000000000000000000000000000000000000011;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CUSTOM ERRORS                       */
