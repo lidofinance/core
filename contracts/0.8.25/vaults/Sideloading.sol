@@ -6,7 +6,8 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "./VaultHub.sol";
 
-import {ILido as IStETH} from "../interfaces/ILido.sol";
+import {ILido} from "../interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ISideloader} from "../interfaces/ISideloader.sol";
 
@@ -53,14 +54,14 @@ contract Sideloading is VaultHub {
 
     /**
      * @notice Constructor.
-     * @param _stETH The address of the STETH contract.
+     * @param _lido The address of the Lido contract.
      */
     constructor(
-        IStETH _stETH,
-        address _accounting,
+        ILidoLocator _locator,
+        ILido _lido,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) VaultHub(_stETH, _accounting, _connectedVaultsLimit, _relativeShareLimitBP) {}
+    ) VaultHub(_locator, _lido, _connectedVaultsLimit, _relativeShareLimitBP) {}
 
     /**
      * @notice Returns true if the sideloader registry is ignored and any address can be used as a sideloader.
@@ -216,7 +217,7 @@ contract Sideloading is VaultHub {
         // cannot result in shares exceeding the share limit
         if (totalSharesAfterSideload > socket.shareLimit) revert ShareLimitExceeded(_vault, socket.shareLimit);
 
-        uint256 totalStETHAfterSideload = STETH.getPooledEthByShares(totalSharesAfterSideload);
+        uint256 totalStETHAfterSideload = LIDO.getPooledEthByShares(totalSharesAfterSideload);
         uint256 minimalReserveAfterSideload = (totalStETHAfterSideload * socket.reserveRatioBP) /
             (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
@@ -240,7 +241,7 @@ contract Sideloading is VaultHub {
         }
 
         // mint the shares to the sideloader
-        STETH.mintExternalShares(_sideloader, _amountOfShares);
+        LIDO.mintExternalShares(_sideloader, _amountOfShares);
 
         // call the sideloader with the provided data
         if (

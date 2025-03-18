@@ -130,7 +130,10 @@ describe("VaultHub.sol:updateVaults", () => {
     // the vault is still in the vaults array
     expect(await vaultHub.vaultsCount()).to.equal(1);
 
+    const valuations = [await vault.valuation()];
+
     const vaultsRebase = await vaultHub.calculateVaultsRebase(
+      valuations,
       ether("105"), // postTotalShares, 5% rewards
       ether("105"), // postTotalPooledEther, 5% rewards
       ether("100"), // preTotalShares
@@ -141,7 +144,6 @@ describe("VaultHub.sol:updateVaults", () => {
     expect(vaultsRebase[1]).to.deep.equal([0]);
     expect(vaultsRebase[2]).to.deep.equal(0);
 
-    const valuations = [await vault.valuation()];
     const inOutDeltas = [await vault.inOutDelta()];
     const locked = [0];
     const treasuryFeeShares = [0];
