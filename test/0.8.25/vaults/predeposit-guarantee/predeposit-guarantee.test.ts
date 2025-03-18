@@ -115,12 +115,76 @@ describe("PredepositGuarantee.sol", () => {
     it("reverts on impl initialization", async () => {
       await expect(pdgImpl.initialize(stranger)).to.be.revertedWithCustomError(pdgImpl, "InvalidInitialization");
     });
-    it("reverts on `_admin` address is zero", async () => {
+
+    it("reverts on `_defaultAdmin` address is zero", async () => {
       const pdgProxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
       const pdgLocal = await ethers.getContractAt("PredepositGuarantee", pdgProxy, vaultOperator);
       await expect(pdgLocal.initialize(ZeroAddress))
         .to.be.revertedWithCustomError(pdgImpl, "ZeroArgument")
         .withArgs("_defaultAdmin");
+    });
+
+    it("reverts after reinitialization", async () => {
+      const pdgProxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
+      const pdgLocal = await ethers.getContractAt("PredepositGuarantee", pdgProxy, vaultOperator);
+      await pdgLocal.initialize(admin);
+
+      await expect(pdgLocal.initialize(admin)).to.be.revertedWithCustomError(pdgImpl, "InvalidInitialization");
+    });
+
+    it("should assign DEFAULT_ADMIN_ROLE to the '_defaultAdmin' after initialize", async () => {
+      const pdgProxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
+      const pdgLocal = await ethers.getContractAt("PredepositGuarantee", pdgProxy, vaultOperator);
+      await pdgLocal.initialize(admin);
+
+      const DEFAULT_ADMIN_ROLE = await pdgLocal.DEFAULT_ADMIN_ROLE();
+      const hasRole = await pdgLocal.hasRole(DEFAULT_ADMIN_ROLE, admin);
+      expect(hasRole).to.be.true;
+    });
+  });
+
+  context("node operator accounting logic (nodeOperator = nodeOperatorGuarantor)", () => {
+    it("check that nodeOperator and nodeOperatorGuarantor are the same address", async () => {
+      // vaultOperator is nodeOperator here
+      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      const nodeOperatorGuarantor = await pdg.nodeOperatorGuarantor(vaultOperator);
+      expect(nodeOperatorGuarantor).to.equal(vaultOperator);
+    });
+
+    it("check that nodeOperator can topUpNodeOperatorBalance", async () => {
+      // vaultOperator is nodeOperator here
+      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("100") });
+      const [operatorBondTotal] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(ether("101"));
+
+      const unlockedBalance = await pdg.unlockedBalance(vaultOperator);
+      expect(unlockedBalance).to.equal(ether("101"));
+    });
+
+    it("check that nodeOperator can withdrawNodeOperatorBalance", async () => {
+      // vaultOperator is nodeOperator here
+      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("100") });
+      await pdg.withdrawNodeOperatorBalance(vaultOperator, ether("50"), vaultOperator);
+
+      const [operatorBondTotal] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(ether("50"));
+    });
+  });
+
+  context("node operator accounting logic (nodeOperator != nodeOperatorGuarantor)", () => {
+    it("Reverts when the 'setNodeOperatorGuarantor' got address is zero", async () => {
+      await expect(pdg.connect(vaultOperator).setNodeOperatorGuarantor(ZeroAddress)).to.be.revertedWithCustomError(
+        pdg,
+        "ZeroArgument",
+      );
+    });
+
+    it("Reverts when the 'setNodeOperatorGuarantor' got the same guarantor address", async () => {
+      await pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      await expect(
+        pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor),
+      ).to.be.revertedWithCustomError(pdg, "SameGuarantor");
     });
   });
 
