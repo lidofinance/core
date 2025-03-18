@@ -102,7 +102,7 @@ mnemonic.
 
 Follow these steps for local deployment:
 
-1. Run `yarn install` (get sure repo dependencies are installed)
+1. Run `yarn install` (make sure repo dependencies are installed)
 2. Run the node on port 8555 (for the commands, see subsections below)
 3. Run the deploy script `bash scripts/dao-local-deploy.sh` from root repo directory
 4. Check out the deploy artifacts in `deployed-local.json`
@@ -121,9 +121,9 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 yarn hardhat node
 ```
 
-### Holešky Testnet Deployment
+### Holesky Testnet Deployment
 
-To do Holešky deployment, the following parameters must be set up via env variables:
+To do Holesky deployment, the following parameters must be set up via env variables:
 
 - `DEPLOYER`. The deployer address. The deployer must own its private key. To ensure proper operation, it should have an
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
