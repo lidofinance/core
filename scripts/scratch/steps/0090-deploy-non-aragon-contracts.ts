@@ -1,3 +1,4 @@
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { certainAddress } from "lib";
@@ -23,11 +24,13 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
+  const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+  const pdgDeployParams = state[Sk.predepositGuarantee].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -136,19 +139,26 @@ export async function main() {
     );
   }
 
+  // Deploy Accounting
+  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
+    locator.address,
+    lidoAddress,
+  ]);
+
+  const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    locator.address,
+    lidoAddress,
+    vaultHubParams.connectedVaultsLimit,
+    vaultHubParams.relativeShareLimitBP,
+  ]);
+
   // Deploy AccountingOracle
   const accountingOracle = await deployBehindOssifiableProxy(
     Sk.accountingOracle,
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    [
-      locator.address,
-      lidoAddress,
-      legacyOracleAddress,
-      Number(chainSpec.secondsPerSlot),
-      Number(chainSpec.genesisTime),
-    ],
+    [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
   // Deploy HashConsensus for AccountingOracle
@@ -185,11 +195,20 @@ export async function main() {
   // Deploy Burner
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
-    treasuryAddress,
+    locator.address,
     lidoAddress,
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,
   ]);
+
+  // Deploy PredepositGuarantee
+  const predepositGuarantee = await deployBehindOssifiableProxy(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    proxyContractsOwner,
+    deployer,
+    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+  );
 
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
@@ -199,7 +218,7 @@ export async function main() {
     legacyOracleAddress,
     lidoAddress,
     certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
-    legacyOracleAddress, // postTokenRebaseReceiver
+    ZeroAddress,
     burner.address,
     stakingRouter.address,
     treasuryAddress,
@@ -207,6 +226,10 @@ export async function main() {
     withdrawalQueueERC721.address,
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
+    accounting.address,
+    predepositGuarantee.address,
+    wstETH.address,
+    vaultHub.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }
