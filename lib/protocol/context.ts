@@ -14,7 +14,9 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  if (getMode() === "scratch") {
+  const isScratch = getMode() === "scratch";
+
+  if (isScratch) {
     await deployScratchProtocol(hre.network.name);
   } else if (process.env.UPGRADE) {
     await deployUpgrade(hre.network.name);
@@ -37,12 +39,13 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     signers,
     interfaces,
     flags,
+    isScratch,
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
-  if (getMode() === "scratch") {
+  if (isScratch) {
     await provision(context);
   }
 

@@ -2,7 +2,7 @@ import { assert } from "chai";
 import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
-import { ERCProxy, EVMScriptRegistryFactory, Kernel } from "typechain-types";
+import { ERCProxy, EVMScriptRegistryFactory, Kernel, LidoTemplate } from "typechain-types";
 
 import { getContractPath, loadContract, LoadedContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -221,11 +221,21 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   persistNetworkState(state);
 }
 
+function addRepoAddress(state: DeploymentState, key: Sk, repoAddress: string) {
+  const entry = state[key];
+  entry["aragonApp"]["repo"] = {
+    proxy: {
+      address: repoAddress,
+    },
+  };
+  updateObjectInState(key, entry);
+}
+
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  let state = readNetworkState({ deployer });
 
-  const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
+  const template = await loadContract<LidoTemplate>("LidoTemplate", state[Sk.lidoTemplate].address);
   if (state[Sk.lidoTemplate].deployBlock) {
     log(`Using LidoTemplate deploy block: ${yl(state.lidoTemplate.deployBlock)}`);
   }
@@ -235,4 +245,15 @@ export async function main() {
   setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
 
   await saveStateFromNewDAOTx(newDAOReceipt);
+
+  // Save repo addresses for aragon apps
+  state = readNetworkState({ deployer });
+  const appRepos = await template.apmRepos();
+  addRepoAddress(state, Sk.appLido, appRepos.lido);
+  addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
+  addRepoAddress(state, Sk.appOracle, appRepos.oracle);
+  addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
+  addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
+  addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);
+  addRepoAddress(state, Sk.appVoting, appRepos.aragonVoting);
 }
