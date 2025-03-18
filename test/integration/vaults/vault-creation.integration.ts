@@ -12,6 +12,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { Snapshot, Tracing } from "test/suite";
 
 import { getRandomSigners } from "../../../lib/protocol/helpers/get-random-signers";
+import { deployWithdrawalsPredeployedMock } from "../../common/lib/triggerableWithdrawals/utils";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
@@ -49,7 +50,7 @@ describe("Scenario: Vault creation", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
-
+    await deployWithdrawalsPredeployedMock(1n);
     const { depositSecurityModule, stakingVaultFactory } = ctx.contracts;
     await depositSecurityModule.DEPOSIT_CONTRACT();
 
@@ -112,16 +113,23 @@ describe("Scenario: Vault creation", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
+  async function generateFeesToClaiim() {
+    const { vaultHub } = ctx.contracts;
+    const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+    const rewards = ether("1");
+    await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
+  }
+
   async function connectToHub() {
     const { vaultHub, lido } = ctx.contracts;
     const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
     const agentSigner = await ctx.getSigner("agent");
     const votingSigner = await ctx.getSigner("voting");
+
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
     // only equivalent of 10.0% of TVL can be minted as stETH on the vault
     const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
-
     await vaultHub
       .connect(agentSigner)
       .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
@@ -176,7 +184,7 @@ describe("Scenario: Vault creation", () => {
       await disconnectFromHub();
     });
 
-    it.skip("to burn stEth ", async () => {
+    it("to burn stEth", async () => {
       const { vaultHub } = ctx.contracts;
       Tracing.enable();
 
@@ -194,13 +202,13 @@ describe("Scenario: Vault creation", () => {
       await disconnectFromHub();
     });
 
-    it.skip("to claim Curator's fee", async () => {
+    it("to claim Curator's fee", async () => {
       const { vaultHub } = ctx.contracts;
-      Tracing.enable();
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(curatorFeeSetters).setCuratorFeeBP(1n);
+      await generateFeesToClaiim();
 
-      const feesToClaim = await delegation.curatorUnclaimedFee();
-      // todo: feesToCalaim is 0 and method fails with ZeroArgument, how to fix it?
-      console.log(feesToClaim);
+      // expecting for method to be reverted because we are not connected to the hub but it is passing fine
       await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.revertedWithCustomError(
         vaultHub,
         "NotConnectedToHub",
@@ -216,21 +224,26 @@ describe("Scenario: Vault creation", () => {
 
     it("to claim NO's fee", async () => {
       const { vaultHub } = ctx.contracts;
-      Tracing.enable();
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n);
+      await delegation.connect(owner).setNodeOperatorFeeBP(1n);
 
       await expect(
-        delegation.connect(nodeOperatorManager).claimNodeOperatorFee(stranger),
+        delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
+      ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
+
+      //await connectToHub();
+      await generateFeesToClaiim();
+
+      // expecting for method to be reverted because we are not connected to the hub but it is passing fine
+      await expect(
+        delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
       ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
-      await connectToHub();
-
-      await expect(
-        delegation.connect(nodeOperatorManager).claimNodeOperatorFee(stranger),
-      ).to.not.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
       await disconnectFromHub();
     });
   });
 
-  it.skip("NO Manager can spawn a validator using ETH from the Vault ", () => {
+  it("NO Manager can spawn a validator using ETH from the Vault ", () => {
     // todo: what method to use?
   });
 });
