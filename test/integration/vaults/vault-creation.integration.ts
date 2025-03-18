@@ -9,6 +9,7 @@ import { Delegation, StakingVault } from "typechain-types";
 import { days, ether, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
+import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot, Tracing } from "test/suite";
 
 import { getRandomSigners } from "../../../lib/protocol/helpers/get-random-signers";
@@ -49,6 +50,9 @@ describe("Scenario: Vault creation", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+
+    // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
+    await deployWithdrawalsPreDeployedMock(1n);
 
     const { depositSecurityModule, stakingVaultFactory } = ctx.contracts;
     await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -146,11 +150,16 @@ describe("Scenario: Vault creation", () => {
     expect(await delegation.connect(depositResumers).resumeBeaconChainDeposits()).to.be.ok;
   });
 
-  it("Allows to force / Ask Node Operator to withdraw funds from validator(s)", async () => {
+  it("Allows to ask Node Operator to withdraw funds from validator(s)", async () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
     expect(await stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY)).to.be.ok;
-    Tracing.enable();
+  });
+
+  it("Allows to trigger validator withdrawal", async () => {
+    const vaultOwnerAddress = await stakingVault.owner();
+    const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
+
     // todo: why it reverts with error WithdrawalFeeInvalidData()?
     expect(
       await stakingVault
