@@ -7,12 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Delegation, StakingVault } from "typechain-types";
 
 import { days, ether, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { getProtocolContext, getRandomSigners,ProtocolContext } from "lib/protocol";
 
 import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot, Tracing } from "test/suite";
-
-import { getRandomSigners } from "../../../lib/protocol/helpers/get-random-signers";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
