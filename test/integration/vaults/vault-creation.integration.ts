@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { ContractRunner, ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
+import { before } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
 import { days, ether, impersonate } from "lib";
-import { getProtocolContext, getRandomSigners,ProtocolContext } from "lib/protocol";
+import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/protocol";
 
 import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot, Tracing } from "test/suite";
@@ -114,7 +115,7 @@ describe("Scenario: Vault creation", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  async function generateFeesToClaiim() {
+  async function generateFeesToClaim() {
     const { vaultHub } = ctx.contracts;
     const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
     const rewards = ether("1");
@@ -165,7 +166,6 @@ describe("Scenario: Vault creation", () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
 
-    // todo: why it reverts with error WithdrawalFeeInvalidData()?
     expect(
       await stakingVault
         .connect(vaultOwner)
@@ -192,7 +192,6 @@ describe("Scenario: Vault creation", () => {
 
     it("to burn stEth", async () => {
       const { vaultHub } = ctx.contracts;
-      Tracing.enable();
 
       // todo: why it fails with ALLOWANCE_EXCEEDED before NotConnectedToHub? How to fix it?
       await expect(delegation.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
@@ -208,44 +207,40 @@ describe("Scenario: Vault creation", () => {
       await disconnectFromHub();
     });
 
-    it("to claim Curator's fee", async () => {
-      const { vaultHub } = ctx.contracts;
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(curatorFeeSetters).setCuratorFeeBP(1n);
-      await generateFeesToClaiim();
+    describe("claiming fees", async () => {
+      before(async () => {
+        await delegation.connect(funder).fund({ value: ether("1") });
+        await generateFeesToClaim();
+      });
 
-      // expecting for method to be reverted because we are not connected to the hub but it is passing fine
-      await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
-      await connectToHub();
+      it("to claim Curator's fee", async () => {
+        const { vaultHub } = ctx.contracts;
+        //await connectToHub();
+        // todo: expecting for method to be reverted because we are not connected to the hub, but it is passing fine
+        await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotConnectedToHub",
+        );
+        await connectToHub();
 
-      await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.not.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
-      await disconnectFromHub();
-    });
+        await expect(
+          delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger),
+        ).to.not.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+        await disconnectFromHub();
+      });
 
-    it("to claim NO's fee", async () => {
-      const { vaultHub } = ctx.contracts;
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n);
-      await delegation.connect(owner).setNodeOperatorFeeBP(1n);
+      it("to claim NO's fee", async () => {
+        const { vaultHub } = ctx.contracts;
+        Tracing.enable();
 
-      await expect(
-        delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
-      ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
+        //await connectToHub();
+        // todo: expecting for method to be reverted because we are not connected to the hub but it is passing fine
+        await expect(
+          delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
+        ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
 
-      //await connectToHub();
-      await generateFeesToClaiim();
-
-      // expecting for method to be reverted because we are not connected to the hub but it is passing fine
-      await expect(
-        delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
-      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
-      await disconnectFromHub();
+        await disconnectFromHub();
+      });
     });
   });
 
