@@ -15,6 +15,7 @@ import {
 
 import { certainAddress, ether, proxify } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BASIS_POINTS = 10000n;
@@ -47,7 +48,9 @@ describe("Sideloading.sol", () => {
     adapter = await ethers.deployContract("SwapperAdapter__MockForSideloading", [steth, swapper]);
 
     const accounting = certainAddress("accounting");
-    const sideloadingImpl = await ethers.deployContract("Sideloading", [steth, accounting, 100n, 1000n]);
+    const depositor = vaultOwner;
+    const locator = await deployLidoLocator({ accounting, predepositGuarantee: depositor });
+    const sideloadingImpl = await ethers.deployContract("Sideloading", [locator, steth, 100n, 1000n]);
     [sideloading] = await proxify({ impl: sideloadingImpl, admin });
 
     await expect(sideloading.initialize(admin))

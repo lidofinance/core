@@ -10,8 +10,11 @@ contract StakingVault__MockForSideloading is Ownable {
 
     uint256 public locked;
     uint256 public valuation;
+    address public depositor;
 
-    constructor(address _owner) Ownable(_owner) {}
+    constructor(address _owner) Ownable(_owner) {
+        depositor = _owner;
+    }
 
     function fund() external payable {
         valuation += msg.value;

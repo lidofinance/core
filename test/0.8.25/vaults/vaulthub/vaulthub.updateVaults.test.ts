@@ -10,6 +10,7 @@ import { StakingVault__MockForVaultHub } from "typechain-types";
 import { ether, proxify } from "lib";
 import { certainAddress } from "lib/address";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BASIS_POINTS = 10_000n;
@@ -38,9 +39,11 @@ describe("VaultHub.sol:updateVaults", () => {
     const connectedVaultsLimit = 10;
     const relativeShareLimitBP = 1000; // 10%
 
+    const locator = await deployLidoLocator({ accounting, predepositGuarantee: vaultOwner });
+
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
+      locator,
       steth,
-      accounting,
       connectedVaultsLimit,
       relativeShareLimitBP,
     ]);
@@ -60,7 +63,8 @@ describe("VaultHub.sol:updateVaults", () => {
 
     // deploy vault
     const depositContract = certainAddress("depositContract");
-    vault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
+    const depositor = vaultOwner;
+    vault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositor, depositContract]);
     await vault.initialize(vaultOwner, vaultOwner, "0x");
     expect(await vault.owner()).to.equal(vaultOwner);
     expect(await vault.nodeOperator()).to.equal(vaultOwner);
