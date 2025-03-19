@@ -315,9 +315,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by VaultHub; locked amount can only be increased
      * @param _locked New amount to lock
      */
-    function lock(uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
-
+    function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
 
