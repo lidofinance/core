@@ -173,18 +173,28 @@ describe("PredepositGuarantee.sol", () => {
   });
 
   context("node operator accounting logic (nodeOperator != nodeOperatorGuarantor)", () => {
-    it("Reverts when the 'setNodeOperatorGuarantor' got address is zero", async () => {
+    it("reverts when the 'setNodeOperatorGuarantor' got address is zero", async () => {
       await expect(pdg.connect(vaultOperator).setNodeOperatorGuarantor(ZeroAddress)).to.be.revertedWithCustomError(
         pdg,
         "ZeroArgument",
       );
     });
 
-    it("Reverts when the 'setNodeOperatorGuarantor' got the same guarantor address", async () => {
+    it("reverts when the 'setNodeOperatorGuarantor' got the same guarantor address", async () => {
       await pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor);
       await expect(
         pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor),
       ).to.be.revertedWithCustomError(pdg, "SameGuarantor");
+    });
+  });
+
+  context("predeposit", () => {
+    it("reverts when the 'predeposit' got empty deposits", async () => {
+      // NO runs predeposit for the vault without predepositData
+      await expect(pdg.connect(stranger).predeposit(stakingVault, [])).to.be.revertedWithCustomError(
+        pdg,
+        "EmptyDeposits",
+      );
     });
   });
 
@@ -267,6 +277,74 @@ describe("PredepositGuarantee.sol", () => {
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("0"));
       expect(operatorBondLocked).to.equal(ether("0"));
+    });
+  });
+
+  context("negative proof flow", () => {
+    it("should correctly handle compensation of disproven validator", async () => {
+      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      const [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(ether("1"));
+      expect(operatorBondLocked).to.equal(0n);
+
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+      expect(await stakingVault.valuation()).to.equal(ether("32"));
+
+      // Generate a validator
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      const validator = generateValidator(vaultWC);
+      const predepositData = generatePredeposit(validator);
+
+      console.log(0);
+
+      await pdg.predeposit(stakingVault, [predepositData]);
+
+      console.log(1);
+
+      // Prepare a local Merkle tree for validators
+      // const { sszMerkleTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree();
+
+      // Validator is added to CL merkle tree
+      await sszMerkleTree.addValidatorLeaf(validator);
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
+
+      // Beacon Block is generated with new CL state
+      const stateRoot = await sszMerkleTree.getMerkleRoot();
+      const beaconBlockHeader = generateBeaconHeader(stateRoot);
+      const beaconBlockMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
+
+      /// Beacon Block root is posted to EL
+      const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
+
+      // NO collects validator proof
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
+      const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
+
+      console.log(2);
+
+      const witness = { pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof };
+      await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultWC);
+
+      console.log(3);
+
+      // Now the validator is in the DISPROVEN stage, we can proceed with compensation
+      const recipient = vaultOperatorGuarantor.address;
+
+      console.log(4);
+
+      // Call compensateDisprovenPredeposit and expect it to succeed
+      await expect(pdg.connect(vaultOwner).compensateDisprovenPredeposit(validator.pubkey, recipient))
+        .to.emit(pdg, "BalanceCompensated")
+        .withArgs(vaultOperator.address, recipient, ether("1"));
+
+      console.log(5);
+
+      // Check that the locked balance of the node operator has been reduced
+      const nodeOperatorBalance = await pdg.nodeOperatorBalance(vaultOperator.address);
+      expect(nodeOperatorBalance.locked).to.equal(0);
     });
   });
 });
