@@ -9,6 +9,7 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {PredepositGuarantee} from "./predeposit_guarantee/PredepositGuarantee.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 /**
@@ -66,9 +67,25 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("vaults.Permissions.RequestValidatorExit");
 
     /**
+     * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
+     */
+    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE =
+        keccak256("vaults.Permissions.TriggerValidatorWithdrawal");
+
+    /**
      * @notice Permission for voluntary disconnecting the StakingVault.
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
+
+    /**
+     * @notice Permission for withdrawing disproven validator predeposit from PDG
+     */
+    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
+
+    /**
+     * @notice Permission for assets recovery
+     */
+    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
 
     /**
      * @notice Address of the implementation contract
@@ -218,10 +235,22 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
-     * @param _pubkey The public key of the validator to request exit for.
+     * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
-    function _requestValidatorExit(bytes calldata _pubkey) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorExit(_pubkey);
+    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+        stakingVault().requestValidatorExit(_pubkeys);
+    }
+
+    /**
+     * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
+     * @dev The zero checks for parameters are performed in the StakingVault contract.
+     */
+    function _triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
+        stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
@@ -229,6 +258,13 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
+    }
+
+    function _compensateDisprovenPredepositFromPDG(
+        bytes calldata _pubkey,
+        address _recipient
+    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
+        return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**

@@ -15,8 +15,13 @@ contract VaultHub__MockForDelegation {
 
     event Mock__VaultDisconnected(address vault);
     event Mock__Rebalanced(uint256 amount);
+    event Mock__VaultConnected(address vault);
 
-    function disconnectVault(address vault) external {
+    function connectVault(address vault) external {
+        emit Mock__VaultConnected(vault);
+    }
+
+    function disconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
     }
 

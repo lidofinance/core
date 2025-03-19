@@ -77,6 +77,12 @@
       "epochsPerFrame": 12
     }
   },
+  "vaultHub": {
+    "deployParameters": {
+      "connectedVaultsLimit": 500,
+      "relativeShareLimitBP": 1000
+    }
+  },
   "accountingOracle": {
     "deployParameters": {
       "consensusVersion": 2
@@ -90,7 +96,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "depositSecurityModule": {
@@ -138,7 +144,7 @@
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "simple-dvt-onchain-v1",
+      "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },
@@ -152,6 +158,13 @@
   "delegation": {
     "deployParameters": {
       "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
+    }
+  },
+  "predepositGuarantee": {
+    "deployParameters": {
+      "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "changeSlot": 0
     }
   }
 }

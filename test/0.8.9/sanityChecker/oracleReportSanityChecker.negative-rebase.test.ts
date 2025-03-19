@@ -87,6 +87,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         oracleDaemonConfig: deployer.address,
         accounting: await accounting.getAddress(),
         wstETH: deployer.address,
+        vaultHub: deployer.address,
+        predepositGuarantee: deployer.address,
       },
     ]);
 

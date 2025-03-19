@@ -22,7 +22,9 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address withdrawalVault;
         address oracleDaemonConfig;
         address accounting;
+        address predepositGuarantee;
         address wstETH;
+        address vaultHub;
     }
 
     error ZeroAddress();
@@ -42,8 +44,9 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
     address public immutable accounting;
+    address public immutable predepositGuarantee;
     address public immutable wstETH;
-
+    address public immutable vaultHub;
     /**
      * @notice declare service locations
      * @dev accepts a struct to avoid the "stack-too-deep" error
@@ -66,20 +69,27 @@ contract LidoLocator__MockMutable is ILidoLocator {
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
         accounting = _assertNonZero(_config.accounting);
         wstETH = _assertNonZero(_config.wstETH);
+        predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
+        vaultHub = _assertNonZero(_config.vaultHub);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
         return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponents() external view returns (address, address, address, address, address, address) {
+    function oracleReportComponents()
+        external
+        view
+        returns (address, address, address, address, address, address, address)
+    {
         return (
             accountingOracle,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
             postTokenRebaseReceiver,
-            stakingRouter
+            stakingRouter,
+            vaultHub
         );
     }
 

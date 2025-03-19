@@ -5,17 +5,17 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { batch, ether, impersonate, log, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
+  getProtocolContext,
   norEnsureOperators,
   OracleReportParams,
+  ProtocolContext,
   report,
   sdvtEnsureOperators,
-} from "lib/protocol/helpers";
+} from "lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
-import { MAX_DEPOSIT, ZERO_HASH } from "test/suite/constants";
+import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
 
 const AMOUNT = ether("100");
 

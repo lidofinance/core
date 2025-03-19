@@ -20,9 +20,7 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// @notice contract is responsible for handling accounting oracle reports
 /// calculating all the state changes that is required to apply the report
 /// and distributing calculated values to relevant parts of the protocol
-/// @dev accounting is inherited from VaultHub contract to reduce gas costs and
-/// simplify the auth flows, but they are mostly independent
-contract Accounting is VaultHub {
+contract Accounting {
     struct Contracts {
         address accountingOracleAddress;
         IOracleReportSanityChecker oracleReportSanityChecker;
@@ -30,6 +28,7 @@ contract Accounting is VaultHub {
         IWithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         IStakingRouter stakingRouter;
+        VaultHub vaultHub;
     }
 
     struct PreReportState {
@@ -63,6 +62,10 @@ contract Accounting is VaultHub {
         /// @notice amount of CL ether that is not rewards earned during this report period
         /// the sum of CL balance on the previous report and the amount of fresh deposits since then
         uint256 principalClBalance;
+        /// @notice total number of internal (not backed by vaults) stETH shares after the report is applied
+        uint256 postInternalShares;
+        /// @notice amount of ether under the protocol after the report is applied
+        uint256 postInternalEther;
         /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
@@ -83,6 +86,8 @@ contract Accounting is VaultHub {
         uint256 precisionPoints;
     }
 
+    error NotAuthorized(string operation, address addr);
+
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
@@ -91,19 +96,14 @@ contract Accounting is VaultHub {
     /// @notice Lido contract
     ILido public immutable LIDO;
 
+    /// @param _lidoLocator Lido Locator contract
+    /// @param _lido Lido contract
     constructor(
         ILidoLocator _lidoLocator,
-        ILido _lido,
-        address _operatorGrid
-    ) VaultHub(_lido, _operatorGrid) {
+        ILido _lido
+    ) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
-    }
-
-    function initialize(address _admin) external initializer {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
-
-        __VaultHub_init(_admin);
     }
 
     /// @notice calculates all the state changes that is required to apply the report
@@ -204,40 +204,37 @@ contract Accounting is VaultHub {
             update.sharesToFinalizeWQ
         );
 
-        // Pre-calculate total amount of protocol fees for this rebase
-        // amount of shares that will be minted to pay it
-        uint256 postExternalEther;
-        (update.sharesToMintAsFees, postExternalEther) = _calculateFeesAndExternalEther(_report, _pre, update);
+        uint256 postInternalSharesBeforeFees =
+            _pre.totalShares - _pre.externalShares // internal shares before
+            - update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
-        // Calculate the new total shares and total pooled ether after the rebase
-        update.postTotalShares =
-            _pre.totalShares + // totalShares already includes externalShares
-            update.sharesToMintAsFees - // new shares minted to pay fees
-            update.totalSharesToBurn; // shares burned for withdrawals and cover
-
-        update.postTotalPooledEther =
-            _pre.totalPooledEther + // was before the report (includes externalEther)
-            _report.clBalance +
-            update.withdrawals -
-            update.principalClBalance + // total cl rewards (or penalty)
-            update.elRewards + // ELRewards
-            postExternalEther - _pre.externalEther // vaults rebase
+        update.postInternalEther =
+            _pre.totalPooledEther - _pre.externalEther // internal ether before
+            + _report.clBalance + update.withdrawals - update.principalClBalance // total cl rewards (or penalty)
+            + update.elRewards // MEV and tips
             - update.etherToFinalizeWQ; // withdrawals
 
+        // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
+        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
+
+        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
+
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
-        // and the amount of shares to mint as fees to the treasury for each vaults
+        // and the amount of shares to mint as fees to the treasury for each vault
         (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
-            _calculateVaultsRebase(
-                update.postTotalShares,
-                update.postTotalPooledEther,
+            _contracts.vaultHub.calculateVaultsRebase(
+                _report.vaultValues,
                 _pre.totalShares,
                 _pre.totalPooledEther,
+                update.postInternalShares,
+                update.postInternalEther,
                 update.sharesToMintAsFees
             );
 
-        update.postTotalPooledEther +=
-            update.totalVaultsTreasuryFeeShares * update.postTotalPooledEther / update.postTotalShares;
-        update.postTotalShares += update.totalVaultsTreasuryFeeShares;
+        uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
+
+        update.postTotalShares = update.postInternalShares + externalShares;
+        update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -255,19 +252,17 @@ contract Accounting is VaultHub {
     }
 
     /// @dev calculates shares that are minted as the protocol fees
-    function _calculateFeesAndExternalEther(
+    function _calculateLidoProtocolFeeShares(
         ReportValues calldata _report,
-        PreReportState memory _pre,
-        CalculatedValues memory _update
-    ) internal pure returns (uint256 sharesToMintAsFees, uint256 postExternalEther) {
+        CalculatedValues memory _update,
+        uint256 _internalSharesBeforeFees,
+        uint256 _internalEther
+    ) internal pure returns (uint256 sharesToMintAsFees) {
         // we are calculating the share rate equal to the post-rebase share rate
-        // but with fees taken as eth deduction
-        // and without externalBalance taken into account
-        uint256 shares = _pre.totalShares - _update.totalSharesToBurn - _pre.externalShares;
-        uint256 eth = _pre.totalPooledEther - _update.etherToFinalizeWQ - _pre.externalEther;
+        // but with fees taken as ether deduction instead of minting shares
+        // to learn the amount of shares we need to mint to compensate for this fee
 
         uint256 unifiedClBalance = _report.clBalance + _update.withdrawals;
-
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
@@ -276,18 +271,15 @@ contract Accounting is VaultHub {
             uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewards;
             uint256 totalFee = _update.rewardDistribution.totalFee;
             uint256 precision = _update.rewardDistribution.precisionPoints;
+            // amount of fees in ether
             uint256 feeEther = (totalRewards * totalFee) / precision;
-            eth += totalRewards - feeEther;
-
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
-            sharesToMintAsFees = (feeEther * shares) / eth;
-        } else {
-            uint256 clPenalty = _update.principalClBalance - unifiedClBalance;
-            eth = eth - clPenalty + _update.elRewards;
+            // using the share rate that takes fees into account
+            // the share rate is the same as the post-rebase share rate
+            // but with fees taken as ether deduction instead of minting shares
+            // to learn the amount of shares we need to mint to compensate for this fee
+            sharesToMintAsFees = (feeEther * _internalSharesBeforeFees) / (_internalEther - feeEther);
         }
-
-        // externalBalance is rebasing at the same rate as the primary balance does
-        postExternalEther = (_pre.externalShares * eth) / shares;
     }
 
     /// @dev applies the precalculated changes to the protocol state
@@ -336,7 +328,8 @@ contract Accounting is VaultHub {
             _update.etherToFinalizeWQ
         );
 
-        _updateVaults(
+        // TODO: Remove this once decide on vaults reporting
+        _contracts.vaultHub.updateVaults(
             _report.vaultValues,
             _report.inOutDeltas,
             _update.vaultsLockedEther,
@@ -344,7 +337,7 @@ contract Accounting is VaultHub {
         );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {
-            STETH.mintExternalShares(LIDO_LOCATOR.treasury(), _update.totalVaultsTreasuryFeeShares);
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_update.totalVaultsTreasuryFeeShares);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
@@ -356,6 +349,8 @@ contract Accounting is VaultHub {
             _pre.totalPooledEther,
             _update.postTotalShares,
             _update.postTotalPooledEther,
+            _update.postInternalShares,
+            _update.postInternalEther,
             _update.sharesToMintAsFees
         );
     }
@@ -464,7 +459,8 @@ contract Accounting is VaultHub {
             address burner,
             address withdrawalQueue,
             address postTokenRebaseReceiver,
-            address stakingRouter
+            address stakingRouter,
+            address vaultHub
         ) = LIDO_LOCATOR.oracleReportComponents();
 
         return
@@ -474,7 +470,8 @@ contract Accounting is VaultHub {
                 IBurner(burner),
                 IWithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                IStakingRouter(stakingRouter)
+                IStakingRouter(stakingRouter),
+                VaultHub(vaultHub)
             );
     }
 

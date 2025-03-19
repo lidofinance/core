@@ -69,9 +69,10 @@ describe("Permissions", () => {
     vaultHub = await ethers.deployContract("VaultHub__MockPermissions");
 
     // 3. Deploy StakingVault implementation
-    stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
+    // TODO: PDG harness
+    stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, nodeOperator, depositContract]);
     expect(await stakingVaultImpl.vaultHub()).to.equal(vaultHub);
-    expect(await stakingVaultImpl.depositContract()).to.equal(depositContract);
+    expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
     // 4. Deploy Beacon and use StakingVault implementation as initial implementation
     beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
@@ -80,7 +81,11 @@ describe("Permissions", () => {
     permissionsImpl = await ethers.deployContract("Permissions__Harness");
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
-    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl]);
+    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [
+      beacon,
+      permissionsImpl,
+      depositContract,
+    ]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
     const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions(
@@ -559,9 +564,10 @@ describe("Permissions", () => {
 
   context("requestValidatorExit()", () => {
     it("requests a validator exit", async () => {
-      await expect(permissions.connect(exitRequester).requestValidatorExit("0xabcdef"))
-        .to.emit(stakingVault, "ValidatorsExitRequest")
-        .withArgs(permissions, "0xabcdef");
+      const pubkeys = "0x" + "beef".repeat(24);
+      await expect(permissions.connect(exitRequester).requestValidatorExit(pubkeys))
+        .to.emit(stakingVault, "ValidatorExitRequested")
+        .withArgs(permissions, pubkeys, pubkeys);
     });
 
     it("reverts if the caller is not a member of the request exit role", async () => {

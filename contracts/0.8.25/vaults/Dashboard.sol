@@ -135,18 +135,18 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Returns the reserve ratio of the vault in basis points
-     * @return The reserve ratio as a uint16
+     * @return The reserve ratio in basis points as a uint16
      */
     function reserveRatioBP() public view returns (uint16) {
         return vaultSocket().reserveRatioBP;
     }
 
     /**
-     * @notice Returns the threshold reserve ratio of the vault in basis points.
-     * @return The threshold reserve ratio as a uint16.
+     * @notice Returns the rebalance threshold of the vault in basis points.
+     * @return The rebalance threshold in basis points as a uint16.
      */
-    function thresholdReserveRatioBP() external view returns (uint16) {
-        return vaultSocket().reserveRatioThresholdBP;
+    function rebalanceThresholdBP() external view returns (uint16) {
+        return vaultSocket().rebalanceThresholdBP;
     }
 
     /**
@@ -261,14 +261,6 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Requests the exit of a validator from the staking vault
-     * @param _validatorPublicKey Public key of the validator to exit
-     */
-    function requestValidatorExit(bytes calldata _validatorPublicKey) external {
-        _requestValidatorExit(_validatorPublicKey);
-    }
-
-    /**
      * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
@@ -377,11 +369,21 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice withdraws ether of disproven validator from PDG
+     * @param _pubkey of validator that was proven invalid in PDG
+     * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
+     */
+    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
+        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
+    }
+
+    /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -404,7 +406,11 @@ contract Dashboard is Permissions {
      * @param _tokenId token id to recover
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC721(address _token, uint256 _tokenId, address _recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC721(
+        address _token,
+        uint256 _tokenId,
+        address _recipient
+    ) external onlyRole(ASSET_RECOVERY_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -425,6 +431,36 @@ contract Dashboard is Permissions {
      */
     function resumeBeaconChainDeposits() external {
         _resumeBeaconChainDeposits();
+    }
+
+    /**
+     * @notice Signals to node operators that specific validators should exit from the beacon chain. It DOES NOT
+     *         directly trigger the exit - node operators must monitor for request events and handle the exits.
+     * @param _pubkeys Concatenated validator public keys (48 bytes each).
+     * @dev    Emits `ValidatorExitRequested` event for each validator public key through the `StakingVault`.
+     *         This is a voluntary exit request - node operators can choose whether to act on it or not.
+     */
+    function requestValidatorExit(bytes calldata _pubkeys) external {
+        _requestValidatorExit(_pubkeys);
+    }
+
+    /**
+     * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
+     *         Both partial withdrawals (disabled for unhealthy `StakingVault`) and full validator exits are supported.
+     * @param _pubkeys Concatenated validator public keys (48 bytes each).
+     * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
+     *         Set amount to 0 for a full validator exit.
+     *         For partial withdrawals, amounts will be trimmed to keep MIN_ACTIVATION_BALANCE on the validator to avoid deactivation
+     * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
+     * @dev    A withdrawal fee must be paid via msg.value.
+     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
+     */
+    function triggerValidatorWithdrawal(
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
+        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
     // ==================== Internal Functions ====================

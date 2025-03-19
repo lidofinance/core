@@ -6,12 +6,18 @@ pragma solidity 0.8.25;
 
 import {AccessControl} from "@openzeppelin/contracts-v5.2/access/AccessControl.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 contract OperatorGrid is AccessControl {
 
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
-    bytes32 public constant MINT_BURN_ROLE = keccak256("vaults.OperatorsGrid.MintBurn");
+
+    /// @notice Lido Locator contract
+    ILidoLocator public immutable LIDO_LOCATOR;
+
+    /// @notice Default group ID
+    uint256 public constant DEFAULT_GROUP_ID = 1;
 
     // -----------------------------
     //            STRUCTS
@@ -26,9 +32,9 @@ contract OperatorGrid is AccessControl {
     struct Tier {
         uint96 shareLimit;
         uint96 mintedShares;
-        uint16 reserveRatio;
-        uint16 reserveRatioThreshold;
-        uint16 treasuryFee;
+        uint16 reserveRatioBP;
+        uint16 rebalanceThresholdBP;
+        uint16 treasuryFeeBP;
     }
 
     struct Operator {
@@ -57,18 +63,27 @@ contract OperatorGrid is AccessControl {
     Vault[] public vaults;
     mapping(address => uint256) public vaultIndex;
 
-    constructor(address _admin) {
+
+    /// @notice Initializes the contract with an LidoLocator and admin address
+    /// @param _locator Lido Locator contract
+    /// @param _admin Address of the contract admin
+    constructor(ILidoLocator _locator, address _admin) {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
+        LIDO_LOCATOR = _locator;
+
         //1-ind
         groups.push(Group({shareLimit: 0, mintedShares: 0, tiers: new uint256[](0), tiersCount: 0}));
         operators.push(Operator({groupId: 0, vaults: new uint256[](0), vaultsCount: 0 }));
-        tiers.push(Tier({shareLimit: 0, mintedShares: 0, reserveRatio: 0, reserveRatioThreshold: 0, treasuryFee: 0}));
+        tiers.push(Tier({shareLimit: 0, mintedShares: 0, reserveRatioBP: 0, rebalanceThresholdBP: 0, treasuryFeeBP: 0}));
         vaults.push(Vault({tierId: 0, mintedShares: 0}));
     }
 
+    /// @notice Registers a new group
+    /// @param groupId identifier of the group
+    /// @param shareLimit Maximum share limit for the group
     function registerGroup(uint256 groupId, uint256 shareLimit) external onlyRole(REGISTRY_ROLE) {
         if (groupIndex[groupId] > 0) revert GroupExists();
 
@@ -86,10 +101,71 @@ contract OperatorGrid is AccessControl {
         emit GroupAdded(groupId, uint96(shareLimit));
     }
 
-    function registerOperator(address _operator) external {
-        _registerOperator(_operator, 1);
+    /// @notice Updates the share limit of a group
+    /// @param groupId Group ID to update
+    /// @param newShareLimit New share limit value
+    function updateGroupShareLimit(uint256 groupId, uint256 newShareLimit) external onlyRole(REGISTRY_ROLE) {
+        uint256 gIdx = groupIndex[groupId];
+        if (gIdx == 0) revert GroupNotExists();
+
+        groups[gIdx].shareLimit = uint96(newShareLimit);
+
+        emit GroupShareLimitUpdated(groupId, uint96(newShareLimit));
     }
 
+    /// @notice Registers a new tier
+    /// @param groupId identifier of the group
+    /// @param tierId identifier of the tier
+    /// @param shareLimit maximum number of stETH shares that can be minted by the vault
+    /// @param reserveRatioBP minimum reserve ratio in basis points
+    /// @param rebalanceThresholdBP threshold to force rebalance on the vault in basis points
+    /// @param treasuryFeeBP treasury fee in basis points
+    function registerTier(
+        uint256 groupId,
+        uint256 tierId,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 rebalanceThresholdBP,
+        uint256 treasuryFeeBP
+    ) external onlyRole(REGISTRY_ROLE) {
+        uint256 gIdx = groupIndex[groupId];
+        if (gIdx == 0) revert GroupNotExists();
+        if (tierIndex[tierId] > 0) revert TierExists();
+
+        tierIndex[tierId] = tiers.length;
+        tiers.push(
+            Tier({
+                shareLimit: uint96(shareLimit),
+                mintedShares: 0,
+                reserveRatioBP: uint16(reserveRatioBP),
+                rebalanceThresholdBP: uint16(rebalanceThresholdBP),
+                treasuryFeeBP: uint16(treasuryFeeBP)
+            })
+        );
+
+        Group storage g = groups[gIdx];
+        g.tiers.push(tierIndex[tierId]);
+        g.tiersCount++;
+
+        emit TierAdded(
+            groupId,
+            tierId,
+            uint96(shareLimit),
+            uint16(reserveRatioBP),
+            uint16(rebalanceThresholdBP),
+            uint16(treasuryFeeBP)
+        );
+    }
+
+    /// @notice Registers a new operator
+    /// @param _operator address of the operator
+    function registerOperator(address _operator) external {
+        _registerOperator(_operator, DEFAULT_GROUP_ID);
+    }
+
+    /// @notice Registers a new operator
+    /// @param _operator address of the operator
+    /// @param _groupId identifier of the group
     function registerOperator(address _operator, uint256 _groupId) external onlyRole(REGISTRY_ROLE) {
         _registerOperator(_operator, _groupId);
     }
@@ -120,7 +196,12 @@ contract OperatorGrid is AccessControl {
         emit OperatorAdded(_groupId, _operator);
     }
 
+    /// @notice Registers a new vault
+    /// @param vault address of the vault
     function registerVault(address vault) external {
+        if (vault == address(0)) revert ZeroArgument("_vault");
+        if (vaultIndex[vault] > 0) revert VaultExists();
+
         address operatorAddr = IStakingVault(vault).nodeOperator();
         uint256 operatorIndex = operatorIndex[operatorAddr];
         if (operatorIndex == 0) revert NodeOperatorNotExists();
@@ -146,87 +227,19 @@ contract OperatorGrid is AccessControl {
         emit VaultAdded(operator.groupId, operatorAddr, vault, _vault.tierId);
     }
 
-    function registerTier(
-        uint256 groupId,
-        uint256 tierId,
-        uint256 shareLimit,
-        uint256 reserveRatio,
-        uint256 reserveRatioThreshold,
-        uint256 treasuryFee
-    ) external onlyRole(REGISTRY_ROLE) {
-        uint256 gIdx = groupIndex[groupId];
-        if (gIdx == 0) revert GroupNotExists();
-        if (tierIndex[tierId] > 0) revert TierExists();
+   // -----------------------------
+   //     MINT / BURN
+   // -----------------------------
 
-        tierIndex[tierId] = tiers.length;
-        tiers.push(
-            Tier({
-                shareLimit: uint96(shareLimit),
-                mintedShares: 0,
-                reserveRatio: uint16(reserveRatio),
-                reserveRatioThreshold: uint16(reserveRatioThreshold),
-                treasuryFee: uint16(treasuryFee)
-            })
-        );
-
-        Group storage g = groups[gIdx];
-        g.tiers.push(tierIndex[tierId]);
-        g.tiersCount++;
-
-        emit TierAddedOrUpdated(
-            groupId,
-            tierId,
-            uint96(shareLimit),
-            uint16(reserveRatio),
-            uint16(reserveRatioThreshold),
-            uint16(treasuryFee)
-        );
-    }
-
-    function updateGroupShareLimit(uint256 groupId, uint256 newShareLimit) external onlyRole(REGISTRY_ROLE) {
-        uint256 gIdx = groupIndex[groupId];
-        if (gIdx == 0) revert GroupNotExists();
-
-        groups[gIdx].shareLimit = uint96(newShareLimit);
-
-        emit GroupShareLimitUpdated(groupId, uint96(newShareLimit));
-    }
-
-//    function unregisterTier(uint256 tierId) external onlyRole(REGISTRY_ROLE) {
-//        uint256 tIdx = tierIndex[tierId];
-//        if (tIdx == 0 || tIdx >= tiers.length) revert TierNotExists();
-//
-//        // swap-and-pop
-//        uint256 lastIdx = tiers.length - 1;
-//        if (tIdx != lastIdx) {
-//            Tier memory lastTier = tiers[lastIdx];
-//            tiers[tIdx] = lastTier;
-//            tierIndex[lastTier.id] = tIdx;
-//        }
-//        tiers.pop();
-//        delete tierIndex[tierId];
-//
-//        emit TierRemoved(tierId);
-//    }
-
-//
-//
-//    // -----------------------------
-//    //     MINT / BURN
-//    // -----------------------------
-//
-//    /**
-//     *
-//     *   group limit: group.mintedShares + amount <= group.shareLimit
-//     *   update shares on group/vault
-//     */
-
-    uint96 public test = 1;
-
+    /// @notice Mint shares
+    /// @param vaultAddr address of the vault
+    /// @param amount amount of shares to mint
     function mintShares(
         address vaultAddr,
         uint256 amount
-    ) external onlyRole(MINT_BURN_ROLE) {
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("mintShares", msg.sender);
+
         uint256 index = vaultIndex[vaultAddr];
         if (index == 0) revert VaultNotExists();
 
@@ -253,10 +266,15 @@ contract OperatorGrid is AccessControl {
         emit Minted(operator.groupId, operatorAddr, vaultAddr, amount_);
     }
 
+    /// @notice Burn shares
+    /// @param vaultAddr address of the vault
+    /// @param amount amount of shares to burn
     function burnShares(
         address vaultAddr,
         uint256 amount
-    ) external onlyRole(MINT_BURN_ROLE) {
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("burnShares", msg.sender);
+
         uint256 index = vaultIndex[vaultAddr];
         if (index == 0) revert VaultNotExists();
 
@@ -280,13 +298,19 @@ contract OperatorGrid is AccessControl {
         emit Burned(operator.groupId, operatorAddr, vaultAddr, amount_);
     }
 
+    /// @notice Get vault limits
+    /// @param vaultAddr address of the vault
+    /// @return shareLimit share limit of the vault
+    /// @return reserveRatioBP reserve ratio of the vault
+    /// @return rebalanceThresholdBP rebalance threshold of the vault
+    /// @return treasuryFeeBP treasury fee of the vault
     function getVaultLimits(address vaultAddr)
     external
     view
     returns (
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 reserveRatioThresholdBP,
+        uint256 rebalanceThresholdBP,
         uint256 treasuryFeeBP
     )
     {
@@ -294,14 +318,12 @@ contract OperatorGrid is AccessControl {
         if (vIdx == 0) revert VaultNotExists();
         Vault memory v = vaults[vIdx];
 
-        address opAddr = IStakingVault(vaultAddr).nodeOperator();
-        uint256 opIdx = operatorIndex[opAddr];
         Tier memory t = tiers[v.tierId];
 
         shareLimit = t.shareLimit;
-        reserveRatioBP = t.reserveRatio;
-        reserveRatioThresholdBP = t.reserveRatioThreshold;
-        treasuryFeeBP = t.treasuryFee;
+        reserveRatioBP = t.reserveRatioBP;
+        rebalanceThresholdBP = t.rebalanceThresholdBP;
+        treasuryFeeBP = t.treasuryFeeBP;
     }
 
     // -----------------------------
@@ -310,7 +332,7 @@ contract OperatorGrid is AccessControl {
 
     event GroupAdded(uint256 indexed groupId, uint256 shareLimit);
     event GroupShareLimitUpdated(uint256 indexed groupId, uint256 shareLimit);
-    event TierAddedOrUpdated(uint256 indexed groupId, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatio, uint256 reserveRatioThreshold, uint256 treasuryFee);
+    event TierAdded(uint256 indexed groupId, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFee);
     event OperatorAdded(uint256 indexed groupId, address indexed operatorAddr);
     event VaultAdded(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 tierId);
     event Minted(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
@@ -319,12 +341,12 @@ contract OperatorGrid is AccessControl {
     // -----------------------------
     //            ERRORS
     // -----------------------------
+    error NotAuthorized(string operation, address sender);
     error ZeroArgument(string argument);
     error GroupExists();
     error GroupNotExists();
     error TierExists();
-    error TierNotExists();
-    error TierRemoved();
+    // error TierNotExists();
     error VaultExists();
     error VaultNotExists();
     error NodeOperatorExists();

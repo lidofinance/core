@@ -8,6 +8,7 @@ import {
   Delegation,
   DepositContract__MockForStakingVault,
   LidoLocator,
+  OperatorGrid,
   StakingVault,
   StETH__MockForDelegation,
   UpgradeableBeacon,
@@ -34,13 +35,15 @@ describe("Delegation.sol", () => {
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
-  let exitRequester: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
   let curatorFeeSetter: HardhatEthersSigner;
   let curatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
-
+  let vaultDepositor: HardhatEthersSigner;
+  let dao: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
@@ -59,6 +62,7 @@ describe("Delegation.sol", () => {
   let vault: StakingVault;
   let delegation: Delegation;
   let beacon: UpgradeableBeacon;
+  let operatorGrid: OperatorGrid;
 
   let originalState: string;
 
@@ -72,7 +76,8 @@ describe("Delegation.sol", () => {
       rebalancer,
       depositPauser,
       depositResumer,
-      exitRequester,
+      validatorExitRequester,
+      validatorWithdrawalTriggerer,
       disconnecter,
       curatorFeeSetter,
       curatorFeeClaimer,
@@ -81,12 +86,15 @@ describe("Delegation.sol", () => {
       stranger,
       beaconOwner,
       rewarder,
+      vaultDepositor,
+      dao,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
+
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
     delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
@@ -94,16 +102,24 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
+    operatorGrid = await ethers.deployContract("OperatorGrid", [lidoLocator, dao]);
+    await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
+
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, vaultDepositor, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    factory = await ethers.deployContract("VaultFactory", [beacon, delegationImpl, operatorGrid]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+    expect(await factory.OPERATOR_GRID()).to.equal(operatorGrid);
+
+    await operatorGrid.connect(dao).registerGroup(1, ether("1000"));
+    await operatorGrid.connect(dao).registerTier(1, 1, ether("1000"), 1000n, 1000n, 1000n);
+    await operatorGrid.connect(dao)["registerOperator(address)"](nodeOperatorManager);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
@@ -112,6 +128,7 @@ describe("Delegation.sol", () => {
         confirmExpiry: days(7n),
         curatorFeeBP: 0n,
         nodeOperatorFeeBP: 0n,
+        assetRecoverer: vaultOwner,
         funders: [funder],
         withdrawers: [withdrawer],
         minters: [minter],
@@ -119,7 +136,8 @@ describe("Delegation.sol", () => {
         rebalancers: [rebalancer],
         depositPausers: [depositPauser],
         depositResumers: [depositResumer],
-        exitRequesters: [exitRequester],
+        validatorExitRequesters: [validatorExitRequester],
+        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
         curatorFeeSetters: [curatorFeeSetter],
         curatorFeeClaimers: [curatorFeeClaimer],
@@ -210,7 +228,8 @@ describe("Delegation.sol", () => {
       await assertSoleMember(rebalancer, await delegation.REBALANCE_ROLE());
       await assertSoleMember(depositPauser, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await assertSoleMember(depositResumer, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await assertSoleMember(exitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorExitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorWithdrawalTriggerer, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
       await assertSoleMember(curatorFeeSetter, await delegation.CURATOR_FEE_SET_ROLE());
       await assertSoleMember(curatorFeeClaimer, await delegation.CURATOR_FEE_CLAIM_ROLE());

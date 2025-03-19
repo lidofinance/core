@@ -12,6 +12,7 @@ import {
   Lido__MockForAccounting,
   Lido__MockForAccounting__factory,
   LidoLocator,
+  OperatorGrid,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
   PostTokenRebaseReceiver__MockForAccounting__factory,
@@ -25,6 +26,7 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/Accou
 import { certainAddress, ether, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
+import { VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -32,6 +34,7 @@ describe("Accounting.sol:report", () => {
   let accounting: Accounting;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
 
   let lido: Lido__MockForAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
@@ -64,9 +67,7 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const operatorGrid = certainAddress("accounting:operatorGrid");
-
-    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, operatorGrid], deployer);
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido], deployer);
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],
@@ -74,7 +75,23 @@ describe("Accounting.sol:report", () => {
     );
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
-    await accounting.initialize(deployer);
+
+    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, deployer]);
+
+    const vaultHubImpl = await ethers.deployContract(
+      "VaultHub",
+      [locator, lido, operatorGrid, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      deployer,
+    );
+
+    const vaultHubProxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [vaultHubImpl, deployer, new Uint8Array()],
+      deployer,
+    );
+    const vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
+    await vaultHub.initialize(deployer);
 
     const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
     accounting = accounting.connect(accountingOracleSigner);
