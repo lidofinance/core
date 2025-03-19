@@ -31,4 +31,8 @@ struct ReportValues {
     // int256[] inOutDeltas;
     /// @notice overall vaults fees
     uint256 vaultsTotalFees;
+    /// @notice Merkle Tree root of the vaults data.
+    bytes32 vaultsDataTreeRoot;
+    /// @notice CID of the published Merkle tree of the vault data.
+    string vaultsDataTreeCid;
 }

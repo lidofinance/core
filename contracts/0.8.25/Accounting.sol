@@ -324,6 +324,11 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
+        _contracts.vaultHub.updateVaultsData(
+            _report.timestamp,
+            _report.vaultsDataTreeRoot,
+            _report.vaultsDataTreeCid
+        );
         // TODO: Remove this once decide on vaults reporting
         // _contracts.vaultHub.updateVaults(
         //     _report.vaultValues,

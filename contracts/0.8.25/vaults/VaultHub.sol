@@ -30,6 +30,12 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
+        /// @notice timestamp of the vaults data
+        uint256 vaultsDataTimestamp;
+        /// @notice root of the vaults data tree
+        bytes32 vaultsDataTreeRoot;
+        /// @notice CID of the vaults data tree
+        string vaultsDataTreeCid;
     }
 
     struct VaultSocket {
@@ -231,6 +237,19 @@ contract VaultHub is PausableUntilWithRoles {
         socket.shareLimit = uint96(_shareLimit);
 
         emit ShareLimitUpdated(_vault, _shareLimit);
+    }
+
+    function updateVaultsData(
+        uint256 _vaultsDataTimestamp,
+        bytes32 _vaultsDataTreeRoot,
+        string memory _vaultsDataTreeCid
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaultsData", msg.sender);
+
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        $.vaultsDataTimestamp = _vaultsDataTimestamp;
+        $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
+        $.vaultsDataTreeCid = _vaultsDataTreeCid;
     }
 
     /// @notice force disconnects a vault from the hub
