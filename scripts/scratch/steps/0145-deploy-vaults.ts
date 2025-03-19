@@ -13,13 +13,14 @@ export async function main() {
 
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
   const wstethAddress = state[Sk.wstETH].address;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
+  const imp = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
     vaultHubAddress,
     state[Sk.predepositGuarantee].proxy.address,
     depositContract,
@@ -27,7 +28,7 @@ export async function main() {
   const impAddress = await imp.getAddress();
 
   // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
+  const delegation = await deployWithoutProxy(Sk.delegationImplementation, "Delegation", deployer, [
     wethContract,
     wstethAddress,
     locatorAddress,
@@ -35,7 +36,10 @@ export async function main() {
   const delegationAddress = await delegation.getAddress();
 
   // Deploy Delegation implementation contract
-  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
+    impAddress,
+    agentAddress,
+  ]);
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist

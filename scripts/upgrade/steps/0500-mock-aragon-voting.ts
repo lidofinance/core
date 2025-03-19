@@ -37,6 +37,8 @@ export async function main(): Promise<void> {
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const upgradeTemplateV3Address = state[Sk.upgradeTemplateV3].address;
+  const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
+  const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
 
   // while locator is not upgraded yet we can fetch the old burner address
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
@@ -44,6 +46,8 @@ export async function main(): Promise<void> {
 
   const parameters = readUpgradeParameters();
   const aoConsensusVersion = parameters[Sk.accountingOracle].deployParameters.consensusVersion;
+  const lidoAppNewVersion = parameters[Sk.appLido].newVersion;
+  const csmAccountingAddress = parameters["csm"].accounting;
 
   const agentSigner = await impersonate(agentAddress, ether("1"));
   const votingSigner = await impersonate(votingAddress, ether("1"));
@@ -76,7 +80,7 @@ export async function main(): Promise<void> {
   );
 
   const lidoRepo = await loadContract<Repo>("Repo", MAINNET_LIDO_REPO);
-  await lidoRepo.connect(votingSigner).newVersion([5, 0, 0], lidoImplAddress, "0x");
+  await lidoRepo.connect(votingSigner).newVersion(lidoAppNewVersion, lidoImplAddress, "0x");
   log("Lido version updated in Lido App Repo");
 
   const aragonKernel = await loadContract<Kernel>("Kernel", kernelAddress);
@@ -86,7 +90,9 @@ export async function main(): Promise<void> {
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);
-  await lido.connect(votingSigner).finalizeUpgrade_v3(oldBurnerAddress); // can be called by anyone
+  await lido
+    .connect(votingSigner)
+    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress); // can be called by anyone
   // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
 

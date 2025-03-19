@@ -87,7 +87,7 @@ contract LidoLocator is ILidoLocator {
         address,
         address,
         address,
-        address, 
+        address,
         address,
         address
     ) {

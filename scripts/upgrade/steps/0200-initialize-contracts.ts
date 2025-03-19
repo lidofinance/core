@@ -61,7 +61,7 @@ export async function main(): Promise<void> {
   // Burner
   //
 
-  // Burner grantRole REQUEST_BURN_SHARES_ROLE to Accounting
+  // Burner grantRole REQUEST_BURN_SHARES_ROLE
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
   await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });

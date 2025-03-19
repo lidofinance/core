@@ -38,5 +38,11 @@
     "deployParameters": {
       "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
     }
+  },
+  "app:lido": {
+    "newVersion": [5, 0, 0]
+  },
+  "csm": {
+    "accounting": "0x4d72BFF1BeaC69925F8Bd12526a39BAAb069e5Da"
   }
 }

@@ -132,7 +132,7 @@ export async function main() {
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   // Deploy StakingVault implementation contract
-  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
+  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
     vaultHub.address,
     predepositGuarantee.address,
     depositContract,
@@ -140,17 +140,17 @@ export async function main() {
   const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
 
   // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
+  const delegation = await deployWithoutProxy(Sk.delegationImplementation, "Delegation", deployer, [
     wethContract,
     wstethAddress,
     locatorAddress,
   ]);
   const delegationAddress = await delegation.getAddress();
 
-  // Deploy Delegation implementation contract
+  // Deploy UpgradeableBeacon contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
     stakingVaultImplAddress,
-    deployer,
+    agentAddress,
   ]);
   const beaconAddress = await beacon.getAddress();
 
