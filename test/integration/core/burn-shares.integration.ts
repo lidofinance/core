@@ -75,6 +75,8 @@ describe("Scenario: Burn Shares", () => {
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
       vaultsTotalFees: 0n,
+      vaultsDataTreeRoot: ethers.ZeroHash,
+      vaultsDataTreeCid: "",
     });
 
     const sharesToBurnAfter = await lido.sharesOf(stranger.address);
