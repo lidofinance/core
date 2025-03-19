@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
@@ -82,7 +83,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
 
-    // deploy stubs for unsupported BLS precompiles
+    // TODO: remove stubs when hardhat fork supports BLS precompiles
     await deployBLSPrecompileStubs();
 
     snapshot = await Snapshot.take();
@@ -255,18 +256,20 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const validators: {
       container: SSZHelpers.ValidatorStruct;
+      blsPrivateKey: SecretKey;
       index: number;
       proof: string[];
     }[] = [];
 
-    // TODO: BLS signature support
     for (let i = 0; i < keysToAdd; i++) {
-      validators.push({ container: generateValidator(withdrawalCredentials), index: 0, proof: [] });
+      validators.push({ ...generateValidator(withdrawalCredentials), index: 0, proof: [] });
     }
 
-    const predeposits = validators.map((validator) => {
-      return generatePredeposit(validator.container);
-    });
+    const predeposits = await Promise.all(
+      validators.map((validator) => {
+        return generatePredeposit(validator);
+      }),
+    );
 
     const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
 

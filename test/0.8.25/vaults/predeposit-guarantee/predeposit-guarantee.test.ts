@@ -147,7 +147,7 @@ describe("PredepositGuarantee.sol", () => {
       const validator = generateValidator(vaultWC);
 
       // NO runs predeposit for the vault
-      const { deposit, depositY } = generatePredeposit(validator);
+      const { deposit, depositY } = await generatePredeposit(validator);
       const predepositTX = pdg.predeposit(stakingVault, [deposit], [depositY]);
 
       await expect(predepositTX)
@@ -163,7 +163,7 @@ describe("PredepositGuarantee.sol", () => {
       expect(operatorBondLocked).to.equal(ether("1"));
 
       // Validator is added to CL merkle tree
-      await sszMerkleTree.addValidatorLeaf(validator);
+      await sszMerkleTree.addValidatorLeaf(validator.container);
       const validatorLeafIndex = firstValidatorLeafIndex + 1n;
       const validatorIndex = 1n;
 
@@ -176,21 +176,21 @@ describe("PredepositGuarantee.sol", () => {
       const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
       // NO collects validator proof
-      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container);
       const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       // NO posts proof and triggers deposit to total of 32 ether
-      const postDepositData = generatePostDeposit(validator, ether("31"));
+      const postDepositData = generatePostDeposit(validator.container, ether("31"));
       const proveAndDepositTx = pdg.proveAndDeposit(
-        [{ pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
+        [{ pubkey: validator.container.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
         [postDepositData],
         stakingVault,
       );
 
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
-        .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC)
+        .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, postDepositData.amount)
         .to.emit(depositContract, "DepositEvent")

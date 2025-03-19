@@ -38,35 +38,34 @@ contract BLSVerifyingKeyTest is Test {
         harness = new BLSHarness();
     }
 
-    function setUp() public {
-        // Deploy the mock contract
-        // Set the mock's bytecode to the desired address
-        //vm.etch(0x000000000000000000000000000000000000000d, address(0x000000000000000000000000000000000000000E).code);
-    }
-
     function test_verifySigningRoot() external view {
-        PrecomputedDepositMessage memory message = STATIC_DEPOSIT_MESSAGE();
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
         bytes32 root = harness.depositMessageSigningRoot(message);
         StdAssertions.assertEq(root, 0xa0ea5aa96388d0375c9181eac29fa198cea873c818efe7442bd49c03948f2a69);
     }
 
-    function test_verifyDeposit() external view {
-        PrecomputedDepositMessage memory message = STATIC_DEPOSIT_MESSAGE();
-        harness.verifyDepositMessage(message);
-    }
-
-    function test_verifyMainnetDeposit() external view {
-        PrecomputedDepositMessage memory message = STATIC_MAINNET_MESSAGE();
-        harness.verifyDepositMessage(message);
-    }
-
     function test_revertOnInCorrectDeposit() external {
-        PrecomputedDepositMessage memory deposit = CORRUPTED_STATIC_DEPOSIT_MESSAGE();
+        PrecomputedDepositMessage memory deposit = CORRUPTED_MESSAGE();
         vm.expectRevert();
         harness.verifyDepositMessage(deposit);
     }
 
-    function STATIC_DEPOSIT_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
+    function test_verifyDeposit_LOCAL_1() external view {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_verifyDeposit_LOCAL_2() external view {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_2();
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_verifyDeposit_MAINNET() external view {
+        PrecomputedDepositMessage memory message = BENCHMARK_MAINNET_MESSAGE();
+        harness.verifyDepositMessage(message);
+    }
+
+    function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
                 IStakingVault.Deposit(
@@ -76,24 +75,52 @@ contract BLSVerifyingKeyTest is Test {
                     bytes32(0) // deposit data root is not checked
                 ),
                 BLS.DepositY(
-                    wrapFp(
-                        hex"19b71bd2a9ebf09809b6c380a1d1de0c2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083"
+                    BLS.Fp(
+                        0x0000000000000000000000000000000019b71bd2a9ebf09809b6c380a1d1de0c,
+                        0x2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083
                     ),
-                    wrapFp2(
-                        hex"160f8d804d277c7a079f451bce224fd42397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb",
-                        hex"10d96c5dcc6e32bcd43e472317e18ad94dde89c9361d79bec5378c72214083ea40f3dc43ee759025eb4c25150e1943bf"
+                    BLS.Fp2(
+                        0x00000000000000000000000000000000160f8d804d277c7a079f451bce224fd4,
+                        0x2397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb,
+                        0x0000000000000000000000000000000010d96c5dcc6e32bcd43e472317e18ad9,
+                        0x4dde89c9361d79bec5378c72214083ea40f3dc43ee759025eb4c25150e1943bf
                     )
                 ),
                 0xf3d93f9fbc6a229f3b11340b4b52ae53833813efab76e812d1d014163259ef1f
             );
     }
 
-    function CORRUPTED_STATIC_DEPOSIT_MESSAGE() internal pure returns (PrecomputedDepositMessage memory message) {
-        message = STATIC_DEPOSIT_MESSAGE();
+    function LOCAL_MESSAGE_2() internal pure returns (PrecomputedDepositMessage memory) {
+        return
+            PrecomputedDepositMessage(
+                IStakingVault.Deposit(
+                    hex"95886cccfd40156b84b29e22098f3b1b3d1811275507cdf10a3d4c29217635cc389156565a9e156c6f4797602520d959",
+                    hex"87eb3d449f8b70f6aa46f7f204cdb100bdc2742fae3176cec9b864bfc5460907deed2bbb7dac911b4e79d5c9df86483c013c5ba55ab4691b6f8bd16197538c3f2413dc9c56f37cb6bd78f72dbe876f8ae2a597adbf7574eadab2dd2aad59a291",
+                    1 ether,
+                    bytes32(0xe019f8a516377a7bd24e571ddf9410a73e7f11968515a0241bb7993a72a9a846) // deposit data root is not checked
+                ),
+                BLS.DepositY(
+                    BLS.Fp(
+                        0x00000000000000000000000000000000065bd597c1126394e2c2e357f9bde064,
+                        0xfe5928f590adac55563d299c738458f9fb15494364ce3ee4a0a45190853f63fe
+                    ),
+                    BLS.Fp2(
+                        0x000000000000000000000000000000000f20e48e1255852b16cb3bc79222d426,
+                        0x8eed3a566036b5608775e10833dc043b33c1f762eff29fb75c4479bea44ead3d,
+                        0x000000000000000000000000000000000a9fffa1483846f01e6dd1a3212afb14,
+                        0x6a523aec73dcb6c8a5a97b42b037162fb7767df9e4e11fc9e89f4c4ff0f37a42
+                    )
+                ),
+                0x0200000000000000000000008daf17a20c9dba35f005b6324f493785d239719d
+            );
+    }
+
+    function CORRUPTED_MESSAGE() internal pure returns (PrecomputedDepositMessage memory message) {
+        message = LOCAL_MESSAGE_1();
         message.withdrawalCredentials = bytes32(0x0);
     }
 
-    function STATIC_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
+    function BENCHMARK_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
                 IStakingVault.Deposit(
@@ -103,12 +130,15 @@ contract BLSVerifyingKeyTest is Test {
                     bytes32(0)
                 ),
                 BLS.DepositY(
-                    wrapFp(
-                        hex"04c46736f0aa8ec7e6e4c1126c12079f09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d"
+                    BLS.Fp(
+                        0x0000000000000000000000000000000004c46736f0aa8ec7e6e4c1126c12079f,
+                        0x09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d
                     ),
-                    wrapFp2(
-                        hex"10e7847980f47ceb3f994a97e246aa1d563dfb50c372156b0eaee0802811cd62da8325ebd37a1a498ad4728b5852872f",
-                        hex"00c4aac6c84c230a670b4d4c53f74c0b2ca4a6a86fe720d0640d725d19d289ce4ac3a9f8a9c8aa345e36577c117e7dd6"
+                    BLS.Fp2(
+                        0x0000000000000000000000000000000010e7847980f47ceb3f994a97e246aa1d,
+                        0x563dfb50c372156b0eaee0802811cd62da8325ebd37a1a498ad4728b5852872f,
+                        0x0000000000000000000000000000000000c4aac6c84c230a670b4d4c53f74c0b,
+                        0x2ca4a6a86fe720d0640d725d19d289ce4ac3a9f8a9c8aa345e36577c117e7dd6
                     )
                 ),
                 0x004AAD923FC63B40BE3DDE294BDD1BBB064E34A4A4D51B68843FEA44532D6147
