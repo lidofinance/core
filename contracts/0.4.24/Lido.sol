@@ -251,7 +251,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _approve(_nodeOperatorsRegistry, burner, INFINITE_ALLOWANCE);
         _approve(_csmAccounting, burner, INFINITE_ALLOWANCE);
         // NB: allowances for withdrawalQueue and accounting are set in _initialize_v3()
-        //     because they are also required upon scratch deployment as well
+        //     because they are required upon scratch deployment as well
     }
 
     /**
