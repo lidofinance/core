@@ -530,14 +530,14 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
-    function updateVaults(
-        uint256[] memory _valuations,
-        int256[] memory _inOutDeltas,
-        uint256[] memory _locked,
-        uint256[] memory _treasureFeeShares
-    ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
-        VaultHubStorage storage $ = _getVaultHubStorage();
+    // function updateVaults(
+    //     uint256[] memory _valuations,
+    //     int256[] memory _inOutDeltas,
+    //     uint256[] memory _locked,
+    //     uint256[] memory _treasureFeeShares
+    // ) external {
+    //     if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
+    //     VaultHubStorage storage $ = _getVaultHubStorage();
 
     //     for (uint256 i = 0; i < _valuations.length; i++) {
     //         VaultSocket storage socket = $.sockets[i + 1];
