@@ -428,7 +428,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
-        vault_.report(vault_.valuation(), vault_.inOutDelta(), 0);
+        vault_.report(block.timestamp, vault_.valuation(), vault_.inOutDelta(), 0);
 
         emit VaultDisconnected(_vault);
     }
@@ -547,6 +547,17 @@ contract VaultHub is PausableUntilWithRoles {
         // we can use the postShareRate here, because charging fees for the vaults does not change shareRate
         // like in the the case of internal treasury fees
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
+    }
+
+    function invalidateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _locked, bytes32[] memory _proof) external {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
+        VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
+
+        // TODO: validate the proof
+        // TODO: check the data timestamp freshness
+
+        IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, _locked);
     }
 
     // function updateVaults(

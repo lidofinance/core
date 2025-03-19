@@ -15,6 +15,7 @@ contract StakingVault__MockForVaultHub {
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
+    uint256 public $timestamp;
 
     bytes32 public withdrawalCredentials;
 
@@ -64,7 +65,8 @@ contract StakingVault__MockForVaultHub {
         $inOutDelta -= int256(amount);
     }
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+        $timestamp = _timestamp;
         $valuation = _valuation;
         $inOutDelta = _inOutDelta;
         $locked = _locked;

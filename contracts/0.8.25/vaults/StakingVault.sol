@@ -356,11 +356,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _inOutDelta New net difference between funded and withdrawn ether
      * @param _locked New amount of locked ether
      */
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
+        $.report.timestamp = uint64(_timestamp);
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);

@@ -80,7 +80,12 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         VaultStorage storage $ = _getVaultStorage();
-        return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
+        return
+            IStakingVault.Report({
+                timestamp: $.report.timestamp,
+                valuation: $.report.valuation,
+                inOutDelta: $.report.inOutDelta
+            });
     }
 
     function _getVaultStorage() private pure returns (VaultStorage storage $) {
@@ -103,7 +108,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function rebalance(uint256 _ether) external {}
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
 
     function lock(uint256 _locked) external {}
 

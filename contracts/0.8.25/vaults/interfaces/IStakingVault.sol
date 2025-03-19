@@ -16,6 +16,7 @@ interface IStakingVault {
      * @custom:inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      */
     struct Report {
+        uint64 timestamp;
         uint128 valuation;
         int128 inOutDelta;
     }
@@ -43,7 +44,7 @@ interface IStakingVault {
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
     function latestReport() external view returns (Report memory);
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
     function withdrawalCredentials() external view returns (bytes32);
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;

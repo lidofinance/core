@@ -316,7 +316,7 @@ describe("VaultHub.sol:hub", () => {
           await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
         }
 
-        await vault.report(valuation - slashed, valuation, BigIntMath.max(mintable, ether("1")));
+        await vault.report(0n, valuation - slashed, valuation, BigIntMath.max(mintable, ether("1")));
 
         const actualHealthy = await vaultHub.isVaultHealthy(vaultAddress);
         try {
@@ -350,16 +350,16 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user, ether("0.25"));
 
-      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(ether("0.5") + 1n, ether("1"), ether("1")); // above the threshold
+      await vault.report(0n, ether("0.5") + 1n, ether("1"), ether("1")); // above the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(ether("0.5"), ether("1"), ether("1")); // at the threshold
+      await vault.report(0n, ether("0.5"), ether("1"), ether("1")); // at the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(ether("0.5") - 1n, ether("1"), ether("1")); // below the threshold
+      await vault.report(0n, ether("0.5") - 1n, ether("1"), ether("1")); // below the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
     });
 
@@ -377,7 +377,7 @@ describe("VaultHub.sol:hub", () => {
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
 
-      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true); // valuation is enough
 
       // Burn some shares to make share rate fractional
@@ -385,20 +385,20 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(whale).transfer(burner, ether("100"));
       await lido.connect(burner).burnShares(ether("100"));
 
-      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false); // old valuation is not enough
 
       const lockedEth = await lido.getPooledEthBySharesRoundUp(sharesToMint);
       // For 50% reserve ratio, we need valuation to be 2x of locked ETH to be healthy
       const report = lockedEth * 2n;
 
-      await vault.report(report - 1n, ether("1"), ether("1")); // below the threshold
+      await vault.report(0n, report - 1n, ether("1"), ether("1")); // below the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
 
-      await vault.report(report, ether("1"), ether("1")); // at the threshold
+      await vault.report(0n, report, ether("1"), ether("1")); // at the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(report + 1n, ether("1"), ether("1")); // above the threshold
+      await vault.report(0n, report + 1n, ether("1"), ether("1")); // above the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
     });
 
@@ -417,7 +417,7 @@ describe("VaultHub.sol:hub", () => {
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
 
-      await vault.report(ether("1"), ether("1"), ether("1")); // normal report
+      await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true); // valuation is enough
 
       // Burn some shares to make share rate fractional
@@ -429,13 +429,13 @@ describe("VaultHub.sol:hub", () => {
       // if lockedEth is 99.99% of the valuation we need to report 100.00% of the valuation to be healthy
       const report = (lockedEth * 10000n) / 9999n;
 
-      await vault.report(report - 1n, ether("1"), ether("1")); // below the threshold
+      await vault.report(0n, report - 1n, ether("1"), ether("1")); // below the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
 
-      await vault.report(report, ether("1"), ether("1")); // at the threshold
+      await vault.report(0n, report, ether("1"), ether("1")); // at the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false); // XXX: rounding issue, should be true
 
-      await vault.report(report + 1n, ether("1"), ether("1")); // above the threshold
+      await vault.report(0n, report + 1n, ether("1"), ether("1")); // above the threshold
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
     });
 
@@ -451,13 +451,13 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user, 1n);
 
-      await vault.report(ether("1"), ether("1"), ether("1"));
+      await vault.report(0n, ether("1"), ether("1"), ether("1"));
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(2n, ether("1"), ether("1")); // Minimal valuation to be healthy with 1 share (50% reserve ratio)
+      await vault.report(0n, 2n, ether("1"), ether("1")); // Minimal valuation to be healthy with 1 share (50% reserve ratio)
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
 
-      await vault.report(1n, ether("1"), ether("1")); // Below minimal required valuation
+      await vault.report(0n, 1n, ether("1"), ether("1")); // Below minimal required valuation
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
 
       await lido.connect(user).transferShares(await locator.vaultHub(), 1n);
