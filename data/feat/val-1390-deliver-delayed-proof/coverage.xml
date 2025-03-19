@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3222"  lines-covered="3172"  line-rate="0.9845"  branches-valid="1412"  branches-covered="1359"  branch-rate="0.9625"  timestamp="1742116912930" complexity="0" version="0.1">
+<coverage lines-valid="3219"  lines-covered="3169"  line-rate="0.9845"  branches-valid="1412"  branches-covered="1359"  branch-rate="0.9625"  timestamp="1742384446902" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1921,7 +1921,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.lib"  line-rate="0.7059000000000001"  branch-rate="0.4167" >
+	<package name="0.8.25.lib"  line-rate="0.6875"  branch-rate="0.4167" >
 	<classes>
 		<class name="GIndex.sol"  filename="contracts/0.8.25/lib/GIndex.sol"  line-rate="0.5455"  branch-rate="0.4167" >
 		<methods>
@@ -2033,20 +2033,8 @@
 		</class>
 		<class name="Types.sol"  filename="contracts/0.8.25/lib/Types.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="unwrap"  hits="70"  signature="()V" >
-				<lines><line number="9"  hits="70" /></lines>
-			</method>
-			<method name="gt"  hits="3"  signature="()V" >
-				<lines><line number="13"  hits="3" /></lines>
-			</method>
-			<method name="lt"  hits="24"  signature="()V" >
-				<lines><line number="17"  hits="24" /></lines>
-			</method>
 		</methods>
 		<lines>
-			<line number="10"  hits="70"  branch="false" />
-			<line number="14"  hits="3"  branch="false" />
-			<line number="18"  hits="24"  branch="false" />
 		</lines>
 		</class>
 	</classes>
