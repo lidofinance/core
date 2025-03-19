@@ -553,6 +553,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
+        _proof;
 
         // TODO: validate the proof
         // TODO: check the data timestamp freshness
