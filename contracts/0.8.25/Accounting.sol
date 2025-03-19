@@ -215,22 +215,17 @@ contract Accounting {
 
         update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
 
-        // TODO: calculate vaults fees correctly in shares instead of ether
-        update.totalVaultsTreasuryFeeShares = _report.vaultsTotalFees * _pre.totalShares * internalShares
-            /
-            (_pre.totalPooledEther * (internalShares - update.sharesToMintAsFees));
-
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vault
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
-            _contracts.vaultHub.calculateVaultsRebase(
-                _report.vaultValues,
-                _pre.totalShares,
-                _pre.totalPooledEther,
-                update.postInternalShares,
-                update.postInternalEther,
-                update.sharesToMintAsFees
-            );
+        // (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+        //     _contracts.vaultHub.calculateVaultsRebase(
+        //         _report.vaultValues,
+        //         _pre.totalShares,
+        //         _pre.totalPooledEther,
+        //         update.postInternalShares,
+        //         update.postInternalEther,
+        //         update.sharesToMintAsFees
+        //     );
 
         uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
 
