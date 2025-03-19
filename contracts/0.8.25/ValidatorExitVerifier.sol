@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {BeaconBlockHeader, Slot, Validator} from "./lib/Types.sol";
+import {BeaconBlockHeader, Validator} from "./lib/Types.sol";
 import {GIndex} from "./lib/GIndex.sol";
 import {SSZ} from "./lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
@@ -92,17 +92,17 @@ contract ValidatorExitVerifier {
     GIndex public immutable GI_HISTORICAL_SUMMARIES_CURR;
 
     /// @notice The first slot this verifier will accept proofs for.
-    Slot public immutable FIRST_SUPPORTED_SLOT;
+    uint64 public immutable FIRST_SUPPORTED_SLOT;
 
     /// @notice The first slot of the currently-compatible fork.
-    Slot public immutable PIVOT_SLOT;
+    uint64 public immutable PIVOT_SLOT;
 
     ILidoLocator public immutable LOCATOR;
 
     error RootNotFound();
     error InvalidGIndex();
     error InvalidBlockHeader();
-    error UnsupportedSlot(Slot slot);
+    error UnsupportedSlot(uint64 slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
     error ExitRequestNotEligibleOnProvableBeaconBlock(
@@ -132,8 +132,8 @@ contract ValidatorExitVerifier {
         GIndex gIFirstValidatorCurr,
         GIndex gIHistoricalSummariesPrev,
         GIndex gIHistoricalSummariesCurr,
-        Slot firstSupportedSlot,
-        Slot pivotSlot,
+        uint64 firstSupportedSlot,
+        uint64 pivotSlot,
         uint32 slotsPerEpoch,
         uint32 secondsPerSlot,
         uint64 genesisTime,
@@ -317,7 +317,7 @@ contract ValidatorExitVerifier {
      */
     function _getSecondsSinceExitRequestEligible(
         uint64 validatorExitRequestTimestamp,
-        Slot referenceSlot,
+        uint64 referenceSlot,
         uint64 validatorActivationEpoch
     ) internal view returns (uint64) {
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
@@ -332,7 +332,7 @@ contract ValidatorExitVerifier {
             ? validatorExitRequestTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
-        uint64 referenceTimestamp = GENESIS_TIME + referenceSlot.unwrap() * SECONDS_PER_SLOT;
+        uint64 referenceTimestamp = GENESIS_TIME + referenceSlot * SECONDS_PER_SLOT;
 
         if (referenceTimestamp < eligibleExitRequestTimestamp) {
             revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceTimestamp, eligibleExitRequestTimestamp);
@@ -341,12 +341,12 @@ contract ValidatorExitVerifier {
         return referenceTimestamp - eligibleExitRequestTimestamp;
     }
 
-    function _getValidatorGI(uint256 offset, Slot stateSlot) internal view returns (GIndex) {
+    function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
         GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
         return gI.shr(offset);
     }
 
-    function _getHistoricalSummariesGI(Slot stateSlot) internal view returns (GIndex) {
+    function _getHistoricalSummariesGI(uint64 stateSlot) internal view returns (GIndex) {
         return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
 
