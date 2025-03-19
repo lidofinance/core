@@ -407,6 +407,8 @@ describe("Accounting.sol:report", () => {
         sharesRequestedToBurn: 0n,
         withdrawalFinalizationBatches: [],
         vaultsTotalFees: 0n,
+        vaultsDataTreeRoot: ethers.ZeroHash,
+        vaultsDataTreeCid: "",
         ...overrides,
       };
     }

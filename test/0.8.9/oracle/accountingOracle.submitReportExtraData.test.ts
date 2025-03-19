@@ -63,6 +63,8 @@ const getDefaultReportFields = (override = {}) => ({
   withdrawalFinalizationBatches: [1],
   isBunkerMode: true,
   vaultsTotalFees: ether("4"),
+  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeCid: "",
   extraDataFormat: EXTRA_DATA_FORMAT_LIST,
   extraDataHash: ZeroHash,
   extraDataItemsCount: 0,
