@@ -34,7 +34,6 @@ export async function main() {
       // New non-aragon implementations
       state[Sk.accountingOracle].implementation.address,
       state[Sk.lidoLocator].implementation.address,
-      state[Sk.withdrawalVault].implementation.address,
 
       // Existing proxies and contracts
       state[Sk.appAgent].proxy.address,

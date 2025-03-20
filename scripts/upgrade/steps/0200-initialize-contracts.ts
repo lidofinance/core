@@ -52,12 +52,6 @@ export async function main(): Promise<void> {
   await makeTx(vaultHub, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
   //
-  // WithdrawalVault
-  //
-
-  // NB: cannot grant ADD_FULL_WITHDRAWAL_REQUEST_ROLE here because WithdrawalVault need to be upgraded by agent first
-
-  //
   // Burner
   //
 

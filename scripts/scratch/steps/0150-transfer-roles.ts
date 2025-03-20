@@ -24,7 +24,6 @@ export async function main() {
     { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
     { name: "VaultHub", address: state.vaultHub.proxy.address },
-    { name: "WithdrawalVault", address: state.withdrawalVault.proxy.address },
     { name: "PredepositGuarantee", address: state.predepositGuarantee.proxy.address },
   ];
 

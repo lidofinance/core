@@ -44,6 +44,11 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      // mining: {
+      //   mempool: {
+      //     order: "fifo"
+      //   }
+      // },
     },
     "custom": {
       url: RPC_URL,

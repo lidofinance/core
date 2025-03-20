@@ -54,6 +54,9 @@ interface IBurner is IAccessControlEnumerable {
     function isMigrationAllowed() external view returns (bool);
 }
 
+interface IStakingRouter is IAccessControlEnumerable {
+}
+
 interface IUpgradeableBeacon {
     function implementation() external view returns (address);
     function owner() external view returns (address);
@@ -62,10 +65,6 @@ interface IUpgradeableBeacon {
 interface IWithdrawalsManagerProxy {
     function proxy_getAdmin() external view returns (address);
     function implementation() external view returns (address);
-}
-
-interface IWithdrawalVault is IAccessControlEnumerable, IVersioned, IWithdrawalsManagerProxy {
-    function getConsensusContract() external view returns (address);
 }
 
 interface IVaultFactory {
@@ -143,7 +142,6 @@ contract UpgradeTemplateV3 {
         // New non-aragon implementations
         address accountingOracleImplementation;
         address newLocatorImplementation;
-        address withdrawalVaultImplementation;
 
         // Existing proxies and contracts
         address agent;
@@ -180,7 +178,6 @@ contract UpgradeTemplateV3 {
     // New non-aragon implementations
     address public immutable _accountingOracleImplementation;
     address public immutable _newLocatorImplementation;
-    address public immutable _withdrawalVaultImplementation;
 
     // Existing proxies and contracts
     address public immutable _agent;
@@ -192,10 +189,10 @@ contract UpgradeTemplateV3 {
     ILidoLocator public immutable _locator;
     address public immutable _nodeOperatorsRegistry;
     address public immutable _simpleDvt;
+    IStakingRouter public immutable _stakingRouter;
     address public immutable _validatorsExitBusOracle;
     address public immutable _voting;
     address public immutable _withdrawalQueue;
-    IWithdrawalVault public immutable _withdrawalVault;
     address public immutable _wstETH;
 
     // Values to set
@@ -234,10 +231,8 @@ contract UpgradeTemplateV3 {
         keccak256("SECOND_OPINION_MANAGER_ROLE");
     bytes32 public constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
         keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
-
-    // WithdrawalVault
-    bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
-
+    // StakingRouter
+    bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
     // VaultHub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
@@ -248,7 +243,6 @@ contract UpgradeTemplateV3 {
 
     uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
     uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
-    uint256 internal constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 2;
 
     //
     // Constants
@@ -304,17 +298,16 @@ contract UpgradeTemplateV3 {
 
         _accountingOracleImplementation = params.accountingOracleImplementation;
         _newLocatorImplementation = params.newLocatorImplementation;
-        _withdrawalVaultImplementation = params.withdrawalVaultImplementation;
 
         _oldBurner = IBurner(_locator.burner());
         _oldOracleReportSanityChecker = IOracleReportSanityChecker(_locator.oracleReportSanityChecker());
         _oracleReportSanityChecker = IOracleReportSanityChecker(params.oracleReportSanityChecker);
         _accountingOracle = IAccountingOracle(_locator.accountingOracle());
         _elRewardsVault = _locator.elRewardsVault();
+        _stakingRouter = IStakingRouter(_locator.stakingRouter());
         _lido = ILido(_locator.lido());
         _validatorsExitBusOracle = _locator.validatorsExitBusOracle();
         _withdrawalQueue = _locator.withdrawalQueue();
-        _withdrawalVault = IWithdrawalVault(_locator.withdrawalVault());
     }
 
     /// @notice Must be called after LidoLocator is upgraded
@@ -416,9 +409,6 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertInitialProxyImplementations() internal view {
-        if (_withdrawalVault.implementation() != _withdrawalVaultImplementation) {
-            revert IncorrectInitialImplementation(address(_withdrawalVault));
-        }
     }
 
     function _assertZeroOZRoleHolders(IAccessControlEnumerable accessControlled, bytes32 role) internal view {
@@ -466,10 +456,6 @@ contract UpgradeTemplateV3 {
         _assertProxyImplementation(_accountingOracle, _accountingOracleImplementation);
 
         _assertBurnerAllowances();
-
-        if (_withdrawalVault.implementation() != _withdrawalVaultImplementation) {
-            revert IncorrectProxyImplementation(address(_withdrawalVault), _withdrawalVaultImplementation);
-        }
 
         if (_vaultFactory.BEACON() != address(_upgradeableBeacon)) {
             revert IncorrectVaultFactoryBeacon(address(_vaultFactory), address(_upgradeableBeacon));
@@ -551,18 +537,16 @@ contract UpgradeTemplateV3 {
         // Burner
         IBurner burner = _burner;
         _assertSingleOZRoleHolder(burner, DEFAULT_ADMIN_ROLE, agent);
-        address[] memory holders = new address[](4);
-        holders[0] = address(_lido);
-        holders[1] = _nodeOperatorsRegistry;
-        holders[2] = _simpleDvt;
-        holders[3] = address(_accounting);
-        _assertOZRoleHolders(burner, REQUEST_BURN_SHARES_ROLE, holders);
+        {
+            address[] memory holders = new address[](4);
+            holders[0] = address(_lido);
+            holders[1] = _nodeOperatorsRegistry;
+            holders[2] = _simpleDvt;
+            holders[3] = address(_accounting);
+            _assertOZRoleHolders(burner, REQUEST_BURN_SHARES_ROLE, holders);
+        }
         // NB: we don't check REQUEST_BURN_SHARES_ROLE on the old burner is revoked
         //     because it is left intentionally to simplify aragon voting operations
-
-        // WithdrawalVault
-        _assertSingleOZRoleHolder(_withdrawalVault, DEFAULT_ADMIN_ROLE, _agent);
-        _assertSingleOZRoleHolder(_withdrawalVault, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, _validatorsExitBusOracle);
 
         // VaultHub
         _assertSingleOZRoleHolder(_vaultHub, DEFAULT_ADMIN_ROLE, _agent);
@@ -582,12 +566,19 @@ contract UpgradeTemplateV3 {
 
         // PredepositGuarantee
         _assertProxyAdmin(_predepositGuarantee, _agent);
+
+        // StakingRouter
+        {
+            address[] memory holders = new address[](2);
+            holders[0] = address(_lido);
+            holders[1] = address(_accounting);
+            _assertOZRoleHolders(_stakingRouter, REPORT_REWARDS_MINTED_ROLE, holders);
+        }
     }
 
     function _checkContractVersions() internal view {
         _assertContractVersion(_lido, EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(_accountingOracle, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
-        _assertContractVersion(_withdrawalVault, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
     }
 
     function _assertContractVersion(IVersioned versioned, uint256 expectedVersion) internal view {

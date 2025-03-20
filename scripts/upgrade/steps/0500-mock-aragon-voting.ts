@@ -1,3 +1,5 @@
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
+
 import {
   AccountingOracle,
   Kernel,
@@ -7,8 +9,6 @@ import {
   Repo,
   StakingRouter,
   UpgradeTemplateV3,
-  WithdrawalsManagerProxy,
-  WithdrawalVault,
 } from "typechain-types";
 
 import { ether, log } from "lib";
@@ -28,17 +28,19 @@ export async function main(): Promise<void> {
   const lidoAddress = state[Sk.appLido].proxy.address;
   const locatorImplAddress = state[Sk.lidoLocator].implementation.address;
   const lidoImplAddress = state[Sk.appLido].implementation.address;
-  const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
-  const withdrawalVaultImplAddress = state[Sk.withdrawalVault].implementation.address;
   const accountingOracleImplAddress = state[Sk.accountingOracle].implementation.address;
   const kernelAddress = state[Sk.aragonKernel].proxy.address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const accountingAddress = state[Sk.accounting].proxy.address;
-  const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const upgradeTemplateV3Address = state[Sk.upgradeTemplateV3].address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
+
+  // Disable automine to ensure all transactions happen in the same block
+  // TODO: automine false and mempool fifo order and manual nonce management still doesn't work!
+  // await mine(1);
+  // await ethers.provider.send("evm_setAutomine", [false]);
 
   // while locator is not upgraded yet we can fetch the old burner address
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
@@ -52,67 +54,64 @@ export async function main(): Promise<void> {
   const agentSigner = await impersonate(agentAddress, ether("1"));
   const votingSigner = await impersonate(votingAddress, ether("1"));
 
+  let agentNonce = await agentSigner.getNonce();
+  let votingNonce = await votingSigner.getNonce();
+
   const locatorProxy = await loadContract<OssifiableProxy>("OssifiableProxy", locatorAddress);
-  await locatorProxy.connect(agentSigner).proxy__upgradeTo(locatorImplAddress);
+  await locatorProxy.connect(agentSigner).proxy__upgradeTo(locatorImplAddress, { nonce: agentNonce });
+  agentNonce += 1;
   log("LidoLocator upgraded to implementation", locatorImplAddress);
 
   const upgradeTemplate = await loadContract<UpgradeTemplateV3>("UpgradeTemplateV3", upgradeTemplateV3Address);
-  await upgradeTemplate.connect(votingSigner).startUpgrade();
+  await upgradeTemplate.connect(votingSigner).startUpgrade({ nonce: votingNonce });
+  votingNonce += 1;
   log("UpgradeTemplateV3 startUpgrade");
 
-  const withdrawalsManagerProxy = await loadContract<WithdrawalsManagerProxy>(
-    "WithdrawalsManagerProxy",
-    withdrawalVaultAddress,
-  );
-  await withdrawalsManagerProxy.connect(votingSigner).proxy_upgradeTo(withdrawalVaultImplAddress, "0x");
-  log("WithdrawalsManagerProxy upgraded to implementation", withdrawalVaultImplAddress);
-
-  // This step is required to grant ADD_FULL_WITHDRAWAL_REQUEST_ROLE in the next step
-  const withdrawalVault = await loadContract<WithdrawalVault>("WithdrawalVault", withdrawalVaultAddress);
-  await withdrawalVault.connect(votingSigner).finalizeUpgrade_v2(agentAddress); // can be called by anyone
-  log("WithdrawalVault finalizeUpgrade_v2 with admin", agentAddress);
-
-  const addFullWithdrawalRequestRole = await withdrawalVault.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
-  await withdrawalVault.connect(agentSigner).grantRole(addFullWithdrawalRequestRole, validatorsExitBusOracleAddress);
-  log(
-    "WithdrawalVault granted ADD_FULL_WITHDRAWAL_REQUEST_ROLE to ValidatorsExitBusOracle",
-    validatorsExitBusOracleAddress,
-  );
-
   const lidoRepo = await loadContract<Repo>("Repo", MAINNET_LIDO_REPO);
-  await lidoRepo.connect(votingSigner).newVersion(lidoAppNewVersion, lidoImplAddress, "0x");
+  await lidoRepo.connect(votingSigner).newVersion(lidoAppNewVersion, lidoImplAddress, "0x", { nonce: votingNonce });
+  votingNonce += 1;
   log("Lido version updated in Lido App Repo");
 
   const aragonKernel = await loadContract<Kernel>("Kernel", kernelAddress);
   const appBasesNamespace = await aragonKernel.APP_BASES_NAMESPACE();
   const lidoAppId = state[Sk.appLido].aragonApp.id;
-  await aragonKernel.connect(votingSigner).setApp(appBasesNamespace, lidoAppId, lidoImplAddress);
+  await aragonKernel.connect(votingSigner).setApp(appBasesNamespace, lidoAppId, lidoImplAddress, { nonce: votingNonce });
+  votingNonce += 1;
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);
   await lido
     .connect(votingSigner)
-    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress); // can be called by anyone
+    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress, { nonce: votingNonce }); // can be called by anyone
+  votingNonce += 1;
   // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
 
   const accountingOracleProxy = await loadContract<OssifiableProxy>("OssifiableProxy", accountingOracleAddress);
-  await accountingOracleProxy.connect(agentSigner).proxy__upgradeTo(accountingOracleImplAddress);
+  await accountingOracleProxy.connect(agentSigner).proxy__upgradeTo(accountingOracleImplAddress, { nonce: agentNonce });
   log("AccountingOracle upgraded to implementation", accountingOracleImplAddress);
+  agentNonce += 1;
 
   const accountingOracle = await loadContract<AccountingOracle>(
     "AccountingOracle",
     state[Sk.accountingOracle].proxy.address,
   );
-  await accountingOracle.connect(agentSigner).finalizeUpgrade_v3(aoConsensusVersion); // can be called by anyone
+  await accountingOracle.connect(agentSigner).finalizeUpgrade_v3(aoConsensusVersion, { nonce: agentNonce }); // can be called by anyone
   log("AccountingOracle finalizeUpgrade_v3 with consensus version", aoConsensusVersion);
+  agentNonce += 1;
 
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
   await stakingRouter
     .connect(agentSigner)
-    .grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress);
+    .grantRole(await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress, { nonce: agentNonce });
   log("StakingRouter granted REPORT_REWARDS_MINTED_ROLE to Accounting", accountingAddress);
+  agentNonce += 1;
 
-  await upgradeTemplate.connect(votingSigner).finishUpgrade();
+  await upgradeTemplate.connect(votingSigner).finishUpgrade({ nonce: votingNonce });
+  votingNonce += 1;
   log("UpgradeTemplateV3 finishUpgrade");
+
+  // await ethers.provider.send("evm_setAutomine", [true]);
+
+  await mine(1);
 }

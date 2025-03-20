@@ -60,9 +60,6 @@ export async function main() {
     [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
   );
 
-  // Deploy WithdrawalVault new implementation
-  await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [lidoAddress, treasuryAddress]);
-
   // Deploy AccountingOracle new implementation
   const accountingOracleImpl = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
     locatorAddress,
