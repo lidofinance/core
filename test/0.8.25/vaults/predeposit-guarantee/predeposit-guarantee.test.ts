@@ -364,6 +364,10 @@ describe("PredepositGuarantee.sol", () => {
       // Check that the locked balance of the node operator has been reduced
       const nodeOperatorBalance = await pdg.nodeOperatorBalance(vaultOperator.address);
       expect(nodeOperatorBalance.locked).to.equal(0);
+
+      validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
+      // ValidatorStatus.stage
+      expect(validatorStatusTx[0]).to.equal(4n); // 4n is COMPENSATED
     });
   });
 });
