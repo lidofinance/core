@@ -199,6 +199,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
         vaultHub.mintShares(address(stakingVault()), _recipient, _shares);
+        _ensureUnmintableValuation();
     }
 
     /**
@@ -286,6 +287,19 @@ abstract contract Permissions is AccessControlConfirmable {
         }
     }
 
+    function _unmintableValuation() internal view virtual returns (uint256) {
+        return 0;
+    }
+
+    function _ensureUnmintableValuation() internal view {
+        uint256 locked = stakingVault().locked();
+        uint256 valuation = stakingVault().valuation();
+
+        if (locked > valuation - _unmintableValuation()) {
+            revert UnmintableValuationBreached(locked, valuation, _unmintableValuation());
+        }
+    }
+
     /**
      * @notice Emitted when the contract is initialized
      */
@@ -306,4 +320,9 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
+
+    /**
+     * @notice Error when unmintable valuation is breached
+     */
+    error UnmintableValuationBreached(uint256 locked, uint256 valuation, uint256 unmintableValuation);
 }

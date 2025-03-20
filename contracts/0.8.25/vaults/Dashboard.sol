@@ -166,11 +166,11 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by valuation and vault share limit.
+     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by valuation, unmintable valuation and vault share limit.
      * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(stakingVault().valuation());
+        return _totalMintableShares(stakingVault().valuation() - _unmintableValuation());
     }
 
     /**
@@ -179,7 +179,7 @@ contract Dashboard is Permissions {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _etherToFund);
+        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _etherToFund - _unmintableValuation());
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
