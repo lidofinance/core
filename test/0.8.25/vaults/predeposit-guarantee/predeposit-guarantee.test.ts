@@ -347,15 +347,14 @@ describe("PredepositGuarantee.sol", () => {
       // Generate a validator
       const vaultNodeOperatorAddress = to02Type(await stakingVault.nodeOperator()); // vaultOperator is same
 
-      // TODO: validatorIncorrectWC ---> validatorIncorrect
-      const validatorIncorrectWC = generateValidator(vaultNodeOperatorAddress);
+      const validatorIncorrect = generateValidator(vaultNodeOperatorAddress);
 
-      const predepositData = generatePredeposit(validatorIncorrectWC);
+      const predepositData = generatePredeposit(validatorIncorrect);
 
       await pdg.predeposit(stakingVault, [predepositData]);
 
       // Validator is added to CL merkle tree
-      await sszMerkleTree.addValidatorLeaf(validatorIncorrectWC);
+      await sszMerkleTree.addValidatorLeaf(validatorIncorrect);
       const validatorLeafIndex = firstValidatorLeafIndex + 1n;
       const validatorIndex = 1n;
 
@@ -368,12 +367,12 @@ describe("PredepositGuarantee.sol", () => {
       const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
       // NO collects validator proof
-      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validatorIncorrectWC);
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validatorIncorrect);
       const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       const witness = {
-        pubkey: validatorIncorrectWC.pubkey,
+        pubkey: validatorIncorrect.pubkey,
         validatorIndex,
         childBlockTimestamp,
         proof: concatenatedProof,
@@ -381,7 +380,7 @@ describe("PredepositGuarantee.sol", () => {
       await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
-      let validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
+      let validatorStatusTx = await pdg.validatorStatus(validatorIncorrect.pubkey);
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(3n); // 3n is DISPROVEN
       // ValidatorStatus.stakingVault
@@ -392,14 +391,14 @@ describe("PredepositGuarantee.sol", () => {
       // Call compensateDisprovenPredeposit and expect it to succeed
       const compensateDisprovenPredepositTx = pdg
         .connect(vaultOwner)
-        .compensateDisprovenPredeposit(validatorIncorrectWC.pubkey, vaultOperator.address);
+        .compensateDisprovenPredeposit(validatorIncorrect.pubkey, vaultOperator.address);
 
       await expect(compensateDisprovenPredepositTx)
         .to.emit(pdg, "BalanceCompensated")
         .withArgs(vaultOperator.address, vaultOperator.address, ether("0"), ether("0"))
         .to.emit(pdg, "ValidatorCompensated")
         .withArgs(
-          validatorIncorrectWC.pubkey,
+          validatorIncorrect.pubkey,
           vaultOperator.address,
           await stakingVault.getAddress(),
           vaultOperator.address,
@@ -411,7 +410,7 @@ describe("PredepositGuarantee.sol", () => {
       const nodeOperatorBalance = await pdg.nodeOperatorBalance(vaultOperator.address);
       expect(nodeOperatorBalance.locked).to.equal(0);
 
-      validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
+      validatorStatusTx = await pdg.validatorStatus(validatorIncorrect.pubkey);
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(4n); // 4n is COMPENSATED
     });
