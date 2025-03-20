@@ -29,6 +29,13 @@ import {
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
+// TODO: move
+function to02Type(address: string): string {
+  const normalizedAddress = address.toLowerCase().replace(/^0x/, "");
+  const padding = "0000000000000000000000";
+  return `0x02${padding}${normalizedAddress}`;
+}
+
 describe("PredepositGuarantee.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -198,8 +205,8 @@ describe("PredepositGuarantee.sol", () => {
     });
   });
 
-  context("happy path", () => {
-    it("can use PDG happy path", async () => {
+  context("happy path - positive proof flow", () => {
+    it("can use PDG happy path with proveAndDeposit", async () => {
       // NO sets guarantor
       await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
       expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
@@ -280,6 +287,52 @@ describe("PredepositGuarantee.sol", () => {
     });
   });
 
+  context("positive proof flow - unknown validator", () => {
+    it("can use PDG with proveUnknownValidator", async () => {
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      const unknownValidator = generateValidator(vaultWC);
+
+      // Validator is added to CL merkle tree
+      await sszMerkleTree.addValidatorLeaf(unknownValidator);
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
+
+      // Beacon Block is generated with new CL state
+      const stateRoot = await sszMerkleTree.getMerkleRoot();
+      const beaconBlockHeader = generateBeaconHeader(stateRoot);
+      const beaconBlockMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
+
+      /// Beacon Block root is posted to EL
+      const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
+
+      // NO collects validator proof
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(unknownValidator);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
+      const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
+
+      let validatorStatusTx = await pdg.validatorStatus(unknownValidator.pubkey);
+      // ValidatorStatus.stage
+      expect(validatorStatusTx[0]).to.equal(0n); // 0n is NONE
+
+      const witness = {
+        pubkey: unknownValidator.pubkey,
+        validatorIndex,
+        childBlockTimestamp,
+        proof: concatenatedProof,
+      };
+      // await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
+      const proveUnknownValidatorTx = await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
+
+      await expect(proveUnknownValidatorTx)
+        .to.emit(pdg, "ValidatorProven")
+        .withArgs(unknownValidator.pubkey, vaultOperator, stakingVault, vaultWC);
+
+      validatorStatusTx = await pdg.validatorStatus(unknownValidator.pubkey);
+      // ValidatorStatus.stage
+      expect(validatorStatusTx[0]).to.equal(2n); // 2n is PROVEN
+    });
+  });
+
   context("negative proof flow", () => {
     it("should correctly handle compensation of disproven validator", async () => {
       await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
@@ -291,16 +344,10 @@ describe("PredepositGuarantee.sol", () => {
       await stakingVault.fund({ value: ether("32") });
       expect(await stakingVault.valuation()).to.equal(ether("32"));
 
-      // TODO: move
-      function to02Type(address: string): string {
-        const normalizedAddress = address.toLowerCase().replace(/^0x/, "");
-        const padding = "0000000000000000000000";
-        return `0x02${padding}${normalizedAddress}`;
-      }
-
       // Generate a validator
       const vaultNodeOperatorAddress = to02Type(await stakingVault.nodeOperator()); // vaultOperator is same
 
+      // TODO: validatorIncorrectWC ---> validatorIncorrect
       const validatorIncorrectWC = generateValidator(vaultNodeOperatorAddress);
 
       const predepositData = generatePredeposit(validatorIncorrectWC);
@@ -334,8 +381,7 @@ describe("PredepositGuarantee.sol", () => {
       await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
-      const validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
-
+      let validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(3n); // 3n is DISPROVEN
       // ValidatorStatus.stakingVault
