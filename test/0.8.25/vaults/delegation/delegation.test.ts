@@ -17,7 +17,16 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  getNextBlockTimestamp,
+  impersonate,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -288,7 +297,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.nodeOperatorFeeBP()).to.equal(operatorFee);
 
       const rewards = ether("1");
-      await vault.connect(hubSigner).report(0n, rewards, 0n, 0n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
 
       const expectedDue = (rewards * operatorFee) / BP_BASE;
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
@@ -316,7 +325,7 @@ describe("Delegation.sol", () => {
       const valuation = ether("2");
       const inOutDelta = 0n;
       const locked = ether("3");
-      await vault.connect(hubSigner).report(0n, valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
 
       expect(await delegation.unreserved()).to.equal(0n);
     });
@@ -336,7 +345,7 @@ describe("Delegation.sol", () => {
 
       const amount = ether("1");
       await delegation.connect(funder).fund({ value: amount });
-      await vault.connect(hubSigner).report(0n, valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
 
       expect(await delegation.withdrawableEther()).to.equal(amount);
     });
@@ -352,7 +361,7 @@ describe("Delegation.sol", () => {
 
       await delegation.connect(funder).fund({ value: amount });
 
-      await vault.connect(hubSigner).report(0n, valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
       const unreserved = await delegation.unreserved();
 
       expect(await delegation.withdrawableEther()).to.equal(unreserved);
@@ -418,7 +427,7 @@ describe("Delegation.sol", () => {
 
     it("withdraws the amount", async () => {
       const amount = ether("1");
-      await vault.connect(hubSigner).report(0n, amount, 0n, 0n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
       expect(await vault.valuation()).to.equal(amount);
       expect(await vault.unlocked()).to.equal(amount);
 

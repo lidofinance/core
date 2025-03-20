@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -552,12 +553,12 @@ contract VaultHub is PausableUntilWithRoles {
     function invalidateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _locked, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
+
+        bytes32 root = $.vaultsDataTreeRoot;
+        bytes32 leaf = keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _locked));
+        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
+
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
-        _proof;
-
-        // TODO: validate the proof
-        // TODO: check the data timestamp freshness
-
         IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, _locked);
     }
 
@@ -672,4 +673,5 @@ contract VaultHub is PausableUntilWithRoles {
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
+    error InvalidProof();
 }
