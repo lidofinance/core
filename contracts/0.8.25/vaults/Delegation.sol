@@ -217,6 +217,10 @@ contract Delegation is Dashboard {
         super._withdraw(_recipient, _ether);
     }
 
+    function _unmintableValuation() internal view override returns (uint256) {
+        return nodeOperatorUnclaimedFee();
+    }
+
     /**
      * @dev Emitted when the node operator fee is set.
      * @param oldNodeOperatorFeeBP The old node operator fee.
