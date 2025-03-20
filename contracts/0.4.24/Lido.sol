@@ -120,6 +120,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev maximum allowed ratio of external shares to total shares in basis points
     bytes32 internal constant MAX_EXTERNAL_RATIO_POSITION =
         0xf243b7ab6a2698a3d0a16e54fb43706d25b46e82d0a92f60e7e1a4aa86c30e1f; // keccak256("lido.Lido.maxExternalRatioBP")
+    /// @dev total amount of deficit in the external ether balance
+    bytes32 internal constant EXTERNAL_ETHER_DEFICIT_POSITION =
+        0x42b611d67147013df68869aa8255277842897c713306263d7b91918006b40584; // keccak256("lido.Lido.externalEtherDeficit")
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -159,6 +162,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 sharesMintedAsFees
     );
 
+    // Internal share rate updated
+    event InternalShareRateUpdated(
+        uint256 indexed reportTimestamp,
+        uint256 postInternalShares,
+        uint256 postInternalEther,
+        uint256 sharesMintedAsFees
+    );
+
     // Lido locator set
     event LidoLocatorSet(address lidoLocator);
 
@@ -174,14 +185,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // The `amount` of ether was sent to the deposit_contract.deposit function
     event Unbuffered(uint256 amount);
 
-    // Internal share rate updated
-    event InternalShareRateUpdated(
-        uint256 indexed reportTimestamp,
-        uint256 postInternalShares,
-        uint256 postInternalEther,
-        uint256 sharesMintedAsFees
-    );
-
     // External shares minted for receiver
     event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 amountOfStETH);
 
@@ -193,6 +196,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // External ether transferred to buffer
     event ExternalEtherTransferredToBuffer(uint256 amount);
+
+    // External ether deficit updated
+    event ExternalEtherDeficitUpdated(uint256 indexed reportTimestamp, uint256 externalEtherDeficit);
 
     /**
      * @dev As AragonApp, Lido contract must be initialized with following variables:
@@ -708,7 +714,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _reportClBalance,
+        uint256 _externalEtherDeficit
     ) external {
         _whenNotStopped();
         _auth(getLidoLocator().accounting());
@@ -720,6 +727,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
         // cl balance change are logged in ETHDistributed event later
+
+        uint256 externalEtherDeficit = EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256();
+        if (_externalEtherDeficit != externalEtherDeficit) {
+            EXTERNAL_ETHER_DEFICIT_POSITION.setStorageUint256(_externalEtherDeficit);
+            emit ExternalEtherDeficitUpdated(_reportTimestamp, _externalEtherDeficit);
+        }
     }
 
     /**
@@ -947,7 +960,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getInternalEther() internal view returns (uint256) {
         return _getBufferedEther()
             .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientEther());
+            .add(_getTransientEther())
+            .sub(EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256());
     }
 
     /// @dev Calculate the amount of ether controlled by external entities

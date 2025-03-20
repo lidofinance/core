@@ -3,7 +3,7 @@
 
 pragma solidity >=0.4.24 <0.9.0;
 
-import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {ReportValues} from "contracts/0.8.9/oracle/AccountingOracle.sol";
 import {AccountingOracle} from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 interface ITimeProvider {

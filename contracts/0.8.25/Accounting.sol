@@ -6,14 +6,17 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "./vaults/VaultHub.sol";
 
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
+
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecker.sol";
 import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
 import {ILido} from "./interfaces/ILido.sol";
-import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {ReportValues} from "contracts/common/types/ReportValues.sol";
+import {ShareRate} from "contracts/common/types/ShareRate.sol";
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -76,6 +79,8 @@ contract Accounting {
         uint256[] vaultsTreasuryFeeShares;
         /// @notice total amount of shares to be minted as vault fees to the treasury
         uint256 totalVaultsTreasuryFeeShares;
+        /// @notice total amount of deficit to be covered by the treasury
+        uint256 totalVaultsDeficit;
     }
 
     struct StakingRewardsDistribution {
@@ -221,13 +226,11 @@ contract Accounting {
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vault
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares, update.totalVaultsDeficit) =
             _contracts.vaultHub.calculateVaultsRebase(
                 _report.vaultValues,
-                _pre.totalShares,
-                _pre.totalPooledEther,
-                update.postInternalShares,
-                update.postInternalEther,
+                ShareRate(_pre.totalPooledEther, _pre.totalShares),
+                ShareRate(update.postInternalEther, update.postInternalShares),
                 update.sharesToMintAsFees
             );
 
@@ -305,7 +308,8 @@ contract Accounting {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance
+            _report.clBalance,
+            _update.totalVaultsDeficit
         );
 
         if (_update.totalSharesToBurn > 0) {
