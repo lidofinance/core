@@ -153,6 +153,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         __Ownable_init(_owner);
         _getStorage().nodeOperator = _nodeOperator;
+        ERC7201Storage storage $ = _getStorage();
+        $.report.timestamp = uint64(block.timestamp);
     }
 
     /**
@@ -193,6 +195,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
     function valuation() public view returns (uint256) {
+        checkReportFreshness();
         ERC7201Storage storage $ = _getStorage();
         return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
     }
@@ -366,7 +369,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
 
-        emit Reported(_valuation, _inOutDelta, _locked);
+        emit Reported(_timestamp, _valuation, _inOutDelta, _locked);
     }
 
     /**
@@ -532,6 +535,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
+    function isReportFresh() internal view returns (bool) {
+        return block.timestamp - _getStorage().report.timestamp < 1 days;
+    }
+
+    function checkReportFreshness() internal view {
+        if (!isReportFresh()) revert FreshReportRequired();
+    }
+
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
@@ -567,7 +578,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      * @param locked Amount of ether locked in `StakingVault`
      */
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
+    event Reported(uint256 timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
      * @notice Emitted if `owner` of `StakingVault` is a contract and its `onReport` hook reverts
@@ -725,4 +736,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when partial withdrawals are not allowed when valuation is below locked
      */
     error PartialWithdrawalNotAllowed();
+
+    /**
+     * @notice Thrown when the report is not fresh
+     */
+    error FreshReportRequired();
 }
