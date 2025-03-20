@@ -1,6 +1,7 @@
 import { log } from "lib";
 
 import {
+  ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   ensureStakeLimit,
@@ -25,7 +26,7 @@ export const provision = async (ctx: ProtocolContext) => {
 
   await ensureHashConsensusInitialEpoch(ctx);
 
-  await ensureOracleCommitteeMembers(ctx, 5n);
+  await ensureOracleCommitteeMembers(ctx, 5n, 4n);
 
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
@@ -36,6 +37,8 @@ export const provision = async (ctx: ProtocolContext) => {
   await finalizeWithdrawalQueue(ctx);
 
   await ensureStakeLimit(ctx);
+
+  await ensureDsmGuardians(ctx, 3n, 2n);
 
   alreadyProvisioned = true;
 
