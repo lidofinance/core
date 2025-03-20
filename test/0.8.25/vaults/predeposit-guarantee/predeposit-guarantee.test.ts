@@ -334,8 +334,16 @@ describe("PredepositGuarantee.sol", () => {
       await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
-      // Call compensateDisprovenPredeposit and expect it to succeed\
+      const validatorStatusTx = await pdg.validatorStatus(validatorIncorrectWC.pubkey);
 
+      // ValidatorStatus.stage
+      expect(validatorStatusTx[0]).to.equal(3n); // 3n is DISPROVEN
+      // ValidatorStatus.stakingVault
+      expect(validatorStatusTx[1]).to.equal(await stakingVault.getAddress());
+      // ValidatorStatus.nodeOperator
+      expect(validatorStatusTx[2]).to.equal(vaultOperator.address);
+
+      // Call compensateDisprovenPredeposit and expect it to succeed
       const compensateDisprovenPredepositTx = pdg
         .connect(vaultOwner)
         .compensateDisprovenPredeposit(validatorIncorrectWC.pubkey, vaultOperator.address);
