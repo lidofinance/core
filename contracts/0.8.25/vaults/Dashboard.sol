@@ -17,6 +17,7 @@ import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {CLProofVerifier} from "./predeposit_guarantee/PredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;
@@ -377,7 +378,7 @@ contract Dashboard is Permissions {
      * @dev requires the caller to have the `UNSAFE_DEPOSIT_ROLE`
      * @dev used as a shortcut if validators are trusted
      */
-    function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) external {
+    function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) public virtual {
         uint256 totalAmount;
         IStakingVault stakingVault = stakingVault();
 
@@ -401,6 +402,10 @@ contract Dashboard is Permissions {
                 deposit.depositDataRoot
             );
         }
+    }
+
+    function addSideValidators(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
+        _proveSideValidators(_witnesses);
     }
 
     /**

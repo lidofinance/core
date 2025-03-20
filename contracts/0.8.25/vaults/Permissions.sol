@@ -9,7 +9,7 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {PredepositGuarantee} from "./predeposit_guarantee/PredepositGuarantee.sol";
+import {PredepositGuarantee, CLProofVerifier} from "./predeposit_guarantee/PredepositGuarantee.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 /**
@@ -83,9 +83,14 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
 
     /**
-     * @notice Permission for assets recovery
+     * @notice Permission for unsafe deposit to trusted validators
      */
     bytes32 public constant UNSAFE_DEPOSIT_ROLE = keccak256("vaults.Permissions.UnsafeDeposit");
+
+    /**
+     * @notice Permission for proving side validators
+     */
+    bytes32 public constant SIDE_VALIDATOR_ROLE = keccak256("vaults.Permissions.SideValidator");
 
     /**
      * @notice Permission for assets recovery
@@ -280,6 +285,18 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _withdrawForDeposit(uint256 _ether) internal onlyRole(UNSAFE_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
+    }
+
+    /**
+     * @dev withdraws ether from vault to this contract for deposit to trusted validators
+     */
+    function _proveSideValidators(
+        CLProofVerifier.ValidatorWitness[] calldata _witness
+    ) internal onlyRole(SIDE_VALIDATOR_ROLE) {
+        IStakingVault vault = stakingVault();
+        for (uint i = 0; i < _witness.length; i++) {
+            PredepositGuarantee(vault.depositor()).proveUnknownValidator(_witness[i], vault);
+        }
     }
 
     /**
