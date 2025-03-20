@@ -222,10 +222,8 @@ describe("VaultHub.sol:forceExit", () => {
 
       const rebase = await vaultHub.calculateVaultsRebase(
         [0n, valuation - penalty],
-        preTotalShares,
-        preTotalPooledEther,
-        preTotalShares - cap,
-        preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares,
+        { eth: preTotalPooledEther, shares: preTotalShares },
+        { eth: preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares, shares: preTotalShares - cap },
         0n,
       );
 

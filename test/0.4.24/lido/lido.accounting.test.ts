@@ -83,13 +83,14 @@ describe("Lido:accounting", () => {
         .withArgs(0n, 0n, 100n);
     });
 
-    type ArgsTuple = [bigint, bigint, bigint, bigint];
+    type ArgsTuple = [bigint, bigint, bigint, bigint, bigint];
 
     interface Args {
       reportTimestamp: bigint;
       preClValidators: bigint;
       postClValidators: bigint;
       postClBalance: bigint;
+      externalEtherDeficit: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
@@ -98,6 +99,7 @@ describe("Lido:accounting", () => {
         preClValidators: 0n,
         postClValidators: 0n,
         postClBalance: 0n,
+        externalEtherDeficit: 0n,
         ...overrides,
       }) as ArgsTuple;
     }

@@ -5,7 +5,7 @@ pragma solidity 0.8.9;
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {ReportValues} from "contracts/common/types/ReportValues.sol";
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
 
