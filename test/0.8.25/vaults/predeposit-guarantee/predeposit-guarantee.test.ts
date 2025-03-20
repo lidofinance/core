@@ -291,10 +291,23 @@ describe("PredepositGuarantee.sol", () => {
       await stakingVault.fund({ value: ether("32") });
       expect(await stakingVault.valuation()).to.equal(ether("32"));
 
+      // TODO: move
+      function to02Type(address: string): string {
+        const normalizedAddress = address.toLowerCase().replace(/^0x/, "");
+        const padding = "000000000000000000000000";
+        return `0x02${padding}${normalizedAddress}`;
+      }
+
       // Generate a validator
       const vaultWC = await stakingVault.withdrawalCredentials();
-      const validator = generateValidator(vaultWC);
-      const predepositData = generatePredeposit(validator);
+      const vaultNodeOperatorAddress = to02Type(await stakingVault.nodeOperator());
+
+      const validatorCorrectWC = generateValidator(vaultWC);
+      const validatorIncorrectWC = generateValidator(vaultNodeOperatorAddress);
+      console.log("validatorCorrectWC:", validatorCorrectWC);
+      console.log("validatorIncorrectWC:", validatorIncorrectWC);
+
+      const predepositData = generatePredeposit(validatorCorrectWC);
 
       console.log(0);
 
@@ -306,7 +319,7 @@ describe("PredepositGuarantee.sol", () => {
       // const { sszMerkleTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree();
 
       // Validator is added to CL merkle tree
-      await sszMerkleTree.addValidatorLeaf(validator);
+      await sszMerkleTree.addValidatorLeaf(validatorCorrectWC);
       const validatorLeafIndex = firstValidatorLeafIndex + 1n;
       const validatorIndex = 1n;
 
@@ -319,13 +332,18 @@ describe("PredepositGuarantee.sol", () => {
       const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
       // NO collects validator proof
-      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validatorCorrectWC);
       const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       console.log(2);
 
-      const witness = { pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof };
+      const witness = {
+        pubkey: validatorCorrectWC.pubkey,
+        validatorIndex,
+        childBlockTimestamp,
+        proof: concatenatedProof,
+      };
       await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultWC);
 
       console.log(3);
@@ -336,7 +354,7 @@ describe("PredepositGuarantee.sol", () => {
       console.log(4);
 
       // Call compensateDisprovenPredeposit and expect it to succeed
-      await expect(pdg.connect(vaultOwner).compensateDisprovenPredeposit(validator.pubkey, recipient))
+      await expect(pdg.connect(vaultOwner).compensateDisprovenPredeposit(validatorCorrectWC.pubkey, recipient))
         .to.emit(pdg, "BalanceCompensated")
         .withArgs(vaultOperator.address, recipient, ether("1"));
 
