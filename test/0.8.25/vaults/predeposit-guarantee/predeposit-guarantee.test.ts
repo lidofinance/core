@@ -334,12 +334,24 @@ describe("PredepositGuarantee.sol", () => {
       await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
-      // Call compensateDisprovenPredeposit and expect it to succeed
-      await expect(
-        pdg.connect(vaultOwner).compensateDisprovenPredeposit(validatorIncorrectWC.pubkey, vaultOperator.address),
-      )
+      // Call compensateDisprovenPredeposit and expect it to succeed\
+
+      const compensateDisprovenPredepositTx = pdg
+        .connect(vaultOwner)
+        .compensateDisprovenPredeposit(validatorIncorrectWC.pubkey, vaultOperator.address);
+
+      await expect(compensateDisprovenPredepositTx)
         .to.emit(pdg, "BalanceCompensated")
-        .withArgs(vaultOperator.address, vaultOperator.address, ether("0"), ether("0"));
+        .withArgs(vaultOperator.address, vaultOperator.address, ether("0"), ether("0"))
+        .to.emit(pdg, "ValidatorCompensated")
+        .withArgs(
+          validatorIncorrectWC.pubkey,
+          vaultOperator.address,
+          await stakingVault.getAddress(),
+          vaultOperator.address,
+        );
+
+      await expect(compensateDisprovenPredepositTx).to.be.ok;
 
       // Check that the locked balance of the node operator has been reduced
       const nodeOperatorBalance = await pdg.nodeOperatorBalance(vaultOperator.address);
