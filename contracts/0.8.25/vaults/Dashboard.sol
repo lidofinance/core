@@ -378,9 +378,15 @@ contract Dashboard is Permissions {
      * @dev requires the caller to have the `UNSAFE_DEPOSIT_ROLE`
      * @dev used as a shortcut if validators are trusted
      */
-    function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) public virtual {
-        uint256 totalAmount;
+    function unsafeWithdrawAndDeposit(
+        IStakingVault.Deposit[] calldata _deposits,
+        bytes32 _depositContractRoot
+    ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
+        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+
+        // maybe allow magic value to skip this check to avoid DOS by deposit contract spammer?
+        if (_depositContractRoot != depositContract.get_deposit_root()) revert InvalidDepositContractRoot();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -389,8 +395,6 @@ contract Dashboard is Permissions {
         _withdrawForDeposit(totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
-
-        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
 
         IStakingVault.Deposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
@@ -401,10 +405,12 @@ contract Dashboard is Permissions {
                 deposit.signature,
                 deposit.depositDataRoot
             );
+
+            emit UnsafeDeposited(address(stakingVault), deposit.pubkey, deposit.amount);
         }
     }
 
-    function addSideValidators(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
+    function proveSideValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
         _proveSideValidators(_witnesses);
     }
 
@@ -585,6 +591,12 @@ contract Dashboard is Permissions {
 
     // ==================== Events ====================
 
+    /// @notice Emitted when ether was withdrawn from the staking vault and unsafely deposited to validators directly bypassing PDG
+    /// @param stakingVault the address of owned staking vault
+    /// @param pubkey of the validator to be deposited
+    /// @param amount of ether deposited to validator
+    event UnsafeDeposited(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
+
     /// @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
     /// @param to The address of the recovery recipient
     /// @param token The address of the recovered ERC20 token (zero address for Ether)
@@ -598,6 +610,9 @@ contract Dashboard is Permissions {
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
+
+    /// @notice Error when an argument is zero
+    error InvalidDepositContractRoot();
 
     /// @notice Error when provided permit is invalid
     error InvalidPermit(address token);

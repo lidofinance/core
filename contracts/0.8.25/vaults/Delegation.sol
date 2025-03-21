@@ -66,9 +66,9 @@ contract Delegation is Dashboard {
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
 
     /**
-     * @notice hackity hack hack
+     * @notice adjustment for inOut to allow fee correction during side deposits
      */
-    uint128 public inOutOffset;
+    uint128 public inOutAdjustment;
 
     /**
      * @notice Constructs the contract.
@@ -218,27 +218,26 @@ contract Delegation is Dashboard {
     /**
      * @notice allows to adjust fee offset,
      * @param _inOutOffset new offset value
-     * @param _currentOffset current offset value used to invalidate votings
+     * @param _currentOffset current offset value used to invalidate previous votings
      */
     function adjustInOutOffset(
-        uint128 _inOutOffset,
-        uint128 _currentOffset
+        uint256 _inOutOffset,
+        uint256 _currentOffset
     ) external onlyConfirmed(_confirmingRoles()) {
-        if (_currentOffset != inOutOffset) revert("Invalid _currentOffset");
-        if (_inOutOffset == _currentOffset) revert("Same offset");
-        inOutOffset = _inOutOffset;
+        if (_currentOffset != inOutAdjustment) revert InvalidCurrentInOutAdjustment();
+        _adjustInOut(uint128(_inOutOffset));
     }
 
-    function unsafeWithdrawAndDeposit(IStakingVault.Deposit[] calldata _deposits) public override {
-        super.unsafeWithdrawAndDeposit(_deposits);
+    function unsafeWithdrawAndDeposit(
+        IStakingVault.Deposit[] calldata _deposits,
+        bytes32 _depositContractRoot
+    ) public override returns (uint256 totalAmount) {
+        totalAmount = super.unsafeWithdrawAndDeposit(_deposits, _depositContractRoot);
 
-        uint128 totalWithdrawn;
-        for (uint256 i = 0; i < _deposits.length; i++) {
-            totalWithdrawn += uint128(_deposits[i].amount);
-        }
-
-        inOutOffset += totalWithdrawn;
+        _adjustInOut(inOutAdjustment + uint128(totalAmount));
     }
+
+    // ==================== Internal Functions ====================
 
     /**
      * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
@@ -263,7 +262,7 @@ contract Delegation is Dashboard {
         IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
-            (latestReport.inOutDelta + int128(inOutOffset) - _lastClaimedReport.inOutDelta);
+            (latestReport.inOutDelta + int128(inOutAdjustment) - _lastClaimedReport.inOutDelta);
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * _feeBP) / TOTAL_BASIS_POINTS : 0;
     }
@@ -278,9 +277,21 @@ contract Delegation is Dashboard {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        inOutOffset = 0;
+        if (inOutAdjustment != 0) _adjustInOut(0);
 
         stakingVault().withdraw(_recipient, _fee);
+    }
+
+    /**
+     * @notice sets InOut adjustment for correct fee calculation
+     * @param _inOutAdjustment new adjustment value
+     */
+    function _adjustInOut(uint128 _inOutAdjustment) internal {
+        if (_inOutAdjustment == inOutAdjustment) revert SameAdjustment();
+
+        emit InOutAdjustmentSet(inOutAdjustment, _inOutAdjustment);
+
+        inOutAdjustment = _inOutAdjustment;
     }
 
     /**
@@ -310,6 +321,8 @@ contract Delegation is Dashboard {
         super._withdraw(_recipient, _ether);
     }
 
+    // ==================== Events ====================
+
     /**
      * @dev Emitted when the curator fee is set.
      * @param oldCuratorFeeBP The old curator fee.
@@ -323,6 +336,25 @@ contract Delegation is Dashboard {
      * @param newNodeOperatorFeeBP The new node operator fee.
      */
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
+
+    /**
+     * @dev Emitted when the inOut adjustment is set.
+     * @param oldInOutAdjustment The old inOut adjustment.
+     * @param newInOutAdjustment The new inOut adjustment.
+     */
+    event InOutAdjustmentSet(uint128 oldInOutAdjustment, uint128 newInOutAdjustment);
+
+    // ==================== Errors ====================
+
+    /**
+     * @dev Error emitted when trying to set same inOutAdjustment
+     */
+    error SameAdjustment();
+
+    /**
+     * @dev Error emitted when trying to enact inOut adjustment vote
+     */
+    error InvalidCurrentInOutAdjustment();
 
     /**
      * @dev Error emitted when the curator fee is unclaimed.
