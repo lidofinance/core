@@ -7,7 +7,6 @@ import "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
-import {StdUtils} from "forge-std/StdUtils.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 
 import {BLS, SSZ} from "contracts/0.8.25/lib/BLS.sol";
@@ -21,7 +20,7 @@ struct PrecomputedDepositMessage {
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 // harness to test methods with calldata args
-contract BLSHarness is StdUtils {
+contract BLSHarness {
     function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
         BLS.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
     }
