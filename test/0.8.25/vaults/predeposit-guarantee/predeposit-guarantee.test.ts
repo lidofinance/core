@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForStakingVault,
+  EthRejector,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
@@ -52,6 +53,7 @@ describe("PredepositGuarantee.sol", () => {
   let sszMerkleTree: SSZMerkleTree;
   let stakingVault: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
+  let rejector: EthRejector;
 
   let firstValidatorLeafIndex: bigint;
 
@@ -90,6 +92,9 @@ describe("PredepositGuarantee.sol", () => {
     const localMerkle = await prepareLocalMerkleTree();
     sszMerkleTree = localMerkle.sszMerkleTree;
     firstValidatorLeafIndex = localMerkle.firstValidatorLeafIndex;
+
+    // eth rejector
+    rejector = await ethers.deployContract("EthRejector");
 
     // ether deposit contract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -192,6 +197,62 @@ describe("PredepositGuarantee.sol", () => {
       await expect(
         pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor),
       ).to.be.revertedWithCustomError(pdg, "SameGuarantor");
+    });
+
+    it("reverts on zero refund", async () => {
+      expect(await pdg.claimableRefund(vaultOperator)).to.equal(0n);
+      await expect(pdg.connect(vaultOperator).claimGuarantorRefund(vaultOperator)).to.be.revertedWithCustomError(
+        pdg,
+        "NothingToRefund",
+      );
+    });
+
+    it("reverts on failed refund", async () => {
+      const pdgNO = pdg.connect(vaultOperator);
+      const balance = ether("1");
+      await pdgNO.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await pdgNO.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+
+      await expect(pdgNO.claimGuarantorRefund(rejector)).to.be.revertedWithCustomError(pdg, "RefundFailed");
+    });
+
+    it("NO is refunded with setting guarantor", async () => {
+      const pdgNO = pdg.connect(vaultOperator);
+
+      const balance = ether("1");
+
+      // init
+      await pdgNO.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      const [operatorBondTotal] = await pdgNO.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(balance);
+      expect(await pdgNO.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperator);
+
+      // set guarantor
+
+      const setGuarantorTx = await pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor);
+
+      await expect(setGuarantorTx)
+        .to.emit(pdg, "BalanceRefunded")
+        .withArgs(vaultOperator, vaultOperatorGuarantor)
+        .to.emit(pdg, "GuarantorRefundAdded")
+        .withArgs(vaultOperator, vaultOperator, balance)
+        .to.emit(pdg, "GuarantorSet")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, vaultOperator);
+
+      const [operatorBondTotalAfter] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotalAfter).to.equal(0n);
+
+      // refund
+
+      expect(await pdgNO.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
+      expect(await pdg.claimableRefund(vaultOperator)).to.equal(balance);
+      const strangerBefore = await ethers.provider.getBalance(stranger);
+
+      const refundTx = await pdgNO.claimGuarantorRefund(stranger);
+
+      await expect(refundTx).to.emit(pdg, "GuarantorRefundClaimed").withArgs(vaultOperator, stranger, balance);
+      expect(await ethers.provider.getBalance(stranger)).to.equal(strangerBefore + balance);
+      expect(await pdg.claimableRefund(vaultOperator)).to.equal(0n);
     });
   });
 
