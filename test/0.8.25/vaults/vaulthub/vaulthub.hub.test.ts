@@ -10,6 +10,7 @@ import {
   Lido,
   LidoLocator,
   OperatorGrid,
+  OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
@@ -47,6 +48,8 @@ describe("VaultHub.sol:hub", () => {
   let lido: Lido;
   let acl: ACL;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let codehash: string;
 
@@ -90,7 +93,7 @@ describe("VaultHub.sol:hub", () => {
     },
   ) {
     const groupId = 1;
-    const tiersCount = (await operatorGrid.groups(groupId)).tiersCount;
+    const tiersCount = (await operatorGrid.group(groupId)).tiersCount;
     const nextTierId = tiersCount + 1n;
 
     await operatorGrid
@@ -134,7 +137,12 @@ describe("VaultHub.sol:hub", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, user]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    await operatorGrid.initialize(user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
@@ -144,7 +152,7 @@ describe("VaultHub.sol:hub", () => {
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
-    const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);

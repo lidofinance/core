@@ -30,6 +30,7 @@ export async function main() {
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -39,7 +40,7 @@ export async function main() {
   const withdrawalQueueAdmin = testnetAdmin;
   const vaultHubAdmin = testnetAdmin;
   const pdgAdmin = testnetAdmin;
-
+  const operatorGridAdmin = testnetAdmin;
   // Initialize NodeOperatorsRegistry
 
   // https://github.com/ethereum/solidity-examples/blob/master/docs/bytes/Bytes.md#description
@@ -147,6 +148,10 @@ export async function main() {
   // Initialize VaultHub
   const vaultHub = await loadContract("VaultHub", vaultHubAddress);
   await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
+
+  // Initialize OperatorGrid
+  const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin], { from: deployer });
 
   // Initialize PDG
   const pdg = await loadContract("PredepositGuarantee", pdgAddress);

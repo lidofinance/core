@@ -15,6 +15,7 @@ import {
   OperatorGrid,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
+  OssifiableProxy,
   PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
@@ -35,6 +36,8 @@ describe("Accounting.sol:report", () => {
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let lido: Lido__MockForAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
@@ -76,7 +79,12 @@ describe("Accounting.sol:report", () => {
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, deployer]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    await operatorGrid.initialize(deployer);
 
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",

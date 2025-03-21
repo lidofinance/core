@@ -53,6 +53,7 @@ describe("VaultFactory.sol", () => {
 
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
 
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
 
@@ -88,7 +89,12 @@ describe("VaultFactory.sol", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, admin]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    await operatorGrid.initialize(admin);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     // Accounting

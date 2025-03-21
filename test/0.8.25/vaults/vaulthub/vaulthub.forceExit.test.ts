@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   LidoLocator,
   OperatorGrid,
+  OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
@@ -44,6 +45,8 @@ describe("VaultHub.sol:forceExit", () => {
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let vaultAddress: string;
   let vaultHubAddress: string;
@@ -62,7 +65,7 @@ describe("VaultHub.sol:forceExit", () => {
     },
   ) {
     const groupId = 1;
-    const tiersCount = (await operatorGrid.groups(groupId)).tiersCount;
+    const tiersCount = (await operatorGrid.group(groupId)).tiersCount;
     const nextTierId = tiersCount + 1n;
 
     await operatorGrid
@@ -93,7 +96,12 @@ describe("VaultHub.sol:forceExit", () => {
       predepositGuarantee: predepositGuarantee,
     });
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, user]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    await operatorGrid.initialize(user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
@@ -103,7 +111,7 @@ describe("VaultHub.sol:forceExit", () => {
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
-    const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);

@@ -88,6 +88,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     easyTrackAddress: config["app:aragon-voting"].proxy.address,
     stakingVaultFactory: config["stakingVaultFactory"].address,
     stakingVaultBeacon: config["stakingVaultBeacon"].address,
+    operatorGrid: config["operatorGrid"].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

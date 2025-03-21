@@ -156,7 +156,22 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Owner to create vault and assign NodeOperator and Curator roles", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { lido, stakingVaultFactory, operatorGrid } = ctx.contracts;
+
+    // Create a group with share limit 1000
+    const groupId = 1;
+    const tierId = 1;
+
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
+    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+
+    const agentSigner = await ctx.getSigner("agent");
+
+    await operatorGrid.connect(agentSigner).registerGroup(groupId, shareLimit);
+    await operatorGrid
+      .connect(agentSigner)
+      .registerTier(groupId, tierId, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
+    await operatorGrid.connect(agentSigner)["registerOperator(address)"](nodeOperator);
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -215,19 +230,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, vaultHub } = ctx.contracts;
 
-    expect(await stakingVault.locked()).to.equal(0); // no ETH locked yet
-
     const votingSigner = await ctx.getSigner("voting");
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
-
-    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
-    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
-
-    const agentSigner = await ctx.getSigner("agent");
-
-    await vaultHub
-      .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
     expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);

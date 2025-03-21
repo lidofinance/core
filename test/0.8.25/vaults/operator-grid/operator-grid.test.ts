@@ -64,6 +64,7 @@ describe("OperatorGrid.sol", () => {
   let beacon: UpgradeableBeacon;
   let vaultHub: VaultHub;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
   let proxy: OssifiableProxy;
   let vaultMock: StalingVault__MockForOperatorGrid;
   let vaultMock2: StalingVault__MockForOperatorGrid;
@@ -112,7 +113,11 @@ describe("OperatorGrid.sol", () => {
     vaultMock2 = await ethers.deployContract("StalingVault__MockForOperatorGrid", [certainAddress("node-operator")]);
 
     // OperatorGrid
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, dao]);
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    await operatorGrid.initialize(dao);
     await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
 
     // VaultHub
@@ -159,9 +164,21 @@ describe("OperatorGrid.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("reverts if `_admin` is zero address", async () => {
-      await expect(ethers.deployContract("OperatorGrid", [ZeroAddress, ZeroAddress]))
-        .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
+    it("reverts on impl initialization", async () => {
+      await expect(operatorGrid.initialize(stranger)).to.be.revertedWithCustomError(
+        operatorGridImpl,
+        "InvalidInitialization",
+      );
+    });
+    it("reverts on `_admin` address is zero", async () => {
+      const operatorGridProxy = await ethers.deployContract(
+        "OssifiableProxy",
+        [operatorGridImpl, deployer, new Uint8Array()],
+        deployer,
+      );
+      const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
+      await expect(operatorGridLocal.initialize(ZeroAddress))
+        .to.be.revertedWithCustomError(operatorGridImpl, "ZeroArgument")
         .withArgs("_admin");
     });
   });
@@ -198,20 +215,25 @@ describe("OperatorGrid.sol", () => {
 
     it("add a new group", async function () {
       const groupId = 2;
-      const shareLimit = 2000;
+      const shareLimit = 2001;
 
       await expect(operatorGrid.connect(dao).registerGroup(groupId, shareLimit))
         .to.emit(operatorGrid, "GroupAdded")
         .withArgs(groupId, shareLimit);
 
-      const gIdx = await operatorGrid.groupIndex(groupId);
-      expect(gIdx).to.not.equal(0);
-
-      const groupStruct = await operatorGrid.groups(gIdx);
+      const groupStruct = await operatorGrid.group(groupId);
 
       expect(groupStruct.shareLimit).to.equal(shareLimit);
       expect(groupStruct.mintedShares).to.equal(0);
       expect(groupStruct.tiersCount).to.equal(0);
+
+      const groupCount = await operatorGrid.groupCount();
+      expect(groupCount).to.equal(1);
+
+      const groupStructByIndex = await operatorGrid.groupByIndex(0);
+      expect(groupStructByIndex.shareLimit).to.equal(shareLimit);
+      expect(groupStructByIndex.mintedShares).to.equal(0);
+      expect(groupStructByIndex.tiersCount).to.equal(0);
     });
 
     it("reverts when updating without `REGISTRY_ROLE` role", async function () {
@@ -234,8 +256,7 @@ describe("OperatorGrid.sol", () => {
         .to.emit(operatorGrid, "GroupShareLimitUpdated")
         .withArgs(groupId, newShareLimit);
 
-      const gIdx = await operatorGrid.groupIndex(groupId);
-      const groupStruct = await operatorGrid.groups(gIdx);
+      const groupStruct = await operatorGrid.group(groupId);
       expect(groupStruct.shareLimit).to.equal(newShareLimit);
     });
   });
@@ -309,15 +330,20 @@ describe("OperatorGrid.sol", () => {
       const operatorAddress = certainAddress("operator-address");
 
       await expect(operatorGrid.connect(dao)["registerOperator(address)"](operatorAddress))
-        .to.emit(operatorGrid, "OperatorAdded")
+        .to.emit(operatorGrid, "NodeOperatorAdded")
         .withArgs(1, operatorAddress);
 
-      const opIndex = await operatorGrid.operatorIndex(operatorAddress);
-      expect(opIndex).to.not.equal(0);
-
-      const opStruct = await operatorGrid.operators(opIndex);
+      const opStruct = await operatorGrid.nodeOperator(operatorAddress);
       expect(opStruct.groupId).to.equal(1);
       expect(opStruct.vaultsCount).to.equal(0);
+
+      const nodeOperatorCount = await operatorGrid.nodeOperatorCount();
+      expect(nodeOperatorCount).to.equal(1);
+
+      const opStructByIndex = await operatorGrid.nodeOperatorByIndex(0);
+      expect(opStructByIndex.groupId).to.equal(1);
+      expect(opStructByIndex.vaultsCount).to.equal(0);
+      expect(opStructByIndex.nodeOperatorAddress).to.equal(operatorAddress);
     });
 
     it("add an operator", async function () {
@@ -328,13 +354,10 @@ describe("OperatorGrid.sol", () => {
       const operatorAddress = certainAddress("operator-address");
 
       await expect(operatorGrid.connect(dao)["registerOperator(address,uint256)"](operatorAddress, groupId))
-        .to.emit(operatorGrid, "OperatorAdded")
-        .withArgs(2, operatorAddress);
+        .to.emit(operatorGrid, "NodeOperatorAdded")
+        .withArgs(groupId, operatorAddress);
 
-      const opIndex = await operatorGrid.operatorIndex(operatorAddress);
-      expect(opIndex).to.not.equal(0);
-
-      const opStruct = await operatorGrid.operators(opIndex);
+      const opStruct = await operatorGrid.nodeOperator(operatorAddress);
       expect(opStruct.groupId).to.equal(groupId);
       expect(opStruct.vaultsCount).to.equal(0);
     });

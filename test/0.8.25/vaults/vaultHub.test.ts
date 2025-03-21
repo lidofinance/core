@@ -31,6 +31,7 @@ describe("VaultHub.sol", () => {
   let locator: LidoLocator;
   let vaultHub: VaultHub;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
 
   let originalState: string;
 
@@ -44,7 +45,11 @@ describe("VaultHub.sol", () => {
       wstETH: wsteth,
     });
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [locator, admin]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: admin });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, admin, new Uint8Array()], admin);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, admin);
+    await operatorGrid.initialize(admin);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     // VaultHub

@@ -4,12 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControl} from "@openzeppelin/contracts-v5.2/access/AccessControl.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
-contract OperatorGrid is AccessControl {
+contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
 
@@ -37,10 +37,11 @@ contract OperatorGrid is AccessControl {
         uint16 treasuryFeeBP;
     }
 
-    struct Operator {
+    struct NodeOperator {
         uint256 groupId;
         uint256[] vaults;
         uint256 vaultsCount;
+        address nodeOperatorAddress;
     }
 
     struct Vault {
@@ -51,45 +52,64 @@ contract OperatorGrid is AccessControl {
     // -----------------------------
     //        STORAGE
     // -----------------------------
-    Group[] public groups;
-    mapping(uint256 => uint256) public groupIndex;
+    struct ERC7201Storage {
+        Group[] groups;
+        mapping(uint256 => uint256) groupIndex;
 
-    Tier[] public tiers;
-    mapping(uint256 => uint256) public tierIndex;
+        Tier[] tiers;
+        mapping(uint256 => uint256) tierIndex;
 
-    Operator[] public operators;
-    mapping(address => uint256) public operatorIndex;
+        NodeOperator[] nodeOperators;
+        mapping(address => uint256) nodeOperatorIndex;
 
-    Vault[] public vaults;
-    mapping(address => uint256) public vaultIndex;
+        Vault[] vaults;
+        mapping(address => uint256) vaultIndex;
+    }
+
+    /**
+     * @notice Storage offset slot for ERC-7201 namespace
+     *         The storage namespace is used to prevent upgrade collisions
+     *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.OperatorGrid")) - 1)) & ~bytes32(uint256(0xff))
+     */
+    bytes32 private constant ERC7201_STORAGE_LOCATION =
+        0x6b64617c951381e2c1eff2be939fe368ab6d76b7d335df2e47ba2309eba1c700;
 
 
-    /// @notice Initializes the contract with an LidoLocator and admin address
+    /// @notice Initializes the contract with an LidoLocator
     /// @param _locator Lido Locator contract
-    /// @param _admin Address of the contract admin
-    constructor(ILidoLocator _locator, address _admin) {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-
+    constructor(ILidoLocator _locator) {
         LIDO_LOCATOR = _locator;
 
-        //1-ind
-        groups.push(Group({shareLimit: 0, mintedShares: 0, tiers: new uint256[](0), tiersCount: 0}));
-        operators.push(Operator({groupId: 0, vaults: new uint256[](0), vaultsCount: 0 }));
-        tiers.push(Tier({shareLimit: 0, mintedShares: 0, reserveRatioBP: 0, rebalanceThresholdBP: 0, treasuryFeeBP: 0}));
-        vaults.push(Vault({tierId: 0, mintedShares: 0}));
+        _disableInitializers();
+    }
+
+    function initialize(address _admin) external initializer {
+        if (_admin == address(0)) revert ZeroArgument("_admin");
+
+        __AccessControlEnumerable_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        ERC7201Storage storage $ = _getStorage();
+
+
+        // ИЛИ Вариант 2: Более компактная запись
+        $.groups.push(Group(0, 0, new uint256[](0), 0));
+        $.nodeOperators.push(NodeOperator(0, new uint256[](0), 0, address(0)));
+        $.tiers.push(Tier(0, 0, 0, 0, 0));
+        $.vaults.push(Vault(0, 0));
     }
 
     /// @notice Registers a new group
     /// @param groupId identifier of the group
     /// @param shareLimit Maximum share limit for the group
     function registerGroup(uint256 groupId, uint256 shareLimit) external onlyRole(REGISTRY_ROLE) {
-        if (groupIndex[groupId] > 0) revert GroupExists();
+        ERC7201Storage storage $ = _getStorage();
+
+        if ($.groupIndex[groupId] > 0) revert GroupExists();
 
         //1-ind
-        groupIndex[groupId] = groups.length;
-        groups.push(
+        $.groupIndex[groupId] = $.groups.length;
+        $.groups.push(
             Group({
                 shareLimit: uint96(shareLimit),
                 mintedShares: 0,
@@ -105,12 +125,27 @@ contract OperatorGrid is AccessControl {
     /// @param groupId Group ID to update
     /// @param newShareLimit New share limit value
     function updateGroupShareLimit(uint256 groupId, uint256 newShareLimit) external onlyRole(REGISTRY_ROLE) {
-        uint256 gIdx = groupIndex[groupId];
+        ERC7201Storage storage $ = _getStorage();
+
+        uint256 gIdx = $.groupIndex[groupId];
         if (gIdx == 0) revert GroupNotExists();
 
-        groups[gIdx].shareLimit = uint96(newShareLimit);
+        $.groups[gIdx].shareLimit = uint96(newShareLimit);
 
         emit GroupShareLimitUpdated(groupId, uint96(newShareLimit));
+    }
+
+    function groupCount() external view returns (uint256) {
+        return _getStorage().groups.length - 1;
+    }
+
+    function groupByIndex(uint256 _index) public view returns (Group memory) {
+        return _getStorage().groups[_index + 1];
+    }
+
+    function group(uint256 _groupId) external view returns (Group memory) {
+        ERC7201Storage storage $ = _getStorage();
+        return $.groups[$.groupIndex[_groupId]];
     }
 
     /// @notice Registers a new tier
@@ -128,12 +163,14 @@ contract OperatorGrid is AccessControl {
         uint256 rebalanceThresholdBP,
         uint256 treasuryFeeBP
     ) external onlyRole(REGISTRY_ROLE) {
-        uint256 gIdx = groupIndex[groupId];
-        if (gIdx == 0) revert GroupNotExists();
-        if (tierIndex[tierId] > 0) revert TierExists();
+        ERC7201Storage storage $ = _getStorage();
 
-        tierIndex[tierId] = tiers.length;
-        tiers.push(
+        uint256 gIdx = $.groupIndex[groupId];
+        if (gIdx == 0) revert GroupNotExists();
+        if ($.tierIndex[tierId] > 0) revert TierExists();
+
+        $.tierIndex[tierId] = $.tiers.length;
+        $.tiers.push(
             Tier({
                 shareLimit: uint96(shareLimit),
                 mintedShares: 0,
@@ -143,8 +180,8 @@ contract OperatorGrid is AccessControl {
             })
         );
 
-        Group storage g = groups[gIdx];
-        g.tiers.push(tierIndex[tierId]);
+        Group storage g = $.groups[gIdx];
+        g.tiers.push($.tierIndex[tierId]);
         g.tiersCount++;
 
         emit TierAdded(
@@ -175,42 +212,60 @@ contract OperatorGrid is AccessControl {
             revert ZeroArgument("_operator");
         }
 
-        if (operatorIndex[_operator] > 0) {
+        ERC7201Storage storage $ = _getStorage();
+
+        if ($.nodeOperatorIndex[_operator] > 0) {
             revert NodeOperatorExists();
         }
 
-        if (groupIndex[_groupId] == 0) {
+        if ($.groupIndex[_groupId] == 0) {
             revert GroupNotExists();
         }
 
-        operatorIndex[_operator] = operators.length;
+        $.nodeOperatorIndex[_operator] = $.nodeOperators.length;
 
-        Operator memory operator = Operator({
+        NodeOperator memory nodeOperator = NodeOperator({
             groupId: _groupId,
             vaults: new uint256[](0),
-            vaultsCount: 0
+            vaultsCount: 0,
+            nodeOperatorAddress: _operator
         });
 
-        operators.push(operator);
+        $.nodeOperators.push(nodeOperator);
 
-        emit OperatorAdded(_groupId, _operator);
+        emit NodeOperatorAdded(_groupId, _operator);
+    }
+
+    function nodeOperatorCount() external view returns (uint256) {
+        return _getStorage().nodeOperators.length - 1;
+    }
+
+    function nodeOperatorByIndex(uint256 _index) external view returns (NodeOperator memory) {
+        return _getStorage().nodeOperators[_index + 1];
+    }
+
+    function nodeOperator(address _nodeOperator) external view returns (NodeOperator memory) {
+        ERC7201Storage storage $ = _getStorage();
+        return $.nodeOperators[$.nodeOperatorIndex[_nodeOperator]];
     }
 
     /// @notice Registers a new vault
     /// @param vault address of the vault
     function registerVault(address vault) external {
+        ERC7201Storage storage $ = _getStorage();
+
         if (vault == address(0)) revert ZeroArgument("_vault");
-        if (vaultIndex[vault] > 0) revert VaultExists();
+        if ($.vaultIndex[vault] > 0) revert VaultExists();
 
-        address operatorAddr = IStakingVault(vault).nodeOperator();
-        uint256 operatorIndex = operatorIndex[operatorAddr];
-        if (operatorIndex == 0) revert NodeOperatorNotExists();
+        address nodeOperatorAddr = IStakingVault(vault).nodeOperator();
+        uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
+        if (nodeOperatorIndex == 0) revert NodeOperatorNotExists();
 
-        Operator storage operator = operators[operatorIndex];
-        uint256 groupIndex = groupIndex[operator.groupId];
-        Group memory group = groups[groupIndex];
+        NodeOperator storage nodeOperator = $.nodeOperators[nodeOperatorIndex];
+        uint256 groupIndex = $.groupIndex[nodeOperator.groupId];
+        Group storage group = $.groups[groupIndex];
 
-        uint256 nextTierIndex = operator.vaultsCount;
+        uint256 nextTierIndex = nodeOperator.vaultsCount;
         if (nextTierIndex >= group.tiersCount) revert TiersNotAvailable();
 
         Vault memory _vault = Vault({
@@ -218,13 +273,13 @@ contract OperatorGrid is AccessControl {
             mintedShares: 0
         });
 
-        vaultIndex[vault] = vaults.length;
-        vaults.push(_vault);
+        $.vaultIndex[vault] = $.vaults.length;
+        $.vaults.push(_vault);
 
-        operator.vaults.push(vaults.length);
-        operator.vaultsCount++;
+        nodeOperator.vaults.push($.vaults.length);
+        nodeOperator.vaultsCount++;
 
-        emit VaultAdded(operator.groupId, operatorAddr, vault, _vault.tierId);
+        emit VaultAdded(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vault, _vault.tierId);
     }
 
    // -----------------------------
@@ -238,32 +293,34 @@ contract OperatorGrid is AccessControl {
         address vaultAddr,
         uint256 amount
     ) external {
+        ERC7201Storage storage $ = _getStorage();
+
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("mintShares", msg.sender);
 
-        uint256 index = vaultIndex[vaultAddr];
+        uint256 index = $.vaultIndex[vaultAddr];
         if (index == 0) revert VaultNotExists();
 
-        Vault storage vault = vaults[index];
+        Vault storage vault = $.vaults[index];
 
-        address operatorAddr = IStakingVault(vaultAddr).nodeOperator();
-        uint256 operatorIndex = operatorIndex[operatorAddr];
+        address nodeOperatorAddr = IStakingVault(vaultAddr).nodeOperator();
+        uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
 
-        Operator storage operator = operators[operatorIndex];
-        uint256 groupIndex = groupIndex[operator.groupId];
-        Group storage group = groups[groupIndex];
+        NodeOperator storage nodeOperator = $.nodeOperators[nodeOperatorIndex];
+        uint256 groupIndex = $.groupIndex[nodeOperator.groupId];
+        Group storage group = $.groups[groupIndex];
 
         uint96 amount_ = uint96(amount);
         if (group.mintedShares + amount_ > group.shareLimit) revert GroupLimitExceeded();
 
-        uint256 tierIndex = tierIndex[vault.tierId];
-        Tier memory tier = tiers[tierIndex];
+        uint256 tierIndex = $.tierIndex[vault.tierId];
+        Tier memory tier = $.tiers[tierIndex];
 
         if (vault.mintedShares + amount_ > tier.shareLimit) revert VaultTierLimitExceeded();
 
         group.mintedShares += amount_;
         vault.mintedShares += amount_;
 
-        emit Minted(operator.groupId, operatorAddr, vaultAddr, amount_);
+        emit Minted(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vaultAddr, amount_);
     }
 
     /// @notice Burn shares
@@ -273,20 +330,22 @@ contract OperatorGrid is AccessControl {
         address vaultAddr,
         uint256 amount
     ) external {
+        ERC7201Storage storage $ = _getStorage();
+
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("burnShares", msg.sender);
 
-        uint256 index = vaultIndex[vaultAddr];
+        uint256 index = $.vaultIndex[vaultAddr];
         if (index == 0) revert VaultNotExists();
 
-        Vault storage vault = vaults[index];
+        Vault storage vault = $.vaults[index];
 
-        address operatorAddr = IStakingVault(vaultAddr).nodeOperator();
-        uint256 operatorIndex = operatorIndex[operatorAddr];
+        address nodeOperatorAddr = IStakingVault(vaultAddr).nodeOperator();
+        uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
 
-        Operator memory operator = operators[operatorIndex];
-        uint256 groupIndex = groupIndex[operator.groupId];
+        NodeOperator memory nodeOperator = $.nodeOperators[nodeOperatorIndex];
+        uint256 groupIndex = $.groupIndex[nodeOperator.groupId];
 
-        Group storage group = groups[groupIndex];
+        Group storage group = $.groups[groupIndex];
         uint96 amount_ = uint96(amount);
 
         if (group.mintedShares < amount_) revert GroupMintedSharesUnderflow();
@@ -295,7 +354,7 @@ contract OperatorGrid is AccessControl {
         group.mintedShares -= amount_;
         vault.mintedShares -= amount_;
 
-        emit Burned(operator.groupId, operatorAddr, vaultAddr, amount_);
+        emit Burned(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vaultAddr, amount_);
     }
 
     /// @notice Get vault limits
@@ -314,16 +373,24 @@ contract OperatorGrid is AccessControl {
         uint256 treasuryFeeBP
     )
     {
-        uint256 vIdx = vaultIndex[vaultAddr];
-        if (vIdx == 0) revert VaultNotExists();
-        Vault memory v = vaults[vIdx];
+        ERC7201Storage storage $ = _getStorage();
 
-        Tier memory t = tiers[v.tierId];
+        uint256 vIdx = $.vaultIndex[vaultAddr];
+        if (vIdx == 0) revert VaultNotExists();
+        Vault memory v = $.vaults[vIdx];
+
+        Tier memory t = $.tiers[v.tierId];
 
         shareLimit = t.shareLimit;
         reserveRatioBP = t.reserveRatioBP;
         rebalanceThresholdBP = t.rebalanceThresholdBP;
         treasuryFeeBP = t.treasuryFeeBP;
+    }
+
+    function _getStorage() private pure returns (ERC7201Storage storage $) {
+        assembly {
+            $.slot := ERC7201_STORAGE_LOCATION
+        }
     }
 
     // -----------------------------
@@ -333,8 +400,8 @@ contract OperatorGrid is AccessControl {
     event GroupAdded(uint256 indexed groupId, uint256 shareLimit);
     event GroupShareLimitUpdated(uint256 indexed groupId, uint256 shareLimit);
     event TierAdded(uint256 indexed groupId, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFee);
-    event OperatorAdded(uint256 indexed groupId, address indexed operatorAddr);
-    event VaultAdded(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 tierId);
+    event NodeOperatorAdded(uint256 indexed groupId, address indexed nodeOperatorAddr);
+    event VaultAdded(uint256 indexed groupId, address indexed nodeOperatorAddr, address indexed vault, uint256 tierId);
     event Minted(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
     event Burned(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
 

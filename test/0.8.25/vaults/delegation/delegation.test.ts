@@ -9,6 +9,7 @@ import {
   DepositContract__MockForStakingVault,
   LidoLocator,
   OperatorGrid,
+  OssifiableProxy,
   StakingVault,
   StETH__MockForDelegation,
   UpgradeableBeacon,
@@ -63,6 +64,8 @@ describe("Delegation.sol", () => {
   let delegation: Delegation;
   let beacon: UpgradeableBeacon;
   let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let originalState: string;
 
@@ -102,7 +105,15 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
-    operatorGrid = await ethers.deployContract("OperatorGrid", [lidoLocator, dao]);
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [lidoLocator], { from: vaultOwner });
+    proxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [operatorGridImpl, vaultOwner, new Uint8Array()],
+      vaultOwner,
+    );
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, vaultOwner);
+    await operatorGrid.initialize(dao);
     await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
