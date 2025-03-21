@@ -420,18 +420,18 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
+        bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
+
+        _validatePubKeyWCProof(_witness, withdrawalCredentials);
+
         ERC7201Storage storage $ = _getStorage();
 
         if ($.validatorStatus[_witness.pubkey].stage != validatorStage.NONE) {
             revert ValidatorNotNew(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
         }
 
-        bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
-
         // sanity check that vault returns valid WC
         _validateWC(_stakingVault, withdrawalCredentials);
-
-        _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         $.validatorStatus[_witness.pubkey] = ValidatorStatus({
             stage: validatorStage.PROVEN,
