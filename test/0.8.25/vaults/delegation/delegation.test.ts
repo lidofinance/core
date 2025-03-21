@@ -17,7 +17,16 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  getNextBlockTimestamp,
+  impersonate,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -229,8 +238,8 @@ describe("Delegation.sol", () => {
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
       expect(await delegation.curatorUnclaimedFee()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
-      expect(await delegation.curatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
-      expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
+      expect(await delegation.curatorFeeClaimedReport()).to.deep.equal([0n, 0n, 0n]);
+      expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n, 0n]);
     });
   });
 
@@ -298,7 +307,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.curatorFeeBP()).to.equal(curatorFee);
 
       const rewards = ether("1");
-      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
 
       const expectedDue = (rewards * curatorFee) / BP_BASE;
       expect(await delegation.curatorUnclaimedFee()).to.equal(expectedDue);
@@ -345,7 +354,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.nodeOperatorFeeBP()).to.equal(operatorFee);
 
       const rewards = ether("1");
-      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
 
       const expectedDue = (rewards * operatorFee) / BP_BASE;
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
@@ -373,7 +382,7 @@ describe("Delegation.sol", () => {
       const valuation = ether("2");
       const inOutDelta = 0n;
       const locked = ether("3");
-      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
 
       expect(await delegation.unreserved()).to.equal(0n);
     });
@@ -393,7 +402,7 @@ describe("Delegation.sol", () => {
 
       const amount = ether("1");
       await delegation.connect(funder).fund({ value: amount });
-      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
 
       expect(await delegation.withdrawableEther()).to.equal(amount);
     });
@@ -411,7 +420,7 @@ describe("Delegation.sol", () => {
 
       await delegation.connect(funder).fund({ value: amount });
 
-      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
       const unreserved = await delegation.unreserved();
 
       expect(await delegation.withdrawableEther()).to.equal(unreserved);
@@ -477,7 +486,7 @@ describe("Delegation.sol", () => {
 
     it("withdraws the amount", async () => {
       const amount = ether("1");
-      await vault.connect(hubSigner).report(amount, 0n, 0n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
       expect(await vault.valuation()).to.equal(amount);
       expect(await vault.unlocked()).to.equal(amount);
 
@@ -578,7 +587,7 @@ describe("Delegation.sol", () => {
       const totalRewards = ether("1");
       const inOutDelta = 0n;
       const locked = 0n;
-      await vault.connect(hubSigner).report(totalRewards, inOutDelta, locked);
+      await vault.connect(hubSigner).report(0n, totalRewards, inOutDelta, locked);
       expect(await delegation.curatorUnclaimedFee()).to.equal((totalRewards * newCuratorFee) / BP_BASE);
 
       // attempt to change the performance fee to 6%
@@ -623,7 +632,7 @@ describe("Delegation.sol", () => {
       const totalRewards = ether("1");
       const inOutDelta = 0n;
       const locked = 0n;
-      await vault.connect(hubSigner).report(totalRewards, inOutDelta, locked);
+      await vault.connect(hubSigner).report(0n, totalRewards, inOutDelta, locked);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal((totalRewards * newOperatorFee) / BP_BASE);
 
       // attempt to change the performance fee to 6%

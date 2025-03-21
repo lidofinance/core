@@ -118,7 +118,7 @@ describe("VaultHub.sol:forceExit", () => {
   const makeVaultUnhealthy = async () => {
     await vault.fund({ value: ether("1") });
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
-    await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+    await vault.connect(vaultHubSigner).report(0n, ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
   context("forceValidatorExit", () => {
@@ -236,7 +236,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       expect(predictedLockedEther).to.equal(rebase.lockedEther[1]);
 
-      await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
+      await demoVault.report(0n, valuation - penalty, valuation, rebase.lockedEther[1]);
 
       expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
 

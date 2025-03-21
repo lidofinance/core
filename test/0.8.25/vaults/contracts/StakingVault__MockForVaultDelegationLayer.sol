@@ -10,7 +10,7 @@ contract StakingVault__MockForVaultDelegationLayer is OwnableUpgradeable {
     address public constant vaultHub = address(0xABCD);
 
     function latestReport() public pure returns (IStakingVault.Report memory) {
-        return IStakingVault.Report({valuation: 1 ether, inOutDelta: 0});
+        return IStakingVault.Report({timestamp: 1, valuation: 1 ether, inOutDelta: 0});
     }
 
     constructor() {

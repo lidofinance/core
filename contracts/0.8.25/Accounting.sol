@@ -70,10 +70,6 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
-        /// @notice amount of ether to be locked in the vaults
-        uint256[] vaultsLockedEther;
-        /// @notice amount of shares to be minted as vault fees to the treasury
-        uint256[] vaultsTreasuryFeeShares;
         /// @notice total amount of shares to be minted as vault fees to the treasury
         uint256 totalVaultsTreasuryFeeShares;
     }
@@ -221,15 +217,15 @@ contract Accounting {
 
         // Calculate the amount of ether locked in the vaults to back external balance of stETH
         // and the amount of shares to mint as fees to the treasury for each vault
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
-            _contracts.vaultHub.calculateVaultsRebase(
-                _report.vaultValues,
-                _pre.totalShares,
-                _pre.totalPooledEther,
-                update.postInternalShares,
-                update.postInternalEther,
-                update.sharesToMintAsFees
-            );
+        // (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares) =
+        //     _contracts.vaultHub.calculateVaultsRebase(
+        //         _report.vaultValues,
+        //         _pre.totalShares,
+        //         _pre.totalPooledEther,
+        //         update.postInternalShares,
+        //         update.postInternalEther,
+        //         update.sharesToMintAsFees
+        //     );
 
         uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
 
@@ -328,13 +324,18 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        // TODO: Remove this once decide on vaults reporting
-        _contracts.vaultHub.updateVaults(
-            _report.vaultValues,
-            _report.inOutDeltas,
-            _update.vaultsLockedEther,
-            _update.vaultsTreasuryFeeShares
+        _contracts.vaultHub.updateVaultsData(
+            _report.timestamp,
+            _report.vaultsDataTreeRoot,
+            _report.vaultsDataTreeCid
         );
+        // TODO: Remove this once decide on vaults reporting
+        // _contracts.vaultHub.updateVaults(
+        //     _report.vaultValues,
+        //     _report.inOutDeltas,
+        //     _update.vaultsLockedEther,
+        //     _update.vaultsTreasuryFeeShares
+        // );
 
         if (_update.totalVaultsTreasuryFeeShares > 0) {
             _contracts.vaultHub.mintVaultsTreasuryFeeShares(_update.totalVaultsTreasuryFeeShares);
