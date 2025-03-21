@@ -8,6 +8,7 @@ import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonAp
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {IBurner} from "../common/interfaces/IBurner.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
@@ -210,10 +211,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
-        // set infinite allowance for burner from withdrawal queue
-        // to burn finalized requests' shares
-        _approve(ILidoLocator(_lidoLocator).withdrawalQueue(), ILidoLocator(_lidoLocator).burner(), INFINITE_ALLOWANCE);
-
         _initialize_v3();
         initialized();
     }
@@ -222,12 +219,39 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     * @param _oldBurner The address of the old Burner contract to migrate from
      */
-    function finalizeUpgrade_v3() external {
+    function finalizeUpgrade_v3(address _oldBurner, address _simpleDvt, address _nodeOperatorsRegistry, address _csmAccounting) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
+        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
+        require(_oldBurner != getLidoLocator().burner(), "OLD_BURNER_SAME_AS_NEW");
 
         _initialize_v3();
+
+        // migrate burner stETH balance
+        address burner = getLidoLocator().burner();
+        uint256 oldBurnerShares = _sharesOf(_oldBurner);
+        if (oldBurnerShares > 0) {
+            _transferShares(_oldBurner, burner, oldBurnerShares);
+            _emitTransferEvents(_oldBurner, burner, oldBurnerShares, oldBurnerShares);
+        }
+
+        // initialize new burner with state from the old burner
+        IBurner(burner).migrate(_oldBurner);
+
+        // revoke allowances for the old burner
+        _approve(getLidoLocator().withdrawalQueue(), _oldBurner, 0);
+        _approve(_simpleDvt, _oldBurner, 0);
+        _approve(_nodeOperatorsRegistry, _oldBurner, 0);
+        _approve(_csmAccounting, _oldBurner, 0);
+
+        // set allowances to new burner
+        _approve(_simpleDvt, burner, INFINITE_ALLOWANCE);
+        _approve(_nodeOperatorsRegistry, burner, INFINITE_ALLOWANCE);
+        _approve(_csmAccounting, burner, INFINITE_ALLOWANCE);
+        // NB: allowances for withdrawalQueue and accounting are set in _initialize_v3()
+        //     because they are required upon scratch deployment as well
     }
 
     /**
@@ -235,6 +259,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function _initialize_v3() internal {
         _setContractVersion(3);
+
+        // Set approvals for the burner
+        address burner = getLidoLocator().burner();
+        _approve(getLidoLocator().withdrawalQueue(), burner, INFINITE_ALLOWANCE);
+        _approve(getLidoLocator().accounting(), burner, INFINITE_ALLOWANCE);
+        // NB: allowances for simpleDvt and nodeOperatorsRegistry are not set here
+        //     because NodeOperatorsRegistry sets it itself upon scratch deployment
     }
 
     /**

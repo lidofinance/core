@@ -70,9 +70,9 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     /// @notice limit for the number of vaults that can ever be connected to the vault hub
-    uint256 private immutable CONNECTED_VAULTS_LIMIT;
+    uint256 public immutable CONNECTED_VAULTS_LIMIT;
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
-    uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
+    uint256 public immutable RELATIVE_SHARE_LIMIT_BP;
 
     /// @notice Lido stETH contract
     ILido public immutable LIDO;
@@ -89,6 +89,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
     ) {
+        // TODO: make it Versioned?
         if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)

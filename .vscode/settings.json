@@ -4,5 +4,24 @@
     "source.fixAll.eslint": "always"
   },
   "solidity.defaultCompiler": "remote",
-  "cSpell.words": ["IETHRegistrarController", "sealables", "streccak", "TmplAppInstalled", "TmplDAOAndTokenDeployed"]
+  "cSpell.words": [
+    "automine",
+    "Codehash",
+    "disconnecters",
+    "funders",
+    "IETHRegistrarController",
+    "mintable",
+    "permissionless",
+    "postdeposits",
+    "predeposit",
+    "predeposits",
+    "rebalancers",
+    "sdvt",
+    "sealables",
+    "streccak",
+    "TmplAppInstalled",
+    "TmplDAOAndTokenDeployed",
+    "Triggerers",
+    "withdrawers"
+  ]
 }

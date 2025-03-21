@@ -50,14 +50,13 @@ export async function deployUpgrade(networkName: string): Promise<void> {
     networkName = "mainnet-fork";
   }
 
+  const stepsFile = `upgrade/steps-upgrade-for-tests.json`;
   try {
-    const stepsFile = `upgrade/steps-${networkName}.json`;
     const steps = loadSteps(stepsFile);
-
     await applySteps(steps);
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
-      log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+      log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
     } else {
       log.error("Upgrade failed:", (error as Error).message);
     }
