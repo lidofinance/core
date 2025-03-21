@@ -555,7 +555,7 @@ contract VaultHub is PausableUntilWithRoles {
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
         bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _locked));
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _locked))));
         if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
