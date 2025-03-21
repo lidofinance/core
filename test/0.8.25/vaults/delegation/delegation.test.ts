@@ -8,6 +8,8 @@ import {
   Delegation,
   DepositContract__MockForStakingVault,
   LidoLocator,
+  OperatorGrid,
+  OssifiableProxy,
   StakingVault,
   StETH__MockForDelegation,
   UpgradeableBeacon,
@@ -42,7 +44,7 @@ describe("Delegation.sol", () => {
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
-
+  let dao: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
@@ -61,6 +63,9 @@ describe("Delegation.sol", () => {
   let vault: StakingVault;
   let delegation: Delegation;
   let beacon: UpgradeableBeacon;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let originalState: string;
 
@@ -85,6 +90,7 @@ describe("Delegation.sol", () => {
       beaconOwner,
       rewarder,
       vaultDepositor,
+      dao,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
@@ -99,16 +105,32 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [lidoLocator], { from: vaultOwner });
+    proxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [operatorGridImpl, vaultOwner, new Uint8Array()],
+      vaultOwner,
+    );
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, vaultOwner);
+    await operatorGrid.initialize(dao);
+    await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
+
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, vaultDepositor, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    factory = await ethers.deployContract("VaultFactory", [beacon, delegationImpl, operatorGrid]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+    expect(await factory.OPERATOR_GRID()).to.equal(operatorGrid);
+
+    await operatorGrid.connect(dao).registerGroup(1, ether("1000"));
+    await operatorGrid.connect(dao).registerTier(1, 1, ether("1000"), 1000n, 1000n, 1000n);
+    await operatorGrid.connect(dao)["registerOperator(address)"](nodeOperatorManager);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
