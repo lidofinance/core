@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3064"  lines-covered="2987"  line-rate="0.9749"  branches-valid="1348"  branches-covered="1302"  branch-rate="0.9659"  timestamp="1742553215445" complexity="0" version="0.1">
+<coverage lines-valid="3064"  lines-covered="2987"  line-rate="0.9749"  branches-valid="1348"  branches-covered="1302"  branch-rate="0.9659"  timestamp="1742560440038" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1797,6 +1797,12 @@
 	</package>
 	<package name="0.8.25.lib"  line-rate="0"  branch-rate="0" >
 	<classes>
+		<class name="BeaconTypes.sol"  filename="contracts/0.8.25/lib/BeaconTypes.sol"  line-rate="1"  branch-rate="1" >
+		<methods>
+		</methods>
+		<lines>
+		</lines>
+		</class>
 		<class name="GIndex.sol"  filename="contracts/0.8.25/lib/GIndex.sol"  line-rate="0"  branch-rate="0" >
 		<methods>
 			<method name="pack"  hits="0"  signature="()V" >
@@ -1903,12 +1909,6 @@
 			<line number="260"  hits="0"  branch="false" />
 			<line number="261"  hits="0"  branch="false" />
 			<line number="265"  hits="0"  branch="false" />
-		</lines>
-		</class>
-		<class name="Types.sol"  filename="contracts/0.8.25/lib/Types.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-		</methods>
-		<lines>
 		</lines>
 		</class>
 	</classes>
