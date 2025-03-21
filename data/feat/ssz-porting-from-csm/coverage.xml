@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3064"  lines-covered="2987"  line-rate="0.9749"  branches-valid="1348"  branches-covered="1302"  branch-rate="0.9659"  timestamp="1742552396702" complexity="0" version="0.1">
+<coverage lines-valid="3064"  lines-covered="2987"  line-rate="0.9749"  branches-valid="1348"  branches-covered="1302"  branch-rate="0.9659"  timestamp="1742553215445" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1800,109 +1800,109 @@
 		<class name="GIndex.sol"  filename="contracts/0.8.25/lib/GIndex.sol"  line-rate="0"  branch-rate="0" >
 		<methods>
 			<method name="pack"  hits="0"  signature="()V" >
-				<lines><line number="15"  hits="0" /></lines>
+				<lines><line number="20"  hits="0" /></lines>
 			</method>
 			<method name="unwrap"  hits="0"  signature="()V" >
-				<lines><line number="24"  hits="0" /></lines>
+				<lines><line number="29"  hits="0" /></lines>
 			</method>
 			<method name="isRoot"  hits="0"  signature="()V" >
-				<lines><line number="28"  hits="0" /></lines>
+				<lines><line number="33"  hits="0" /></lines>
 			</method>
 			<method name="index"  hits="0"  signature="()V" >
-				<lines><line number="32"  hits="0" /></lines>
+				<lines><line number="37"  hits="0" /></lines>
 			</method>
 			<method name="width"  hits="0"  signature="()V" >
-				<lines><line number="36"  hits="0" /></lines>
+				<lines><line number="41"  hits="0" /></lines>
 			</method>
 			<method name="pow"  hits="0"  signature="()V" >
-				<lines><line number="40"  hits="0" /></lines>
-			</method>
-			<method name="shr"  hits="0"  signature="()V" >
 				<lines><line number="45"  hits="0" /></lines>
 			</method>
+			<method name="shr"  hits="0"  signature="()V" >
+				<lines><line number="50"  hits="0" /></lines>
+			</method>
 			<method name="shl"  hits="0"  signature="()V" >
-				<lines><line number="57"  hits="0" /></lines>
+				<lines><line number="62"  hits="0" /></lines>
 			</method>
 			<method name="concat"  hits="0"  signature="()V" >
-				<lines><line number="69"  hits="0" /></lines>
+				<lines><line number="74"  hits="0" /></lines>
 			</method>
 			<method name="isParentOf"  hits="0"  signature="()V" >
-				<lines><line number="80"  hits="0" /></lines>
+				<lines><line number="85"  hits="0" /></lines>
 			</method>
 			<method name="fls"  hits="0"  signature="()V" >
-				<lines><line number="104"  hits="0" /></lines>
+				<lines><line number="109"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="16"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="17"  hits="0"  branch="false" />
-			<line number="21"  hits="0"  branch="false" />
-			<line number="25"  hits="0"  branch="false" />
-			<line number="29"  hits="0"  branch="false" />
-			<line number="33"  hits="0"  branch="false" />
-			<line number="37"  hits="0"  branch="false" />
-			<line number="41"  hits="0"  branch="false" />
+			<line number="21"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="22"  hits="0"  branch="false" />
+			<line number="26"  hits="0"  branch="false" />
+			<line number="30"  hits="0"  branch="false" />
+			<line number="34"  hits="0"  branch="false" />
+			<line number="38"  hits="0"  branch="false" />
+			<line number="42"  hits="0"  branch="false" />
 			<line number="46"  hits="0"  branch="false" />
-			<line number="47"  hits="0"  branch="false" />
-			<line number="49"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="50"  hits="0"  branch="false" />
-			<line number="53"  hits="0"  branch="false" />
+			<line number="51"  hits="0"  branch="false" />
+			<line number="52"  hits="0"  branch="false" />
+			<line number="54"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="55"  hits="0"  branch="false" />
 			<line number="58"  hits="0"  branch="false" />
-			<line number="59"  hits="0"  branch="false" />
-			<line number="61"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="62"  hits="0"  branch="false" />
-			<line number="65"  hits="0"  branch="false" />
+			<line number="63"  hits="0"  branch="false" />
+			<line number="64"  hits="0"  branch="false" />
+			<line number="66"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="67"  hits="0"  branch="false" />
 			<line number="70"  hits="0"  branch="false" />
-			<line number="71"  hits="0"  branch="false" />
-			<line number="73"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="74"  hits="0"  branch="false" />
-			<line number="77"  hits="0"  branch="false" />
-			<line number="81"  hits="0"  branch="false" />
+			<line number="75"  hits="0"  branch="false" />
+			<line number="76"  hits="0"  branch="false" />
+			<line number="78"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="79"  hits="0"  branch="false" />
 			<line number="82"  hits="0"  branch="false" />
-			<line number="84"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="88"  hits="0"  branch="false" />
+			<line number="86"  hits="0"  branch="false" />
+			<line number="87"  hits="0"  branch="false" />
 			<line number="89"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="90"  hits="0"  branch="false" />
 			<line number="93"  hits="0"  branch="false" />
-			<line number="96"  hits="0"  branch="false" />
-			<line number="106"  hits="0"  branch="false" />
+			<line number="94"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="95"  hits="0"  branch="false" />
+			<line number="98"  hits="0"  branch="false" />
+			<line number="101"  hits="0"  branch="false" />
+			<line number="111"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="SSZ.sol"  filename="contracts/0.8.25/lib/SSZ.sol"  line-rate="0"  branch-rate="1" >
 		<methods>
 			<method name="hashTreeRoot"  hits="0"  signature="()V" >
-				<lines><line number="14"  hits="0" /></lines>
+				<lines><line number="19"  hits="0" /></lines>
 			</method>
 			<method name="hashTreeRoot"  hits="0"  signature="()V" >
-				<lines><line number="82"  hits="0" /></lines>
+				<lines><line number="87"  hits="0" /></lines>
 			</method>
 			<method name="verifyProof"  hits="0"  signature="()V" >
-				<lines><line number="172"  hits="0" /></lines>
+				<lines><line number="177"  hits="0" /></lines>
 			</method>
 			<method name="toLittleEndian"  hits="0"  signature="()V" >
-				<lines><line number="242"  hits="0" /></lines>
+				<lines><line number="247"  hits="0" /></lines>
 			</method>
 			<method name="toLittleEndian"  hits="0"  signature="()V" >
-				<lines><line number="259"  hits="0" /></lines>
+				<lines><line number="264"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="15"  hits="0"  branch="false" />
-			<line number="27"  hits="0"  branch="false" />
-			<line number="83"  hits="0"  branch="false" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="103"  hits="0"  branch="false" />
-			<line number="115"  hits="0"  branch="false" />
-			<line number="173"  hits="0"  branch="false" />
-			<line number="176"  hits="0"  branch="false" />
-			<line number="243"  hits="0"  branch="false" />
-			<line number="246"  hits="0"  branch="false" />
-			<line number="249"  hits="0"  branch="false" />
-			<line number="252"  hits="0"  branch="false" />
-			<line number="255"  hits="0"  branch="false" />
-			<line number="256"  hits="0"  branch="false" />
+			<line number="20"  hits="0"  branch="false" />
+			<line number="32"  hits="0"  branch="false" />
+			<line number="88"  hits="0"  branch="false" />
+			<line number="90"  hits="0"  branch="false" />
+			<line number="108"  hits="0"  branch="false" />
+			<line number="120"  hits="0"  branch="false" />
+			<line number="178"  hits="0"  branch="false" />
+			<line number="181"  hits="0"  branch="false" />
+			<line number="248"  hits="0"  branch="false" />
+			<line number="251"  hits="0"  branch="false" />
+			<line number="254"  hits="0"  branch="false" />
+			<line number="257"  hits="0"  branch="false" />
 			<line number="260"  hits="0"  branch="false" />
+			<line number="261"  hits="0"  branch="false" />
+			<line number="265"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="Types.sol"  filename="contracts/0.8.25/lib/Types.sol"  line-rate="1"  branch-rate="1" >
