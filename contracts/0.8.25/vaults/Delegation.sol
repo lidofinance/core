@@ -20,16 +20,6 @@ contract Delegation is Dashboard {
     uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
 
     /**
-     * @notice Sets curator fee.
-     */
-    bytes32 public constant CURATOR_FEE_SET_ROLE = keccak256("vaults.Delegation.CuratorFeeSetRole");
-
-    /**
-     * @notice Claims curator fee.
-     */
-    bytes32 public constant CURATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.CuratorFeeClaimRole");
-
-    /**
      * @notice Node operator manager role:
      * - confirms confirm expiry;
      * - confirms ownership transfer;
@@ -42,17 +32,6 @@ contract Delegation is Dashboard {
      * @notice Claims node operator fee.
      */
     bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
-
-    /**
-     * @notice Curator fee in basis points; combined with node operator fee cannot exceed 100%.
-     * The curator's unclaimed fee in ether is returned by `curatorUnclaimedFee()`.
-     */
-    uint256 public curatorFeeBP;
-
-    /**
-     * @notice The last report for which curator fee was claimed. Updated on each claim.
-     */
-    IStakingVault.Report public curatorFeeClaimedReport;
 
     /**
      * @notice Node operator fee in basis points; combined with curator fee cannot exceed 100%, or 10,000 basis points.
@@ -93,20 +72,6 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Returns the accumulated unclaimed curator fee in ether,
-     * calculated as: U = (R * F) / T
-     * where:
-     * - U is the curator unclaimed fee;
-     * - R is the StakingVault rewards accrued since the last curator fee claim;
-     * - F is `curatorFeeBP`;
-     * - T is the total basis points, 10,000.
-     * @return uint256: the amount of unclaimed fee in ether.
-     */
-    function curatorUnclaimedFee() public view returns (uint256) {
-        return _calculateFee(curatorFeeBP, curatorFeeClaimedReport);
-    }
-
-    /**
      * @notice Returns the accumulated unclaimed node operator fee in ether,
      * calculated as: U = (R * F) / T
      * where:
@@ -129,7 +94,7 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + curatorUnclaimedFee() + nodeOperatorUnclaimedFee();
+        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
         uint256 valuation = stakingVault().valuation();
 
         return reserved > valuation ? 0 : valuation - reserved;
@@ -156,22 +121,6 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Sets the curator fee.
-     * The curator fee is the percentage (in basis points) of curator's share of the StakingVault rewards.
-     * The curator and node operator fees combined cannot exceed 100%, or 10,000 basis points.
-     * The function will revert if the curator fee is unclaimed.
-     * @param _newCuratorFeeBP The new curator fee in basis points.
-     */
-    function setCuratorFeeBP(uint256 _newCuratorFeeBP) external onlyRole(CURATOR_FEE_SET_ROLE) {
-        if (_newCuratorFeeBP + nodeOperatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
-        if (curatorUnclaimedFee() > 0) revert CuratorFeeUnclaimed();
-        uint256 oldCuratorFeeBP = curatorFeeBP;
-        curatorFeeBP = _newCuratorFeeBP;
-
-        emit CuratorFeeBPSet(msg.sender, oldCuratorFeeBP, _newCuratorFeeBP);
-    }
-
-    /**
      * @notice Sets the node operator fee.
      * The node operator fee is the percentage (in basis points) of node operator's share of the StakingVault rewards.
      * The node operator fee combined with the curator fee cannot exceed 100%.
@@ -180,22 +129,12 @@ contract Delegation is Dashboard {
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(_confirmingRoles()) {
-        if (_newNodeOperatorFeeBP + curatorFeeBP > MAX_FEE_BP) revert CombinedFeesExceed100Percent();
+        if (_newNodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
         emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
-    }
-
-    /**
-     * @notice Claims the curator fee.
-     * @param _recipient The address to which the curator fee will be sent.
-     */
-    function claimCuratorFee(address _recipient) external onlyRole(CURATOR_FEE_CLAIM_ROLE) {
-        uint256 fee = curatorUnclaimedFee();
-        curatorFeeClaimedReport = stakingVault().latestReport();
-        _claimFee(_recipient, fee);
     }
 
     /**
@@ -279,23 +218,11 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @dev Emitted when the curator fee is set.
-     * @param oldCuratorFeeBP The old curator fee.
-     * @param newCuratorFeeBP The new curator fee.
-     */
-    event CuratorFeeBPSet(address indexed sender, uint256 oldCuratorFeeBP, uint256 newCuratorFeeBP);
-
-    /**
      * @dev Emitted when the node operator fee is set.
      * @param oldNodeOperatorFeeBP The old node operator fee.
      * @param newNodeOperatorFeeBP The new node operator fee.
      */
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
-
-    /**
-     * @dev Error emitted when the curator fee is unclaimed.
-     */
-    error CuratorFeeUnclaimed();
 
     /**
      * @dev Error emitted when the node operator fee is unclaimed.
@@ -305,7 +232,7 @@ contract Delegation is Dashboard {
     /**
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
-    error CombinedFeesExceed100Percent();
+    error FeeValueExceed100Percent();
 
     /**
      * @dev Error emitted when the requested amount exceeds the unreserved amount.
