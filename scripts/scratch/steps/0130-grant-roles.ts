@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { Accounting, Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import { Burner, StakingRouter, ValidatorsExitBusOracle, VaultHub, WithdrawalQueueERC721 } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -23,6 +23,7 @@ export async function main() {
   const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -94,12 +95,12 @@ export async function main() {
     from: deployer,
   });
 
-  // Accounting
-  const accounting = await loadContract<Accounting>("Accounting", accountingAddress);
-  await makeTx(accounting, "grantRole", [await accounting.VAULT_MASTER_ROLE(), agentAddress], {
+  // VaultHub
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
     from: deployer,
   });
-  await makeTx(accounting, "grantRole", [await accounting.VAULT_REGISTRY_ROLE(), deployer], {
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_REGISTRY_ROLE(), deployer], {
     from: deployer,
   });
 }

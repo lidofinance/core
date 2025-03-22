@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-// solhint-disable-next-line
-pragma solidity >=0.4.24 <0.9.0;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.9;
 
 struct ReportValues {
     /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
@@ -27,7 +27,6 @@ struct ReportValues {
     ///         (sum of all the balances of Lido validators of the vault
     ///          plus the balance of the vault itself)
     uint256[] vaultValues;
-    /// @notice netCashFlow of each Lido vault
-    ///         (difference between deposits to and withdrawals from the vault)
-    int256[] netCashFlows;
+    /// @notice in-out deltas (deposits - withdrawals) of each Lido vault
+    int256[] inOutDeltas;
 }

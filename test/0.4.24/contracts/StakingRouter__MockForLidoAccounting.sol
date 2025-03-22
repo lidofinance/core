@@ -30,7 +30,7 @@ contract StakingRouter__MockForLidoAccounting {
         precisionPoints = precisionPoint__mocked;
     }
 
-    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external {
+    function reportRewardsMinted(uint256[] calldata, uint256[] calldata) external {
         emit Mock__MintedRewardsReported();
     }
 

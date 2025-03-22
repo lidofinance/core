@@ -87,11 +87,14 @@ export enum Sk {
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
+  vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
   // Vaults
+  predepositGuarantee = "predepositGuarantee",
   stakingVaultImpl = "stakingVaultImpl",
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
+  stakingVaultBeacon = "stakingVaultBeacon",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

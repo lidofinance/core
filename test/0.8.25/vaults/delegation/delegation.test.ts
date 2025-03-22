@@ -7,8 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   Delegation,
   DepositContract__MockForStakingVault,
+  LidoLocator,
   StakingVault,
   StETH__MockForDelegation,
+  UpgradeableBeacon,
   VaultFactory,
   VaultHub__MockForDelegation,
   WETH9__MockForVault,
@@ -17,6 +19,7 @@ import {
 
 import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BP_BASE = 10000n;
@@ -24,17 +27,29 @@ const MAX_FEE = BP_BASE;
 
 describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
-  let curator: HardhatEthersSigner;
-  let staker: HardhatEthersSigner;
-  let tokenMaster: HardhatEthersSigner;
-  let operator: HardhatEthersSigner;
-  let claimOperatorDueRole: HardhatEthersSigner;
+  let funder: HardhatEthersSigner;
+  let withdrawer: HardhatEthersSigner;
+  let minter: HardhatEthersSigner;
+  let burner: HardhatEthersSigner;
+  let rebalancer: HardhatEthersSigner;
+  let depositPauser: HardhatEthersSigner;
+  let depositResumer: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalTriggerer: HardhatEthersSigner;
+  let disconnecter: HardhatEthersSigner;
+  let curatorFeeSetter: HardhatEthersSigner;
+  let curatorFeeClaimer: HardhatEthersSigner;
+  let nodeOperatorManager: HardhatEthersSigner;
+  let nodeOperatorFeeClaimer: HardhatEthersSigner;
+  let vaultDepositor: HardhatEthersSigner;
+
   let stranger: HardhatEthersSigner;
-  let factoryOwner: HardhatEthersSigner;
+  let beaconOwner: HardhatEthersSigner;
   let hubSigner: HardhatEthersSigner;
   let rewarder: HardhatEthersSigner;
   const recipient = certainAddress("some-recipient");
 
+  let lidoLocator: LidoLocator;
   let steth: StETH__MockForDelegation;
   let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
@@ -45,41 +60,80 @@ describe("Delegation.sol", () => {
   let factory: VaultFactory;
   let vault: StakingVault;
   let delegation: Delegation;
+  let beacon: UpgradeableBeacon;
 
   let originalState: string;
 
   before(async () => {
-    [vaultOwner, curator, staker, tokenMaster, operator, claimOperatorDueRole, stranger, factoryOwner, rewarder] =
-      await ethers.getSigners();
+    [
+      vaultOwner,
+      funder,
+      withdrawer,
+      minter,
+      burner,
+      rebalancer,
+      depositPauser,
+      depositResumer,
+      validatorExitRequester,
+      validatorWithdrawalTriggerer,
+      disconnecter,
+      curatorFeeSetter,
+      curatorFeeClaimer,
+      nodeOperatorManager,
+      nodeOperatorFeeClaimer,
+      stranger,
+      beaconOwner,
+      rewarder,
+      vaultDepositor,
+    ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
 
-    delegationImpl = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
+
+    delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
     expect(await delegationImpl.STETH()).to.equal(steth);
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, vaultDepositor, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
-    factory = await ethers.deployContract("VaultFactory", [
-      factoryOwner,
-      vaultImpl.getAddress(),
-      delegationImpl.getAddress(),
-    ]);
-    expect(await factory.implementation()).to.equal(vaultImpl);
-    expect(await factory.delegationImpl()).to.equal(delegationImpl);
+    beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    const vaultCreationTx = await factory
-      .connect(vaultOwner)
-      .createVault(
-        { curator, staker, tokenMaster, operator, claimOperatorDueRole, curatorFee: 0n, operatorFee: 0n },
-        "0x",
-      );
+    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    expect(await beacon.implementation()).to.equal(vaultImpl);
+    expect(await factory.BEACON()).to.equal(beacon);
+    expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+
+    const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
+      {
+        defaultAdmin: vaultOwner,
+        nodeOperatorManager,
+        confirmExpiry: days(7n),
+        curatorFeeBP: 0n,
+        nodeOperatorFeeBP: 0n,
+        assetRecoverer: vaultOwner,
+        funders: [funder],
+        withdrawers: [withdrawer],
+        minters: [minter],
+        burners: [burner],
+        rebalancers: [rebalancer],
+        depositPausers: [depositPauser],
+        depositResumers: [depositResumer],
+        validatorExitRequesters: [validatorExitRequester],
+        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
+        disconnecters: [disconnecter],
+        curatorFeeSetters: [curatorFeeSetter],
+        curatorFeeClaimers: [curatorFeeClaimer],
+        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
+      },
+      "0x",
+    );
 
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation receipt not found");
@@ -89,7 +143,6 @@ describe("Delegation.sol", () => {
 
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
-    expect(await vault.getBeacon()).to.equal(factory);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);
@@ -111,156 +164,152 @@ describe("Delegation.sol", () => {
 
   context("constructor", () => {
     it("reverts if stETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, weth, wsteth]))
+      await expect(ethers.deployContract("Delegation", [weth, ethers.ZeroAddress]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_stETH");
+        .withArgs("_lidoLocator");
     });
 
     it("reverts if wETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, ethers.ZeroAddress, wsteth]))
+      await expect(ethers.deployContract("Delegation", [ethers.ZeroAddress, lidoLocator]))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_WETH");
-    });
-
-    it("reverts if wstETH is zero address", async () => {
-      await expect(ethers.deployContract("Delegation", [steth, weth, ethers.ZeroAddress]))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_wstETH");
+        .withArgs("_wETH");
     });
 
     it("sets the stETH address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
       expect(await delegation_.STETH()).to.equal(steth);
+      expect(await delegation_.WETH()).to.equal(weth);
+      expect(await delegation_.WSTETH()).to.equal(wsteth);
     });
   });
 
   context("initialize", () => {
-    it("reverts if staking vault is zero address", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
-
-      await expect(delegation_.initialize(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(delegation_, "ZeroArgument")
-        .withArgs("_stakingVault");
-    });
-
     it("reverts if already initialized", async () => {
-      await expect(delegation.initialize(vault)).to.be.revertedWithCustomError(delegation, "AlreadyInitialized");
+      await expect(delegation.initialize(vaultOwner, days(7n))).to.be.revertedWithCustomError(
+        delegation,
+        "AlreadyInitialized",
+      );
     });
 
     it("reverts if called on the implementation", async () => {
-      const delegation_ = await ethers.deployContract("Delegation", [steth, weth, wsteth]);
+      const delegation_ = await ethers.deployContract("Delegation", [weth, lidoLocator]);
 
-      await expect(delegation_.initialize(vault)).to.be.revertedWithCustomError(delegation_, "NonProxyCallsForbidden");
+      await expect(delegation_.initialize(vaultOwner, days(7n))).to.be.revertedWithCustomError(
+        delegation_,
+        "NonProxyCallsForbidden",
+      );
     });
   });
 
   context("initialized state", () => {
     it("initializes the contract correctly", async () => {
       expect(await vault.owner()).to.equal(delegation);
-      expect(await vault.operator()).to.equal(operator);
+      expect(await vault.nodeOperator()).to.equal(nodeOperatorManager);
 
       expect(await delegation.stakingVault()).to.equal(vault);
       expect(await delegation.vaultHub()).to.equal(hub);
 
-      expect(await delegation.hasRole(await delegation.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.DEFAULT_ADMIN_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.CURATOR_ROLE(), curator)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.CURATOR_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.STAKER_ROLE(), staker)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.STAKER_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.TOKEN_MASTER_ROLE(), tokenMaster)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.TOKEN_MASTER_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.OPERATOR_ROLE(), operator)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.OPERATOR_ROLE())).to.equal(1);
-      expect(await delegation.hasRole(await delegation.CLAIM_OPERATOR_DUE_ROLE(), claimOperatorDueRole)).to.be.true;
-      expect(await delegation.getRoleMemberCount(await delegation.CLAIM_OPERATOR_DUE_ROLE())).to.equal(1);
+      await assertSoleMember(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE());
+      await assertSoleMember(funder, await delegation.FUND_ROLE());
+      await assertSoleMember(withdrawer, await delegation.WITHDRAW_ROLE());
+      await assertSoleMember(minter, await delegation.MINT_ROLE());
+      await assertSoleMember(burner, await delegation.BURN_ROLE());
+      await assertSoleMember(rebalancer, await delegation.REBALANCE_ROLE());
+      await assertSoleMember(depositPauser, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
+      await assertSoleMember(depositResumer, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
+      await assertSoleMember(validatorExitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
+      await assertSoleMember(validatorWithdrawalTriggerer, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
+      await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
+      await assertSoleMember(curatorFeeSetter, await delegation.CURATOR_FEE_SET_ROLE());
+      await assertSoleMember(curatorFeeClaimer, await delegation.CURATOR_FEE_CLAIM_ROLE());
+      await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
+      await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
 
-      expect(await delegation.curatorFee()).to.equal(0n);
-      expect(await delegation.operatorFee()).to.equal(0n);
-      expect(await delegation.curatorDue()).to.equal(0n);
-      expect(await delegation.operatorDue()).to.equal(0n);
-      expect(await delegation.curatorDueClaimedReport()).to.deep.equal([0n, 0n]);
-      expect(await delegation.operatorDueClaimedReport()).to.deep.equal([0n, 0n]);
+      expect(await delegation.curatorFeeBP()).to.equal(0n);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
+      expect(await delegation.curatorUnclaimedFee()).to.equal(0n);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
+      expect(await delegation.curatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
+      expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
     });
   });
 
-  context("votingCommittee", () => {
+  context("confirmingRoles", () => {
     it("returns the correct roles", async () => {
-      expect(await delegation.votingCommittee()).to.deep.equal([
-        await delegation.CURATOR_ROLE(),
-        await delegation.OPERATOR_ROLE(),
+      expect(await delegation.confirmingRoles()).to.deep.equal([
+        await delegation.DEFAULT_ADMIN_ROLE(),
+        await delegation.NODE_OPERATOR_MANAGER_ROLE(),
       ]);
     });
   });
 
-  context("setVoteLifetime", () => {
-    it("reverts if the caller is not a member of the vote lifetime committee", async () => {
-      await expect(delegation.connect(stranger).setVoteLifetime(days(10n))).to.be.revertedWithCustomError(
+  context("setConfirmExpiry", () => {
+    it("reverts if the caller is not a member of the confirm expiry committee", async () => {
+      await expect(delegation.connect(stranger).setConfirmExpiry(days(10n))).to.be.revertedWithCustomError(
         delegation,
-        "NotACommitteeMember",
+        "SenderNotMember",
       );
     });
 
-    it("sets the new vote lifetime", async () => {
-      const oldVoteLifetime = await delegation.voteLifetime();
-      const newVoteLifetime = days(10n);
-      const msgData = delegation.interface.encodeFunctionData("setVoteLifetime", [newVoteLifetime]);
-      let voteTimestamp = await getNextBlockTimestamp();
+    it("sets the new confirm expiry", async () => {
+      const oldConfirmExpiry = await delegation.getConfirmExpiry();
+      const newConfirmExpiry = days(10n);
+      const msgData = delegation.interface.encodeFunctionData("setConfirmExpiry", [newConfirmExpiry]);
+      let confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
 
-      await expect(delegation.connect(curator).setVoteLifetime(newVoteLifetime))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
+      await expect(delegation.connect(vaultOwner).setConfirmExpiry(newConfirmExpiry))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData);
 
-      voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(operator).setVoteLifetime(newVoteLifetime))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData)
-        .and.to.emit(delegation, "VoteLifetimeSet")
-        .withArgs(operator, oldVoteLifetime, newVoteLifetime);
+      confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData)
+        .and.to.emit(delegation, "ConfirmExpirySet")
+        .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
-      expect(await delegation.voteLifetime()).to.equal(newVoteLifetime);
+      expect(await delegation.getConfirmExpiry()).to.equal(newConfirmExpiry);
     });
   });
 
-  context("claimCuratorDue", () => {
+  context("claimCuratorFee", () => {
     it("reverts if the caller is not a member of the curator due claim role", async () => {
-      await expect(delegation.connect(stranger).claimCuratorDue(stranger))
+      await expect(delegation.connect(stranger).claimCuratorFee(stranger))
         .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await delegation.CURATOR_ROLE());
+        .withArgs(stranger, await delegation.CURATOR_FEE_CLAIM_ROLE());
     });
 
     it("reverts if the recipient is the zero address", async () => {
-      await expect(delegation.connect(curator).claimCuratorDue(ethers.ZeroAddress))
+      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_recipient");
     });
 
-    it("reverts if the due is zero", async () => {
-      expect(await delegation.curatorDue()).to.equal(0n);
-      await expect(delegation.connect(curator).claimCuratorDue(stranger)).to.be.revertedWithCustomError(
-        delegation,
-        "NoDueToClaim",
-      );
+    it("reverts if the fee is zero", async () => {
+      expect(await delegation.curatorUnclaimedFee()).to.equal(0n);
+      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(stranger))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_fee");
     });
 
-    it("claims the due", async () => {
+    it("claims the fee", async () => {
       const curatorFee = 10_00n; // 10%
-      await delegation.connect(curator).setCuratorFee(curatorFee);
-      expect(await delegation.curatorFee()).to.equal(curatorFee);
+      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(curatorFee);
+      expect(await delegation.curatorFeeBP()).to.equal(curatorFee);
 
       const rewards = ether("1");
       await vault.connect(hubSigner).report(rewards, 0n, 0n);
 
       const expectedDue = (rewards * curatorFee) / BP_BASE;
-      expect(await delegation.curatorDue()).to.equal(expectedDue);
-      expect(await delegation.curatorDue()).to.be.greaterThan(await ethers.provider.getBalance(vault));
+      expect(await delegation.curatorUnclaimedFee()).to.equal(expectedDue);
+      expect(await delegation.curatorUnclaimedFee()).to.be.greaterThan(await ethers.provider.getBalance(vault));
 
       expect(await ethers.provider.getBalance(vault)).to.equal(0n);
       await rewarder.sendTransaction({ to: vault, value: rewards });
       expect(await ethers.provider.getBalance(vault)).to.equal(rewards);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
-      await expect(delegation.connect(curator).claimCuratorDue(recipient))
+      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(recipient))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, expectedDue);
       expect(await ethers.provider.getBalance(recipient)).to.equal(expectedDue);
@@ -268,47 +317,46 @@ describe("Delegation.sol", () => {
     });
   });
 
-  context("claimOperatorDue", () => {
+  context("claimNodeOperatorFee", () => {
     it("reverts if the caller does not have the operator due claim role", async () => {
-      await expect(delegation.connect(stranger).claimOperatorDue(stranger)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).claimNodeOperatorFee(stranger)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("reverts if the recipient is the zero address", async () => {
-      await expect(delegation.connect(claimOperatorDueRole).claimOperatorDue(ethers.ZeroAddress))
+      await expect(delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(delegation, "ZeroArgument")
         .withArgs("_recipient");
     });
 
     it("reverts if the due is zero", async () => {
-      expect(await delegation.operatorDue()).to.equal(0n);
-      await expect(delegation.connect(claimOperatorDueRole).claimOperatorDue(recipient)).to.be.revertedWithCustomError(
-        delegation,
-        "NoDueToClaim",
-      );
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
+      await expect(delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_fee");
     });
 
     it("claims the due", async () => {
       const operatorFee = 10_00n; // 10%
-      await delegation.connect(operator).setOperatorFee(operatorFee);
-      await delegation.connect(curator).setOperatorFee(operatorFee);
-      expect(await delegation.operatorFee()).to.equal(operatorFee);
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(operatorFee);
 
       const rewards = ether("1");
       await vault.connect(hubSigner).report(rewards, 0n, 0n);
 
       const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await delegation.operatorDue()).to.equal(expectedDue);
-      expect(await delegation.operatorDue()).to.be.greaterThan(await ethers.provider.getBalance(vault));
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.be.greaterThan(await ethers.provider.getBalance(vault));
 
       expect(await ethers.provider.getBalance(vault)).to.equal(0n);
       await rewarder.sendTransaction({ to: vault, value: rewards });
       expect(await ethers.provider.getBalance(vault)).to.equal(rewards);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
-      await expect(delegation.connect(claimOperatorDueRole).claimOperatorDue(recipient))
+      await expect(delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, expectedDue);
       expect(await ethers.provider.getBalance(recipient)).to.equal(expectedDue);
@@ -331,6 +379,45 @@ describe("Delegation.sol", () => {
     });
   });
 
+  context("withdrawableEther", () => {
+    it("returns the correct amount", async () => {
+      const amount = ether("1");
+      await delegation.connect(funder).fund({ value: amount });
+      expect(await delegation.withdrawableEther()).to.equal(amount);
+    });
+
+    it("returns the correct amount when balance is less than unreserved", async () => {
+      const valuation = ether("3");
+      const inOutDelta = 0n;
+      const locked = ether("2");
+
+      const amount = ether("1");
+      await delegation.connect(funder).fund({ value: amount });
+      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+
+      expect(await delegation.withdrawableEther()).to.equal(amount);
+    });
+
+    it("returns the correct amount when has fees", async () => {
+      const amount = ether("6");
+      const valuation = ether("3");
+      const inOutDelta = ether("1");
+      const locked = ether("2");
+
+      const curatorFeeBP = 1000; // 10%
+      const operatorFeeBP = 1000; // 10%
+      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(curatorFeeBP);
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFeeBP);
+
+      await delegation.connect(funder).fund({ value: amount });
+
+      await vault.connect(hubSigner).report(valuation, inOutDelta, locked);
+      const unreserved = await delegation.unreserved();
+
+      expect(await delegation.withdrawableEther()).to.equal(unreserved);
+    });
+  });
+
   context("fund", () => {
     it("reverts if the caller is not a member of the staker role", async () => {
       await expect(delegation.connect(stranger).fund()).to.be.revertedWithCustomError(
@@ -345,7 +432,7 @@ describe("Delegation.sol", () => {
       expect(await vault.inOutDelta()).to.equal(0n);
       expect(await vault.valuation()).to.equal(0n);
 
-      await expect(delegation.connect(staker).fund({ value: amount }))
+      await expect(delegation.connect(funder).fund({ value: amount }))
         .to.emit(vault, "Funded")
         .withArgs(delegation, amount);
 
@@ -356,7 +443,9 @@ describe("Delegation.sol", () => {
   });
 
   context("withdraw", () => {
-    it("reverts if the caller is not a member of the staker role", async () => {
+    it("reverts if the caller is not a member of the withdrawer role", async () => {
+      await delegation.connect(funder).fund({ value: ether("1") });
+
       await expect(delegation.connect(stranger).withdraw(recipient, ether("1"))).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
@@ -364,22 +453,23 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the recipient is the zero address", async () => {
-      await expect(delegation.connect(staker).withdraw(ethers.ZeroAddress, ether("1"))).to.be.revertedWithCustomError(
-        delegation,
-        "ZeroArgument",
-      );
+      await delegation.connect(funder).fund({ value: ether("1") });
+
+      await expect(delegation.connect(withdrawer).withdraw(ethers.ZeroAddress, ether("1")))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_recipient");
     });
 
     it("reverts if the amount is zero", async () => {
-      await expect(delegation.connect(staker).withdraw(recipient, 0n)).to.be.revertedWithCustomError(
-        delegation,
-        "ZeroArgument",
-      );
+      await expect(delegation.connect(withdrawer).withdraw(recipient, 0n))
+        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
+        .withArgs("_ether");
     });
 
     it("reverts if the amount is greater than the unreserved amount", async () => {
+      await delegation.connect(funder).fund({ value: ether("1") });
       const unreserved = await delegation.unreserved();
-      await expect(delegation.connect(staker).withdraw(recipient, unreserved + 1n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(withdrawer).withdraw(recipient, unreserved + 1n)).to.be.revertedWithCustomError(
         delegation,
         "RequestedAmountExceedsUnreserved",
       );
@@ -396,7 +486,7 @@ describe("Delegation.sol", () => {
       expect(await ethers.provider.getBalance(vault)).to.equal(amount);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
-      await expect(delegation.connect(staker).withdraw(recipient, amount))
+      await expect(delegation.connect(withdrawer).withdraw(recipient, amount))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, amount);
       expect(await ethers.provider.getBalance(vault)).to.equal(0n);
@@ -414,16 +504,17 @@ describe("Delegation.sol", () => {
 
     it("rebalances the vault by transferring ether", async () => {
       const amount = ether("1");
-      await delegation.connect(staker).fund({ value: amount });
+      await delegation.connect(funder).fund({ value: amount });
 
-      await expect(delegation.connect(curator).rebalanceVault(amount))
+      await expect(delegation.connect(rebalancer).rebalanceVault(amount))
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
     });
 
     it("funds and rebalances the vault", async () => {
       const amount = ether("1");
-      await expect(delegation.connect(curator).rebalanceVault(amount, { value: amount }))
+      await delegation.connect(vaultOwner).grantRole(await delegation.FUND_ROLE(), rebalancer);
+      await expect(delegation.connect(rebalancer).rebalanceVault(amount, { value: amount }))
         .to.emit(vault, "Funded")
         .withArgs(delegation, amount)
         .to.emit(hub, "Mock__Rebalanced")
@@ -433,7 +524,7 @@ describe("Delegation.sol", () => {
 
   context("mint", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).mint(recipient, 1n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).mintShares(recipient, 1n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -441,7 +532,7 @@ describe("Delegation.sol", () => {
 
     it("mints the tokens", async () => {
       const amount = 100n;
-      await expect(delegation.connect(tokenMaster).mint(recipient, amount))
+      await expect(delegation.connect(minter).mintShares(recipient, amount))
         .to.emit(steth, "Transfer")
         .withArgs(ethers.ZeroAddress, recipient, amount);
     });
@@ -449,7 +540,10 @@ describe("Delegation.sol", () => {
 
   context("burn", () => {
     it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).burn(100n)).to.be.revertedWithCustomError(
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(minter).mintShares(stranger, 100n);
+
+      await expect(delegation.connect(stranger).burnShares(100n)).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -457,25 +551,45 @@ describe("Delegation.sol", () => {
 
     it("burns the tokens", async () => {
       const amount = 100n;
-      await delegation.connect(tokenMaster).mint(tokenMaster, amount);
+      await delegation.connect(minter).mintShares(burner, amount);
 
-      await expect(delegation.connect(tokenMaster).burn(amount))
+      await expect(delegation.connect(burner).burnShares(amount))
         .to.emit(steth, "Transfer")
-        .withArgs(tokenMaster, hub, amount)
+        .withArgs(burner, hub, amount)
         .and.to.emit(steth, "Transfer")
         .withArgs(hub, ethers.ZeroAddress, amount);
     });
   });
 
-  context("setCuratorFee", () => {
+  context("setCuratorFeeBP", () => {
     it("reverts if caller is not curator", async () => {
-      await expect(delegation.connect(stranger).setCuratorFee(1000n))
+      await expect(delegation.connect(stranger).setCuratorFeeBP(1000n))
         .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await delegation.CURATOR_ROLE());
+        .withArgs(stranger, await delegation.CURATOR_FEE_SET_ROLE());
+    });
+
+    it("reverts if curator fee is not zero", async () => {
+      // set the curator fee to 5%
+      const newCuratorFee = 500n;
+      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(newCuratorFee);
+      expect(await delegation.curatorFeeBP()).to.equal(newCuratorFee);
+
+      // bring rewards
+      const totalRewards = ether("1");
+      const inOutDelta = 0n;
+      const locked = 0n;
+      await vault.connect(hubSigner).report(totalRewards, inOutDelta, locked);
+      expect(await delegation.curatorUnclaimedFee()).to.equal((totalRewards * newCuratorFee) / BP_BASE);
+
+      // attempt to change the performance fee to 6%
+      await expect(delegation.connect(curatorFeeSetter).setCuratorFeeBP(600n)).to.be.revertedWithCustomError(
+        delegation,
+        "CuratorFeeUnclaimed",
+      );
     });
 
     it("reverts if new fee is greater than max fee", async () => {
-      await expect(delegation.connect(curator).setCuratorFee(MAX_FEE + 1n)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(curatorFeeSetter).setCuratorFeeBP(MAX_FEE + 1n)).to.be.revertedWithCustomError(
         delegation,
         "CombinedFeesExceed100Percent",
       );
@@ -483,144 +597,202 @@ describe("Delegation.sol", () => {
 
     it("sets the curator fee", async () => {
       const newCuratorFee = 1000n;
-      await delegation.connect(curator).setCuratorFee(newCuratorFee);
-      expect(await delegation.curatorFee()).to.equal(newCuratorFee);
+      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(newCuratorFee);
+      expect(await delegation.curatorFeeBP()).to.equal(newCuratorFee);
     });
   });
 
   context("setOperatorFee", () => {
     it("reverts if new fee is greater than max fee", async () => {
       const invalidFee = MAX_FEE + 1n;
-      await delegation.connect(curator).setOperatorFee(invalidFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(invalidFee);
 
-      await expect(delegation.connect(operator).setOperatorFee(invalidFee)).to.be.revertedWithCustomError(
-        delegation,
-        "CombinedFeesExceed100Percent",
-      );
+      await expect(
+        delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(invalidFee),
+      ).to.be.revertedWithCustomError(delegation, "CombinedFeesExceed100Percent");
     });
 
     it("reverts if performance due is not zero", async () => {
       // set the performance fee to 5%
       const newOperatorFee = 500n;
-      await delegation.connect(curator).setOperatorFee(newOperatorFee);
-      await delegation.connect(operator).setOperatorFee(newOperatorFee);
-      expect(await delegation.operatorFee()).to.equal(newOperatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee);
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(newOperatorFee);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(newOperatorFee);
 
       // bring rewards
       const totalRewards = ether("1");
       const inOutDelta = 0n;
       const locked = 0n;
       await vault.connect(hubSigner).report(totalRewards, inOutDelta, locked);
-      expect(await delegation.operatorDue()).to.equal((totalRewards * newOperatorFee) / BP_BASE);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal((totalRewards * newOperatorFee) / BP_BASE);
 
       // attempt to change the performance fee to 6%
-      await delegation.connect(curator).setOperatorFee(600n);
-      await expect(delegation.connect(operator).setOperatorFee(600n)).to.be.revertedWithCustomError(
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(600n);
+      await expect(delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(600n)).to.be.revertedWithCustomError(
         delegation,
-        "OperatorDueUnclaimed",
+        "NodeOperatorFeeUnclaimed",
       );
     });
 
-    it("requires both curator and operator to set the operator fee and emits the RoleMemberVoted event", async () => {
-      const previousOperatorFee = await delegation.operatorFee();
+    it("requires both default admin and operator manager to set the operator fee and emits the RoleMemberConfirmed event", async () => {
+      const previousOperatorFee = await delegation.nodeOperatorFeeBP();
       const newOperatorFee = 1000n;
-      let voteTimestamp = await getNextBlockTimestamp();
-      const msgData = delegation.interface.encodeFunctionData("setOperatorFee", [newOperatorFee]);
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      const msgData = delegation.interface.encodeFunctionData("setNodeOperatorFeeBP", [newOperatorFee]);
 
-      await expect(delegation.connect(curator).setOperatorFee(newOperatorFee))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
+      await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData);
       // fee is unchanged
-      expect(await delegation.operatorFee()).to.equal(previousOperatorFee);
-      // check vote
-      expect(await delegation.votings(keccak256(msgData), await delegation.CURATOR_ROLE())).to.equal(voteTimestamp);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(previousOperatorFee);
+      // check confirm
+      expect(await delegation.confirmations(msgData, await delegation.DEFAULT_ADMIN_ROLE())).to.equal(expiryTimestamp);
 
-      voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(operator).setOperatorFee(newOperatorFee))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData)
-        .and.to.emit(delegation, "OperatorFeeSet")
-        .withArgs(operator, previousOperatorFee, newOperatorFee);
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(newOperatorFee))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), expiryTimestamp, msgData)
+        .and.to.emit(delegation, "NodeOperatorFeeBPSet")
+        .withArgs(nodeOperatorManager, previousOperatorFee, newOperatorFee);
 
-      expect(await delegation.operatorFee()).to.equal(newOperatorFee);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(newOperatorFee);
 
-      // resets the votes
-      for (const role of await delegation.votingCommittee()) {
-        expect(await delegation.votings(keccak256(msgData), role)).to.equal(0n);
+      // resets the confirms
+      for (const role of await delegation.confirmingRoles()) {
+        expect(await delegation.confirmations(keccak256(msgData), role)).to.equal(0n);
       }
     });
 
     it("reverts if the caller is not a member of the operator fee committee", async () => {
       const newOperatorFee = 1000n;
-      await expect(delegation.connect(stranger).setOperatorFee(newOperatorFee)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).setNodeOperatorFeeBP(newOperatorFee)).to.be.revertedWithCustomError(
         delegation,
-        "NotACommitteeMember",
+        "SenderNotMember",
       );
     });
 
-    it("doesn't execute if an earlier vote has expired", async () => {
-      const previousOperatorFee = await delegation.operatorFee();
+    it("doesn't execute if an earlier confirm has expired", async () => {
+      const previousOperatorFee = await delegation.nodeOperatorFeeBP();
       const newOperatorFee = 1000n;
-      const msgData = delegation.interface.encodeFunctionData("setOperatorFee", [newOperatorFee]);
-      const callId = keccak256(msgData);
-      let voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(curator).setOperatorFee(newOperatorFee))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
+      const msgData = delegation.interface.encodeFunctionData("setNodeOperatorFeeBP", [newOperatorFee]);
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+
+      await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData);
       // fee is unchanged
-      expect(await delegation.operatorFee()).to.equal(previousOperatorFee);
-      // check vote
-      expect(await delegation.votings(callId, await delegation.CURATOR_ROLE())).to.equal(voteTimestamp);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(previousOperatorFee);
+      // check confirm
+      expect(await delegation.confirmations(msgData, await delegation.DEFAULT_ADMIN_ROLE())).to.equal(expiryTimestamp);
 
       // move time forward
       await advanceChainTime(days(7n) + 1n);
-      const expectedVoteTimestamp = await getNextBlockTimestamp();
-      expect(expectedVoteTimestamp).to.be.greaterThan(voteTimestamp + days(7n));
-      await expect(delegation.connect(operator).setOperatorFee(newOperatorFee))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(operator, await delegation.OPERATOR_ROLE(), expectedVoteTimestamp, msgData);
+      const expectedExpiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      expect(expectedExpiryTimestamp).to.be.greaterThan(expiryTimestamp + days(7n));
+      await expect(delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(newOperatorFee))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), expectedExpiryTimestamp, msgData);
 
       // fee is still unchanged
-      expect(await delegation.operatorFee()).to.equal(previousOperatorFee);
-      // check vote
-      expect(await delegation.votings(callId, await delegation.OPERATOR_ROLE())).to.equal(expectedVoteTimestamp);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(previousOperatorFee);
+      // check confirm
+      expect(await delegation.confirmations(msgData, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.equal(
+        expectedExpiryTimestamp,
+      );
 
-      // curator has to vote again
-      voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(curator).setOperatorFee(newOperatorFee))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData)
-        .and.to.emit(delegation, "OperatorFeeSet")
-        .withArgs(curator, previousOperatorFee, newOperatorFee);
+      // curator has to confirm again
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(vaultOwner).setNodeOperatorFeeBP(newOperatorFee))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData)
+        .and.to.emit(delegation, "NodeOperatorFeeBPSet")
+        .withArgs(vaultOwner, previousOperatorFee, newOperatorFee);
       // fee is now changed
-      expect(await delegation.operatorFee()).to.equal(newOperatorFee);
+      expect(await delegation.nodeOperatorFeeBP()).to.equal(newOperatorFee);
     });
   });
 
-  context("transferStVaultOwnership", () => {
+  context("transferStakingVaultOwnership", () => {
     it("reverts if the caller is not a member of the transfer committee", async () => {
-      await expect(delegation.connect(stranger).transferStVaultOwnership(recipient)).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).transferStakingVaultOwnership(recipient)).to.be.revertedWithCustomError(
         delegation,
-        "NotACommitteeMember",
+        "SenderNotMember",
       );
     });
 
-    it("requires both curator and operator to transfer ownership and emits the RoleMemberVoted event", async () => {
+    it("requires both curator and operator to transfer ownership and emits the RoleMemberConfirmd event", async () => {
       const newOwner = certainAddress("newOwner");
-      const msgData = delegation.interface.encodeFunctionData("transferStVaultOwnership", [newOwner]);
-      let voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(curator).transferStVaultOwnership(newOwner))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(curator, await delegation.CURATOR_ROLE(), voteTimestamp, msgData);
+      const msgData = delegation.interface.encodeFunctionData("transferStakingVaultOwnership", [newOwner]);
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(vaultOwner).transferStakingVaultOwnership(newOwner))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), expiryTimestamp, msgData);
       // owner is unchanged
       expect(await vault.owner()).to.equal(delegation);
 
-      voteTimestamp = await getNextBlockTimestamp();
-      await expect(delegation.connect(operator).transferStVaultOwnership(newOwner))
-        .to.emit(delegation, "RoleMemberVoted")
-        .withArgs(operator, await delegation.OPERATOR_ROLE(), voteTimestamp, msgData);
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+      await expect(delegation.connect(nodeOperatorManager).transferStakingVaultOwnership(newOwner))
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), expiryTimestamp, msgData);
       // owner changed
       expect(await vault.owner()).to.equal(newOwner);
     });
   });
+
+  context("pauseBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already paused", async () => {
+      await delegation.connect(depositPauser).pauseBeaconChainDeposits();
+
+      await expect(delegation.connect(depositPauser).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsResumeExpected",
+      );
+    });
+
+    it("pauses the beacon deposits", async () => {
+      await expect(delegation.connect(depositPauser).pauseBeaconChainDeposits()).to.emit(
+        vault,
+        "BeaconChainDepositsPaused",
+      );
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+    });
+  });
+
+  context("resumeBeaconChainDeposits", () => {
+    it("reverts if the caller is not a curator", async () => {
+      await expect(delegation.connect(stranger).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the beacon deposits are already resumed", async () => {
+      await expect(delegation.connect(depositResumer).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
+
+    it("resumes the beacon deposits", async () => {
+      await delegation.connect(depositPauser).pauseBeaconChainDeposits();
+
+      await expect(delegation.connect(depositResumer).resumeBeaconChainDeposits()).to.emit(
+        vault,
+        "BeaconChainDepositsResumed",
+      );
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
+
+  async function assertSoleMember(account: HardhatEthersSigner, role: string) {
+    expect(await delegation.hasRole(role, account)).to.be.true;
+    expect(await delegation.getRoleMemberCount(role)).to.equal(1);
+  }
 });

@@ -16,17 +16,15 @@ contract VaultHub__MockForDelegation {
     event Mock__VaultDisconnected(address vault);
     event Mock__Rebalanced(uint256 amount);
 
-    function disconnectVault(address vault) external {
+    function disconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function mintSharesBackedByVault(address vault, address recipient, uint256 amount) external {
+    function mintShares(address /* vault */, address recipient, uint256 amount) external {
         steth.mint(recipient, amount);
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function burnSharesBackedByVault(address vault, uint256 amount) external {
+    function burnShares(address /* vault */, uint256 amount) external {
         steth.burn(amount);
     }
 

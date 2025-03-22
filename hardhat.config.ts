@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
+import * as process from "node:process";
 
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
@@ -13,48 +12,22 @@ import "hardhat-watcher";
 import "hardhat-ignore-warnings";
 import "hardhat-contract-sizer";
 import "hardhat-gas-reporter";
-import { globSync } from "glob";
-import { TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS } from "hardhat/builtin-tasks/task-names";
-import { HardhatUserConfig, subtask } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
 
 import { mochaRootHooks } from "test/hooks";
 
 import "./tasks";
 
+import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
+
 const RPC_URL: string = process.env.RPC_URL || "";
-const ACCOUNTS_PATH = "./accounts.json";
-
-const HARDHAT_FORKING_URL = process.env.HARDHAT_FORKING_URL || "";
-
-const INTEGRATION_WITH_SCRATCH_DEPLOY = process.env.INTEGRATION_WITH_SCRATCH_DEPLOY || "off";
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-/* Determines the forking configuration for Hardhat */
-function getHardhatForkingConfig() {
-  if (INTEGRATION_WITH_SCRATCH_DEPLOY === "on" || !HARDHAT_FORKING_URL) {
-    return undefined;
-  }
-  return { url: HARDHAT_FORKING_URL };
-}
-
-function loadAccounts(networkName: string) {
-  // TODO: this plaintext accounts.json private keys management is a subject
-  //       of rework to a solution with the keys stored encrypted
-  if (!existsSync(ACCOUNTS_PATH)) {
-    return [];
-  }
-  const content = JSON.parse(readFileSync(ACCOUNTS_PATH, "utf-8"));
-  if (!content.eth) {
-    return [];
-  }
-  return content.eth[networkName] || [];
-}
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
-    enabled: true,
+    enabled: process.env.SKIP_GAS_REPORT ? false : true,
   },
   networks: {
     "hardhat": {
@@ -79,14 +52,6 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
-    "holesky-vaults-devnet-0": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "mekong-vaults-devnet-1": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
       timeout: 20 * 60 * 1000, // 20 minutes
@@ -105,19 +70,8 @@ const config: HardhatUserConfig = {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
     },
-    "mekong": {
-      url: process.env.MEKONG_RPC_URL || RPC_URL,
-      chainId: 7078815900,
-      accounts: loadAccounts("mekong"),
-    },
   },
   etherscan: {
-    apiKey: {
-      "default": process.env.ETHERSCAN_API_KEY || "",
-      "holesky": process.env.ETHERSCAN_API_KEY || "",
-      "mekong": process.env.BLOCKSCOUT_API_KEY || "",
-      "local-devnet": "local-devnet",
-    },
     customChains: [
       {
         network: "local-devnet",
@@ -128,14 +82,19 @@ const config: HardhatUserConfig = {
         },
       },
       {
-        network: "mekong",
-        chainId: 7078815900,
+        network: "local-devnet",
+        chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
         urls: {
-          apiURL: "https://explorer.mekong.ethpandaops.io/api",
-          browserURL: "https://explorer.mekong.ethpandaops.io",
+          apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
+          browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
         },
       },
     ],
+    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
+      ? {
+          "local-devnet": "local-devnet",
+        }
+      : process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [
@@ -213,7 +172,10 @@ const config: HardhatUserConfig = {
   },
   watcher: {
     test: {
-      tasks: [{ command: "test", params: { testFiles: ["{path}"] } }],
+      tasks: [
+        { command: "compile", params: { quiet: true } },
+        { command: "test", params: { noCompile: true, testFiles: ["{path}"] } },
+      ],
       files: ["./test/**/*"],
       clearOnStart: true,
       start: "echo Running tests...",
@@ -240,22 +202,10 @@ const config: HardhatUserConfig = {
   contractSizer: {
     alphaSort: false,
     disambiguatePaths: false,
-    runOnCompile: true,
+    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
     strict: true,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };
-
-// a workaround for having an additional source directory for compilation
-// see, https://github.com/NomicFoundation/hardhat/issues/776#issuecomment-1713584386
-subtask(TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS).setAction(async (_, hre, runSuper) => {
-  const paths = await runSuper();
-
-  const otherDirectoryGlob = path.join(hre.config.paths.root, "test", "**", "*.sol");
-  // Don't need to compile test, helper and script files that are not part of the contracts for Hardhat.
-  const otherPaths = globSync(otherDirectoryGlob).filter((x) => !/\.([ths]\.sol)$/.test(x));
-
-  return [...paths, ...otherPaths];
-});
 
 export default config;

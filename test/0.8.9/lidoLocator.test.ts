@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { LidoLocator } from "typechain-types";
 
-import { ArrayToUnion, randomAddress } from "lib";
+import { randomAddress } from "lib";
 
 const services = [
   "accountingOracle",
@@ -22,8 +22,11 @@ const services = [
   "oracleDaemonConfig",
   "accounting",
   "wstETH",
+  "vaultHub",
+  "predepositGuarantee",
 ] as const;
 
+type ArrayToUnion<A extends readonly unknown[]> = A[number];
 type Service = ArrayToUnion<typeof services>;
 type Config = Record<Service, string> & {
   postTokenRebaseReceiver: string; // can be ZeroAddress
@@ -91,6 +94,7 @@ describe("LidoLocator.sol", () => {
         withdrawalQueue,
         postTokenRebaseReceiver,
         stakingRouter,
+        vaultHub,
       } = config;
 
       expect(await locator.oracleReportComponents()).to.deep.equal([
@@ -100,6 +104,7 @@ describe("LidoLocator.sol", () => {
         withdrawalQueue,
         postTokenRebaseReceiver,
         stakingRouter,
+        vaultHub,
       ]);
     });
   });

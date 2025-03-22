@@ -1,13 +1,6 @@
 import hre from "hardhat";
 
-import {
-  AccountingOracle,
-  Lido,
-  LidoLocator,
-  StakingRouter,
-  VaultFactory,
-  WithdrawalQueueERC721,
-} from "typechain-types";
+import { AccountingOracle, Lido, LidoLocator, StakingRouter, WithdrawalQueueERC721 } from "typechain-types";
 
 import { batch, log } from "lib";
 
@@ -22,6 +15,7 @@ import {
   ProtocolContracts,
   ProtocolSigners,
   StakingModuleContracts,
+  VaultsContracts,
   WstETHContracts,
 } from "./types";
 
@@ -164,10 +158,16 @@ const getWstEthContract = async (
 /**
  * Load all required vaults contracts.
  */
-const getVaultsContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: LoadedContract<LidoLocator>) => {
   return (await batch({
     stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
-  })) as { stakingVaultFactory: LoadedContract<VaultFactory> };
+    stakingVaultBeacon: loadContract("UpgradeableBeacon", config.get("stakingVaultBeacon")),
+    vaultHub: loadContract("VaultHub", config.get("vaultHub") || (await locator.vaultHub())),
+    predepositGuarantee: loadContract(
+      "PredepositGuarantee",
+      config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
+    ),
+  })) as VaultsContracts;
 };
 
 export async function discover() {
@@ -182,7 +182,7 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
-    ...(await getVaultsContracts(locator, networkConfig)),
+    ...(await getVaultsContracts(networkConfig, locator)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
@@ -208,6 +208,9 @@ export async function discover() {
     "wstETH": contracts.wstETH.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
+    "Vault Hub": contracts.vaultHub.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee.address,
   });
 
   const signers = {

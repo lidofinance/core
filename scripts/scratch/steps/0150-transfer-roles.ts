@@ -23,7 +23,8 @@ export async function main() {
     { name: "WithdrawalQueueERC721", address: state.withdrawalQueueERC721.proxy.address },
     { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
-    { name: "Accounting", address: state.accounting.proxy.address },
+    { name: "VaultHub", address: state.vaultHub.proxy.address },
+    { name: "PredepositGuarantee", address: state.predepositGuarantee.proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {
@@ -39,6 +40,8 @@ export async function main() {
     state.accountingOracle.proxy.address,
     state.validatorsExitBusOracle.proxy.address,
     state.withdrawalQueueERC721.proxy.address,
+    state.vaultHub.proxy.address,
+    state.predepositGuarantee.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {

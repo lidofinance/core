@@ -17,7 +17,6 @@ import {
   impersonate,
   log,
   ONE_GWEI,
-  trace,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -49,7 +48,7 @@ export type OracleReportParams = {
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
   vaultValues?: bigint[];
-  netCashFlows?: bigint[];
+  inOutDeltas?: bigint[];
   silent?: boolean;
 };
 
@@ -85,7 +84,7 @@ export const report = async (
     reportElVault = true,
     reportWithdrawalsVault = true,
     vaultValues = [],
-    netCashFlows = [],
+    inOutDeltas = [],
   }: OracleReportParams = {},
 ): Promise<OracleReportResults> => {
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
@@ -145,7 +144,7 @@ export const report = async (
       withdrawalVaultBalance,
       elRewardsVaultBalance,
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     });
 
     if (!simulatedReport) {
@@ -189,7 +188,7 @@ export const report = async (
     withdrawalFinalizationBatches,
     isBunkerMode,
     vaultsValues: vaultValues,
-    vaultsNetCashFlows: netCashFlows,
+    vaultsInOutDeltas: inOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -278,7 +277,7 @@ type SimulateReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultValues: bigint[];
-  netCashFlows: bigint[];
+  inOutDeltas: bigint[];
 };
 
 type SimulateReportResult = {
@@ -300,7 +299,7 @@ const simulateReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     vaultValues,
-    netCashFlows,
+    inOutDeltas,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -328,7 +327,7 @@ const simulateReport = async (
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     },
     0n,
   );
@@ -355,7 +354,7 @@ type HandleOracleReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultValues?: bigint[];
-  netCashFlows?: bigint[];
+  inOutDeltas?: bigint[];
 };
 
 export const handleOracleReport = async (
@@ -367,7 +366,7 @@ export const handleOracleReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     vaultValues = [],
-    netCashFlows = [],
+    inOutDeltas = [],
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
@@ -388,8 +387,7 @@ export const handleOracleReport = async (
     });
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
-
-    const handleReportTx = await accounting.connect(accountingOracleAccount).handleOracleReport({
+    await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
       timeElapsed, // 1 day
       clValidators: beaconValidators,
@@ -399,10 +397,8 @@ export const handleOracleReport = async (
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
       vaultValues,
-      netCashFlows,
+      inOutDeltas,
     });
-
-    await trace("accounting.handleOracleReport", handleReportTx);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
@@ -504,7 +500,7 @@ export type OracleReportSubmitParams = {
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
   vaultsValues: bigint[];
-  vaultsNetCashFlows: bigint[];
+  vaultsInOutDeltas: bigint[];
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -534,7 +530,7 @@ const submitReport = async (
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
     vaultsValues = [],
-    vaultsNetCashFlows = [],
+    vaultsInOutDeltas = [],
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -555,7 +551,7 @@ const submitReport = async (
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
     "Vaults values": vaultsValues,
-    "Vaults net cash flows": vaultsNetCashFlows,
+    "Vaults in-out deltas": vaultsInOutDeltas,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -578,7 +574,7 @@ const submitReport = async (
     withdrawalFinalizationBatches,
     isBunkerMode,
     vaultsValues,
-    vaultsNetCashFlows,
+    vaultsInOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -596,9 +592,6 @@ const submitReport = async (
   log.debug("Pushed oracle report for reached consensus", data);
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
-
-  await trace("accountingOracle.submitReportData", reportTx);
-
   log.debug("Pushed oracle report main data", {
     "Ref slot": refSlot,
     "Consensus version": consensusVersion,
@@ -608,10 +601,8 @@ const submitReport = async (
   let extraDataTx: ContractTransactionResponse;
   if (extraDataFormat) {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataList(extraDataList);
-    await trace("accountingOracle.submitReportExtraDataList", extraDataTx);
   } else {
     extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataEmpty();
-    await trace("accountingOracle.submitReportExtraDataEmpty", extraDataTx);
   }
 
   const state = await accountingOracle.getProcessingState();
@@ -683,12 +674,10 @@ const reachConsensus = async (
       submitter = member;
     }
 
-    const tx = await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
-    await trace("hashConsensus.submitReport", tx);
+    await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();
-
   expect(consensusReport).to.equal(reportHash, "Consensus report hash is incorrect");
 
   return submitter as HardhatEthersSigner;
@@ -710,7 +699,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
   data.vaultsValues,
-  data.vaultsNetCashFlows,
+  data.vaultsInOutDeltas,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -733,7 +722,7 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
     "uint256[]", // vaultsValues
-    "int256[]", // vaultsNetCashFlow
+    "int256[]", // vaultsInOutDeltas
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount
@@ -777,8 +766,7 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log.warning(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    const addTx = await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
-    await trace("hashConsensus.addMember", addTx);
+    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
 
     addresses.push(address);
 
@@ -813,9 +801,7 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
     const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
 
     const agentSigner = await ctx.getSigner("agent");
-
-    const tx = await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-    await trace("hashConsensus.updateInitialEpoch", tx);
+    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
 
     log.success("Hash consensus epoch initialized");
   }

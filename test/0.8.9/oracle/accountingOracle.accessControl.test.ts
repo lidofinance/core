@@ -76,7 +76,7 @@ describe("AccountingOracle.sol:accessControl", () => {
       withdrawalFinalizationBatches: [1],
       isBunkerMode: true,
       vaultsValues: [],
-      vaultsNetCashFlows: [],
+      vaultsInOutDeltas: [],
       extraDataFormat: emptyExtraData ? EXTRA_DATA_FORMAT_EMPTY : EXTRA_DATA_FORMAT_LIST,
       extraDataHash: emptyExtraData ? ZeroHash : extraDataHash,
       extraDataItemsCount: emptyExtraData ? 0 : extraDataItems.length,

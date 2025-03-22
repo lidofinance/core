@@ -4,9 +4,9 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts-v4.4/access/Ownable.sol";
-import "../../0.8.9/utils/Versioned.sol";
+import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts-v4.4/access/Ownable.sol";
+import {Versioned} from "../../0.8.9/utils/Versioned.sol";
 
 interface IDepositContract {
     event DepositEvent(bytes pubkey, bytes withdrawal_credentials, bytes amount, bytes signature, bytes index);
@@ -43,10 +43,10 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
     error ZeroAddress(string field);
 
     // Sepolia original deposit contract address
-    ISepoliaDepositContract public immutable originalContract;
+    ISepoliaDepositContract public immutable ORIGINAL_CONTRACT;
 
     constructor(address _deposit_contract) {
-        originalContract = ISepoliaDepositContract(_deposit_contract);
+        ORIGINAL_CONTRACT = ISepoliaDepositContract(_deposit_contract);
     }
 
     function initialize(address _owner) external {
@@ -57,11 +57,11 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
     }
 
     function get_deposit_root() external view override returns (bytes32) {
-        return originalContract.get_deposit_root();
+        return ORIGINAL_CONTRACT.get_deposit_root();
     }
 
     function get_deposit_count() external view override returns (bytes memory) {
-        return originalContract.get_deposit_count();
+        return ORIGINAL_CONTRACT.get_deposit_count();
     }
 
     receive() external payable {
@@ -79,8 +79,8 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
     }
 
     function recoverBepolia() external onlyOwner {
-        uint256 bepoliaOwnTokens = originalContract.balanceOf(address(this));
-        bool success = originalContract.transfer(owner(), bepoliaOwnTokens);
+        uint256 bepoliaOwnTokens = ORIGINAL_CONTRACT.balanceOf(address(this));
+        bool success = ORIGINAL_CONTRACT.transfer(owner(), bepoliaOwnTokens);
         if (!success) {
             revert BepoliaRecoverFailed();
         }
@@ -93,7 +93,7 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         bytes calldata signature,
         bytes32 deposit_data_root
     ) external payable override {
-        originalContract.deposit{value: msg.value}(pubkey, withdrawal_credentials, signature, deposit_data_root);
+        ORIGINAL_CONTRACT.deposit{value: msg.value}(pubkey, withdrawal_credentials, signature, deposit_data_root);
         // solhint-disable-next-line avoid-low-level-calls
         (bool success,) = owner().call{value: msg.value}("");
         if (!success) {

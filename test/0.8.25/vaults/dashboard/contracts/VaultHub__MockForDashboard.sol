@@ -37,16 +37,24 @@ contract VaultHub__MockForDashboard {
         return vaultSockets[vault];
     }
 
-    function disconnectVault(address vault) external {
+    function disconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
     }
 
-    function mintSharesBackedByVault(address /* vault */, address recipient, uint256 amount) external {
+    function mintShares(address vault, address recipient, uint256 amount) external {
+        if (vault == address(0)) revert ZeroArgument("_vault");
+        if (recipient == address(0)) revert ZeroArgument("recipient");
+        if (amount == 0) revert ZeroArgument("amount");
+
         steth.mintExternalShares(recipient, amount);
+        vaultSockets[vault].sharesMinted = uint96(vaultSockets[vault].sharesMinted + amount);
     }
 
-    function burnSharesBackedByVault(address /* vault */, uint256 amount) external {
-        steth.burnExternalShares(amount);
+    function burnShares(address _vault, uint256 _amountOfShares) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        steth.burnExternalShares(_amountOfShares);
+        vaultSockets[_vault].sharesMinted = uint96(vaultSockets[_vault].sharesMinted - _amountOfShares);
     }
 
     function voluntaryDisconnect(address _vault) external {
@@ -54,6 +62,10 @@ contract VaultHub__MockForDashboard {
     }
 
     function rebalance() external payable {
+        vaultSockets[msg.sender].sharesMinted = 0;
+
         emit Mock__Rebalanced(msg.value);
     }
+
+    error ZeroArgument(string argument);
 }

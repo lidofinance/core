@@ -1,4 +1,9 @@
 contracts/openzeppelin/
+contracts/0.8.9/utils/access/AccessControl.sol
+contracts/0.8.9/utils/access/AccessControlEnumerable.sol
+
+contracts/0.4.24/template/
 contracts/0.6.11/deposit_contract.sol
-contracts/0.6.12/WstETH.sol
+contracts/0.6.12/
 contracts/0.8.4/WithdrawalsManagerProxy.sol
+contracts/0.8.9/LidoExecutionLayerRewardsVault.sol

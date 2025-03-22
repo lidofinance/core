@@ -10,7 +10,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.22.17-scratch
+        image: ghcr.io/lidofinance/hardhat-node:2.22.19-scratch
         ports:
           - 8555:8545
 
