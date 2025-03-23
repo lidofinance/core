@@ -86,7 +86,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     constructorArgs: [
       // see LidoTemplate._createToken
       state[Sk.miniMeTokenFactory].address,
-      ethers.ZeroAddress,
+      ethers.constants.AddressZero,
       0,
       state[Sk.daoInitialSettings].token.name,
       18, // see LidoTemplate.TOKEN_DECIMALS
