@@ -758,12 +758,10 @@ describe("PredepositGuarantee.sol", () => {
 
       // Generate a validator
       const vaultNodeOperatorAddress = to02Type(await stakingVault.nodeOperator()); // vaultOperator is same
-
       const validatorIncorrect = generateValidator(vaultNodeOperatorAddress);
-
       const predepositData = generatePredeposit(validatorIncorrect);
 
-      await pdg.predeposit(stakingVault, [predepositData]);
+      // predeposit is called below
 
       // Validator is added to CL merkle tree
       await sszMerkleTree.addValidatorLeaf(validatorIncorrect);
@@ -789,6 +787,13 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
+
+      // revert ValidatorNotPreDeposited
+      await expect(
+        pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress),
+      ).to.revertedWithCustomError(pdg, "ValidatorNotPreDeposited");
+
+      await pdg.predeposit(stakingVault, [predepositData]);
 
       await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress))
         .to.emit(pdg, "ValidatorDisproven")
