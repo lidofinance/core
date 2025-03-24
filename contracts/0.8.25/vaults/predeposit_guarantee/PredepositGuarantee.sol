@@ -199,9 +199,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         uint256 _amount,
         address _recipient
     ) external onlyGuarantorOf(_nodeOperator) whenResumed {
-        if (_amount == 0) revert ZeroArgument("amount");
+        // _nodeOperator != address(0) is enforced by onlyGuarantorOf()
+        if (_amount == 0) revert ZeroArgument("_amount");
         if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(_amount);
-        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
 

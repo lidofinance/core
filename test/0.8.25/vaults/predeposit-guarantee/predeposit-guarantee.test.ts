@@ -185,7 +185,7 @@ describe("PredepositGuarantee.sol", () => {
     });
   });
 
-  context("node operator accounting logic (nodeOperator != nodeOperatorGuarantor)", () => {
+  context("setNodeOperatorGuarantor", () => {
     it("reverts when the 'setNodeOperatorGuarantor' got address is zero", async () => {
       await expect(pdg.connect(vaultOperator).setNodeOperatorGuarantor(ZeroAddress)).to.be.revertedWithCustomError(
         pdg,
@@ -200,21 +200,22 @@ describe("PredepositGuarantee.sol", () => {
       ).to.be.revertedWithCustomError(pdg, "SameGuarantor");
     });
 
-    it("reverts on zero refund", async () => {
-      expect(await pdg.claimableRefund(vaultOperator)).to.equal(0n);
-      await expect(pdg.connect(vaultOperator).claimGuarantorRefund(vaultOperator)).to.be.revertedWithCustomError(
+    it("reverts when the 'setNodeOperatorGuarantor' got address is zero", async () => {
+      await expect(pdg.connect(vaultOperator).setNodeOperatorGuarantor(ZeroAddress)).to.be.revertedWithCustomError(
         pdg,
-        "NothingToRefund",
+        "ZeroArgument",
       );
     });
 
-    it("reverts on failed refund", async () => {
-      const pdgNO = pdg.connect(vaultOperator);
-      const balance = ether("1");
-      await pdgNO.topUpNodeOperatorBalance(vaultOperator, { value: balance });
-      await pdgNO.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+    it("reverts when setting guarantor with in-flight deposits", async () => {
+      await stakingVault.fund({ value: ether("32") });
+      await pdg.predeposit(stakingVault, [generatePredeposit(generateValidator())], { value: ether("1") });
 
-      await expect(pdgNO.claimGuarantorRefund(rejector)).to.be.revertedWithCustomError(pdg, "RefundFailed");
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([ether("1"), ether("1")]);
+
+      await expect(pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor))
+        .to.be.revertedWithCustomError(pdg, "LockedIsNotZero")
+        .withArgs(ether("1"));
     });
 
     it("NO is refunded with setting guarantor", async () => {
@@ -254,6 +255,123 @@ describe("PredepositGuarantee.sol", () => {
       await expect(refundTx).to.emit(pdg, "GuarantorRefundClaimed").withArgs(vaultOperator, stranger, balance);
       expect(await ethers.provider.getBalance(stranger)).to.equal(strangerBefore + balance);
       expect(await pdg.claimableRefund(vaultOperator)).to.equal(0n);
+    });
+
+    it("Guarantor is refunded when returning to NO", async () => {
+      const balance = ether("20");
+      await pdg.connect(vaultOperator).setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
+
+      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+      const returnTx = pdg.setNodeOperatorGuarantor(vaultOperator);
+      await expect(returnTx)
+        .to.emit(pdg, "BalanceRefunded")
+        .withArgs(vaultOperator, vaultOperator)
+        .to.emit(pdg, "GuarantorRefundAdded")
+        .withArgs(vaultOperatorGuarantor, vaultOperator, balance)
+        .to.emit(pdg, "GuarantorSet")
+        .withArgs(vaultOperator, vaultOperator, vaultOperatorGuarantor);
+
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([0n, 0n]);
+      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperator);
+      expect(await pdg.claimableRefund(vaultOperatorGuarantor)).to.equal(balance);
+    });
+  });
+
+  context("claimGuarantorRefund", () => {
+    it("reverts on zero refund", async () => {
+      expect(await pdg.claimableRefund(vaultOperator)).to.equal(0n);
+      await expect(pdg.connect(vaultOperator).claimGuarantorRefund(vaultOperator)).to.be.revertedWithCustomError(
+        pdg,
+        "NothingToRefund",
+      );
+    });
+
+    it("reverts on failed refund", async () => {
+      const pdgNO = pdg.connect(vaultOperator);
+      const balance = ether("1");
+      await pdgNO.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await pdgNO.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+
+      await expect(pdgNO.claimGuarantorRefund(rejector)).to.be.revertedWithCustomError(pdg, "RefundFailed");
+    });
+  });
+
+  context("withdrawNodeOperatorBalance", () => {
+    it("allows only valid guarantor to withdraw balance", async () => {
+      const balance = ether("1");
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+      await expect(
+        pdg.connect(stranger).withdrawNodeOperatorBalance(vaultOperator, balance, stranger),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
+
+      let withdrawTx = pdg.withdrawNodeOperatorBalance(vaultOperator, balance, vaultOperatorGuarantor);
+      await expect(withdrawTx)
+        .to.emit(pdg, "BalanceWithdrawn")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, balance);
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([0n, 0n]);
+
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await expect(
+        pdg.connect(vaultOperator).withdrawNodeOperatorBalance(vaultOperator, balance, stranger),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
+
+      withdrawTx = pdg
+        .connect(vaultOperatorGuarantor)
+        .withdrawNodeOperatorBalance(vaultOperator, balance, vaultOperatorGuarantor);
+      await expect(withdrawTx)
+        .to.emit(pdg, "BalanceWithdrawn")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, balance);
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([0n, 0n]);
+    });
+
+    it("allows only valid withdrawal amount", async () => {
+      const balance = ether("1");
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, 0, stranger))
+        .to.be.revertedWithCustomError(pdg, "ZeroArgument")
+        .withArgs("_amount");
+
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance / 2n, stranger))
+        .to.be.revertedWithCustomError(pdg, "ValueNotMultipleOfPredepositAmount")
+        .withArgs(balance / 2n);
+
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, (balance * 3n) / 2n, stranger))
+        .to.be.revertedWithCustomError(pdg, "ValueNotMultipleOfPredepositAmount")
+        .withArgs((balance * 3n) / 2n);
+    });
+
+    it("allow only to withdraw unlocked balance", async () => {
+      await stakingVault.fund({ value: ether("32") });
+      const balance = ether("1");
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, stranger))
+        .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
+        .withArgs(0n, balance);
+
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await pdg.predeposit(stakingVault, [generatePredeposit(generateValidator())]);
+
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, stranger))
+        .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
+        .withArgs(0n, balance);
+
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance * 2n });
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance * 3n, stranger))
+        .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
+        .withArgs(balance * 2n, balance * 3n);
+    });
+
+    it("reverts when withdrawal recipient is reverting", async () => {
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, ether("1"), rejector)).to.be.revertedWithCustomError(
+        pdg,
+        "WithdrawalFailed",
+      );
     });
   });
 
