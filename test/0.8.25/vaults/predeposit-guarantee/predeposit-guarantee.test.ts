@@ -487,7 +487,6 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
-      // await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
       const proveUnknownValidatorTx = await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
 
       await expect(proveUnknownValidatorTx)
