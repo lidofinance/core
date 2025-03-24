@@ -576,6 +576,14 @@ describe("PredepositGuarantee.sol", () => {
   });
 
   context("positive proof flow - unknown validator", () => {
+    it("revert the proveUnknownValidator if it was called by NotStakingVaultOwner", async () => {
+      const witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
+      await expect(pdg.connect(stranger).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
+        pdg,
+        "NotStakingVaultOwner",
+      );
+    });
+
     it("can use PDG with proveUnknownValidator", async () => {
       const vaultWC = await stakingVault.withdrawalCredentials();
       const unknownValidator = generateValidator(vaultWC);
@@ -608,6 +616,7 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
+
       const proveUnknownValidatorTx = await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
 
       await expect(proveUnknownValidatorTx)
