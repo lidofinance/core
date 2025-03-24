@@ -266,6 +266,65 @@ describe("PredepositGuarantee.sol", () => {
       );
     });
 
+    it("allows only NO to predeposit", async () => {
+      const predeposit = generatePredeposit(generateValidator());
+      await expect(pdg.connect(vaultOwner).predeposit(stakingVault, [predeposit])).to.be.revertedWithCustomError(
+        pdg,
+        "NotNodeOperator",
+      );
+      await expect(pdg.connect(stranger).predeposit(stakingVault, [predeposit])).to.be.revertedWithCustomError(
+        pdg,
+        "NotNodeOperator",
+      );
+    });
+
+    it("not allows to use locked balance", async () => {
+      const predeposit = generatePredeposit(generateValidator());
+      await expect(pdg.predeposit(stakingVault, [predeposit]))
+        .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
+        .withArgs(0n, ether("1"));
+
+      const predeposit2 = generatePredeposit(generateValidator());
+
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+
+      await expect(pdg.predeposit(stakingVault, [predeposit, predeposit2]))
+        .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
+        .withArgs(ether("1"), ether("2"));
+    });
+
+    it("not allows to re-use validator", async () => {
+      await stakingVault.fund({ value: ether("32") });
+      const validator = generateValidator();
+      const predeposit = generatePredeposit(validator);
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
+
+      const PREDEPOSITED_STAGE = 1n;
+
+      await pdg.predeposit(stakingVault, [predeposit]);
+      const validatorStatus = await pdg.validatorStatus(validator.pubkey);
+      expect(validatorStatus.stage).to.equal(PREDEPOSITED_STAGE);
+
+      const predeposit2 = generatePredeposit(generateValidator());
+
+      await expect(pdg.predeposit(stakingVault, [predeposit2, predeposit]))
+        .to.be.revertedWithCustomError(pdg, "ValidatorNotNew")
+        .withArgs(validator.pubkey, PREDEPOSITED_STAGE);
+    });
+
+    it("not allows invalid predeposit amount", async () => {
+      await stakingVault.fund({ value: ether("32") });
+      const validator = generateValidator();
+      const predeposit = generatePredeposit(validator);
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
+
+      predeposit.amount = ether("2");
+
+      await expect(pdg.predeposit(stakingVault, [predeposit]))
+        .to.be.revertedWithCustomError(pdg, "PredepositAmountInvalid")
+        .withArgs(validator.pubkey, predeposit.amount);
+    });
+
     it("allows to top up on predeposit", async () => {
       // Staking Vault is funded with enough ether to run validator
       await stakingVault.fund({ value: ether("32") });
