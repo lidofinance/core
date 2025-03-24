@@ -56,10 +56,18 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         _transferOwnership(_owner);
     }
 
+    /**
+     * @notice Returns the deposit root of the original Sepolia contract
+     * @return The deposit root as a `bytes32`
+     */
     function get_deposit_root() external view override returns (bytes32) {
         return originalContract.get_deposit_root();
     }
 
+    /**
+     * @notice Returns the deposit count from the original Sepolia contract
+     * @return The deposit count as `bytes`
+     */
     function get_deposit_count() external view override returns (bytes memory) {
         return originalContract.get_deposit_count();
     }
@@ -68,6 +76,10 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         emit EthReceived(msg.sender, msg.value);
     }
 
+    /**
+     * @notice Allows the owner to recover Ether stored in the contract
+     * @dev Transfers all Ether to the owner's address. Reverts on failure.
+     */
     function recoverEth() external onlyOwner {
         uint256 balance = address(this).balance;
         // solhint-disable-next-line avoid-low-level-calls
@@ -78,6 +90,10 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         emit EthRecovered(balance);
     }
 
+    /**
+     * @notice Allows the owner to recover Bepolia tokens stored in the contract
+     * @dev Transfers all Bepolia tokens to the owner's address. Reverts on failure.
+     */
     function recoverBepolia() external onlyOwner {
         uint256 bepoliaOwnTokens = originalContract.balanceOf(address(this));
         bool success = originalContract.transfer(owner(), bepoliaOwnTokens);
@@ -87,6 +103,14 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         emit BepoliaRecovered(bepoliaOwnTokens);
     }
 
+    /**
+     * @notice Deposits funds into the original Sepolia deposit contract
+     * @dev Forwards the deposit call to the original contract and transfers ETH back to the owner. Reverts on failure.
+     * @param pubkey The public key of the validator
+     * @param withdrawal_credentials Withdrawal credentials for the deposit
+     * @param signature Validator's signature
+     * @param deposit_data_root Root of the deposit data
+     */
     function deposit(
         bytes calldata pubkey,
         bytes calldata withdrawal_credentials,
