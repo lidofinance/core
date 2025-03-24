@@ -544,7 +544,15 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
-      await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
+
+      await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress))
+        .to.emit(pdg, "ValidatorDisproven")
+        .withArgs(
+          validatorIncorrect.pubkey,
+          vaultOperator.address,
+          await stakingVault.getAddress(),
+          vaultNodeOperatorAddress,
+        );
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
       let validatorStatusTx = await pdg.validatorStatus(validatorIncorrect.pubkey);
