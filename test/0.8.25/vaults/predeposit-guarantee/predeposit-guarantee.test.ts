@@ -626,10 +626,27 @@ describe("PredepositGuarantee.sol", () => {
 
   context("positive proof flow - unknown validator", () => {
     it("revert the proveUnknownValidator if it was called by NotStakingVaultOwner", async () => {
-      const witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
+      let witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
       await expect(pdg.connect(stranger).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
         pdg,
         "NotStakingVaultOwner",
+      );
+
+      await expect(pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
+        pdg,
+        "InvalidPubkeyLength",
+      );
+
+      witness = {
+        validatorIndex: 1n,
+        childBlockTimestamp: 1n,
+        pubkey: "0xd16c95bcdfab6a218c1e0a4c71f98b9835fa29360a69737d2021c35626f64f9c7d5c9062420a80ffd81efb64fdd5f14c",
+        proof: [],
+      };
+
+      await expect(pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
+        pdg,
+        "RootNotFound",
       );
     });
 
@@ -675,6 +692,12 @@ describe("PredepositGuarantee.sol", () => {
       validatorStatusTx = await pdg.validatorStatus(unknownValidator.pubkey);
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(2n); // 2n is PROVEN
+
+      // revert ValidatorNotNew
+      await expect(pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
+        pdg,
+        "ValidatorNotNew",
+      );
     });
   });
 
