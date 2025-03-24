@@ -54,6 +54,7 @@ describe("PredepositGuarantee.sol", () => {
   let vaultHub: VaultHub__MockForStakingVault;
   let sszMerkleTree: SSZMerkleTree;
   let stakingVault: StakingVault;
+  let secondStakingVault: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let rejector: EthRejector;
 
@@ -119,6 +120,7 @@ describe("PredepositGuarantee.sol", () => {
     expect(await locator.predepositGuarantee()).to.equal(await pdg.getAddress());
     vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault");
     stakingVault = await deployStakingVault(vaultOwner, vaultOperator);
+    secondStakingVault = await deployStakingVault(vaultOwner, vaultOperator);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -633,6 +635,77 @@ describe("PredepositGuarantee.sol", () => {
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("0"));
       expect(operatorBondLocked).to.equal(ether("0"));
+    });
+
+    it("can use PDG happy path with proveValidatorWC", async () => {
+      // NO sets guarantor
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
+
+      // guarantor funds PDG for operator
+      await expect(pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, ether("1"));
+
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+      expect(await stakingVault.valuation()).to.equal(ether("32"));
+
+      // NO generates validator for vault
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      const validator = generateValidator(vaultWC);
+
+      // NO runs predeposit for the vault
+      const predepositData = generatePredeposit(validator);
+      await pdg.predeposit(stakingVault, [predepositData]);
+
+      // Validator is added to CL merkle tree
+      await sszMerkleTree.addValidatorLeaf(validator);
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
+
+      // Beacon Block is generated with new CL state
+      const stateRoot = await sszMerkleTree.getMerkleRoot();
+      const beaconBlockHeader = generateBeaconHeader(stateRoot);
+      const beaconBlockMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
+
+      /// Beacon Block root is posted to EL
+      const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
+
+      // NO collects validator proof
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
+      const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
+
+      // NO posts proof and triggers deposit to total of 32 ether
+      const witness = {
+        pubkey: validator.pubkey,
+        validatorIndex,
+        childBlockTimestamp,
+        proof: concatenatedProof,
+      };
+
+      const proveValidatorWCTX = pdg.connect(vaultOwner).proveValidatorWC(witness);
+
+      await expect(proveValidatorWCTX)
+        .to.emit(pdg, "BalanceUnlocked")
+        .withArgs(vaultOperator, ether("1"), ether("0"))
+        .to.emit(pdg, "ValidatorProven")
+        .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC);
+
+      // revert DepositToWrongVault
+      await expect(pdg.depositToBeaconChain(secondStakingVault, [predepositData])).to.be.revertedWithCustomError(
+        pdg,
+        "DepositToWrongVault",
+      );
+
+      const depositToBeaconChainTX = pdg.depositToBeaconChain(stakingVault, [predepositData]);
+
+      await expect(depositToBeaconChainTX)
+        .to.emit(stakingVault, "DepositedToBeaconChain")
+        .withArgs(pdg, 1, predepositData.amount)
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(predepositData.pubkey, vaultWC, predepositData.signature, predepositData.depositDataRoot);
     });
   });
 
