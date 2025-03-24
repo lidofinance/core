@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { zeroAddress } from "ethereumjs-util";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
@@ -298,10 +299,58 @@ describe("PredepositGuarantee.sol", () => {
     });
   });
 
+  context("topUpNodeOperatorBalance", () => {
+    it("allows only valid guarantor to top up balance", async () => {
+      const balance = ether("1");
+
+      await expect(
+        pdg.connect(stranger).topUpNodeOperatorBalance(zeroAddress(), { value: balance }),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
+
+      await expect(
+        pdg.connect(stranger).topUpNodeOperatorBalance(vaultOperator, { value: balance }),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
+
+      let topUpTx = pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await expect(topUpTx).to.emit(pdg, "BalanceToppedUp").withArgs(vaultOperator, vaultOperator, balance);
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([balance, 0n]);
+
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([0n, 0n]);
+      await expect(
+        pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: balance }),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
+
+      topUpTx = pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: balance });
+      await expect(topUpTx).to.emit(pdg, "BalanceToppedUp").withArgs(vaultOperator, vaultOperatorGuarantor, balance);
+      expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([balance, 0n]);
+    });
+
+    it("allows only valid top up amount", async () => {
+      const balance = ether("1");
+
+      await expect(pdg.topUpNodeOperatorBalance(vaultOperator, { value: 0n }))
+        .to.be.revertedWithCustomError(pdg, "ZeroArgument")
+        .withArgs("msg.value");
+
+      await expect(pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance / 2n }))
+        .to.be.revertedWithCustomError(pdg, "ValueNotMultipleOfPredepositAmount")
+        .withArgs(balance / 2n);
+
+      await expect(pdg.topUpNodeOperatorBalance(vaultOperator, { value: (balance * 3n) / 2n }))
+        .to.be.revertedWithCustomError(pdg, "ValueNotMultipleOfPredepositAmount")
+        .withArgs((balance * 3n) / 2n);
+    });
+  });
+
   context("withdrawNodeOperatorBalance", () => {
     it("allows only valid guarantor to withdraw balance", async () => {
       const balance = ether("1");
       await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+      await expect(
+        pdg.connect(stranger).withdrawNodeOperatorBalance(zeroAddress(), balance, stranger),
+      ).to.be.revertedWithCustomError(pdg, "NotGuarantor");
 
       await expect(
         pdg.connect(stranger).withdrawNodeOperatorBalance(vaultOperator, balance, stranger),
