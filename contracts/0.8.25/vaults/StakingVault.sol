@@ -367,7 +367,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.report.timestamp = uint64(_timestamp);
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
-        $.locked = uint128(_locked);
+        // TODO: Remove this once decide on vaults locked amount reporting
+        // $.locked = uint128(_locked);
 
         emit Reported(_timestamp, _valuation, _inOutDelta, _locked);
     }
