@@ -105,13 +105,15 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = (await dsm.getGuardians())[0];
     const guardianSigner = await impersonate(guardian, ether("1"));
 
-    const pauseIntentValidityPeriodBlocks = await dsm.getPauseIntentValidityPeriodBlocks();
-    let currentBlock = BigInt(await time.latestBlock());
-    if (currentBlock <= pauseIntentValidityPeriodBlocks) {
-      await mine(Number(pauseIntentValidityPeriodBlocks) + 1);
-      currentBlock = BigInt(await time.latestBlock());
-    }
-    const expiredBlockNumber = currentBlock - pauseIntentValidityPeriodBlocks - 1n;
+    // Setting pause intent validity period to a lesser value because
+    // hardhat node fails to restore snapshot after mining ~6k blocks
+    const pauseIntentValidityPeriodBlocks = 40;
+    const owner = await dsm.getOwner();
+    const ownerSigner = await impersonate(owner, ether("1"));
+    await dsm.connect(ownerSigner).setPauseIntentValidityPeriodBlocks(pauseIntentValidityPeriodBlocks);
+
+    const expiredBlockNumber = await time.latestBlock();
+    await mine(Number(pauseIntentValidityPeriodBlocks) + 1);
 
     await expect(
       dsm.connect(guardianSigner).pauseDeposits(expiredBlockNumber, {
