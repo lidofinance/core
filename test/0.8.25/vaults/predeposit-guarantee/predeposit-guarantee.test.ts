@@ -679,6 +679,47 @@ describe("PredepositGuarantee.sol", () => {
   });
 
   context("negative proof flow", () => {
+    it("revert the compensateDisprovenPredeposit if {ZeroArgument('_recipient')|CompensateToVaultNotAllowed|NotStakingVaultOwner|ValidatorNotDisproven}", async () => {
+      await expect(pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperator, ether("1"));
+
+      const [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(ether("1"));
+      expect(operatorBondLocked).to.equal(0n);
+
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+      expect(await stakingVault.valuation()).to.equal(ether("32"));
+
+      // Generate a validator
+      const vaultNodeOperatorAddress = to02Type(await stakingVault.nodeOperator()); // vaultOperator is same
+
+      const validatorIncorrect = generateValidator(vaultNodeOperatorAddress);
+
+      const predepositData = generatePredeposit(validatorIncorrect);
+
+      await pdg.predeposit(stakingVault, [predepositData]);
+
+      await expect(pdg.connect(vaultOwner).compensateDisprovenPredeposit(validatorIncorrect.pubkey, ZeroAddress))
+        .to.be.revertedWithCustomError(pdg, "ZeroArgument")
+        .withArgs("_recipient");
+
+      await expect(
+        pdg
+          .connect(vaultOwner)
+          .compensateDisprovenPredeposit(validatorIncorrect.pubkey, await stakingVault.getAddress()),
+      ).to.be.revertedWithCustomError(pdg, "CompensateToVaultNotAllowed");
+
+      await expect(
+        pdg.connect(stranger).compensateDisprovenPredeposit(validatorIncorrect.pubkey, vaultOperator.address),
+      ).to.be.revertedWithCustomError(pdg, "NotStakingVaultOwner");
+
+      await expect(
+        pdg.connect(vaultOwner).compensateDisprovenPredeposit(validatorIncorrect.pubkey, vaultOperator.address),
+      ).to.be.revertedWithCustomError(pdg, "ValidatorNotDisproven");
+    });
+
     it("should correctly handle compensation of disproven validator", async () => {
       await expect(pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
         .to.emit(pdg, "BalanceToppedUp")
