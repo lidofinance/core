@@ -254,7 +254,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param _recipient address to send the refund to
      * @return claimedEther amount of refund
      */
-    function claimGuarantorRefund(address _recipient) external returns (uint256 claimedEther) {
+    function claimGuarantorRefund(address _recipient) external whenResumed returns (uint256 claimedEther) {
         ERC7201Storage storage $ = _getStorage();
 
         claimedEther = $.guarantorClaimableEther[msg.sender];

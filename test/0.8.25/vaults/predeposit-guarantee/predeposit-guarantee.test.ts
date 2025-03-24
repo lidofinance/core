@@ -17,7 +17,7 @@ import {
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { ether, findEvents } from "lib";
+import { ether, findEvents, randomBytes32 } from "lib";
 import {
   generateBeaconHeader,
   generatePostDeposit,
@@ -43,6 +43,7 @@ describe("PredepositGuarantee.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let vaultOperator: HardhatEthersSigner;
   let vaultOperatorGuarantor: HardhatEthersSigner;
+  let pauser: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let proxy: OssifiableProxy;
@@ -86,7 +87,7 @@ describe("PredepositGuarantee.sol", () => {
   }
 
   before(async () => {
-    [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, stranger] = await ethers.getSigners();
+    [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
 
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
@@ -262,6 +263,52 @@ describe("PredepositGuarantee.sol", () => {
       await expect(pdg.connect(stranger).predeposit(stakingVault, [])).to.be.revertedWithCustomError(
         pdg,
         "EmptyDeposits",
+      );
+    });
+
+    it("allows to top up on predeposit", async () => {
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+
+      const balance = ether("1");
+
+      // NO generates validator for vault
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      const validator = generateValidator(vaultWC);
+
+      const [total, locked] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(total).to.equal(0n);
+      expect(locked).to.equal(0n);
+
+      // NO runs predeposit for the vault
+      const predepositData = generatePredeposit(validator);
+      const predepositTX = pdg.predeposit(stakingVault, [predepositData], { value: balance });
+
+      await expect(predepositTX).to.emit(pdg, "BalanceToppedUp").withArgs(vaultOperator, vaultOperator, balance);
+
+      const [totalAfter, lockedAfter] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(totalAfter).to.equal(balance);
+      expect(lockedAfter).to.equal(balance);
+    });
+
+    it("reverts on top up with predeposit if has guarantor", async () => {
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+
+      const balance = ether("1");
+
+      await pdg.setNodeOperatorGuarantor(vaultOperatorGuarantor);
+      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+      // NO generates validator for vault
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      const validator = generateValidator(vaultWC);
+
+      // NO runs predeposit for the vault
+      const predepositData = generatePredeposit(validator);
+      await expect(pdg.predeposit(stakingVault, [predepositData], { value: balance })).to.revertedWithCustomError(
+        pdg,
+        "NotGuarantor",
       );
     });
   });
@@ -474,6 +521,56 @@ describe("PredepositGuarantee.sol", () => {
       validatorStatusTx = await pdg.validatorStatus(validatorIncorrect.pubkey);
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(4n); // 4n is COMPENSATED
+    });
+  });
+
+  context("pausing", () => {
+    it("should pause core methods", async () => {
+      // Roles
+      await pdg.connect(admin).grantRole(await pdg.PAUSE_ROLE(), pauser);
+      await pdg.connect(admin).grantRole(await pdg.RESUME_ROLE(), pauser);
+      const infinitePause = await pdg.PAUSE_INFINITELY();
+
+      // Pause state
+      const pauseTX = await pdg.connect(pauser).pauseFor(infinitePause);
+      await expect(pauseTX).to.emit(pdg, "Paused").withArgs(infinitePause);
+      expect(await pdg.isPaused()).to.be.true;
+
+      // Paused Methods
+      await expect(pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") })).to.revertedWithCustomError(
+        pdg,
+        "ResumedExpected",
+      );
+      await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, 1n, vaultOperator)).to.revertedWithCustomError(
+        pdg,
+        "ResumedExpected",
+      );
+
+      await expect(pdg.setNodeOperatorGuarantor(vaultOperator)).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.claimGuarantorRefund(vaultOperator)).to.revertedWithCustomError(pdg, "ResumedExpected");
+
+      const witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
+
+      await expect(pdg.predeposit(stakingVault, [])).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.proveValidatorWC(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.depositToBeaconChain(stakingVault, [])).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.proveAndDeposit([], [], stakingVault)).to.revertedWithCustomError(pdg, "ResumedExpected");
+
+      await expect(pdg.proveUnknownValidator(witness, stakingVault)).to.revertedWithCustomError(pdg, "ResumedExpected");
+
+      await expect(pdg.proveInvalidValidatorWC(witness, randomBytes32())).to.revertedWithCustomError(
+        pdg,
+        "ResumedExpected",
+      );
+      await expect(pdg.compensateDisprovenPredeposit("0x00", stakingVault)).to.revertedWithCustomError(
+        pdg,
+        "ResumedExpected",
+      );
+
+      // Resume state
+      const resumeTx = pdg.connect(pauser).resume();
+      await expect(resumeTx).to.emit(pdg, "Resumed");
+      expect(await pdg.isPaused()).to.be.false;
     });
   });
 });
