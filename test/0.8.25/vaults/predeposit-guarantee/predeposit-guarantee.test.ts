@@ -379,7 +379,10 @@ describe("PredepositGuarantee.sol", () => {
       expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
 
       // guarantor funds PDG for operator
-      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      await expect(pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, ether("1"));
+
       let [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(0n);
@@ -501,7 +504,10 @@ describe("PredepositGuarantee.sol", () => {
 
   context("negative proof flow", () => {
     it("should correctly handle compensation of disproven validator", async () => {
-      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      await expect(pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperator, ether("1"));
+
       const [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(0n);
