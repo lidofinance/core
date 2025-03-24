@@ -539,6 +539,18 @@ describe("PredepositGuarantee.sol", () => {
     });
   });
 
+  context("depositToBeaconChain", () => {
+    it("not allows for not PROVEN validator", async () => {
+      const validator = generateValidator();
+      const predeposit = generatePredeposit(validator);
+
+      await expect(pdg.depositToBeaconChain(stakingVault, [predeposit])).to.be.revertedWithCustomError(
+        pdg,
+        "DepositToUnprovenValidator",
+      );
+    });
+  });
+
   context("happy path - positive proof flow", () => {
     it("can use PDG happy path with proveAndDeposit", async () => {
       // NO sets guarantor
