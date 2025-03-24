@@ -550,17 +550,31 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
-    function invalidateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _sharesMinted, bytes32[] memory _proof) external {
+    function invalidateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
         bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _sharesMinted))));
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
         if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
-        socket.sharesMinted = uint96(_sharesMinted);
-        IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, 0);
+        uint256 newMintedShares = socket.sharesMinted;
+        newMintedShares += _fees;
+
+        uint256 internalEther = LIDO.getTotalPooledEther() - LIDO.getExternalEther();
+        uint256 internalShares = LIDO.getTotalShares() - LIDO.getExternalShares();
+
+        uint256 lockedEther = Math256.max(
+            // combining two division into one here:
+            // uint256 newMintedStETH = (newMintedShares * _postInternalEther) / _postInternalShares;
+            // uint256 lockedEther = newMintedStETH * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+            (newMintedShares * internalEther * TOTAL_BASIS_POINTS)
+                / (internalShares * (TOTAL_BASIS_POINTS - socket.reserveRatioBP)),
+            CONNECT_DEPOSIT
+        );
+        socket.sharesMinted = uint96(newMintedShares);
+        IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
     }
 
     // function updateVaults(
