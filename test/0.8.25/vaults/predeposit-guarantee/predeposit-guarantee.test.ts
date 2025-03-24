@@ -497,7 +497,10 @@ describe("PredepositGuarantee.sol", () => {
       expect(await pdg.nodeOperatorGuarantor(vaultOperator)).to.equal(vaultOperatorGuarantor);
 
       // guarantor funds PDG for operator
-      await pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      await expect(pdg.connect(vaultOperatorGuarantor).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperatorGuarantor, ether("1"));
+
       let [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(0n);
@@ -605,7 +608,6 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
-      // await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
       const proveUnknownValidatorTx = await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
 
       await expect(proveUnknownValidatorTx)
@@ -620,7 +622,10 @@ describe("PredepositGuarantee.sol", () => {
 
   context("negative proof flow", () => {
     it("should correctly handle compensation of disproven validator", async () => {
-      await pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
+      await expect(pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperator, ether("1"));
+
       const [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(0n);
@@ -662,7 +667,15 @@ describe("PredepositGuarantee.sol", () => {
         childBlockTimestamp,
         proof: concatenatedProof,
       };
-      await pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress);
+
+      await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultNodeOperatorAddress))
+        .to.emit(pdg, "ValidatorDisproven")
+        .withArgs(
+          validatorIncorrect.pubkey,
+          vaultOperator.address,
+          await stakingVault.getAddress(),
+          vaultNodeOperatorAddress,
+        );
 
       // Now the validator is in the DISPROVEN stage, we can proceed with compensation
       let validatorStatusTx = await pdg.validatorStatus(validatorIncorrect.pubkey);
