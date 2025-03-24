@@ -555,9 +555,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {
         uint128 amount = uint128(msg.value);
 
+        // _nodeOperator != address(0) is enforced by onlyGuarantorOf()
         if (amount == 0) revert ZeroArgument("msg.value");
         if (amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(amount);
-        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(amount);
 
