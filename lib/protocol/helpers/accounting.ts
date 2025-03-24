@@ -46,7 +46,8 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
-  vaultsTotalFees?: bigint;
+  vaultsTotalTreasuryFees?: bigint;
+  vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   silent?: boolean;
@@ -83,7 +84,8 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    vaultsTotalFees = 0n,
+    vaultsTotalTreasuryFees = 0n,
+    vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
@@ -144,7 +146,8 @@ export const report = async (
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      vaultsTotalFees,
+      vaultsTotalTreasuryFees,
+      vaultsTotalDeficit,
       vaultsDataTreeRoot,
       vaultsDataTreeCid,
     });
@@ -189,7 +192,8 @@ export const report = async (
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalFees,
+    vaultsTotalTreasuryFees,
+    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
     extraDataFormat,
@@ -279,7 +283,8 @@ type SimulateReportParams = {
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalFees: bigint;
+  vaultsTotalTreasuryFees: bigint;
+  vaultsTotalDeficit: bigint;
   vaultsDataTreeRoot: string;
   vaultsDataTreeCid: string;
 };
@@ -302,7 +307,8 @@ const simulateReport = async (
     clBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalFees,
+    vaultsTotalTreasuryFees,
+    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
   }: SimulateReportParams,
@@ -331,7 +337,8 @@ const simulateReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultsTotalFees,
+      vaultsTotalTreasuryFees,
+      vaultsTotalDeficit,
       vaultsDataTreeRoot,
       vaultsDataTreeCid,
     },
@@ -359,7 +366,8 @@ type HandleOracleReportParams = {
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalFees: bigint;
+  vaultsTotalTreasuryFees: bigint;
+  vaultsTotalDeficit: bigint;
   vaultsDataTreeRoot: string;
   vaultsDataTreeCid: string;
 };
@@ -372,7 +380,8 @@ export const handleOracleReport = async (
     sharesRequestedToBurn,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalFees,
+    vaultsTotalTreasuryFees,
+    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
   }: HandleOracleReportParams,
@@ -404,7 +413,8 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      vaultsTotalFees,
+      vaultsTotalTreasuryFees,
+      vaultsTotalDeficit,
       vaultsDataTreeRoot,
       vaultsDataTreeCid,
     });
@@ -508,7 +518,8 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultsTotalFees?: bigint;
+  vaultsTotalTreasuryFees?: bigint;
+  vaultsTotalDeficit?: bigint;
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -537,7 +548,8 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultsTotalFees = 0n,
+    vaultsTotalTreasuryFees = 0n,
+    vaultsTotalDeficit = 0n,
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -557,7 +569,8 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults total fees": vaultsTotalFees,
+    "Vaults total treasury fees": vaultsTotalTreasuryFees,
+    "Vaults total deficit": vaultsTotalDeficit,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -579,7 +592,8 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalFees,
+    vaultsTotalTreasuryFees,
+    vaultsTotalDeficit,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -703,7 +717,8 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
-  data.vaultsTotalFees,
+  data.vaultsTotalTreasuryFees,
+  data.vaultsTotalDeficit,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -725,7 +740,8 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
-    "uint256", // vaultsTotalFees
+    "uint256", // vaultsTotalTreasuryFees
+    "uint256", // vaultsTotalDeficit
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount

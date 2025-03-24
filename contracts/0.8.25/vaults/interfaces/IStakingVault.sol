@@ -16,9 +16,9 @@ interface IStakingVault {
      * @custom:inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      */
     struct Report {
-        uint64 timestamp;
         uint128 valuation;
         int128 inOutDelta;
+        uint64 timestamp;
     }
 
     struct Deposit {

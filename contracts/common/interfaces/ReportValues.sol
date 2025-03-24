@@ -23,14 +23,10 @@ struct ReportValues {
     /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
-    /// @notice array of combined values for each Lido vault
-    ///         (sum of all the balances of Lido validators of the vault
-    ///          plus the balance of the vault itself)
-    // uint256[] vaultValues;
-    /// @notice in-out deltas (deposits - withdrawals) of each Lido vault
-    // int256[] inOutDeltas;
-    /// @notice overall vaults fees
-    uint256 vaultsTotalFees;
+    /// @notice overall vaults treasury fees
+    uint256 vaultsTotalTreasuryFees;
+    /// @notice overall vaults total deficit
+    uint256 vaultsTotalDeficit;
     /// @notice Merkle Tree root of the vaults data.
     bytes32 vaultsDataTreeRoot;
     /// @notice CID of the published Merkle tree of the vault data.

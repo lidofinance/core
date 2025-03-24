@@ -56,8 +56,10 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
+        /// @notice last fees accrued on the vault
+        uint96 lastFees;
         /// @notice unused gap in the slot 2
-        /// uint104 _unused_gap_;
+        /// uint8 _unused_gap_;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -119,7 +121,7 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -213,7 +215,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            0
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -550,7 +553,7 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
-    function invalidateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
+    function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
@@ -559,21 +562,19 @@ contract VaultHub is PausableUntilWithRoles {
         if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
-        uint256 newMintedShares = socket.sharesMinted;
-        newMintedShares += _fees;
-
-        uint256 internalEther = LIDO.getTotalPooledEther() - LIDO.getExternalEther();
-        uint256 internalShares = LIDO.getTotalShares() - LIDO.getExternalShares();
+        uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
+        if (_fees < socket.lastFees) {
+            revert InvalidFees(_vault, _fees, socket.lastFees);
+        }
+        newMintedShares += _fees - socket.lastFees;
+        socket.sharesMinted = uint96(newMintedShares);
+        socket.lastFees = uint96(_fees);
 
         uint256 lockedEther = Math256.max(
-            // combining two division into one here:
-            // uint256 newMintedStETH = (newMintedShares * _postInternalEther) / _postInternalShares;
-            // uint256 lockedEther = newMintedStETH * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
-            (newMintedShares * internalEther * TOTAL_BASIS_POINTS)
-                / (internalShares * (TOTAL_BASIS_POINTS - socket.reserveRatioBP)),
+            LIDO.getPooledEthBySharesRoundUp(newMintedShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
             CONNECT_DEPOSIT
         );
-        socket.sharesMinted = uint96(newMintedShares);
+
         IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
     }
 
@@ -689,4 +690,5 @@ contract VaultHub is PausableUntilWithRoles {
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
     error InvalidProof();
+    error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
 }

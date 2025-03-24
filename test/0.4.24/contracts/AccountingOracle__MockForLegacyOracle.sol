@@ -46,7 +46,8 @@ contract AccountingOracle__MockForLegacyOracle {
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
-                data.vaultsTotalFees,
+                data.vaultsTotalTreasuryFees,
+                data.vaultsTotalDeficit,
                 data.vaultsDataTreeRoot,
                 data.vaultsDataTreeCid
             )
