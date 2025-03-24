@@ -43,12 +43,14 @@ export async function deployWithdrawalsPreDeployedMock(
 export async function deployStakingVaultBehindBeaconProxy(
   vaultOwner: HardhatEthersSigner,
   operator: HardhatEthersSigner,
+  depositor: HardhatEthersSigner,
 ): Promise<DeployedStakingVault> {
   // deploying implementation
   const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
   const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
   const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
     await vaultHub_.getAddress(),
+    depositor,
     await depositContract_.getAddress(),
   ]);
 
@@ -70,6 +72,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, vaultOwner);
   expect(await stakingVault_.owner()).to.equal(await vaultOwner.getAddress());
   expect(await stakingVault_.nodeOperator()).to.equal(await operator.getAddress());
+  expect(await stakingVault_.depositor()).to.equal(await depositor.getAddress());
 
   return {
     depositContract: depositContract_,

@@ -23,6 +23,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
         address accounting;
+        address predepositGuarantee;
         address wstETH;
         address vaultHub;
     }
@@ -42,6 +43,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
     address public immutable accounting;
+    address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
     constructor(ContractAddresses memory addresses) {
@@ -61,6 +63,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         oracleDaemonConfig = addresses.oracleDaemonConfig;
         accounting = addresses.accounting;
         wstETH = addresses.wstETH;
+        predepositGuarantee = addresses.predepositGuarantee;
         vaultHub = addresses.vaultHub;
     }
 
