@@ -195,7 +195,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
     function valuation() public view returns (uint256) {
-        checkReportFreshness();
+        _checkReportFreshness();
         ERC7201Storage storage $ = _getStorage();
         return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
     }
@@ -535,12 +535,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
-    function isReportFresh() internal view returns (bool) {
+    function _isReportFresh() internal view returns (bool) {
         return block.timestamp - _getStorage().report.timestamp < 1 days;
     }
 
-    function checkReportFreshness() internal view {
-        if (!isReportFresh()) revert FreshReportRequired();
+    function _checkReportFreshness() internal view {
+        if (!_isReportFresh()) revert FreshReportRequired();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
