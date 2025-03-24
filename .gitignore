@@ -3,6 +3,7 @@
 .vscode/*
 !./vscode/settings.json
 !./vscode/extensions.json
+!./vscode/snippets.code-snippets
 
 node_modules/
 coverage/

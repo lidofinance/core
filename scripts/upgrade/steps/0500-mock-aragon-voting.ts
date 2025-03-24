@@ -75,14 +75,18 @@ export async function main(): Promise<void> {
   const aragonKernel = await loadContract<Kernel>("Kernel", kernelAddress);
   const appBasesNamespace = await aragonKernel.APP_BASES_NAMESPACE();
   const lidoAppId = state[Sk.appLido].aragonApp.id;
-  await aragonKernel.connect(votingSigner).setApp(appBasesNamespace, lidoAppId, lidoImplAddress, { nonce: votingNonce });
+  await aragonKernel
+    .connect(votingSigner)
+    .setApp(appBasesNamespace, lidoAppId, lidoImplAddress, { nonce: votingNonce });
   votingNonce += 1;
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);
   await lido
     .connect(votingSigner)
-    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress, { nonce: votingNonce }); // can be called by anyone
+    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress, {
+      nonce: votingNonce,
+    }); // can be called by anyone
   votingNonce += 1;
   // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
