@@ -924,6 +924,58 @@ describe("PredepositGuarantee.sol", () => {
       // ValidatorStatus.stage
       expect(validatorStatusTx[0]).to.equal(4n); // 4n is COMPENSATED
     });
+
+    it("revert proveInvalidValidatorWC with WithdrawalCredentialsMatch error", async () => {
+      await expect(pdg.connect(vaultOperator).topUpNodeOperatorBalance(vaultOperator, { value: ether("1") }))
+        .to.emit(pdg, "BalanceToppedUp")
+        .withArgs(vaultOperator, vaultOperator, ether("1"));
+
+      const [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
+      expect(operatorBondTotal).to.equal(ether("1"));
+      expect(operatorBondLocked).to.equal(0n);
+
+      // Staking Vault is funded with enough ether to run validator
+      await stakingVault.fund({ value: ether("32") });
+      expect(await stakingVault.valuation()).to.equal(ether("32"));
+
+      // Generate a validator
+      const vaultWC = await stakingVault.withdrawalCredentials();
+      // this WC will raise WithdrawalCredentialsMatch error
+      const validatorIncorrect = generateValidator(vaultWC);
+      const predepositData = generatePredeposit(validatorIncorrect);
+
+      await pdg.predeposit(stakingVault, [predepositData]);
+
+      // Validator is added to CL merkle tree
+      await sszMerkleTree.addValidatorLeaf(validatorIncorrect);
+      const validatorLeafIndex = firstValidatorLeafIndex + 1n;
+      const validatorIndex = 1n;
+
+      // Beacon Block is generated with new CL state
+      const stateRoot = await sszMerkleTree.getMerkleRoot();
+      const beaconBlockHeader = generateBeaconHeader(stateRoot);
+      const beaconBlockMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
+
+      /// Beacon Block root is posted to EL
+      const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
+
+      // NO collects validator proof
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validatorIncorrect);
+      const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
+      const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
+
+      const witness = {
+        pubkey: validatorIncorrect.pubkey,
+        validatorIndex,
+        childBlockTimestamp,
+        proof: concatenatedProof,
+      };
+
+      await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(witness, vaultWC)).to.revertedWithCustomError(
+        pdg,
+        "WithdrawalCredentialsMatch",
+      );
+    });
   });
 
   context("pausing", () => {
