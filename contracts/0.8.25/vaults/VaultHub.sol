@@ -174,7 +174,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 mintedStETH = LIDO.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
+        uint256 mintedStETH = LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
