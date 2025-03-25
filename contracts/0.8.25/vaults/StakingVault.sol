@@ -185,6 +185,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return _getStorage().vaultHub;
     }
 
+    /**
+     * @notice Attaches the vault to a `VaultHub`
+     * @param _vaultHub Address of `VaultHub`
+     */
     function attachVaultHub(address _vaultHub) external onlyOwner {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
@@ -203,7 +207,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         address _vaultHub = $.vaultHub;
         if (_vaultHub == address(0)) revert VaultHubNotAttached();
-        if (VaultHub(_vaultHub).vaultSocket(address(this)).sharesMinted != 0) revert DetachVaultWithMintedSharesNotAllowed();
+
+        VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
+        if (!socket.pendingDisconnect) revert VaultNotPendingDisconnect();
 
         $.vaultHub = address(0);
 
@@ -779,12 +785,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error PartialWithdrawalNotAllowed();
 
     /**
-     * @notice Thrown when trying to detach vault from VaultHub with mintedShares
-     */
-    error DetachVaultWithMintedSharesNotAllowed();
-
-
-    /**
      * @notice Thrown when trying to detach vault from VaultHub while it is not attached
      */
     error VaultHubNotAttached();
@@ -793,4 +793,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to attach vault to VaultHub while it is already attached
      */
     error VaultHubAlreadyAttached();
+
+    /**
+     * @notice Thrown when trying to detach vault from VaultHub while it is not in pending disconnect status
+     */
+    error VaultNotPendingDisconnect();
 }
