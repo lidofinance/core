@@ -334,18 +334,22 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     /**
      * @notice permissionless method to prove correct Withdrawal Credentials for the validator on CL
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
-     * @dev will revert if proof is invalid or misformed
+     * @dev will revert if proof is invalid or misformed or validator is not predeposited
      */
     function proveValidatorWC(ValidatorWitness calldata _witness) public whenResumed {
+        ValidatorStatus storage validator = _getStorage().validatorStatus[_witness.pubkey];
+
+        // checking stage here prevents revert on call to zero address at `.stakingVault.withdrawalCredentials()`
+        if (validator.stage != validatorStage.PREDEPOSITED) {
+            revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
+        }
+
         // WC will be sanity checked in `_processPositiveProof()`
-        bytes32 withdrawalCredentials = _getStorage()
-            .validatorStatus[_witness.pubkey]
-            .stakingVault
-            .withdrawalCredentials();
+        bytes32 withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
 
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
-        _processPositiveProof(_witness.pubkey, withdrawalCredentials);
+        _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
     }
 
     /**
@@ -505,19 +509,16 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // * * * * * Internal Functions * * * * *  //
     // * * * * * * * * * * * * * * * * * * * * //
 
-    function _processPositiveProof(bytes calldata _pubkey, bytes32 _withdrawalCredentials) internal {
-        ERC7201Storage storage $ = _getStorage();
-        ValidatorStatus storage validator = $.validatorStatus[_pubkey];
-
-        if (validator.stage != validatorStage.PREDEPOSITED) {
-            revert ValidatorNotPreDeposited(_pubkey, validator.stage);
-        }
-
+    function _processPositiveProof(
+        bytes calldata _pubkey,
+        ValidatorStatus storage validator,
+        bytes32 _withdrawalCredentials
+    ) internal {
         // sanity check that vault returns valid WC
         _validateWC(validator.stakingVault, _withdrawalCredentials);
 
         validator.stage = validatorStage.PROVEN;
-        NodeOperatorBalance storage balance = $.nodeOperatorBalance[validator.nodeOperator];
+        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[validator.nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
 
         emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
