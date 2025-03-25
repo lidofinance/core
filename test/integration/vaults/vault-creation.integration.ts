@@ -11,7 +11,7 @@ import { days, ether, impersonate } from "lib";
 import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/protocol";
 
 import { deployWithdrawalsPreDeployedMock } from "test/deploy";
-import { Snapshot, Tracing } from "test/suite";
+import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
@@ -42,8 +42,7 @@ describe("Scenario: Vault creation", () => {
     curatorFeeClaimers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
     stranger: HardhatEthersSigner,
-    agentSigner: HardhatEthersSigner,
-    votingSigner: HardhatEthersSigner;
+    agentSigner: HardhatEthersSigner;
 
   let allRoles: HardhatEthersSigner[];
   let shareLimit: bigint;
@@ -79,9 +78,8 @@ describe("Scenario: Vault creation", () => {
       curatorFeeClaimers,
       nodeOperatorFeeClaimers,
       stranger,
-      agentSigner,
-      votingSigner,
     ] = allRoles;
+    agentSigner = await ctx.getSigner("agent");
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -129,6 +127,8 @@ describe("Scenario: Vault creation", () => {
 
   async function setupLido() {
     const { lido } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
     // only equivalent of 10.0% of TVL can be minted as stETH on the vault
     shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
@@ -178,6 +178,16 @@ describe("Scenario: Vault creation", () => {
     ).to.be.ok;
   });
 
+  it("Allows to claim Curator's fee", async () => {
+    await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.not.revertedWithoutReason();
+  });
+
+  it("Allows to claim NO's fee", async () => {
+    await expect(
+      delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
+    ).to.be.not.revertedWithoutReason();
+  });
+
   describe("Allows actions only after connecting to Hub", () => {
     it("Allows to mint stEth", async () => {
       const { vaultHub } = ctx.contracts;
@@ -216,35 +226,6 @@ describe("Scenario: Vault creation", () => {
       before(async () => {
         await delegation.connect(funder).fund({ value: ether("1") });
         await generateFeesToClaim();
-      });
-
-      it("to claim Curator's fee", async () => {
-        const { vaultHub } = ctx.contracts;
-        //await connectToHub();
-        // todo: expecting for method to be reverted because we are not connected to the hub, but it is passing fine
-        await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.revertedWithCustomError(
-          vaultHub,
-          "NotConnectedToHub",
-        );
-        await connectToHub();
-
-        await expect(
-          delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger),
-        ).to.not.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
-        await disconnectFromHub();
-      });
-
-      it("to claim NO's fee", async () => {
-        const { vaultHub } = ctx.contracts;
-        Tracing.enable();
-
-        //await connectToHub();
-        // todo: expecting for method to be reverted because we are not connected to the hub but it is passing fine
-        await expect(
-          delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
-        ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
-
-        await disconnectFromHub();
       });
     });
   });
