@@ -15,7 +15,6 @@ import { Snapshot } from "test/suite";
 
 import { ether } from "../../../lib/units";
 
-const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
@@ -48,8 +47,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     validatorExitRequesters: HardhatEthersSigner,
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
-    curatorFeeSetters: HardhatEthersSigner,
-    curatorFeeClaimers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -73,8 +70,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       validatorExitRequesters,
       validatorWithdrawalTriggerers,
       disconnecters,
-      curatorFeeSetters,
-      curatorFeeClaimers,
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
@@ -118,7 +113,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           defaultAdmin: owner,
           nodeOperatorManager: nodeOperatorManager,
           assetRecoverer: assetRecoverer,
-          curatorFeeBP: VAULT_OWNER_FEE,
           nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
           confirmExpiry: days(7n),
           funders: [funder],
@@ -131,8 +125,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [validatorExitRequesters],
           validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
           disconnecters: [disconnecters],
-          curatorFeeSetters: [curatorFeeSetters],
-          curatorFeeClaimers: [curatorFeeClaimers],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
         },
         "0x",
@@ -146,48 +138,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
-        it("setCuratorFeeBP", async () => {
-          await testMethod(
-            testDelegation,
-            "setCuratorFeeBP",
-            {
-              successUsers: [curatorFeeSetters],
-              failingUsers: allRoles.filter((r) => r !== curatorFeeSetters),
-            },
-            [1n],
-            await testDelegation.CURATOR_FEE_SET_ROLE(),
-          );
-
-          await testRevokingRole(
-            testDelegation,
-            "setCuratorFeeBP",
-            await testDelegation.CURATOR_FEE_SET_ROLE(),
-            curatorFeeSetters,
-            [1n],
-          );
-        });
-
-        it("claimCuratorFee", async () => {
-          await testMethod(
-            testDelegation,
-            "claimCuratorFee",
-            {
-              successUsers: [curatorFeeClaimers],
-              failingUsers: allRoles.filter((r) => r !== curatorFeeClaimers),
-            },
-            [stranger],
-            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
-          );
-
-          await testRevokingRole(
-            testDelegation,
-            "claimCuratorFee",
-            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
-            curatorFeeClaimers,
-            [stranger],
-          );
-        });
-
         it("claimNodeOperatorFee", async () => {
           await testMethod(
             testDelegation,
@@ -492,7 +442,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
     it("Allows anyone to read public metrics of the vault", async () => {
       expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
-      expect(await testDelegation.connect(funder).curatorUnclaimedFee()).to.equal(0);
       expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
       expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
     });
@@ -515,7 +464,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         {
           defaultAdmin: owner,
           nodeOperatorManager: nodeOperatorManager,
-          curatorFeeBP: VAULT_OWNER_FEE,
           nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
           assetRecoverer: assetRecoverer,
           confirmExpiry: days(7n),
@@ -529,8 +477,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [],
           validatorWithdrawalTriggerers: [],
           disconnecters: [],
-          curatorFeeSetters: [],
-          curatorFeeClaimers: [],
           nodeOperatorFeeClaimers: [],
         },
         "0x",
@@ -544,8 +490,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
     it("Verify that roles are not assigned", async () => {
       const roles = [
-        await testDelegation.CURATOR_FEE_SET_ROLE(),
-        await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
         await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
         await testDelegation.FUND_ROLE(),
         await testDelegation.WITHDRAW_ROLE(),
@@ -565,26 +509,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     });
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
-        it("setCuratorFeeBP", async () => {
-          await testGrantingRole(
-            testDelegation,
-            "setCuratorFeeBP",
-            await testDelegation.CURATOR_FEE_SET_ROLE(),
-            [1n],
-            owner,
-          );
-        });
-
-        it("claimCuratorFee", async () => {
-          await testGrantingRole(
-            testDelegation,
-            "claimCuratorFee",
-            await testDelegation.CURATOR_FEE_CLAIM_ROLE(),
-            [stranger],
-            owner,
-          );
-        });
-
         it("claimNodeOperatorFee", async () => {
           await testGrantingRole(
             testDelegation,
@@ -635,22 +559,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
       ).to.be.not.revertedWithCustomError(delegation, "SenderNotMember");
     }
-  }
-
-  async function testRevokingRole<T extends unknown[]>(
-    delegation: Delegation,
-    methodName: DelegationMethods,
-    roleToRevoke: string,
-    userToRevoke: HardhatEthersSigner,
-    argument: T,
-  ) {
-    await delegation.connect(owner).revokeRole(roleToRevoke, userToRevoke);
-
-    await expect(
-      delegation.connect(userToRevoke)[methodName](...(argument as ContractMethodArgs<T>)),
-    ).to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
-
-    await delegation.connect(owner).grantRole(roleToRevoke, userToRevoke);
   }
 
   async function testGrantingRole<T extends unknown[]>(
