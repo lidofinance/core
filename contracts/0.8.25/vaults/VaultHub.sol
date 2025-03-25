@@ -385,14 +385,15 @@ contract VaultHub is PausableUntilWithRoles {
         burnShares(_vault, _amountOfShares);
     }
 
-    /// @notice force rebalance of the vault to have sufficient reserve ratio
+    /// @notice permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
-    /// @dev permissionless if the vault's min reserve ratio is broken
+    /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _requireUnhealthy(_vault);
 
-        uint256 amountToRebalance = rebalanceShortfall(_vault);
+        uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
+        uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
