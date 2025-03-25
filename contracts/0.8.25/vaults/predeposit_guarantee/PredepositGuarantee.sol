@@ -45,7 +45,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be compensated to staking vault owner
      * @param COMPENSATED - disproven validator has it's PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
      */
-    enum validatorStage {
+    enum ValidatorStage {
         NONE,
         PREDEPOSITED,
         PROVEN,
@@ -71,7 +71,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      * @param nodeOperator pins validator to specific NO
      */
     struct ValidatorStatus {
-        validatorStage stage;
+        ValidatorStage stage;
         IStakingVault stakingVault;
         address nodeOperator;
     }
@@ -310,14 +310,14 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
 
-            if ($.validatorStatus[_deposit.pubkey].stage != validatorStage.NONE) {
+            if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
                 revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
             }
 
             if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositAmountInvalid(_deposit.pubkey, _deposit.amount);
 
             $.validatorStatus[_deposit.pubkey] = ValidatorStatus({
-                stage: validatorStage.PREDEPOSITED,
+                stage: ValidatorStage.PREDEPOSITED,
                 stakingVault: _stakingVault,
                 nodeOperator: nodeOperator
             });
@@ -340,7 +340,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ValidatorStatus storage validator = _getStorage().validatorStatus[_witness.pubkey];
 
         // checking stage here prevents revert on call to zero address at `.stakingVault.withdrawalCredentials()`
-        if (validator.stage != validatorStage.PREDEPOSITED) {
+        if (validator.stage != ValidatorStage.PREDEPOSITED) {
             revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
         }
 
@@ -372,7 +372,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
-            if (validator.stage != validatorStage.PROVEN) {
+            if (validator.stage != ValidatorStage.PROVEN) {
                 revert DepositToUnprovenValidator(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
             }
 
@@ -426,7 +426,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         ERC7201Storage storage $ = _getStorage();
 
-        if ($.validatorStatus[_witness.pubkey].stage != validatorStage.NONE) {
+        if ($.validatorStatus[_witness.pubkey].stage != ValidatorStage.NONE) {
             revert ValidatorNotNew(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
         }
 
@@ -438,7 +438,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         $.validatorStatus[_witness.pubkey] = ValidatorStatus({
-            stage: validatorStage.PROVEN,
+            stage: ValidatorStage.PROVEN,
             stakingVault: _stakingVault,
             nodeOperator: _stakingVault.nodeOperator()
         });
@@ -488,9 +488,9 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_recipient == address(stakingVault)) revert CompensateToVaultNotAllowed();
         if (msg.sender != stakingVault.owner()) revert NotStakingVaultOwner();
-        if (validator.stage != validatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
+        if (validator.stage != ValidatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
 
-        validator.stage = validatorStage.COMPENSATED;
+        validator.stage = ValidatorStage.COMPENSATED;
 
         // reduces total&locked NO balance
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[nodeOperator];
@@ -517,7 +517,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         // sanity check that vault returns valid WC
         _validateWC(validator.stakingVault, _withdrawalCredentials);
 
-        validator.stage = validatorStage.PROVEN;
+        validator.stage = ValidatorStage.PROVEN;
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[validator.nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
 
@@ -529,7 +529,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
         ValidatorStatus storage validator = $.validatorStatus[_pubkey];
 
-        if (validator.stage != validatorStage.PREDEPOSITED) {
+        if (validator.stage != ValidatorStage.PREDEPOSITED) {
             revert ValidatorNotPreDeposited(_pubkey, validator.stage);
         }
 
@@ -543,7 +543,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             revert WithdrawalCredentialsMatch();
         }
 
-        validator.stage = validatorStage.DISPROVEN;
+        validator.stage = ValidatorStage.DISPROVEN;
 
         emit ValidatorDisproven(
             _pubkey,
@@ -661,22 +661,22 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     // predeposit errors
     error EmptyDeposits();
     error PredepositAmountInvalid(bytes validatorPubkey, uint256 depositAmount);
-    error ValidatorNotNew(bytes validatorPubkey, validatorStage stage);
+    error ValidatorNotNew(bytes validatorPubkey, ValidatorStage stage);
     error NotEnoughUnlocked(uint256 unlocked, uint256 amount);
     error WithdrawalCredentialsMismatch(address stakingVault, address withdrawalCredentialsAddress);
 
     // depositing errors
-    error DepositToUnprovenValidator(bytes validatorPubkey, validatorStage stage);
+    error DepositToUnprovenValidator(bytes validatorPubkey, ValidatorStage stage);
     error DepositToWrongVault(bytes validatorPubkey, address stakingVault);
 
     // prove
-    error ValidatorNotPreDeposited(bytes validatorPubkey, validatorStage stage);
+    error ValidatorNotPreDeposited(bytes validatorPubkey, ValidatorStage stage);
     error WithdrawalCredentialsMatch();
     error WithdrawalCredentialsMisformed(bytes32 withdrawalCredentials);
     error WithdrawalCredentialsInvalidVersion(uint8 version);
 
     // compensate
-    error ValidatorNotDisproven(validatorStage stage);
+    error ValidatorNotDisproven(ValidatorStage stage);
     error CompensateFailed();
     error CompensateToVaultNotAllowed();
 
