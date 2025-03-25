@@ -37,8 +37,6 @@ describe("Delegation.sol", () => {
   let validatorExitRequester: HardhatEthersSigner;
   let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
-  let curatorFeeSetter: HardhatEthersSigner;
-  let curatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
@@ -77,8 +75,6 @@ describe("Delegation.sol", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
-      curatorFeeSetter,
-      curatorFeeClaimer,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       stranger,
@@ -115,7 +111,6 @@ describe("Delegation.sol", () => {
         defaultAdmin: vaultOwner,
         nodeOperatorManager,
         confirmExpiry: days(7n),
-        curatorFeeBP: 0n,
         nodeOperatorFeeBP: 0n,
         assetRecoverer: vaultOwner,
         funders: [funder],
@@ -128,8 +123,6 @@ describe("Delegation.sol", () => {
         validatorExitRequesters: [validatorExitRequester],
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
-        curatorFeeSetters: [curatorFeeSetter],
-        curatorFeeClaimers: [curatorFeeClaimer],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
       },
       "0x",
@@ -221,16 +214,11 @@ describe("Delegation.sol", () => {
       await assertSoleMember(validatorExitRequester, await delegation.REQUEST_VALIDATOR_EXIT_ROLE());
       await assertSoleMember(validatorWithdrawalTriggerer, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
-      await assertSoleMember(curatorFeeSetter, await delegation.CURATOR_FEE_SET_ROLE());
-      await assertSoleMember(curatorFeeClaimer, await delegation.CURATOR_FEE_CLAIM_ROLE());
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
 
-      expect(await delegation.curatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
-      expect(await delegation.curatorUnclaimedFee()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
-      expect(await delegation.curatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
       expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
     });
   });
@@ -270,51 +258,6 @@ describe("Delegation.sol", () => {
         .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
       expect(await delegation.getConfirmExpiry()).to.equal(newConfirmExpiry);
-    });
-  });
-
-  context("claimCuratorFee", () => {
-    it("reverts if the caller is not a member of the curator due claim role", async () => {
-      await expect(delegation.connect(stranger).claimCuratorFee(stranger))
-        .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await delegation.CURATOR_FEE_CLAIM_ROLE());
-    });
-
-    it("reverts if the recipient is the zero address", async () => {
-      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_recipient");
-    });
-
-    it("reverts if the fee is zero", async () => {
-      expect(await delegation.curatorUnclaimedFee()).to.equal(0n);
-      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(stranger))
-        .to.be.revertedWithCustomError(delegation, "ZeroArgument")
-        .withArgs("_fee");
-    });
-
-    it("claims the fee", async () => {
-      const curatorFee = 10_00n; // 10%
-      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(curatorFee);
-      expect(await delegation.curatorFeeBP()).to.equal(curatorFee);
-
-      const rewards = ether("1");
-      await vault.connect(hubSigner).report(rewards, 0n, 0n);
-
-      const expectedDue = (rewards * curatorFee) / BP_BASE;
-      expect(await delegation.curatorUnclaimedFee()).to.equal(expectedDue);
-      expect(await delegation.curatorUnclaimedFee()).to.be.greaterThan(await ethers.provider.getBalance(vault));
-
-      expect(await ethers.provider.getBalance(vault)).to.equal(0n);
-      await rewarder.sendTransaction({ to: vault, value: rewards });
-      expect(await ethers.provider.getBalance(vault)).to.equal(rewards);
-
-      expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
-      await expect(delegation.connect(curatorFeeClaimer).claimCuratorFee(recipient))
-        .to.emit(vault, "Withdrawn")
-        .withArgs(delegation, recipient, expectedDue);
-      expect(await ethers.provider.getBalance(recipient)).to.equal(expectedDue);
-      expect(await ethers.provider.getBalance(vault)).to.equal(rewards - expectedDue);
     });
   });
 
@@ -405,9 +348,7 @@ describe("Delegation.sol", () => {
       const inOutDelta = ether("1");
       const locked = ether("2");
 
-      const curatorFeeBP = 1000; // 10%
       const operatorFeeBP = 1000; // 10%
-      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(curatorFeeBP);
       await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFeeBP);
 
       await delegation.connect(funder).fund({ value: amount });
@@ -562,47 +503,6 @@ describe("Delegation.sol", () => {
     });
   });
 
-  context("setCuratorFeeBP", () => {
-    it("reverts if caller is not curator", async () => {
-      await expect(delegation.connect(stranger).setCuratorFeeBP(1000n))
-        .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await delegation.CURATOR_FEE_SET_ROLE());
-    });
-
-    it("reverts if curator fee is not zero", async () => {
-      // set the curator fee to 5%
-      const newCuratorFee = 500n;
-      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(newCuratorFee);
-      expect(await delegation.curatorFeeBP()).to.equal(newCuratorFee);
-
-      // bring rewards
-      const totalRewards = ether("1");
-      const inOutDelta = 0n;
-      const locked = 0n;
-      await vault.connect(hubSigner).report(totalRewards, inOutDelta, locked);
-      expect(await delegation.curatorUnclaimedFee()).to.equal((totalRewards * newCuratorFee) / BP_BASE);
-
-      // attempt to change the performance fee to 6%
-      await expect(delegation.connect(curatorFeeSetter).setCuratorFeeBP(600n)).to.be.revertedWithCustomError(
-        delegation,
-        "CuratorFeeUnclaimed",
-      );
-    });
-
-    it("reverts if new fee is greater than max fee", async () => {
-      await expect(delegation.connect(curatorFeeSetter).setCuratorFeeBP(MAX_FEE + 1n)).to.be.revertedWithCustomError(
-        delegation,
-        "CombinedFeesExceed100Percent",
-      );
-    });
-
-    it("sets the curator fee", async () => {
-      const newCuratorFee = 1000n;
-      await delegation.connect(curatorFeeSetter).setCuratorFeeBP(newCuratorFee);
-      expect(await delegation.curatorFeeBP()).to.equal(newCuratorFee);
-    });
-  });
-
   context("setOperatorFee", () => {
     it("reverts if new fee is greater than max fee", async () => {
       const invalidFee = MAX_FEE + 1n;
@@ -610,7 +510,7 @@ describe("Delegation.sol", () => {
 
       await expect(
         delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(invalidFee),
-      ).to.be.revertedWithCustomError(delegation, "CombinedFeesExceed100Percent");
+      ).to.be.revertedWithCustomError(delegation, "FeeValueExceed100Percent");
     });
 
     it("reverts if performance due is not zero", async () => {
