@@ -199,6 +199,16 @@
       ]
     }
   },
+  "app:sandbox": {
+    "aragonApp": {
+      "name": "sandbox",
+      "fullName": "sandbox.lidopm.eth"
+    },
+    "proxy": {
+      "address": "0x682E94d2630846a503BDeE8b6810DF71C9806891",
+      "contract": "@aragon/os/contracts/apps/AppProxyUpgradeable.sol"
+    }
+  },
   "aragon-acl": {
     "implementation": {
       "contract": "@aragon/os/contracts/acl/ACL.sol",
