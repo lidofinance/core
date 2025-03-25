@@ -52,6 +52,11 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
     "sepolia": {
       url: RPC_URL,
       chainId: 11155111,
@@ -70,6 +75,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
           browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io",
         },
       },
     ],
