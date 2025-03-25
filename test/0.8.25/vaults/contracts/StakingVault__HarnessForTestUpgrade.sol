@@ -30,7 +30,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
-    constructor(address _beaconChainDepositContract) {
+    constructor(address _predepositGuarantee, address _beaconChainDepositContract) {
+        if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         DEPOSIT_CONTRACT = _beaconChainDepositContract;
@@ -43,7 +44,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _owner,
         address _nodeOperator,
         address _vaultHub,
-        bytes calldata // _params
+        bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) revert VaultAlreadyInitialized();
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
@@ -54,11 +55,20 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         _getVaultStorage().vaultHub = _vaultHub;
     }
 
+    function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
+        return OwnableUpgradeable.owner();
+    }
+
+    function depositor() external view returns (address) {
+        return address(0);
+    }
+
     function finalizeUpgrade_v2() public reinitializer(_version) {
         __StakingVault_init_v2();
     }
 
     event InitializedV2();
+
     function __StakingVault_init_v2() internal onlyInitializing {
         emit InitializedV2();
     }
@@ -83,6 +93,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function depositToBeaconChain(Deposit[] calldata _deposits) external {}
+
     function fund() external payable {}
 
     function inOutDelta() external pure returns (int256) {
@@ -92,13 +103,17 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function nodeOperator() external view returns (address) {
         return _getVaultStorage().nodeOperator;
     }
+
     function rebalance(uint256 _ether) external {}
+
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+
     function lock(uint256 _locked) external {}
 
     function locked() external pure returns (uint256) {
         return 0;
     }
+
     function unlocked() external pure returns (uint256) {
         return 0;
     }
@@ -123,6 +138,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function pauseBeaconChainDeposits() external {}
+
     function resumeBeaconChainDeposits() external {}
 
     function calculateValidatorWithdrawalFee(uint256) external pure returns (uint256) {
@@ -130,6 +146,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function requestValidatorExit(bytes calldata _pubkeys) external {}
+
     function triggerValidatorWithdrawal(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
@@ -138,13 +155,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function detachHub() external {}
 
-    function computeDepositDataRoot(
-        bytes calldata _pubkey,
-        bytes calldata _withdrawalCredentials,
-        bytes calldata _signature,
-        uint256 _amount
-    ) external pure returns (bytes32) {
-        return keccak256("computeDepositDataRoot");
+    function isOssified() external pure returns (bool) {
+        return false;
     }
 
     error ZeroArgument(string name);

@@ -13,6 +13,7 @@ import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 struct DelegationConfig {
     address defaultAdmin;
     address nodeOperatorManager;
+    address assetRecoverer;
     uint256 confirmExpiry;
     uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
@@ -77,6 +78,7 @@ contract VaultFactory {
         // basic permissions to the staking vault
         delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);
         delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
+        delegation.grantRole(delegation.ASSET_RECOVERY_ROLE(), _delegationConfig.assetRecoverer);
 
         for (uint256 i = 0; i < _delegationConfig.funders.length; i++) {
             delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funders[i]);
@@ -100,10 +102,16 @@ contract VaultFactory {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
-            delegation.grantRole(delegation.REQUEST_VALIDATOR_EXIT_ROLE(), _delegationConfig.validatorExitRequesters[i]);
+            delegation.grantRole(
+                delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+                _delegationConfig.validatorExitRequesters[i]
+            );
         }
         for (uint256 i = 0; i < _delegationConfig.validatorWithdrawalTriggerers.length; i++) {
-            delegation.grantRole(delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _delegationConfig.validatorWithdrawalTriggerers[i]);
+            delegation.grantRole(
+                delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+                _delegationConfig.validatorWithdrawalTriggerers[i]
+            );
         }
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);

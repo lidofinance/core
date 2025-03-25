@@ -29,6 +29,7 @@ export async function main() {
   const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
+  const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -36,8 +37,8 @@ export async function main() {
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
-  const withdrawalVaultAdmin = testnetAdmin;
   const vaultHubAdmin = testnetAdmin;
+  const pdgAdmin = testnetAdmin;
 
   // Initialize NodeOperatorsRegistry
 
@@ -111,10 +112,6 @@ export async function main() {
     { from: deployer },
   );
 
-  // Initialize WithdrawalVault
-  const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [withdrawalVaultAdmin], { from: deployer });
-
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);
   await makeTx(withdrawalQueue, "initialize", [withdrawalQueueAdmin], { from: deployer });
@@ -150,4 +147,8 @@ export async function main() {
   // Initialize VaultHub
   const vaultHub = await loadContract("VaultHub", vaultHubAddress);
   await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
+
+  // Initialize PDG
+  const pdg = await loadContract("PredepositGuarantee", pdgAddress);
+  await makeTx(pdg, "initialize", [pdgAdmin], { from: deployer });
 }

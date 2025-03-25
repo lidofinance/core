@@ -27,17 +27,20 @@ struct PermissionsConfig {
 contract VaultFactory__MockPermissions {
     address public immutable BEACON;
     address public immutable PERMISSIONS_IMPL;
+    address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable VAULT_HUB;
 
     /// @param _beacon The address of the beacon contract
     /// @param _permissionsImpl The address of the Permissions implementation
-    constructor(address _beacon, address _permissionsImpl, address _vaultHub) {
+    constructor(address _beacon, address _permissionsImpl, address _predeposit_guarantee, address _vaultHub) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_permissionsImpl == address(0)) revert ZeroArgument("_permissionsImpl");
+        if (_predeposit_guarantee == address(0)) revert ZeroArgument("_predeposit_guarantee");
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         BEACON = _beacon;
         PERMISSIONS_IMPL = _permissionsImpl;
+        PREDEPOSIT_GUARANTEE = _predeposit_guarantee;
         VAULT_HUB = _vaultHub;
     }
 

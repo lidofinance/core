@@ -30,6 +30,7 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+  const pdgDeployParams = state[Sk.predepositGuarantee].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -145,8 +146,8 @@ export async function main() {
   ]);
 
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+    locator.address,
     lidoAddress,
-    accounting.address,
     vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,
   ]);
@@ -200,6 +201,15 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
+  // Deploy PredepositGuarantee
+  const predepositGuarantee = await deployBehindOssifiableProxy(
+    Sk.predepositGuarantee,
+    "PredepositGuarantee",
+    proxyContractsOwner,
+    deployer,
+    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+  );
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -217,6 +227,7 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     accounting.address,
+    predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
   ];
