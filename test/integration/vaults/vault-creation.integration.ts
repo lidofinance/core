@@ -41,13 +41,17 @@ describe("Scenario: Vault creation", () => {
     curatorFeeSetters: HardhatEthersSigner,
     curatorFeeClaimers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
-    stranger: HardhatEthersSigner;
+    stranger: HardhatEthersSigner,
+    agentSigner: HardhatEthersSigner,
+    votingSigner: HardhatEthersSigner;
 
   let allRoles: HardhatEthersSigner[];
-
+  let shareLimit: bigint;
   let snapshot: string;
 
   before(async () => {
+    snapshot = await Snapshot.take();
+
     ctx = await getProtocolContext();
 
     // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
@@ -75,6 +79,8 @@ describe("Scenario: Vault creation", () => {
       curatorFeeClaimers,
       nodeOperatorFeeClaimers,
       stranger,
+      agentSigner,
+      votingSigner,
     ] = allRoles;
 
     // Owner can create a vault with operator as a node operator
@@ -109,8 +115,7 @@ describe("Scenario: Vault creation", () => {
 
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
     delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
-
-    snapshot = await Snapshot.take();
+    await setupLido();
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -122,16 +127,17 @@ describe("Scenario: Vault creation", () => {
     await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
   }
 
-  async function connectToHub() {
-    const { vaultHub, lido } = ctx.contracts;
-    const treasuryFeeBP = 5_00n; // 5% of the treasury fee
-
-    const agentSigner = await ctx.getSigner("agent");
-    const votingSigner = await ctx.getSigner("voting");
-
+  async function setupLido() {
+    const { lido } = ctx.contracts;
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
     // only equivalent of 10.0% of TVL can be minted as stETH on the vault
-    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+    shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+  }
+
+  async function connectToHub() {
+    const { vaultHub } = ctx.contracts;
+    const treasuryFeeBP = 5_00n; // 5% of the treasury fee
+
     await vaultHub
       .connect(agentSigner)
       .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
@@ -139,7 +145,6 @@ describe("Scenario: Vault creation", () => {
 
   async function disconnectFromHub() {
     const { vaultHub } = ctx.contracts;
-    const agentSigner = await ctx.getSigner("agent");
 
     await vaultHub.connect(agentSigner).disconnect(stakingVault);
   }
