@@ -119,7 +119,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
     it("Allows anyone to read public metrics of the vault", async () => {
       expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
-      expect(await testDelegation.connect(funder).curatorUnclaimedFee()).to.equal(0);
       expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
       expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
     });

@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import { ContractRunner, ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
-import { before } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -14,7 +13,6 @@ import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
-const VAULT_OWNER_FEE = 1_00n; // 1% AUM owner fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
 const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
@@ -38,8 +36,6 @@ describe("Scenario: Vault creation", () => {
     validatorExitRequesters: HardhatEthersSigner,
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
-    curatorFeeSetters: HardhatEthersSigner,
-    curatorFeeClaimers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
     stranger: HardhatEthersSigner,
     agentSigner: HardhatEthersSigner;
@@ -47,11 +43,12 @@ describe("Scenario: Vault creation", () => {
   let allRoles: HardhatEthersSigner[];
   let shareLimit: bigint;
   let snapshot: string;
+  let originalSnapshot: string;
 
   before(async () => {
-    snapshot = await Snapshot.take();
-
     ctx = await getProtocolContext();
+
+    originalSnapshot = await Snapshot.take();
 
     // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
     await deployWithdrawalsPreDeployedMock(1n);
@@ -74,8 +71,6 @@ describe("Scenario: Vault creation", () => {
       validatorExitRequesters,
       validatorWithdrawalTriggerers,
       disconnecters,
-      curatorFeeSetters,
-      curatorFeeClaimers,
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
@@ -86,7 +81,6 @@ describe("Scenario: Vault creation", () => {
       {
         defaultAdmin: owner,
         nodeOperatorManager: nodeOperatorManager,
-        curatorFeeBP: VAULT_OWNER_FEE,
         assetRecoverer: assetRecoverer,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
         confirmExpiry: days(7n),
@@ -100,8 +94,6 @@ describe("Scenario: Vault creation", () => {
         validatorExitRequesters: [validatorExitRequesters],
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
         disconnecters: [disconnecters],
-        curatorFeeSetters: [curatorFeeSetters],
-        curatorFeeClaimers: [curatorFeeClaimers],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
       },
       "0x",
@@ -116,7 +108,11 @@ describe("Scenario: Vault creation", () => {
     await setupLido();
   });
 
-  after(async () => await Snapshot.restore(snapshot));
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(snapshot));
+
+  after(async () => await Snapshot.restore(originalSnapshot));
 
   async function generateFeesToClaim() {
     const { vaultHub } = ctx.contracts;
@@ -143,11 +139,12 @@ describe("Scenario: Vault creation", () => {
       .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
   }
 
-  async function disconnectFromHub() {
-    const { vaultHub } = ctx.contracts;
-
-    await vaultHub.connect(agentSigner).disconnect(stakingVault);
-  }
+  // TODO: not needed for now
+  // async function disconnectFromHub() {
+  //   const { vaultHub } = ctx.contracts;
+  //
+  //   await vaultHub.connect(agentSigner).disconnect(stakingVault);
+  // }
 
   it("Allows to fund an withdraw funds for dedicated roles", async () => {
     expect(await delegation.connect(funder).fund({ value: 2n })).to.be.ok;
@@ -178,56 +175,69 @@ describe("Scenario: Vault creation", () => {
     ).to.be.ok;
   });
 
-  it("Allows to claim Curator's fee", async () => {
-    await expect(delegation.connect(curatorFeeClaimers).claimCuratorFee(stranger)).to.be.not.revertedWithoutReason();
-  });
-
   it("Allows to claim NO's fee", async () => {
     await expect(
       delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
     ).to.be.not.revertedWithoutReason();
   });
 
-  describe("Allows actions only after connecting to Hub", () => {
-    it("Allows to mint stEth", async () => {
-      const { vaultHub } = ctx.contracts;
-
+  describe("Reverts stETH related actions when not connected to hub", () => {
+    it("Reverts on minting stETH", async () => {
       await expect(delegation.connect(minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
-        vaultHub,
+        ctx.contracts.vaultHub,
         "NotConnectedToHub",
       );
-      await connectToHub();
-
-      await expect(delegation.connect(minter).mintStETH(stranger, 1n)).to.not.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
-      await disconnectFromHub();
     });
 
-    it("to burn stEth", async () => {
+    it("Reverts on burning stETH", async () => {
+      const { lido, locator } = ctx.contracts;
+
+      // suppose user somehow got 1 share and tries to burn it via the delegation contract on disconnected vault
+      const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
+      await lido.connect(accountingSigner).mintShares(burner, 1n);
+
+      await expect(delegation.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
+        ctx.contracts.vaultHub,
+        "NotConnectedToHub",
+      );
+    });
+  });
+
+  describe("Allows stETH related actions only after connecting to Hub", () => {
+    beforeEach(async () => await connectToHub());
+
+    it("Allows to mint stETH", async () => {
       const { vaultHub } = ctx.contracts;
 
-      // todo: why it fails with ALLOWANCE_EXCEEDED before NotConnectedToHub? How to fix it?
-      await expect(delegation.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
-      await connectToHub();
+      // add some stETH to the vault to have valuation
+      await delegation.connect(funder).fund({ value: ether("1") });
 
-      await expect(delegation.connect(burner).burnStETH(1n)).to.not.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
-      await disconnectFromHub();
+      await expect(delegation.connect(minter).mintStETH(stranger, 1n))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVault, 1n);
     });
 
-    describe("claiming fees", async () => {
-      before(async () => {
-        await delegation.connect(funder).fund({ value: ether("1") });
-        await generateFeesToClaim();
-      });
+    it("Allows to burn stETH", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      // add some stETH to the vault to have valuation, mint shares and approve stETH
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(minter).mintStETH(burner, 1n);
+      await lido.connect(burner).approve(delegation, 1n);
+
+      await expect(delegation.connect(burner).burnStETH(1n))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, 1n);
     });
+  });
+
+  describe("claiming fees", async () => {
+    before(async () => {
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await generateFeesToClaim();
+    });
+
+    // TODO: add test for claiming fees?
   });
 
   it("NO Manager can spawn a validator using ETH from the Vault ", () => {

@@ -263,7 +263,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       };
     });
 
-    const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
+    const pdg = ctx.contracts.predepositGuarantee.connect(nodeOperator);
 
     // top up PDG balance
     await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
