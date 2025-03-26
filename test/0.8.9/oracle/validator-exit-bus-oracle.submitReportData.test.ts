@@ -103,7 +103,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     return (await oracle.getLastRequestedValidatorIndices(moduleId, [nodeOpId]))[0];
   }
 
-  const deploy = async () => {
+  before(async () => {
+    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -122,12 +124,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     await consensus.addMember(member1, 1);
     await consensus.addMember(member2, 2);
     await consensus.addMember(member3, 2);
-  };
-
-  before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
-
-    await deploy();
   });
 
   context("discarded report prevents data submit", () => {
@@ -501,7 +497,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("SUBMIT_DATA_ROLE is allowed", async () => {
-      oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), stranger, { from: admin });
+      await oracle.grantRole(await oracle.SUBMIT_DATA_ROLE(), stranger, { from: admin });
       await consensus.advanceTimeToNextFrameStart();
       const { reportData } = await prepareReportAndSubmitHash();
       await oracle.connect(stranger).submitReportData(reportData, oracleVersion);

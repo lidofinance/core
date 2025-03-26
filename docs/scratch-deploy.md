@@ -24,7 +24,7 @@ The repository contains bash scripts for deploying the DAO across various enviro
 
 The protocol requires configuration of numerous parameters for a scratch deployment. The default configurations are
 stored in JSON files named `deployed-<deploy env>-defaults.json`, where `<deploy env>` represents the target
-environment. Currently, a single default configuration file exists: `deployed-testnet-defaults.json`, which is tailored
+environment. Currently, a single default configuration file exists: `testnet-defaults.json`, which is tailored
 for testnet deployments. This configuration differs from the mainnet setup, featuring shorter vote durations and more
 frequent oracle report cycles, among other adjustments.
 
@@ -34,7 +34,7 @@ frequent oracle report cycles, among other adjustments.
 
 The deployment script performs the following steps regarding configuration:
 
-1. Copies the appropriate default configuration file (e.g., `deployed-testnet-defaults.json`) to a new file named
+1. Copies the appropriate default configuration file (e.g., `testnet-defaults.json`) to a new file named
    `deployed-<network name>.json`, where `<network name>` corresponds to a network configuration defined in
    `hardhat.config.js`.
 
@@ -52,7 +52,7 @@ Detailed information for each setup is provided in the sections below.
 A detailed overview of the deployment script's process:
 
 - Prepare `deployed-<network name>.json` file
-  - Copied from `deployed-testnet-defaults.json`
+  - Copied from `testnet-defaults.json`
   - Enhanced with environment variable values, e.g., `DEPLOYER`
   - Progressively updated with deployed contract information
 - (optional) Deploy DepositContract
@@ -141,7 +141,7 @@ To do Holešky deployment, the following parameters must be set up via env varia
 Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
-To start the deployment, run (the env variables must already defined) from the root repo directory:
+To start the deployment, run (the env variables must already defined) from the root repo directory, e.g.:
 
 ```shell
 bash scripts/scratch/dao-holesky-deploy.sh
@@ -154,7 +154,7 @@ Deploy artifacts information will be stored in `deployed-holesky.json`.
 ### Publishing Sources to Etherscan
 
 ```shell
-NETWORK=<PUT-YOUR-VALUE> RPC_URL=<PUT-YOUR-VALUE> bash ./scripts/verify-contracts-code.sh
+yarn verify:deployed --network <network> (--file <path-to-deployed-json>)
 ```
 
 #### Issues with verification of part of the contracts deployed from factories
@@ -216,7 +216,7 @@ await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { fr
 ## Protocol Parameters
 
 This section describes part of the parameters and their values used at the deployment. The values are specified in
-`deployed-testnet-defaults.json`.
+`testnet-defaults.json`.
 
 ### OracleDaemonConfig
 
@@ -225,23 +225,23 @@ This section describes part of the parameters and their values used at the deplo
 # See https://research.lido.fi/t/withdrawals-for-lido-on-ethereum-bunker-mode-design-and-implementation/3890/4
 # and https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
 # NB: BASE_REWARD_FACTOR: https://ethereum.github.io/consensus-specs/specs/phase0/beacon-chain/#rewards-and-penalties
-NORMALIZED_CL_REWARD_PER_EPOCH=64
-NORMALIZED_CL_REWARD_MISTAKE_RATE_BP=1000  # 10%
-REBASE_CHECK_NEAREST_EPOCH_DISTANCE=1
-REBASE_CHECK_DISTANT_EPOCH_DISTANCE=23  # 10% of AO 225 epochs frame
-VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS=7200  # 1 day
+NORMALIZED_CL_REWARD_PER_EPOCH = 64
+NORMALIZED_CL_REWARD_MISTAKE_RATE_BP = 1000  # 10%
+REBASE_CHECK_NEAREST_EPOCH_DISTANCE = 1
+REBASE_CHECK_DISTANT_EPOCH_DISTANCE = 23  # 10% of AO 225 epochs frame
+VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS = 7200  # 1 day
 
 # See https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330 for "Requirement not be considered Delinquent"
-VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS=28800  # 4 days
+VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS = 28800  # 4 days
 
 # See "B.3.I" of https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
-NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP=100  # 1% network penetration for a single NO
+NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # 1% network penetration for a single NO
 
 # Time period of historical observations used for prediction of the rewards amount
 # see https://research.lido.fi/t/withdrawals-for-lido-on-ethereum-bunker-mode-design-and-implementation/3890/4
-PREDICTION_DURATION_IN_SLOTS=50400  # 7 days
+PREDICTION_DURATION_IN_SLOTS = 50400  # 7 days
 
 # Max period of delay for requests finalization in case of bunker due to negative rebase
 # twice min governance response time - 3 days voting duration
-FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT=1350  # 6 days
+FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350  # 6 days
 ```

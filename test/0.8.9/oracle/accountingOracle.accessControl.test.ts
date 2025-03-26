@@ -5,7 +5,11 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { AccountingOracle__Harness, HashConsensus__Harness, Lido__MockForAccountingOracle } from "typechain-types";
+import {
+  Accounting__MockForAccountingOracle,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
+} from "typechain-types";
 
 import {
   calcExtraDataListHash,
@@ -20,7 +24,6 @@ import {
   OracleReport,
   packExtraDataList,
   ReportAsArray,
-  shareRate,
 } from "lib";
 
 import { deployAndConfigureAccountingOracle } from "test/deploy";
@@ -29,7 +32,7 @@ import { Snapshot } from "test/suite";
 describe("AccountingOracle.sol:accessControl", () => {
   let consensus: HashConsensus__Harness;
   let oracle: AccountingOracle__Harness;
-  let mockLido: Lido__MockForAccountingOracle;
+  let mockAccounting: Accounting__MockForAccountingOracle;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport;
   let extraDataList: string;
@@ -71,8 +74,9 @@ describe("AccountingOracle.sol:accessControl", () => {
       elRewardsVaultBalance: ether("2"),
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
-      simulatedShareRate: shareRate(1n),
       isBunkerMode: true,
+      vaultsValues: [],
+      vaultsInOutDeltas: [],
       extraDataFormat: emptyExtraData ? EXTRA_DATA_FORMAT_EMPTY : EXTRA_DATA_FORMAT_LIST,
       extraDataHash: emptyExtraData ? ZeroHash : extraDataHash,
       extraDataItemsCount: emptyExtraData ? 0 : extraDataItems.length,
@@ -84,7 +88,7 @@ describe("AccountingOracle.sol:accessControl", () => {
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    mockLido = deployed.lido;
+    mockAccounting = deployed.accounting;
   };
 
   before(async () => {
@@ -101,7 +105,7 @@ describe("AccountingOracle.sol:accessControl", () => {
     it("deploying accounting oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
-      expect(mockLido).to.be.not.null;
+      expect(mockAccounting).to.be.not.null;
       expect(reportItems).to.be.not.null;
       expect(extraDataList).to.be.not.null;
     });

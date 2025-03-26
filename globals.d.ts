@@ -1,21 +1,21 @@
 declare namespace NodeJS {
   export interface ProcessEnv {
-    /* iternal logging verbosity (used in scratch deploy / integration tests) */
+    /* internal logging verbosity (used in scratch deploy / integration tests) */
     LOG_LEVEL?: "all" | "debug" | "info" | "warn" | "error" | "none"; // default: "info"
 
     /**
      * Flags for changing the behavior of the Hardhat Network
      */
 
-    /* RPC URL for Hardhat Network forking, required for running tests on mainnet fork with tracing */
-    HARDHAT_FORKING_URL?: string;
+    /* Test execution mode: 'scratch' for fresh network, 'fork' for forked network */
+    MODE?: "scratch" | "forking"; // default: "scratch"
+
+    /* URL of the network to fork from */
+    FORK_RPC_URL?: string; // default: "https://eth.drpc.org"
 
     /**
      * Flags for changing the behavior of the integration tests
      */
-
-    /* if "on" the integration tests will deploy the contracts to the empty Hardhat Network node using scratch deploy */
-    INTEGRATION_ON_SCRATCH?: "on" | "off"; // default: "off"
 
     /* if "on" the integration tests will assume CSM module is present in the StakingRouter, and adjust accordingly */
     INTEGRATION_WITH_CSM?: "on" | "off"; // default: "off"
@@ -39,6 +39,7 @@ declare namespace NodeJS {
     LOCAL_KERNEL_ADDRESS?: string;
     LOCAL_LEGACY_ORACLE_ADDRESS?: string;
     LOCAL_LIDO_ADDRESS?: string;
+    LOCAL_WSTETH_ADDRESS?: string;
     LOCAL_NOR_ADDRESS?: string;
     LOCAL_ORACLE_DAEMON_CONFIG_ADDRESS?: string;
     LOCAL_ORACLE_REPORT_SANITY_CHECKER_ADDRESS?: string;
@@ -47,6 +48,7 @@ declare namespace NodeJS {
     LOCAL_VALIDATORS_EXIT_BUS_ORACLE_ADDRESS?: string;
     LOCAL_WITHDRAWAL_QUEUE_ADDRESS?: string;
     LOCAL_WITHDRAWAL_VAULT_ADDRESS?: string;
+    LOCAL_STAKING_VAULT_FACTORY_ADDRESS?: string;
 
     /* for mainnet fork testing */
     MAINNET_RPC_URL: string;
@@ -63,6 +65,7 @@ declare namespace NodeJS {
     MAINNET_KERNEL_ADDRESS?: string;
     MAINNET_LEGACY_ORACLE_ADDRESS?: string;
     MAINNET_LIDO_ADDRESS?: string;
+    MAINNET_WSTETH_ADDRESS?: string;
     MAINNET_NOR_ADDRESS?: string;
     MAINNET_ORACLE_DAEMON_CONFIG_ADDRESS?: string;
     MAINNET_ORACLE_REPORT_SANITY_CHECKER_ADDRESS?: string;
@@ -71,8 +74,24 @@ declare namespace NodeJS {
     MAINNET_VALIDATORS_EXIT_BUS_ORACLE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_QUEUE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
+    MAINNET_STAKING_VAULT_FACTORY_ADDRESS?: string;
+
+    HOLESKY_RPC_URL?: string;
+    SEPOLIA_RPC_URL?: string;
 
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;
+
+    /* for local devnet */
+    LOCAL_DEVNET_PK?: string;
+    LOCAL_DEVNET_CHAIN_ID?: string;
+    LOCAL_DEVNET_EXPLORER_API_URL?: string;
+    LOCAL_DEVNET_EXPLORER_URL?: string;
+
+    /* scratch deploy environment variables */
+    NETWORK_STATE_FILE?: string;
+
+    /* hardhat plugins options */
+    SKIP_CONTRACT_SIZE?: boolean;
   }
 }

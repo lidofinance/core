@@ -14,6 +14,8 @@ import { Snapshot } from "test/suite";
 const ONE_STETH = 10n ** 18n;
 const ONE_SHARE = 10n ** 18n;
 
+const INITIAL_SHARES_HOLDER = "0x000000000000000000000000000000000000dead";
+
 describe("StETH.sol:non-ERC-20 behavior", () => {
   let deployer: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -140,7 +142,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       );
     });
 
-    it("Reverts when transfering from zero address", async () => {
+    it("Reverts when transferring from zero address", async () => {
       await expect(steth.connect(zeroAddressSigner).transferShares(recipient, 0)).to.be.revertedWith(
         "TRANSFER_FROM_ZERO_ADDR",
       );
@@ -382,7 +384,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of shares is unchanged after a ${rebase} rebase`, async () => {
         const totalSharesBeforeRebase = await steth.getTotalShares();
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
@@ -399,7 +401,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       ["positive", 105n], // 0.95
       ["negative", 95n], // 1.05
     ]) {
-      it(`The amount of user shares is unchaged after a ${rebase} rebase`, async () => {
+      it(`The amount of user shares is unchanged after a ${rebase} rebase`, async () => {
         const sharesOfHolderBeforeRebase = await steth.sharesOf(holder);
 
         const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
@@ -460,20 +462,37 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
     }
   });
 
-  context("mintShares", () => {
-    it("Reverts when minting to zero address", async () => {
-      await expect(steth.mintShares(ZeroAddress, 1n)).to.be.revertedWith("MINT_TO_ZERO_ADDR");
-    });
+  context("getPooledEthBySharesRoundUp", () => {
+    for (const [rebase, factor] of [
+      ["neutral", 100n], // 1
+      ["positive", 103n], // 0.97
+      ["negative", 97n], // 1.03
+    ]) {
+      it(`Returns the correct rate after a ${rebase} rebase`, async () => {
+        // before the first rebase, steth are equivalent to shares
+        expect(await steth.getPooledEthBySharesRoundUp(ONE_SHARE)).to.equal(ONE_STETH);
+
+        const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
+        await steth.setTotalPooledEther(rebasedSupply);
+
+        expect(await steth.getSharesByPooledEth(await steth.getPooledEthBySharesRoundUp(1))).to.equal(1n);
+        expect(await steth.getSharesByPooledEth(await steth.getPooledEthBySharesRoundUp(ONE_SHARE))).to.equal(
+          ONE_SHARE,
+        );
+      });
+    }
   });
 
-  context("burnShares", () => {
-    it("Reverts when burning on zero address", async () => {
-      await expect(steth.burnShares(ZeroAddress, 1n)).to.be.revertedWith("BURN_FROM_ZERO_ADDR");
-    });
+  context("_mintInitialShares", () => {
+    it("Mints shares to the recipient and fires the transfer events", async () => {
+      const balanceOfInitialSharesHolderBefore = await steth.balanceOf(INITIAL_SHARES_HOLDER);
 
-    it("Reverts when burning more than the owner owns", async () => {
-      const sharesOfHolder = await steth.sharesOf(holder);
-      await expect(steth.burnShares(holder, sharesOfHolder + 1n)).to.be.revertedWith("BALANCE_EXCEEDED");
+      await steth.harness__mintInitialShares(1000n);
+
+      expect(await steth.balanceOf(INITIAL_SHARES_HOLDER)).to.approximately(
+        balanceOfInitialSharesHolderBefore + 1000n,
+        1n,
+      );
     });
   });
 });

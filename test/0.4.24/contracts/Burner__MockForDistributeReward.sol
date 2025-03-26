@@ -13,7 +13,7 @@ contract Burner__MockForDistributeReward {
 
     event Mock__CommitSharesToBurnWasCalled();
 
-    function requestBurnShares(address _from, uint256 _sharesAmountToBurn) external {
+    function requestBurnShares(address, uint256 _sharesAmountToBurn) external {
         // imitating share to steth rate 1:2
         uint256 _stETHAmount = _sharesAmountToBurn * 2;
         emit StETHBurnRequested(false, msg.sender, _stETHAmount, _sharesAmountToBurn);

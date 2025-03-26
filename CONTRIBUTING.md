@@ -45,7 +45,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/en) version 20 (LTS) with `corepack` enabled
+- [Node.js](https://nodejs.org/en) version 22 (LTS) with `corepack` enabled
 - [Yarn](https://yarnpkg.com/) installed via corepack (see below)
 - [Foundry](https://book.getfoundry.sh/) latest available version
 
@@ -117,16 +117,30 @@ the [Mocking and Harnessing Contracts](#mocking-and-harnessing-contracts) sectio
 
 #### Unit Tests
 
-Unit tests are crucial for ensuring the functionality of individual contracts and their components. These tests should
-be written using Hardhat and placed in the `/tests` directory. Each subdirectory should correspond to the version of the
-contract being tested, mirroring the structure of the `/contracts` directory.
-
-Follow the naming convention `*.test.ts` for unit test files, such as `myContract.test.ts`. This convention aids in the
-easy identification and organization of tests.
+Every contract must be accompanied by high-quality unit tests.
+The [Moloch Testing Guide](https://github.com/MolochVentures/moloch/tree/master/test#readme) provides excellent recommendations,
+though some guidelines may not apply directly to this project.
 
 > [!NOTE]
-> The project utilizes the `hardhat-coverage` plugin to generate coverage reports. Foundry-based tests are not included
-> in the coverage.
+> Tests should not only verify correct functionality but also be clear and well-structured for thorough peer
+> review—particularly for mission-critical Solidity code where tests are often as important as the implementation itself.
+
+- All new features or code changes must include comprehensive, relevant tests.
+- Refactoring should be performed separately from test modifications to maintain test integrity.
+- Tests must be reliable and deterministic; flaky tests will not be accepted.
+- The test suite runs automatically with every repository change, and all tests must pass before pull requests can be merged.
+- Maintain test coverage as close to 100% as possible, which will be verified during pull request reviews.
+
+Unit tests should be written using Hardhat and placed in the `/tests` directory.
+The subdirectory structure should mirror the `/contracts` directory, with each subdirectory corresponding to the
+Solidity version of the contracts being tested.
+
+Use the naming convention `*.test.ts` for unit test files (e.g., `myContract.test.ts`) to ensure consistent
+organization and easy identification of test files.
+
+> [!NOTE]
+> The project uses the `hardhat-coverage` plugin to generate coverage reports. Note that Foundry-based tests are not
+> included in these coverage calculations.
 
 #### Integration Tests
 
@@ -143,7 +157,7 @@ integration tests follows the `*.integration.ts` postfix, for example, `myScenar
 Foundry's Solidity tests are specifically used for fuzzing library contracts or functions that perform complex
 calculations or byte manipulation. These Solidity tests are located under `/tests` and organized into appropriate
 subdirectories. The naming conventions follow
-Foundry's [documentation](https://book.getfoundry.sh/tutorials/best-practices#general-test-guidance):
+Foundry's [documentation](https://book.getfoundry.sh/guides/best-practices#general-test-guidance):
 
 - For tests, use the `.t.sol` postfix (e.g., `MyContract.t.sol`).
 - For scripts, use the `.s.sol` postfix (e.g., `MyScript.s.sol`).
@@ -327,7 +341,7 @@ This is the most common method for running integration tests. It uses an instanc
 mainnet environment, allowing you to run integration tests with trace logging.
 
 > [!NOTE]
-> Ensure that `HARDHAT_FORKING_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
+> Ensure that `FORK_RPC_URL` is set to Ethereum Mainnet RPC and `MAINNET_*` environment variables are set in the
 > `.env` file (refer to `.env.example` for guidance). Otherwise, the tests will run against the Scratch deployment.
 
 ```bash

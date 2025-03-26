@@ -1,5 +1,6 @@
 .idea/
 .yarn/
+.vscode/
 
 node_modules/
 coverage/
@@ -24,6 +25,7 @@ lib/abi/*.json
 accounts.json
 deployed-local.json
 deployed-hardhat.json
+deployed-local-devnet.json
 
 # MacOS
 .DS_Store

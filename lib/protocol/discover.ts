@@ -15,6 +15,7 @@ import {
   ProtocolContracts,
   ProtocolSigners,
   StakingModuleContracts,
+  VaultsContracts,
   WstETHContracts,
 } from "./types";
 
@@ -78,6 +79,7 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
     ),
     legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
+    accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
       config.get("oracleReportSanityChecker") || (await locator.oracleReportSanityChecker()),
@@ -153,6 +155,21 @@ const getWstEthContract = async (
   })) as WstETHContracts;
 };
 
+/**
+ * Load all required vaults contracts.
+ */
+const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: LoadedContract<LidoLocator>) => {
+  return (await batch({
+    stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
+    stakingVaultBeacon: loadContract("UpgradeableBeacon", config.get("stakingVaultBeacon")),
+    vaultHub: loadContract("VaultHub", config.get("vaultHub") || (await locator.vaultHub())),
+    predepositGuarantee: loadContract(
+      "PredepositGuarantee",
+      config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
+    ),
+  })) as VaultsContracts;
+};
+
 export async function discover() {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
@@ -165,11 +182,13 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
+    ...(await getVaultsContracts(networkConfig, locator)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
+    "Accounting": foundationContracts.accounting.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
@@ -187,6 +206,11 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
+    // Vaults
+    "Staking Vault Factory": contracts.stakingVaultFactory.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
+    "Vault Hub": contracts.vaultHub.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee.address,
   });
 
   const signers = {

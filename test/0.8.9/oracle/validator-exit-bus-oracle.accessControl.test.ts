@@ -70,7 +70,9 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const deploy = async () => {
+  before(async () => {
+    [admin, member1, member2, member3, stranger, account1] = await ethers.getSigners();
+
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -103,12 +105,6 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
     await consensus.connect(member3).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-  };
-
-  before(async () => {
-    [admin, member1, member2, member3, stranger, account1] = await ethers.getSigners();
-
-    await deploy();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

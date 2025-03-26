@@ -1,9 +1,12 @@
 name: Integration Tests
 
-on:
-  push:
-  schedule:
-    - cron: "0 10 */2 * *"
+on: workflow_dispatch
+
+# TODO: uncomment
+#on:
+#  push:
+#  schedule:
+#    - cron: "0 10 */2 * *"
 
 jobs:
   test_hardhat_integration_fork:
@@ -13,7 +16,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.22.17
+        image: ghcr.io/lidofinance/hardhat-node:2.22.19
         ports:
           - 8545:8545
         env:
