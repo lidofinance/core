@@ -12,6 +12,8 @@ import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/proto
 import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
+import { connectToHub, setupLido } from "../../../lib/protocol/vaults";
+
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 
@@ -37,11 +39,9 @@ describe("Scenario: Vault creation", () => {
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
-    stranger: HardhatEthersSigner,
-    agentSigner: HardhatEthersSigner;
+    stranger: HardhatEthersSigner;
 
   let allRoles: HardhatEthersSigner[];
-  let shareLimit: bigint;
   let snapshot: string;
   let originalSnapshot: string;
 
@@ -74,7 +74,6 @@ describe("Scenario: Vault creation", () => {
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
-    agentSigner = await ctx.getSigner("agent");
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -105,7 +104,8 @@ describe("Scenario: Vault creation", () => {
 
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
     delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
-    await setupLido();
+    await setupLido(ctx);
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -113,38 +113,6 @@ describe("Scenario: Vault creation", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
-  async function generateFeesToClaim() {
-    const { vaultHub } = ctx.contracts;
-    const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-    const rewards = ether("1");
-    await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
-  }
-
-  async function setupLido() {
-    const { lido } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
-
-    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
-    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
-    shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
-  }
-
-  async function connectToHub() {
-    const { vaultHub } = ctx.contracts;
-    const treasuryFeeBP = 5_00n; // 5% of the treasury fee
-
-    await vaultHub
-      .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
-  }
-
-  // TODO: not needed for now
-  // async function disconnectFromHub() {
-  //   const { vaultHub } = ctx.contracts;
-  //
-  //   await vaultHub.connect(agentSigner).disconnect(stakingVault);
-  // }
 
   it("Allows to fund an withdraw funds for dedicated roles", async () => {
     expect(await delegation.connect(funder).fund({ value: 2n })).to.be.ok;
@@ -190,21 +158,21 @@ describe("Scenario: Vault creation", () => {
     });
 
     it("Reverts on burning stETH", async () => {
-      const { lido, locator } = ctx.contracts;
+      const { lido, vaultHub, locator } = ctx.contracts;
 
       // suppose user somehow got 1 share and tries to burn it via the delegation contract on disconnected vault
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
       await lido.connect(accountingSigner).mintShares(burner, 1n);
 
       await expect(delegation.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
-        ctx.contracts.vaultHub,
+        vaultHub,
         "NotConnectedToHub",
       );
     });
   });
 
   describe("Allows stETH related actions only after connecting to Hub", () => {
-    beforeEach(async () => await connectToHub());
+    beforeEach(async () => await connectToHub(ctx, stakingVault, { reserveRatio, rebalanceThreshold }));
 
     it("Allows to mint stETH", async () => {
       const { vaultHub } = ctx.contracts;
@@ -229,15 +197,6 @@ describe("Scenario: Vault creation", () => {
         .to.emit(vaultHub, "BurnedSharesOnVault")
         .withArgs(stakingVault, 1n);
     });
-  });
-
-  describe("claiming fees", async () => {
-    before(async () => {
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await generateFeesToClaim();
-    });
-
-    // TODO: add test for claiming fees?
   });
 
   it("NO Manager can spawn a validator using ETH from the Vault ", () => {
