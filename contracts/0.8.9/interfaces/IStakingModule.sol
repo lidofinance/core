@@ -5,6 +5,62 @@ pragma solidity 0.8.9;
 
 /// @title Lido's Staking Module interface
 interface IStakingModule {
+    /// @dev Event to be emitted on StakingModule's nonce change
+    event NonceChanged(uint256 nonce);
+
+    /// @dev Event to be emitted when a signing key is added to the StakingModule
+    event SigningKeyAdded(uint256 indexed nodeOperatorId, bytes pubkey);
+
+    /// @dev Event to be emitted when a signing key is removed from the StakingModule
+    event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
+
+    /// @notice Handles tracking and penalization logic for validators that remain active beyond their eligible exit window.
+    /// @dev This function is called to report the current exit-related status of validators belonging to a specific node operator.
+    ///      It accepts a batch of validator public keys, each associated with the duration (in seconds) they were eligible to exit but have not.
+    ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
+    /// @param nodeOperatorId The ID of the node operator whose validators statuses being delivered.
+    /// @param proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
+    /// @param publicKeys Concatenated public keys of the validators being reported.
+    /// @param eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
+    function handleActiveValidatorsExitingStatus(
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes calldata publicKeys,
+        bytes calldata eligibleToExitInSec
+    ) external;
+
+    /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
+    /// @dev This function is called when a validator is exited using the triggerable exit request on EL.
+    /// @param _nodeOperatorId The ID of the node operator.
+    /// @param publicKeys Concatenated public keys of the validators being reported.
+    /// @param withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
+    /// @param exitType The type of exit being performed.
+    ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
+    function onTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes calldata publicKeys,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    ) external;
+
+    /// @notice Determines whether a validator exit status should be updated and will have affect on Node Operator.
+    /// @param _nodeOperatorId The ID of the node operator.
+    /// @param proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
+    /// @param publicKey Validator's public key.
+    /// @param eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
+    /// @return bool Returns true if contract should receive updated validator's status.
+    function shouldValidatorBePenalized(
+        uint256 _nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes calldata publicKey,
+        uint256 eligibleToExitInSec
+    ) external view returns (bool);
+
+
+    /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @return The exit deadline threshold in seconds.
+    function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256);
+
     /// @notice Returns the type of the staking module
     function getType() external view returns (bytes32);
 
@@ -168,13 +224,4 @@ interface IStakingModule {
     /// @dev IMPORTANT: this method SHOULD revert with empty error data ONLY because of "out of gas".
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
     function onWithdrawalCredentialsChanged() external;
-
-    /// @dev Event to be emitted on StakingModule's nonce change
-    event NonceChanged(uint256 nonce);
-
-    /// @dev Event to be emitted when a signing key is added to the StakingModule
-    event SigningKeyAdded(uint256 indexed nodeOperatorId, bytes pubkey);
-
-    /// @dev Event to be emitted when a signing key is removed from the StakingModule
-    event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
 }

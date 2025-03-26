@@ -11,6 +11,20 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__OnRewardsMinted(uint256 _totalShares);
     event Mock__ExitedValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
 
+    event Mock__HandleActiveValidatorsExitingStatus(
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes publicKeys,
+        bytes eligibleToExitInSec
+    );
+
+    event Mock__OnTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes publicKeys,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    );
+
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));
     }
@@ -252,5 +266,58 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     function mock__onWithdrawalCredentialsChanged(bool shouldRevert, bool shouldRunOutGas) external {
         onWithdrawalCredentialsChangedShouldRevert = shouldRevert;
         onWithdrawalCredentialsChangedShouldRunOutGas = shouldRunOutGas;
+    }
+
+    bool private shouldBePenalized__mocked;
+
+    function handleActiveValidatorsExitingStatus(
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes calldata publicKeys,
+        bytes calldata eligibleToExitInSec
+    ) external {
+        emit Mock__HandleActiveValidatorsExitingStatus(
+            nodeOperatorId,
+            proofSlotTimestamp,
+            publicKeys,
+            eligibleToExitInSec
+        );
+    }
+
+    function onTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes calldata publicKeys,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    ) external {
+        emit Mock__OnTriggerableExit(
+            _nodeOperatorId,
+            publicKeys,
+            withdrawalRequestPaidFee,
+            exitType
+        );
+    }
+
+    function shouldValidatorBePenalized(
+        uint256 _nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes calldata publicKey,
+        uint256 eligibleToExitInSec
+    ) external view returns (bool) {
+        return shouldBePenalized__mocked;
+    }
+
+    function mock__shouldValidatorBePenalized(bool shouldBePenalized) external {
+        shouldBePenalized__mocked = shouldBePenalized;
+    }
+
+    uint256 private exitDeadlineThreshold__mocked;
+
+    function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256) {
+        return exitDeadlineThreshold__mocked;
+    }
+
+    function mock__exitDeadlineThreshold(uint256 threshold) external {
+        exitDeadlineThreshold__mocked = threshold;
     }
 }
