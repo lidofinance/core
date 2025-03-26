@@ -56,7 +56,7 @@ contract VaultHub is PausableUntilWithRoles {
     struct VaultInfo {
         uint256 index;
         address vault;
-        uint256 valuation;
+        uint256 balance;
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 sharesMinted;
