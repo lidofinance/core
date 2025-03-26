@@ -53,7 +53,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// uint104 _unused_gap_;
     }
 
-    struct VaultBatchInfo {
+    struct VaultInfo {
         uint256 index;
         address vault;
         uint256 valuation;
@@ -161,12 +161,12 @@ contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
-    function batchVaultsInfo() external view returns (VaultBatchInfo[] memory) {
+    function batchVaultsInfo() external view returns (VaultInfo[] memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
-        VaultBatchInfo[] memory batch = new VaultBatchInfo[]($.sockets.length - 1);
+        VaultInfo[] memory batch = new VaultInfo[]($.sockets.length - 1);
         for (uint256 i = 0; i < $.sockets.length - 1; i++) {
             IStakingVault currentVault = IStakingVault($.sockets[i + 1].vault);
-            batch[i] = VaultBatchInfo(
+            batch[i] = VaultInfo(
                 i,
                 $.sockets[i + 1].vault,
                 $.sockets[i + 1].vault.balance,
