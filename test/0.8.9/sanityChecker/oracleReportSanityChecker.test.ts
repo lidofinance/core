@@ -23,7 +23,7 @@ const MAX_UINT32 = 2 ** 32;
 const MAX_UINT64 = 2 ** 64;
 const TOTAL_BASIS_POINTS = 100_00n;
 
-describe("OracleReportSanityChecker.sol:misc", () => {
+describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;
   let locator: LidoLocator__MockForSanityChecker;
   let burner: Burner__MockForSanityChecker;
@@ -621,7 +621,536 @@ describe("OracleReportSanityChecker.sol:misc", () => {
     });
   });
 
-  context("smoothenTokenRebase", () => {});
+  context("smoothenTokenRebase", () => {
+    const defaultSmoothenTokenRebaseParams = {
+      preTotalPooledEther: ether("100"),
+      preTotalShares: ether("100"),
+      preCLBalance: ether("100"),
+      postCLBalance: ether("100"),
+      withdrawalVaultBalance: 0n,
+      elRewardsVaultBalance: 0n,
+      sharesRequestedToBurn: 0n,
+      etherToLockForWithdrawals: 0n,
+      newSharesToBurnForWithdrawals: 0n,
+    };
+
+    const report = (
+      overrides: Partial<{
+        [key in keyof typeof defaultSmoothenTokenRebaseParams]: bigint;
+      }> = {},
+    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
+      const reportData = { ...defaultSmoothenTokenRebaseParams, ...overrides };
+      return [
+        reportData.preTotalPooledEther,
+        reportData.preTotalShares,
+        reportData.preCLBalance,
+        reportData.postCLBalance,
+        reportData.withdrawalVaultBalance,
+        reportData.elRewardsVaultBalance,
+        reportData.sharesRequestedToBurn,
+        reportData.etherToLockForWithdrawals,
+        reportData.newSharesToBurnForWithdrawals,
+      ];
+    };
+
+    before(async () => {
+      await checker.connect(admin).grantRole(await checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), manager);
+    });
+
+    after(async () => {
+      await checker.connect(admin).revokeRole(await checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), manager);
+    });
+
+    it("works with zero data", async () => {
+      const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+        ...report(),
+      );
+
+      expect(withdrawals).to.equal(0);
+      expect(elRewards).to.equal(0);
+      expect(sharesFromWQToBurn).to.equal(0);
+      expect(sharesToBurn).to.equal(0);
+    });
+
+    context("trivial post CL < pre CL", () => {
+      before(async () => {
+        const newRebaseLimit = 100_000; // 0.01%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            elRewardsVaultBalance: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("0.1"));
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            withdrawalVaultBalance: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("0.1"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            sharesRequestedToBurn: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(ether("0.1"));
+      });
+    });
+
+    context("trivial post CL > pre CL", () => {
+      before(async () => {
+        const newRebaseLimit = 100_000_000; // 10%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("100.01"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("100.01"),
+            elRewardsVaultBalance: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("0.1"));
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("100.01"),
+            withdrawalVaultBalance: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("0.1"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("100.01"),
+            sharesRequestedToBurn: ether("0.1"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(ether("0.1"));
+      });
+    });
+
+    context("non-trivial post CL < pre CL ", () => {
+      before(async () => {
+        const newRebaseLimit = 10_000_000; // 1%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            elRewardsVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("2"));
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            withdrawalVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("2"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals and el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            withdrawalVaultBalance: ether("5"),
+            elRewardsVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("2"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("99"),
+            sharesRequestedToBurn: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(1980198019801980198n); // ether(100. - (99. / 1.01))
+      });
+    });
+
+    context("non-trivial post CL > pre CL", () => {
+      before(async () => {
+        const newRebaseLimit = 20_000_000; // 2%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("101"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("101"),
+            elRewardsVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("1"));
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("101"),
+            withdrawalVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("1"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with withdrawals and el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("101"),
+            withdrawalVaultBalance: ether("5"),
+            elRewardsVaultBalance: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(ether("1"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(0);
+      });
+
+      it("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({
+            postCLBalance: ether("101"),
+            sharesRequestedToBurn: ether("5"),
+          }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(0);
+        expect(sharesToBurn).to.equal(980392156862745098n); // ether(100. - (101. / 1.02))
+      });
+    });
+
+    context("non-trivial post CL < pre CL and withdrawals", () => {
+      const defaultRebaseParams = {
+        ...defaultSmoothenTokenRebaseParams,
+        postCLBalance: ether("99"),
+        etherToLockForWithdrawals: ether("10"),
+        newSharesToBurnForWithdrawals: ether("10"),
+      };
+
+      before(async () => {
+        const newRebaseLimit = 5_000_000; // 0.5%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report(defaultRebaseParams),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(ether("10"));
+        expect(sharesToBurn).to.equal(ether("10"));
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, elRewardsVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("1.5"));
+        expect(sharesFromWQToBurn).to.equal(9950248756218905472n); // 100. - 90.5 / 1.005
+        expect(sharesToBurn).to.equal(9950248756218905472n);
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, withdrawalVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(ether("1.5"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(9950248756218905472n); // 100. - 90.5 / 1.005
+        expect(sharesToBurn).to.equal(9950248756218905472n);
+      });
+
+      it("smoothens with withdrawals and el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, withdrawalVaultBalance: ether("5"), elRewardsVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(ether("1.5"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(9950248756218905472n); // 100. - 90.5 / 1.005
+        expect(sharesToBurn).to.equal(9950248756218905472n);
+      });
+
+      // TODO: check rounding
+      it.skip("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, sharesRequestedToBurn: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+
+        expect(sharesFromWQToBurn).to.equal(9950248756218905472n); // ether("100. - (90.5 / 1.005)")
+        expect(sharesToBurn).to.equal(11442786069651741293n); // ether("100. - (89. / 1.005)")
+      });
+    });
+
+    context("non-trivial post CL > pre CL and withdrawals", () => {
+      const defaultRebaseParams = {
+        ...defaultSmoothenTokenRebaseParams,
+        postCLBalance: ether("102"),
+        etherToLockForWithdrawals: ether("10"),
+        newSharesToBurnForWithdrawals: ether("10"),
+      };
+
+      before(async () => {
+        const newRebaseLimit = 40_000_000; // 4%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens with no rewards and no withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report(defaultRebaseParams),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(ether("10"));
+        expect(sharesToBurn).to.equal(ether("10"));
+      });
+
+      it("smoothens with el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, elRewardsVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(ether("2"));
+        expect(sharesFromWQToBurn).to.equal(9615384615384615384n);
+        expect(sharesToBurn).to.equal(9615384615384615384n); // 100. - 94. / 1.04
+      });
+
+      it("smoothens with withdrawals", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, withdrawalVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(ether("2"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(9615384615384615384n);
+        expect(sharesToBurn).to.equal(9615384615384615384n); // 100. - 94. / 1.04
+      });
+
+      it("smoothens with withdrawals and el rewards", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, withdrawalVaultBalance: ether("5"), elRewardsVaultBalance: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(ether("2"));
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(9615384615384615384n);
+        expect(sharesToBurn).to.equal(9615384615384615384n); // 100. - 94. / 1.04
+      });
+
+      // TODO: check rounding
+      it.skip("smoothens with shares requested to burn", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report({ ...defaultRebaseParams, sharesRequestedToBurn: ether("5") }),
+        );
+
+        expect(withdrawals).to.equal(0);
+        expect(elRewards).to.equal(0);
+        expect(sharesFromWQToBurn).to.equal(9615384615384615384n);
+        expect(sharesToBurn).to.equal(11538461538461538461n); // 100. - (92. / 1.04)
+      });
+    });
+
+    context("share rate ~1 case with huge withdrawal", () => {
+      const rebaseParams = {
+        preTotalPooledEther: ether("1000000"),
+        preTotalShares: ether("1000000"),
+        preCLBalance: ether("1000000"),
+        postCLBalance: ether("1000000"),
+        withdrawalVaultBalance: ether("500"),
+        elRewardsVaultBalance: ether("500"),
+        sharesRequestedToBurn: ether("0"),
+        etherToLockForWithdrawals: ether("40000"),
+        newSharesToBurnForWithdrawals: ether("40000"),
+      };
+
+      before(async () => {
+        const newRebaseLimit = 1_000_000; // 0.1%
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens the rebase", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report(rebaseParams),
+        );
+
+        expect(withdrawals).to.equal(ether("500"));
+        expect(elRewards).to.equal(ether("500"));
+        expect(sharesFromWQToBurn).to.equal(39960039960039960039960n); // ether(1000000 - 961000. / 1.001)
+        expect(sharesToBurn).to.equal(39960039960039960039960n);
+      });
+    });
+
+    context("rounding case from Görli", () => {
+      const rebaseParams = {
+        preTotalPooledEther: 125262263468962792235936n,
+        preTotalShares: 120111767594397261197918n,
+        preCLBalance: 113136253352529000000000n,
+        postCLBalance: 113134996436274000000000n,
+        withdrawalVaultBalance: 129959459000000000n,
+        elRewardsVaultBalance: 6644376444653811679390n,
+        sharesRequestedToBurn: 15713136097768852533n,
+        etherToLockForWithdrawals: 0n,
+        newSharesToBurnForWithdrawals: 0n,
+      };
+
+      before(async () => {
+        const newRebaseLimit = 750_000; // 0.075% or 7.5 basis points
+        await checker.connect(manager).setMaxPositiveTokenRebase(newRebaseLimit);
+      });
+
+      it("smoothens the rebase", async () => {
+        const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
+          ...report(rebaseParams),
+        );
+
+        expect(withdrawals).to.equal(129959459000000000n);
+        expect(elRewards).to.equal(95073654397722094176n);
+        expect(sharesFromWQToBurn).to.equal(0n);
+        expect(sharesToBurn).to.equal(0n);
+      });
+    });
+  });
 
   // NB: negative rebase is handled in `oracleReportSanityChecker.negative-rebase.test.ts`
   context("checkAccountingOracleReport", () => {
@@ -899,1020 +1428,4 @@ describe("OracleReportSanityChecker.sol:misc", () => {
       );
     });
   });
-
-  // context("checkSimulatedShareRate", () => {
-  //   const correctSimulatedShareRate = {
-  //     postTotalPooledEther: ether("9"),
-  //     postTotalShares: ether("4"),
-  //     etherLockedOnWithdrawalQueue: ether("1"),
-  //     sharesBurntFromWithdrawalQueue: ether("1"),
-  //     simulatedShareRate: 2n * 10n ** 27n,
-  //   };
-  //   type CheckSimulatedShareRateParameters = [bigint, bigint, bigint, bigint, bigint];
-
-  //   it("reverts with error IncorrectSimulatedShareRate() when simulated share rate is higher than expected", async () => {
-  //     const simulatedShareRate = ether("2.1") * 10n ** 9n;
-  //     const actualShareRate = 2n * 10n ** 27n;
-  //     await expect(
-  //       oracleReportSanityChecker.checkSimulatedShareRate(
-  //         ...(Object.values({
-  //           ...correctSimulatedShareRate,
-  //           simulatedShareRate: simulatedShareRate,
-  //         }) as CheckSimulatedShareRateParameters),
-  //       ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate")
-  //       .withArgs(simulatedShareRate, actualShareRate);
-  //   });
-
-  //   it("reverts with error IncorrectSimulatedShareRate() when simulated share rate is lower than expected", async () => {
-  //     const simulatedShareRate = ether("1.9") * 10n ** 9n;
-  //     const actualShareRate = 2n * 10n ** 27n;
-  //     await expect(
-  //       oracleReportSanityChecker.checkSimulatedShareRate(
-  //         ...(Object.values({
-  //           ...correctSimulatedShareRate,
-  //           simulatedShareRate: simulatedShareRate,
-  //         }) as CheckSimulatedShareRateParameters),
-  //       ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate")
-  //       .withArgs(simulatedShareRate, actualShareRate);
-  //   });
-
-  //   it("reverts with error ActualShareRateIsZero() when actual share rate is zero", async () => {
-  //     await expect(
-  //       oracleReportSanityChecker.checkSimulatedShareRate(
-  //         ...(Object.values({
-  //           ...correctSimulatedShareRate,
-  //           etherLockedOnWithdrawalQueue: ether("0"),
-  //           postTotalPooledEther: ether("0"),
-  //         }) as CheckSimulatedShareRateParameters),
-  //       ),
-  //     ).to.be.revertedWithCustomError(oracleReportSanityChecker, "ActualShareRateIsZero");
-  //   });
-
-  //   it("passes all checks with correct share rate", async () => {
-  //     await oracleReportSanityChecker.checkSimulatedShareRate(
-  //       ...(Object.values(correctSimulatedShareRate) as CheckSimulatedShareRateParameters),
-  //     );
-  //   });
-  // });
-
-  // context("max positive rebase", () => {
-  //   const defaultSmoothenTokenRebaseParams = {
-  //     preTotalPooledEther: ether("100"),
-  //     preTotalShares: ether("100"),
-  //     preCLBalance: ether("100"),
-  //     postCLBalance: ether("100"),
-  //     withdrawalVaultBalance: 0n,
-  //     elRewardsVaultBalance: 0n,
-  //     sharesRequestedToBurn: 0n,
-  //     etherToLockForWithdrawals: 0n,
-  //     newSharesToBurnForWithdrawals: 0n,
-  //   };
-  //   type SmoothenTokenRebaseParameters = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
-
-  //   it("getMaxPositiveTokenRebase works", async () => {
-  //     expect(await oracleReportSanityChecker.getMaxPositiveTokenRebase()).to.equal(
-  //       defaultLimitsList.maxPositiveTokenRebase,
-  //     );
-  //   });
-
-  //   it("setMaxPositiveTokenRebase works", async () => {
-  //     const newRebaseLimit = 1_000_000;
-  //     expect(newRebaseLimit).to.not.equal(defaultLimitsList.maxPositiveTokenRebase);
-
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setMaxPositiveTokenRebase(newRebaseLimit),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //     );
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     expect(await oracleReportSanityChecker.getMaxPositiveTokenRebase()).to.equal(newRebaseLimit);
-  //     await expect(tx).to.emit(oracleReportSanityChecker, "MaxPositiveTokenRebaseSet").withArgs(newRebaseLimit);
-  //   });
-
-  //   it("all zero data works", async () => {
-  //     const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           preTotalPooledEther: 0,
-  //           preTotalShares: 0,
-  //           preCLBalance: 0,
-  //           postCLBalance: 0,
-  //         }) as SmoothenTokenRebaseParameters),
-  //       );
-
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //   });
-
-  //   it("trivial smoothen rebase works when post CL < pre CL and no withdrawals", async () => {
-  //     const newRebaseLimit = 100_000; // 0.01%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       );
-
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           elRewardsVaultBalance: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("0.1"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           withdrawalVaultBalance: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("0.1"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           sharesRequestedToBurn: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(ether("0.1"));
-  //     expect(sharesToBurn).to.equal(ether("0.1"));
-  //   });
-
-  //   it("trivial smoothen rebase works when post CL > pre CL and no withdrawals", async () => {
-  //     const newRebaseLimit = 100_000_000; // 10%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("100.01"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       );
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("100.01"),
-  //           elRewardsVaultBalance: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("0.1"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("100.01"),
-  //           withdrawalVaultBalance: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("0.1"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("100.01"),
-  //           sharesRequestedToBurn: ether("0.1"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(ether("0.1"));
-  //     expect(sharesToBurn).to.equal(ether("0.1"));
-  //   });
-
-  //   it("non-trivial smoothen rebase works when post CL < pre CL and no withdrawals", async () => {
-  //     const newRebaseLimit = 10_000_000; // 1%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       );
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("2"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           withdrawalVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("2"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals + el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           withdrawalVaultBalance: ether("5"),
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("2"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("99"),
-  //           sharesRequestedToBurn: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal("1980198019801980198"); // ether(100. - (99. / 1.01))
-  //     expect(sharesToBurn).to.equal("1980198019801980198"); // the same as above since no withdrawals
-  //   });
-
-  //   it("non-trivial smoothen rebase works when post CL > pre CL and no withdrawals", async () => {
-  //     const newRebaseLimit = 20_000_000; // 2%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("101"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       );
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("101"),
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("1"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("101"),
-  //           withdrawalVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("1"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // withdrawals + el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("101"),
-  //           elRewardsVaultBalance: ether("5"),
-  //           withdrawalVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("1"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //     // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultSmoothenTokenRebaseParams,
-  //           postCLBalance: ether("101"),
-  //           sharesRequestedToBurn: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal("980392156862745098"); // ether(100. - (101. / 1.02))
-  //     expect(sharesToBurn).to.equal("980392156862745098"); // the same as above since no withdrawals
-  //   });
-
-  //   it("non-trivial smoothen rebase works when post CL < pre CL and withdrawals", async () => {
-  //     const newRebaseLimit = 5_000_000; // 0.5%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     const defaultRebaseParams = {
-  //       ...defaultSmoothenTokenRebaseParams,
-  //       postCLBalance: ether("99"),
-  //       etherToLockForWithdrawals: ether("10"),
-  //       newSharesToBurnForWithdrawals: ether("10"),
-  //     };
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values(defaultRebaseParams) as SmoothenTokenRebaseParameters),
-  //       );
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(ether("10"));
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("1.5"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           withdrawalVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("1.5"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
-  //     // withdrawals + el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           withdrawalVaultBalance: ether("5"),
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("1.5"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9950248756218905472"); // 100. - 90.5 / 1.005
-  //     // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           sharesRequestedToBurn: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal("1492537313432835820"); // ether("100. - (99. / 1.005))
-  //     expect(sharesToBurn).to.equal("11442786069651741293"); // ether("100. - (89. / 1.005))
-  //   });
-
-  //   it("non-trivial smoothen rebase works when post CL > pre CL and withdrawals", async () => {
-  //     const newRebaseLimit = 40_000_000; // 4%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     const defaultRebaseParams = {
-  //       ...defaultSmoothenTokenRebaseParams,
-  //       postCLBalance: ether("102"),
-  //       etherToLockForWithdrawals: ether("10"),
-  //       newSharesToBurnForWithdrawals: ether("10"),
-  //     };
-
-  //     let { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values(defaultRebaseParams) as SmoothenTokenRebaseParameters),
-  //       );
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(ether("10"));
-  //     // el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(ether("2"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
-  //     // withdrawals
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           withdrawalVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("2"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
-  //     // withdrawals + el rewards
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           withdrawalVaultBalance: ether("5"),
-  //           elRewardsVaultBalance: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(ether("2"));
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("9615384615384615384"); // 100. - 94. / 1.04
-  //     // shares requested to burn
-  //     ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values({
-  //           ...defaultRebaseParams,
-  //           sharesRequestedToBurn: ether("5"),
-  //         }) as SmoothenTokenRebaseParameters),
-  //       ));
-  //     expect(withdrawals).to.equal(0);
-  //     expect(elRewards).to.equal(0);
-  //     expect(simulatedSharesToBurn).to.equal("1923076923076923076"); // ether("100. - (102. / 1.04))
-  //     expect(sharesToBurn).to.equal("11538461538461538461"); // ether("100. - (92. / 1.04))
-  //   });
-
-  //   it("share rate ~1 case with huge withdrawal", async () => {
-  //     const newRebaseLimit = 1_000_000; // 0.1%
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     const rebaseParams = {
-  //       preTotalPooledEther: ether("1000000"),
-  //       preTotalShares: ether("1000000"),
-  //       preCLBalance: ether("1000000"),
-  //       postCLBalance: ether("1000000"),
-  //       withdrawalVaultBalance: ether("500"),
-  //       elRewardsVaultBalance: ether("500"),
-  //       sharesRequestedToBurn: ether("0"),
-  //       etherToLockForWithdrawals: ether("40000"),
-  //       newSharesToBurnForWithdrawals: ether("40000"),
-  //     };
-
-  //     const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values(rebaseParams) as SmoothenTokenRebaseParameters),
-  //       );
-
-  //     expect(withdrawals).to.equal(ether("500"));
-  //     expect(elRewards).to.equal(ether("500"));
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal("39960039960039960039960"); // ether(1000000 - 961000. / 1.001)
-  //   });
-
-  //   it("rounding case from Görli", async () => {
-  //     const newRebaseLimit = 750_000; // 0.075% or 7.5 basis points
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //       .setMaxPositiveTokenRebase(newRebaseLimit);
-
-  //     const rebaseParams = {
-  //       preTotalPooledEther: 125262263468962792235936n,
-  //       preTotalShares: 120111767594397261197918n,
-  //       preCLBalance: 113136253352529000000000n,
-  //       postCLBalance: 113134996436274000000000n,
-  //       withdrawalVaultBalance: 129959459000000000n,
-  //       elRewardsVaultBalance: 6644376444653811679390n,
-  //       sharesRequestedToBurn: 15713136097768852533n,
-  //       etherToLockForWithdrawals: 0n,
-  //       newSharesToBurnForWithdrawals: 0n,
-  //     };
-
-  //     const { withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
-  //       await oracleReportSanityChecker.smoothenTokenRebase(
-  //         ...(Object.values(rebaseParams) as SmoothenTokenRebaseParameters),
-  //       );
-
-  //     expect(withdrawals).to.equal(129959459000000000n);
-  //     expect(elRewards).to.equal(95073654397722094176n);
-  //     expect(simulatedSharesToBurn).to.equal(0);
-  //     expect(sharesToBurn).to.equal(0);
-  //   });
-  // });
-
-  // context("validators limits", () => {
-  //   it("setExitedValidatorsPerDayLimit works", async () => {
-  //     const oldExitedLimit = defaultLimitsList.exitedValidatorsPerDayLimit;
-
-  //     await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldExitedLimit);
-  //     await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(oldExitedLimit + 1n))
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedValidatorsLimitExceeded")
-  //       .withArgs(oldExitedLimit, oldExitedLimit + 1n);
-
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.be.equal(
-  //       oldExitedLimit,
-  //     );
-
-  //     const newExitedLimit = 30n;
-  //     expect(newExitedLimit).to.not.equal(oldExitedLimit);
-
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setExitedValidatorsPerDayLimit(newExitedLimit),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-  //     );
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-  //         managersRoster.exitedValidatorsPerDayLimitManagers[0],
-  //       );
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.exitedValidatorsPerDayLimitManagers[0])
-  //       .setExitedValidatorsPerDayLimit(newExitedLimit);
-
-  //     await expect(tx).to.emit(oracleReportSanityChecker, "ExitedValidatorsPerDayLimitSet").withArgs(newExitedLimit);
-
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.equal(
-  //       newExitedLimit,
-  //     );
-
-  //     await oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newExitedLimit);
-  //     await expect(oracleReportSanityChecker.checkExitedValidatorsRatePerDay(newExitedLimit + 1n))
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedValidatorsLimitExceeded")
-  //       .withArgs(newExitedLimit, newExitedLimit + 1n);
-  //   });
-
-  //   it("setAppearedValidatorsPerDayLimit works", async () => {
-  //     const oldAppearedLimit = defaultLimitsList.appearedValidatorsPerDayLimit;
-
-  //     await oracleReportSanityChecker.checkAccountingOracleReport(
-  //       ...(Object.values({
-  //         ...correctLidoOracleReport,
-  //         postCLValidators: oldAppearedLimit,
-  //       }) as CheckAccountingOracleReportParameters),
-  //     );
-
-  //     await expect(
-  //       oracleReportSanityChecker.checkAccountingOracleReport(
-  //         ...(Object.values({
-  //           ...correctLidoOracleReport,
-  //           postCLValidators: oldAppearedLimit + 1n,
-  //         }) as CheckAccountingOracleReportParameters),
-  //       ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, `IncorrectAppearedValidators`)
-  //       .withArgs(oldAppearedLimit + 1n);
-
-  //     const newAppearedLimit = 30n;
-  //     expect(newAppearedLimit).not.equal(oldAppearedLimit);
-
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setAppearedValidatorsPerDayLimit(newAppearedLimit),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-  //     );
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-  //         managersRoster.appearedValidatorsPerDayLimitManagers[0],
-  //       );
-
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.appearedValidatorsPerDayLimitManagers[0])
-  //       .setAppearedValidatorsPerDayLimit(newAppearedLimit);
-
-  //     await expect(tx)
-  //       .to.emit(oracleReportSanityChecker, "AppearedValidatorsPerDayLimitSet")
-  //       .withArgs(newAppearedLimit);
-
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).appearedValidatorsPerDayLimit).to.be.equal(
-  //       newAppearedLimit,
-  //     );
-
-  //     await oracleReportSanityChecker.checkAccountingOracleReport(
-  //       ...(Object.values({
-  //         ...correctLidoOracleReport,
-  //         postCLValidators: newAppearedLimit,
-  //       }) as CheckAccountingOracleReportParameters),
-  //     );
-  //     await expect(
-  //       oracleReportSanityChecker.checkAccountingOracleReport(
-  //         ...(Object.values({
-  //           ...correctLidoOracleReport,
-  //           postCLValidators: newAppearedLimit + 1n,
-  //         }) as CheckAccountingOracleReportParameters),
-  //       ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectAppearedValidators")
-  //       .withArgs(newAppearedLimit + 1n);
-  //   });
-  // });
-
-  // context("checkExitBusOracleReport", () => {
-  //   beforeEach(async () => {
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.allLimitsManagers[0])
-  //       .setOracleReportLimits(defaultLimitsList, ZeroAddress);
-  //   });
-
-  //   it("checkExitBusOracleReport works", async () => {
-  //     const maxRequests = defaultLimitsList.maxValidatorExitRequestsPerReport;
-
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
-  //       maxRequests,
-  //     );
-
-  //     await oracleReportSanityChecker.checkExitBusOracleReport(maxRequests);
-  //     await expect(oracleReportSanityChecker.checkExitBusOracleReport(maxRequests + 1n))
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
-  //       .withArgs(maxRequests);
-  //   });
-
-  //   it("setMaxExitRequestsPerOracleReport", async () => {
-  //     const oldMaxRequests = defaultLimitsList.maxValidatorExitRequestsPerReport;
-  //     await oracleReportSanityChecker.checkExitBusOracleReport(oldMaxRequests);
-  //     await expect(oracleReportSanityChecker.checkExitBusOracleReport(oldMaxRequests + 1n))
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
-  //       .withArgs(oldMaxRequests);
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
-  //       oldMaxRequests,
-  //     );
-
-  //     const newMaxRequests = 306;
-  //     expect(newMaxRequests).to.not.equal(oldMaxRequests);
-
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setMaxExitRequestsPerOracleReport(newMaxRequests),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(),
-  //     );
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(),
-  //         managersRoster.maxValidatorExitRequestsPerReportManagers[0],
-  //       );
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.maxValidatorExitRequestsPerReportManagers[0])
-  //       .setMaxExitRequestsPerOracleReport(newMaxRequests);
-
-  //     await expect(tx)
-  //       .to.emit(oracleReportSanityChecker, "MaxValidatorExitRequestsPerReportSet")
-  //       .withArgs(newMaxRequests);
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).maxValidatorExitRequestsPerReport).to.equal(
-  //       newMaxRequests,
-  //     );
-
-  //     await oracleReportSanityChecker.checkExitBusOracleReport(newMaxRequests);
-  //     await expect(oracleReportSanityChecker.checkExitBusOracleReport(newMaxRequests + 1))
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
-  //       .withArgs(newMaxRequests);
-  //   });
-  // });
-
-  // context("extra data reporting", () => {
-  //   beforeEach(async () => {
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-  //     await oracleReportSanityChecker
-  //       .connect(managersRoster.allLimitsManagers[0])
-  //       .setOracleReportLimits(defaultLimitsList, ZeroAddress);
-  //   });
-
-  //   it("set maxNodeOperatorsPerExtraDataItem", async () => {
-  //     const previousValue = (await oracleReportSanityChecker.getOracleReportLimits()).maxNodeOperatorsPerExtraDataItem;
-  //     const newValue = 33;
-  //     expect(newValue).to.not.equal(previousValue);
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setMaxNodeOperatorsPerExtraDataItem(newValue),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE(),
-  //     );
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE(),
-  //         managersRoster.maxNodeOperatorsPerExtraDataItemManagers[0],
-  //       );
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.maxNodeOperatorsPerExtraDataItemManagers[0])
-  //       .setMaxNodeOperatorsPerExtraDataItem(newValue);
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).maxNodeOperatorsPerExtraDataItem).to.be.equal(
-  //       newValue,
-  //     );
-  //     await expect(tx).to.emit(oracleReportSanityChecker, "MaxNodeOperatorsPerExtraDataItemSet").withArgs(newValue);
-  //   });
-
-  //   it("set maxItemsPerExtraDataTransaction", async () => {
-  //     const previousValue = (await oracleReportSanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction;
-  //     const newValue = 31;
-  //     expect(newValue).to.not.equal(previousValue);
-  //     await expect(
-  //       oracleReportSanityChecker.connect(deployer).setMaxItemsPerExtraDataTransaction(newValue),
-  //     ).to.be.revertedWithOZAccessControlError(
-  //       deployer.address,
-  //       await oracleReportSanityChecker.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE(),
-  //     );
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE(),
-  //         managersRoster.maxItemsPerExtraDataTransactionManagers[0],
-  //       );
-  //     const tx = await oracleReportSanityChecker
-  //       .connect(managersRoster.maxItemsPerExtraDataTransactionManagers[0])
-  //       .setMaxItemsPerExtraDataTransaction(newValue);
-  //     expect((await oracleReportSanityChecker.getOracleReportLimits()).maxItemsPerExtraDataTransaction).to.be.equal(
-  //       newValue,
-  //     );
-  //     await expect(tx).to.emit(oracleReportSanityChecker, "MaxItemsPerExtraDataTransactionSet").withArgs(newValue);
-  //   });
-  // });
-
-  // context("check limit boundaries", () => {
-  //   it("values must be less or equal to MAX_BASIS_POINTS", async () => {
-  //     const MAX_BASIS_POINTS = 10000;
-  //     const INVALID_BASIS_POINTS = MAX_BASIS_POINTS + 1;
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits(
-  //           { ...defaultLimitsList, annualBalanceIncreaseBPLimit: INVALID_BASIS_POINTS },
-  //           ZeroAddress,
-  //         ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, simulatedShareRateDeviationBPLimit: 10001 }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_BASIS_POINTS, 0, MAX_BASIS_POINTS);
-  //   });
-
-  //   it("values must be less or equal to type(uint16).max", async () => {
-  //     const MAX_UINT_16 = 65535;
-  //     const INVALID_VALUE = MAX_UINT_16 + 1;
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits(
-  //           { ...defaultLimitsList, maxValidatorExitRequestsPerReport: INVALID_VALUE },
-  //           ZeroAddress,
-  //         ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, exitedValidatorsPerDayLimit: INVALID_VALUE }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, appearedValidatorsPerDayLimit: INVALID_VALUE }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits(
-  //           { ...defaultLimitsList, maxNodeOperatorsPerExtraDataItem: INVALID_VALUE },
-  //           ZeroAddress,
-  //         ),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, initialSlashingAmountPWei: INVALID_VALUE }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, inactivityPenaltiesAmountPWei: INVALID_VALUE }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 0, MAX_UINT_16);
-  //   });
-
-  //   it("values must be less or equals to type(uint64).max", async () => {
-  //     const MAX_UINT_64 = 2n ** 64n - 1n;
-  //     const MAX_UINT_32 = 2n ** 32n - 1n;
-  //     const INVALID_VALUE_UINT_64 = MAX_UINT_64 + 1n;
-  //     const INVALID_VALUE_UINT_32 = MAX_UINT_32 + 1n;
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(await oracleReportSanityChecker.ALL_LIMITS_MANAGER_ROLE(), managersRoster.allLimitsManagers[0]);
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, requestTimestampMargin: INVALID_VALUE_UINT_32 }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE_UINT_32.toString(), 0, MAX_UINT_32);
-
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.allLimitsManagers[0])
-  //         .setOracleReportLimits({ ...defaultLimitsList, maxPositiveTokenRebase: INVALID_VALUE_UINT_64 }, ZeroAddress),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE_UINT_64.toString(), 1, MAX_UINT_64);
-  //   });
-
-  //   it("value must be greater than zero", async () => {
-  //     const MAX_UINT_64 = 2n ** 64n - 1n;
-  //     const INVALID_VALUE = 0;
-
-  //     await oracleReportSanityChecker
-  //       .connect(admin)
-  //       .grantRole(
-  //         await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-  //         managersRoster.maxPositiveTokenRebaseManagers[0],
-  //       );
-  //     await expect(
-  //       oracleReportSanityChecker
-  //         .connect(managersRoster.maxPositiveTokenRebaseManagers[0])
-  //         .setMaxPositiveTokenRebase(0),
-  //     )
-  //       .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectLimitValue")
-  //       .withArgs(INVALID_VALUE, 1n, MAX_UINT_64);
-  //   });
-  // });
 });
