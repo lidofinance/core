@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
+import {BLS} from "contracts/0.8.25/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
@@ -284,7 +285,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function predeposit(
         IStakingVault _stakingVault,
-        IStakingVault.Deposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits,
+        BLS.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
 
@@ -311,6 +313,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
+
+            BLS.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
                 revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);

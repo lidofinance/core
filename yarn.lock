@@ -268,6 +268,152 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@chainsafe/as-sha256@npm:1.1.0":
+  version: 1.1.0
+  resolution: "@chainsafe/as-sha256@npm:1.1.0"
+  checksum: 10c0/b5daeeb18dccde143192f8c83fcf33e3403793cc9039eebc887a408bcace746d9352148b6d9802a3e7443fa7621fffdad933575e061a6bde034df850d4f366ed
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-darwin-arm64@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-darwin-arm64@npm:2.2.0"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-darwin-x64@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-darwin-x64@npm:2.2.0"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-linux-arm64-gnu@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-linux-arm64-gnu@npm:2.2.0"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-linux-arm64-musl@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-linux-arm64-musl@npm:2.2.0"
+  conditions: os=linux & cpu=arm64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-linux-x64-gnu@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-linux-x64-gnu@npm:2.2.0"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-linux-x64-musl@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-linux-x64-musl@npm:2.2.0"
+  conditions: os=linux & cpu=x64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst-win32-x64-msvc@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst-win32-x64-msvc@npm:2.2.0"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@chainsafe/blst@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "@chainsafe/blst@npm:2.2.0"
+  dependencies:
+    "@chainsafe/blst-darwin-arm64": "npm:2.2.0"
+    "@chainsafe/blst-darwin-x64": "npm:2.2.0"
+    "@chainsafe/blst-linux-arm64-gnu": "npm:2.2.0"
+    "@chainsafe/blst-linux-arm64-musl": "npm:2.2.0"
+    "@chainsafe/blst-linux-x64-gnu": "npm:2.2.0"
+    "@chainsafe/blst-linux-x64-musl": "npm:2.2.0"
+    "@chainsafe/blst-win32-x64-msvc": "npm:2.2.0"
+  dependenciesMeta:
+    "@chainsafe/blst-darwin-arm64":
+      optional: true
+    "@chainsafe/blst-darwin-x64":
+      optional: true
+    "@chainsafe/blst-linux-arm64-gnu":
+      optional: true
+    "@chainsafe/blst-linux-arm64-musl":
+      optional: true
+    "@chainsafe/blst-linux-x64-gnu":
+      optional: true
+    "@chainsafe/blst-linux-x64-musl":
+      optional: true
+    "@chainsafe/blst-win32-x64-msvc":
+      optional: true
+  checksum: 10c0/1772f88adc9fafcc08b7278e449b3abaef2fd2411f5ad2c9db0f0d2ec4ea4e80663c977e7f281b326e0c253fff0ca3a85eb854d25dc81cf9dadafd1c49625a2d
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree-darwin-arm64@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@chainsafe/hashtree-darwin-arm64@npm:1.0.1"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@chainsafe/hashtree-linux-arm64-gnu@npm:1.0.1"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree-linux-x64-gnu@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@chainsafe/hashtree-linux-x64-gnu@npm:1.0.1"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@chainsafe/hashtree@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@chainsafe/hashtree@npm:1.0.1"
+  dependencies:
+    "@chainsafe/hashtree-darwin-arm64": "npm:1.0.1"
+    "@chainsafe/hashtree-linux-arm64-gnu": "npm:1.0.1"
+    "@chainsafe/hashtree-linux-x64-gnu": "npm:1.0.1"
+  dependenciesMeta:
+    "@chainsafe/hashtree-darwin-arm64":
+      optional: true
+    "@chainsafe/hashtree-linux-arm64-gnu":
+      optional: true
+    "@chainsafe/hashtree-linux-x64-gnu":
+      optional: true
+  checksum: 10c0/fb2589727f222875f2e89459424809782717ce1e24a60c08ca413874134f219061a0389114a14c1fcb66a81ea34f3511a4d5916d8094f7961137fc6230d3c53f
+  languageName: node
+  linkType: hard
+
+"@chainsafe/persistent-merkle-tree@npm:1.1.0":
+  version: 1.1.0
+  resolution: "@chainsafe/persistent-merkle-tree@npm:1.1.0"
+  dependencies:
+    "@chainsafe/as-sha256": "npm:1.1.0"
+    "@chainsafe/hashtree": "npm:1.0.1"
+    "@noble/hashes": "npm:^1.3.0"
+  checksum: 10c0/e9741803071aaf9f07169040067bda622b0abd0b7e8580512ab9cb0beb51aad85941c5db910606e851ef64c2b7a46c1b05bfa6df0bcc1ea7e5f88fee144882c7
+  languageName: node
+  linkType: hard
+
+"@chainsafe/ssz@npm:^1.0.2":
+  version: 1.2.0
+  resolution: "@chainsafe/ssz@npm:1.2.0"
+  dependencies:
+    "@chainsafe/as-sha256": "npm:1.1.0"
+    "@chainsafe/persistent-merkle-tree": "npm:1.1.0"
+  checksum: 10c0/b9b57ffe6da161f637d0398d44147d2ead5b2c2253aa406896a52587c81bf727e851ae7f5fb34522244cad501ee326875a017a963f0dbed90d7ffcc3fe6ebbb1
+  languageName: node
+  linkType: hard
+
 "@colors/colors@npm:1.5.0":
   version: 1.5.0
   resolution: "@colors/colors@npm:1.5.0"
@@ -1206,6 +1352,13 @@ __metadata:
   version: 1.4.0
   resolution: "@noble/hashes@npm:1.4.0"
   checksum: 10c0/8c3f005ee72e7b8f9cff756dfae1241485187254e3f743873e22073d63906863df5d4f13d441b7530ea614b7a093f0d889309f28b59850f33b66cb26a779a4a5
+  languageName: node
+  linkType: hard
+
+"@noble/hashes@npm:^1.3.0":
+  version: 1.7.1
+  resolution: "@noble/hashes@npm:1.7.1"
+  checksum: 10c0/2f8ec0338ccc92b576a0f5c16ab9c017a3a494062f1fbb569ae641c5e7eab32072f9081acaa96b5048c0898f972916c818ea63cbedda707886a4b5ffcfbf94e3
   languageName: node
   linkType: hard
 
@@ -8071,6 +8224,8 @@ __metadata:
     "@aragon/id": "npm:2.1.1"
     "@aragon/minime": "npm:1.0.0"
     "@aragon/os": "npm:4.4.0"
+    "@chainsafe/blst": "npm:^2.2.0"
+    "@chainsafe/ssz": "npm:^1.0.2"
     "@commitlint/cli": "npm:19.7.1"
     "@commitlint/config-conventional": "npm:19.7.1"
     "@eslint/compat": "npm:1.2.7"
