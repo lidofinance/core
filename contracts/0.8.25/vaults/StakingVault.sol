@@ -56,11 +56,10 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
- * BeaconProxy
- * The contract is designed as a beacon proxy implementation, allowing all StakingVault instances
- * to be upgraded simultaneously through the beacon contract. The implementation is petrified
- * (non-initializable) and contains immutable references to the VaultHub and the beacon chain
- * deposit contract.
+ * PinnedBeaconProxy
+ * The contract is designed as a extended beacon proxy implementation, allowing individual StakingVault instances
+ * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
+ * and contains immutable references to the beacon chain deposit contract.
  *
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
@@ -206,7 +205,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function detachVaultHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         address _vaultHub = $.vaultHub;
-        if (_vaultHub == address(0)) revert VaultHubNotAttached();
+        if (_vaultHub == address(0)) revert VaultHubAlreadyDetached();
 
         VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
         if (!socket.pendingDisconnect) revert VaultNotPendingDisconnect();
@@ -217,10 +216,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Ossifies the current implementation
+     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
+     *         once ossified, the vault cannot be upgraded.
      * @dev Can only be called by the owner.
      *      Pins the current vault implementation to prevent further upgrades.
      *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
+     * @dev Reverts if already ossified.
      */
     function ossifyStakingVault() external onlyOwner {
         PinnedBeaconUtils.ossify();
@@ -787,7 +788,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when trying to detach vault from VaultHub while it is not attached
      */
-    error VaultHubNotAttached();
+    error VaultHubAlreadyDetached();
 
     /**
      * @notice Thrown when trying to attach vault to VaultHub while it is already attached
