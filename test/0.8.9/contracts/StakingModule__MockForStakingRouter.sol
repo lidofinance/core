@@ -271,44 +271,44 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     bool private shouldBePenalized__mocked;
 
     function handleActiveValidatorsExitingStatus(
-        uint256 nodeOperatorId,
-        uint256 proofSlotTimestamp,
-        bytes calldata publicKeys,
-        bytes calldata eligibleToExitInSec
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKeys,
+        bytes calldata _eligibleToExitInSec
     ) external {
         emit Mock__HandleActiveValidatorsExitingStatus(
-            nodeOperatorId,
-            proofSlotTimestamp,
-            publicKeys,
-            eligibleToExitInSec
+            _nodeOperatorId,
+            _proofSlotTimestamp,
+            _publicKeys,
+            _eligibleToExitInSec
         );
     }
 
     function onTriggerableExit(
         uint256 _nodeOperatorId,
-        bytes calldata publicKeys,
-        uint256 withdrawalRequestPaidFee,
-        uint256 exitType
+        bytes calldata _publicKeys,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
     ) external {
         emit Mock__OnTriggerableExit(
             _nodeOperatorId,
-            publicKeys,
-            withdrawalRequestPaidFee,
-            exitType
+            _publicKeys,
+            _withdrawalRequestPaidFee,
+            _exitType
         );
     }
 
     function shouldValidatorBePenalized(
         uint256 _nodeOperatorId,
-        uint256 proofSlotTimestamp,
-        bytes calldata publicKey,
-        uint256 eligibleToExitInSec
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
     ) external view returns (bool) {
         return shouldBePenalized__mocked;
     }
 
-    function mock__shouldValidatorBePenalized(bool shouldBePenalized) external {
-        shouldBePenalized__mocked = shouldBePenalized;
+    function mock__shouldValidatorBePenalized(bool _shouldBePenalized) external {
+        shouldBePenalized__mocked = _shouldBePenalized;
     }
 
     uint256 private exitDeadlineThreshold__mocked;
@@ -317,7 +317,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         return exitDeadlineThreshold__mocked;
     }
 
-    function mock__exitDeadlineThreshold(uint256 threshold) external {
-        exitDeadlineThreshold__mocked = threshold;
+    function mock__exitDeadlineThreshold(uint256 _threshold) external {
+        exitDeadlineThreshold__mocked = _threshold;
     }
 }

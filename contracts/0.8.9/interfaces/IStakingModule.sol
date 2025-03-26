@@ -18,42 +18,42 @@ interface IStakingModule {
     /// @dev This function is called to report the current exit-related status of validators belonging to a specific node operator.
     ///      It accepts a batch of validator public keys, each associated with the duration (in seconds) they were eligible to exit but have not.
     ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
-    /// @param nodeOperatorId The ID of the node operator whose validators statuses being delivered.
-    /// @param proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
-    /// @param publicKeys Concatenated public keys of the validators being reported.
-    /// @param eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
+    /// @param _nodeOperatorId The ID of the node operator whose validators statuses being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
+    /// @param _publicKeys Concatenated public keys of the validators being reported.
+    /// @param _eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
     function handleActiveValidatorsExitingStatus(
-        uint256 nodeOperatorId,
-        uint256 proofSlotTimestamp,
-        bytes calldata publicKeys,
-        bytes calldata eligibleToExitInSec
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKeys,
+        bytes calldata _eligibleToExitInSec
     ) external;
 
     /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
     /// @dev This function is called when a validator is exited using the triggerable exit request on EL.
     /// @param _nodeOperatorId The ID of the node operator.
-    /// @param publicKeys Concatenated public keys of the validators being reported.
-    /// @param withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
-    /// @param exitType The type of exit being performed.
+    /// @param _publicKeys Concatenated public keys of the validators being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
+    /// @param _exitType The type of exit being performed.
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
     function onTriggerableExit(
         uint256 _nodeOperatorId,
-        bytes calldata publicKeys,
-        uint256 withdrawalRequestPaidFee,
-        uint256 exitType
+        bytes calldata _publicKeys,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
     ) external;
 
     /// @notice Determines whether a validator exit status should be updated and will have affect on Node Operator.
     /// @param _nodeOperatorId The ID of the node operator.
-    /// @param proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
-    /// @param publicKey Validator's public key.
-    /// @param eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
+    /// @param _publicKey Validator's public key.
+    /// @param _eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
     /// @return bool Returns true if contract should receive updated validator's status.
     function shouldValidatorBePenalized(
         uint256 _nodeOperatorId,
-        uint256 proofSlotTimestamp,
-        bytes calldata publicKey,
-        uint256 eligibleToExitInSec
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
     ) external view returns (bool);
 
 
