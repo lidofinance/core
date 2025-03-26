@@ -54,9 +54,11 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     struct VaultBatchInfo {
+        uint256 index;
         address vault;
         uint256 valuation;
         int256 inOutDelta;
+        bytes32 withdrawalCredentials;
         uint256 sharesMinted;
     }
 
@@ -163,10 +165,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _getVaultHubStorage();
         VaultBatchInfo[] memory batch = new VaultBatchInfo[]($.sockets.length - 1);
         for (uint256 i = 0; i < $.sockets.length - 1; i++) {
+            IStakingVault currentVault = IStakingVault($.sockets[i + 1].vault);
             batch[i] = VaultBatchInfo(
+                i,
                 $.sockets[i + 1].vault,
-                IStakingVault($.sockets[i + 1].vault).valuation(),
-                IStakingVault($.sockets[i + 1].vault).inOutDelta(),
+                $.sockets[i + 1].vault.balance,
+                currentVault.inOutDelta(),
+                currentVault.withdrawalCredentials(),
                 $.sockets[i + 1].sharesMinted
             );
         }
