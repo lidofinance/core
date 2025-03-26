@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { days, ether, impersonate } from "lib";
+import { days, ether, generatePredeposit, generateValidator, impersonate } from "lib";
 import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/protocol";
 
 import { deployWithdrawalsPreDeployedMock } from "test/deploy";
@@ -74,7 +74,7 @@ describe("Scenario: Vault creation", () => {
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
-
+    console.log(allRoles.map((s) => s.address));
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
@@ -199,7 +199,17 @@ describe("Scenario: Vault creation", () => {
     });
   });
 
-  it("NO Manager can spawn a validator using ETH from the Vault ", () => {
-    // todo: what method to use?
+  it("NO Manager can spawn a validator using ETH from the Vault ", async () => {
+    const pdg = ctx.contracts.predepositGuarantee.connect(nodeOperatorManager);
+
+    await delegation.connect(funder).fund({ value: ether("32") });
+
+    await pdg.topUpNodeOperatorBalance(nodeOperatorManager, { value: ether("1") });
+
+    const vaultWC = await stakingVault.withdrawalCredentials();
+    const validator = generateValidator(vaultWC);
+    const predepositData = generatePredeposit(validator);
+
+    await expect(pdg.predeposit(stakingVault, [predepositData])).to.emit(stakingVault, "DepositedToBeaconChain");
   });
 });
