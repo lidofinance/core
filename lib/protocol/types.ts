@@ -171,6 +171,7 @@ export type ProtocolContext = {
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
+  isScratch: boolean;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
   getEvents: (
     receipt: ContractTransactionReceipt,

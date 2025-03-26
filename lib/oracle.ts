@@ -33,7 +33,7 @@ export const EXTRA_DATA_FORMAT_LIST = 1n;
 export const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1n;
 export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2n;
 
-const DEFAULT_REPORT_FIELDS: OracleReport = {
+export const DEFAULT_REPORT_FIELDS: OracleReport = {
   consensusVersion: 1n,
   refSlot: 0n,
   numValidators: 0n,
