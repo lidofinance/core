@@ -11,7 +11,10 @@ export {
   waitNextAvailableReportTime,
   handleOracleReport,
   report,
+  getReportDataItems,
+  calcReportDataHash,
 } from "./accounting";
 
 export { sdvtEnsureOperators } from "./sdvt";
 export { norEnsureOperators } from "./nor";
+export { ensureDsmGuardians } from "./dsm";

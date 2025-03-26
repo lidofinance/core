@@ -20,9 +20,19 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { certainAddress, days, ether, findEvents, signPermit, stethDomain, wstethDomain } from "lib";
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  findEvents,
+  signPermit,
+  stethDomain,
+  wstethDomain,
+} from "lib";
 
-import { deployLidoLocator, deployWithdrawalsPreDeployedMock } from "test/deploy";
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("Dashboard.sol", () => {
@@ -52,12 +62,10 @@ describe("Dashboard.sol", () => {
 
   const BP_BASE = 10_000n;
 
-  const FEE = 10n; // some withdrawal fee for EIP-7002
-
   before(async () => {
     [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
 
-    await deployWithdrawalsPreDeployedMock(FEE);
+    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
@@ -668,7 +676,11 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       const amounts = [0n]; // 0 amount means full withdrawal
 
-      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+      await expect(
+        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+          value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+        }),
+      )
         .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });
@@ -677,7 +689,11 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = "0x" + randomBytes(48).toString("hex");
       const amounts = [ether("0.1")];
 
-      await expect(dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, { value: FEE }))
+      await expect(
+        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+          value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+        }),
+      )
         .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
     });

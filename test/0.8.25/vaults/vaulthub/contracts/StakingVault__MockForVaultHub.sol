@@ -3,6 +3,8 @@
 
 pragma solidity ^0.8.0;
 
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
 contract StakingVault__MockForVaultHub {
     address public depositContract;
 
@@ -15,9 +17,12 @@ contract StakingVault__MockForVaultHub {
     uint256 public $valuation;
     int256 public $inOutDelta;
 
+    bytes32 public withdrawalCredentials;
+
     constructor(address _depositor, address _depositContract) {
         depositContract = _depositContract;
         DEPOSITOR = _depositor;
+        withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
     function initialize(address _owner, address _nodeOperator, address _vaultHub, bytes calldata) external {
@@ -36,6 +41,14 @@ contract StakingVault__MockForVaultHub {
 
     function valuation() external view returns (uint256) {
         return $valuation;
+    }
+
+    function mock__setWithdrawalCredentials(bytes32 _wc) external {
+        withdrawalCredentials = _wc;
+    }
+
+    function mock__setNo(address _no) external {
+        nodeOperator = _no;
     }
 
     function inOutDelta() external view returns (int256) {
@@ -81,6 +94,8 @@ contract StakingVault__MockForVaultHub {
     function mock__increaseValuation(uint256 amount) external {
         $valuation += amount;
     }
+
+    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
 
     function isOssified() external pure returns (bool) {
         return false;
