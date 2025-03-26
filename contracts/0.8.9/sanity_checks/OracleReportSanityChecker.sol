@@ -835,6 +835,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 }
 
 library LimitsListPacker {
+    error BasisPointsOverflow(uint256 value, uint256 maxValue);
+
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
         res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
         res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
@@ -850,7 +852,9 @@ library LimitsListPacker {
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {
-        require(_value <= MAX_BASIS_POINTS, "BASIS_POINTS_OVERFLOW");
+        if (_value > MAX_BASIS_POINTS) {
+            revert BasisPointsOverflow(_value, MAX_BASIS_POINTS);
+        }
         return uint16(_value);
     }
 }
