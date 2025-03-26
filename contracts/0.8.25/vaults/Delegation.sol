@@ -170,7 +170,7 @@ contract Delegation is Dashboard {
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
     ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUSTMENT_ROLE) {
-        _setAccruedRewardsAdjustment(_adjustmentIncrease);
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + adjustmentIncrease);
     }
 
     /**
@@ -242,7 +242,6 @@ contract Delegation is Dashboard {
      */
     function _setAccruedRewardsAdjustment(uint256 _newAdjustment) internal {
         uint256 oldAdjustment = accruedRewardsAdjustment;
-        if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
         accruedRewardsAdjustment = _newAdjustment;
 
@@ -293,16 +292,6 @@ contract Delegation is Dashboard {
     event AccruedRewardsAdjustmentSet(uint256 oldAdjustment, uint256 newAdjustment);
 
     // ==================== Errors ====================
-
-    /**
-     * @dev Error emitted when trying to set same inOutAdjustment
-     */
-    error SameAdjustment();
-
-    /**
-     * @dev Error emitted when trying to enact inOut adjustment vote
-     */
-    error InvalidAccruedRewardsAdjustment();
 
     /**
      * @dev Error emitted when the curator fee is unclaimed.
