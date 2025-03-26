@@ -156,7 +156,7 @@ describe("Scenario: Node operators happy path", () => {
 
     // Add node operator
     await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+    const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys to operator
     const keysCount = 13n;
@@ -219,16 +219,14 @@ describe("Scenario: Node operators happy path", () => {
 
     // Add node operator
     await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+    const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys
     const keysCount = 13n;
     const pubkeys = randomPubkeys(Number(keysCount));
     const signatures = randomSignatures(Number(keysCount));
     const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
-    await nor
-      .connect(rewardAddressSigner)
-      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
+    await nor.connect(rewardAddressSigner).addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
     // Get state before setting staking limit
     const nonceBefore = await nor.getKeysOpIndex();
@@ -240,9 +238,7 @@ describe("Scenario: Node operators happy path", () => {
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "invalid new staking limit");
 
     // Set staking limit
-    const stakingLimitTx = await nor
-      .connect(votingSigner)
-      .setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
+    const stakingLimitTx = await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting staking limit
     const nonceAfter = await nor.getKeysOpIndex();
@@ -269,20 +265,16 @@ describe("Scenario: Node operators happy path", () => {
 
     // Add node operator
     await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+    const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys and set staking limit
     const keysCount = 13n;
     const pubkeys = randomPubkeys(Number(keysCount));
     const signatures = randomSignatures(Number(keysCount));
     const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
-    await nor
-      .connect(rewardAddressSigner)
-      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
+    await nor.connect(rewardAddressSigner).addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
-    await nor
-      .connect(votingSigner)
-      .setNodeOperatorStakingLimit(newOperatorId, keysCount);
+    await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, keysCount);
 
     // Get state before deactivating operator
     const nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
@@ -331,7 +323,7 @@ describe("Scenario: Node operators happy path", () => {
 
     // Add node operator
     await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+    const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Deactivate node operator
     await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
@@ -379,16 +371,14 @@ describe("Scenario: Node operators happy path", () => {
 
     // Add node operator
     await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+    const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys
     const keysCount = 13n;
     const pubkeys = randomPubkeys(Number(keysCount));
     const signatures = randomSignatures(Number(keysCount));
     const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
-    await nor
-      .connect(rewardAddressSigner)
-      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
+    await nor.connect(rewardAddressSigner).addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
     // Deactivate and reactivate node operator
     await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
@@ -404,9 +394,7 @@ describe("Scenario: Node operators happy path", () => {
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "Invalid new staking limit");
 
     // Set staking limit
-    const setLimitTx = await nor
-      .connect(votingSigner)
-      .setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
+    const setLimitTx = await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting limit
     const nonceAfter = await nor.getKeysOpIndex();
