@@ -85,12 +85,12 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for unsafe deposit to trusted validators
      */
-    bytes32 public constant UNSAFE_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.UnsafeWithdrawDeposit");
+    bytes32 public constant TRUSTED_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.UnsafeWithdrawDeposit");
 
     /**
      * @notice Permission for proving side validators
      */
-    bytes32 public constant PROVE_SIDE_VALIDATOR_ROLE = keccak256("vaults.Permissions.ProvingSideValidator");
+    bytes32 public constant PROVE_SIDE_VALIDATOR_ROLE = keccak256("vaults.Permissions.ProveSideValidator");
 
     /**
      * @notice Permission for assets recovery
@@ -283,7 +283,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev withdraws ether from vault to this contract for deposit to trusted validators
      */
-    function _withdrawForDeposit(uint256 _ether) internal onlyRole(UNSAFE_WITHDRAW_DEPOSIT_ROLE) {
+    function _withdrawForDeposit(uint256 _ether) internal onlyRole(TRUSTED_WITHDRAW_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
     }
 
@@ -291,11 +291,12 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev withdraws ether from vault to this contract for deposit to trusted validators
      */
     function _proveSideValidators(
-        CLProofVerifier.ValidatorWitness[] calldata _witness
+        CLProofVerifier.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PROVE_SIDE_VALIDATOR_ROLE) {
         IStakingVault vault = stakingVault();
-        for (uint i = 0; i < _witness.length; i++) {
-            PredepositGuarantee(vault.depositor()).proveUnknownValidator(_witness[i], vault);
+        PredepositGuarantee pdg = PredepositGuarantee(vault.depositor());
+        for (uint256 i = 0; i < _witnesses.length; i++) {
+            pdg.proveUnknownValidator(_witnesses[i], vault);
         }
     }
 

@@ -29,7 +29,7 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
-    function  DEPOSIT_CONTRACT() external view returns (IDepositContract);
+    function DEPOSIT_CONTRACT() external view returns (IDepositContract);
 
     function initialize(address _owner, address _operator, bytes calldata _params) external;
     function version() external pure returns (uint64);

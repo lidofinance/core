@@ -34,6 +34,12 @@ contract Delegation is Dashboard {
     bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
 
     /**
+     * @notice adjusts rewards to allow fee correction during side deposits or consolidations
+     */
+    bytes32 public constant NODE_OPERATOR_REWARDS_ADJUSTMENT_ROLE =
+        keccak256("vaults.Delegation.NodeOperatorRewardsAdjustmentRole");
+
+    /**
      * @notice Node operator fee in basis points; combined with curator fee cannot exceed 100%, or 10,000 basis points.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
@@ -47,7 +53,7 @@ contract Delegation is Dashboard {
     /**
      * @notice adjustment for inOut to allow fee correction during side deposits
      */
-    uint128 public inOutAdjustment;
+    uint256 public accruedRewardsAdjustment;
 
     /**
      * @notice Constructs the contract.
@@ -74,6 +80,7 @@ contract Delegation is Dashboard {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUSTMENT_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
@@ -155,25 +162,33 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice allows to adjust fee offset,
-     * @param _inOutOffset new offset value
-     * @param _currentOffset current offset value used to invalidate previous votings
+     * @notice allows to increase accrued rewards adjustment to correct fee calculation due to non-rewards ether on CL
+     *         Note that the authorized role is NODE_OPERATOR_FEE_CLAIM_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
+     *         although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
+     * @param _adjustmentIncrease amount to increase adjustment by
      */
-    function adjustInOutOffset(
-        uint256 _inOutOffset,
-        uint256 _currentOffset
-    ) external onlyConfirmed(_confirmingRoles()) {
-        if (_currentOffset != inOutAdjustment) revert InvalidCurrentInOutAdjustment();
-        _adjustInOut(uint128(_inOutOffset));
+    function increaseAccruedRewardsAdjustment(
+        uint256 _adjustmentIncrease
+    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUSTMENT_ROLE) {
+        _setAccruedRewardsAdjustment(_adjustmentIncrease);
     }
 
-    function unsafeWithdrawAndDeposit(
+    /**
+     * @notice withdraws ether from vault and deposits directly to provided validators,
+     *         so later validators can be proven by `PDG.proveUnknownValidator` for direct vault deposits.
+     *         Also increases accruedRewardsAdjustment to account for those validators in fee calculation.
+     * @param _deposits array of StakingVault.Deposit structs containing deposit data
+     * @param _depositContractRoot deposit contract root to check to make sure that state of deposit contract remains the same
+     * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
+     * @dev can be used as PDG shortcut if the node operator is trusted
+     */
+    function trustedWithdrawAndDeposit(
         IStakingVault.Deposit[] calldata _deposits,
         bytes32 _depositContractRoot
     ) public override returns (uint256 totalAmount) {
-        totalAmount = super.unsafeWithdrawAndDeposit(_deposits, _depositContractRoot);
+        totalAmount = super.trustedWithdrawAndDeposit(_deposits, _depositContractRoot);
 
-        _adjustInOut(inOutAdjustment + uint128(totalAmount));
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
     }
 
     // ==================== Internal Functions ====================
@@ -201,7 +216,7 @@ contract Delegation is Dashboard {
         IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
-            (latestReport.inOutDelta + int128(inOutAdjustment) - _lastClaimedReport.inOutDelta);
+            (latestReport.inOutDelta + int128(uint128(accruedRewardsAdjustment)) - _lastClaimedReport.inOutDelta);
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * _feeBP) / TOTAL_BASIS_POINTS : 0;
     }
@@ -216,21 +231,22 @@ contract Delegation is Dashboard {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
-        if (inOutAdjustment != 0) _adjustInOut(0);
+        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
 
         stakingVault().withdraw(_recipient, _fee);
     }
 
     /**
      * @notice sets InOut adjustment for correct fee calculation
-     * @param _inOutAdjustment new adjustment value
+     * @param _newAdjustment new adjustment value
      */
-    function _adjustInOut(uint128 _inOutAdjustment) internal {
-        if (_inOutAdjustment == inOutAdjustment) revert SameAdjustment();
+    function _setAccruedRewardsAdjustment(uint256 _newAdjustment) internal {
+        uint256 oldAdjustment = accruedRewardsAdjustment;
+        if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
-        emit InOutAdjustmentSet(inOutAdjustment, _inOutAdjustment);
+        accruedRewardsAdjustment = _newAdjustment;
 
-        inOutAdjustment = _inOutAdjustment;
+        emit AccruedRewardsAdjustmentSet(oldAdjustment, _newAdjustment);
     }
 
     /**
@@ -270,11 +286,11 @@ contract Delegation is Dashboard {
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
 
     /**
-     * @dev Emitted when the inOut adjustment is set.
-     * @param oldInOutAdjustment The old inOut adjustment.
-     * @param newInOutAdjustment The new inOut adjustment.
+     * @dev Emitted when the new rewards adjustment is set.
+     * @param oldAdjustment the old adjustment value
+     * @param newAdjustment the new adjustment value
      */
-    event InOutAdjustmentSet(uint128 oldInOutAdjustment, uint128 newInOutAdjustment);
+    event AccruedRewardsAdjustmentSet(uint256 oldAdjustment, uint256 newAdjustment);
 
     // ==================== Errors ====================
 
@@ -286,7 +302,7 @@ contract Delegation is Dashboard {
     /**
      * @dev Error emitted when trying to enact inOut adjustment vote
      */
-    error InvalidCurrentInOutAdjustment();
+    error InvalidAccruedRewardsAdjustment();
 
     /**
      * @dev Error emitted when the curator fee is unclaimed.

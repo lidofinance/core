@@ -374,11 +374,12 @@ contract Dashboard is Permissions {
     /**
      * @notice withdraws ether from vault and deposits directly to provided validators,
      *         so later validators can be proven by `PDG.proveUnknownValidator` for direct vault deposits
-     * @param _deposits array of StakingVault.Deposit structs containing deposit data
-     * @dev requires the caller to have the `UNSAFE_DEPOSIT_ROLE`
-     * @dev used as a shortcut if validators are trusted
+     * @param _deposits array of IStakingVault.Deposit structs containing deposit data
+     * @param _depositContractRoot deposit contract root to check to make sure that state of deposit contract remains the same
+     * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
+     * @dev can be used as PDG shortcut if the node operator is trusted
      */
-    function unsafeWithdrawAndDeposit(
+    function trustedWithdrawAndDeposit(
         IStakingVault.Deposit[] calldata _deposits,
         bytes32 _depositContractRoot
     ) public virtual returns (uint256 totalAmount) {
@@ -410,6 +411,11 @@ contract Dashboard is Permissions {
         }
     }
 
+    /**
+     * @notice proves validators with correct vault WC if they are unknown to PDG
+     * @param _witnesses array of CLProofVerifier.ValidatorWitness structs containing proof data for validators
+     * @dev requires the caller to have the `PROVE_SIDE_VALIDATOR_ROLE`
+     */
     function proveSideValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
         _proveSideValidators(_witnesses);
     }
@@ -445,7 +451,7 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Transfers a given token_id of anх ERC721-compatible NFT (defined by the token contract address)
+     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
      * from the dashboard contract to sender
      *
      * @param _token an ERC721-compatible token
