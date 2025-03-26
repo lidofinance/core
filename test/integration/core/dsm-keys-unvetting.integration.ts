@@ -112,10 +112,14 @@ describe("Integration: DSM keys unvetting", () => {
     // Prepare unvet parameters
     const stakingModuleId = 1;
     const operatorId = 0n;
-    const vettedSigningKeysCount = 1n;
     const blockNumber = await time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
+
+    // Get node operator state before unvetting
+    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
+    const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
+    const vettedSigningKeysCount = totalVettedValidatorsBefore - 2n;
 
     // Pack operator IDs into bytes (8 bytes per ID)
     const nodeOperatorIds = ethers.solidityPacked(["uint64"], [operatorId]);
@@ -135,12 +139,6 @@ describe("Integration: DSM keys unvetting", () => {
     const sig = await unvetMessage.sign(GUARDIAN_PRIVATE_KEY);
 
     // Stranger should be able to unvet with valid guardian signature
-    // Get node operator state before unvetting
-    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
-    const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
-    expect(totalVettedValidatorsBefore).to.be.not.equal(vettedSigningKeysCount);
-
-    // Unvet signing keys
     const tx = await dsm
       .connect(stranger)
       .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, sig);
@@ -166,19 +164,20 @@ describe("Integration: DSM keys unvetting", () => {
 
     // Set single guardian
     await setSingleGuardian(ctx, guardian);
+    const operatorId = 0n;
+
+    // Get node operator state before unvetting
+    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
+    const totalDepositedValidatorsBefore = nodeOperatorBefore.totalDepositedValidators;
+    expect(totalDepositedValidatorsBefore).to.be.gte(1n);
+    const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
 
     // Prepare unvet parameters
     const stakingModuleId = 1;
-    const operatorId = 0n;
-    const vettedSigningKeysCount = 3n;
+    const vettedSigningKeysCount = totalVettedValidatorsBefore - 3n;
     const blockNumber = await time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
-
-    // Get node operator state before unvetting
-    const nodeOperatorsBefore = await nor.getNodeOperator(operatorId, true);
-    const totalDepositedValidatorsBefore = nodeOperatorsBefore.totalDepositedValidators;
-    expect(totalDepositedValidatorsBefore).to.be.gte(1n);
 
     // Pack operator IDs into bytes (8 bytes per ID)
     const nodeOperatorIds = ethers.solidityPacked(["uint64"], [operatorId]);
