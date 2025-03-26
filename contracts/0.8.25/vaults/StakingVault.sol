@@ -195,7 +195,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
     function valuation() public view returns (uint256) {
-        _checkReportFreshness();
         ERC7201Storage storage $ = _getStorage();
         return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
     }
@@ -215,7 +214,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      including ether currently being staked on validators
      */
     function unlocked() public view returns (uint256) {
-        uint256 _valuation = valuation();
+        uint256 _valuation = checkFreshnessAndGetVauluation();
         uint256 _locked = _getStorage().locked;
 
         if (_locked > _valuation) return 0;
@@ -308,7 +307,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (checkFreshnessAndGetVauluation() < $.locked) revert ValuationBelowLockedAmount();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -338,7 +337,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        uint256 valuation_ = valuation();
+        uint256 valuation_ = checkFreshnessAndGetVauluation();
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
@@ -429,7 +428,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (msg.sender != DEPOSITOR) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (checkFreshnessAndGetVauluation() < $.locked) revert ValuationBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
         uint256 totalAmount = 0;
@@ -506,7 +505,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isValuationBelowLocked = valuation() < $.locked;
+        bool isValuationBelowLocked = checkFreshnessAndGetVauluation() < $.locked;
         if (isValuationBelowLocked) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
@@ -533,6 +532,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+    }
+
+    function checkFreshnessAndGetVauluation() internal view returns (uint256) {
+        _checkReportFreshness();
+        return valuation();
     }
 
     function _isReportFresh() internal view returns (bool) {
