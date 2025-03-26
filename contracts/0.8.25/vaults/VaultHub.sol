@@ -243,7 +243,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit ShareLimitUpdated(_vault, _shareLimit);
     }
 
-    function updateVaultsData(
+    function updateReportData(
         uint256 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataTreeCid

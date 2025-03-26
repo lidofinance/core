@@ -70,8 +70,6 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
-        /// @notice total amount of shares to be minted as vault fees to the treasury
-        uint256 totalVaultsTreasuryFeeShares;
     }
 
     struct StakingRewardsDistribution {
@@ -227,7 +225,7 @@ contract Accounting {
         //         update.sharesToMintAsFees
         //     );
 
-        uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
+        uint256 externalShares = _pre.externalShares + _report.vaultsTotalTreasuryFees;
 
         update.postTotalShares = update.postInternalShares + externalShares;
         update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
@@ -324,21 +322,13 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        _contracts.vaultHub.updateVaultsData(
+        _contracts.vaultHub.updateReportData(
             _report.timestamp,
             _report.vaultsDataTreeRoot,
             _report.vaultsDataTreeCid
         );
-        // TODO: Remove this once decide on vaults reporting
-        // _contracts.vaultHub.updateVaults(
-        //     _report.vaultValues,
-        //     _report.inOutDeltas,
-        //     _update.vaultsLockedEther,
-        //     _update.vaultsTreasuryFeeShares
-        // );
-
-        if (_update.totalVaultsTreasuryFeeShares > 0) {
-            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_update.totalVaultsTreasuryFeeShares);
+        if (_report.vaultsTotalTreasuryFees > 0) {
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFees);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
