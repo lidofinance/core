@@ -12,7 +12,6 @@ import {ILido} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
