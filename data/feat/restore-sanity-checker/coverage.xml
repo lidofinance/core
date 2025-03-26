@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3843"  lines-covered="3725"  line-rate="0.9693"  branches-valid="1836"  branches-covered="1731"  branch-rate="0.9428"  timestamp="1743024917669" complexity="0" version="0.1">
+<coverage lines-valid="3843"  lines-covered="3725"  line-rate="0.9693"  branches-valid="1836"  branches-covered="1739"  branch-rate="0.9472"  timestamp="1743029171881" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -5226,7 +5226,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.lib"  line-rate="1"  branch-rate="0.6364" >
+	<package name="0.8.9.lib"  line-rate="1"  branch-rate="1" >
 	<classes>
 		<class name="Math.sol"  filename="contracts/0.8.9/lib/Math.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -5250,47 +5250,47 @@
 			<line number="29"  hits="472"  branch="false" />
 		</lines>
 		</class>
-		<class name="PositiveTokenRebaseLimiter.sol"  filename="contracts/0.8.9/lib/PositiveTokenRebaseLimiter.sol"  line-rate="1"  branch-rate="0.5556" >
+		<class name="PositiveTokenRebaseLimiter.sol"  filename="contracts/0.8.9/lib/PositiveTokenRebaseLimiter.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="initLimiterState"  hits="29"  signature="()V" >
-				<lines><line number="83"  hits="29" /></lines>
+			<method name="initLimiterState"  hits="44"  signature="()V" >
+				<lines><line number="83"  hits="44" /></lines>
 			</method>
-			<method name="isLimitReached"  hits="58"  signature="()V" >
-				<lines><line number="109"  hits="58" /></lines>
+			<method name="isLimitReached"  hits="62"  signature="()V" >
+				<lines><line number="109"  hits="62" /></lines>
 			</method>
-			<method name="decreaseEther"  hits="43"  signature="()V" >
-				<lines><line number="118"  hits="43" /></lines>
+			<method name="decreaseEther"  hits="46"  signature="()V" >
+				<lines><line number="118"  hits="46" /></lines>
 			</method>
-			<method name="increaseEther"  hits="73"  signature="()V" >
-				<lines><line number="134"  hits="73" /></lines>
+			<method name="increaseEther"  hits="77"  signature="()V" >
+				<lines><line number="134"  hits="77" /></lines>
 			</method>
-			<method name="getSharesToBurnLimit"  hits="58"  signature="()V" >
-				<lines><line number="159"  hits="58" /></lines>
+			<method name="getSharesToBurnLimit"  hits="61"  signature="()V" >
+				<lines><line number="159"  hits="61" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="88"  hits="29"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="89"  hits="29"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="92"  hits="29"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="94"  hits="29"  branch="false" />
-			<line number="95"  hits="29"  branch="false" />
-			<line number="96"  hits="29"  branch="false" />
-			<line number="98"  hits="29"  branch="false" />
-			<line number="110"  hits="58"  branch="false" />
-			<line number="121"  hits="43"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="123"  hits="43"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="125"  hits="43"  branch="false" />
-			<line number="141"  hits="73"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="143"  hits="73"  branch="false" />
-			<line number="144"  hits="73"  branch="false" />
-			<line number="146"  hits="73"  branch="false" />
-			<line number="149"  hits="73"  branch="false" />
-			<line number="151"  hits="73"  branch="false" />
-			<line number="164"  hits="58"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="166"  hits="58"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="168"  hits="37"  branch="false" />
-			<line number="169"  hits="37"  branch="false" />
-			<line number="172"  hits="37"  branch="false" />
+			<line number="88"  hits="44"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="89"  hits="43"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="92"  hits="42"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="94"  hits="42"  branch="false" />
+			<line number="95"  hits="42"  branch="false" />
+			<line number="96"  hits="42"  branch="false" />
+			<line number="98"  hits="42"  branch="false" />
+			<line number="110"  hits="62"  branch="false" />
+			<line number="121"  hits="46"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="123"  hits="45"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="125"  hits="44"  branch="false" />
+			<line number="141"  hits="77"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="143"  hits="76"  branch="false" />
+			<line number="144"  hits="76"  branch="false" />
+			<line number="146"  hits="76"  branch="false" />
+			<line number="149"  hits="76"  branch="false" />
+			<line number="151"  hits="76"  branch="false" />
+			<line number="164"  hits="61"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="166"  hits="60"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="168"  hits="38"  branch="false" />
+			<line number="169"  hits="38"  branch="false" />
+			<line number="172"  hits="38"  branch="false" />
 		</lines>
 		</class>
 		<class name="UnstructuredRefStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredRefStorage.sol"  line-rate="1"  branch-rate="1" >
