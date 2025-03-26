@@ -7,9 +7,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
-describe("EL rewards distribution", () => {
+describe("Scenario: EL rewards distribution", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let stranger: HardhatEthersSigner;
@@ -23,6 +23,8 @@ describe("EL rewards distribution", () => {
   });
 
   after(async () => await Snapshot.restore(snapshot));
+
+  beforeEach(bailOnFailure);
 
   it("Should have correct initial values", async () => {
     const { lido, locator, elRewardsVault } = ctx.contracts;

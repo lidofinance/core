@@ -61,7 +61,7 @@ describe("Integration: DSM pause deposits", () => {
   async function ownerUnpauseDeposits() {
     expect(await dsm.isDepositsPaused()).to.be.true;
     const owner = await dsm.getOwner();
-    const ownerSigner = await impersonate(owner);
+    const ownerSigner = await impersonate(owner, ether("1"));
 
     const unpauseDepositTx = await dsm.connect(ownerSigner).unpauseDeposits();
 
@@ -84,7 +84,7 @@ describe("Integration: DSM pause deposits", () => {
   });
 
   it("Should allow stranger to pause deposits with guardian signature", async () => {
-    // Create new guardian with known private key
+    // Just an arbitrary account for using in tests
     const guardianPrivateKey = "0x516b8a7d9290502f5661da81f0cf43893e3d19cb9aea3c426cfb36e8186e9c09";
     const guardian = new ethers.Wallet(guardianPrivateKey).address;
 

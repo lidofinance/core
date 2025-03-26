@@ -5,7 +5,7 @@ import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "li
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/nor";
 
-import { Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 type NodeOperatorState = {
   active: boolean;
@@ -67,11 +67,10 @@ function verifyNodeOperatorSummaryStateChanges(
   }
 }
 
-describe("Integration: Node operators flow", () => {
+describe("Scenario: Node operators happy path", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;
-  let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -80,14 +79,6 @@ describe("Integration: Node operators flow", () => {
 
     // Grant required roles
     const votingSigner = await ctx.getSigner("voting");
-    const agentSigner = await ctx.getSigner("agent");
-
-    await ctx.contracts.stakingRouter
-      .connect(agentSigner)
-      .grantRole(
-        await ctx.contracts.stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE(),
-        await votingSigner.getAddress(),
-      );
 
     await ctx.contracts.acl
       .connect(votingSigner)
@@ -98,9 +89,7 @@ describe("Integration: Node operators flow", () => {
       );
   });
 
-  beforeEach(async () => (originalState = await Snapshot.take()));
-
-  afterEach(async () => await Snapshot.restore(originalState));
+  beforeEach(bailOnFailure);
 
   after(async () => await Snapshot.restore(snapshot));
 
@@ -111,15 +100,15 @@ describe("Integration: Node operators flow", () => {
     const operatorName = "new_node_operator";
 
     // Get initial counts
-    let nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
-    let activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
+    const activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
 
     // Add node operator
     const addTx = await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
 
     // Get counts after adding operator
-    let nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
-    let activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
+    const activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
 
     // Verify counts increased by 1
     expect(nodeOperatorsCountAfter).to.equal(nodeOperatorsCountBefore + 1n);
@@ -157,6 +146,17 @@ describe("Integration: Node operators flow", () => {
     expect(events[0].args.name).to.equal(operatorName);
     expect(events[0].args.rewardAddress).to.equal(rewardAddress);
     expect(events[0].args.stakingLimit).to.equal(0);
+  });
+
+  it("Should allow adding signing keys to a node operator", async () => {
+    const { nor } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+    const rewardAddress = certainAddress("rewardAddress");
+    const operatorName = "new_node_operator";
+
+    // Add node operator
+    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
 
     // Add signing keys to operator
     const keysCount = 13n;
@@ -164,11 +164,11 @@ describe("Integration: Node operators flow", () => {
     const signatures = randomSignatures(Number(keysCount));
 
     // Get state before adding keys
-    let nonceBefore = await nor.getKeysOpIndex();
+    const nonceBefore = await nor.getKeysOpIndex();
     const totalSigningKeysCountBefore = await nor.getTotalSigningKeyCount(newOperatorId);
     const unusedSigningKeysCountBefore = await nor.getUnusedSigningKeyCount(newOperatorId);
-    let nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
-    let nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
+    const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Add signing keys
     const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
@@ -177,11 +177,11 @@ describe("Integration: Node operators flow", () => {
       .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
     // Get state after adding keys
-    let nonceAfter = await nor.getKeysOpIndex();
+    const nonceAfter = await nor.getKeysOpIndex();
     const totalSigningKeysCountAfter = await nor.getTotalSigningKeyCount(newOperatorId);
     const unusedSigningKeysCountAfter = await nor.getUnusedSigningKeyCount(newOperatorId);
-    let nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
-    let nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
+    const nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Verify state changes
     expect(nonceAfter).to.not.equal(nonceBefore);
@@ -209,26 +209,47 @@ describe("Integration: Node operators flow", () => {
       .withArgs(newOperatorId, totalSigningKeysCountAfter);
     await expect(addKeysTx).to.emit(nor, "KeysOpIndexSet").withArgs(nonceAfter);
     await expect(addKeysTx).to.emit(nor, "NonceChanged").withArgs(nonceAfter);
+  });
+
+  it("Should allow setting staking limit for a node operator", async () => {
+    const { nor } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+    const rewardAddress = certainAddress("rewardAddress");
+    const operatorName = "new_node_operator";
+
+    // Add node operator
+    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+
+    // Add signing keys
+    const keysCount = 13n;
+    const pubkeys = randomPubkeys(Number(keysCount));
+    const signatures = randomSignatures(Number(keysCount));
+    const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
+    await nor
+      .connect(rewardAddressSigner)
+      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
     // Get state before setting staking limit
-    nonceBefore = await nor.getKeysOpIndex();
-    nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
+    const nonceBefore = await nor.getKeysOpIndex();
+    const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Verify staking limit
-    let newStakingLimit = await nor.getTotalSigningKeyCount(newOperatorId);
+    const newStakingLimit = await nor.getTotalSigningKeyCount(newOperatorId);
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "invalid new staking limit");
 
     // Set staking limit
     const stakingLimitTx = await nor
-      .connect(await ctx.getSigner("voting"))
+      .connect(votingSigner)
       .setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting staking limit
-    nonceAfter = await nor.getKeysOpIndex();
-    nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
+    const nonceAfter = await nor.getKeysOpIndex();
+    const nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
 
+    expect(nonceAfter).to.be.gt(nonceBefore, "nonce should be incremented after setting staking limit");
     verifyNodeOperatorStateChanges(nodeOperatorAfter, nodeOperatorBefore, { totalVettedValidators: newStakingLimit });
     verifyNodeOperatorSummaryStateChanges(nodeOperatorSummaryAfter, nodeOperatorSummaryBefore, {
       depositableValidatorsCount: newStakingLimit,
@@ -238,21 +259,45 @@ describe("Integration: Node operators flow", () => {
     await expect(stakingLimitTx).to.emit(nor, "VettedSigningKeysCountChanged").withArgs(newOperatorId, newStakingLimit);
     await expect(stakingLimitTx).to.emit(nor, "KeysOpIndexSet").withArgs(nonceAfter);
     await expect(stakingLimitTx).to.emit(nor, "NonceChanged").withArgs(nonceAfter);
+  });
+
+  it("Should allow deactivating a node operator", async () => {
+    const { nor } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+    const rewardAddress = certainAddress("rewardAddress");
+    const operatorName = "new_node_operator";
+
+    // Add node operator
+    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+
+    // Add signing keys and set staking limit
+    const keysCount = 13n;
+    const pubkeys = randomPubkeys(Number(keysCount));
+    const signatures = randomSignatures(Number(keysCount));
+    const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
+    await nor
+      .connect(rewardAddressSigner)
+      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
+
+    await nor
+      .connect(votingSigner)
+      .setNodeOperatorStakingLimit(newOperatorId, keysCount);
 
     // Get state before deactivating operator
-    nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
-    activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
-    nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
+    const nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
+    const activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Deactivate node operator
     const deactivateTx = await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
 
     // Get state after deactivating operator
-    nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
-    activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
-    nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
+    const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
+    const activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Verify operator counts
     expect(nodeOperatorsCountAfter).to.equal(nodeOperatorsCountBefore);
@@ -276,29 +321,43 @@ describe("Integration: Node operators flow", () => {
     expect(deactivateEvents.length).to.equal(1);
     expect(deactivateEvents[0].args.nodeOperatorId).to.equal(newOperatorId);
     expect(deactivateEvents[0].args.active).to.be.false;
+  });
+
+  it("Should allow reactivating a node operator", async () => {
+    const { nor } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+    const rewardAddress = certainAddress("rewardAddress");
+    const operatorName = "new_node_operator";
+
+    // Add node operator
+    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+
+    // Deactivate node operator
+    await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
 
     // Get state before activating operator
-    nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
     expect(nodeOperatorBefore.active).to.be.false;
 
-    nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
-    nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
-    activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
+    const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
+    const activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
 
     // Activate node operator
     const activateTx = await nor.connect(votingSigner).activateNodeOperator(newOperatorId);
 
     // Get state after activating operator
-    nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
-    nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
-    activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
+    const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
+    const nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
+    const activeNodeOperatorsCountAfter = await nor.getActiveNodeOperatorsCount();
 
     // Verify operator counts
     expect(nodeOperatorsCountAfter).to.equal(nodeOperatorsCountBefore);
     expect(activeNodeOperatorsCountAfter).to.equal(activeNodeOperatorsCountBefore + 1n);
 
     // Verify node operator state changes
-    nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
     verifyNodeOperatorStateChanges(nodeOperatorAfter, nodeOperatorBefore, { active: true });
     verifyNodeOperatorSummaryStateChanges(nodeOperatorSummaryAfter, nodeOperatorSummaryBefore);
 
@@ -310,26 +369,51 @@ describe("Integration: Node operators flow", () => {
     expect(activateEvents.length).to.equal(1);
     expect(activateEvents[0].args.nodeOperatorId).to.equal(newOperatorId);
     expect(activateEvents[0].args.active).to.be.true;
+  });
+
+  it("Should allow updating staking limit after reactivation", async () => {
+    const { nor } = ctx.contracts;
+    const votingSigner = await ctx.getSigner("voting");
+    const rewardAddress = certainAddress("rewardAddress");
+    const operatorName = "new_node_operator";
+
+    // Add node operator
+    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const newOperatorId = await nor.getNodeOperatorsCount() - 1n;
+
+    // Add signing keys
+    const keysCount = 13n;
+    const pubkeys = randomPubkeys(Number(keysCount));
+    const signatures = randomSignatures(Number(keysCount));
+    const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
+    await nor
+      .connect(rewardAddressSigner)
+      .addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
+
+    // Deactivate and reactivate node operator
+    await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
+    await nor.connect(votingSigner).activateNodeOperator(newOperatorId);
 
     // Get state before setting staking limit
-    nonceBefore = await nor.getKeysOpIndex();
-    nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
+    const nonceBefore = await nor.getKeysOpIndex();
+    const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Set new staking limit equal to total signing keys
-    newStakingLimit = await nor.getTotalSigningKeyCount(newOperatorId);
+    const newStakingLimit = await nor.getTotalSigningKeyCount(newOperatorId);
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "Invalid new staking limit");
 
     // Set staking limit
     const setLimitTx = await nor
-      .connect(await ctx.getSigner("voting"))
+      .connect(votingSigner)
       .setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting limit
-    nonceAfter = await nor.getKeysOpIndex();
-    nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
-    nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
+    const nonceAfter = await nor.getKeysOpIndex();
+    const nodeOperatorAfter = await nor.getNodeOperator(newOperatorId, true);
+    const nodeOperatorSummaryAfter = await nor.getNodeOperatorSummary(newOperatorId);
 
+    expect(nonceAfter).to.be.gt(nonceBefore, "nonce should be incremented after setting staking limit");
     verifyNodeOperatorStateChanges(nodeOperatorAfter, nodeOperatorBefore, { totalVettedValidators: newStakingLimit });
     verifyNodeOperatorSummaryStateChanges(nodeOperatorSummaryAfter, nodeOperatorSummaryBefore, {
       depositableValidatorsCount: newStakingLimit,

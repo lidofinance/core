@@ -18,12 +18,16 @@ import { Snapshot, ZERO_HASH } from "test/suite";
 
 import { HashConsensus } from "../../../typechain-types";
 
+const UINT64_MAX = 2n ** 64n - 1n;
+
 describe("Hash consensus negative scenarios", () => {
   let ctx: ProtocolContext;
-  let snapshot: string;
   let stranger: HardhatEthersSigner;
   let hashConsensus: HashConsensus;
   let agent: HardhatEthersSigner;
+
+  let snapshot: string;
+  let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -34,6 +38,10 @@ describe("Hash consensus negative scenarios", () => {
   });
 
   after(async () => await Snapshot.restore(snapshot));
+
+  beforeEach(async () => (originalState = await Snapshot.take()));
+
+  afterEach(async () => await Snapshot.restore(originalState));
 
   it("Should not allow updating initial epoch after initialization", async () => {
     await expect(hashConsensus.connect(agent).updateInitialEpoch(1)).to.be.revertedWithCustomError(
@@ -189,7 +197,7 @@ describe("Hash consensus negative scenarios", () => {
 
     // Test numeric overflow
     await expect(
-      hashConsensus.connect(memberSigner).submitReport(2n ** 64n, reportHash, consensusVersion),
+      hashConsensus.connect(memberSigner).submitReport(UINT64_MAX + 1n, reportHash, consensusVersion),
     ).to.be.revertedWithCustomError(hashConsensus, "NumericOverflow");
 
     // Test empty report

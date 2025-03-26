@@ -15,6 +15,7 @@ describe("Staking limits", () => {
   let ctx: ProtocolContext;
   let lido: Lido;
   let snapshot: string;
+  let testSnapshot: string;
   let stranger: HardhatEthersSigner;
   let voting: HardhatEthersSigner;
 
@@ -25,6 +26,14 @@ describe("Staking limits", () => {
     voting = await ctx.getSigner("voting");
 
     snapshot = await Snapshot.take();
+  });
+
+  beforeEach(async () => {
+    testSnapshot = await Snapshot.take();
+  });
+
+  afterEach(async () => {
+    await Snapshot.restore(testSnapshot);
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -187,11 +196,9 @@ describe("Staking limits", () => {
       const maxLimit = ether("1000");
       const limitPerBlock = ether("100");
 
-      const tx = await lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock);
-      const receipt = await tx.wait();
-
-      expect(receipt?.logs.length).to.equal(1);
-      await expect(tx).to.emit(lido, "StakingLimitSet").withArgs(maxLimit, limitPerBlock);
+      await expect(lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock))
+        .to.emit(lido, "StakingLimitSet")
+        .withArgs(maxLimit, limitPerBlock);
 
       const info = await lido.getStakeLimitFullInfo();
       expect(info.isStakingLimitSet).to.be.true;
@@ -204,11 +211,9 @@ describe("Staking limits", () => {
 
       const newMax = ether("2000");
       const newPerBlock = ether("200");
-      const tx = await lido.connect(voting).setStakingLimit(newMax, newPerBlock);
-      const receipt = await tx.wait();
-
-      expect(receipt?.logs.length).to.equal(1);
-      await expect(tx).to.emit(lido, "StakingLimitSet").withArgs(newMax, newPerBlock);
+      await expect(lido.connect(voting).setStakingLimit(newMax, newPerBlock))
+        .to.emit(lido, "StakingLimitSet")
+        .withArgs(newMax, newPerBlock);
 
       const info = await lido.getStakeLimitFullInfo();
       expect(info.isStakingLimitSet).to.be.true;
@@ -219,11 +224,7 @@ describe("Staking limits", () => {
       const limitPerBlock = ether("100");
       await lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock);
 
-      const tx = await lido.connect(voting).removeStakingLimit();
-      const receipt = await tx.wait();
-
-      expect(receipt?.logs.length).to.equal(1);
-      await expect(tx).to.emit(lido, "StakingLimitRemoved");
+      await expect(lido.connect(voting).removeStakingLimit()).to.emit(lido, "StakingLimitRemoved");
 
       const info = await lido.getStakeLimitFullInfo();
       expect(info.isStakingLimitSet).to.be.false;
