@@ -267,6 +267,32 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("batchVaultsInfo", () => {
+    it("returns the vault info", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaults = await vaultHub.batchVaultsInfo();
+
+      expect(vaults.length).to.equal(2);
+
+      const vaultInfo = vaults[0];
+      expect(vaultInfo.index).to.equal(0);
+      expect(vaultInfo.vault).to.equal(vaultAddress1);
+      expect(vaultInfo.balance).to.equal(0n);
+      expect(vaultInfo.inOutDelta).to.equal(0n);
+      expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
+
+      const vaultInfo2 = vaults[1];
+      expect(vaultInfo2.index).to.equal(1);
+      expect(vaultInfo2.vault).to.equal(vaultAddress2);
+      expect(vaultInfo2.balance).to.equal(0n);
+      expect(vaultInfo2.inOutDelta).to.equal(0n);
+      expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
+    });
+  });
+
   context("isVaultHealthy", () => {
     it("reverts if vault is not connected", async () => {
       await expect(vaultHub.isVaultHealthy(randomAddress())).to.be.revertedWithCustomError(
