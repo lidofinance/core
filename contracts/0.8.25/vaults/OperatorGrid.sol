@@ -91,8 +91,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
 
-
-        // ИЛИ Вариант 2: Более компактная запись
         $.groups.push(Group(0, 0, new uint256[](0), 0));
         $.nodeOperators.push(NodeOperator(0, new uint256[](0), 0, address(0)));
         $.tiers.push(Tier(0, 0, 0, 0, 0));
