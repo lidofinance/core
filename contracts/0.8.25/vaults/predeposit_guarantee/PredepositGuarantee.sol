@@ -118,6 +118,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
         _disableInitializers();
+        _pauseUntil(PAUSE_INFINITELY);
     }
 
     function initialize(address _defaultAdmin) external initializer {

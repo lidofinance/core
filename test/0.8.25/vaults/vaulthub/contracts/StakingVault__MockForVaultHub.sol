@@ -15,13 +15,14 @@ contract StakingVault__MockForVaultHub {
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
-    bytes32 public $withdrawalCredentials;
+
+    bytes32 public withdrawalCredentials;
 
     constructor(address _vaultHub, address _depositor, address _depositContract) {
         vaultHub = _vaultHub;
         depositContract = _depositContract;
         DEPOSITOR = _depositor;
-        $withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
+        withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
     function initialize(address _owner, address _nodeOperator, bytes calldata) external {
@@ -41,12 +42,8 @@ contract StakingVault__MockForVaultHub {
         return $valuation;
     }
 
-    function withdrawalCredentials() public view returns (bytes32) {
-        return $withdrawalCredentials;
-    }
-
     function mock__setWithdrawalCredentials(bytes32 _wc) external {
-        $withdrawalCredentials = _wc;
+        withdrawalCredentials = _wc;
     }
 
     function mock__setNo(address _no) external {
