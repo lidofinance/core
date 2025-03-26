@@ -53,6 +53,13 @@ contract VaultHub is PausableUntilWithRoles {
         /// uint104 _unused_gap_;
     }
 
+    struct VaultBatchInfo {
+        address vault;
+        uint256 valuation;
+        int256 inOutDelta;
+        uint256 sharesMinted;
+    }
+
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
@@ -150,6 +157,20 @@ contract VaultHub is PausableUntilWithRoles {
     function vaultSocket(address _vault) external view returns (VaultSocket memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         return $.sockets[$.vaultIndex[_vault]];
+    }
+
+    function batchVaultsInfo() external view returns (VaultBatchInfo[] memory) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        VaultBatchInfo[] memory batch = new VaultBatchInfo[]($.sockets.length - 1);
+        for (uint256 i = 0; i < $.sockets.length - 1; i++) {
+            batch[i] = VaultBatchInfo(
+                $.sockets[i + 1].vault,
+                IStakingVault($.sockets[i + 1].vault).valuation(),
+                IStakingVault($.sockets[i + 1].vault).inOutDelta(),
+                $.sockets[i + 1].sharesMinted
+            );
+        }
+        return batch;
     }
 
     /// @notice checks if the vault is healthy by comparing its projected valuation after applying rebalance threshold
