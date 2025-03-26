@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -348,7 +348,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the address of the second opinion oracle and clBalanceOraclesErrorUpperBPLimit value
     /// @param _secondOpinionOracle second opinion oracle.
-    ///     If it's zero address — oracle is disabled.
+    ///     If it's zero address — oracle is disabled.
     ///     Default value is zero address.
     /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
     function setSecondOpinionOracleAndCLBalanceUpperMargin(ISecondOpinionOracle _secondOpinionOracle, uint256 _clBalanceOraclesErrorUpperBPLimit)
@@ -740,12 +740,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             .getWithdrawalStatus(requestIds);
         if (_reportTimestamp < statuses[0].timestamp + _limitsList.requestTimestampMargin)
             revert IncorrectRequestFinalization(statuses[0].timestamp);
-    }
-
-    function _grantRole(bytes32 _role, address[] memory _accounts) internal {
-        for (uint256 i = 0; i < _accounts.length; ++i) {
-            _grantRole(_role, _accounts[i]);
-        }
     }
 
     function _updateLimits(LimitsList memory _newLimitsList) internal {
