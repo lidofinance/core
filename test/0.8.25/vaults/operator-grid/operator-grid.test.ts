@@ -42,8 +42,6 @@ describe("OperatorGrid.sol", () => {
   let depositResumer: HardhatEthersSigner;
   let exitRequester: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
-  let curatorFeeSetter: HardhatEthersSigner;
-  let curatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let dao: HardhatEthersSigner;
@@ -88,8 +86,6 @@ describe("OperatorGrid.sol", () => {
       depositResumer,
       exitRequester,
       disconnecter,
-      curatorFeeSetter,
-      curatorFeeClaimer,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       stranger,
@@ -679,23 +675,20 @@ describe("OperatorGrid.sol", () => {
       delegationParams = {
         defaultAdmin: vaultOwner,
         nodeOperatorManager,
+        assetRecoverer: vaultOwner,
         confirmExpiry: days(7n),
-        curatorFeeBP: 100n,
         nodeOperatorFeeBP: 200n,
         funders: [funder],
         withdrawers: [withdrawer],
         minters: [minter],
         burners: [burner],
-        curatorFeeSetters: [curatorFeeSetter],
-        curatorFeeClaimers: [curatorFeeClaimer],
-        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
         rebalancers: [rebalancer],
         depositPausers: [depositPauser],
         depositResumers: [depositResumer],
         validatorExitRequesters: [exitRequester],
         validatorWithdrawalTriggerers: [vaultOwner],
         disconnecters: [disconnecter],
-        assetRecoverer: vaultOwner,
+        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
       };
 
       const { vault } = await createVaultProxy(vaultOwner, factory, delegationParams);
