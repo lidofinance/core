@@ -491,6 +491,14 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs((balance * 3n) / 2n);
       });
 
+      it("reverts on invalid zero address recipient", async () => {
+        await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+        await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, ZeroAddress))
+          .to.be.revertedWithCustomError(pdg, "ZeroArgument")
+          .withArgs("_recipient");
+      });
+
       it("reverts on withdrawing locked balance", async () => {
         await stakingVault.fund({ value: ether("32") });
 
