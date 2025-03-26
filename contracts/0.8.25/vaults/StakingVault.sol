@@ -187,12 +187,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Attaches the vault to a `VaultHub`
      * @param _vaultHub Address of `VaultHub`
+     * @dev Can only be called by the owner
+     * @dev Reverts if `_vaultHub` is the zero address
+     * @dev Reverts if vault is already attached to VaultHub
      */
     function attachVaultHub(address _vaultHub) external onlyOwner {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
+        _checkVaultHubNotAttached($);
 
         $.vaultHub = _vaultHub;
         emit VaultHubAttached(_vaultHub);
@@ -201,6 +204,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Disconnect the vault from `VaultHub`
      * @dev Sets `vaultHub` to the zero address, fully detaching it from the vault
+     * @dev Can only be called by the owner
+     * @dev Reverts if vault is not attached to VaultHub
+     * @dev Reverts if vault is not pending disconnect
      */
     function detachVaultHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -222,8 +228,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      Pins the current vault implementation to prevent further upgrades.
      *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
      * @dev Reverts if already ossified.
+     * @dev Reverts if vault is attached to VaultHub
      */
     function ossifyStakingVault() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        _checkVaultHubNotAttached($);
         PinnedBeaconUtils.ossify();
     }
 
@@ -577,6 +586,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+    }
+
+    function _checkVaultHubNotAttached(ERC7201Storage storage $) internal view {
+        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
