@@ -343,7 +343,7 @@ describe("VaultHub.sol:detach", () => {
 
       await expect(vault.connect(delegationSigner).detachVaultHub()).to.revertedWithCustomError(
         vault,
-        "VaultHubNotAttached",
+        "VaultHubAlreadyDetached",
       );
     });
 
@@ -506,6 +506,48 @@ describe("VaultHub.sol:detach", () => {
       );
     });
 
+    it("reverts when vault is attached to VaultHub", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+      await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
+        vault,
+        "VaultHubAlreadyAttached",
+      );
+    });
+
+    it("reverts when vault is already ossified", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      const config = {
+        shareLimit: 10n,
+        minReserveRatioBP: 500n,
+        rebalanceThresholdBP: 20n,
+        treasuryFeeBP: 500n,
+      };
+      await expect(
+        vaultHub
+          .connect(admin)
+          .connectVault(
+            vault,
+            config.shareLimit,
+            config.minReserveRatioBP,
+            config.rebalanceThresholdBP,
+            config.treasuryFeeBP,
+          ),
+      ).to.emit(vaultHub, "VaultConnected");
+
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await vault.connect(delegationSigner).detachVaultHub();
+      await vault.connect(delegationSigner).ossifyStakingVault();
+      await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
+        vault,
+        "AlreadyOssified",
+      );
+    });
+
     it("ossify implementation works", async () => {
       const config = {
         shareLimit: 10n,
@@ -549,6 +591,8 @@ describe("VaultHub.sol:detach", () => {
 
       expect(vault1ImplementationBefore).to.equal(vault2ImplementationBefore);
 
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await vault.connect(delegationSigner).detachVaultHub();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();

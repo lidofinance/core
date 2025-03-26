@@ -195,7 +195,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         ERC7201Storage storage $ = _getStorage();
-        _checkVaultHubNotAttached($);
+        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
 
         $.vaultHub = _vaultHub;
         emit VaultHubAttached(_vaultHub);
@@ -232,7 +232,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        _checkVaultHubNotAttached($);
+        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
         PinnedBeaconUtils.ossify();
     }
 
@@ -586,10 +586,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
-    }
-
-    function _checkVaultHubNotAttached(ERC7201Storage storage $) internal view {
-        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
