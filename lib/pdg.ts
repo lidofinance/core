@@ -7,7 +7,7 @@ import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
-import { computeDepositDataRoot, computeDepositMessageRoot, ether, impersonate } from "lib";
+import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
 export type Validator = { container: SSZHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
@@ -20,6 +20,9 @@ export const randomInt = (max: number): number => Math.floor(Math.random() * max
 const ikm = Uint8Array.from(Buffer.from("test test test test test test test", "utf-8"));
 const masterSecret = SecretKey.deriveMasterEip2333(ikm);
 let secretIndex = 0;
+
+export const addressToWC = (address: string, version = 2) =>
+  `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
 
 export const generateValidator = (customWC?: string): Validator => {
   const secretKey = masterSecret.deriveChildEip2333(secretIndex++);
@@ -41,8 +44,9 @@ export const generateValidator = (customWC?: string): Validator => {
 
 export const generatePredeposit = async (
   validator: Validator,
+  overrideAmount?: bigint,
 ): Promise<{ deposit: IStakingVault.DepositStruct; depositY: BLS.DepositYStruct }> => {
-  const amount = ether("1");
+  const amount = overrideAmount ?? ether("1");
   const pubkey = validator.blsPrivateKey.toPublicKey();
 
   const messageRoot = await computeDepositMessageRoot(
