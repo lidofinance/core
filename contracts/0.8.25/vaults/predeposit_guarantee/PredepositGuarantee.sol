@@ -203,6 +203,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
     ) external onlyGuarantorOf(_nodeOperator) whenResumed {
         // _nodeOperator != address(0) is enforced by onlyGuarantorOf()
         if (_amount == 0) revert ZeroArgument("_amount");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(_amount);
 
         NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
@@ -332,6 +333,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         balance.locked += totalDepositAmount;
         _stakingVault.depositToBeaconChain(_deposits);
+
+        emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }
 
     // * * * * * Positive Proof Flow  * * * * * //
@@ -492,8 +495,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
 
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_recipient == address(stakingVault)) revert CompensateToVaultNotAllowed();
-        if (msg.sender != stakingVault.owner()) revert NotStakingVaultOwner();
         if (validator.stage != ValidatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
+        if (msg.sender != stakingVault.owner()) revert NotStakingVaultOwner();
 
         validator.stage = ValidatorStage.COMPENSATED;
 
