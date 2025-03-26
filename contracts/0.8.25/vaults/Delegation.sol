@@ -170,7 +170,7 @@ contract Delegation is Dashboard {
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
     ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUSTMENT_ROLE) {
-        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + adjustmentIncrease);
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + _adjustmentIncrease);
     }
 
     /**
