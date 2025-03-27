@@ -177,6 +177,13 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 mintedStETH = LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
+        uint256 valuation = IStakingVault(_vault).valuation();
+
+        // to avoid revert below
+        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
+            // return MAX_UINT_256
+            return type(uint256).max;
+        }
 
         // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / TOTAL_BASIS_POINTS
         // (mintedStETH - X) * TOTAL_BASIS_POINTS = (vault.valuation() - X) * maxMintableRatio
@@ -188,7 +195,7 @@ contract VaultHub is PausableUntilWithRoles {
         // reserveRatio = TOTAL_BASIS_POINTS - maxMintableRatio
         // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        return (mintedStETH * TOTAL_BASIS_POINTS - IStakingVault(_vault).valuation() * maxMintableRatio) / reserveRatioBP;
+        return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
     }
 
     /// @notice connects a vault to the hub
