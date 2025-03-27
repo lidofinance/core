@@ -33,7 +33,7 @@ export const EXTRA_DATA_FORMAT_LIST = 1n;
 export const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1n;
 export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2n;
 
-const DEFAULT_REPORT_FIELDS: OracleReport = {
+export const DEFAULT_REPORT_FIELDS: OracleReport = {
   consensusVersion: 1n,
   refSlot: 0n,
   numValidators: 0n,
@@ -44,8 +44,9 @@ const DEFAULT_REPORT_FIELDS: OracleReport = {
   elRewardsVaultBalance: 0n,
   sharesRequestedToBurn: 0n,
   withdrawalFinalizationBatches: [],
-  simulatedShareRate: 0n,
   isBunkerMode: false,
+  vaultsValues: [],
+  vaultsInOutDeltas: [],
   extraDataFormat: 0n,
   extraDataHash: ethers.ZeroHash,
   extraDataItemsCount: 0n,
@@ -63,8 +64,9 @@ export function getReportDataItems(r: OracleReport) {
     r.elRewardsVaultBalance,
     r.sharesRequestedToBurn,
     r.withdrawalFinalizationBatches,
-    r.simulatedShareRate,
     r.isBunkerMode,
+    r.vaultsValues,
+    r.vaultsInOutDeltas,
     r.extraDataFormat,
     r.extraDataHash,
     r.extraDataItemsCount,
@@ -74,7 +76,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256[], int256[], uint256, bytes32, uint256)",
     ],
     [reportItems],
   );

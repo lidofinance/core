@@ -1,9 +1,12 @@
 name: Integration Tests
 
-on:
-  push:
-  schedule:
-    - cron: "0 10 */2 * *"
+on: workflow_dispatch
+
+# TODO: uncomment
+#on:
+#  push:
+#  schedule:
+#    - cron: "0 10 */2 * *"
 
 jobs:
   test_hardhat_integration_fork:

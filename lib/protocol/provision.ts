@@ -1,6 +1,8 @@
 import { log } from "lib";
+import { ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
 
 import {
+  ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   ensureStakeLimit,
@@ -23,9 +25,13 @@ export const provision = async (ctx: ProtocolContext) => {
     return;
   }
 
+  // Ensure necessary precompiled contracts are present
+  await ensureEIP7002WithdrawalRequestContractPresent();
+
+  // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);
 
-  await ensureOracleCommitteeMembers(ctx, 5n);
+  await ensureOracleCommitteeMembers(ctx, 5n, 4n);
 
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
@@ -36,6 +42,8 @@ export const provision = async (ctx: ProtocolContext) => {
   await finalizeWithdrawalQueue(ctx);
 
   await ensureStakeLimit(ctx);
+
+  await ensureDsmGuardians(ctx, 3n, 2n);
 
   alreadyProvisioned = true;
 

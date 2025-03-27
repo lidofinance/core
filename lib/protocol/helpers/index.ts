@@ -3,16 +3,18 @@ export { unpauseStaking, ensureStakeLimit, depositAndReportValidators } from "./
 export { unpauseWithdrawalQueue, finalizeWithdrawalQueue } from "./withdrawal";
 
 export {
-  OracleReportOptions,
-  OracleReportPushOptions,
+  OracleReportParams,
+  OracleReportSubmitParams,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   getReportTimeElapsed,
   waitNextAvailableReportTime,
   handleOracleReport,
-  submitReport,
   report,
+  getReportDataItems,
+  calcReportDataHash,
 } from "./accounting";
 
 export { sdvtEnsureOperators } from "./sdvt";
 export { norEnsureOperators } from "./nor";
+export { ensureDsmGuardians } from "./dsm";

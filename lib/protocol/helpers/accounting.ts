@@ -17,57 +17,45 @@ import {
   impersonate,
   log,
   ONE_GWEI,
-  streccak,
 } from "lib";
 
 import { ProtocolContext } from "../types";
 
-export type OracleReportOptions = {
-  clDiff: bigint;
-  clAppearedValidators: bigint;
-  elRewardsVaultBalance: bigint | null;
-  withdrawalVaultBalance: bigint | null;
-  sharesRequestedToBurn: bigint | null;
-  withdrawalFinalizationBatches: bigint[];
-  simulatedShareRate: bigint | null;
-  refSlot: bigint | null;
-  dryRun: boolean;
-  excludeVaultsBalances: boolean;
-  skipWithdrawals: boolean;
-  waitNextReportTime: boolean;
-  extraDataFormat: bigint;
-  extraDataHash: string;
-  extraDataItemsCount: bigint;
-  extraDataList: Uint8Array;
-  stakingModuleIdsWithNewlyExitedValidators: bigint[];
-  numExitedValidatorsByStakingModule: bigint[];
-  reportElVault: boolean;
-  reportWithdrawalsVault: boolean;
-  silent: boolean;
-};
+const ZERO_HASH = new Uint8Array(32).fill(0);
+const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
+const SHARE_RATE_PRECISION = 10n ** 27n;
 
-export type OracleReportPushOptions = {
-  refSlot: bigint;
-  clBalance: bigint;
-  numValidators: bigint;
-  withdrawalVaultBalance: bigint;
-  elRewardsVaultBalance: bigint;
-  sharesRequestedToBurn: bigint;
-  simulatedShareRate: bigint;
-  stakingModuleIdsWithNewlyExitedValidators?: bigint[];
-  numExitedValidatorsByStakingModule?: bigint[];
+export type OracleReportParams = {
+  clDiff?: bigint;
+  clAppearedValidators?: bigint;
+  elRewardsVaultBalance?: bigint | null;
+  withdrawalVaultBalance?: bigint | null;
+  sharesRequestedToBurn?: bigint | null;
   withdrawalFinalizationBatches?: bigint[];
-  isBunkerMode?: boolean;
+  simulatedShareRate?: bigint | null;
+  refSlot?: bigint | null;
+  dryRun?: boolean;
+  excludeVaultsBalances?: boolean;
+  skipWithdrawals?: boolean;
+  waitNextReportTime?: boolean;
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
   extraDataList?: Uint8Array;
+  stakingModuleIdsWithNewlyExitedValidators?: bigint[];
+  numExitedValidatorsByStakingModule?: bigint[];
+  reportElVault?: boolean;
+  reportWithdrawalsVault?: boolean;
+  vaultValues?: bigint[];
+  inOutDeltas?: bigint[];
+  silent?: boolean;
 };
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
-const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
-const SHARE_RATE_PRECISION = 10n ** 27n;
-const MIN_MEMBERS_COUNT = 3n;
+type OracleReportResults = {
+  data: AccountingOracle.ReportDataStruct;
+  reportTx: ContractTransactionResponse | undefined;
+  extraDataTx: ContractTransactionResponse | undefined;
+};
 
 /**
  * Prepare and push oracle report.
@@ -81,7 +69,6 @@ export const report = async (
     withdrawalVaultBalance = null,
     sharesRequestedToBurn = null,
     withdrawalFinalizationBatches = [],
-    simulatedShareRate = null,
     refSlot = null,
     dryRun = false,
     excludeVaultsBalances = false,
@@ -95,23 +82,17 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-  } = {} as Partial<OracleReportOptions>,
-): Promise<{
-  data: AccountingOracle.ReportDataStruct;
-  reportTx: ContractTransactionResponse | undefined;
-  extraDataTx: ContractTransactionResponse | undefined;
-}> => {
+    vaultValues = [],
+    inOutDeltas = [],
+  }: OracleReportParams = {},
+): Promise<OracleReportResults> => {
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
 
-  // Fast-forward to next report time
   if (waitNextReportTime) {
     await waitNextAvailableReportTime(ctx);
   }
 
-  // Get report slot from the protocol
-  if (!refSlot) {
-    ({ refSlot } = await hashConsensus.getCurrentFrame());
-  }
+  refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
   const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
   const postCLBalance = beaconBalance + clDiff;
@@ -129,9 +110,6 @@ export const report = async (
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "ElRewards vault": formatEther(elRewardsVaultBalance),
   });
-
-  // excludeVaultsBalance safely forces LIDO to see vault balances as empty allowing zero/negative rebase
-  // simulateReports needs proper withdrawal and elRewards vaults balances
 
   if (excludeVaultsBalances) {
     if (!reportWithdrawalsVault || !reportElVault) {
@@ -158,19 +136,21 @@ export const report = async (
   let isBunkerMode = false;
 
   if (!skipWithdrawals) {
-    const params = {
+    const simulatedReport = await simulateReport(ctx, {
       refSlot,
       beaconValidators: postBeaconValidators,
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-    };
+      vaultValues,
+      inOutDeltas,
+    });
 
-    const simulatedReport = await simulateReport(ctx, params);
+    if (!simulatedReport) {
+      throw new Error("Failed to simulate report");
+    }
 
-    expect(simulatedReport).to.not.be.undefined;
-
-    const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = simulatedReport!;
+    const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = simulatedReport;
 
     log.debug("Simulated report", {
       "Post Total Pooled Ether": formatEther(postTotalPooledEther),
@@ -179,9 +159,7 @@ export const report = async (
       "El Rewards": formatEther(elRewards),
     });
 
-    if (simulatedShareRate === null) {
-      simulatedShareRate = (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
-    }
+    const simulatedShareRate = (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
 
     if (withdrawalFinalizationBatches.length === 0) {
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
@@ -194,67 +172,37 @@ export const report = async (
     isBunkerMode = (await lido.getTotalPooledEther()) > postTotalPooledEther;
 
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
-  } else if (simulatedShareRate === null) {
-    simulatedShareRate = 0n;
   }
 
-  if (dryRun) {
-    const data = {
-      consensusVersion: await accountingOracle.getConsensusVersion(),
-      refSlot,
-      numValidators: postBeaconValidators,
-      clBalanceGwei: postCLBalance / ONE_GWEI,
-      stakingModuleIdsWithNewlyExitedValidators,
-      numExitedValidatorsByStakingModule,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      sharesRequestedToBurn,
-      withdrawalFinalizationBatches,
-      simulatedShareRate,
-      isBunkerMode,
-      extraDataFormat,
-      extraDataHash,
-      extraDataItemsCount,
-    } as AccountingOracle.ReportDataStruct;
-
-    log.debug("Final Report (Dry Run)", {
-      "Consensus version": data.consensusVersion,
-      "Ref slot": data.refSlot,
-      "CL balance": data.clBalanceGwei,
-      "Num validators": data.numValidators,
-      "Withdrawal vault balance": data.withdrawalVaultBalance,
-      "EL rewards vault balance": data.elRewardsVaultBalance,
-      "Shares requested to burn": data.sharesRequestedToBurn,
-      "Withdrawal finalization batches": data.withdrawalFinalizationBatches,
-      "Simulated share rate": data.simulatedShareRate,
-      "Is bunker mode": data.isBunkerMode,
-      "Extra data format": data.extraDataFormat,
-      "Extra data hash": data.extraDataHash,
-      "Extra data items count": data.extraDataItemsCount,
-    });
-
-    return { data, reportTx: undefined, extraDataTx: undefined };
-  }
-
-  const reportParams = {
+  const reportData = {
+    consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    clBalance: postCLBalance,
     numValidators: postBeaconValidators,
+    clBalanceGwei: postCLBalance / ONE_GWEI,
+    stakingModuleIdsWithNewlyExitedValidators,
+    numExitedValidatorsByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
-    simulatedShareRate,
-    stakingModuleIdsWithNewlyExitedValidators,
-    numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
+    vaultsValues: vaultValues,
+    vaultsInOutDeltas: inOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
-    extraDataList,
-  };
+  } satisfies AccountingOracle.ReportDataStruct;
 
-  return submitReport(ctx, reportParams);
+  if (dryRun) {
+    log.debug("Final Report (Dry Run)", reportData);
+    return { data: reportData, reportTx: undefined, extraDataTx: undefined };
+  }
+
+  return submitReport(ctx, {
+    ...reportData,
+    clBalance: postCLBalance,
+    extraDataList,
+  });
 };
 
 export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
@@ -321,28 +269,42 @@ export const waitNextAvailableReportTime = async (ctx: ProtocolContext): Promise
   expect(nextFrame.refSlot).to.equal(refSlot + slotsPerFrame, "Next frame refSlot is incorrect");
 };
 
+type SimulateReportParams = {
+  refSlot: bigint;
+  beaconValidators: bigint;
+  clBalance: bigint;
+  withdrawalVaultBalance: bigint;
+  elRewardsVaultBalance: bigint;
+  vaultValues: bigint[];
+  inOutDeltas: bigint[];
+};
+
+type SimulateReportResult = {
+  postTotalPooledEther: bigint;
+  postTotalShares: bigint;
+  withdrawals: bigint;
+  elRewards: bigint;
+};
+
 /**
  * Simulate oracle report to get the expected result.
  */
 const simulateReport = async (
   ctx: ProtocolContext,
-  params: {
-    refSlot: bigint;
-    beaconValidators: bigint;
-    clBalance: bigint;
-    withdrawalVaultBalance: bigint;
-    elRewardsVaultBalance: bigint;
-  },
-): Promise<
-  { postTotalPooledEther: bigint; postTotalShares: bigint; withdrawals: bigint; elRewards: bigint } | undefined
-> => {
-  const { hashConsensus, accountingOracle, lido } = ctx.contracts;
-  const { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance } = params;
+  {
+    refSlot,
+    beaconValidators,
+    clBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    vaultValues,
+    inOutDeltas,
+  }: SimulateReportParams,
+): Promise<SimulateReportResult> => {
+  const { hashConsensus, accounting } = ctx.contracts;
 
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
   const reportTimestamp = genesisTime + refSlot * secondsPerSlot;
-
-  const accountingOracleAccount = await impersonate(accountingOracle.address, ether("100"));
 
   log.debug("Simulating oracle report", {
     "Ref Slot": refSlot,
@@ -352,84 +314,61 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  // NOTE: To enable negative rebase sanity checker, the static call below
-  //    replaced with advanced eth_call with stateDiff.
-  // const [postTotalPooledEther1, postTotalShares1, withdrawals1, elRewards1] = await lido
-  //   .connect(accountingOracleAccount)
-  //   .handleOracleReport.staticCall(
-  //     reportTimestamp,
-  //     1n * 24n * 60n * 60n, // 1 day
-  //     beaconValidators,
-  //     clBalance,
-  //     withdrawalVaultBalance,
-  //     elRewardsVaultBalance,
-  //     0n,
-  //     [],
-  //     0n,
-  //   );
-
-  // Step 1: Encode the function call data
-  const data = lido.interface.encodeFunctionData("handleOracleReport", [
-    reportTimestamp,
-    BigInt(24 * 60 * 60), // 1 day in seconds
-    beaconValidators,
-    clBalance,
-    withdrawalVaultBalance,
-    elRewardsVaultBalance,
-    BigInt(0),
-    [],
-    BigInt(0),
-  ]);
-
-  // Step 2: Prepare the transaction object
-  const transactionObject = {
-    to: lido.address,
-    from: accountingOracleAccount.address,
-    data: data,
-  };
-
-  // Step 3: Prepare call parameters, state diff and perform eth_call
-  const accountingOracleAddr = await accountingOracle.getAddress();
-  const callParams = [transactionObject, "latest"];
-  const LAST_PROCESSING_REF_SLOT_POSITION = streccak("lido.BaseOracle.lastProcessingRefSlot");
-  const stateDiff = {
-    [accountingOracleAddr]: {
-      stateDiff: {
-        [LAST_PROCESSING_REF_SLOT_POSITION]: refSlot, // setting the processing refslot for the sanity checker
-      },
+  const { timeElapsed } = await getReportTimeElapsed(ctx);
+  const update = await accounting.simulateOracleReport(
+    {
+      timestamp: reportTimestamp,
+      timeElapsed,
+      clValidators: beaconValidators,
+      clBalance,
+      withdrawalVaultBalance,
+      elRewardsVaultBalance,
+      sharesRequestedToBurn: 0n,
+      withdrawalFinalizationBatches: [],
+      vaultValues,
+      inOutDeltas,
     },
-  };
-
-  const returnData = await ethers.provider.send("eth_call", [...callParams, stateDiff]);
-
-  // Step 4: Decode the returned data
-  const [[postTotalPooledEther, postTotalShares, withdrawals, elRewards]] = lido.interface.decodeFunctionResult(
-    "handleOracleReport",
-    returnData,
+    0n,
   );
 
   log.debug("Simulation result", {
-    "Post Total Pooled Ether": formatEther(postTotalPooledEther),
-    "Post Total Shares": postTotalShares,
-    "Withdrawals": formatEther(withdrawals),
-    "El Rewards": formatEther(elRewards),
+    "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
+    "Post Total Shares": update.postTotalShares,
+    "Withdrawals": formatEther(update.withdrawals),
+    "El Rewards": formatEther(update.elRewards),
   });
 
-  return { postTotalPooledEther, postTotalShares, withdrawals, elRewards };
+  return {
+    postTotalPooledEther: update.postTotalPooledEther,
+    postTotalShares: update.postTotalShares,
+    withdrawals: update.withdrawals,
+    elRewards: update.elRewards,
+  };
+};
+
+type HandleOracleReportParams = {
+  beaconValidators: bigint;
+  clBalance: bigint;
+  sharesRequestedToBurn: bigint;
+  withdrawalVaultBalance: bigint;
+  elRewardsVaultBalance: bigint;
+  vaultValues?: bigint[];
+  inOutDeltas?: bigint[];
 };
 
 export const handleOracleReport = async (
   ctx: ProtocolContext,
-  params: {
-    beaconValidators: bigint;
-    clBalance: bigint;
-    sharesRequestedToBurn: bigint;
-    withdrawalVaultBalance: bigint;
-    elRewardsVaultBalance: bigint;
-  },
+  {
+    beaconValidators,
+    clBalance,
+    sharesRequestedToBurn,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    vaultValues = [],
+    inOutDeltas = [],
+  }: HandleOracleReportParams,
 ): Promise<void> => {
-  const { hashConsensus, accountingOracle, lido } = ctx.contracts;
-  const { beaconValidators, clBalance, sharesRequestedToBurn, withdrawalVaultBalance, elRewardsVaultBalance } = params;
+  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
 
   const { refSlot } = await hashConsensus.getCurrentFrame();
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
@@ -446,21 +385,29 @@ export const handleOracleReport = async (
       "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
     });
 
-    await lido.connect(accountingOracleAccount).handleOracleReport(
-      reportTimestamp,
-      1n * 24n * 60n * 60n, // 1 day
-      beaconValidators,
+    const { timeElapsed } = await getReportTimeElapsed(ctx);
+    await accounting.connect(accountingOracleAccount).handleOracleReport({
+      timestamp: reportTimestamp,
+      timeElapsed, // 1 day
+      clValidators: beaconValidators,
       clBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
       sharesRequestedToBurn,
-      [],
-      0n,
-    );
+      withdrawalFinalizationBatches: [],
+      vaultValues,
+      inOutDeltas,
+    });
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
   }
+};
+
+type FinalizationBatchesParams = {
+  shareRate: bigint;
+  limitedWithdrawalVaultBalance: bigint;
+  limitedElRewardsVaultBalance: bigint;
 };
 
 /**
@@ -468,14 +415,9 @@ export const handleOracleReport = async (
  */
 const getFinalizationBatches = async (
   ctx: ProtocolContext,
-  params: {
-    shareRate: bigint;
-    limitedWithdrawalVaultBalance: bigint;
-    limitedElRewardsVaultBalance: bigint;
-  },
+  { shareRate, limitedWithdrawalVaultBalance, limitedElRewardsVaultBalance }: FinalizationBatchesParams,
 ): Promise<bigint[]> => {
   const { oracleReportSanityChecker, lido, withdrawalQueue } = ctx.contracts;
-  const { shareRate, limitedWithdrawalVaultBalance, limitedElRewardsVaultBalance } = params;
 
   const { requestTimestampMargin } = await oracleReportSanityChecker.getOracleReportLimits();
 
@@ -490,13 +432,7 @@ const getFinalizationBatches = async (
   const MAX_REQUESTS_PER_CALL = 1000n;
 
   if (availableEth === 0n) {
-    log.debug("No available ether to request withdrawals", {
-      "Share rate": shareRate,
-      "Available eth": formatEther(availableEth),
-      "Limited withdrawal vault balance": formatEther(limitedWithdrawalVaultBalance),
-      "Limited el rewards vault balance": formatEther(limitedElRewardsVaultBalance),
-      "Reserved buffer": formatEther(reservedBuffer),
-    });
+    log.warning("No available ether to request withdrawals");
     return [];
   }
 
@@ -551,10 +487,35 @@ const getFinalizationBatches = async (
   return (batchesState.batches as Result).toArray().filter((x) => x > 0n);
 };
 
+export type OracleReportSubmitParams = {
+  refSlot: bigint;
+  clBalance: bigint;
+  numValidators: bigint;
+  withdrawalVaultBalance: bigint;
+  elRewardsVaultBalance: bigint;
+  sharesRequestedToBurn: bigint;
+  stakingModuleIdsWithNewlyExitedValidators?: bigint[];
+  numExitedValidatorsByStakingModule?: bigint[];
+  withdrawalFinalizationBatches?: bigint[];
+  isBunkerMode?: boolean;
+  vaultsValues: bigint[];
+  vaultsInOutDeltas: bigint[];
+  extraDataFormat?: bigint;
+  extraDataHash?: string;
+  extraDataItemsCount?: bigint;
+  extraDataList?: Uint8Array;
+};
+
+type OracleReportSubmitResult = {
+  data: AccountingOracle.ReportDataStruct;
+  reportTx: ContractTransactionResponse;
+  extraDataTx: ContractTransactionResponse;
+};
+
 /**
  * Main function to push oracle report to the protocol.
  */
-export const submitReport = async (
+const submitReport = async (
   ctx: ProtocolContext,
   {
     refSlot,
@@ -563,21 +524,18 @@ export const submitReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
-    simulatedShareRate,
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
+    vaultsValues = [],
+    vaultsInOutDeltas = [],
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
     extraDataList = new Uint8Array(),
-  } = {} as OracleReportPushOptions,
-): Promise<{
-  data: AccountingOracle.ReportDataStruct;
-  reportTx: ContractTransactionResponse;
-  extraDataTx: ContractTransactionResponse;
-}> => {
+  }: OracleReportSubmitParams,
+): Promise<OracleReportSubmitResult> => {
   const { accountingOracle } = ctx.contracts;
 
   log.debug("Pushing oracle report", {
@@ -587,11 +545,12 @@ export const submitReport = async (
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "El rewards vault": formatEther(elRewardsVaultBalance),
     "Shares requested to burn": sharesRequestedToBurn,
-    "Simulated share rate": simulatedShareRate,
     "Staking module ids with newly exited validators": stakingModuleIdsWithNewlyExitedValidators,
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
+    "Vaults values": vaultsValues,
+    "Vaults in-out deltas": vaultsInOutDeltas,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -609,11 +568,12 @@ export const submitReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
-    simulatedShareRate,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
+    vaultsValues,
+    vaultsInOutDeltas,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -631,7 +591,6 @@ export const submitReport = async (
   log.debug("Pushed oracle report for reached consensus", data);
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
-
   log.debug("Pushed oracle report main data", {
     "Ref slot": refSlot,
     "Consensus version": consensusVersion,
@@ -682,77 +641,10 @@ export const submitReport = async (
   return { data, reportTx, extraDataTx };
 };
 
-/**
- * Ensure that the oracle committee has the required number of members.
- */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
-  const { hashConsensus } = ctx.contracts;
-
-  const members = await hashConsensus.getFastLaneMembers();
-  const addresses = members.addresses.map((address) => address.toLowerCase());
-
-  const agentSigner = await ctx.getSigner("agent");
-
-  if (addresses.length >= minMembersCount) {
-    log.debug("Oracle committee members count is sufficient", {
-      "Min members count": minMembersCount,
-      "Members count": addresses.length,
-      "Members": addresses.join(", "),
-    });
-
-    return;
-  }
-
-  const managementRole = await hashConsensus.MANAGE_MEMBERS_AND_QUORUM_ROLE();
-  await hashConsensus.connect(agentSigner).grantRole(managementRole, agentSigner);
-
-  let count = addresses.length;
-  while (addresses.length < minMembersCount) {
-    const address = getOracleCommitteeMemberAddress(count);
-
-    log.debug(`Adding oracle committee member ${count}`, {
-      "Min members count": minMembersCount,
-      "Address": address,
-    });
-
-    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
-
-    addresses.push(address);
-
-    log.success(`Added oracle committee member ${count}`);
-
-    count++;
-  }
-
-  await hashConsensus.connect(agentSigner).renounceRole(managementRole, agentSigner);
-
-  log.debug("Checked oracle committee members count", {
-    "Min members count": minMembersCount,
-    "Members count": addresses.length,
-    "Members": addresses.join(", "),
-  });
-
-  expect(addresses.length).to.be.gte(minMembersCount);
-};
-
-export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
-  const { hashConsensus } = ctx.contracts;
-
-  const { initialEpoch } = await hashConsensus.getFrameConfig();
-  if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    log.debug("Initializing hash consensus epoch...", {
-      "Initial epoch": initialEpoch,
-    });
-
-    const latestBlockTimestamp = await getCurrentBlockTimestamp();
-    const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
-    const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
-
-    const agentSigner = await ctx.getSigner("agent");
-    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-
-    log.success("Hash consensus epoch initialized");
-  }
+type ReachConsensusParams = {
+  refSlot: bigint;
+  reportHash: string;
+  consensusVersion: bigint;
 };
 
 /**
@@ -760,14 +652,9 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
  */
 const reachConsensus = async (
   ctx: ProtocolContext,
-  params: {
-    refSlot: bigint;
-    reportHash: string;
-    consensusVersion: bigint;
-  },
+  { refSlot, reportHash, consensusVersion }: ReachConsensusParams,
 ) => {
   const { hashConsensus } = ctx.contracts;
-  const { refSlot, reportHash, consensusVersion } = params;
 
   const { addresses } = await hashConsensus.getFastLaneMembers();
 
@@ -790,7 +677,6 @@ const reachConsensus = async (
   }
 
   const { consensusReport } = await hashConsensus.getConsensusState();
-
   expect(consensusReport).to.equal(reportHash, "Consensus report hash is incorrect");
 
   return submitter as HardhatEthersSigner;
@@ -799,7 +685,7 @@ const reachConsensus = async (
 /**
  * Helper function to get report data items in the required order.
  */
-const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
+export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
   data.numValidators,
@@ -810,8 +696,9 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.elRewardsVaultBalance,
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
-  data.simulatedShareRate,
   data.isBunkerMode,
+  data.vaultsValues,
+  data.vaultsInOutDeltas,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -820,7 +707,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
 /**
  * Helper function to calculate hash of the report data.
  */
-const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
+export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
   const types = [
     "uint256", // consensusVersion
     "uint256", // refSlot
@@ -832,8 +719,9 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
     "uint256", // elRewardsVaultBalance
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
-    "uint256", // simulatedShareRate
     "bool", // isBunkerMode
+    "uint256[]", // vaultsValues
+    "int256[]", // vaultsInOutDeltas
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount
@@ -847,3 +735,73 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
  * Helper function to get oracle committee member address by id.
  */
 const getOracleCommitteeMemberAddress = (id: number) => certainAddress(`AO:HC:OC:${id}`);
+
+/**
+ * Ensure that the oracle committee has the required number of members.
+ */
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
+  const { hashConsensus } = ctx.contracts;
+
+  const members = await hashConsensus.getFastLaneMembers();
+  const addresses = members.addresses.map((address) => address.toLowerCase());
+
+  const agentSigner = await ctx.getSigner("agent");
+
+  if (addresses.length >= minMembersCount) {
+    log.debug("Oracle committee members count is sufficient", {
+      "Min members count": minMembersCount,
+      "Members count": addresses.length,
+      "Members": addresses.join(", "),
+    });
+
+    return;
+  }
+
+  const managementRole = await hashConsensus.MANAGE_MEMBERS_AND_QUORUM_ROLE();
+  await hashConsensus.connect(agentSigner).grantRole(managementRole, agentSigner);
+
+  let count = addresses.length;
+  while (addresses.length < minMembersCount) {
+    log.warning(`Adding oracle committee member ${count}`);
+
+    const address = getOracleCommitteeMemberAddress(count);
+    await hashConsensus.connect(agentSigner).addMember(address, quorum);
+
+    addresses.push(address);
+
+    log.success(`Added oracle committee member ${count}`);
+
+    count++;
+  }
+
+  await hashConsensus.connect(agentSigner).renounceRole(managementRole, agentSigner);
+
+  log.debug("Checked oracle committee members count", {
+    "Min members count": minMembersCount,
+    "Members count": addresses.length,
+    "Members": addresses.join(", "),
+  });
+
+  expect(addresses.length).to.be.gte(minMembersCount);
+};
+
+/**
+ * Ensure that the oracle committee members have consensus on the initial epoch.
+ */
+export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
+  const { hashConsensus } = ctx.contracts;
+
+  const { initialEpoch } = await hashConsensus.getFrameConfig();
+  if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
+    log.warning("Initializing hash consensus epoch...");
+
+    const latestBlockTimestamp = await getCurrentBlockTimestamp();
+    const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
+    const updatedInitialEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
+
+    const agentSigner = await ctx.getSigner("agent");
+    await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
+
+    log.success("Hash consensus epoch initialized");
+  }
+};
