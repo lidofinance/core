@@ -85,12 +85,12 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for unsafe deposit to trusted validators
      */
-    bytes32 public constant TRUSTED_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.UnsafeWithdrawDeposit");
+    bytes32 public constant TRUSTED_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.TrustedWithdrawDeposit");
 
     /**
-     * @notice Permission for proving side validators
+     * @notice Permission for proving validators unknown to the PDG
      */
-    bytes32 public constant PROVE_SIDE_VALIDATOR_ROLE = keccak256("vaults.Permissions.ProveSideValidator");
+    bytes32 public constant PROVE_UNKNOWN_VALIDATOR_ROLE = keccak256("vaults.Permissions.ProveUnknownValidator");
 
     /**
      * @notice Permission for assets recovery
@@ -271,7 +271,7 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev claims disproven predeposit from PDG
+     * @dev Claims disproven predeposit from PDG
      */
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
@@ -281,18 +281,18 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev withdraws ether from vault to this contract for deposit to trusted validators
+     * @dev Withdraws ether from vault to this contract for deposit to trusted validators
      */
     function _withdrawForDeposit(uint256 _ether) internal onlyRole(TRUSTED_WITHDRAW_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
     }
 
     /**
-     * @dev withdraws ether from vault to this contract for deposit to trusted validators
+     * @dev Proves validators unknown to PDG that have correct vault WC
      */
-    function _proveSideValidators(
+    function _proveUnknownValidators(
         CLProofVerifier.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRole(PROVE_SIDE_VALIDATOR_ROLE) {
+    ) internal onlyRole(PROVE_UNKNOWN_VALIDATOR_ROLE) {
         IStakingVault vault = stakingVault();
         PredepositGuarantee pdg = PredepositGuarantee(vault.depositor());
         for (uint256 i = 0; i < _witnesses.length; i++) {

@@ -372,22 +372,18 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice withdraws ether from vault and deposits directly to provided validators,
-     *         so later validators can be proven by `PDG.proveUnknownValidator` for direct vault deposits
+     *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
+     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
+     *          clearing them for future deposits via `PDG.depositToBeaconChain`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
-     * @param _depositContractRoot deposit contract root to check to make sure that state of deposit contract remains the same
      * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
-     * @dev can be used as PDG shortcut if the node operator is trusted
+     * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function trustedWithdrawAndDeposit(
         IStakingVault.Deposit[] calldata _deposits,
-        bytes32 _depositContractRoot
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
         IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
-
-        // maybe allow magic value to skip this check to avoid DOS by deposit contract spammer?
-        if (_depositContractRoot != depositContract.get_deposit_root()) revert InvalidDepositContractRoot();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -407,21 +403,21 @@ contract Dashboard is Permissions {
                 deposit.depositDataRoot
             );
 
-            emit UnsafeDeposited(address(stakingVault), deposit.pubkey, deposit.amount);
+            emit TrustedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
         }
     }
 
     /**
-     * @notice proves validators with correct vault WC if they are unknown to PDG
+     * @notice Proves validators with correct vault WC if they are unknown to PDG
      * @param _witnesses array of CLProofVerifier.ValidatorWitness structs containing proof data for validators
      * @dev requires the caller to have the `PROVE_SIDE_VALIDATOR_ROLE`
      */
-    function proveSideValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
-        _proveSideValidators(_witnesses);
+    function proveUnknownValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
+        _proveUnknownValidators(_witnesses);
     }
 
     /**
-     * @notice withdraws ether of disproven validator from PDG
+     * @notice Withdraws ether of disproven validator from PDG
      * @param _pubkey of validator that was proven invalid in PDG
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
      * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
@@ -597,22 +593,28 @@ contract Dashboard is Permissions {
 
     // ==================== Events ====================
 
-    /// @notice Emitted when ether was withdrawn from the staking vault and unsafely deposited to validators directly bypassing PDG
-    /// @param stakingVault the address of owned staking vault
-    /// @param pubkey of the validator to be deposited
-    /// @param amount of ether deposited to validator
-    event UnsafeDeposited(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
+    /**
+     * @notice Emitted when ether was withdrawn from the staking vault and deposited to validators directly bypassing PDG
+     * @param stakingVault the address of owned staking vault
+     * @param pubkey of the validator to be deposited
+     * @param amount of ether deposited to validator
+     */
+    event TrustedDeposit(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
 
-    /// @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
-    /// @param to The address of the recovery recipient
-    /// @param token The address of the recovered ERC20 token (zero address for Ether)
-    /// @param amount The amount of the token recovered
+    /**
+     * @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
+     * @param to The address of the recovery recipient
+     * @param token The address of the recovered ERC20 token (zero address for Ether)
+     * @param amount The amount of the token recovered
+     */
     event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
 
-    /// @notice Emitted when the ERC721-compatible `token` (NFT) recovered  (i.e. transferred)
-    /// @param to The address of the recovery recipient
-    /// @param token The address of the recovered ERC721 token
-    /// @param tokenId id of token recovered
+    /**
+     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered  (i.e. transferred)
+     * @param to The address of the recovery recipient
+     * @param token The address of the recovered ERC721 token
+     * @param tokenId id of token recovered
+     */
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
