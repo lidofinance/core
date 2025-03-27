@@ -8,9 +8,9 @@ import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {PredepositGuarantee} from "./predeposit_guarantee/PredepositGuarantee.sol";
-import {VaultHub} from "./VaultHub.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {PredepositGuarantee} from "../predeposit_guarantee/PredepositGuarantee.sol";
+import {VaultHub} from "../VaultHub.sol";
 
 /**
  * @title Permissions
@@ -69,8 +69,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
      */
-    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE =
-        keccak256("vaults.Permissions.TriggerValidatorWithdrawal");
+    bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.TriggerValWithdrawal");
 
     /**
      * @notice Permission for voluntary disconnecting the StakingVault.
@@ -87,47 +86,18 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
 
-    /**
-     * @notice Address of the implementation contract
-     * @dev Used to prevent initialization in the implementation
-     */
-    address private immutable _SELF;
-
-    /**
-     * @notice Indicates whether the contract has been initialized
-     */
-    bool public initialized;
-
-    /**
-     * @notice Address of the VaultHub contract
-     */
-    VaultHub public vaultHub;
-
-    constructor() {
-        _SELF = address(this);
-    }
-
-    function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal {
-        if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
-
-        initialized = true;
-        vaultHub = VaultHub(stakingVault().vaultHub());
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-
-        _setConfirmExpiry(_confirmExpiry);
-
-        emit Initialized(_defaultAdmin);
-    }
 
     /**
      * @notice Returns the address of the underlying StakingVault.
      * @return The address of the StakingVault.
      */
-    function stakingVault() public view returns (IStakingVault) {
-        return IStakingVault(_loadStakingVaultAddress());
-    }
+    function stakingVault() public view virtual returns (IStakingVault);
+
+    /**
+     * @notice Returns the address of the VaultHub contract.
+     * @return The address of the VaultHub contract.
+     */
+    function vaultHub() public view virtual returns (VaultHub);
 
     // ==================== Role Management Functions ====================
 
@@ -137,7 +107,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Performs the role admin checks internally.
      * @dev If an account is already a member of a role, doesn't revert, emits no events.
      */
-    function grantRoles(RoleAssignment[] memory _assignments) external {
+    function grantRoles(RoleAssignment[] memory _assignments) public {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
 
         for (uint256 i = 0; i < _assignments.length; i++) {
@@ -167,11 +137,7 @@ abstract contract Permissions is AccessControlConfirmable {
      *      which are introduced further in the inheritance chain.
      * @return The roles that need to confirm the call.
      */
-    function _confirmingRoles() internal pure virtual returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](1);
-        roles[0] = DEFAULT_ADMIN_ROLE;
-        return roles;
-    }
+    function confirmingRoles() internal pure virtual returns (bytes32[] memory);
 
     /**
      * @dev Checks the FUND_ROLE and funds the StakingVault.
@@ -198,7 +164,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        vaultHub.mintShares(address(stakingVault()), _recipient, _shares);
+        vaultHub().mintShares(address(stakingVault()), _recipient, _shares);
     }
 
     /**
@@ -207,7 +173,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        vaultHub.burnShares(address(stakingVault()), _shares);
+        vaultHub().burnShares(address(stakingVault()), _shares);
     }
 
     /**
@@ -257,7 +223,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        vaultHub.voluntaryDisconnect(address(stakingVault()));
+        vaultHub().voluntaryDisconnect(address(stakingVault()));
     }
 
     function _compensateDisprovenPredepositFromPDG(
@@ -271,35 +237,10 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the confirming roles and transfers the StakingVault ownership.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
-    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
+    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
-    /**
-     * @dev Loads the address of the underlying StakingVault.
-     * @return addr The address of the StakingVault.
-     */
-    function _loadStakingVaultAddress() internal view returns (address addr) {
-        bytes memory args = Clones.fetchCloneArgs(address(this));
-        assembly {
-            addr := mload(add(args, 32))
-        }
-    }
-
-    /**
-     * @notice Emitted when the contract is initialized
-     */
-    event Initialized(address _defaultAdmin);
-
-    /**
-     * @notice Error when direct calls to the implementation are forbidden
-     */
-    error NonProxyCallsForbidden();
-
-    /**
-     * @notice Error when the contract is already initialized.
-     */
-    error AlreadyInitialized();
 
     /**
      * @notice Error thrown for when a given value cannot be zero

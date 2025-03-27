@@ -4,11 +4,11 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Permissions} from "./Permissions.sol";
+import {Delegation} from "./Delegation.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {VaultHub} from "./VaultHub.sol";
+import {VaultHub} from "../VaultHub.sol";
 
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
@@ -35,7 +35,7 @@ interface IWstETH is IERC20, IERC20Permit {
  * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
-contract Dashboard is Permissions {
+contract Dashboard is Delegation {
     /**
      * @notice Total basis points for fee calculations; equals to 100%.
      */
@@ -86,35 +86,23 @@ contract Dashboard is Permissions {
         WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
     }
 
-    /**
-     * @notice Initializes the contract
-     * @param _defaultAdmin Address of the default admin
-     * @param _confirmExpiry Confirm expiry in seconds
-     */
-    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external virtual {
+
+    function initialize(InitializationConfig memory _config) public override {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        _initialize(_defaultAdmin, _confirmExpiry);
+        super.initialize(_config);
     }
 
     // ==================== View Functions ====================
-
-    /**
-     * @notice Returns the roles that need to confirm multi-role operations.
-     * @return The roles that need to confirm the call.
-     */
-    function confirmingRoles() external pure returns (bytes32[] memory) {
-        return _confirmingRoles();
-    }
 
     /**
      * @notice Returns the vault socket data for the staking vault.
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(address(stakingVault()));
+        return vaultHub().vaultSocket(address(stakingVault()));
     }
 
     /**
@@ -186,14 +174,6 @@ contract Dashboard is Permissions {
         return _totalShares - _sharesMinted;
     }
 
-    /**
-     * @notice Returns the amount of ether that can be withdrawn from the staking vault.
-     * @return The amount of ether that can be withdrawn.
-     */
-    function withdrawableEther() external view virtual returns (uint256) {
-        return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
-    }
-
     // ==================== Vault Management Functions ====================
 
     /**
@@ -213,7 +193,7 @@ contract Dashboard is Permissions {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
+        uint256 shares = vaultHub().vaultSocket(address(stakingVault())).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -298,7 +278,7 @@ contract Dashboard is Permissions {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub()), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -330,7 +310,7 @@ contract Dashboard is Permissions {
         uint256 _amountOfShares,
         PermitInput calldata _permit
     ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub()), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -516,7 +496,7 @@ contract Dashboard is Permissions {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub()), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -529,7 +509,7 @@ contract Dashboard is Permissions {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(vaultHub), unwrappedShares);
+        STETH.transferShares(address(vaultHub()), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 

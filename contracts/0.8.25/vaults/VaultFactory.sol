@@ -8,7 +8,7 @@ import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {Delegation} from "./Delegation.sol";
+import {Delegation} from "./delegation/Delegation.sol";
 
 struct DelegationConfig {
     address defaultAdmin;
@@ -65,7 +65,7 @@ contract VaultFactory {
         );
 
         // initialize Delegation
-        delegation.initialize(address(this), _delegationConfig.confirmExpiry);
+        // delegation.initialize(address(this), _delegationConfig.confirmExpiry);
 
         // setup roles from config
         // basic permissions to the staking vault
