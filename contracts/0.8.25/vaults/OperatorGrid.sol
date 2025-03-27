@@ -23,6 +23,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     //            STRUCTS
     // -----------------------------
     struct Group {
+        uint256 id;
         uint96 shareLimit;
         uint96 mintedShares;
         uint256[] tiers;
@@ -41,11 +42,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint256 groupId;
         uint256[] vaults;
         uint256 vaultsCount;
-        address nodeOperatorAddress;
     }
 
     struct Vault {
-        uint256 tierId;
+        uint256 groupIndex;
+        uint256 tierIndex;
         uint96 mintedShares;
     }
 
@@ -91,10 +92,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        $.groups.push(Group(0, 0, new uint256[](0), 0));
-        $.nodeOperators.push(NodeOperator(0, new uint256[](0), 0, address(0)));
+        $.groups.push(Group(0, 0, 0, new uint256[](0), 0));
+        $.nodeOperators.push(NodeOperator(0, new uint256[](0), 0));
         $.tiers.push(Tier(0, 0, 0, 0, 0));
-        $.vaults.push(Vault(0, 0));
+        $.vaults.push(Vault(0, 0, 0));
     }
 
     /// @notice Registers a new group
@@ -109,6 +110,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         $.groupIndex[groupId] = $.groups.length;
         $.groups.push(
             Group({
+                id: groupId,
                 shareLimit: uint96(shareLimit),
                 mintedShares: 0,
                 tiers: new uint256[](0),
@@ -221,15 +223,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         }
 
         $.nodeOperatorIndex[_operator] = $.nodeOperators.length;
-
-        NodeOperator memory nodeOperator = NodeOperator({
-            groupId: _groupId,
-            vaults: new uint256[](0),
-            vaultsCount: 0,
-            nodeOperatorAddress: _operator
-        });
-
-        $.nodeOperators.push(nodeOperator);
+        $.nodeOperators.push(
+            NodeOperator({
+                groupId: _groupId,
+                vaults: new uint256[](0),
+                vaultsCount: 0
+            })
+        );
 
         emit NodeOperatorAdded(_groupId, _operator);
     }
@@ -267,7 +267,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (nextTierIndex >= group.tiersCount) revert TiersNotAvailable();
 
         Vault memory _vault = Vault({
-            tierId: group.tiers[nextTierIndex],
+            groupIndex: groupIndex,
+            tierIndex: group.tiers[nextTierIndex],
             mintedShares: 0
         });
 
@@ -277,7 +278,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         nodeOperator.vaults.push($.vaults.length);
         nodeOperator.vaultsCount++;
 
-        emit VaultAdded(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vault, _vault.tierId);
+        emit VaultAdded(group.id, _vault.tierIndex, vault);
     }
 
    // -----------------------------
@@ -299,26 +300,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (index == 0) revert VaultNotExists();
 
         Vault storage vault = $.vaults[index];
-
-        address nodeOperatorAddr = IStakingVault(vaultAddr).nodeOperator();
-        uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
-
-        NodeOperator storage nodeOperator = $.nodeOperators[nodeOperatorIndex];
-        uint256 groupIndex = $.groupIndex[nodeOperator.groupId];
-        Group storage group = $.groups[groupIndex];
+        Group storage group = $.groups[vault.groupIndex];
 
         uint96 amount_ = uint96(amount);
         if (group.mintedShares + amount_ > group.shareLimit) revert GroupLimitExceeded();
 
-        uint256 tierIndex = $.tierIndex[vault.tierId];
-        Tier memory tier = $.tiers[tierIndex];
+        Tier memory tier = $.tiers[vault.tierIndex];
 
         if (vault.mintedShares + amount_ > tier.shareLimit) revert VaultTierLimitExceeded();
 
-        group.mintedShares += amount_;
         vault.mintedShares += amount_;
+        group.mintedShares += amount_;
 
-        emit Minted(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vaultAddr, amount_);
+        emit Minted(group.id, vaultAddr, amount_);
     }
 
     /// @notice Burn shares
@@ -328,31 +322,24 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         address vaultAddr,
         uint256 amount
     ) external {
-        ERC7201Storage storage $ = _getStorage();
-
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("burnShares", msg.sender);
+
+        ERC7201Storage storage $ = _getStorage();
 
         uint256 index = $.vaultIndex[vaultAddr];
         if (index == 0) revert VaultNotExists();
 
         Vault storage vault = $.vaults[index];
-
-        address nodeOperatorAddr = IStakingVault(vaultAddr).nodeOperator();
-        uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
-
-        NodeOperator memory nodeOperator = $.nodeOperators[nodeOperatorIndex];
-        uint256 groupIndex = $.groupIndex[nodeOperator.groupId];
-
-        Group storage group = $.groups[groupIndex];
+        Group storage group = $.groups[vault.groupIndex];
         uint96 amount_ = uint96(amount);
 
         if (group.mintedShares < amount_) revert GroupMintedSharesUnderflow();
         if (vault.mintedShares < amount_) revert VaultMintedSharesUnderflow();
 
-        group.mintedShares -= amount_;
         vault.mintedShares -= amount_;
+        group.mintedShares -= amount_;
 
-        emit Burned(nodeOperator.groupId, nodeOperator.nodeOperatorAddress, vaultAddr, amount_);
+        emit Burned(group.id, vaultAddr, amount_);
     }
 
     /// @notice Get vault limits
@@ -373,11 +360,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     {
         ERC7201Storage storage $ = _getStorage();
 
-        uint256 vIdx = $.vaultIndex[vaultAddr];
-        if (vIdx == 0) revert VaultNotExists();
-        Vault memory v = $.vaults[vIdx];
+        uint256 index = $.vaultIndex[vaultAddr];
+        if (index == 0) revert VaultNotExists();
 
-        Tier memory t = $.tiers[v.tierId];
+        Vault memory v = $.vaults[index];
+        Tier memory t = $.tiers[v.tierIndex];
 
         shareLimit = t.shareLimit;
         reserveRatioBP = t.reserveRatioBP;
@@ -399,9 +386,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     event GroupShareLimitUpdated(uint256 indexed groupId, uint256 shareLimit);
     event TierAdded(uint256 indexed groupId, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFee);
     event NodeOperatorAdded(uint256 indexed groupId, address indexed nodeOperatorAddr);
-    event VaultAdded(uint256 indexed groupId, address indexed nodeOperatorAddr, address indexed vault, uint256 tierId);
-    event Minted(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
-    event Burned(uint256 indexed groupId, address indexed operatorAddr, address indexed vault, uint256 amount);
+    event VaultAdded(uint256 indexed groupId, uint256 tierIndex, address indexed vault);
+    event Minted(uint256 indexed groupId, address indexed vault, uint256 amount);
+    event Burned(uint256 indexed groupId, address indexed vault, uint256 amount);
 
     // -----------------------------
     //            ERRORS

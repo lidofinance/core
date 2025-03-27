@@ -339,7 +339,6 @@ describe("OperatorGrid.sol", () => {
       const opStructByIndex = await operatorGrid.nodeOperatorByIndex(0);
       expect(opStructByIndex.groupId).to.equal(1);
       expect(opStructByIndex.vaultsCount).to.equal(0);
-      expect(opStructByIndex.nodeOperatorAddress).to.equal(operatorAddress);
     });
 
     it("add an operator", async function () {
@@ -419,7 +418,7 @@ describe("OperatorGrid.sol", () => {
 
       await expect(operatorGrid.connect(dao).registerVault(vaultMock))
         .to.be.emit(operatorGrid, "VaultAdded")
-        .withArgs(groupId, operatorAddress, await vaultMock.getAddress(), 2);
+        .withArgs(groupId, 2, await vaultMock.getAddress());
     });
   });
 
@@ -507,7 +506,7 @@ describe("OperatorGrid.sol", () => {
 
       await expect(operatorGrid.connect(vaultHubAsSigner).mintShares(vaultMock, tierShareLimit - 1))
         .to.be.emit(operatorGrid, "Minted")
-        .withArgs(groupId, operatorAddress, await vaultMock.getAddress(), tierShareLimit - 1);
+        .withArgs(groupId, await vaultMock.getAddress(), tierShareLimit - 1);
     });
   });
 
@@ -610,7 +609,7 @@ describe("OperatorGrid.sol", () => {
 
       await expect(operatorGrid.connect(vaultHubAsSigner).burnShares(vaultMock, tierShareLimit))
         .to.be.emit(operatorGrid, "Burned")
-        .withArgs(groupId, operatorAddress, await vaultMock.getAddress(), tierShareLimit);
+        .withArgs(groupId, await vaultMock.getAddress(), tierShareLimit);
     });
   });
 
