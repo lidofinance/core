@@ -123,7 +123,7 @@ contract LidoTemplate is IsContract {
     APMRegistryFactory private apmRegistryFactory;
 
     DeployState private deployState;
-    APMRepos private apmRepos;
+    APMRepos public apmRepos;
 
     event TmplAPMDeployed(address apm);
     event TmplReposCreated();

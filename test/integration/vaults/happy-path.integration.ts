@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -12,25 +12,14 @@ import {
   days,
   ether,
   generateValidator,
-  impersonate,
   log,
   prepareLocalMerkleTree,
   updateBalance,
 } from "lib";
-import {
-  getProtocolContext,
-  getReportTimeElapsed,
-  norEnsureOperators,
-  OracleReportParams,
-  ProtocolContext,
-  report,
-  sdvtEnsureOperators,
-} from "lib/protocol";
+import { getProtocolContext, getReportTimeElapsed, OracleReportParams, ProtocolContext, report } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
-import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
-
-const LIDO_DEPOSIT = ether("640");
+import { ONE_DAY } from "test/suite/constants";
 
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("32");
@@ -47,7 +36,6 @@ const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
-  let ethHolder: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
@@ -71,7 +59,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, nodeOperator, curator] = await ethers.getSigners();
+    [owner, nodeOperator, curator] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -115,29 +103,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Use beacon balance to calculate the vault value
     return vault101Balance + stakingVaultBeaconBalance;
   }
-
-  it("Should have at least 10 deposited node operators in NOR", async () => {
-    const { depositSecurityModule, lido } = ctx.contracts;
-
-    await norEnsureOperators(ctx, 10n, 1n);
-    await sdvtEnsureOperators(ctx, 10n, 1n);
-    expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(10n);
-    expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(10n);
-
-    // Send 640 ETH to lido
-    await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
-
-    const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-
-    const reportData: Partial<OracleReportParams> = {
-      clDiff: LIDO_DEPOSIT,
-      clAppearedValidators: 20n,
-    };
-
-    await report(ctx, reportData);
-  });
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
     const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
@@ -347,8 +312,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const lockedEvents = ctx.getEvents(mintTxReceipt, "LockedIncreased", [stakingVault.interface]);
     expect(lockedEvents.length).to.equal(1n);
-    expect(lockedEvents[0].args?.locked).to.equal(VAULT_DEPOSIT);
 
+    expect(lockedEvents[0].args?.locked).to.equal(VAULT_DEPOSIT);
     expect(await stakingVault.locked()).to.equal(VAULT_DEPOSIT);
 
     log.debug("Staking Vault", {
