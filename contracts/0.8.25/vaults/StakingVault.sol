@@ -151,6 +151,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.nodeOperator = _nodeOperator;
         $.vaultHub = _vaultHub;
         $.depositor = _depositor;
+
+        emit NodeOperatorSet(_nodeOperator);
+        emit VaultHubAttached(_vaultHub);
+        emit DepositorAttached(_depositor);
     }
 
     /**
@@ -197,6 +201,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function attachVaultHubAndDepositor(address _vaultHub, address _depositor) external onlyOwner {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (_depositor == address(0)) revert ZeroArgument("_depositor");
+        if (isOssified()) revert VaultIsOssified();
 
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
@@ -205,6 +210,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.depositor = _depositor;
 
         emit VaultHubAttached(_vaultHub);
+        emit DepositorAttached(_depositor);
     }
 
     /**
@@ -228,6 +234,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.depositor = address(0);
 
         emit VaultHubDetached(address(0));
+        emit DepositorDetached(address(0));
     }
 
     /**
@@ -242,7 +249,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
-        if ($.depositor != address(0)) revert VaultHubAlreadyAttached();
         PinnedBeaconUtils.ossify();
     }
 
@@ -250,7 +256,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Returns true if the vault is ossified
      * @return True if the vault is ossified, false otherwise
      */
-    function isOssified() external view returns (bool) {
+    function isOssified() public view returns (bool) {
         return PinnedBeaconUtils.isOssified();
     }
 
@@ -605,6 +611,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Emitted when `NodeOperator` is set
+     * @param nodeOperator Address of the set `NodeOperator`
+     */
+    event NodeOperatorSet(address indexed nodeOperator);
+
+    /**
      * @notice Emitted when `VaultHub` is attached to `StakingVault`
      * @param vaultHub Address of the attached `VaultHub`
      */
@@ -615,6 +627,18 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param vaultHub Address of the detached `VaultHub`
      */
     event VaultHubDetached(address indexed vaultHub);
+
+    /**
+     * @notice Emitted when `Depositor` is attached
+     * @param depositor Address of the attached `Depositor`
+     */
+    event DepositorAttached(address indexed depositor);
+
+    /**
+     * @notice Emitted when `Depositor` is detached
+     * @param depositor Address of the detached `Depositor`
+     */
+    event DepositorDetached(address indexed depositor);
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
@@ -818,4 +842,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to detach vault from VaultHub while it is not in pending disconnect status
      */
     error VaultNotMarkedForDisconnect(address vault, bool pendingDisconnect);
+
+    /**
+     * @notice Thrown when trying to attach vault to VaultHub while it is ossified
+     */
+    error VaultIsOssified();
 }

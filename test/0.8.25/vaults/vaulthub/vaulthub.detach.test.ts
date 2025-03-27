@@ -484,6 +484,41 @@ describe("VaultHub.sol:detach", () => {
       expect(vault2VaultHubAfterUpgrade).to.equal(vault2VaultHubBefore);
     });
 
+    it("reverts when vault is ossified", async () => {
+      const config = {
+        shareLimit: 10n,
+        minReserveRatioBP: 500n,
+        rebalanceThresholdBP: 20n,
+        treasuryFeeBP: 500n,
+      };
+
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      await vault.connect(delegationSigner).fund({ value: 1000n });
+
+      await expect(
+        vaultHub
+          .connect(admin)
+          .connectVault(
+            vault,
+            config.shareLimit,
+            config.minReserveRatioBP,
+            config.rebalanceThresholdBP,
+            config.treasuryFeeBP,
+          ),
+      ).to.emit(vaultHub, "VaultConnected");
+
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
+      await vault.connect(delegationSigner).ossifyStakingVault();
+
+      await expect(
+        vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
+      ).to.revertedWithCustomError(vault, "VaultIsOssified");
+    });
+
     it("reverts when attach vaultHub already attached", async () => {
       const config = {
         shareLimit: 10n,
@@ -563,10 +598,14 @@ describe("VaultHub.sol:detach", () => {
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
         .to.emit(vault, "VaultHubDetached")
+        .withArgs(ZeroAddress)
+        .to.emit(vault, "DepositorDetached")
         .withArgs(ZeroAddress);
       await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee))
         .to.emit(vault, "VaultHubAttached")
-        .withArgs(vaultHub);
+        .withArgs(vaultHub)
+        .to.emit(vault, "DepositorAttached")
+        .withArgs(predepositGuarantee);
     });
 
     it("reverts when ossify by stranger", async () => {
