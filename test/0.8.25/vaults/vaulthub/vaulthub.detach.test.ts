@@ -254,10 +254,9 @@ describe("VaultHub.sol:detach", () => {
       const socket = await vaultHub["vaultSocket(address)"](vault);
       expect(mintShares).to.equal(socket.sharesMinted);
 
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultNotPendingDisconnect",
-      );
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
+        .to.revertedWithCustomError(vault, "VaultNotMarkedForDisconnect")
+        .withArgs(vault, false);
     });
 
     it("reverts if vault no mintedShares, but is connected", async () => {
@@ -297,7 +296,7 @@ describe("VaultHub.sol:detach", () => {
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
-        "VaultNotPendingDisconnect",
+        "VaultNotMarkedForDisconnect",
       );
     });
 
@@ -354,7 +353,7 @@ describe("VaultHub.sol:detach", () => {
       );
     });
 
-    it("detach vaultHub works", async () => {
+    it("detach vaultHub works after voluntaryDisconnect", async () => {
       const config = {
         shareLimit: 10n,
         minReserveRatioBP: 500n,
@@ -399,6 +398,73 @@ describe("VaultHub.sol:detach", () => {
       expect(0).to.equal(socket.sharesMinted);
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
+
+      const vault1VaultHubAfterDetach = await vault.vaultHub();
+      const vault2VaultHubAfterDetach = await vault2.vaultHub();
+
+      expect(vault1VaultHubAfterDetach).to.equal(ZeroAddress);
+      expect(vault2VaultHubAfterDetach).to.equal(vault2VaultHubBefore);
+
+      //upgrade beacon to new implementation
+      await beacon.connect(admin).upgradeTo(implNew);
+
+      const vault1VaultHubAfterUpgrade = await vault.vaultHub();
+      const vault2VaultHubAfterUpgrade = await vault2.vaultHub();
+
+      expect(vault1VaultHubAfterUpgrade).to.equal(ZeroAddress);
+      expect(vault2VaultHubAfterUpgrade).to.equal(vault2VaultHubBefore);
+    });
+
+    it("detach vaultHub works after voluntaryDisconnect and updateVaults", async () => {
+      const config = {
+        shareLimit: 10n,
+        minReserveRatioBP: 500n,
+        rebalanceThresholdBP: 20n,
+        treasuryFeeBP: 500n,
+      };
+
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      await vault.connect(delegationSigner).fund({ value: 1000n });
+
+      await expect(
+        vaultHub
+          .connect(admin)
+          .connectVault(
+            vault,
+            config.shareLimit,
+            config.minReserveRatioBP,
+            config.rebalanceThresholdBP,
+            config.treasuryFeeBP,
+          ),
+      ).to.emit(vaultHub, "VaultConnected");
+
+      const mintShares = 10;
+
+      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
+      await steth.connect(stranger).transferShares(vaultHub, mintShares);
+      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
+
+      const { vault: vault2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
+
+      const vault1VaultHubBefore = await vault.vaultHub();
+      const vault2VaultHubBefore = await vault2.vaultHub();
+
+      expect(vault1VaultHubBefore).to.equal(vault2VaultHubBefore);
+      expect(vault1VaultHubBefore).not.to.equal(ZeroAddress);
+
+      //disconnect vault
+      const socket = await vaultHub["vaultSocket(address)"](vault);
+      expect(0).to.equal(socket.sharesMinted);
+
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+      await vaultHub.connect(accountingSigner).updateVaults([], [], [], []);
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
 

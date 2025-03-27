@@ -557,7 +557,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
 
         for (uint256 i = 1; i < length; i++) {
-            VaultSocket storage socket = $.sockets[i];
+            VaultSocket memory socket = $.sockets[i];
             if (socket.pendingDisconnect) {
                 // remove disconnected vault from the list
                 VaultSocket memory lastSocket = $.sockets[length - 1];

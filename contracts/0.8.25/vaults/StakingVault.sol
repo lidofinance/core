@@ -220,7 +220,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_vaultHub == address(0)) revert VaultHubAlreadyDetached();
 
         VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
-        if (!socket.pendingDisconnect) revert VaultNotPendingDisconnect();
+        if (socket.vault != address(0) && !socket.pendingDisconnect) {
+            revert VaultNotMarkedForDisconnect(socket.vault, socket.pendingDisconnect);
+        }
 
         $.vaultHub = address(0);
         $.depositor = address(0);
@@ -815,5 +817,5 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when trying to detach vault from VaultHub while it is not in pending disconnect status
      */
-    error VaultNotPendingDisconnect();
+    error VaultNotMarkedForDisconnect(address vault, bool pendingDisconnect);
 }
