@@ -113,7 +113,7 @@ contract Delegation is Permissions {
      * - transfer the ownership of the StakingVault.
      * @return roles is an array of roles that form the confirming roles.
      */
-    function confirmingRoles() internal pure override returns (bytes32[] memory roles) {
+    function confirmingRoles() public pure override returns (bytes32[] memory roles) {
         roles = new bytes32[](2);
         roles[0] = DEFAULT_ADMIN_ROLE;
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;

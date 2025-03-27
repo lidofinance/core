@@ -137,7 +137,7 @@ abstract contract Permissions is AccessControlConfirmable {
      *      which are introduced further in the inheritance chain.
      * @return The roles that need to confirm the call.
      */
-    function confirmingRoles() internal pure virtual returns (bytes32[] memory);
+    function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
      * @dev Checks the FUND_ROLE and funds the StakingVault.
