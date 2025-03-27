@@ -158,7 +158,7 @@ contract Dashboard is Delegation {
      * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(stakingVault().valuation());
+        return _totalMintableShares(_mintableValuation());
     }
 
     /**
@@ -167,7 +167,7 @@ contract Dashboard is Delegation {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _etherToFund);
+        uint256 _totalShares = _totalMintableShares(_mintableValuation() + _etherToFund);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -246,7 +246,7 @@ contract Dashboard is Delegation {
      * @param _amountOfShares Amount of stETH shares to mint
      */
     function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
-        _mintShares(_recipient, _amountOfShares);
+        _mintSharesWithinMintableValuation(_recipient, _amountOfShares);
     }
 
     /**
@@ -256,7 +256,7 @@ contract Dashboard is Delegation {
      * @param _amountOfStETH Amount of stETH to mint
      */
     function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundable {
-        _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
+        _mintSharesWithinMintableValuation(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
     /**
@@ -265,7 +265,7 @@ contract Dashboard is Delegation {
      * @param _amountOfWstETH Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
-        _mintShares(address(this), _amountOfWstETH);
+        _mintSharesWithinMintableValuation(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
@@ -488,7 +488,21 @@ contract Dashboard is Delegation {
         revert InvalidPermit(token);
     }
 
-    /**
+    function _mintableValuation() internal view returns (uint256) {
+        return stakingVault().valuation() - nodeOperatorUnclaimedFee();
+    }
+
+    function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
+        _mintShares(_recipient, _amountOfShares);
+
+        uint256 locked = stakingVault().locked();
+        uint256 mintableValuation = _mintableValuation();
+
+        if (locked > mintableValuation) {
+            revert MintableValuationExceeded(locked, mintableValuation);
+        }
+    }
+
 
     /**
      * @dev Burns stETH tokens from the sender backed by the vault
@@ -544,4 +558,7 @@ contract Dashboard is Delegation {
 
     /// @notice Error when recovery of ETH fails on transfer to recipient
     error EthTransferFailed(address recipient, uint256 amount);
+
+    /// @notice Error when mintable valuation is breached
+    error MintableValuationExceeded(uint256 locked, uint256 mintableValuation);
 }
