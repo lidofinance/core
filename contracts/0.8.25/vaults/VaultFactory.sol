@@ -33,17 +33,20 @@ contract VaultFactory {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
     address public immutable VAULT_HUB;
+    address public immutable DEPOSITOR;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl, address _vaultHub) {
+    constructor(address _beacon, address _delegationImpl, address _vaultHub, address _depositor) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
         VAULT_HUB = _vaultHub;
+        DEPOSITOR = _depositor;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -65,6 +68,7 @@ contract VaultFactory {
             address(delegation),
             _delegationConfig.nodeOperatorManager,
             VAULT_HUB,
+            DEPOSITOR,
             _stakingVaultInitializerExtraParams
         );
 

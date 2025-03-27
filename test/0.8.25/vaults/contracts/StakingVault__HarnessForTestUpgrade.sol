@@ -17,6 +17,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         int128 inOutDelta;
         address nodeOperator;
         address vaultHub;
+        address depositor;
         bool beaconChainDepositsPaused;
     }
 
@@ -30,8 +31,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
-    constructor(address _predepositGuarantee, address _beaconChainDepositContract) {
-        if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
+    constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         DEPOSIT_CONTRACT = _beaconChainDepositContract;
@@ -44,6 +44,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _owner,
         address _nodeOperator,
         address _vaultHub,
+        address _depositor,
         bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) revert VaultAlreadyInitialized();
@@ -51,8 +52,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
         __StakingVault_init_v2();
         __Ownable_init(_owner);
-        _getVaultStorage().nodeOperator = _nodeOperator;
-        _getVaultStorage().vaultHub = _vaultHub;
+
+        ERC7201Storage storage $ = _getStorage();
+        $.nodeOperator = _nodeOperator;
+        $.vaultHub = _vaultHub;
+        $.depositor = _depositor;
     }
 
     function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
@@ -82,11 +86,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function latestReport() external view returns (IStakingVault.Report memory) {
-        ERC7201Storage storage $ = _getVaultStorage();
+        ERC7201Storage storage $ = _getStorage();
         return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
     }
 
-    function _getVaultStorage() private pure returns (ERC7201Storage storage $) {
+    function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := VAULT_STORAGE_LOCATION
         }
@@ -101,7 +105,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function nodeOperator() external view returns (address) {
-        return _getVaultStorage().nodeOperator;
+        return _getStorage().nodeOperator;
     }
 
     function rebalance(uint256 _ether) external {}
@@ -123,7 +127,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function vaultHub() external view returns (address) {
-        ERC7201Storage storage $ = _getVaultStorage();
+        ERC7201Storage storage $ = _getStorage();
         return $.vaultHub;
     }
 

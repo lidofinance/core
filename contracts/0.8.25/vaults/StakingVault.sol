@@ -79,6 +79,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         int128 inOutDelta;
         address nodeOperator;
         address vaultHub;
+        address depositor;
         bool beaconChainDepositsPaused;
     }
 
@@ -87,12 +88,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         The implementation is petrified to this version
      */
     uint64 private constant _VERSION = 1;
-
-    /**
-     * @notice Address of depositor
-     *         Set immutably in the constructor to avoid storage costs
-     */
-    address private immutable DEPOSITOR;
 
     /**
      * @notice Address of `BeaconChainDepositContract`
@@ -120,15 +115,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Constructs the implementation of `StakingVault`
-     * @param _depositor Address of the depositor
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _depositor, address _beaconChainDepositContract) {
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
+    constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        DEPOSITOR = _depositor;
         DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
@@ -142,13 +134,23 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _vaultHub Address of VaultHub
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, address _vaultHub, bytes calldata /* _params */) external initializer {
+    function initialize(
+        address _owner,
+        address _nodeOperator,
+        address _vaultHub,
+        address _depositor,
+        bytes calldata /* _params */
+    ) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         __Ownable_init(_owner);
-        _getStorage().nodeOperator = _nodeOperator;
-        _getStorage().vaultHub = _vaultHub;
+
+        ERC7201Storage storage $ = _getStorage();
+        $.nodeOperator = _nodeOperator;
+        $.vaultHub = _vaultHub;
+        $.depositor = _depositor;
     }
 
     /**
@@ -185,30 +187,34 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Attaches the vault to a `VaultHub`
+     * @notice Attaches the vault to a `VaultHub` and `Depositor`
      * @param _vaultHub Address of `VaultHub`
+     * @param _depositor Address of `Depositor`
      * @dev Can only be called by the owner
      * @dev Reverts if `_vaultHub` is the zero address
      * @dev Reverts if vault is already attached to VaultHub
      */
-    function attachVaultHub(address _vaultHub) external onlyOwner {
+    function attachVaultHubAndDepositor(address _vaultHub, address _depositor) external onlyOwner {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
 
         $.vaultHub = _vaultHub;
+        $.depositor = _depositor;
+
         emit VaultHubAttached(_vaultHub);
     }
 
     /**
-     * @notice Disconnect the vault from `VaultHub`
+     * @notice Disconnect the vault from `VaultHub` and `Depositor`
      * @dev Sets `vaultHub` to the zero address, fully detaching it from the vault
      * @dev Can only be called by the owner
      * @dev Reverts if vault is not attached to VaultHub
      * @dev Reverts if vault is not pending disconnect
      */
-    function detachVaultHub() external onlyOwner {
+    function detachVaultHubAndDepositor() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         address _vaultHub = $.vaultHub;
         if (_vaultHub == address(0)) revert VaultHubAlreadyDetached();
@@ -217,6 +223,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (!socket.pendingDisconnect) revert VaultNotPendingDisconnect();
 
         $.vaultHub = address(0);
+        $.depositor = address(0);
 
         emit VaultHubDetached(address(0));
     }
@@ -233,6 +240,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
+        if ($.depositor != address(0)) revert VaultHubAlreadyAttached();
         PinnedBeaconUtils.ossify();
     }
 
@@ -316,7 +324,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @return Address of the depositor
      */
     function depositor() external view returns (address) {
-        return DEPOSITOR;
+        return _getStorage().depositor;
     }
 
     /**
@@ -479,7 +487,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (msg.sender != DEPOSITOR) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
@@ -800,7 +808,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error VaultHubAlreadyDetached();
 
     /**
-     * @notice Thrown when trying to attach vault to VaultHub while it is already attached
+     * @notice Thrown when trying to ossify vault, or to attach vault to VaultHub while it is already attached
      */
     error VaultHubAlreadyAttached();
 

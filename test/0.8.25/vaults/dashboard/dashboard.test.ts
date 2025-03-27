@@ -40,6 +40,7 @@ describe("Dashboard.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let depositor: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
@@ -63,7 +64,7 @@ describe("Dashboard.sol", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+    [factoryOwner, vaultOwner, nodeOperator, stranger, depositor] = await ethers.getSigners();
 
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
@@ -79,7 +80,7 @@ describe("Dashboard.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // TODO: PDG harness
-    vaultImpl = await ethers.deployContract("StakingVault", [nodeOperator, depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
@@ -91,6 +92,7 @@ describe("Dashboard.sol", () => {
       vaultImpl,
       dashboardImpl,
       hub,
+      depositor,
     ]);
     expect(await factory.owner()).to.equal(factoryOwner);
     expect(await factory.implementation()).to.equal(vaultImpl);

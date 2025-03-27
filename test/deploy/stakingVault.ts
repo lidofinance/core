@@ -29,7 +29,7 @@ export async function deployStakingVaultBehindBeaconProxy(
   // deploying implementation
   const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
   const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
-  const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [depositor, depositContract_]);
+  const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [depositContract_]);
 
   // deploying factory/beacon
   const vaultFactory_ = await ethers.deployContract("VaultFactory__MockForStakingVault", [
@@ -38,7 +38,7 @@ export async function deployStakingVaultBehindBeaconProxy(
 
   // deploying beacon proxy
   const vaultCreation = await vaultFactory_
-    .createVault(await vaultOwner.getAddress(), await operator.getAddress(), vaultHub_)
+    .createVault(await vaultOwner.getAddress(), await operator.getAddress(), vaultHub_, depositor)
     .then((tx) => tx.wait());
   if (!vaultCreation) throw new Error("Vault creation failed");
   const events = findEvents(vaultCreation, "VaultCreated");

@@ -93,16 +93,8 @@ describe("VaultHub.sol:detach", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [await locator.predepositGuarantee(), depositContract], {
-      from: deployer,
-    });
-    implNew = await ethers.deployContract(
-      "StakingVault__HarnessForTestUpgrade",
-      [await locator.predepositGuarantee(), depositContract],
-      {
-        from: deployer,
-      },
-    );
+    implOld = await ethers.deployContract("StakingVault", [depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [depositContract], { from: deployer });
 
     //beacon
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
@@ -111,10 +103,16 @@ describe("VaultHub.sol:detach", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, vaultHub], { from: deployer });
-    invalidVaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, stranger], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, vaultHub, predepositGuarantee], {
       from: deployer,
     });
+    invalidVaultFactory = await ethers.deployContract(
+      "VaultFactory",
+      [beacon, delegation, stranger, predepositGuarantee],
+      {
+        from: deployer,
+      },
+    );
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -122,10 +120,9 @@ describe("VaultHub.sol:detach", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, vaultHub, "0x")).to.revertedWithCustomError(
-      implOld,
-      "InvalidInitialization",
-    );
+    await expect(
+      implOld.initialize(stranger, operator, vaultHub, predepositGuarantee, "0x"),
+    ).to.revertedWithCustomError(implOld, "InvalidInitialization");
 
     //add proxy code hash to whitelist
     const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
@@ -184,7 +181,7 @@ describe("VaultHub.sol:detach", () => {
     it("reverts on invalid owner", async () => {
       const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
 
-      await expect(vault.connect(stranger).detachVaultHub()).to.revertedWithCustomError(
+      await expect(vault.connect(stranger).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
         "OwnableUnauthorizedAccount",
       );
@@ -198,19 +195,30 @@ describe("VaultHub.sol:detach", () => {
       );
 
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-      await expect(vault.connect(delegationSigner).attachVaultHub(ZeroAddress)).to.revertedWithCustomError(
-        vault,
-        "ZeroArgument",
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(ZeroAddress, predepositGuarantee))
+        .to.revertedWithCustomError(vault, "ZeroArgument")
+        .withArgs("_vaultHub");
+    });
+
+    it("reverts when attachVaultHub on invalid depositor address", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(
+        vaultOwner1,
+        invalidVaultFactory,
+        delegationParams,
       );
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, ZeroAddress))
+        .to.revertedWithCustomError(vault, "ZeroArgument")
+        .withArgs("_depositor");
     });
 
     it("reverts when attachVaultHub on invalid owner", async () => {
       const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
 
-      await expect(vault.connect(stranger).attachVaultHub(vaultHub)).to.revertedWithCustomError(
-        vault,
-        "OwnableUnauthorizedAccount",
-      );
+      await expect(
+        vault.connect(stranger).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
+      ).to.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
     });
 
     it("reverts if vault has mintedShares", async () => {
@@ -246,7 +254,7 @@ describe("VaultHub.sol:detach", () => {
       const socket = await vaultHub["vaultSocket(address)"](vault);
       expect(mintShares).to.equal(socket.sharesMinted);
 
-      await expect(vault.connect(delegationSigner).detachVaultHub()).to.revertedWithCustomError(
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
         "VaultNotPendingDisconnect",
       );
@@ -287,7 +295,7 @@ describe("VaultHub.sol:detach", () => {
       const socket = await vaultHub["vaultSocket(address)"](vault);
       expect(0).to.equal(socket.sharesMinted);
 
-      await expect(vault.connect(delegationSigner).detachVaultHub()).to.revertedWithCustomError(
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
         "VaultNotPendingDisconnect",
       );
@@ -339,9 +347,8 @@ describe("VaultHub.sol:detach", () => {
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
-      await expect(vault.connect(delegationSigner).detachVaultHub()).to.emit(vault, "VaultHubDetached");
-
-      await expect(vault.connect(delegationSigner).detachVaultHub()).to.revertedWithCustomError(
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
         "VaultHubAlreadyDetached",
       );
@@ -393,7 +400,7 @@ describe("VaultHub.sol:detach", () => {
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
-      await expect(vault.connect(delegationSigner).detachVaultHub()).to.emit(vault, "VaultHubDetached");
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
 
       const vault1VaultHubAfterDetach = await vault.vaultHub();
       const vault2VaultHubAfterDetach = await vault2.vaultHub();
@@ -437,10 +444,9 @@ describe("VaultHub.sol:detach", () => {
           ),
       ).to.emit(vaultHub, "VaultConnected");
 
-      await expect(vault.connect(delegationSigner).attachVaultHub(vaultHub)).to.revertedWithCustomError(
-        vault,
-        "VaultHubAlreadyAttached",
-      );
+      await expect(
+        vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
+      ).to.revertedWithCustomError(vault, "VaultHubAlreadyAttached");
     });
 
     it("attach vaultHub works", async () => {
@@ -489,10 +495,10 @@ describe("VaultHub.sol:detach", () => {
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
-      await expect(vault.connect(delegationSigner).detachVaultHub())
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
         .to.emit(vault, "VaultHubDetached")
         .withArgs(ZeroAddress);
-      await expect(vault.connect(delegationSigner).attachVaultHub(vaultHub))
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee))
         .to.emit(vault, "VaultHubAttached")
         .withArgs(vaultHub);
     });
@@ -540,7 +546,7 @@ describe("VaultHub.sol:detach", () => {
       ).to.emit(vaultHub, "VaultConnected");
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHub();
+      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
       await vault.connect(delegationSigner).ossifyStakingVault();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
         vault,
@@ -592,7 +598,7 @@ describe("VaultHub.sol:detach", () => {
       expect(vault1ImplementationBefore).to.equal(vault2ImplementationBefore);
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHub();
+      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();
