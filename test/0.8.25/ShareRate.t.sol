@@ -25,7 +25,7 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
 
     ILido public lidoContract;
     WithdrawalQueueERC721 public wqContract;
-    address public accounting;
+    address public vaultHub;
     address public userAccount;
     address public rootAccount;
 
@@ -40,13 +40,13 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
     constructor(
         ILido _lido,
         WithdrawalQueueERC721 _wqContract,
-        address _accounting,
+        address _vaultHub,
         address _userAccount,
         address _rootAccount,
         uint256 _maxAmountOfShares
     ) {
         lidoContract = _lido;
-        accounting = _accounting;
+        vaultHub = _vaultHub;
         userAccount = _userAccount;
         rootAccount = _rootAccount;
         maxAmountOfShares = _maxAmountOfShares;
@@ -76,7 +76,7 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         vm.prank(userAccount);
         lidoContract.resumeStaking();
 
-        vm.prank(accounting);
+        vm.prank(vaultHub);
 
         boundaryValues.externalSharesRecipient = _recipient;
         boundaryValues.mintedExternalShares = _amountOfShares;
@@ -95,7 +95,7 @@ contract ShareRateHandler is CommonBase, StdCheats, StdUtils {
         vm.prank(userAccount);
         lidoContract.resumeStaking();
 
-        vm.prank(accounting);
+        vm.prank(vaultHub);
 
         boundaryValues.burnExternalShares = _amountOfShares;
 
@@ -275,7 +275,7 @@ contract ShareRateTest is BaseProtocolTest {
     function setUp() public {
         BaseProtocolTest.setUpProtocol(protocolStartBalance, rootAccount, userAccount);
 
-        address accountingContract = lidoLocator.accounting();
+        address vaultHubAddress = lidoLocator.vaultHub();
 
         vm.startPrank(userAccount);
         lidoContract.setMaxExternalRatioBP(_maxExternalRatioBP);
@@ -286,7 +286,7 @@ contract ShareRateTest is BaseProtocolTest {
         shareRateHandler = new ShareRateHandler(
             lidoContract,
             wq,
-            accountingContract,
+            vaultHubAddress,
             userAccount,
             rootAccount,
             _maxAmountOfShares
@@ -304,8 +304,8 @@ contract ShareRateTest is BaseProtocolTest {
 
         // @dev mint 10000 external shares to simulate some shares already minted, so
         //      burnExternalShares will be able to actually burn some shares
-        vm.prank(accountingContract);
-        lidoContract.mintExternalShares(accountingContract, protocolStartExternalShares);
+        vm.prank(vaultHubAddress);
+        lidoContract.mintExternalShares(vaultHubAddress, protocolStartExternalShares);
         shareRateHandler.submit(0, 10 ether);
 
         vm.roll(block.number + ONE_DAY_IN_BLOCKS);

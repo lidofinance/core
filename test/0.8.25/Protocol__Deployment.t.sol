@@ -10,7 +10,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 import {StakingRouter__MockForLidoAccountingFuzzing} from "./contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
@@ -18,7 +18,7 @@ import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondO
 import {WithdrawalQueue, IWstETH} from "../../contracts/0.8.9/WithdrawalQueue.sol";
 import {WithdrawalQueueERC721} from "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 
-interface IAccounting {
+interface IVaultHub {
     function initialize(address _admin) external;
 }
 
@@ -92,28 +92,9 @@ interface IDaoFactory {
     function newDAO(address _root) external returns (IKernel);
 }
 
-struct LidoLocatorConfig {
-    address accountingOracle;
-    address depositSecurityModule;
-    address elRewardsVault;
-    address legacyOracle;
-    address lido;
-    address oracleReportSanityChecker;
-    address postTokenRebaseReceiver;
-    address burner;
-    address stakingRouter;
-    address treasury;
-    address validatorsExitBusOracle;
-    address withdrawalQueue;
-    address withdrawalVault;
-    address oracleDaemonConfig;
-    address accounting;
-    address wstETH;
-}
-
 contract BaseProtocolTest is Test {
     ILido public lidoContract;
-    ILidoLocator public lidoLocator;
+    LidoLocator public lidoLocator;
     WithdrawalQueueERC721 public wq;
     IACL public acl;
     SecondOpinionOracle__MockForAccountingFuzzing public secondOpinionOracleMock;
@@ -197,13 +178,24 @@ contract BaseProtocolTest is Test {
         // Add accounting contract with handler to the protocol
         address accountingImpl = deployCode(
             "Accounting.sol:Accounting",
-            abi.encode(address(lidoLocator), lidoProxyAddress, VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT)
+            abi.encode(address(lidoLocator), lidoProxyAddress)
         );
 
         deployCodeTo(
             "OssifiableProxy.sol:OssifiableProxy",
             abi.encode(accountingImpl, rootAccount, new bytes(0)),
             lidoLocator.accounting()
+        );
+
+        address vaultHubImpl = deployCode(
+            "VaultHub.sol:VaultHub",
+            abi.encode(address(lidoLocator), lidoProxyAddress, VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT)
+        );
+
+        deployCodeTo(
+            "OssifiableProxy.sol:OssifiableProxy",
+            abi.encode(vaultHubImpl, rootAccount, new bytes(0)),
+            lidoLocator.vaultHub()
         );
 
         deployCodeTo(
@@ -261,7 +253,7 @@ contract BaseProtocolTest is Test {
             bytes32(uint256(uint160(address(secondOpinionOracleMock))))
         );
 
-        IAccounting(lidoLocator.accounting()).initialize(rootAccount);
+        IVaultHub(lidoLocator.vaultHub()).initialize(rootAccount);
 
         /// @dev deploy eip712steth
         address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
@@ -318,8 +310,8 @@ contract BaseProtocolTest is Test {
     }
 
     /// @dev deploy lido locator with dummy default values
-    function _deployLidoLocator(address lido, address stakingRouterAddress) internal returns (ILidoLocator) {
-        LidoLocatorConfig memory config = LidoLocatorConfig({
+    function _deployLidoLocator(address lido, address stakingRouterAddress) internal returns (LidoLocator) {
+        LidoLocator.Config memory config = LidoLocator.Config({
             accountingOracle: makeAddr("dummy-locator:accountingOracle"),
             depositSecurityModule: makeAddr("dummy-locator:depositSecurityModule"),
             elRewardsVault: makeAddr("dummy-locator:elRewardsVault"),
@@ -335,9 +327,11 @@ contract BaseProtocolTest is Test {
             withdrawalVault: makeAddr("dummy-locator:withdrawalVault"),
             oracleDaemonConfig: makeAddr("dummy-locator:oracleDaemonConfig"),
             accounting: makeAddr("dummy-locator:accounting"),
-            wstETH: wstETHAdr
+            predepositGuarantee: makeAddr("dummy-locator:predeposit_guarantee"),
+            wstETH: wstETHAdr,
+            vaultHub: makeAddr("dummy-locator:vaultHub")
         });
 
-        return ILidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
+        return LidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
     }
 }
