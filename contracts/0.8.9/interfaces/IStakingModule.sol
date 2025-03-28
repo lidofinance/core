@@ -179,11 +179,9 @@ interface IStakingModule {
     ///      'unsafely' means that this method can both increase and decrease exited and stuck counters
     /// @param _nodeOperatorId Id of the node operator
     /// @param _exitedValidatorsCount New number of EXITED validators for the node operator
-    /// @param _stuckValidatorsCount New number of STUCK validator for the node operator
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
+        uint256 _exitedValidatorsCount
     ) external;
 
     /// @notice Obtains deposit data to be used by StakingRouter to deposit to the Ethereum Deposit
@@ -208,7 +206,7 @@ interface IStakingModule {
     ///
     /// @dev IMPORTANT: this method SHOULD revert with empty error data ONLY because of "out of gas".
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
-    function onExitedAndStuckValidatorsCountsUpdated() external;
+    function onExitedValidatorsCountsUpdated() external;
 
     /// @notice Called by StakingRouter when withdrawal credentials are changed.
     /// @dev This method MUST discard all StakingModule's unused deposit data cause they become

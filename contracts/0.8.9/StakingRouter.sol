@@ -60,8 +60,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     error StakingModuleWrongName();
     error UnexpectedCurrentValidatorsCount(
         uint256 currentModuleExitedValidatorsCount,
-        uint256 currentNodeOpExitedValidatorsCount,
-        uint256 currentNodeOpStuckValidatorsCount
+        uint256 currentNodeOpExitedValidatorsCount
     );
     error UnexpectedFinalExitedValidatorsCount (
         uint256 newModuleTotalExitedValidatorsCount,
@@ -133,6 +132,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
+    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS = keccak256("REPORT_EXITED_VALIDATORS_STATUS");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -455,7 +455,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
     ///    and exited validator counts per node operator for the current reporting frame, the oracle calls
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
-    ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
+    ///    `IStakingModule.onExitedValidatorsCountsUpdated` on all modules.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
     function updateExitedValidatorsCountByStakingModule(
@@ -540,15 +540,10 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         /// @notice The expected current number of exited validators of the node operator
         /// that is being corrected.
         uint256 currentNodeOperatorExitedValidatorsCount;
-        /// @notice The expected current number of stuck validators of the node operator
-        /// that is being corrected.
-        uint256 currentNodeOperatorStuckValidatorsCount;
         /// @notice The corrected number of exited validators of the module.
         uint256 newModuleExitedValidatorsCount;
         /// @notice The corrected number of exited validators of the node operator.
         uint256 newNodeOperatorExitedValidatorsCount;
-        /// @notice The corrected number of stuck validators of the node operator.
-        uint256 newNodeOperatorStuckValidatorsCount;
     }
 
     /// @notice Sets exited validators count for the given module and given node operator in that module
@@ -559,7 +554,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///
     /// @param _stakingModuleId Id of the staking module.
     /// @param _nodeOperatorId Id of the node operator.
-    /// @param _triggerUpdateFinish Whether to call `onExitedAndStuckValidatorsCountsUpdated` on the module
+    /// @param _triggerUpdateFinish Whether to call `onExitedValidatorsCountsUpdated` on the module
     /// after applying the corrections.
     /// @param _correction See the docs for the `ValidatorsCountsCorrection` struct.
     ///
@@ -582,7 +577,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         (
             /* uint256 targetLimitMode */,
             /* uint256 targetValidatorsCount */,
-            uint256 stuckValidatorsCount,
+            /* uint256 stuckValidatorsCount, */,
             /* uint256 refundedValidatorsCount */,
             /* uint256 stuckPenaltyEndTimestamp */,
             uint256 totalExitedValidators,
@@ -591,13 +586,11 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
 
         if (_correction.currentModuleExitedValidatorsCount != stakingModuleState.exitedValidatorsCount ||
-            _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators ||
-            _correction.currentNodeOperatorStuckValidatorsCount != stuckValidatorsCount
+            _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators
         ) {
             revert UnexpectedCurrentValidatorsCount(
                 stakingModuleState.exitedValidatorsCount,
-                totalExitedValidators,
-                stuckValidatorsCount
+                totalExitedValidators
             );
         }
 
@@ -605,8 +598,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
         stakingModule.unsafeUpdateValidatorsCount(
             _nodeOperatorId,
-            _correction.newNodeOperatorExitedValidatorsCount,
-            _correction.newNodeOperatorStuckValidatorsCount
+            _correction.newNodeOperatorExitedValidatorsCount
         );
 
         (
@@ -629,7 +621,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
                 );
             }
 
-            stakingModule.onExitedAndStuckValidatorsCountsUpdated();
+            stakingModule.onExitedValidatorsCountsUpdated();
         }
     }
 
@@ -657,13 +649,13 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             (uint256 exitedValidatorsCount, , ) = _getStakingModuleSummary(moduleContract);
             if (exitedValidatorsCount == stakingModule.exitedValidatorsCount) {
                 // oracle finished updating exited validators for all node ops
-                try moduleContract.onExitedAndStuckValidatorsCountsUpdated() {}
+                try moduleContract.onExitedValidatorsCountsUpdated() {}
                 catch (bytes memory lowLevelRevertData) {
                     /// @dev This check is required to prevent incorrect gas estimation of the method.
                     ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                    ///      return an invalid value when the onExitedAndStuckValidatorsCountsUpdated()
+                    ///      return an invalid value when the onExitedValidatorsCountsUpdated()
                     ///      reverts because of the "out of gas" error. Here we assume that the
-                    ///      onExitedAndStuckValidatorsCountsUpdated() method doesn't have reverts with
+                    ///      onExitedValidatorsCountsUpdated() method doesn't have reverts with
                     ///      empty error data except "out of gas".
                     if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                     emit ExitedAndStuckValidatorsCountsUpdateFailed(
@@ -837,18 +829,16 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         (
             uint256 targetLimitMode,
             uint256 targetValidatorsCount,
-            uint256 stuckValidatorsCount,
+            /* uint256 stuckValidatorsCount */,
             uint256 refundedValidatorsCount,
-            uint256 stuckPenaltyEndTimestamp,
+            /* uint256 stuckPenaltyEndTimestamp */,
             uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
             uint256 depositableValidatorsCount
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
         summary.targetLimitMode = targetLimitMode;
         summary.targetValidatorsCount = targetValidatorsCount;
-        summary.stuckValidatorsCount = stuckValidatorsCount;
         summary.refundedValidatorsCount = refundedValidatorsCount;
-        summary.stuckPenaltyEndTimestamp = stuckPenaltyEndTimestamp;
         summary.totalExitedValidators = totalExitedValidators;
         summary.totalDepositedValidators = totalDepositedValidators;
         summary.depositableValidatorsCount = depositableValidatorsCount;
@@ -1495,7 +1485,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         bytes calldata _eligibleToExitInSec
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+        onlyRole(REPORT_EXITED_VALIDATORS_STATUS)
     {
         _getIStakingModuleById(_stakingModuleId).handleActiveValidatorsExitingStatus(
             _nodeOperatorId,

@@ -208,16 +208,14 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     event Mock__ValidatorsCountUnsafelyUpdated(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCoun
+        uint256 _exitedValidatorsCount
     );
 
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
+        uint256 _exitedValidatorsCount
     ) external {
-        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount, _stuckValidatorsCount);
+        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
     function obtainDepositData(
@@ -228,24 +226,24 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         signatures = new bytes(96 * _depositsCount);
     }
 
-    event Mock__onExitedAndStuckValidatorsCountsUpdated();
+    event Mock__onExitedValidatorsCountsUpdated();
 
-    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRevert = false;
-    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = false;
+    bool private onExitedValidatorsCountsUpdatedShouldRevert = false;
+    bool private onExitedValidatorsCountsUpdatedShouldRunOutGas = false;
 
-    function onExitedAndStuckValidatorsCountsUpdated() external {
-        require(!onExitedAndStuckValidatorsCountsUpdatedShouldRevert, "revert reason");
+    function onExitedValidatorsCountsUpdated() external {
+        require(!onExitedValidatorsCountsUpdatedShouldRevert, "revert reason");
 
-        if (onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas) {
+        if (onExitedValidatorsCountsUpdatedShouldRunOutGas) {
             revert();
         }
 
-        emit Mock__onExitedAndStuckValidatorsCountsUpdated();
+        emit Mock__onExitedValidatorsCountsUpdated();
     }
 
-    function mock__onExitedAndStuckValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
-        onExitedAndStuckValidatorsCountsUpdatedShouldRevert = shouldRevert;
-        onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
+    function mock__onExitedValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
+        onExitedValidatorsCountsUpdatedShouldRevert = shouldRevert;
+        onExitedValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
     }
 
     event Mock__WithdrawalCredentialsChanged();
