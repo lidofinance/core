@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -30,6 +31,12 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
+        /// @notice timestamp of the vaults data
+        uint256 vaultsDataTimestamp;
+        /// @notice root of the vaults data tree
+        bytes32 vaultsDataTreeRoot;
+        /// @notice CID of the vaults data tree
+        string vaultsDataTreeCid;
     }
 
     struct VaultSocket {
@@ -49,8 +56,10 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
+        /// @notice last fees accrued on the vault
+        uint96 lastFees;
         /// @notice unused gap in the slot 2
-        /// uint104 _unused_gap_;
+        /// uint8 _unused_gap_;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -112,7 +121,7 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -206,7 +215,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            0
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -231,6 +241,19 @@ contract VaultHub is PausableUntilWithRoles {
         socket.shareLimit = uint96(_shareLimit);
 
         emit ShareLimitUpdated(_vault, _shareLimit);
+    }
+
+    function updateReportData(
+        uint256 _vaultsDataTimestamp,
+        bytes32 _vaultsDataTreeRoot,
+        string memory _vaultsDataTreeCid
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaultsData", msg.sender);
+
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        $.vaultsDataTimestamp = _vaultsDataTimestamp;
+        $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
+        $.vaultsDataTreeCid = _vaultsDataTreeCid;
     }
 
     /// @notice force disconnects a vault from the hub
@@ -409,7 +432,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
-        vault_.report(vault_.valuation(), vault_.inOutDelta(), 0);
+        vault_.report(block.timestamp, vault_.valuation(), vault_.inOutDelta(), 0);
 
         emit VaultDisconnected(_vault);
     }
@@ -530,43 +553,68 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
-    function updateVaults(
-        uint256[] memory _valuations,
-        int256[] memory _inOutDeltas,
-        uint256[] memory _locked,
-        uint256[] memory _treasureFeeShares
-    ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
+    function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
+        if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
-        for (uint256 i = 0; i < _valuations.length; i++) {
-            VaultSocket storage socket = $.sockets[i + 1];
+        bytes32 root = $.vaultsDataTreeRoot;
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
+        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
-            if (socket.pendingDisconnect) continue; // we skip disconnected vaults
-
-            uint256 treasuryFeeShares = _treasureFeeShares[i];
-            if (treasuryFeeShares > 0) {
-                socket.sharesMinted += uint96(treasuryFeeShares);
-            }
-
-            IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
+        VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
+        uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
+        if (_fees < socket.lastFees) {
+            revert InvalidFees(_vault, _fees, socket.lastFees);
         }
+        newMintedShares += _fees - socket.lastFees;
+        socket.sharesMinted = uint96(newMintedShares);
+        socket.lastFees = uint96(_fees);
 
-        uint256 length = $.sockets.length;
+        uint256 lockedEther = Math256.max(
+            LIDO.getPooledEthBySharesRoundUp(newMintedShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
+            CONNECT_DEPOSIT
+        );
 
-        for (uint256 i = 1; i < length; i++) {
-            VaultSocket storage socket = $.sockets[i];
-            if (socket.pendingDisconnect) {
-                // remove disconnected vault from the list
-                VaultSocket memory lastSocket = $.sockets[length - 1];
-                $.sockets[i] = lastSocket;
-                $.vaultIndex[lastSocket.vault] = i;
-                $.sockets.pop(); // TODO: replace with length--
-                delete $.vaultIndex[socket.vault];
-                --length;
-            }
-        }
+        IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
     }
+
+    // function updateVaults(
+    //     uint256[] memory _valuations,
+    //     int256[] memory _inOutDeltas,
+    //     uint256[] memory _locked,
+    //     uint256[] memory _treasureFeeShares
+    // ) external {
+    //     if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
+    //     VaultHubStorage storage $ = _getVaultHubStorage();
+
+    //     for (uint256 i = 0; i < _valuations.length; i++) {
+    //         VaultSocket storage socket = $.sockets[i + 1];
+
+    //         if (socket.pendingDisconnect) continue; // we skip disconnected vaults
+
+    //         uint256 treasuryFeeShares = _treasureFeeShares[i];
+    //         if (treasuryFeeShares > 0) {
+    //             socket.sharesMinted += uint96(treasuryFeeShares);
+    //         }
+
+    //         IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
+    //     }
+
+    //     uint256 length = $.sockets.length;
+
+    //     for (uint256 i = 1; i < length; i++) {
+    //         VaultSocket storage socket = $.sockets[i];
+    //         if (socket.pendingDisconnect) {
+    //             // remove disconnected vault from the list
+    //             VaultSocket memory lastSocket = $.sockets[length - 1];
+    //             $.sockets[i] = lastSocket;
+    //             $.vaultIndex[lastSocket.vault] = i;
+    //             $.sockets.pop(); // TODO: replace with length--
+    //             delete $.vaultIndex[socket.vault];
+    //             --length;
+    //         }
+    //     }
+    // }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
         if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
@@ -641,4 +689,6 @@ contract VaultHub is PausableUntilWithRoles {
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
+    error InvalidProof();
+    error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
 }

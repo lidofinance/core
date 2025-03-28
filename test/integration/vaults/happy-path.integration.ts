@@ -366,8 +366,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const params = {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
-      vaultValues: [vaultValue],
-      inOutDeltas: [VAULT_DEPOSIT],
+      vaultsTotalTreasuryFees: vaultValue,
     } as OracleReportParams;
 
     const { reportTx } = (await report(ctx, params)) as {

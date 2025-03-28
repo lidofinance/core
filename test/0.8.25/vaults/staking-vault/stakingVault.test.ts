@@ -19,6 +19,7 @@ import {
   deployEIP7002WithdrawalRequestContract,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
+  getCurrentBlockTimestamp,
   impersonate,
   MAX_UINT256,
   proxify,
@@ -65,6 +66,7 @@ describe("StakingVault.sol", () => {
   let vaultHub: VaultHub__MockForStakingVault;
   let withdrawalRequestContract: EIP7002WithdrawalRequest__Mock;
   let ethRejector: EthRejector;
+  let stakingVaultTimestamp: bigint;
 
   let vaultOwnerAddress: string;
   let stakingVaultAddress: string;
@@ -79,6 +81,7 @@ describe("StakingVault.sol", () => {
     ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
       await deployStakingVaultBehindBeaconProxy(vaultOwner, operator, depositor));
 
+    stakingVaultTimestamp = (await stakingVault.latestReport())[2];
     withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -157,7 +160,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
-      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n]);
+      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n, stakingVaultTimestamp]);
       expect(await stakingVault.nodeOperator()).to.equal(operator);
       expect((await stakingVault.withdrawalCredentials()).toLowerCase()).to.equal(
         ("0x02" + "00".repeat(11) + de0x(stakingVaultAddress)).toLowerCase(),
@@ -212,12 +215,12 @@ describe("StakingVault.sol", () => {
 
   context("latestReport", () => {
     it("returns zeros initially", async () => {
-      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n]);
+      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n, stakingVaultTimestamp]);
     });
 
     it("returns the latest report", async () => {
-      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("0"));
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
+      await stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("2"), ether("0"));
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), 0n]);
     });
   });
 
@@ -357,7 +360,9 @@ describe("StakingVault.sol", () => {
 
     it("makes inOutDelta negative if withdrawals are greater than deposits (after rewards)", async () => {
       const valuation = ether("10");
-      await stakingVault.connect(vaultHubSigner).report(valuation, ether("0"), ether("0"));
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), valuation, ether("0"), ether("0"));
       expect(await stakingVault.valuation()).to.equal(valuation);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
 
@@ -453,7 +458,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("can be called by the vault hub when the vault is unhealthy", async () => {
-      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("0.1"), ether("1.1"));
       expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: ether("0.1") });
@@ -469,17 +476,17 @@ describe("StakingVault.sol", () => {
 
   context("report", () => {
     it("reverts if the caller is not the vault hub", async () => {
-      await expect(stakingVault.connect(stranger).report(ether("1"), ether("2"), ether("3")))
+      await expect(stakingVault.connect(stranger).report(0n, ether("1"), ether("2"), ether("3")))
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("report", stranger);
     });
 
     it("updates the state and emits the Reported event", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
+      await expect(stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "Reported")
-        .withArgs(ether("1"), ether("2"), ether("3"));
+        .withArgs(0n, ether("1"), ether("2"), ether("3"));
 
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), 0n]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
     });
   });
@@ -795,7 +802,9 @@ describe("StakingVault.sol", () => {
 
     it("reverts if partial withdrawals is called on an unhealthy vault", async () => {
       await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("0.9"), ether("1"), ether("1.1")); // slashing
 
       await expect(
         stakingVault
@@ -922,7 +931,9 @@ describe("StakingVault.sol", () => {
 
     it("requests a validator withdrawal if called by the vault hub on an unhealthy vault", async () => {
       await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("0.9"), ether("1"), ether("1.1")); // slashing
 
       await expect(
         stakingVault

@@ -18,6 +18,7 @@ interface IStakingVault {
     struct Report {
         uint128 valuation;
         int128 inOutDelta;
+        uint64 timestamp;
     }
 
     struct Deposit {
@@ -43,7 +44,7 @@ interface IStakingVault {
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
     function latestReport() external view returns (Report memory);
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
     function withdrawalCredentials() external view returns (bytes32);
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
