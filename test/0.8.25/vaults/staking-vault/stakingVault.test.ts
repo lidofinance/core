@@ -96,28 +96,12 @@ describe("StakingVault.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("sets the vault hub address in the implementation", async () => {
-      expect(await stakingVaultImplementation.vaultHub()).to.equal(vaultHubAddress);
-    });
-
     it("sets the deposit contract address in the implementation", async () => {
       expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
     });
 
-    it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositor, depositContractAddress]))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_vaultHub");
-    });
-
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress, depositContractAddress]))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_depositor");
-    });
-
-    it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, depositor, ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -131,16 +115,29 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, vaultHubAddress, depositor, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
-        stakingVaultImplementation,
-        "ZeroArgument",
-      );
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, vaultHubAddress, depositor, "0x"))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_nodeOperator");
+    });
+
+    it("reverts if the `_vaultHub` is zero address", async () => {
+      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
+      await expect(vault_.initialize(vaultOwner, operator, ZeroAddress, depositor, "0x"))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_vaultHub");
+    });
+
+    it("reverts if the `_depositor` is zero address", async () => {
+      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
+      await expect(vault_.initialize(vaultOwner, operator, vaultHubAddress, ZeroAddress, "0x"))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_depositor");
     });
   });
 

@@ -70,8 +70,7 @@ describe("Permissions", () => {
 
     // 3. Deploy StakingVault implementation
     // TODO: PDG harness
-    stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, nodeOperator, depositContract]);
-    expect(await stakingVaultImpl.vaultHub()).to.equal(vaultHub);
+    stakingVaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
     expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
     // 4. Deploy Beacon and use StakingVault implementation as initial implementation
@@ -84,6 +83,7 @@ describe("Permissions", () => {
     vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [
       beacon,
       permissionsImpl,
+      vaultHub,
       depositContract,
     ]);
 
@@ -125,6 +125,7 @@ describe("Permissions", () => {
     // 10. Check that StakingVault is initialized properly
     expect(await stakingVault.owner()).to.equal(permissions);
     expect(await stakingVault.nodeOperator()).to.equal(nodeOperator);
+    expect(await stakingVault.vaultHub()).to.equal(vaultHub);
 
     // 11. Check events
     expect(vaultCreatedEvent.args.owner).to.equal(permissions);

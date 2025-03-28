@@ -188,6 +188,8 @@ contract VaultHub is PausableUntilWithRoles {
             revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
+        if (IStakingVault(_vault).vaultHub() != address(this)) revert InvalidVaultHubAddress(_vault, IStakingVault(_vault).vaultHub());
+        if (IStakingVault(_vault).isOssified()) revert VaultIsOssified(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -555,7 +557,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
 
         for (uint256 i = 1; i < length; i++) {
-            VaultSocket storage socket = $.sockets[i];
+            VaultSocket memory socket = $.sockets[i];
             if (socket.pendingDisconnect) {
                 // remove disconnected vault from the list
                 VaultSocket memory lastSocket = $.sockets[length - 1];
@@ -641,4 +643,6 @@ contract VaultHub is PausableUntilWithRoles {
     error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
+    error InvalidVaultHubAddress(address vault, address vaultHub);
+    error VaultIsOssified(address vault);
 }

@@ -13,16 +13,13 @@ export async function main() {
 
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
+  const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
-    vaultHubAddress,
-    state[Sk.predepositGuarantee].proxy.address,
-    depositContract,
-  ]);
+  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [depositContract]);
   const impAddress = await imp.getAddress();
 
   // Deploy Delegation implementation contract
@@ -37,7 +34,7 @@ export async function main() {
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
-  const vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beaconAddress, "0x"]);
+  const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beaconAddress, "0x"]);
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
@@ -47,6 +44,8 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     beaconAddress,
     delegationAddress,
+    vaultHubAddress,
+    predepositGuaranteeAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 

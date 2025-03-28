@@ -4,11 +4,11 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Delegation} from "./Delegation.sol";
+import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 struct DelegationConfig {
     address defaultAdmin;
@@ -32,15 +32,21 @@ struct DelegationConfig {
 contract VaultFactory {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
+    address public immutable VAULT_HUB;
+    address public immutable DEPOSITOR;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl) {
+    constructor(address _beacon, address _delegationImpl, address _vaultHub, address _depositor) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
+        VAULT_HUB = _vaultHub;
+        DEPOSITOR = _depositor;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -51,7 +57,7 @@ contract VaultFactory {
         bytes calldata _stakingVaultInitializerExtraParams
     ) external returns (IStakingVault vault, Delegation delegation) {
         // create StakingVault
-        vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
 
         // create Delegation
         bytes memory immutableArgs = abi.encode(vault);
@@ -61,6 +67,8 @@ contract VaultFactory {
         vault.initialize(
             address(delegation),
             _delegationConfig.nodeOperatorManager,
+            VAULT_HUB,
+            DEPOSITOR,
             _stakingVaultInitializerExtraParams
         );
 
