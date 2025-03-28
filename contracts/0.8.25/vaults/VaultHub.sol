@@ -165,7 +165,8 @@ contract VaultHub is PausableUntilWithRoles {
     function batchVaultsInfo() external view returns (VaultInfo[] memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         VaultInfo[] memory batch = new VaultInfo[]($.sockets.length - 1);
-        for (uint256 i = 0; i < $.sockets.length - 1; i++) {
+        uint256 length = $.sockets.length - 1;
+        for (uint256 i = 0; i < length; i++) {
             VaultSocket memory socket = $.sockets[i + 1];
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
