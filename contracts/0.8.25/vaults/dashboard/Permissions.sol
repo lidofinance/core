@@ -15,11 +15,11 @@ import {VaultHub} from "../VaultHub.sol";
 /**
  * @title Permissions
  * @author Lido
- * @notice Provides granular permissions for StakingVault operations.
+ * @notice Granular role-based access control layer for StakingVault operations
  */
 abstract contract Permissions is AccessControlConfirmable {
     /**
-     * @notice Struct containing an account and a role for granting/revoking roles.
+     * @notice An account-role pair for batch role management
      */
     struct RoleAssignment {
         address account;
@@ -27,85 +27,83 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @notice Permission for funding the StakingVault.
+     * @notice Role for funding the StakingVault
      */
     bytes32 public constant FUND_ROLE = keccak256("vaults.Permissions.Fund");
 
     /**
-     * @notice Permission for withdrawing funds from the StakingVault.
+     * @notice Role for withdrawing ether from the StakingVault
      */
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
 
     /**
-     * @notice Permission for minting stETH shares backed by the StakingVault.
+     * @notice Role for minting stETH backed by the StakingVault
      */
     bytes32 public constant MINT_ROLE = keccak256("vaults.Permissions.Mint");
 
     /**
-     * @notice Permission for burning stETH shares backed by the StakingVault.
+     * @notice Role for burning stETH backed by the StakingVault
      */
     bytes32 public constant BURN_ROLE = keccak256("vaults.Permissions.Burn");
 
     /**
-     * @notice Permission for rebalancing the StakingVault.
+     * @notice Role for rebalancing the StakingVault
      */
     bytes32 public constant REBALANCE_ROLE = keccak256("vaults.Permissions.Rebalance");
 
     /**
-     * @notice Permission for pausing beacon chain deposits on the StakingVault.
+     * @notice Role for pausing beacon chain deposits
      */
     bytes32 public constant PAUSE_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.PauseDeposits");
 
     /**
-     * @notice Permission for resuming beacon chain deposits on the StakingVault.
+     * @notice Role for resuming beacon chain deposits
      */
     bytes32 public constant RESUME_BEACON_CHAIN_DEPOSITS_ROLE = keccak256("vaults.Permissions.ResumeDeposits");
 
     /**
-     * @notice Permission for requesting validator exit from the StakingVault.
+     * @notice Role for requesting validator exit from the beacon chain
      */
     bytes32 public constant REQUEST_VALIDATOR_EXIT_ROLE = keccak256("vaults.Permissions.RequestValidatorExit");
 
     /**
-     * @notice Permission for triggering validator withdrawal from the StakingVault using EIP-7002 triggerable exit.
+     * @notice Role for triggering validator withdrawal using EIP-7002
      */
     bytes32 public constant TRIGGER_VALIDATOR_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.TriggerValWithdrawal");
 
     /**
-     * @notice Permission for voluntary disconnecting the StakingVault.
+     * @notice Role for voluntary disconnecting the StakingVault from the VaultHub
      */
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for withdrawing disproven validator predeposit from PDG
+     * @notice Role for withdrawing disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
 
     /**
-     * @notice Permission for assets recovery
+     * @notice Role for emergency asset recovery operations
      */
     bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
 
-
     /**
-     * @notice Returns the address of the underlying StakingVault.
-     * @return The address of the StakingVault.
+     * @notice Returns the address of the underlying StakingVault
      */
     function stakingVault() public view virtual returns (IStakingVault);
 
     /**
-     * @notice Returns the address of the VaultHub contract.
-     * @return The address of the VaultHub contract.
+     * @notice Returns the address of the VaultHub
      */
     function vaultHub() public view virtual returns (VaultHub);
 
     // ==================== Role Management Functions ====================
 
     /**
-     * @notice Mass-grants multiple roles to multiple accounts.
-     * @param _assignments An array of role assignments.
-     * @dev Performs the role admin checks internally.
-     * @dev If an account is already a member of a role, doesn't revert, emits no events.
+     * @notice Batch grants multiple roles to multiple accounts in a single transaction
+     * @param _assignments Array of role-account pairs to grant
+     * @dev Gas-efficient way to grant roles to multiple accounts;
+     *      each assignment is checked against role admin requirements;
+     *      silently skips accounts that already have the specified role
      */
     function grantRoles(RoleAssignment[] memory _assignments) public {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
@@ -116,10 +114,11 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @notice Mass-revokes multiple roles from multiple accounts.
-     * @param _assignments An array of role assignments.
-     * @dev Performs the role admin checks internally.
-     * @dev If an account is not a member of a role, doesn't revert, emits no events.
+     * @notice Batch revokes multiple roles from multiple accounts in a single transaction
+     * @param _assignments Array of role-account pairs to revoke
+     * @dev Gas-efficient way to remove roles from multiple accounts;
+     *      each revocation is checked against role admin requirements;
+     *      silently skips accounts that don't have the specified role
      */
     function revokeRoles(RoleAssignment[] memory _assignments) external {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
@@ -130,86 +129,80 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Returns an array of roles that need to confirm the call
-     *      used for the `onlyConfirmed` modifier.
-     *      At this level, only the DEFAULT_ADMIN_ROLE is needed to confirm the call
-     *      but in inherited contracts, the function can be overridden to add more roles,
-     *      which are introduced further in the inheritance chain.
-     * @return The roles that need to confirm the call.
+     * @notice Returns roles that must confirm sensitive operations
+     * @return Array of role identifiers required for confirmation
      */
     function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
-     * @dev Checks the FUND_ROLE and funds the StakingVault.
-     * @param _ether The amount of ether to fund the StakingVault with.
+     * @notice Funds the StakingVault with ETH
+     * @param _ether Amount of ETH in wei to send to the vault
      */
     function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
         stakingVault().fund{value: _ether}();
     }
 
     /**
-     * @dev Checks the WITHDRAW_ROLE and withdraws funds from the StakingVault.
-     * @param _recipient The address to withdraw the funds to.
-     * @param _ether The amount of ether to withdraw from the StakingVault.
-     * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
+     * @notice Withdraws ETH from the StakingVault to a specified recipient
+     * @param _recipient Address to receive the withdrawn ETH
+     * @param _ether Amount of ETH in wei to withdraw
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
         stakingVault().withdraw(_recipient, _ether);
     }
 
     /**
-     * @dev Checks the MINT_ROLE and mints shares backed by the StakingVault.
-     * @param _recipient The address to mint the shares to.
-     * @param _shares The amount of shares to mint.
-     * @dev The zero checks for parameters are performed in the VaultHub contract.
+     * @notice Mints stETH shares backed by the underlying StakingVault
+     * @param _recipient Address to receive the newly minted shares
+     * @param _shares Amount of shares to mint
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
         vaultHub().mintShares(address(stakingVault()), _recipient, _shares);
     }
 
     /**
-     * @dev Checks the BURN_ROLE and burns shares backed by the StakingVault.
-     * @param _shares The amount of shares to burn.
-     * @dev The zero check for parameters is performed in the VaultHub contract.
+     * @notice Burns stETH shares backed by the underlying StakingVault
+     * @param _shares Amount of shares to burn
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
         vaultHub().burnShares(address(stakingVault()), _shares);
     }
 
     /**
-     * @dev Checks the REBALANCE_ROLE and rebalances the StakingVault.
-     * @param _ether The amount of ether to rebalance the StakingVault with.
-     * @dev The zero check for parameters is performed in the StakingVault contract.
+     * @notice Rebalances the underlying StakingVault
+     * @param _ether Amount of ETH in wei to use for rebalancing
      */
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
         stakingVault().rebalance(_ether);
     }
 
     /**
-     * @dev Checks the PAUSE_BEACON_CHAIN_DEPOSITS_ROLE and pauses beacon chain deposits on the StakingVault.
+     * @notice Pauses new validator deposits to the beacon chain
      */
     function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
         stakingVault().pauseBeaconChainDeposits();
     }
 
     /**
-     * @dev Checks the RESUME_BEACON_CHAIN_DEPOSITS_ROLE and resumes beacon chain deposits on the StakingVault.
+     * @notice Resumes validator deposits to the beacon chain
      */
     function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
         stakingVault().resumeBeaconChainDeposits();
     }
 
     /**
-     * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
-     * @dev The zero check for _pubkeys is performed in the StakingVault contract.
+     * @notice Submits exit requests for specific validators by public key
+     * @param _pubkeys Concatenated validator public keys (each 48 bytes)
      */
     function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
         stakingVault().requestValidatorExit(_pubkeys);
     }
 
     /**
-     * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
-     * @dev The zero checks for parameters are performed in the StakingVault contract.
+     * @notice Triggers validator withdrawal using EIP-7002 mechanism
+     * @param _pubkeys Concatenated validator public keys (each 48 bytes)
+     * @param _amounts Array of ETH amounts to trigger withdrawal for
+     * @param _refundRecipient Address to receive any refund
      */
     function _triggerValidatorWithdrawal(
         bytes calldata _pubkeys,
@@ -220,12 +213,18 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
+     * @notice Voluntarily disconnects the StakingVault from the VaultHub
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
         vaultHub().voluntaryDisconnect(address(stakingVault()));
     }
 
+    /**
+     * @notice Recovers ETH from disproven validator predeposits
+     * @param _pubkey Public key of the validator with disproven predeposit
+     * @param _recipient Address to receive the recovered ETH
+     * @return Amount of ETH recovered
+     */
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
@@ -234,17 +233,16 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the confirming roles and transfers the StakingVault ownership.
-     * @param _newOwner The address to transfer the StakingVault ownership to.
+     * @notice Transfers ownership of the StakingVault to a new owner
+     * @param _newOwner Address of the new owner
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
-
     /**
-     * @notice Error thrown for when a given value cannot be zero
-     * @param argument Name of the argument
+     * @notice Error thrown when a required parameter is zero or empty
+     * @param argument Name of the parameter that cannot be zero/empty
      */
     error ZeroArgument(string argument);
 }
