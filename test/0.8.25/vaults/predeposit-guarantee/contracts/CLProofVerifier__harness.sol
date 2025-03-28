@@ -3,8 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
-import {CLProofVerifier, SSZ, GIndex} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
+import {CLProofVerifier, GIndex} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
 
 contract CLProofVerifier__Harness is CLProofVerifier {
     constructor(
@@ -24,7 +23,7 @@ contract CLProofVerifier__Harness is CLProofVerifier {
         return _getParentBlockRoot(parentBlockTimestamp);
     }
 
-    function TEST_getValidatorGI(uint256 offset) public view returns (GIndex) {
-        return GI_FIRST_VALIDATOR.shr(offset);
+    function TEST_getValidatorGI(uint256 offset, uint64 slot) public view returns (GIndex) {
+        return _getValidatorGI(offset, slot);
     }
 }
