@@ -54,7 +54,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     struct VaultInfo {
-        uint256 index;
         address vault;
         uint256 balance;
         int256 inOutDelta;
@@ -161,18 +160,20 @@ contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
+    /// @notice returns batch of vaults info. To be used in Oracle
+    /// @return batch of vaults info
     function batchVaultsInfo() external view returns (VaultInfo[] memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         VaultInfo[] memory batch = new VaultInfo[]($.sockets.length - 1);
         for (uint256 i = 0; i < $.sockets.length - 1; i++) {
-            IStakingVault currentVault = IStakingVault($.sockets[i + 1].vault);
+            VaultSocket memory socket = $.sockets[i + 1];
+            IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
-                i,
-                $.sockets[i + 1].vault,
-                $.sockets[i + 1].vault.balance,
+                socket.vault,
+                socket.vault.balance,
                 currentVault.inOutDelta(),
                 currentVault.withdrawalCredentials(),
-                $.sockets[i + 1].sharesMinted
+                socket.sharesMinted
             );
         }
         return batch;
