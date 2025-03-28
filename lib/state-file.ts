@@ -95,6 +95,7 @@ export enum Sk {
   stakingVaultFactory = "stakingVaultFactory",
   delegationImpl = "delegationImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  operatorGrid = "operatorGrid",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -141,6 +142,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.depositContract:
     case Sk.accounting:
     case Sk.tokenRebaseNotifier:
+    case Sk.operatorGrid:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

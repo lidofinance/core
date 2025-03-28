@@ -7,6 +7,8 @@ pragma solidity 0.8.25;
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
+import {VaultHub} from "./VaultHub.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Delegation} from "./Delegation.sol";
 
@@ -32,15 +34,18 @@ struct DelegationConfig {
 contract VaultFactory {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
+    OperatorGrid public immutable OPERATOR_GRID;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl) {
+    constructor(address _beacon, address _delegationImpl, address _operatorGrid) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_operatorGrid == address(0)) revert ZeroArgument("_operatorGrid");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
+        OPERATOR_GRID = OperatorGrid(_operatorGrid);
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -63,6 +68,8 @@ contract VaultFactory {
             _delegationConfig.nodeOperatorManager,
             _stakingVaultInitializerExtraParams
         );
+        OPERATOR_GRID.registerVault(address(vault));
+        VaultHub(vault.vaultHub()).connectVault(address(vault));
 
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmExpiry);

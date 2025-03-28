@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -77,6 +78,8 @@ contract VaultHub is PausableUntilWithRoles {
     ILido public immutable LIDO;
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
+    /// @notice OperatorGrid contract
+    OperatorGrid public immutable OPERATOR_GRID;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
@@ -85,6 +88,7 @@ contract VaultHub is PausableUntilWithRoles {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
+        OperatorGrid _operatorGrid,
         uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
     ) {
@@ -95,6 +99,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
+        OPERATOR_GRID = _operatorGrid;
         CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
@@ -165,21 +170,29 @@ contract VaultHub is PausableUntilWithRoles {
                 TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
     }
 
+    function connectVault(address _vault) external {
+        (
+            uint256 shareLimit,
+            uint256 reserveRatioBP,
+            uint256 reserveRatioThresholdBP,
+            uint256 treasuryFeeBP
+        ) = OPERATOR_GRID.getVaultLimits(_vault);
+        _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
+    }
+
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
     /// @param _rebalanceThresholdBP threshold to force rebalance on the vault in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function connectVault(
+    function _connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _rebalanceThresholdBP,
         uint256 _treasuryFeeBP
-    ) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+    ) internal {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
@@ -289,6 +302,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
+        OPERATOR_GRID.mintShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -311,6 +325,7 @@ contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
+        OPERATOR_GRID.burnShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
