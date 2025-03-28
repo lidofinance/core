@@ -227,7 +227,7 @@ describe("Delegation.sol", () => {
 
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
-      expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n]);
+      expect(await delegation.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n, 0n]);
     });
   });
 
