@@ -53,6 +53,14 @@ contract VaultHub is PausableUntilWithRoles {
         /// uint104 _unused_gap_;
     }
 
+    struct VaultInfo {
+        address vault;
+        uint256 balance;
+        int256 inOutDelta;
+        bytes32 withdrawalCredentials;
+        uint256 sharesMinted;
+    }
+
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
@@ -150,6 +158,26 @@ contract VaultHub is PausableUntilWithRoles {
     function vaultSocket(address _vault) external view returns (VaultSocket memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         return $.sockets[$.vaultIndex[_vault]];
+    }
+
+    /// @notice returns batch of vaults info. To be used in Oracle
+    /// @return batch of vaults info
+    function batchVaultsInfo() external view returns (VaultInfo[] memory) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        uint256 length = $.sockets.length - 1;
+        VaultInfo[] memory batch = new VaultInfo[](length);
+        for (uint256 i = 0; i < length; i++) {
+            VaultSocket memory socket = $.sockets[i + 1];
+            IStakingVault currentVault = IStakingVault(socket.vault);
+            batch[i] = VaultInfo(
+                socket.vault,
+                socket.vault.balance,
+                currentVault.inOutDelta(),
+                currentVault.withdrawalCredentials(),
+                socket.sharesMinted
+            );
+        }
+        return batch;
     }
 
     /// @notice checks if the vault is healthy by comparing its projected valuation after applying rebalance threshold
