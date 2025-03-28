@@ -1,19 +1,8 @@
-import { BaseContract, BytesLike, ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { BaseContract, BytesLike } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  BeaconProxy,
-  Delegation,
-  OssifiableProxy,
-  OssifiableProxy__factory,
-  StakingVault,
-  VaultFactory,
-} from "typechain-types";
-import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
-
-import { findEventsWithInterfaces } from "lib";
+import { OssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -38,46 +27,46 @@ export async function proxify<T extends BaseContract>({
   return [proxied, proxy];
 }
 
-interface CreateVaultResponse {
-  tx: ContractTransactionResponse;
-  proxy: BeaconProxy;
-  vault: StakingVault;
-  delegation: Delegation;
-}
+// interface CreateVaultResponse {
+//   tx: ContractTransactionResponse;
+//   proxy: BeaconProxy;
+//   vault: StakingVault;
+//   delegation: Delegation;
+// }
 
-export async function createVaultProxy(
-  caller: HardhatEthersSigner,
-  vaultFactory: VaultFactory,
-  delegationParams: DelegationConfigStruct,
-  stakingVaultInitializerExtraParams: BytesLike = "0x",
-): Promise<CreateVaultResponse> {
-  const tx = await vaultFactory
-    .connect(caller)
-    .createVaultWithDelegation(delegationParams, stakingVaultInitializerExtraParams);
+// export async function createVaultProxy(
+//   caller: HardhatEthersSigner,
+//   vaultFactory: VaultFactory,
+//   delegationParams: DelegationConfigStruct,
+//   stakingVaultInitializerExtraParams: BytesLike = "0x",
+// ): Promise<CreateVaultResponse> {
+//   const tx = await vaultFactory
+//     .connect(caller)
+//     .createVaultWithDelegation(delegationParams, stakingVaultInitializerExtraParams);
 
-  // Get the receipt manually
-  const receipt = (await tx.wait())!;
-  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+//   // Get the receipt manually
+//   const receipt = (await tx.wait())!;
+//   const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
 
-  if (events.length === 0) throw new Error("Vault creation event not found");
+//   if (events.length === 0) throw new Error("Vault creation event not found");
 
-  const event = events[0];
-  const { vault } = event.args;
+//   const event = events[0];
+//   const { vault } = event.args;
 
-  const delegationEvents = findEventsWithInterfaces(receipt, "DelegationCreated", [vaultFactory.interface]);
+//   const delegationEvents = findEventsWithInterfaces(receipt, "DelegationCreated", [vaultFactory.interface]);
 
-  if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
+//   if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
 
-  const { delegation: delegationAddress } = delegationEvents[0].args;
+//   const { delegation: delegationAddress } = delegationEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("BeaconProxy", vault, caller)) as BeaconProxy;
-  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
-  const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
+//   const proxy = (await ethers.getContractAt("BeaconProxy", vault, caller)) as BeaconProxy;
+//   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+//   const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
 
-  return {
-    tx,
-    proxy,
-    vault: stakingVault,
-    delegation,
-  };
-}
+//   return {
+//     tx,
+//     proxy,
+//     vault: stakingVault,
+//     delegation,
+//   };
+// }

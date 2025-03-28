@@ -8,123 +8,47 @@ import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {Delegation} from "./delegation/Delegation.sol";
-
-struct DelegationConfig {
-    address defaultAdmin;
-    address nodeOperatorManager;
-    address assetRecoverer;
-    uint256 confirmExpiry;
-    uint16 nodeOperatorFeeBP;
-    address[] funders;
-    address[] withdrawers;
-    address[] minters;
-    address[] burners;
-    address[] rebalancers;
-    address[] depositPausers;
-    address[] depositResumers;
-    address[] validatorExitRequesters;
-    address[] validatorWithdrawalTriggerers;
-    address[] disconnecters;
-    address[] nodeOperatorFeeClaimers;
-}
+import {Dashboard} from "./dashboard/Dashboard.sol";
 
 contract VaultFactory {
     address public immutable BEACON;
-    address public immutable DELEGATION_IMPL;
+    address public immutable DASHBOARD_IMPL;
 
     /// @param _beacon The address of the beacon contract
-    /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl) {
+    /// @param _dashboardImpl The address of the Dashboard implementation
+    constructor(address _beacon, address _dashboardImpl) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
-        if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
 
         BEACON = _beacon;
-        DELEGATION_IMPL = _delegationImpl;
+        DASHBOARD_IMPL = _dashboardImpl;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
-    /// @param _delegationConfig The params of delegation initialization
-    /// @param _stakingVaultInitializerExtraParams The params of vault initialization
-    function createVaultWithDelegation(
-        DelegationConfig calldata _delegationConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
-    ) external returns (IStakingVault vault, Delegation delegation) {
-        // create StakingVault
+    /// @param _defaultAdmin The address of the default admin
+    /// @param _nodeOperator The address of the node operator
+    /// @param _extraParams The params of vault creation
+    /// @param _nodeOperatorManager The address of the node operator manager
+    /// @param _nodeOperatorFeeBP The node operator fee in basis points
+    /// @param _confirmExpiry The confirmation expiry
+    function createVaultWithDashboard(
+        address _defaultAdmin,
+        address _nodeOperator,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry,
+        bytes calldata _extraParams
+    ) external returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
 
-        // create Delegation
         bytes memory immutableArgs = abi.encode(vault);
-        delegation = Delegation(payable(Clones.cloneWithImmutableArgs(DELEGATION_IMPL, immutableArgs)));
+        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        // initialize StakingVault
-        vault.initialize(
-            address(delegation),
-            _delegationConfig.nodeOperatorManager,
-            _stakingVaultInitializerExtraParams
-        );
+        vault.initialize(address(dashboard), _nodeOperator, _extraParams);
+        dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        // initialize Delegation
-        // delegation.initialize(address(this), _delegationConfig.confirmExpiry);
-
-        // setup roles from config
-        // basic permissions to the staking vault
-        delegation.grantRole(delegation.DEFAULT_ADMIN_ROLE(), _delegationConfig.defaultAdmin);
-        delegation.grantRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), _delegationConfig.nodeOperatorManager);
-        delegation.grantRole(delegation.ASSET_RECOVERY_ROLE(), _delegationConfig.assetRecoverer);
-
-        for (uint256 i = 0; i < _delegationConfig.funders.length; i++) {
-            delegation.grantRole(delegation.FUND_ROLE(), _delegationConfig.funders[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.withdrawers.length; i++) {
-            delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawers[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.minters.length; i++) {
-            delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minters[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.burners.length; i++) {
-            delegation.grantRole(delegation.BURN_ROLE(), _delegationConfig.burners[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.rebalancers.length; i++) {
-            delegation.grantRole(delegation.REBALANCE_ROLE(), _delegationConfig.rebalancers[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.depositPausers.length; i++) {
-            delegation.grantRole(delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositPausers[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
-            delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
-            delegation.grantRole(
-                delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
-                _delegationConfig.validatorExitRequesters[i]
-            );
-        }
-        for (uint256 i = 0; i < _delegationConfig.validatorWithdrawalTriggerers.length; i++) {
-            delegation.grantRole(
-                delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-                _delegationConfig.validatorWithdrawalTriggerers[i]
-            );
-        }
-        for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
-            delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
-            delegation.grantRole(
-                delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-                _delegationConfig.nodeOperatorFeeClaimers[i]
-            );
-        }
-
-        // set fees
-        delegation.setNodeOperatorFeeBP(_delegationConfig.nodeOperatorFeeBP);
-
-        // revoke temporary roles from factory
-        delegation.revokeRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
-        delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
-
-        emit VaultCreated(address(delegation), address(vault));
-        emit DelegationCreated(_delegationConfig.defaultAdmin, address(delegation));
+        emit VaultCreated(address(dashboard), address(vault));
+        emit DashboardCreated(_defaultAdmin, address(dashboard));
     }
 
     /**
@@ -135,11 +59,11 @@ contract VaultFactory {
     event VaultCreated(address indexed owner, address indexed vault);
 
     /**
-     * @notice Event emitted on a Delegation creation
-     * @param admin The address of the Delegation admin
-     * @param delegation The address of the created Delegation
+     * @notice Event emitted on a Dashboard creation
+     * @param admin The address of the Dashboard admin
+     * @param dashboard The address of the created Dashboard
      */
-    event DelegationCreated(address indexed admin, address indexed delegation);
+    event DashboardCreated(address indexed admin, address indexed dashboard);
 
     /**
      * @notice Error thrown for when a given value cannot be zero

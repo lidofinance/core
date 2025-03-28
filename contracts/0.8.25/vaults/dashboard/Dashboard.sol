@@ -87,12 +87,12 @@ contract Dashboard is Delegation {
     }
 
 
-    function initialize(InitializationConfig memory _config) public override {
+    function initialize(address _defaultAdmin, address _nodeOperatorManager, uint256 _nodeOperatorFeeBP, uint256 _confirmExpiry) public override {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        super.initialize(_config);
+        super.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
     }
 
     // ==================== View Functions ====================

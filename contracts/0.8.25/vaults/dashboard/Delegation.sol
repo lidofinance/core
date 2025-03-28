@@ -16,12 +16,11 @@ import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
  * @notice This contract is a contract-owner of StakingVault and includes an additional delegation layer.
  */
 contract Delegation is Permissions {
-    struct InitializationConfig {
+    struct InitParams {
         address defaultAdmin;
         address nodeOperatorManager;
         uint256 nodeOperatorFeeBP;
         uint256 confirmExpiry;
-        RoleAssignment[] additionalRoles;
     }
 
     /**
@@ -73,27 +72,31 @@ contract Delegation is Permissions {
         _SELF = address(this);
     }
 
-    function initialize(InitializationConfig memory _config) public virtual {
+    function initialize(
+        address _defaultAdmin,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry
+    ) public virtual {
         if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
-        if (_config.defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
-        if (_config.nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
-        if (_config.nodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
+        if (_nodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
 
         initialized = true;
 
-        for (uint256 i = 0; i < _config.additionalRoles.length; i++) {
-            RoleAssignment memory roleAssignment = _config.additionalRoles[i];
-            _grantRole(roleAssignment.role, roleAssignment.account);
-        }
+        nodeOperatorFeeBP = _nodeOperatorFeeBP;
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _config.defaultAdmin);
-        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _config.nodeOperatorManager);
+        _setConfirmExpiry(_confirmExpiry);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
+
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setConfirmExpiry(_config.confirmExpiry);
 
-        emit Initialized(_config.defaultAdmin);
+        emit Initialized(_defaultAdmin);
     }
 
     function stakingVault() public view override returns (IStakingVault) {
