@@ -18,10 +18,16 @@ import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondO
 import {WithdrawalQueue, IWstETH} from "../../contracts/0.8.9/WithdrawalQueue.sol";
 import {WithdrawalQueueERC721} from "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 
+/**
+ * @title Interface for VaultHub
+ */
 interface IVaultHub {
     function initialize(address _admin) external;
 }
 
+/**
+ * @title Stake Limit State Data Structure
+ */
 struct StakeLimitStateData {
     uint32 prevStakeBlockNumber; // block number of the previous stake submit
     uint96 prevStakeLimit; // limit value (<= `maxStakeLimit`) obtained on the previous stake submit
@@ -29,29 +35,21 @@ struct StakeLimitStateData {
     uint96 maxStakeLimit; // maximum limit value
 }
 
+/**
+ * @title Interface for Lido contract
+ */
 interface ILido {
     function getTotalShares() external view returns (uint256);
-
     function getExternalShares() external view returns (uint256);
-
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external;
-
     function burnExternalShares(uint256 _amountOfShares) external;
-
     function setMaxExternalRatioBP(uint256 _maxExternalRatioBP) external;
-
     function initialize(address _lidoLocator, address _eip712StETH) external payable;
-
     function resumeStaking() external;
-
     function resume() external;
-
     function setStakingLimit(uint256 _maxStakeLimit, uint256 _stakeLimitIncreasePerBlock) external;
-
     function transfer(address _recipient, uint256 _amount) external returns (bool);
-
     function submit(address _referral) external payable returns (uint256);
-
     function getStakeLimitFullInfo()
         external
         view
@@ -64,14 +62,15 @@ interface ILido {
             uint256 prevStakeLimit,
             uint256 prevStakeBlockNumber
         );
-
     function approve(address _spender, uint256 _amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
 }
 
+/**
+ * @title Interface for Aragon Kernel
+ */
 interface IKernel {
     function acl() external view returns (IACL);
-
     function newAppInstance(
         bytes32 _appId,
         address _appBase,
@@ -80,19 +79,28 @@ interface IKernel {
     ) external;
 }
 
+/**
+ * @title Interface for Aragon ACL
+ */
 interface IACL {
     function initialize(address _permissionsCreator) external;
-
     function createPermission(address _entity, address _app, bytes32 _role, address _manager) external;
-
     function hasPermission(address _who, address _where, bytes32 _what) external view returns (bool);
 }
 
+/**
+ * @title Interface for Aragon DAO Factory
+ */
 interface IDaoFactory {
     function newDAO(address _root) external returns (IKernel);
 }
 
+/**
+ * @title Base Protocol Test Contract
+ * @notice Sets up the Lido protocol for testing
+ */
 contract BaseProtocolTest is Test {
+    // Main protocol contracts
     ILido public lidoContract;
     LidoLocator public lidoLocator;
     WithdrawalQueueERC721 public wq;
@@ -100,20 +108,24 @@ contract BaseProtocolTest is Test {
     SecondOpinionOracle__MockForAccountingFuzzing public secondOpinionOracleMock;
     IKernel private dao;
 
+    // Account addresses
     address private rootAccount;
     address private userAccount;
 
+    // Aragon DAO components
     address public kernelBase;
     address public aclBase;
     address public evmScriptRegistryFactory;
     address public daoFactoryAdr;
 
+    // Protocol configuration
+    address public depositContractAdr = address(0x4242424242424242424242424242424242424242);
+    address public withdrawalQueueAdr = makeAddr("dummy-locator:withdrawalQueue");
     uint256 public genesisTimestamp = 1_695_902_400;
-    address private depositContractAdr = address(0x4242424242424242424242424242424242424242);
-    address private withdrawalQueueAdr = makeAddr("dummy-locator:withdrawalQueue");
     address public lidoTreasuryAdr = makeAddr("dummy-lido:treasury");
     address public wstETHAdr = makeAddr("dummy-locator:wstETH");
 
+    // Constants
     uint256 public constant VAULTS_LIMIT = 500;
     uint256 public constant VAULTS_RELATIVE_SHARE_LIMIT = 10_00;
 
@@ -132,27 +144,75 @@ contract BaseProtocolTest is Test {
             clBalanceOraclesErrorUpperBPLimit: 50
         });
 
+    /**
+     * @notice Sets up the protocol with initial configuration
+     * @param _startBalance Initial balance for the Lido contract
+     * @param _rootAccount Admin account address
+     * @param _userAccount User account address
+     */
     function setUpProtocol(uint256 _startBalance, address _rootAccount, address _userAccount) public {
         rootAccount = _rootAccount;
         userAccount = _userAccount;
 
+        // Deploy Lido implementation
         address impl = deployCode("Lido.sol:Lido");
 
         vm.startPrank(rootAccount);
-        (dao, acl) = createAragonDao();
 
-        address lidoProxyAddress = addAragonApp(dao, impl);
+        // Create Aragon DAO
+        (dao, acl) = _createAragonDao();
 
+        // Add Lido as an Aragon app
+        address lidoProxyAddress = _addAragonApp(dao, impl);
         lidoContract = ILido(lidoProxyAddress);
 
-        /// @dev deal lido contract with start balance
+        // Fund Lido contract
         vm.deal(lidoProxyAddress, _startBalance);
 
+        // Set up permissions
+        _setupLidoPermissions(lidoProxyAddress);
+
+        // Set up staking router mock
+        StakingRouter__MockForLidoAccountingFuzzing stakingRouter = _setupStakingRouterMock();
+
+        // Deploy Lido locator
+        lidoLocator = _deployLidoLocator(lidoProxyAddress, address(stakingRouter));
+
+        // Deploy and set up protocol components
+        _deployProtocolComponents(lidoProxyAddress);
+
+        // Initialize VaultHub
+        IVaultHub(lidoLocator.vaultHub()).initialize(rootAccount);
+
+        // Deploy and initialize EIP712StETH
+        address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
+        lidoContract.initialize(address(lidoLocator), address(eip712steth));
+
+        // Deploy WstETH
+        deployCodeTo("WstETH.sol:WstETH", abi.encode(lidoProxyAddress), wstETHAdr);
+
+        // Set up withdrawal queue
+        _setupWithdrawalQueue();
+
+        vm.stopPrank();
+    }
+
+    /**
+     * @notice Sets up permissions for the Lido contract
+     * @param lidoProxyAddress Address of the Lido proxy
+     */
+    function _setupLidoPermissions(address lidoProxyAddress) internal {
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("STAKING_CONTROL_ROLE"), rootAccount);
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("STAKING_PAUSE_ROLE"), rootAccount);
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("RESUME_ROLE"), rootAccount);
         acl.createPermission(userAccount, lidoProxyAddress, keccak256("PAUSE_ROLE"), rootAccount);
+    }
 
+    /**
+     * @notice Sets up the staking router mock
+     * @return StakingRouter__MockForLidoAccountingFuzzing The configured staking router mock
+     */
+    function _setupStakingRouterMock() internal returns (StakingRouter__MockForLidoAccountingFuzzing) {
         StakingRouter__MockForLidoAccountingFuzzing stakingRouter = new StakingRouter__MockForLidoAccountingFuzzing();
 
         uint96[] memory stakingModuleFees = new uint96[](3);
@@ -172,58 +232,66 @@ contract BaseProtocolTest is Test {
             100000000000000000000
         );
 
-        /// @dev deploy lido locator with dummy default values
-        lidoLocator = _deployLidoLocator(lidoProxyAddress, address(stakingRouter));
+        return stakingRouter;
+    }
 
-        // Add accounting contract with handler to the protocol
+    /**
+     * @notice Deploys all protocol components
+     * @param lidoProxyAddress Address of the Lido proxy
+     */
+    function _deployProtocolComponents(address lidoProxyAddress) internal {
+        // Deploy Accounting
         address accountingImpl = deployCode(
             "Accounting.sol:Accounting",
             abi.encode(address(lidoLocator), lidoProxyAddress)
         );
-
         deployCodeTo(
             "OssifiableProxy.sol:OssifiableProxy",
             abi.encode(accountingImpl, rootAccount, new bytes(0)),
             lidoLocator.accounting()
         );
 
+        // Deploy VaultHub
         address vaultHubImpl = deployCode(
             "VaultHub.sol:VaultHub",
             abi.encode(address(lidoLocator), lidoProxyAddress, VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT)
         );
-
         deployCodeTo(
             "OssifiableProxy.sol:OssifiableProxy",
             abi.encode(vaultHubImpl, rootAccount, new bytes(0)),
             lidoLocator.vaultHub()
         );
 
+        // Deploy AccountingOracle
         deployCodeTo(
             "AccountingOracle.sol:AccountingOracle",
-            abi.encode(
-                address(lidoLocator),
-                lidoLocator.legacyOracle(),
-                12, // secondsPerSlot
-                genesisTimestamp
-            ),
+            abi.encode(address(lidoLocator), lidoLocator.legacyOracle(), 12, genesisTimestamp),
             lidoLocator.accountingOracle()
         );
 
-        // Add burner contract to the protocol
+        // Deploy Burner
         deployCodeTo(
             "Burner.sol:Burner",
             abi.encode(rootAccount, address(lidoLocator), lidoProxyAddress, 0, 0),
             lidoLocator.burner()
         );
 
-        // Add burner contract to the protocol
+        // Deploy EL Rewards Vault
         deployCodeTo(
             "LidoExecutionLayerRewardsVault.sol:LidoExecutionLayerRewardsVault",
             abi.encode(lidoProxyAddress, lidoTreasuryAdr),
             lidoLocator.elRewardsVault()
         );
 
-        // Add oracle report sanity checker contract to the protocol
+        // Deploy Oracle Report Sanity Checker
+        _deployOracleReportSanityChecker();
+    }
+
+    /**
+     * @notice Deploys the Oracle Report Sanity Checker
+     */
+    function _deployOracleReportSanityChecker() internal {
+        // Deploy the sanity checker
         deployCodeTo(
             "OracleReportSanityChecker.sol:OracleReportSanityChecker",
             abi.encode(
@@ -246,35 +314,34 @@ contract BaseProtocolTest is Test {
             lidoLocator.oracleReportSanityChecker()
         );
 
+        // Set up second opinion oracle mock
         secondOpinionOracleMock = new SecondOpinionOracle__MockForAccountingFuzzing();
         vm.store(
             lidoLocator.oracleReportSanityChecker(),
             bytes32(uint256(2)),
             bytes32(uint256(uint160(address(secondOpinionOracleMock))))
         );
+    }
 
-        IVaultHub(lidoLocator.vaultHub()).initialize(rootAccount);
-
-        /// @dev deploy eip712steth
-        address eip712steth = deployCode("EIP712StETH.sol:EIP712StETH", abi.encode(lidoProxyAddress));
-
-        lidoContract.initialize(address(lidoLocator), address(eip712steth));
-
-        deployCodeTo("WstETH.sol:WstETH", abi.encode(lidoProxyAddress), wstETHAdr);
-
+    /**
+     * @notice Sets up the withdrawal queue
+     */
+    function _setupWithdrawalQueue() internal {
         wq = new WithdrawalQueueERC721(wstETHAdr, "withdrawalQueueERC721", "wstETH");
         vm.store(address(wq), keccak256("lido.Versioned.contractVersion"), bytes32(0));
         wq.initialize(rootAccount);
         wq.grantRole(keccak256("RESUME_ROLE"), rootAccount);
         wq.grantRole(keccak256("FINALIZE_ROLE"), rootAccount);
-
         wq.resume();
-
-        vm.stopPrank();
     }
 
-    /// @dev create aragon dao and return kernel and acl
-    function createAragonDao() private returns (IKernel, IACL) {
+    /**
+     * @notice Creates an Aragon DAO and returns the kernel and ACL
+     * @return IKernel The DAO kernel
+     * @return IACL The DAO ACL
+     */
+    function _createAragonDao() internal returns (IKernel, IACL) {
+        // Deploy Aragon components
         kernelBase = deployCode("Kernel.sol:Kernel", abi.encode(true));
         aclBase = deployCode("ACL.sol:ACL");
         evmScriptRegistryFactory = deployCode("EVMScriptRegistryFactory.sol:EVMScriptRegistryFactory");
@@ -285,6 +352,7 @@ contract BaseProtocolTest is Test {
 
         IDaoFactory daoFactory = IDaoFactory(daoFactoryAdr);
 
+        // Create new DAO
         vm.recordLogs();
         daoFactory.newDAO(rootAccount);
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -293,13 +361,19 @@ contract BaseProtocolTest is Test {
         IKernel _dao = IKernel(address(daoAddress));
         IACL _acl = IACL(address(_dao.acl()));
 
+        // Set up permissions
         _acl.createPermission(rootAccount, daoAddress, keccak256("APP_MANAGER_ROLE"), rootAccount);
 
         return (_dao, _acl);
     }
 
-    /// @dev add aragon app to dao and return proxy address
-    function addAragonApp(IKernel _dao, address _impl) private returns (address) {
+    /**
+     * @notice Adds an Aragon app to the DAO and returns the proxy address
+     * @param _dao The DAO kernel
+     * @param _impl The implementation address
+     * @return address The proxy address
+     */
+    function _addAragonApp(IKernel _dao, address _impl) internal returns (address) {
         vm.recordLogs();
         _dao.newAppInstance(keccak256(bytes("lido.aragonpm.test")), _impl, "", false);
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -309,7 +383,12 @@ contract BaseProtocolTest is Test {
         return proxyAddress;
     }
 
-    /// @dev deploy lido locator with dummy default values
+    /**
+     * @notice Deploys Lido locator with default values
+     * @param lido The Lido contract address
+     * @param stakingRouterAddress The staking router address
+     * @return LidoLocator The deployed Lido locator
+     */
     function _deployLidoLocator(address lido, address stakingRouterAddress) internal returns (LidoLocator) {
         LidoLocator.Config memory config = LidoLocator.Config({
             accountingOracle: makeAddr("dummy-locator:accountingOracle"),
