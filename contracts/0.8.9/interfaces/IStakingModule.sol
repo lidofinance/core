@@ -15,8 +15,9 @@ interface IStakingModule {
     event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
 
     /// @notice Handles tracking and penalization logic for validators that remain active beyond their eligible exit window.
-    /// @dev This function is called to report the current exit-related status of validators belonging to a specific node operator.
-    ///      It accepts a batch of validator public keys, each associated with the duration (in seconds) they were eligible to exit but have not.
+    /// @dev This function is called by the StakingRouter to report the current exit-related status of validators
+    ///      belonging to a specific node operator. It accepts a batch of validator public keys, each associated
+    ///      with the duration (in seconds) they were eligible to exit but have not.
     ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
     /// @param _nodeOperatorId The ID of the node operator whose validators statuses being delivered.
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
@@ -30,7 +31,8 @@ interface IStakingModule {
     ) external;
 
     /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
-    /// @dev This function is called when a validator is exited using the triggerable exit request on EL.
+    /// @dev This function is called by the StakingRouter when a validator is exited using the triggerable
+    ///      exit request on Execution Layer.
     /// @param _nodeOperatorId The ID of the node operator.
     /// @param _publicKeys Concatenated public keys of the validators being reported.
     /// @param _withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
@@ -148,15 +150,6 @@ interface IStakingModule {
     function decreaseVettedSigningKeysCount(
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
-    ) external;
-
-    /// @notice Updates the number of the validators of the given node operator that were requested
-    ///         to exit but failed to do so in the max allowed time
-    /// @param _nodeOperatorIds bytes packed array of the node operators id
-    /// @param _stuckValidatorsCounts bytes packed array of the new number of STUCK validators for the node operators
-    function updateStuckValidatorsCount(
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _stuckValidatorsCounts
     ) external;
 
     /// @notice Updates the number of the validators in the EXITED state for node operator with given id

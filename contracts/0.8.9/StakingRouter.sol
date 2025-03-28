@@ -437,18 +437,13 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    distribute new stake and staking fees between the modules. There can only be single call of this function
     ///    per oracle reporting frame.
     ///
-    /// 2. In the first part of the second data submission phase, the oracle calls
-    ///    `StakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator` on the staking router which passes the
-    ///    counts by node operator to the staking module by calling `IStakingModule.updateStuckValidatorsCount`.
-    ///    This can be done multiple times for the same module, passing data for different subsets of node operators.
-    ///
-    /// 3. In the second part of the second data submission phase, the oracle calls
+    /// 2. In the second part of the second data submission phase, the oracle calls
     ///    `StakingRouter.reportStakingModuleExitedValidatorsCountByNodeOperator` on the staking router which passes
     ///    the counts by node operator to the staking module by calling `IStakingModule.updateExitedValidatorsCount`.
     ///    This can be done multiple times for the same module, passing data for different subsets of node
     ///    operators.
     ///
-    /// 4. At the end of the second data submission phase, it's expected for the aggregate exited validators count
+    /// 3. At the end of the second data submission phase, it's expected for the aggregate exited validators count
     ///    across all module's node operators (stored in the module) to match the total count for this module
     ///    (stored in the staking router). However, it might happen that the second phase of data submission doesn't
     ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
@@ -457,7 +452,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    the exited and maybe stuck validator counts during the whole reporting frame. Handling this condition is
     ///    the responsibility of each staking module.
     ///
-    /// 5. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
+    /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
     ///    and exited validator counts per node operator for the current reporting frame, the oracle calls
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
     ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
@@ -636,27 +631,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
             stakingModule.onExitedAndStuckValidatorsCountsUpdated();
         }
-    }
-
-    /// @notice Updates stuck validators counts per node operator for the staking module with
-    /// the specified id. See the docs for `updateExitedValidatorsCountByStakingModule` for the
-    /// description of the overall update process.
-    ///
-    /// @param _stakingModuleId The id of the staking modules to be updated.
-    /// @param _nodeOperatorIds Ids of the node operators to be updated.
-    /// @param _stuckValidatorsCounts New counts of stuck validators for the specified node operators.
-    ///
-    /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
-    function reportStakingModuleStuckValidatorsCountByNodeOperator(
-        uint256 _stakingModuleId,
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _stuckValidatorsCounts
-    )
-        external
-        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
-    {
-        _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _stuckValidatorsCounts);
-        _getIStakingModuleById(_stakingModuleId).updateStuckValidatorsCount(_nodeOperatorIds, _stuckValidatorsCounts);
     }
 
     /// @notice Finalizes the reporting of the exited and stuck validators counts for the current
@@ -1502,5 +1476,58 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
     function _getStakingModuleSummary(IStakingModule stakingModule) internal view returns (uint256, uint256, uint256) {
         return stakingModule.getStakingModuleSummary();
+    }
+
+    /// @notice Handles tracking and penalization logic for validators that remain active beyond their eligible exit window.
+    /// @dev This function is called to report the current exit-related status of validators belonging to a specific node operator.
+    ///      It accepts a batch of validator public keys, each associated with the duration (in seconds) they were eligible to exit but have not.
+    ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
+    /// @param _stakingModuleId The ID of the staking module.
+    /// @param _nodeOperatorId The ID of the node operator whose validators statuses being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
+    /// @param _publicKeys Concatenated public keys of the validators being reported.
+    /// @param _eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
+    function handleActiveValidatorsExitingStatus(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKeys,
+        bytes calldata _eligibleToExitInSec
+    )
+        external
+        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+    {
+        _getIStakingModuleById(_stakingModuleId).handleActiveValidatorsExitingStatus(
+            _nodeOperatorId,
+            _proofSlotTimestamp,
+            _publicKeys,
+            _eligibleToExitInSec
+        );
+    }
+
+    /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
+    /// @dev This function is called when a validator is exited using the triggerable exit request on EL.
+    /// @param _stakingModuleId The ID of the staking module.
+    /// @param _nodeOperatorId The ID of the node operator.
+    /// @param _publicKeys Concatenated public keys of the validators being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
+    /// @param _exitType The type of exit being performed.
+    ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
+    function onTriggerableExit(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        bytes calldata _publicKeys,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    )
+        external
+        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+    {
+        _getIStakingModuleById(_stakingModuleId).onTriggerableExit(
+            _nodeOperatorId,
+            _publicKeys,
+            _withdrawalRequestPaidFee,
+            _exitType
+        );
     }
 }
