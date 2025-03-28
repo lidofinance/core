@@ -132,7 +132,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS = keccak256("REPORT_EXITED_VALIDATORS_STATUS");
+    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_STATUS_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -1485,7 +1485,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         bytes calldata _eligibleToExitInSec
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_STATUS)
+        onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
     {
         _getIStakingModuleById(_stakingModuleId).handleActiveValidatorsExitingStatus(
             _nodeOperatorId,
