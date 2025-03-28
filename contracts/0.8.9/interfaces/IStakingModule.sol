@@ -14,43 +14,43 @@ interface IStakingModule {
     /// @dev Event to be emitted when a signing key is removed from the StakingModule
     event SigningKeyRemoved(uint256 indexed nodeOperatorId, bytes pubkey);
 
-    /// @notice Handles tracking and penalization logic for validators that remain active beyond their eligible exit window.
-    /// @dev This function is called by the StakingRouter to report the current exit-related status of validators
-    ///      belonging to a specific node operator. It accepts a batch of validator public keys, each associated
-    ///      with the duration (in seconds) they were eligible to exit but have not.
-    ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
-    /// @param _nodeOperatorId The ID of the node operator whose validators statuses being delivered.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
-    /// @param _publicKeys Concatenated public keys of the validators being reported.
-    /// @param _eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
+    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @dev This function is called by the StakingRouter to report the current exit-related status of a validator
+    ///      belonging to a specific node operator. It accepts a validator's public key, associated
+    ///      with the duration (in seconds) it was eligible to exit but has not exited.
+    ///      This data could be used to trigger penalties for the node operator if the validator has exceeded the allowed exit window.
+    /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
     function handleActiveValidatorsExitingStatus(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
-        bytes calldata _publicKeys,
+        bytes calldata _publicKey,
         bytes calldata _eligibleToExitInSec
     ) external;
 
-    /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
+    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
     /// @dev This function is called by the StakingRouter when a validator is exited using the triggerable
-    ///      exit request on Execution Layer.
+    ///      exit request on the Execution Layer (EL).
     /// @param _nodeOperatorId The ID of the node operator.
-    /// @param _publicKeys Concatenated public keys of the validators being reported.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
     /// @param _exitType The type of exit being performed.
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
     function onTriggerableExit(
         uint256 _nodeOperatorId,
-        bytes calldata _publicKeys,
+        bytes calldata _publicKey,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
 
-    /// @notice Determines whether a validator exit status should be updated and will have affect on Node Operator.
+    /// @notice Determines whether a validator's exit status should be updated and will have an effect on the Node Operator.
     /// @param _nodeOperatorId The ID of the node operator.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
-    /// @param _publicKey Validator's public key.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
+    /// @param _publicKey The public key of the validator.
     /// @param _eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
-    /// @return bool Returns true if contract should receive updated validator's status.
+    /// @return bool Returns true if the contract should receive the updated status of the validator.
     function shouldValidatorBePenalized(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -58,8 +58,8 @@ interface IStakingModule {
         uint256 _eligibleToExitInSec
     ) external view returns (bool);
 
-
     /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @param _nodeOperatorId The ID of the node operator.
     /// @return The exit deadline threshold in seconds.
     function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256);
 

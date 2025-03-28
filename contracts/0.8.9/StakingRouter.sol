@@ -1468,20 +1468,20 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         return stakingModule.getStakingModuleSummary();
     }
 
-    /// @notice Handles tracking and penalization logic for validators that remain active beyond their eligible exit window.
-    /// @dev This function is called to report the current exit-related status of validators belonging to a specific node operator.
-    ///      It accepts a batch of validator public keys, each associated with the duration (in seconds) they were eligible to exit but have not.
-    ///      This data could be used to trigger penalties for the node operator if validators have been non-exiting for too long.
+    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
+    ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
+    ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
     /// @param _stakingModuleId The ID of the staking module.
-    /// @param _nodeOperatorId The ID of the node operator whose validators statuses being delivered.
-    /// @param _proofSlotTimestamp The timestamp (slot time) when the validators were last known to be in an active ongoing state.
-    /// @param _publicKeys Concatenated public keys of the validators being reported.
-    /// @param _eligibleToExitInSec Array of durations (in seconds), each indicating how long a validator has been eligible to exit but hasn't.
+    /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
     function handleActiveValidatorsExitingStatus(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
-        bytes calldata _publicKeys,
+        bytes calldata _publicKey,
         bytes calldata _eligibleToExitInSec
     )
         external
@@ -1490,23 +1490,23 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         _getIStakingModuleById(_stakingModuleId).handleActiveValidatorsExitingStatus(
             _nodeOperatorId,
             _proofSlotTimestamp,
-            _publicKeys,
+            _publicKey,
             _eligibleToExitInSec
         );
     }
 
-    /// @notice Handles the triggerable exit events validator belonging to a specific node operator.
-    /// @dev This function is called when a validator is exited using the triggerable exit request on EL.
+    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
+    /// @dev This function is called when a validator is exited using the triggerable exit request on the Execution Layer (EL).
     /// @param _stakingModuleId The ID of the staking module.
     /// @param _nodeOperatorId The ID of the node operator.
-    /// @param _publicKeys Concatenated public keys of the validators being reported.
-    /// @param _withdrawalRequestPaidFee Fee amount paid to send withdrawal request on EL.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
     /// @param _exitType The type of exit being performed.
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
     function onTriggerableExit(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
-        bytes calldata _publicKeys,
+        bytes calldata _publicKey,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     )
@@ -1515,7 +1515,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     {
         _getIStakingModuleById(_stakingModuleId).onTriggerableExit(
             _nodeOperatorId,
-            _publicKeys,
+            _publicKey,
             _withdrawalRequestPaidFee,
             _exitType
         );
