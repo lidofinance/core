@@ -34,6 +34,12 @@ contract Delegation is Dashboard {
     bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
 
     /**
+     * @notice adjusts rewards to allow fee correction during side deposits or consolidations
+     */
+    bytes32 public constant NODE_OPERATOR_REWARDS_ADJUST_ROLE =
+        keccak256("vaults.Delegation.NodeOperatorRewardsAdjustRole");
+
+    /**
      * @notice Node operator fee in basis points; combined with curator fee cannot exceed 100%, or 10,000 basis points.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
@@ -43,6 +49,11 @@ contract Delegation is Dashboard {
      * @notice The last report for which node operator fee was claimed. Updated on each claim.
      */
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
+
+    /**
+     * @notice adjustment for inOut to allow fee correction during side deposits
+     */
+    uint256 public accruedRewardsAdjustment;
 
     /**
      * @notice Constructs the contract.
@@ -69,6 +80,7 @@ contract Delegation is Dashboard {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
@@ -150,6 +162,38 @@ contract Delegation is Dashboard {
     }
 
     /**
+     * @notice Increases accrued rewards adjustment to correct fee calculation due to non-rewards ether on CL
+     *         Note that the authorized role is NODE_OPERATOR_FEE_CLAIM_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
+     *         although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
+     * @param _adjustmentIncrease amount to increase adjustment by
+     */
+    function increaseAccruedRewardsAdjustment(
+        uint256 _adjustmentIncrease
+    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + _adjustmentIncrease);
+    }
+
+    /**
+     *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
+     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
+     *          clearing them for future deposits via `PDG.depositToBeaconChain`.
+     *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
+     * @param _deposits array of StakingVault.Deposit structs containing deposit data
+     * @param _depositContractRoot deposit contract root to check to make sure that state of deposit contract remains the same
+     * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
+     * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
+     */
+    function trustedWithdrawAndDeposit(
+        IStakingVault.Deposit[] calldata _deposits
+    ) public override returns (uint256 totalAmount) {
+        totalAmount = super.trustedWithdrawAndDeposit(_deposits);
+
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
+    }
+
+    // ==================== Internal Functions ====================
+
+    /**
      * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
      * @param _ether The amount of ether to check.
      */
@@ -172,13 +216,14 @@ contract Delegation is Dashboard {
         IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
-            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta);
+            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
+            int128(uint128(accruedRewardsAdjustment));
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * _feeBP) / TOTAL_BASIS_POINTS : 0;
     }
 
     /**
-     * @dev Claims the curator/node operator fee amount.
+     * @dev Claims the node operator fee amount.
      * @param _recipient The address to which the fee will be sent.
      * @param _fee The accrued fee amount.
      * @dev Use `Permissions._unsafeWithdraw()` to avoid the `WITHDRAW_ROLE` check.
@@ -187,7 +232,21 @@ contract Delegation is Dashboard {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_fee == 0) revert ZeroArgument("_fee");
 
+        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
+
         stakingVault().withdraw(_recipient, _fee);
+    }
+
+    /**
+     * @notice sets InOut adjustment for correct fee calculation
+     * @param _newAdjustment new adjustment value
+     */
+    function _setAccruedRewardsAdjustment(uint256 _newAdjustment) internal {
+        uint256 oldAdjustment = accruedRewardsAdjustment;
+
+        accruedRewardsAdjustment = _newAdjustment;
+
+        emit AccruedRewardsAdjustmentSet(oldAdjustment, _newAdjustment);
     }
 
     /**
@@ -217,12 +276,23 @@ contract Delegation is Dashboard {
         super._withdraw(_recipient, _ether);
     }
 
+    // ==================== Events ====================
+
     /**
      * @dev Emitted when the node operator fee is set.
      * @param oldNodeOperatorFeeBP The old node operator fee.
      * @param newNodeOperatorFeeBP The new node operator fee.
      */
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
+
+    /**
+     * @dev Emitted when the new rewards adjustment is set.
+     * @param oldAdjustment the old adjustment value
+     * @param newAdjustment the new adjustment value
+     */
+    event AccruedRewardsAdjustmentSet(uint256 oldAdjustment, uint256 newAdjustment);
+
+    // ==================== Errors ====================
 
     /**
      * @dev Error emitted when the node operator fee is unclaimed.
