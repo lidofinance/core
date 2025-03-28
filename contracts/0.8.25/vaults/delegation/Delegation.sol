@@ -73,7 +73,6 @@ contract Delegation is Permissions {
         _SELF = address(this);
     }
 
-
     function initialize(InitializationConfig memory _config) public virtual {
         if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
@@ -255,7 +254,6 @@ contract Delegation is Permissions {
      * @dev Error emitted when the requested amount exceeds the unreserved amount.
      */
     error RequestedAmountExceedsUnreserved();
-
 
     /**
      * @dev Error emitted when the contract is already initialized.
