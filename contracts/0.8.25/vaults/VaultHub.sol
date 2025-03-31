@@ -12,7 +12,6 @@ import {ILido} from "../interfaces/ILido.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 /// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
@@ -164,6 +163,38 @@ contract VaultHub is PausableUntilWithRoles {
         return
             ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
                 TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+    }
+
+    /// @notice estimate ether amount to make the vault healthy using rebalance
+    /// @param _vault vault address
+    /// @return amount to rebalance
+    function rebalanceShortfall(address _vault) public view returns (uint256) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 mintedStETH = LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+        uint256 reserveRatioBP = socket.reserveRatioBP;
+        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
+        uint256 valuation = IStakingVault(_vault).valuation();
+
+        // to avoid revert below
+        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
+            // return MAX_UINT_256
+            return type(uint256).max;
+        }
+
+        // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / TOTAL_BASIS_POINTS
+        // (mintedStETH - X) * TOTAL_BASIS_POINTS = (vault.valuation() - X) * maxMintableRatio
+        // mintedStETH * TOTAL_BASIS_POINTS - X * TOTAL_BASIS_POINTS = vault.valuation() * maxMintableRatio - X * maxMintableRatio
+        // X * maxMintableRatio - X * TOTAL_BASIS_POINTS = vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS
+        // X * (maxMintableRatio - TOTAL_BASIS_POINTS) = vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS
+        // X = (vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS) / (maxMintableRatio - TOTAL_BASIS_POINTS)
+        // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / (TOTAL_BASIS_POINTS - maxMintableRatio)
+        // reserveRatio = TOTAL_BASIS_POINTS - maxMintableRatio
+        // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / reserveRatio
+
+        return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
     }
 
     /// @notice connects a vault to the hub
@@ -331,28 +362,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _requireUnhealthy(_vault);
 
-        VaultSocket storage socket = _connectedSocket(_vault);
-
-        uint256 mintedStETH = LIDO.getPooledEthByShares(socket.sharesMinted); // TODO: fix rounding issue
-        uint256 reserveRatioBP = socket.reserveRatioBP;
-        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-
-        // how much ETH should be moved out of the vault to rebalance it to minimal reserve ratio
-
-        // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / BPS_BASE
-        // (mintedStETH - X) * BPS_BASE = (vault.valuation() - X) * maxMintableRatio
-        // mintedStETH * BPS_BASE - X * BPS_BASE = vault.valuation() * maxMintableRatio - X * maxMintableRatio
-        // X * maxMintableRatio - X * BPS_BASE = vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE
-        // X * (maxMintableRatio - BPS_BASE) = vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE
-        // X = (vault.valuation() * maxMintableRatio - mintedStETH * BPS_BASE) / (maxMintableRatio - BPS_BASE)
-        // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / (BPS_BASE - maxMintableRatio)
-        // reserveRatio = BPS_BASE - maxMintableRatio
-        // X = (mintedStETH * BPS_BASE - vault.valuation() * maxMintableRatio) / reserveRatio
-
-        uint256 amountToRebalance = (mintedStETH *
-            TOTAL_BASIS_POINTS -
-            IStakingVault(_vault).valuation() *
-            maxMintableRatio) / reserveRatioBP;
+        uint256 amountToRebalance = rebalanceShortfall(_vault);
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);

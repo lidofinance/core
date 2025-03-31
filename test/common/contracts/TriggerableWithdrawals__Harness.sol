@@ -8,7 +8,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 /**
  * @notice This is a harness of TriggerableWithdrawals library.
  */
-contract TriggerableWithdrawals_Harness {
+contract TriggerableWithdrawals__Harness {
     function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) external {
         TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, feePerRequest);
     }

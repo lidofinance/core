@@ -33,5 +33,8 @@ jobs:
         # with:
         #   version: nightly-54d8510c0f2b0f791f4c5ef99866c6af99b7606a
 
+      - name: Print forge version
+        run: forge --version
+
       - name: Run fuzzing and invariant tests
         run: forge test -vvv

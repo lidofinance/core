@@ -137,11 +137,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
-    // @dev `preClBalance` is the balance of the validators on previous report
+    // @dev `preCLBalance` is the balance of the validators on previous report
     // plus the amount of ether that was deposited to the deposit contract since then
     event ETHDistributed(
         uint256 indexed reportTimestamp,
-        uint256 preClBalance, // actually its preClBalance + deposits due to compatibility reasons
+        uint256 preCLBalance, // actually its preCLBalance + deposits due to compatibility reasons
         uint256 postCLBalance,
         uint256 withdrawalsWithdrawn,
         uint256 executionLayerRewardsWithdrawn,
