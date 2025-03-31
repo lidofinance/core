@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Delegation} from "./Delegation.sol";
@@ -30,6 +31,8 @@ struct DelegationConfig {
 }
 
 contract VaultFactory {
+    uint256 public constant VAULTHUB_CONNECT_DEPOSIT = 1 ether;
+
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
 
@@ -49,7 +52,9 @@ contract VaultFactory {
     function createVaultWithDelegation(
         DelegationConfig calldata _delegationConfig,
         bytes calldata _stakingVaultInitializerExtraParams
-    ) external returns (IStakingVault vault, Delegation delegation) {
+    ) external payable returns (IStakingVault vault, Delegation delegation) {
+        if (msg.value < VAULTHUB_CONNECT_DEPOSIT) revert InsufficientMsgValueForConnectDeposit();
+
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
 
@@ -59,10 +64,14 @@ contract VaultFactory {
 
         // initialize StakingVault
         vault.initialize(
-            address(delegation),
+            address(this),
             _delegationConfig.nodeOperatorManager,
             _stakingVaultInitializerExtraParams
         );
+
+        vault.fund{value: msg.value}();
+        vault.lock(VAULTHUB_CONNECT_DEPOSIT);
+        OwnableUpgradeable(address(vault)).transferOwnership(address(delegation));
 
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmExpiry);
@@ -146,4 +155,9 @@ contract VaultFactory {
      * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
+
+    /**
+     * @notice Error thrown for when insufficient msg.value is provided for the connect deposit
+     */
+    error InsufficientMsgValueForConnectDeposit();
 }
