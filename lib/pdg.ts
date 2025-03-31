@@ -3,12 +3,15 @@ import { ethers } from "hardhat";
 
 import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 
-import { computeDepositDataRoot, ether, impersonate } from "lib";
+import { computeDepositDataRoot, de0x, ether, impersonate } from "lib";
 
 export const randomBytes32 = (): string => hexlify(randomBytes(32));
 export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
 
 export const randomInt = (max: number): number => Math.floor(Math.random() * max);
+
+export const addressToWC = (address: string, version = 2) =>
+  `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
 
 export const generateValidator = (customWC?: string, customPukey?: string): SSZHelpers.ValidatorStruct => {
   return {

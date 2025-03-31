@@ -11,8 +11,11 @@ export {
   waitNextAvailableReportTime,
   handleOracleReport,
   report,
+  getReportDataItems,
+  calcReportDataHash,
 } from "./accounting";
 
 export { sdvtEnsureOperators } from "./sdvt";
 export { norEnsureOperators } from "./nor";
 export { getRandomSigners } from "./get-random-signers";
+export { ensureDsmGuardians } from "./dsm";

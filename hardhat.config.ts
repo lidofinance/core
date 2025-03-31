@@ -27,7 +27,7 @@ export const ZERO_PK = "0x000000000000000000000000000000000000000000000000000000
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
-    enabled: process.env.SKIP_GAS_REPORT ? false : true,
+    enabled: !process.env.SKIP_GAS_REPORT,
   },
   networks: {
     "hardhat": {
@@ -45,6 +45,7 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
@@ -52,19 +53,16 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "holesky": {
-      url: process.env.HOLESKY_RPC_URL || RPC_URL,
-      chainId: 17000,
-      accounts: loadAccounts("holesky"),
-    },
+    // testnets
     "sepolia": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
+    },
+    // forks
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
     },
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,

@@ -7,15 +7,25 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
-  EIP7002WithdrawalRequest_Mock,
+  EIP7002WithdrawalRequest__Mock,
   EthRejector,
   StakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { computeDepositDataRoot, de0x, ether, impersonate, MAX_UINT256, proxify, streccak } from "lib";
+import {
+  computeDepositDataRoot,
+  de0x,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  impersonate,
+  MAX_UINT256,
+  proxify,
+  streccak,
+} from "lib";
 
-import { deployStakingVaultBehindBeaconProxy, deployWithdrawalsPreDeployedMock } from "test/deploy";
+import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const MAX_INT128 = 2n ** 127n - 1n;
@@ -53,7 +63,7 @@ describe("StakingVault.sol", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
-  let withdrawalRequest: EIP7002WithdrawalRequest_Mock;
+  let withdrawalRequestContract: EIP7002WithdrawalRequest__Mock;
   let ethRejector: EthRejector;
 
   let vaultOwnerAddress: string;
@@ -69,8 +79,7 @@ describe("StakingVault.sol", () => {
     ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
       await deployStakingVaultBehindBeaconProxy(vaultOwner, operator, depositor));
 
-    // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
-    withdrawalRequest = await deployWithdrawalsPreDeployedMock(1n);
+    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
     ethRejector = await ethers.deployContract("EthRejector");
 
     vaultOwnerAddress = await vaultOwner.getAddress();
@@ -635,18 +644,18 @@ describe("StakingVault.sol", () => {
     });
 
     it("works with max uint256", async () => {
-      const fee = BigInt(await withdrawalRequest.fee());
+      const fee = BigInt(await withdrawalRequestContract.fee());
       expect(await stakingVault.calculateValidatorWithdrawalFee(MAX_UINT256)).to.equal(BigInt(MAX_UINT256) * fee);
     });
 
     it("calculates the total fee for given number of validator keys", async () => {
       const newFee = 100n;
-      await withdrawalRequest.setFee(newFee);
+      await withdrawalRequestContract.mock__setFee(newFee);
 
       const fee = await stakingVault.calculateValidatorWithdrawalFee(1n);
       expect(fee).to.equal(newFee);
 
-      const feePerRequest = await withdrawalRequest.fee();
+      const feePerRequest = await withdrawalRequestContract.fee();
       expect(fee).to.equal(feePerRequest);
 
       const feeForMultipleKeys = await stakingVault.calculateValidatorWithdrawalFee(2n);
@@ -699,7 +708,7 @@ describe("StakingVault.sol", () => {
     let baseFee: bigint;
 
     before(async () => {
-      baseFee = BigInt(await withdrawalRequest.fee());
+      baseFee = BigInt(await withdrawalRequestContract.fee());
     });
 
     it("reverts if msg.value is zero", async () => {
@@ -801,7 +810,7 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -813,7 +822,7 @@ describe("StakingVault.sol", () => {
           .connect(operator)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(operator, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -825,7 +834,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -838,7 +847,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, 0);
@@ -854,7 +863,7 @@ describe("StakingVault.sol", () => {
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
 
       await expect(tx)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, overpaid);
@@ -880,9 +889,9 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(pubkeys.stringified, amounts, vaultOwnerAddress, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
         .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, vaultOwnerAddress, 0n);
@@ -900,9 +909,9 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(pubkeys.stringified, amounts, stranger, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
         .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, stranger, valueToRefund);
@@ -920,7 +929,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultHubSigner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: 1n }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
     });
   });

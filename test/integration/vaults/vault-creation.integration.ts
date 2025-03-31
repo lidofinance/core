@@ -9,7 +9,6 @@ import { Delegation, StakingVault } from "typechain-types";
 import { days, ether, generatePredeposit, generateValidator, impersonate } from "lib";
 import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/protocol";
 
-import { deployWithdrawalsPreDeployedMock } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { connectToHub, setupLido } from "../../../lib/protocol/vaults";
@@ -49,9 +48,6 @@ describe("Scenario: Vault creation", () => {
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();
-
-    // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
-    await deployWithdrawalsPreDeployedMock(1n);
 
     const { depositSecurityModule, stakingVaultFactory } = ctx.contracts;
     await depositSecurityModule.DEPOSIT_CONTRACT();
