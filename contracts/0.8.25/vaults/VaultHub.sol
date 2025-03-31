@@ -622,27 +622,22 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
-    error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
-    error RebalanceFailed(address vault);
     error NotAuthorized(string operation, address addr);
     error ZeroArgument(string argument);
-    error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error RebalanceThresholdTooHigh(address vault, uint256 rebalanceThresholdBP, uint256 maxRebalanceThresholdBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
     error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
     error VaultProxyNotAllowed(address beacon);
     error InvalidPubkeysLength();
-    error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
 }

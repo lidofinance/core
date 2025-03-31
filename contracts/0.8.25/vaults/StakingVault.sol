@@ -569,13 +569,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
-     * @notice Emitted if `owner` of `StakingVault` is a contract and its `onReport` hook reverts
-     * @dev Hook used to inform `owner` contract of a new report, e.g. calculating AUM fees, etc.
-     * @param reason Revert data from `onReport` hook
-     */
-    event OnReportFailed(bytes reason);
-
-    /**
      * @notice Emitted when deposits to beacon chain are paused
      */
     event BeaconChainDepositsPaused();
@@ -675,11 +668,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param beacon Expected beacon address
      */
     error SenderNotBeacon(address sender, address beacon);
-
-    /**
-     * @notice Thrown when the onReport() hook reverts with an Out of Gas error
-     */
-    error UnrecoverableError();
 
     /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused

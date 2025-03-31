@@ -379,9 +379,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
     expect(socket.sharesMinted).to.be.gt(stakingVaultMaxMintingShares);
 
-    const errorReportingEvent = ctx.getEvents(reportTxReceipt, "OnReportFailed", [stakingVault.interface]);
-    expect(errorReportingEvent.length).to.equal(0n);
-
     const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
     expect(vaultReportedEvent.length).to.equal(1n);
 
