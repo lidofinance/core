@@ -37,4 +37,4 @@ jobs:
         run: forge --version
 
       - name: Run fuzzing and invariant tests
-        run: forge test -vvv
+        run: forge test
