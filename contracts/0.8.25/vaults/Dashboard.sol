@@ -380,7 +380,7 @@ contract Dashboard is Permissions {
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function trustedWithdrawAndDeposit(
-        IStakingVault.Deposit[] calldata _deposits,
+        IStakingVault.Deposit[] calldata _deposits
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
         IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();

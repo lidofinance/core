@@ -307,6 +307,77 @@ describe("Delegation.sol", () => {
     });
   });
 
+  context("increaseAccruedRewardsAdjustment", () => {
+    beforeEach(async () => {
+      await delegation
+        .connect(nodeOperatorManager)
+        .grantRole(await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), nodeOperatorManager);
+
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if non NODE_OPERATOR_REWARDS_ADJUST_ROLE sets adjustment", async () => {
+      await expect(delegation.connect(stranger).increaseAccruedRewardsAdjustment(100n)).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if manually adjust more than limit", async () => {
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      const increase = ether("1");
+
+      await expect(
+        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(LIMIT + 1n),
+      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
+
+      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
+
+      await expect(
+        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(LIMIT),
+      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+
+      const increase2 = LIMIT - increase;
+      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase2);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT);
+
+      await expect(
+        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(1n),
+      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+    });
+
+    it("adjuster can increaseAccruedRewardsAdjustment", async () => {
+      const increase = ether("10");
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
+      const tx = await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase);
+
+      await expect(tx).to.emit(delegation, "AccruedRewardsAdjustmentSet").withArgs(0n, increase);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
+    });
+
+    it("manual increase can decrease fee", async () => {
+      const operatorFee = await delegation.nodeOperatorFeeBP();
+
+      const rewards = ether("10");
+      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      const expectedDue = (rewards * operatorFee) / BP_BASE;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+
+      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue / 2n);
+
+      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
+    });
+  });
+
   context("unreserved", () => {
     it("initially returns 0", async () => {
       expect(await delegation.unreserved()).to.equal(0n);

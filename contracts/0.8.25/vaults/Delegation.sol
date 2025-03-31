@@ -20,6 +20,11 @@ contract Delegation is Dashboard {
     uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
 
     /**
+     * @notice maximum value that can be set via manual adjustment
+     */
+    uint256 public constant MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
+
+    /**
      * @notice Node operator manager role:
      * - confirms confirm expiry;
      * - confirms ownership transfer;
@@ -166,11 +171,15 @@ contract Delegation is Dashboard {
      *         Note that the authorized role is NODE_OPERATOR_FEE_CLAIM_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
      *         although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
      * @param _adjustmentIncrease amount to increase adjustment by
+     * @dev will revert if final adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
      */
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
     ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
-        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + _adjustmentIncrease);
+        uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
+        // sanity check, though value will be cast safely during fee calculation
+        if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreaseOverLimit();
+        _setAccruedRewardsAdjustment(newAdjustment);
     }
 
     /**
@@ -179,7 +188,6 @@ contract Delegation is Dashboard {
      *          clearing them for future deposits via `PDG.depositToBeaconChain`.
      *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
      * @param _deposits array of StakingVault.Deposit structs containing deposit data
-     * @param _depositContractRoot deposit contract root to check to make sure that state of deposit contract remains the same
      * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
@@ -215,9 +223,12 @@ contract Delegation is Dashboard {
     ) internal view returns (uint256) {
         IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
+        // cast down safely clamping to int128.max
+        int128 adjustment = int128(int256((accruedRewardsAdjustment << 129) >> 129));
+
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
-            int128(uint128(accruedRewardsAdjustment));
+            adjustment;
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * _feeBP) / TOTAL_BASIS_POINTS : 0;
     }
@@ -308,4 +319,9 @@ contract Delegation is Dashboard {
      * @dev Error emitted when the requested amount exceeds the unreserved amount.
      */
     error RequestedAmountExceedsUnreserved();
+
+    /**
+     * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.
+     */
+    error IncreaseOverLimit();
 }
