@@ -9,20 +9,12 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
-import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 
 /**
  * @title Delegation
  * @notice This contract is a contract-owner of StakingVault and includes an additional delegation layer.
  */
-contract Delegation is Permissions {
-    struct InitParams {
-        address defaultAdmin;
-        address nodeOperatorManager;
-        uint256 nodeOperatorFeeBP;
-        uint256 confirmExpiry;
-    }
-
+abstract contract Delegation is Permissions {
     /**
      * @notice Total basis points; 1bp = 0.01%, 10000bp = 100%.
      */
@@ -47,12 +39,6 @@ contract Delegation is Permissions {
     bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
 
     /**
-     * @notice Address of the implementation contract
-     * @dev Used to prevent initialization in the implementation
-     */
-    address private immutable _SELF;
-
-    /**
      * @notice Node operator fee in basis points; cannot exceed 100%, or 10,000 basis points.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
@@ -63,28 +49,15 @@ contract Delegation is Permissions {
      */
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
 
-    /**
-     * @notice Indicates whether the contract has been initialized
-     */
-    bool public initialized;
-
-    constructor() {
-        _SELF = address(this);
-    }
-
-    function initialize(
+    function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) public virtual {
-        if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
         if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
         if (_nodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
-
-        initialized = true;
 
         nodeOperatorFeeBP = _nodeOperatorFeeBP;
 
@@ -92,19 +65,8 @@ contract Delegation is Permissions {
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
-
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-
-        emit Initialized(_defaultAdmin);
-    }
-
-    function stakingVault() public view override returns (IStakingVault) {
-        return IStakingVault(_loadStakingVaultAddress());
-    }
-
-    function vaultHub() public view override returns (VaultHub) {
-        return VaultHub(stakingVault().vaultHub());
     }
 
     /**
@@ -217,17 +179,6 @@ contract Delegation is Permissions {
         uint256 withdrawable = unreserved();
         if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
         _;
-    }
-
-    /**
-     * @dev Loads the address of the underlying StakingVault.
-     * @return addr The address of the StakingVault.
-     */
-    function _loadStakingVaultAddress() internal view returns (address addr) {
-        bytes memory args = Clones.fetchCloneArgs(address(this));
-        assembly {
-            addr := mload(add(args, 32))
-        }
     }
 
     /**
