@@ -317,7 +317,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if (_locked < $.locked) revert NewLockedLowerThanCurrent();
+        if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
         if (_locked > valuation()) revert NewLockedExceedsValuation();
 
         $.locked = uint128(_locked);
@@ -664,7 +664,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report
      */
-    error NewLockedLowerThanCurrent();
+    error NewLockedNotGreaterThanCurrent();
 
     /**
      * @notice Thrown when the locked amount exceeds the valuation
