@@ -197,7 +197,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice estimate ether amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount to rebalance
+    /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     function rebalanceShortfall(address _vault) public view returns (uint256) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
