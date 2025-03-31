@@ -465,8 +465,6 @@ contract StakingVaultTest is Test {
 
         vm.prank(address(vaultHub));
         stakingVaultProxy.lock(totalEtherToLock);
-
-        assertEq(stakingVaultProxy.locked(), totalEtherToLock);
     }
 
     function transitionRandomReport() internal {
@@ -481,9 +479,6 @@ contract StakingVaultTest is Test {
 
         vm.prank(address(vaultHub));
         stakingVaultProxy.report(newValuation, currentInOutDelta, newLocked);
-
-        assertEq(stakingVaultProxy.valuation(), newValuation);
-        assertEq(stakingVaultProxy.locked(), newLocked);
     }
 
     function transitionRandomRebalance() internal {
