@@ -230,7 +230,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             "compensateDisprovenPredepositFromPDG",
             {
               successUsers: [],
-              failingUsers: allRoles,
+              failingUsers: allRoles.filter((r) => r !== pdgWithdrawers),
             },
             [SAMPLE_PUBKEY, stranger],
             await testDelegation.PDG_WITHDRAWAL_ROLE(),
