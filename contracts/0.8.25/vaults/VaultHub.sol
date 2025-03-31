@@ -553,13 +553,22 @@ contract VaultHub is PausableUntilWithRoles {
         treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
     }
 
+    /// @notice update the vaults data for vault's owner
+    /// @param _vault the address of the vault
+    /// @param _valuation the valuation of the vault
+    /// @param _inOutDelta the inOutDelta of the vault
+    /// @param _fees the fees of the vault
+    /// @param _sharesMinted the sharesMinted of the vault
+    /// @param _proof the proof of the reported data
     function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
         bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encodePacked(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
         if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
+
+        // TODO: Move this check in the beggining of the function
+        if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
         uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
