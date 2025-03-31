@@ -273,7 +273,7 @@ describe("VaultHub.sol:hub", () => {
       const vault2 = await createAndConnectVault(vaultFactory);
       const vaultAddress1 = await vault1.getAddress();
       const vaultAddress2 = await vault2.getAddress();
-      const vaults = await vaultHub.batchVaultsInfo();
+      const vaults = await vaultHub.batchVaultsInfo(0n, 2n);
 
       expect(vaults.length).to.equal(2);
 
@@ -288,6 +288,40 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultInfo2.balance).to.equal(0n);
       expect(vaultInfo2.inOutDelta).to.equal(0n);
       expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
+    });
+
+    it("returns the vault info with pagination", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vault3 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaultAddress3 = await vault3.getAddress();
+
+      const vaults1 = await vaultHub.batchVaultsInfo(0n, 1n);
+      expect(vaults1.length).to.equal(1);
+      expect(vaults1[0].vault).to.equal(vaultAddress1);
+
+      const vaults2 = await vaultHub.batchVaultsInfo(1n, 1n);
+      expect(vaults2.length).to.equal(1);
+      expect(vaults2[0].vault).to.equal(vaultAddress2);
+
+      const vaults3 = await vaultHub.batchVaultsInfo(0n, 4n);
+      expect(vaults3.length).to.equal(3);
+      expect(vaults3[0].vault).to.equal(vaultAddress1);
+      expect(vaults3[1].vault).to.equal(vaultAddress2);
+      expect(vaults3[2].vault).to.equal(vaultAddress3);
+
+      const vaults4 = await vaultHub.batchVaultsInfo(1n, 3n);
+      expect(vaults4.length).to.equal(2);
+      expect(vaults4[0].vault).to.equal(vaultAddress2);
+      expect(vaults4[1].vault).to.equal(vaultAddress3);
+
+      const vaults5 = await vaultHub.batchVaultsInfo(0n, 0n);
+      expect(vaults5.length).to.equal(0);
+
+      const vaults6 = await vaultHub.batchVaultsInfo(3n, 1n);
+      expect(vaults6.length).to.equal(0);
     });
   });
 
