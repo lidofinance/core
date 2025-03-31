@@ -73,6 +73,14 @@ const config: HardhatUserConfig = {
     customChains: [
       {
         network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
+      {
+        network: "local-devnet",
         chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
         urls: {
           apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
