@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -348,7 +348,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the address of the second opinion oracle and clBalanceOraclesErrorUpperBPLimit value
     /// @param _secondOpinionOracle second opinion oracle.
-    ///     If it's zero address — oracle is disabled.
+    ///     If it's zero address — oracle is disabled.
     ///     Default value is zero address.
     /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
     function setSecondOpinionOracleAndCLBalanceUpperMargin(ISecondOpinionOracle _secondOpinionOracle, uint256 _clBalanceOraclesErrorUpperBPLimit)
@@ -742,12 +742,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             revert IncorrectRequestFinalization(statuses[0].timestamp);
     }
 
-    function _grantRole(bytes32 _role, address[] memory _accounts) internal {
-        for (uint256 i = 0; i < _accounts.length; ++i) {
-            _grantRole(_role, _accounts[i]);
-        }
-    }
-
     function _updateLimits(LimitsList memory _newLimitsList) internal {
         LimitsList memory _oldLimitsList = _limits.unpack();
         if (_oldLimitsList.exitedValidatorsPerDayLimit != _newLimitsList.exitedValidatorsPerDayLimit) {
@@ -841,6 +835,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 }
 
 library LimitsListPacker {
+    error BasisPointsOverflow(uint256 value, uint256 maxValue);
+
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
         res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
         res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
@@ -856,7 +852,9 @@ library LimitsListPacker {
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {
-        require(_value <= MAX_BASIS_POINTS, "BASIS_POINTS_OVERFLOW");
+        if (_value > MAX_BASIS_POINTS) {
+            revert BasisPointsOverflow(_value, MAX_BASIS_POINTS);
+        }
         return uint16(_value);
     }
 }
