@@ -17,7 +17,17 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  generatePostDeposit,
+  generateValidator,
+  getNextBlockTimestamp,
+  impersonate,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -39,7 +49,11 @@ describe("Delegation.sol", () => {
   let disconnecter: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
+  let nodeOperatorRewardAdjuster: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
+  let trustedWithdrawDepositor: HardhatEthersSigner;
+  let unknownValidatorProver: HardhatEthersSigner;
+  let pdgWithdrawer: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
@@ -77,10 +91,14 @@ describe("Delegation.sol", () => {
       disconnecter,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
+      nodeOperatorRewardAdjuster,
       stranger,
       beaconOwner,
       rewarder,
       vaultDepositor,
+      trustedWithdrawDepositor,
+      unknownValidatorProver,
+      pdgWithdrawer,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
@@ -124,6 +142,10 @@ describe("Delegation.sol", () => {
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
+        nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
+        trustedWithdrawDepositors: [trustedWithdrawDepositor],
+        unknownValidatorProvers: [unknownValidatorProver],
+        pdgWithdrawers: [pdgWithdrawer],
       },
       "0x",
     );
@@ -215,6 +237,10 @@ describe("Delegation.sol", () => {
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
+      await assertSoleMember(nodeOperatorRewardAdjuster, await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE());
+      await assertSoleMember(trustedWithdrawDepositor, await delegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE());
+      await assertSoleMember(unknownValidatorProver, await delegation.PROVE_UNKNOWN_VALIDATOR_ROLE());
+      await assertSoleMember(pdgWithdrawer, await delegation.PDG_WITHDRAWAL_ROLE());
 
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
@@ -309,10 +335,6 @@ describe("Delegation.sol", () => {
 
   context("increaseAccruedRewardsAdjustment", () => {
     beforeEach(async () => {
-      await delegation
-        .connect(nodeOperatorManager)
-        .grantRole(await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), nodeOperatorManager);
-
       const operatorFee = 10_00n; // 10%
       await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
       await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
@@ -330,24 +352,24 @@ describe("Delegation.sol", () => {
       const increase = ether("1");
 
       await expect(
-        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(LIMIT + 1n),
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT + 1n),
       ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
 
-      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase);
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
       expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
 
       await expect(
-        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(LIMIT),
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT),
       ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
 
       const increase2 = LIMIT - increase;
-      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase2);
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase2);
       expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT);
 
       await expect(
-        delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(1n),
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(1n),
       ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
     });
 
@@ -355,14 +377,14 @@ describe("Delegation.sol", () => {
       const increase = ether("10");
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
-      const tx = await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(increase);
+      const tx = await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
 
       await expect(tx).to.emit(delegation, "AccruedRewardsAdjustmentSet").withArgs(0n, increase);
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
     });
 
-    it("manual increase can decrease fee", async () => {
+    it("manual increase can decrease NO fee", async () => {
       const operatorFee = await delegation.nodeOperatorFeeBP();
 
       const rewards = ether("10");
@@ -370,11 +392,47 @@ describe("Delegation.sol", () => {
       const expectedDue = (rewards * operatorFee) / BP_BASE;
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
 
-      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(rewards / 2n);
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue / 2n);
 
-      await delegation.connect(nodeOperatorManager).increaseAccruedRewardsAdjustment(rewards / 2n);
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
+    });
+  });
+
+  context("trustedWithdrawAndDeposit", () => {
+    beforeEach(async () => {
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if the caller is not a member of the withdrawer role", async () => {
+      await expect(delegation.connect(stranger).trustedWithdrawAndDeposit([])).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("allows trusted depositor to withdraw and deposit", async () => {
+      const validator = generateValidator(await vault.withdrawalCredentials());
+      const amount = ether("32");
+      await delegation.connect(funder).fund({ value: amount });
+
+      const deposit = generatePostDeposit(validator, ether("32"));
+
+      const withdrawDepositTx = delegation.connect(trustedWithdrawDepositor).trustedWithdrawAndDeposit([deposit]);
+      await expect(withdrawDepositTx)
+        .to.emit(vault, "Withdrawn")
+        .withArgs(delegation, delegation, deposit.amount)
+        .to.emit(delegation, "TrustedDeposit")
+        .withArgs(vault, deposit.pubkey, deposit.amount)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(0n, deposit.amount);
+
+      expect(await delegation.valuation()).to.equal(0n);
+      expect(await delegation.withdrawableEther()).to.equal(0n);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(deposit.amount);
     });
   });
 

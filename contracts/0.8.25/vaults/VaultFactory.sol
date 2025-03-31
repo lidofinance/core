@@ -23,10 +23,14 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
+    address[] pdgWithdrawers;
+    address[] unknownValidatorProvers;
+    address[] trustedWithdrawDepositors;
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
     address[] nodeOperatorFeeClaimers;
+    address[] nodeOperatorRewardAdjusters;
 }
 
 contract VaultFactory {
@@ -113,6 +117,30 @@ contract VaultFactory {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
                 _delegationConfig.nodeOperatorFeeClaimers[i]
+            );
+        }
+        for (uint256 i = 0; i < _delegationConfig.nodeOperatorRewardAdjusters.length; i++) {
+            delegation.grantRole(
+                delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+                _delegationConfig.nodeOperatorRewardAdjusters[i]
+            );
+        }
+
+        for (uint256 i = 0; i < _delegationConfig.trustedWithdrawDepositors.length; i++) {
+            delegation.grantRole(
+                delegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE(),
+                _delegationConfig.trustedWithdrawDepositors[i]
+            );
+        }
+
+        for (uint256 i = 0; i < _delegationConfig.pdgWithdrawers.length; i++) {
+            delegation.grantRole(delegation.PDG_WITHDRAWAL_ROLE(), _delegationConfig.pdgWithdrawers[i]);
+        }
+
+        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
+            delegation.grantRole(
+                delegation.PROVE_UNKNOWN_VALIDATOR_ROLE(),
+                _delegationConfig.unknownValidatorProvers[i]
             );
         }
 

@@ -45,14 +45,18 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
-    stranger: HardhatEthersSigner;
+    stranger: HardhatEthersSigner,
+    nodeOperatorRewardAdjusters: HardhatEthersSigner,
+    trustedWithdrawDepositors: HardhatEthersSigner,
+    unknownValidatorProvers: HardhatEthersSigner,
+    pdgWithdrawers: HardhatEthersSigner;
 
   let allRoles: HardhatEthersSigner[];
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    allRoles = await getRandomSigners(20);
+    allRoles = await getRandomSigners(30);
     [
       owner,
       nodeOperatorManager,
@@ -69,6 +73,10 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       disconnecters,
       nodeOperatorFeeClaimers,
       stranger,
+      nodeOperatorRewardAdjusters,
+      trustedWithdrawDepositors,
+      unknownValidatorProvers,
+      pdgWithdrawers,
     ] = allRoles;
 
     const { depositSecurityModule } = ctx.contracts;
@@ -107,6 +115,10 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
           disconnecters: [disconnecters],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
+          nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjusters],
+          trustedWithdrawDepositors: [trustedWithdrawDepositors],
+          unknownValidatorProvers: [unknownValidatorProvers],
+          pdgWithdrawers: [pdgWithdrawers],
         },
         "0x",
       );
@@ -458,6 +470,10 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorWithdrawalTriggerers: [],
           disconnecters: [],
           nodeOperatorFeeClaimers: [],
+          nodeOperatorRewardAdjusters: [],
+          trustedWithdrawDepositors: [],
+          pdgWithdrawers: [],
+          unknownValidatorProvers: [],
         },
         "0x",
       );

@@ -132,6 +132,7 @@ describe("VaultFactory.sol", () => {
       nodeOperatorManager: await operator.getAddress(),
       confirmExpiry: days(7n),
       nodeOperatorFeeBP: 200n,
+      assetRecoverer: await vaultOwner1.getAddress(),
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
       minters: [await vaultOwner1.getAddress()],
@@ -143,7 +144,11 @@ describe("VaultFactory.sol", () => {
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
-      assetRecoverer: await vaultOwner1.getAddress(),
+
+      nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
+      pdgWithdrawers: [await vaultOwner1.getAddress()],
+      trustedWithdrawDepositors: [await vaultOwner1.getAddress()],
+      unknownValidatorProvers: [await vaultOwner1.getAddress()],
     };
   });
 
