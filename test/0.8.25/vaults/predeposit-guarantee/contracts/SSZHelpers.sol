@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
+import {GIndex, pack, concat, fls} from "contracts/0.8.25/lib/GIndex.sol";
 import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 
 // As defined in phase0/beacon-chain.md:159
@@ -47,6 +47,10 @@ contract SSZHelpers {
         bytes32 parentRoot;
         bytes32 stateRoot;
         bytes32 bodyRoot;
+    }
+
+    function depth(GIndex gIndex) public pure returns (uint256) {
+        return fls(gIndex.index());
     }
 
     // canonical implementation from original SSZ

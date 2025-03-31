@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "yarn@4.6.0",
+  "packageManager": "yarn@4.7.0",
   "scripts": {
     "compile": "hardhat compile",
     "cleanup": "hardhat clean",
@@ -33,7 +33,6 @@
     "test:integration:fork:mainnet": "MODE=forking hardhat test test/integration/**/*.ts --network mainnet-fork",
     "test:integration:fork:mainnet:custom": "MODE=forking hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
     "test:fuzzShateRate": "forge test --match-path \"test/0.8.25/ShareRate.t.sol\"",
@@ -52,10 +51,10 @@
     ]
   },
   "devDependencies": {
-    "@commitlint/cli": "19.7.1",
-    "@commitlint/config-conventional": "19.7.1",
+    "@commitlint/cli": "19.8.0",
+    "@commitlint/config-conventional": "19.8.0",
     "@eslint/compat": "1.2.7",
-    "@eslint/js": "9.21.0",
+    "@eslint/js": "9.23.0",
     "@nomicfoundation/hardhat-chai-matchers": "2.0.8",
     "@nomicfoundation/hardhat-ethers": "3.0.8",
     "@nomicfoundation/hardhat-ignition": "0.15.10",
@@ -69,15 +68,15 @@
     "@types/chai": "4.3.20",
     "@types/eslint": "9.6.1",
     "@types/mocha": "10.0.10",
-    "@types/node": "22.13.5",
+    "@types/node": "22.13.14",
     "bigint-conversion": "2.4.3",
     "chai": "4.5.0",
     "chalk": "4.1.2",
     "dotenv": "16.4.7",
-    "eslint": "9.21.0",
+    "eslint": "9.23.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-no-only-tests": "3.3.0",
-    "eslint-plugin-prettier": "5.2.3",
+    "eslint-plugin-prettier": "5.2.5",
     "eslint-plugin-simple-import-sort": "12.1.1",
     "ethereumjs-util": "7.1.5",
     "ethers": "6.13.5",
@@ -90,8 +89,8 @@
     "hardhat-tracer": "3.1.0",
     "hardhat-watcher": "2.5.0",
     "husky": "9.1.7",
-    "lint-staged": "15.4.3",
-    "prettier": "3.5.2",
+    "lint-staged": "15.5.0",
+    "prettier": "3.5.3",
     "prettier-plugin-solidity": "1.4.2",
     "solhint": "5.0.5",
     "solhint-plugin-lido": "0.0.4",
@@ -99,8 +98,8 @@
     "ts-node": "10.9.2",
     "tsconfig-paths": "4.2.0",
     "typechain": "8.3.2",
-    "typescript": "5.7.3",
-    "typescript-eslint": "8.25.0"
+    "typescript": "5.8.2",
+    "typescript-eslint": "8.28.0"
   },
   "dependencies": {
     "@aragon/apps-agent": "2.1.0",

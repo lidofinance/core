@@ -1,12 +1,22 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Delegation, StakingVault } from "typechain-types";
+import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
-import { computeDepositDataRoot, days, ether, impersonate, log, updateBalance } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  ether,
+  generateValidator,
+  impersonate,
+  log,
+  prepareLocalMerkleTree,
+  updateBalance,
+} from "lib";
 import {
   getProtocolContext,
   getReportTimeElapsed,
@@ -20,9 +30,6 @@ import {
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
 
-const PUBKEY_LENGTH = 48n;
-const SIGNATURE_LENGTH = 96n;
-
 const LIDO_DEPOSIT = ether("640");
 
 const VALIDATORS_PER_VAULT = 2n;
@@ -35,7 +42,6 @@ const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
-const VAULT_CURATOR_FEE = 1_00n; // 1% curator performance fee
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 
 describe("Scenario: Staking Vaults Happy Path", () => {
@@ -60,9 +66,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
-  let pubKeysBatch: Uint8Array;
-  let signaturesBatch: Uint8Array;
-
   let snapshot: string;
 
   before(async () => {
@@ -72,6 +75,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    // add ETH to NO for PDG deposit + gas
+    await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
 
     snapshot = await Snapshot.take();
   });
@@ -157,7 +163,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         defaultAdmin: owner,
         nodeOperatorManager: nodeOperator,
         assetRecoverer: curator,
-        curatorFeeBP: VAULT_CURATOR_FEE,
         nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
         confirmExpiry: days(7n),
         funders: [curator],
@@ -170,8 +175,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         validatorExitRequesters: [curator],
         validatorWithdrawalTriggerers: [curator],
         disconnecters: [curator],
-        curatorFeeSetters: [curator],
-        curatorFeeClaimers: [curator],
         nodeOperatorFeeClaimers: [nodeOperator],
       },
       "0x",
@@ -186,9 +189,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
 
     expect(await isSoleRoleMember(owner, await delegation.DEFAULT_ADMIN_ROLE())).to.be.true;
-
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_SET_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.CURATOR_FEE_CLAIM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
     expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
@@ -235,33 +235,79 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
   });
 
-  it("Should allow NodeOperator to deposit validators from the vault", async () => {
+  it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
     const keysToAdd = VALIDATORS_PER_VAULT;
-    pubKeysBatch = ethers.randomBytes(Number(keysToAdd * PUBKEY_LENGTH));
-    signaturesBatch = ethers.randomBytes(Number(keysToAdd * SIGNATURE_LENGTH));
-
-    const deposits = [];
 
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+    const predepositAmount = await ctx.contracts.predepositGuarantee.PREDEPOSIT_AMOUNT();
 
+    const validators: {
+      container: SSZHelpers.ValidatorStruct;
+      index: number;
+      proof: string[];
+    }[] = [];
+
+    // TODO: BLS signature support
     for (let i = 0; i < keysToAdd; i++) {
-      const pubkey = hexlify(pubKeysBatch.slice(i * Number(PUBKEY_LENGTH), (i + 1) * Number(PUBKEY_LENGTH)));
-      const signature = hexlify(
-        signaturesBatch.slice(i * Number(SIGNATURE_LENGTH), (i + 1) * Number(SIGNATURE_LENGTH)),
-      );
-
-      deposits.push({
-        pubkey: pubkey,
-        signature: signature,
-        amount: VALIDATOR_DEPOSIT_SIZE,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, VALIDATOR_DEPOSIT_SIZE),
-      });
+      validators.push({ container: generateValidator(withdrawalCredentials), index: 0, proof: [] });
     }
 
-    // TODO: fix PDG integration test
-    const pdg = ctx.contracts.predepositGuarantee;
-    const pdgImperosnator = await impersonate(pdg.address, ether("100"));
-    await stakingVault.connect(pdgImperosnator).depositToBeaconChain(deposits);
+    const predeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+      return {
+        pubkey: pubkey,
+        signature: signature,
+        amount: predepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, predepositAmount),
+      };
+    });
+
+    const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
+
+    // top up PDG balance
+    await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
+
+    // predeposit validators
+    await pdg.predeposit(stakingVault, predeposits);
+
+    const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+
+    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.index = (await mockCLtree.addValidator(validator.container)).validatorIndex;
+    }
+
+    const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
+
+    for (let index = 0; index < validators.length; index++) {
+      const validator = validators[index];
+      validator.proof = await mockCLtree.buildProof(validator.index, beaconBlockHeader);
+    }
+
+    const witnesses = validators.map((validator) => ({
+      proof: validator.proof,
+      pubkey: hexlify(validator.container.pubkey),
+      validatorIndex: validator.index,
+      childBlockTimestamp,
+    }));
+
+    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
+    const postdeposits = validators.map((validator) => {
+      const pubkey = hexlify(validator.container.pubkey);
+      const signature = hexlify(randomBytes(96));
+
+      return {
+        pubkey,
+        signature,
+        amount: postDepositAmount,
+        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, postDepositAmount),
+      };
+    });
+
+    await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
 
     stakingVaultBeaconBalance += VAULT_DEPOSIT;
     stakingVaultAddress = await stakingVault.getAddress();
@@ -343,7 +389,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
     // TODO: add assertions or locked values and rewards
 
-    expect(await delegation.curatorUnclaimedFee()).to.be.gt(0n);
     expect(await delegation.nodeOperatorUnclaimedFee()).to.be.gt(0n);
   });
 
@@ -369,34 +414,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     expect(operatorBalanceAfter).to.equal(operatorBalanceBefore + performanceFee - gasFee);
-  });
-
-  it("Should allow Curator to claim performance fees", async () => {
-    const feesToClaim = await delegation.curatorUnclaimedFee();
-    expect(feesToClaim).to.be.gt(0n);
-
-    log.debug("Staking Vault stats after operator exit", {
-      "Staking Vault management fee": ethers.formatEther(feesToClaim),
-      "Staking Vault balance": ethers.formatEther(await ethers.provider.getBalance(stakingVaultAddress)),
-    });
-
-    const managerBalanceBefore = await ethers.provider.getBalance(curator);
-
-    const claimEthTx = await delegation.connect(curator).claimCuratorFee(curator);
-    const { gasUsed, gasPrice } = (await claimEthTx.wait()) as ContractTransactionReceipt;
-
-    const managerBalanceAfter = await ethers.provider.getBalance(curator);
-    const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);
-
-    log.debug("Balances after owner fee claim", {
-      "Manager's ETH balance before": ethers.formatEther(managerBalanceBefore),
-      "Manager's ETH balance after": ethers.formatEther(managerBalanceAfter),
-      "Manager's ETH balance diff": ethers.formatEther(managerBalanceAfter - managerBalanceBefore),
-      "Staking Vault owner fee": ethers.formatEther(feesToClaim),
-      "Staking Vault balance": ethers.formatEther(vaultBalance),
-    });
-
-    expect(managerBalanceAfter).to.equal(managerBalanceBefore + feesToClaim - gasUsed * gasPrice);
   });
 
   it("Should allow Curator to burn minted shares", async () => {
