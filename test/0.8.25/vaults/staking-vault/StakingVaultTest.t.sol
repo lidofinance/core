@@ -86,7 +86,7 @@ contract ValidatorMock is Test {
     uint256 constant DAYS_PER_YEAR = 365;
     uint256 constant APR_MIN = 300; // 3.00% minimum APR
     uint256 constant APR_MAX = 500; // 5.00% maximum APR
-    uint256 private validatorBalance;
+    uint256 constant MIN_VALIDATOR_BALANCE = 32 ether;
 
     uint256 private currentAPR;
     uint256 private lastRewardTimestamp;
@@ -108,8 +108,7 @@ contract ValidatorMock is Test {
         uint256 daysPassed = timePassed / SECONDS_PER_DAY;
         lastRewardTimestamp += daysPassed * SECONDS_PER_DAY;
 
-        uint256 validatorBalance = 32 ether;
-        uint256 yearlyReward = (validatorBalance * currentAPR) / APR_DENOMINATOR;
+        uint256 yearlyReward = (MIN_VALIDATOR_BALANCE * currentAPR) / APR_DENOMINATOR;
         uint256 dailyReward = (yearlyReward * daysPassed) / DAYS_PER_YEAR;
 
         int256 randomVariation = int256(rnd.randInt(200)) - 100;
@@ -299,21 +298,25 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomUserDeposit() internal {
+        console2.log("------Deposit by random user------");
+
         uint256 amount = rnd.randAmountD18();
         console2.log("Deposit by random user %d", amount);
 
-        address user = rnd.randAddress();
-        deal(user, amount);
+        address randomUser = rnd.randAddress();
+        deal(randomUser, amount);
         if (amount == 0) {
             vm.expectRevert(abi.encodeWithSelector(ZeroArgument.selector, "msg.value"));
         }
-        vm.prank(user);
+        vm.prank(randomUser);
         payable(address(stakingVaultProxy)).transfer(amount);
         vm.stopPrank();
         randomUserDeposits += amount;
     }
 
     function transitionRandomFund() internal {
+        console2.log("------Fund vault------");
+
         uint256 amount = rnd.randAmountD18();
         console2.log("Fund vault %d", amount);
 
@@ -328,6 +331,8 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomWithdraw() internal {
+        console2.log("------Withdraw funds------");
+
         uint256 unlocked = stakingVaultProxy.unlocked();
         uint256 vaultBalance = address(stakingVaultProxy).balance;
         uint256 minWithdrawal = Math.min(unlocked, vaultBalance);
@@ -345,6 +350,8 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomReceiveReward() internal {
+        console2.log("------Receive reward------");
+
         uint256 dailyReward = validator.getDailyReward();
         console2.log("Receive reward %d", dailyReward);
         vm.deal(address(stakingVaultProxy), address(stakingVaultProxy).balance + dailyReward);
@@ -360,7 +367,7 @@ contract StakingVaultTest is Test {
         vm.stopPrank();
         deposits += VALIDATOR_DEPOSIT;
 
-        IStakingVault.Deposit[] memory deposits = new IStakingVault.Deposit[](1);
+        IStakingVault.Deposit[] memory newDeposits = new IStakingVault.Deposit[](1);
 
         bytes memory pubkey = new bytes(48);
         bytes32 firstPart = bytes32(uint256(1));
@@ -371,14 +378,14 @@ contract StakingVaultTest is Test {
             mstore(add(pubkey, 64), secondPart)
         }
 
-        deposits[0] = IStakingVault.Deposit({
+        newDeposits[0] = IStakingVault.Deposit({
             pubkey: pubkey,
             signature: bytes.concat(bytes32(uint256(2))),
             amount: VALIDATOR_DEPOSIT,
             depositDataRoot: bytes32(uint256(3))
         });
         vm.prank(depositor);
-        stakingVaultProxy.depositToBeaconChain(deposits);
+        stakingVaultProxy.depositToBeaconChain(newDeposits);
         vm.stopPrank();
 
         depositsToBeaconChain += VALIDATOR_DEPOSIT;
@@ -392,6 +399,8 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomDepositToBeaconChain() internal {
+        console2.log("------Deposit to Beacon Chain------");
+
         uint256 amount = rnd.randAmountD18();
         console2.log("Deposit to Beacon Chain %d", amount);
 
@@ -404,8 +413,8 @@ contract StakingVaultTest is Test {
             mstore(add(pubkey, 64), secondPart)
         }
 
-        IStakingVault.Deposit[] memory deposits = new IStakingVault.Deposit[](1);
-        deposits[0] = IStakingVault.Deposit({
+        IStakingVault.Deposit[] memory newDeposits = new IStakingVault.Deposit[](1);
+        newDeposits[0] = IStakingVault.Deposit({
             pubkey: pubkey,
             signature: bytes.concat(bytes32(uint256(2))),
             amount: amount,
@@ -413,7 +422,7 @@ contract StakingVaultTest is Test {
         });
 
         vm.prank(depositor);
-        stakingVaultProxy.depositToBeaconChain(deposits);
+        stakingVaultProxy.depositToBeaconChain(newDeposits);
         vm.stopPrank();
 
         depositsToBeaconChain += amount;
@@ -424,7 +433,8 @@ contract StakingVaultTest is Test {
 
         vm.prank(address(vaultHub));
         stakingVaultProxy.lock(CONNECT_DEPOSIT);
-        vm.stopPrank();
+
+        assertEq(stakingVaultProxy.locked(), CONNECT_DEPOSIT);
     }
 
     function transitionDisconnectVaultFromHub() internal {
@@ -432,12 +442,16 @@ contract StakingVaultTest is Test {
 
         uint256 valuation = stakingVaultProxy.valuation();
         int256 inOutDelta = stakingVaultProxy.inOutDelta();
+
         vm.prank(address(vaultHub));
         stakingVaultProxy.report(valuation, inOutDelta, 0);
-        vm.stopPrank();
+
+        assertEq(stakingVaultProxy.locked(), 0);
     }
 
     function transitionRandomMintShares() internal {
+        console2.log("------Mint shares------");
+
         uint256 vaultValuation = stakingVaultProxy.valuation();
         uint256 totalEtherToLock = vaultHub.getTotalEtherToLock(vaultValuation);
         console2.log("Mint shares %d", totalEtherToLock);
@@ -448,13 +462,15 @@ contract StakingVaultTest is Test {
                 abi.encodeWithSelector(LockedCannotDecreaseOutsideOfReport.selector, currentLocked, totalEtherToLock)
             );
         }
+
         vm.prank(address(vaultHub));
         stakingVaultProxy.lock(totalEtherToLock);
-        vm.stopPrank();
+
+        assertEq(stakingVaultProxy.locked(), totalEtherToLock);
     }
 
     function transitionRandomReport() internal {
-        console2.log("Receive report");
+        console2.log("------Receive report------");
 
         uint256 currentValuation = stakingVaultProxy.valuation();
         int256 currentInOutDelta = stakingVaultProxy.inOutDelta();
@@ -465,10 +481,14 @@ contract StakingVaultTest is Test {
 
         vm.prank(address(vaultHub));
         stakingVaultProxy.report(newValuation, currentInOutDelta, newLocked);
-        vm.stopPrank();
+
+        assertEq(stakingVaultProxy.valuation(), newValuation);
+        assertEq(stakingVaultProxy.locked(), newLocked);
     }
 
     function transitionRandomRebalance() internal {
+        console2.log("------Rebalance------");
+
         uint256 currentValuation = stakingVaultProxy.valuation();
         uint256 currentBalance = address(stakingVaultProxy).balance;
         uint256 currentLocked = stakingVaultProxy.locked();
