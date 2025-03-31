@@ -30,8 +30,6 @@ const TREASURY_FEE_BP = 5_00n;
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
 
-const VAULTS_CONNECTED_VAULTS_LIMIT = 5; // Low limit to test the overflow
-
 describe("VaultHub.sol:hub", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -116,7 +114,6 @@ describe("VaultHub.sol:hub", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -614,19 +611,6 @@ describe("VaultHub.sol:hub", () => {
           .connect(user)
           .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, tooHighTreasuryFeeBP),
       ).to.be.revertedWithCustomError(vaultHub, "TreasuryFeeTooHigh");
-    });
-
-    it("reverts if max vault size is exceeded", async () => {
-      const vaultsCount = await vaultHub.vaultsCount();
-      for (let i = vaultsCount; i < VAULTS_CONNECTED_VAULTS_LIMIT; i++) {
-        await createAndConnectVault(vaultFactory);
-      }
-
-      await expect(
-        vaultHub
-          .connect(user)
-          .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "TooManyVaults");
     });
 
     it("reverts if vault is already connected", async () => {

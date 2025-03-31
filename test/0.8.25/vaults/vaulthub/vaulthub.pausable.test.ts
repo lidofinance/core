@@ -9,7 +9,7 @@ import { StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 import { ether, MAX_UINT256 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultHub.sol:pausableUntil", () => {
   let deployer: HardhatEthersSigner;
@@ -28,12 +28,7 @@ describe("VaultHub.sol:pausableUntil", () => {
     const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);

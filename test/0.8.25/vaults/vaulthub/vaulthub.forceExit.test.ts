@@ -18,7 +18,7 @@ import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
@@ -64,12 +64,7 @@ describe("VaultHub.sol:forceExit", () => {
       predepositGuarantee: predepositGuarantee,
     });
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
 
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 

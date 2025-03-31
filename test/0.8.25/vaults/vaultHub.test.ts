@@ -9,7 +9,7 @@ import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__Harness
 import { ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultHub.sol", () => {
   let admin: HardhatEthersSigner;
@@ -40,7 +40,6 @@ describe("VaultHub.sol", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 

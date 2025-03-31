@@ -10,7 +10,4 @@ export const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 
-export const EIP7002_PREDEPLOYED_ADDRESS = "0x00000961Ef480Eb55e80D19ad83579A64c007002";
-
 export const VAULTS_RELATIVE_SHARE_LIMIT_BP = 10_00n;
-export const VAULTS_CONNECTED_VAULTS_LIMIT = 500;
