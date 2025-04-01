@@ -35,6 +35,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
     withdrawer: HardhatEthersSigner,
+    locker: HardhatEthersSigner,
     assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
@@ -59,6 +60,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       assetRecoverer,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
@@ -99,6 +101,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [funder],
           withdrawers: [withdrawer],
           minters: [minter],
+          lockers: [locker],
           burners: [burner],
           rebalancers: [rebalancer],
           depositPausers: [depositPausers],
@@ -293,6 +296,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
         it("mintStETH", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintStETH",
@@ -306,6 +311,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         });
 
         it("mintShares", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintShares",
@@ -333,6 +340,18 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
 
+        it("lock", async () => {
+          await testMethod(
+            testDelegation,
+            "lock",
+            {
+              successUsers: [locker],
+              failingUsers: allRoles.filter((r) => r !== locker),
+            },
+            [ether("1")],
+            await testDelegation.LOCK_ROLE(),
+          );
+        });
         // requires prepared state for this test to pass, skipping for now
         it.skip("withdrawWETH", async () => {
           await testMethod(
@@ -450,6 +469,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [],
           withdrawers: [],
           minters: [],
+          lockers: [],
           burners: [],
           rebalancers: [],
           depositPausers: [],

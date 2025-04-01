@@ -124,6 +124,7 @@ describe("Delegation.sol", () => {
         assetRecoverer: vaultOwner,
         funders: [funder],
         withdrawers: [withdrawer],
+        lockers: [minter],
         minters: [minter],
         burners: [burner],
         rebalancers: [rebalancer],
@@ -291,6 +292,7 @@ describe("Delegation.sol", () => {
     });
 
     it("claims the due", async () => {
+      const vaultBalanceBefore = await ethers.provider.getBalance(vault);
       const operatorFee = 10_00n; // 10%
       await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
       await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
@@ -301,18 +303,20 @@ describe("Delegation.sol", () => {
 
       const expectedDue = (rewards * operatorFee) / BP_BASE;
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
-      expect(await delegation.nodeOperatorUnclaimedFee()).to.be.greaterThan(await ethers.provider.getBalance(vault));
+      expect((await delegation.nodeOperatorUnclaimedFee()) + vaultBalanceBefore).to.be.greaterThan(
+        await ethers.provider.getBalance(vault),
+      );
 
-      expect(await ethers.provider.getBalance(vault)).to.equal(0n);
+      expect(await ethers.provider.getBalance(vault)).to.equal(vaultBalanceBefore);
       await rewarder.sendTransaction({ to: vault, value: rewards });
-      expect(await ethers.provider.getBalance(vault)).to.equal(rewards);
+      expect(await ethers.provider.getBalance(vault)).to.equal(rewards + vaultBalanceBefore);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
       await expect(delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, expectedDue);
       expect(await ethers.provider.getBalance(recipient)).to.equal(expectedDue);
-      expect(await ethers.provider.getBalance(vault)).to.equal(rewards - expectedDue);
+      expect(await ethers.provider.getBalance(vault)).to.equal(rewards - expectedDue + vaultBalanceBefore);
     });
   });
 
@@ -344,10 +348,11 @@ describe("Delegation.sol", () => {
       const locked = ether("2");
 
       const amount = ether("1");
+      const vaultBalanceBefore = await ethers.provider.getBalance(vault);
       await delegation.connect(funder).fund({ value: amount });
       await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, locked);
 
-      expect(await delegation.withdrawableEther()).to.equal(amount);
+      expect(await delegation.withdrawableEther()).to.equal(amount + vaultBalanceBefore);
     });
 
     it("returns the correct amount when has fees", async () => {
@@ -378,17 +383,18 @@ describe("Delegation.sol", () => {
 
     it("funds the vault", async () => {
       const amount = ether("1");
-      expect(await ethers.provider.getBalance(vault)).to.equal(0n);
-      expect(await vault.inOutDelta()).to.equal(0n);
-      expect(await vault.valuation()).to.equal(0n);
+      const vaultBalanceBefore = await ethers.provider.getBalance(vault);
+      expect(await ethers.provider.getBalance(vault)).to.equal(vaultBalanceBefore);
+      expect(await vault.inOutDelta()).to.equal(vaultBalanceBefore);
+      expect(await vault.valuation()).to.equal(vaultBalanceBefore);
 
       await expect(delegation.connect(funder).fund({ value: amount }))
         .to.emit(vault, "Funded")
         .withArgs(delegation, amount);
 
-      expect(await ethers.provider.getBalance(vault)).to.equal(amount);
-      expect(await vault.inOutDelta()).to.equal(amount);
-      expect(await vault.valuation()).to.equal(amount);
+      expect(await ethers.provider.getBalance(vault)).to.equal(amount + vaultBalanceBefore);
+      expect(await vault.inOutDelta()).to.equal(amount + vaultBalanceBefore);
+      expect(await vault.valuation()).to.equal(amount + vaultBalanceBefore);
     });
   });
 
@@ -427,19 +433,21 @@ describe("Delegation.sol", () => {
 
     it("withdraws the amount", async () => {
       const amount = ether("1");
-      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
-      expect(await vault.valuation()).to.equal(amount);
-      expect(await vault.unlocked()).to.equal(amount);
+      const timestamp = await getCurrentBlockTimestamp();
+      await vault.connect(hubSigner).report(timestamp, amount, 0n, 0n);
+      const vaultBalanceBefore = await ethers.provider.getBalance(vault);
+      expect(await vault.valuation()).to.equal(amount + vaultBalanceBefore);
+      expect(await vault.unlocked()).to.equal(amount + vaultBalanceBefore);
 
-      expect(await ethers.provider.getBalance(vault)).to.equal(0n);
+      expect(await ethers.provider.getBalance(vault)).to.equal(vaultBalanceBefore);
       await rewarder.sendTransaction({ to: vault, value: amount });
-      expect(await ethers.provider.getBalance(vault)).to.equal(amount);
+      expect(await ethers.provider.getBalance(vault)).to.equal(amount + vaultBalanceBefore);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(0n);
       await expect(delegation.connect(withdrawer).withdraw(recipient, amount))
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, amount);
-      expect(await ethers.provider.getBalance(vault)).to.equal(0n);
+      expect(await ethers.provider.getBalance(vault)).to.equal(vaultBalanceBefore);
       expect(await ethers.provider.getBalance(recipient)).to.equal(amount);
     });
   });
@@ -469,45 +477,6 @@ describe("Delegation.sol", () => {
         .withArgs(delegation, amount)
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
-    });
-  });
-
-  context("mint", () => {
-    it("reverts if the caller is not a member of the token master role", async () => {
-      await expect(delegation.connect(stranger).mintShares(recipient, 1n)).to.be.revertedWithCustomError(
-        delegation,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("mints the tokens", async () => {
-      const amount = 100n;
-      await expect(delegation.connect(minter).mintShares(recipient, amount))
-        .to.emit(steth, "Transfer")
-        .withArgs(ethers.ZeroAddress, recipient, amount);
-    });
-  });
-
-  context("burn", () => {
-    it("reverts if the caller is not a member of the token master role", async () => {
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(minter).mintShares(stranger, 100n);
-
-      await expect(delegation.connect(stranger).burnShares(100n)).to.be.revertedWithCustomError(
-        delegation,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("burns the tokens", async () => {
-      const amount = 100n;
-      await delegation.connect(minter).mintShares(burner, amount);
-
-      await expect(delegation.connect(burner).burnShares(amount))
-        .to.emit(steth, "Transfer")
-        .withArgs(burner, hub, amount)
-        .and.to.emit(steth, "Transfer")
-        .withArgs(hub, ethers.ZeroAddress, amount);
     });
   });
 

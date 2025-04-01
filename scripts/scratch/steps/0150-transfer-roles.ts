@@ -49,7 +49,7 @@ export async function main() {
     await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
   }
 
-  // Change DepositSecurityModule admin if not using predefined address
+  // Change DepositSecurityModule admin if not using a predefined address
   if (state[Sk.depositSecurityModule].deployParameters.usePredefinedAddressInstead === null) {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });

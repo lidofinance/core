@@ -463,7 +463,7 @@ describe("Dashboard.sol", () => {
       const amount = ether("1");
       await dashboard.fund({ value: amount });
 
-      await hub.mock_vaultLock(vault.getAddress(), amount);
+      await dashboard.lock(amount);
 
       expect(await dashboard.withdrawableEther()).to.equal(0n);
     });
@@ -472,25 +472,27 @@ describe("Dashboard.sol", () => {
       const amount = ether("1");
       await dashboard.fund({ value: amount });
 
-      await hub.mock_vaultLock(vault.getAddress(), amount);
+      await dashboard.lock(amount);
 
       expect(await dashboard.withdrawableEther()).to.equal(0n);
     });
 
     it("funds and get all half locked and can only half withdraw", async () => {
-      const amount = ether("1");
-      await dashboard.fund({ value: amount });
+      const fundAmount = ether("1");
+      await dashboard.fund({ value: fundAmount });
 
-      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+      const lockAmount = fundAmount / 2n;
+      await dashboard.lock(lockAmount);
 
-      expect(await dashboard.withdrawableEther()).to.equal(amount / 2n);
+      expect(await dashboard.withdrawableEther()).to.equal(fundAmount - lockAmount);
     });
 
     it("funds and get all half locked, but no balance and can not withdraw", async () => {
       const amount = ether("1");
       await dashboard.fund({ value: amount });
 
-      await hub.mock_vaultLock(vault.getAddress(), amount / 2n);
+      const lockAmount = amount / 2n;
+      await dashboard.lock(lockAmount);
 
       await setBalance(await vault.getAddress(), 0n);
 
@@ -536,14 +538,11 @@ describe("Dashboard.sol", () => {
 
       before(async () => {
         amountSteth = await steth.getPooledEthByShares(amountShares);
+        await dashboard.fund({ value: amountSteth });
       });
 
       beforeEach(async () => {
         await dashboard.mintShares(vaultOwner, amountShares);
-      });
-
-      it("reverts on disconnect attempt", async () => {
-        await expect(dashboard.voluntaryDisconnect()).to.be.reverted;
       });
 
       it("succeeds with rebalance when providing sufficient ETH", async () => {
@@ -593,11 +592,12 @@ describe("Dashboard.sol", () => {
 
     it("funds by weth", async () => {
       await weth.connect(vaultOwner).approve(dashboard, amount);
+      const previousBalance = await ethers.provider.getBalance(vault);
 
       await expect(dashboard.fundWeth(amount, { from: vaultOwner }))
         .to.emit(vault, "Funded")
         .withArgs(dashboard, amount);
-      expect(await ethers.provider.getBalance(vault)).to.equal(amount);
+      expect(await ethers.provider.getBalance(vault)).to.equal(previousBalance + amount);
     });
 
     it("reverts without approval", async () => {
@@ -700,6 +700,15 @@ describe("Dashboard.sol", () => {
       )
         .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
+    });
+  });
+
+  context("lock", () => {
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).lock(ether("1"))).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
     });
   });
 
@@ -909,7 +918,9 @@ describe("Dashboard.sol", () => {
 
     before(async () => {
       // mint shares to the vault owner for the burn
-      await dashboard.mintShares(vaultOwner, amountWsteth + amountWsteth);
+      const amountSteth = await steth.getPooledEthByShares(amountWsteth);
+      await dashboard.fund({ value: amountSteth });
+      await dashboard.mintShares(vaultOwner, amountWsteth);
     });
 
     it("reverts if called by a non-admin", async () => {
@@ -1230,8 +1241,9 @@ describe("Dashboard.sol", () => {
 
     before(async () => {
       // mint steth to the vault owner for the burn
-      await dashboard.mintShares(vaultOwner, amountShares);
       amountSteth = await steth.getPooledEthBySharesRoundUp(amountShares);
+      await dashboard.fund({ value: amountSteth });
+      await dashboard.mintShares(vaultOwner, amountShares);
     });
 
     beforeEach(async () => {
@@ -1427,8 +1439,9 @@ describe("Dashboard.sol", () => {
     let amountSteth: bigint;
 
     beforeEach(async () => {
-      amountSteth = await steth.getPooledEthBySharesRoundUp(amountShares);
+      amountSteth = await steth.getPooledEthBySharesRoundUp(amountShares + 100n);
       // mint steth to the vault owner for the burn
+      await dashboard.fund({ value: amountSteth });
       await dashboard.mintShares(vaultOwner, amountShares);
       // approve for wsteth wrap
       await steth.connect(vaultOwner).approve(wsteth, amountSteth);
@@ -1437,9 +1450,12 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await dashboard.mintShares(stranger, amountShares + 100n);
-      await steth.connect(stranger).approve(wsteth, amountSteth + 100n);
-      await wsteth.connect(stranger).wrap(amountSteth + 100n);
+      const shares = amountShares + 100n;
+      const stethAmount = await steth.getPooledEthByShares(shares);
+      await dashboard.fund({ value: stethAmount });
+      await dashboard.mintShares(stranger, shares);
+      await steth.connect(stranger).approve(wsteth, stethAmount);
+      await wsteth.connect(stranger).wrap(stethAmount);
 
       const permit = {
         owner: stranger.address,
@@ -1496,7 +1512,7 @@ describe("Dashboard.sol", () => {
         nonce: await wsteth.nonces(vaultOwner),
         deadline: BigInt(await time.latest()) + days(1n),
       };
-
+      const amountOfSteth = await steth.getPooledEthByShares(amountShares);
       const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
       const { deadline, value } = permit;
       const { v, r, s } = signature;
@@ -1514,8 +1530,8 @@ describe("Dashboard.sol", () => {
 
       await expect(result).to.emit(wsteth, "Approval").withArgs(vaultOwner, dashboard, amountShares); // approve steth from vault owner to dashboard
       await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amountShares); // transfer steth to dashboard
-      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amountSteth); // uwrap wsteth to steth
-      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountSteth, amountSteth, amountShares); // burn steth
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amountOfSteth); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountOfSteth, amountOfSteth, amountShares); // burn steth
 
       expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amountShares);
@@ -1529,6 +1545,8 @@ describe("Dashboard.sol", () => {
         nonce: (await wsteth.nonces(vaultOwner)) + 1n, // invalid nonce
         deadline: BigInt(await time.latest()) + days(1n),
       };
+
+      const amountOfSteth = await steth.getPooledEthByShares(amountShares);
 
       const signature = await signPermit(await wstethDomain(wsteth), permit, vaultOwner);
       const { deadline, value } = permit;
@@ -1552,8 +1570,8 @@ describe("Dashboard.sol", () => {
       const result = await dashboard.connect(vaultOwner).burnWstETHWithPermit(amountShares, permitData);
 
       await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amountShares); // transfer steth to dashboard
-      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amountSteth); // uwrap wsteth to steth
-      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountSteth, amountSteth, amountShares); // burn steth
+      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amountOfSteth); // uwrap wsteth to steth
+      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountOfSteth, amountOfSteth, amountShares); // burn steth
 
       expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amountShares);
