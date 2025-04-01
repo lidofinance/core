@@ -144,9 +144,8 @@ describe("VaultFactory.sol", () => {
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
-
       nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
-      pdgWithdrawers: [await vaultOwner1.getAddress()],
+      pdgCompensators: [await vaultOwner1.getAddress()],
       trustedWithdrawDepositors: [await vaultOwner1.getAddress()],
       unknownValidatorProvers: [await vaultOwner1.getAddress()],
     };

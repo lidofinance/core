@@ -410,10 +410,10 @@ contract Dashboard is Permissions {
     /**
      * @notice Proves validators with correct vault WC if they are unknown to PDG
      * @param _witnesses array of CLProofVerifier.ValidatorWitness structs containing proof data for validators
-     * @dev requires the caller to have the `PROVE_SIDE_VALIDATOR_ROLE`
+     * @dev requires the caller to have the `PDG_PROVE_VALIDATOR_ROLE`
      */
     function proveUnknownValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
-        _proveUnknownValidators(_witnesses);
+        _proveUnknownValidatorsToPDG(_witnesses);
     }
 
     /**
@@ -421,6 +421,7 @@ contract Dashboard is Permissions {
      * @param _pubkey of validator that was proven invalid in PDG
      * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
      * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
+     * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
      */
     function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
         _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);

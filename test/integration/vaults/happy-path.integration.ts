@@ -179,7 +179,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         nodeOperatorRewardAdjusters: [nodeOperator],
         trustedWithdrawDepositors: [curator],
         unknownValidatorProvers: [curator],
-        pdgWithdrawers: [curator],
+        pdgCompensators: [curator],
       },
       "0x",
     );

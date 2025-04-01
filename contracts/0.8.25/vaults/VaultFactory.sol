@@ -23,7 +23,7 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
-    address[] pdgWithdrawers;
+    address[] pdgCompensators;
     address[] unknownValidatorProvers;
     address[] trustedWithdrawDepositors;
     address[] validatorExitRequesters;
@@ -133,15 +133,12 @@ contract VaultFactory {
             );
         }
 
-        for (uint256 i = 0; i < _delegationConfig.pdgWithdrawers.length; i++) {
-            delegation.grantRole(delegation.PDG_WITHDRAWAL_ROLE(), _delegationConfig.pdgWithdrawers[i]);
+        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
+            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
         }
 
         for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
-            delegation.grantRole(
-                delegation.PROVE_UNKNOWN_VALIDATOR_ROLE(),
-                _delegationConfig.unknownValidatorProvers[i]
-            );
+            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
         }
 
         // set fees

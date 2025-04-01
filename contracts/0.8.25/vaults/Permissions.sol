@@ -78,19 +78,19 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for withdrawing disproven validator predeposit from PDG
+     * @notice Permission for getting compensation of disproven validator predeposit from PDG
      */
-    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
+    bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
+
+    /**
+     * @notice Permission for proving valid vault validators unknown to the PDG
+     */
+    bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
 
     /**
      * @notice Permission for unsafe deposit to trusted validators
      */
     bytes32 public constant TRUSTED_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.TrustedWithdrawDeposit");
-
-    /**
-     * @notice Permission for proving validators unknown to the PDG
-     */
-    bytes32 public constant PROVE_UNKNOWN_VALIDATOR_ROLE = keccak256("vaults.Permissions.ProveUnknownValidator");
 
     /**
      * @notice Permission for assets recovery
@@ -276,8 +276,21 @@ abstract contract Permissions is AccessControlConfirmable {
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
-    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
+    ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
         return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+    }
+
+    /**
+     * @dev Proves validators unknown to PDG that have correct vault WC
+     */
+    function _proveUnknownValidatorsToPDG(
+        CLProofVerifier.ValidatorWitness[] calldata _witnesses
+    ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
+        IStakingVault vault = stakingVault();
+        PredepositGuarantee pdg = PredepositGuarantee(vault.depositor());
+        for (uint256 i = 0; i < _witnesses.length; i++) {
+            pdg.proveUnknownValidator(_witnesses[i], vault);
+        }
     }
 
     /**
@@ -285,19 +298,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _withdrawForDeposit(uint256 _ether) internal onlyRole(TRUSTED_WITHDRAW_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
-    }
-
-    /**
-     * @dev Proves validators unknown to PDG that have correct vault WC
-     */
-    function _proveUnknownValidators(
-        CLProofVerifier.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRole(PROVE_UNKNOWN_VALIDATOR_ROLE) {
-        IStakingVault vault = stakingVault();
-        PredepositGuarantee pdg = PredepositGuarantee(vault.depositor());
-        for (uint256 i = 0; i < _witnesses.length; i++) {
-            pdg.proveUnknownValidator(_witnesses[i], vault);
-        }
     }
 
     /**

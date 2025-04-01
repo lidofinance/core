@@ -53,7 +53,7 @@ describe("Delegation.sol", () => {
   let vaultDepositor: HardhatEthersSigner;
   let trustedWithdrawDepositor: HardhatEthersSigner;
   let unknownValidatorProver: HardhatEthersSigner;
-  let pdgWithdrawer: HardhatEthersSigner;
+  let pdgCompensator: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
@@ -98,7 +98,7 @@ describe("Delegation.sol", () => {
       vaultDepositor,
       trustedWithdrawDepositor,
       unknownValidatorProver,
-      pdgWithdrawer,
+      pdgCompensator,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
@@ -145,7 +145,7 @@ describe("Delegation.sol", () => {
         nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
         trustedWithdrawDepositors: [trustedWithdrawDepositor],
         unknownValidatorProvers: [unknownValidatorProver],
-        pdgWithdrawers: [pdgWithdrawer],
+        pdgCompensators: [pdgCompensator],
       },
       "0x",
     );
@@ -225,6 +225,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.vaultHub()).to.equal(hub);
 
       await assertSoleMember(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE());
+      await assertSoleMember(vaultOwner, await delegation.ASSET_RECOVERY_ROLE());
       await assertSoleMember(funder, await delegation.FUND_ROLE());
       await assertSoleMember(withdrawer, await delegation.WITHDRAW_ROLE());
       await assertSoleMember(minter, await delegation.MINT_ROLE());
@@ -239,8 +240,8 @@ describe("Delegation.sol", () => {
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
       await assertSoleMember(nodeOperatorRewardAdjuster, await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE());
       await assertSoleMember(trustedWithdrawDepositor, await delegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE());
-      await assertSoleMember(unknownValidatorProver, await delegation.PROVE_UNKNOWN_VALIDATOR_ROLE());
-      await assertSoleMember(pdgWithdrawer, await delegation.PDG_WITHDRAWAL_ROLE());
+      await assertSoleMember(unknownValidatorProver, await delegation.PDG_PROVE_VALIDATOR_ROLE());
+      await assertSoleMember(pdgCompensator, await delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE());
 
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
