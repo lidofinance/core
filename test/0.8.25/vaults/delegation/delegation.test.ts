@@ -399,6 +399,32 @@ describe("Delegation.sol", () => {
       await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
     });
+
+    it("adjustment is reset after fee claim", async () => {
+      const operatorFee = await delegation.nodeOperatorFeeBP();
+
+      const rewards = ether("10");
+      await delegation.connect(funder).fund({ value: rewards });
+      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      const expectedDue = (rewards * operatorFee) / BP_BASE;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(rewards / 2n);
+
+      const adjustedDue = expectedDue / 2n;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(adjustedDue);
+
+      const claimTx = delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient);
+      await expect(claimTx)
+        .to.emit(vault, "Withdrawn")
+        .withArgs(delegation, recipient, adjustedDue)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(rewards / 2n, 0n);
+
+      expect(await ethers.provider.getBalance(recipient)).to.equal(adjustedDue);
+      expect(await ethers.provider.getBalance(vault)).to.equal(rewards - adjustedDue);
+    });
   });
 
   context("trustedWithdrawAndDeposit", () => {
@@ -415,7 +441,7 @@ describe("Delegation.sol", () => {
       );
     });
 
-    it("allows trusted depositor to withdraw and deposit", async () => {
+    it("allows to trustedWithdrawAndDeposit and increases accruedRewardsAdjustment", async () => {
       const validator = generateValidator(await vault.withdrawalCredentials());
       const amount = ether("32");
       await delegation.connect(funder).fund({ value: amount });
@@ -434,6 +460,27 @@ describe("Delegation.sol", () => {
       expect(await delegation.valuation()).to.equal(0n);
       expect(await delegation.withdrawableEther()).to.equal(0n);
       expect(await delegation.accruedRewardsAdjustment()).to.equal(deposit.amount);
+    });
+
+    it("trustedWithdrawAndDeposit can increase accruedRewardsAdjustment beyond manual limit", async () => {
+      // set adjustment to manual limit
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT);
+
+      // prep for shortcut deposit
+      const validator = generateValidator(await vault.withdrawalCredentials());
+      const amount = ether("32");
+      await delegation.connect(funder).fund({ value: amount });
+      const deposit = generatePostDeposit(validator, ether("32"));
+
+      // increase adjustment with trustedWithdrawAndDeposit
+      const withdrawDepositTx = delegation.connect(trustedWithdrawDepositor).trustedWithdrawAndDeposit([deposit]);
+      await expect(withdrawDepositTx)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(LIMIT, LIMIT + BigInt(deposit.amount));
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT + BigInt(deposit.amount));
     });
   });
 
