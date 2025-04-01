@@ -71,6 +71,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
      * @custom:vaultHub Address of VaultHub
+     * @custom:depositor Address of the depositor
      * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -132,6 +133,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _owner Address that will own the vault
      * @param _nodeOperator Address of the node operator
      * @param _vaultHub Address of VaultHub
+     * @param _depositor Address of the depositor. If zero address, _nodeOperator will be used
      * @param - Additional initialization parameters
      */
     function initialize(
@@ -143,18 +145,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     ) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         __Ownable_init(_owner);
 
         ERC7201Storage storage $ = _getStorage();
         $.nodeOperator = _nodeOperator;
         $.vaultHub = _vaultHub;
-        $.depositor = _depositor;
+        $.depositor = _depositor == address(0) ? _nodeOperator : _depositor;
 
         emit NodeOperatorSet(_nodeOperator);
         emit VaultHubAttached(_vaultHub);
-        emit DepositorAttached(_depositor);
+        emit DepositorSet(_depositor);
     }
 
     /**
@@ -200,17 +201,22 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function attachVaultHubAndDepositor(address _vaultHub, address _depositor) external onlyOwner {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
         if (isOssified()) revert VaultIsOssified();
 
+        VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
+        if (socket.vault != address(0) && socket.vault != address(this)) {
+            revert VaultSocketOccupied(socket.vault);
+        }
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
 
+        address depositor_ = _depositor == address(0) ? $.nodeOperator : _depositor;
+
         $.vaultHub = _vaultHub;
-        $.depositor = _depositor;
+        $.depositor = depositor_;
 
         emit VaultHubAttached(_vaultHub);
-        emit DepositorAttached(_depositor);
+        emit DepositorSet(depositor_);
     }
 
     /**
@@ -230,11 +236,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             revert VaultNotMarkedForDisconnect(socket.vault, socket.pendingDisconnect);
         }
 
-        $.vaultHub = address(0);
-        $.depositor = address(0);
+        address _depositor = $.nodeOperator;
 
-        emit VaultHubDetached(address(0));
-        emit DepositorDetached(address(0));
+        $.vaultHub = address(0);
+        $.depositor = _depositor;
+
+        emit VaultHubDetached();
+        emit DepositorSet(_depositor);
     }
 
     /**
@@ -410,13 +418,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
-        address _vaultHub = $.vaultHub;
-        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == _vaultHub)) {
+        address vaultHub_ = $.vaultHub;
+        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == vaultHub_)) {
             $.inOutDelta -= int128(int256(_ether));
 
-            emit Withdrawn(msg.sender, _vaultHub, _ether);
+            emit Withdrawn(msg.sender, vaultHub_, _ether);
 
-            VaultHub(_vaultHub).rebalance{value: _ether}();
+            VaultHub(vaultHub_).rebalance{value: _ether}();
         } else {
             revert NotAuthorized("rebalance", msg.sender);
         }
@@ -624,21 +632,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Emitted when `VaultHub` is detached from `StakingVault`
-     * @param vaultHub Address of the detached `VaultHub`
      */
-    event VaultHubDetached(address indexed vaultHub);
+    event VaultHubDetached();
 
     /**
      * @notice Emitted when `Depositor` is attached
      * @param depositor Address of the attached `Depositor`
      */
-    event DepositorAttached(address indexed depositor);
-
-    /**
-     * @notice Emitted when `Depositor` is detached
-     * @param depositor Address of the detached `Depositor`
-     */
-    event DepositorDetached(address indexed depositor);
+    event DepositorSet(address indexed depositor);
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
@@ -847,4 +848,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
      */
     error VaultIsOssified();
+
+    /**
+     * @notice Thrown when trying to attach vault to VaultHub while it is already occupied
+     */
+    error VaultSocketOccupied(address vault);
 }

@@ -200,19 +200,6 @@ describe("VaultHub.sol:detach", () => {
         .withArgs("_vaultHub");
     });
 
-    it("reverts when attachVaultHub on invalid depositor address", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(
-        vaultOwner1,
-        invalidVaultFactory,
-        delegationParams,
-      );
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, ZeroAddress))
-        .to.revertedWithCustomError(vault, "ZeroArgument")
-        .withArgs("_depositor");
-    });
-
     it("reverts when attachVaultHub on invalid owner", async () => {
       const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
 
@@ -598,14 +585,53 @@ describe("VaultHub.sol:detach", () => {
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
         .to.emit(vault, "VaultHubDetached")
-        .withArgs(ZeroAddress)
-        .to.emit(vault, "DepositorDetached")
-        .withArgs(ZeroAddress);
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
       await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee))
         .to.emit(vault, "VaultHubAttached")
         .withArgs(vaultHub)
-        .to.emit(vault, "DepositorAttached")
+        .to.emit(vault, "DepositorSet")
         .withArgs(predepositGuarantee);
+    });
+
+    it("depositor set to nodeOperatorManager if zero address is provided", async () => {
+      const config = {
+        shareLimit: 10n,
+        minReserveRatioBP: 500n,
+        rebalanceThresholdBP: 20n,
+        treasuryFeeBP: 500n,
+      };
+
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      await vault.connect(delegationSigner).fund({ value: 1000n });
+
+      await expect(
+        vaultHub
+          .connect(admin)
+          .connectVault(
+            vault,
+            config.shareLimit,
+            config.minReserveRatioBP,
+            config.rebalanceThresholdBP,
+            config.treasuryFeeBP,
+          ),
+      ).to.emit(vaultHub, "VaultConnected");
+
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
+        .to.emit(vault, "VaultHubDetached")
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
+
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, ZeroAddress))
+        .to.emit(vault, "VaultHubAttached")
+        .withArgs(vaultHub)
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
     });
 
     it("reverts when ossify by stranger", async () => {

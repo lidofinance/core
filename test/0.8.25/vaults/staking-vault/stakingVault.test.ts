@@ -133,11 +133,11 @@ describe("StakingVault.sol", () => {
         .withArgs("_vaultHub");
     });
 
-    it("reverts if the `_depositor` is zero address", async () => {
+    it("no reverts if the `_depositor` is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, operator, vaultHubAddress, ZeroAddress, "0x"))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_depositor");
+      await expect(vault_.initialize(vaultOwner, operator, vaultHubAddress, ZeroAddress, "0x")).to.not.be.reverted;
+
+      expect(await vault_.depositor()).to.equal(operator);
     });
   });
 
