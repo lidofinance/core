@@ -103,6 +103,10 @@ describe("VaultHub.sol:forceExit", () => {
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
+    const connectDeposit = ether("1.0");
+    await vault.connect(user).fund({ value: connectDeposit });
+    await vault.connect(user).lock(connectDeposit);
+
     await vaultHub
       .connect(user)
       .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
@@ -208,6 +212,7 @@ describe("VaultHub.sol:forceExit", () => {
       await demoVault.fund({ value: valuation });
       const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
+      await demoVault.connect(user).lock(valuation);
       await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
