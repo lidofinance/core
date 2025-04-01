@@ -562,13 +562,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _proof the proof of the reported data
     function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
-
-        bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
-        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
-
-        // TODO: Move this check in the beggining of the function
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
+
+        checkVaultsDataProof(_vault, _valuation, _inOutDelta, _fees, _sharesMinted, _proof);
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
         uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
@@ -585,6 +581,13 @@ contract VaultHub is PausableUntilWithRoles {
         );
 
         IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
+    }
+
+    function checkVaultsDataProof(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) public view {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        bytes32 root = $.vaultsDataTreeRoot;
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
+        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
     }
 
     // function updateVaults(
