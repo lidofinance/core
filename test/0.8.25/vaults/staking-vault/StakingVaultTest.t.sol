@@ -307,7 +307,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomUserDeposit() internal {
-        console2.log("------Deposit by random user------");
+        console2.log("Deposit by random user with random amount");
 
         uint256 amount = rnd.randAmountD18();
         address randomUser = rnd.randAddress();
@@ -321,7 +321,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomFund() internal {
-        console2.log("------Fund vault------");
+        console2.log("Fund vault with random amount of funds");
 
         uint256 amount = rnd.randAmountD18();
         int256 inOutDeltaBefore = stakingVaultProxy.inOutDelta();
@@ -343,7 +343,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomWithdraw() internal {
-        console2.log("------Withdraw funds------");
+        console2.log("Withdraw random amount of funds");
 
         uint256 unlocked = stakingVaultProxy.unlocked();
         uint256 vaultBalance = address(stakingVaultProxy).balance;
@@ -368,7 +368,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomReceiveReward() internal {
-        console2.log("------Receive reward------");
+        console2.log("Receive random reward");
 
         uint256 dailyReward = validator.getDailyReward();
         uint256 valuationBefore = stakingVaultProxy.valuation();
@@ -431,9 +431,12 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomDepositToBeaconChain() internal {
-        console2.log("------Deposit to Beacon Chain------");
+        console2.log("Deposit to Beacon Chain with random amount");
 
         uint256 amount = rnd.randAmountD18();
+        int256 inOutDeltaBefore = stakingVaultProxy.inOutDelta();
+        uint256 valuationBefore = stakingVaultProxy.valuation();
+        uint256 balanceBefore = address(stakingVaultProxy).balance;
 
         bytes memory pubkey = new bytes(48);
         bytes32 firstPart = bytes32(uint256(1));
@@ -455,6 +458,10 @@ contract StakingVaultTest is Test {
         vm.prank(depositor);
         stakingVaultProxy.depositToBeaconChain(newDeposits);
         depositsToBeaconChain += amount;
+
+        assertEq(inOutDeltaBefore, stakingVaultProxy.inOutDelta());
+        assertEq(valuationBefore, stakingVaultProxy.valuation());
+        assertEq(balanceBefore, address(stakingVaultProxy).balance + amount);
     }
 
     function transitionConnectVaultToHub() internal {
@@ -484,7 +491,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomMintShares() internal {
-        console2.log("------Mint shares------");
+        console2.log("Mint shares with random amount");
 
         uint256 vaultValuation = stakingVaultProxy.valuation();
         uint256 totalEtherToLock = vaultHub.getTotalEtherToLock(vaultValuation);
@@ -503,7 +510,7 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomReport() internal {
-        console2.log("------Receive report------");
+        console2.log("Receive report");
 
         uint256 currentValuation = stakingVaultProxy.valuation();
         int256 currentInOutDelta = stakingVaultProxy.inOutDelta();
@@ -524,27 +531,40 @@ contract StakingVaultTest is Test {
     }
 
     function transitionRandomRebalance() internal {
-        console2.log("------Rebalance------");
+        console2.log("Rebalance with random amount");
 
-        uint256 currentValuation = stakingVaultProxy.valuation();
-        uint256 currentBalance = address(stakingVaultProxy).balance;
-        uint256 currentLocked = stakingVaultProxy.locked();
-        uint256 etherToRebalance = vaultHub.getAmountToUnlock(currentValuation, currentLocked);
+        int256 inOutDelta = stakingVaultProxy.inOutDelta();
+        uint256 valuation = stakingVaultProxy.valuation();
+        uint256 balance = address(stakingVaultProxy).balance;
+        uint256 locked = stakingVaultProxy.locked();
+        uint256 etherToRebalance = vaultHub.getAmountToUnlock(valuation, locked);
+        bool isRebalanceAllowed = false;
 
         if (etherToRebalance == 0) {
             vm.expectRevert(abi.encodeWithSelector(ZeroArgument.selector, "_ether"));
-        } else if (etherToRebalance > currentBalance) {
-            vm.expectRevert(abi.encodeWithSelector(InsufficientBalance.selector, currentBalance));
-        } else if (etherToRebalance > currentValuation) {
+        } else if (etherToRebalance > balance) {
+            vm.expectRevert(abi.encodeWithSelector(InsufficientBalance.selector, balance));
+        } else if (etherToRebalance > valuation) {
             vm.expectRevert(
-                abi.encodeWithSelector(RebalanceAmountExceedsValuation.selector, currentValuation, etherToRebalance)
+                abi.encodeWithSelector(RebalanceAmountExceedsValuation.selector, valuation, etherToRebalance)
             );
-        } else if (currentValuation >= currentLocked) {
+        } else if (valuation >= locked) {
             vm.expectRevert(abi.encodeWithSelector(NotAuthorized.selector, "rebalance", address(vaultHub)));
         } else {
+            isRebalanceAllowed = true;
             vaultHubBalance += etherToRebalance;
         }
         vm.prank(address(vaultHub));
         stakingVaultProxy.rebalance(etherToRebalance);
+
+        if (isRebalanceAllowed) {
+            assertEq(inOutDelta, stakingVaultProxy.inOutDelta() + int256(etherToRebalance));
+            assertEq(valuation, stakingVaultProxy.valuation() + etherToRebalance);
+            assertEq(balance, address(stakingVaultProxy).balance + etherToRebalance);
+        } else {
+            assertEq(inOutDelta, stakingVaultProxy.inOutDelta());
+            assertEq(valuation, stakingVaultProxy.valuation());
+            assertEq(balance, address(stakingVaultProxy).balance);
+        }
     }
 }
