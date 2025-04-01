@@ -37,7 +37,7 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
 
     /**
-     * @notice Permission for locking the StakingVault.
+     * @notice Permission for locking ether on StakingVault.
      */
     bytes32 public constant LOCK_ROLE = keccak256("vaults.Permissions.Lock");
 
