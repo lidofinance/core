@@ -520,6 +520,8 @@ export type OracleReportSubmitParams = {
   isBunkerMode?: boolean;
   vaultsTotalTreasuryFees?: bigint;
   vaultsTotalDeficit?: bigint;
+  vaultsDataTreeRoot?: string;
+  vaultsDataTreeCid?: string;
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -550,6 +552,8 @@ const submitReport = async (
     isBunkerMode = false,
     vaultsTotalTreasuryFees = 0n,
     vaultsTotalDeficit = 0n,
+    vaultsDataTreeRoot = ZERO_BYTES32,
+    vaultsDataTreeCid = "",
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -571,6 +575,8 @@ const submitReport = async (
     "Is bunker mode": isBunkerMode,
     "Vaults total treasury fees": vaultsTotalTreasuryFees,
     "Vaults total deficit": vaultsTotalDeficit,
+    "Vaults data tree root": vaultsDataTreeRoot,
+    "Vaults data tree cid": vaultsDataTreeCid,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -594,6 +600,8 @@ const submitReport = async (
     isBunkerMode,
     vaultsTotalTreasuryFees,
     vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -719,6 +727,8 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.isBunkerMode,
   data.vaultsTotalTreasuryFees,
   data.vaultsTotalDeficit,
+  data.vaultsDataTreeRoot,
+  data.vaultsDataTreeCid,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -742,6 +752,8 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "bool", // isBunkerMode
     "uint256", // vaultsTotalTreasuryFees
     "uint256", // vaultsTotalDeficit
+    "bytes32", // vaultsDataTreeRoot
+    "string", // vaultsDataTreeCid
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount
