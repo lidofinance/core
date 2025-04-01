@@ -19,6 +19,7 @@ struct DelegationConfig {
     uint16 nodeOperatorFeeBP;
     address[] funders;
     address[] withdrawers;
+    address[] lockers;
     address[] minters;
     address[] burners;
     address[] rebalancers;
@@ -87,6 +88,9 @@ contract VaultFactory {
         }
         for (uint256 i = 0; i < _delegationConfig.withdrawers.length; i++) {
             delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lockers.length; i++) {
+            delegation.grantRole(delegation.LOCK_ROLE(), _delegationConfig.lockers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.minters.length; i++) {
             delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minters[i]);
