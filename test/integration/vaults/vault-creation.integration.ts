@@ -110,39 +110,72 @@ describe("Scenario: Vault creation", () => {
 
   after(async () => await Snapshot.restore(originalSnapshot));
 
+  async function generateFeesToClaim() {
+    const { vaultHub } = ctx.contracts;
+    const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+    const rewards = ether("1");
+    await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
+  }
+
   it("Allows to fund an withdraw funds for dedicated roles", async () => {
-    expect(await delegation.connect(funder).fund({ value: 2n })).to.be.ok;
+    await expect(delegation.connect(funder).fund({ value: 2n }))
+      .to.emit(stakingVault, "Funded")
+      .withArgs(delegation, 2n);
+
     expect(await delegation.connect(owner).withdrawableEther()).to.equal(2n);
-    expect(await delegation.connect(withdrawer).withdraw(stranger, 2n)).to.be.ok;
+
+    await expect(await delegation.connect(withdrawer).withdraw(stranger, 2n))
+      .to.emit(stakingVault, "Withdrawn")
+      .withArgs(delegation, stranger, 2n);
     expect(await delegation.connect(owner).withdrawableEther()).to.equal(0);
   });
 
   it("Allows to pause/resume deposits to validators", async () => {
-    expect(await delegation.connect(depositPausers).pauseBeaconChainDeposits()).to.be.ok;
-    expect(await delegation.connect(depositResumers).resumeBeaconChainDeposits()).to.be.ok;
+    await expect(delegation.connect(depositPausers).pauseBeaconChainDeposits()).to.emit(
+      stakingVault,
+      "BeaconChainDepositsPaused",
+    );
+    await expect(delegation.connect(depositResumers).resumeBeaconChainDeposits()).to.emit(
+      stakingVault,
+      "BeaconChainDepositsResumed",
+    );
   });
 
   it("Allows to ask Node Operator to withdraw funds from validator(s)", async () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
-    expect(await stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY)).to.be.ok;
+    await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
+      .to.emit(stakingVault, "ValidatorExitRequested")
+      .withArgs(vaultOwner, SAMPLE_PUBKEY, SAMPLE_PUBKEY);
   });
 
   it("Allows to trigger validator withdrawal", async () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
 
-    expect(
-      await stakingVault
+    await expect(
+      stakingVault
         .connect(vaultOwner)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
-    ).to.be.ok;
+    )
+      .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
+      .withArgs(vaultOwnerAddress, SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, 0);
   });
 
   it("Allows to claim NO's fee", async () => {
+    await delegation.connect(funder).fund({ value: ether("1") });
+    await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n);
+    await delegation.connect(owner).setNodeOperatorFeeBP(1n);
+
     await expect(
       delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger),
-    ).to.be.not.revertedWithoutReason();
+    ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "ZeroArgument");
+
+    await generateFeesToClaim();
+
+    await expect(delegation.connect(nodeOperatorFeeClaimers).claimNodeOperatorFee(stranger))
+      .to.emit(stakingVault, "Withdrawn")
+      .withArgs(delegation, stranger, 100000000000000n);
   });
 
   describe("Reverts stETH related actions when not connected to hub", () => {
@@ -206,6 +239,8 @@ describe("Scenario: Vault creation", () => {
     const validator = generateValidator(vaultWC);
     const predepositData = generatePredeposit(validator);
 
-    await expect(pdg.predeposit(stakingVault, [predepositData])).to.emit(stakingVault, "DepositedToBeaconChain");
+    await expect(pdg.predeposit(stakingVault, [predepositData]))
+      .to.emit(stakingVault, "DepositedToBeaconChain")
+      .withArgs(ctx.contracts.predepositGuarantee.address, 1, 1000000000000000000n);
   });
 });
