@@ -308,13 +308,13 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault vault_ = IStakingVault(_vault);
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
         uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        uint256 etherToLock = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
-        if (etherToLock > maxMintableEther) {
+        uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
+        if (stETHAfterMint > maxMintableEther) {
             revert InsufficientValuationToMint(_vault, vault_.valuation());
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 minLocked = (etherToLock * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+        uint256 minLocked = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
         if (minLocked > vault_.locked()) {
             revert VaultInsufficientLocked(_vault, vault_.locked(), minLocked);
         }
