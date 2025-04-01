@@ -231,7 +231,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
             revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
 
-        if (IStakingVault(_vault).locked() != CONNECT_DEPOSIT)
+        if (IStakingVault(_vault).locked() < CONNECT_DEPOSIT)
             revert VaultInsufficientLocked(_vault, IStakingVault(_vault).locked(), CONNECT_DEPOSIT);
 
         VaultSocket memory vsocket = VaultSocket(
