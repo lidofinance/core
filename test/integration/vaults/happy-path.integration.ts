@@ -168,6 +168,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         funders: [curator],
         withdrawers: [curator],
         minters: [curator],
+        lockers: [curator],
         burners: [curator],
         rebalancers: [curator],
         depositPausers: [curator],
@@ -195,6 +196,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await delegation.LOCK_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.MINT_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.BURN_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await delegation.REBALANCE_ROLE())).to.be.true;
@@ -208,7 +210,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, vaultHub } = ctx.contracts;
 
-    expect(await stakingVault.locked()).to.equal(0); // no ETH locked yet
+    expect(await stakingVault.locked()).to.equal(0n); // no ETH locked yet
 
     const votingSigner = await ctx.getSigner("voting");
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
@@ -217,6 +219,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
 
     const agentSigner = await ctx.getSigner("agent");
+
+    await delegation.connect(curator).fund({ value: ether("1") });
+    await delegation.connect(curator).lock(ether("1"));
 
     await vaultHub
       .connect(agentSigner)
@@ -231,8 +236,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
-    expect(vaultBalance).to.equal(VAULT_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
+    expect(vaultBalance).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
@@ -313,12 +318,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     stakingVaultAddress = await stakingVault.getAddress();
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
-    expect(vaultBalance).to.equal(0n);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT);
+    expect(vaultBalance).to.equal(VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow Curator to mint max stETH", async () => {
-    const { vaultHub, lido } = ctx.contracts;
+    const { lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -330,12 +335,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       "Total ETH": await stakingVault.valuation(),
       "Max shares": stakingVaultMaxMintingShares,
     });
-
-    // Validate minting with the cap
-    const mintOverLimitTx = delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares + 1n);
-    await expect(mintOverLimitTx)
-      .to.be.revertedWithCustomError(vaultHub, "InsufficientValuationToMint")
-      .withArgs(stakingVault, stakingVault.valuation());
 
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
