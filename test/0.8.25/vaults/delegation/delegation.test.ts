@@ -105,7 +105,7 @@ describe("Delegation.sol", () => {
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
     expect(await factory.VAULT_HUB()).to.equal(hub);
-    expect(await factory.DEPOSITOR()).to.equal(vaultDepositor);
+    expect(await factory.PREDEPOSIT_GUARANTEE()).to.equal(vaultDepositor);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {

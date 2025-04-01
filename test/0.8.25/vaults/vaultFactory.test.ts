@@ -188,12 +188,12 @@ describe("VaultFactory.sol", () => {
         .withArgs("_vaultHub");
     });
 
-    it("reverts if `_vaultHub` is zero address", async () => {
+    it("reverts if `_predepositGuarantee` is zero address", async () => {
       await expect(
         ethers.deployContract("VaultFactory", [beacon, delegation, vaultHub, ZeroAddress], { from: deployer }),
       )
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_depositor");
+        .withArgs("_predepositGuarantee");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
