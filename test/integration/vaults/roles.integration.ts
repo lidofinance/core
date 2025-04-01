@@ -526,7 +526,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
         testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
         testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
-        testDelegation.ASSET_RECOVERY_ROLE(),
         testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
         testDelegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE(),
         testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
