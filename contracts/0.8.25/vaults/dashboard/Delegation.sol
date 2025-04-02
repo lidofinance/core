@@ -182,12 +182,6 @@ abstract contract Delegation is Permissions {
     }
 
     /**
-     * @dev Emitted when the contract is initialized.
-     * @param defaultAdmin The address of the default admin.
-     */
-    event Initialized(address indexed defaultAdmin);
-
-    /**
      * @dev Emitted when the node operator fee is set.
      * @param oldNodeOperatorFeeBP The old node operator fee.
      * @param newNodeOperatorFeeBP The new node operator fee.

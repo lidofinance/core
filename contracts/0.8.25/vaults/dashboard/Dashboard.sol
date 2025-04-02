@@ -30,15 +30,8 @@ contract Dashboard is UXLayer {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
-    ) public {
-        if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
-
-        initialized = true;
-
+    ) public initializer {
         super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-
-        emit Initialized(_defaultAdmin);
     }
 
     function stakingVault() public view override returns (IStakingVault) {
@@ -47,6 +40,17 @@ contract Dashboard is UXLayer {
 
     function vaultHub() public view override returns (VaultHub) {
         return VaultHub(stakingVault().vaultHub());
+    }
+
+    modifier initializer() {
+        if (initialized) revert AlreadyInitialized();
+        if (address(this) == _SELF) revert NonProxyCallsForbidden();
+
+        initialized = true;
+
+        _;
+
+        emit Initialized();
     }
 
     /**
@@ -59,4 +63,9 @@ contract Dashboard is UXLayer {
             addr := mload(add(args, 32))
         }
     }
+
+    /**
+     * @dev Emitted when the contract is initialized.
+     */
+    event Initialized();
 }
