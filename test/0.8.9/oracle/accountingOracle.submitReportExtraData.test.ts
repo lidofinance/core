@@ -62,7 +62,7 @@ const getDefaultReportFields = (override = {}) => ({
   sharesRequestedToBurn: ether("3"),
   withdrawalFinalizationBatches: [1],
   isBunkerMode: true,
-  vaultsTotalTreasuryFees: ether("4"),
+  vaultsTotalTreasuryFeesShares: ether("4"),
   vaultsTotalDeficit: ether("5"),
   vaultsDataTreeRoot: ethers.ZeroHash,
   vaultsDataTreeCid: "",

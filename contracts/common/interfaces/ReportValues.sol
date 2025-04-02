@@ -24,7 +24,7 @@ struct ReportValues {
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
     /// @notice overall vaults treasury fees
-    uint256 vaultsTotalTreasuryFees;
+    uint256 vaultsTotalTreasuryFeesShares;
     /// @notice overall vaults total deficit
     uint256 vaultsTotalDeficit;
     /// @notice Merkle Tree root of the vaults data.

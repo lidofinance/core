@@ -215,7 +215,7 @@ contract Accounting {
 
         // Calculate the amount of shares to mint as fees to the treasury for vaults
 
-        uint256 externalShares = _pre.externalShares + _report.vaultsTotalTreasuryFees;
+        uint256 externalShares = _pre.externalShares + _report.vaultsTotalTreasuryFeesShares;
 
         update.postTotalShares = update.postInternalShares + externalShares;
         update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
@@ -317,8 +317,8 @@ contract Accounting {
             _report.vaultsDataTreeRoot,
             _report.vaultsDataTreeCid
         );
-        if (_report.vaultsTotalTreasuryFees > 0) {
-            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFees);
+        if (_report.vaultsTotalTreasuryFeesShares > 0) {
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFeesShares);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
