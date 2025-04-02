@@ -11,6 +11,7 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
 import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
+import { ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData } from "../lib/ReportExitLimitUtils.sol";
 
 
 interface IOracleReportSanityChecker {
@@ -21,12 +22,12 @@ interface IOracleReportSanityChecker {
 contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
+    using ReportExitLimitUtilsStorage for bytes32;
+    using ReportExitLimitUtils for ExitRequestLimitData;
+
 
     error AdminCannotBeZero();
     error SenderNotAllowed();
-    error UnsupportedRequestsDataFormat(uint256 format);
-    error InvalidRequestsData();
-    error InvalidRequestsDataLength();
     error UnexpectedRequestsDataLength();
     error InvalidRequestsDataSortOrder();
     error ArgumentOutOfBounds();
@@ -35,14 +36,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint256 nodeOpId,
         uint256 prevRequestedValidatorIndex,
         uint256 requestedValidatorIndex
-    );
-
-    event ValidatorExitRequest(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        uint256 indexed validatorIndex,
-        bytes validatorPubkey,
-        uint256 timestamp
     );
 
     event WarnDataIncompleteProcessing(
@@ -89,7 +82,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.dataProcessingState");
 
-    ILidoLocator internal immutable LOCATOR;
+    // ILidoLocator internal immutable LOCATOR;
 
     ///
     /// Initialization & admin functions
@@ -97,8 +90,8 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
         BaseOracle(secondsPerSlot, genesisTime)
+        ValidatorsExitBus(lidoLocator)
     {
-        LOCATOR = ILidoLocator(lidoLocator);
     }
 
     function initialize(
@@ -116,7 +109,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
-        _setLocatorAddress(address(LOCATOR));
+        // TODO: after deleted last exited keys clean here slots
     }
 
     /// @notice Resume accepting validator exit requests
@@ -183,24 +176,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         /// see the constant defining a specific data format below for more info.
         bytes data;
     }
-
-    /// @notice The list format of the validator exit requests data. Used when all
-    /// requests fit into a single transaction.
-    ///
-    /// Each validator exit request is described by the following 64-byte array:
-    ///
-    /// MSB <------------------------------------------------------- LSB
-    /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
-    /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
-    ///
-    /// All requests are tightly packed into a byte array where requests follow
-    /// one another without any separator or padding, and passed to the `data`
-    /// field of the report structure.
-    ///
-    /// Requests must be sorted in the ascending order by the following compound
-    /// key: (moduleId, nodeOpId, validatorIndex).
-    ///
-    uint256 public constant DATA_FORMAT_LIST = 1;
 
     /// @notice Submits report data for processing.
     ///
@@ -346,9 +321,20 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
             revert InvalidRequestsDataLength();
         }
 
-        // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
+
+        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+
+        if (exitRequestLimitData.isExitReportLimitSet()) {
+          uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+
+          if (limit < data.requestsCount) {
+            revert ExitRequestsLimit();
+          }
+
+          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount));
+        }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
@@ -454,7 +440,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         if (requestsCount == 0) {
             return;
         }
-        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(block.timestamp, requestsCount - 1));
     }
 
     ///

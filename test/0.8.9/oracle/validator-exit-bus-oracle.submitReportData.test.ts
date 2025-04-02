@@ -704,4 +704,69 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       ]);
     });
   });
+
+  context("VEB limits", () => {
+    let originalState: string;
+    before(async () => {
+      originalState = await Snapshot.take();
+      await consensus.advanceTimeToNextFrameStart();
+    });
+    after(async () => await Snapshot.restore(originalState));
+
+    let report: ReportFields;
+    let hash: string;
+
+    it("Set exit limit", async () => {
+      const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      await oracle.grantRole(role, admin);
+      const exitLimitTx = await oracle.connect(admin).setExitReportLimit(2, 1);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1);
+    });
+
+    it("emits ValidatorExitRequest events", async () => {
+      const requests = [
+        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2] },
+      ];
+      const { reportData } = await prepareReportAndSubmitHash(requests);
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
+        oracle,
+        "ExitRequestsLimit",
+      );
+
+      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      const block = await tx.getBlock();
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          requests[0].moduleId,
+          requests[0].nodeOpId,
+          requests[0].valIndex,
+          requests[0].valPubkey,
+          block?.timestamp,
+        );
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          requests[1].moduleId,
+          requests[1].nodeOpId,
+          requests[1].valIndex,
+          requests[1].valPubkey,
+          block?.timestamp,
+        );
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          requests[2].moduleId,
+          requests[2].nodeOpId,
+          requests[2].valIndex,
+          requests[2].valPubkey,
+          block?.timestamp,
+        );
+    });
+  });
 });
