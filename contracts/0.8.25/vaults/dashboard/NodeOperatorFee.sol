@@ -225,16 +225,6 @@ abstract contract NodeOperatorFee is Permissions {
     error RequestedAmountExceedsUnreserved();
 
     /**
-     * @dev Error emitted when the contract is already initialized.
-     */
-    error AlreadyInitialized();
-
-    /**
-     * @dev Error emitted when the contract is called as a proxy.
-     */
-    error NonProxyCallsForbidden();
-
-    /**
      * @dev Error emitted when the fee is 0.
      */
     error NoUnclaimedFee();

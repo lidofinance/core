@@ -68,4 +68,14 @@ contract Dashboard is UXLayer {
      * @dev Emitted when the contract is initialized.
      */
     event Initialized();
+
+    /**
+     * @dev Error emitted when the contract is already initialized.
+     */
+    error AlreadyInitialized();
+
+    /**
+     * @dev Error emitted when the contract is called as a proxy.
+     */
+    error NonProxyCallsForbidden();
 }
