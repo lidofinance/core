@@ -135,6 +135,7 @@ describe("VaultFactory.sol", () => {
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
       minters: [await vaultOwner1.getAddress()],
+      lockers: [await vaultOwner1.getAddress()],
       burners: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
       rebalancers: [await vaultOwner1.getAddress()],
@@ -263,6 +264,9 @@ describe("VaultFactory.sol", () => {
 
       //add proxy code hash to whitelist
       await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
+
+      await delegator1.fund({ value: ether("1") });
+      await delegator1.lock(ether("1"));
 
       //connect vault 1 to VaultHub
       await vaultHub

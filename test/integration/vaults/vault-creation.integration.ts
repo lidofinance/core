@@ -28,9 +28,10 @@ describe("Scenario: Vault creation", () => {
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
     withdrawer: HardhatEthersSigner,
+    locker: HardhatEthersSigner,
+    assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
-    assetRecoverer: HardhatEthersSigner,
     rebalancer: HardhatEthersSigner,
     depositPausers: HardhatEthersSigner,
     depositResumers: HardhatEthersSigner,
@@ -56,11 +57,12 @@ describe("Scenario: Vault creation", () => {
     [
       owner,
       nodeOperatorManager,
+      assetRecoverer,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
-      assetRecoverer,
       rebalancer,
       depositPausers,
       depositResumers,
@@ -70,7 +72,7 @@ describe("Scenario: Vault creation", () => {
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
-    console.log(allRoles.map((s) => s.address));
+
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
       {
@@ -82,6 +84,7 @@ describe("Scenario: Vault creation", () => {
         funders: [funder],
         withdrawers: [withdrawer],
         minters: [minter],
+        lockers: [locker],
         burners: [burner],
         rebalancers: [rebalancer],
         depositPausers: [depositPausers],

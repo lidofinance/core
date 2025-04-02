@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, impersonate, randomAddress } from "lib";
+import { BigIntMath, ether, findEvents, impersonate, MAX_UINT256, randomAddress } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -72,6 +72,8 @@ describe("VaultHub.sol:hub", () => {
     },
   ) {
     const vault = await createVault(factory);
+    await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
+    await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     await vaultHub
       .connect(user)
@@ -313,6 +315,7 @@ describe("VaultHub.sol:hub", () => {
 
         if (mintable > 0n) {
           const sharesToMint = await lido.getSharesByPooledEth(mintable);
+          await vault.lock(valuation);
           await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
         }
 
@@ -498,6 +501,7 @@ describe("VaultHub.sol:hub", () => {
       await vault.fund({ value: ether("50") });
       const mintingEth = ether("25");
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vault.lock(ether("50"));
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
 
       await vault.report(ether("50"), ether("50"), ether("5"));
@@ -517,17 +521,10 @@ describe("VaultHub.sol:hub", () => {
       });
 
       const vaultAddress = await vault.getAddress();
-
-      const vaultSocket_1 = await vaultHub["vaultSocket(address)"](vaultAddress);
-      const mintedStETH_1 = await lido.getPooledEthByShares(vaultSocket_1.sharesMinted);
-      const maxMintableRatio_1 = TOTAL_BASIS_POINTS - vaultSocket_1.reserveRatioBP;
-      const vaultValuation_1 = await vault.valuation();
-      const localGap_1 =
-        (mintedStETH_1 * TOTAL_BASIS_POINTS - vaultValuation_1 * maxMintableRatio_1) / vaultSocket_1.reserveRatioBP;
-
-      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(localGap_1);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MAX_UINT256);
 
       await vault.fund({ value: ether("50") });
+      await vault.lock(ether("50"));
       const mintingEth = ether("25");
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
@@ -677,6 +674,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocketBefore.vault).to.equal(ZeroAddress);
       expect(vaultSocketBefore.pendingDisconnect).to.be.false;
 
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)
@@ -695,6 +695,9 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("allows to connect the vault with 0 share limit", async () => {
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)
@@ -705,6 +708,9 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("allows to connect the vault with 0 treasury fee", async () => {
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)
