@@ -251,14 +251,14 @@ describe("VaultHub.sol:hub", () => {
         ZERO_HASH,
       ]);
       const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket.lastFees).to.equal(100n);
+      expect(vaultSocket.feeSharesCharged).to.equal(100n);
 
       await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 101n, 0n, [
         ZERO_HASH,
       ]);
 
       const vaultSocket2 = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket2.lastFees).to.equal(101n);
+      expect(vaultSocket2.feeSharesCharged).to.equal(101n);
     });
 
     it("rejects incorrectly reported cumulative vaults treasury fees", async () => {
@@ -274,7 +274,7 @@ describe("VaultHub.sol:hub", () => {
         ZERO_HASH,
       ]);
       const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket.lastFees).to.equal(100n);
+      expect(vaultSocket.feeSharesCharged).to.equal(100n);
 
       await expect(
         vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 99n, 0n, [

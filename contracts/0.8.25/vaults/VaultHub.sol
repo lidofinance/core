@@ -57,7 +57,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
         /// @notice last fees accrued on the vault
-        uint96 lastFees;
+        uint96 feeSharesCharged;
         /// @notice unused gap in the slot 2
         /// uint8 _unused_gap_;
     }
@@ -568,24 +568,23 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault the address of the vault
     /// @param _valuation the valuation of the vault
     /// @param _inOutDelta the inOutDelta of the vault
-    /// @param _fees the fees of the vault
+    /// @param _feeSharesCharged the feeSharesCharged of the vault
     /// @param _sharesMinted the sharesMinted of the vault
     /// @param _proof the proof of the reported data
-    function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) external {
+    function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _feeSharesCharged, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
 
-        checkVaultsDataProof(_vault, _valuation, _inOutDelta, _fees, _sharesMinted, _proof);
+        checkVaultsDataProof(_vault, _valuation, _inOutDelta, _feeSharesCharged, _sharesMinted, _proof);
 
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
-        uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
-        if (_fees < socket.lastFees) {
-            revert InvalidFees(_vault, _fees, socket.lastFees);
+        if (_feeSharesCharged  < socket.feeSharesCharged) {
+            revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
         }
-        newMintedShares += _fees - socket.lastFees;
-        socket.sharesMinted = uint96(newMintedShares);
-        socket.lastFees = uint96(_fees);
+        socket.sharesMinted += uint96(_feeSharesCharged - socket.feeSharesCharged);
+        socket.feeSharesCharged = uint96(_feeSharesCharged);
 
+        uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
         uint256 lockedEther = Math256.max(
             LIDO.getPooledEthBySharesRoundUp(newMintedShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
             CONNECT_DEPOSIT
