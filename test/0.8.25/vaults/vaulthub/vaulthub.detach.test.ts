@@ -332,8 +332,8 @@ describe("VaultHub.sol:detach", () => {
       expect(0).to.equal(socket.sharesMinted);
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
 
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
         vault,
         "VaultHubAlreadyDetached",
@@ -386,7 +386,10 @@ describe("VaultHub.sol:detach", () => {
 
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
+        .to.emit(vault, "VaultHubSet")
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
 
       const vault1VaultHubAfterDetach = await vault.vaultHub();
       const vault2VaultHubAfterDetach = await vault2.vaultHub();
@@ -453,7 +456,10 @@ describe("VaultHub.sol:detach", () => {
       const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
       await vaultHub.connect(accountingSigner).updateVaults([], [], [], []);
 
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.emit(vault, "VaultHubDetached");
+      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
+        .to.emit(vault, "VaultHubSet")
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
 
       const vault1VaultHubAfterDetach = await vault.vaultHub();
       const vault2VaultHubAfterDetach = await vault2.vaultHub();
@@ -534,7 +540,7 @@ describe("VaultHub.sol:detach", () => {
 
       await expect(
         vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
-      ).to.revertedWithCustomError(vault, "VaultHubAlreadyAttached");
+      ).to.revertedWithCustomError(vault, "VaultHubAttached");
     });
 
     it("attach vaultHub works", async () => {
@@ -584,11 +590,11 @@ describe("VaultHub.sol:detach", () => {
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubDetached")
+        .to.emit(vault, "VaultHubSet")
         .to.emit(vault, "DepositorSet")
         .withArgs(delegationParams.nodeOperatorManager);
       await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee))
-        .to.emit(vault, "VaultHubAttached")
+        .to.emit(vault, "VaultHubSet")
         .withArgs(vaultHub)
         .to.emit(vault, "DepositorSet")
         .withArgs(predepositGuarantee);
@@ -623,12 +629,12 @@ describe("VaultHub.sol:detach", () => {
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
 
       await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubDetached")
+        .to.emit(vault, "VaultHubSet")
         .to.emit(vault, "DepositorSet")
         .withArgs(delegationParams.nodeOperatorManager);
 
       await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, ZeroAddress))
-        .to.emit(vault, "VaultHubAttached")
+        .to.emit(vault, "VaultHubSet")
         .withArgs(vaultHub)
         .to.emit(vault, "DepositorSet")
         .withArgs(delegationParams.nodeOperatorManager);
@@ -649,7 +655,7 @@ describe("VaultHub.sol:detach", () => {
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
         vault,
-        "VaultHubAlreadyAttached",
+        "VaultHubAttached",
       );
     });
 

@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {Address} from "@openzeppelin/contracts-v4.4/utils/Address.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
@@ -63,6 +64,8 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
+    using Address for address;
+
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -154,7 +157,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.depositor = _depositor == address(0) ? _nodeOperator : _depositor;
 
         emit NodeOperatorSet(_nodeOperator);
-        emit VaultHubAttached(_vaultHub);
+        emit VaultHubSet(_vaultHub);
         emit DepositorSet(_depositor);
     }
 
@@ -203,19 +206,22 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (isOssified()) revert VaultIsOssified();
 
-        VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
-        if (socket.vault != address(0) && socket.vault != address(this)) {
-            revert VaultSocketOccupied(socket.vault);
+        if (_vaultHub.isContract()) {
+            VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
+            if (socket.vault != address(0) && socket.vault != address(this)) {
+                revert VaultSocketOccupied(socket.vault);
+            }
         }
+
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
+        if ($.vaultHub != address(0)) revert VaultHubAttached();
 
         address depositor_ = _depositor == address(0) ? $.nodeOperator : _depositor;
 
         $.vaultHub = _vaultHub;
         $.depositor = depositor_;
 
-        emit VaultHubAttached(_vaultHub);
+        emit VaultHubSet(_vaultHub);
         emit DepositorSet(depositor_);
     }
 
@@ -231,9 +237,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         address _vaultHub = $.vaultHub;
         if (_vaultHub == address(0)) revert VaultHubAlreadyDetached();
 
-        VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
-        if (socket.vault != address(0) && !socket.pendingDisconnect) {
-            revert VaultNotMarkedForDisconnect(socket.vault, socket.pendingDisconnect);
+        if (_vaultHub.isContract()) {
+            VaultHub.VaultSocket memory socket = VaultHub(_vaultHub).vaultSocket(address(this));
+            if (socket.vault != address(0) && !socket.pendingDisconnect) {
+                revert VaultNotMarkedForDisconnect(socket.vault, socket.pendingDisconnect);
+            }
         }
 
         address _depositor = $.nodeOperator;
@@ -241,7 +249,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         $.vaultHub = address(0);
         $.depositor = _depositor;
 
-        emit VaultHubDetached();
+        emit VaultHubSet(address(0));
         emit DepositorSet(_depositor);
     }
 
@@ -256,7 +264,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHub != address(0)) revert VaultHubAlreadyAttached();
+        if ($.vaultHub != address(0)) revert VaultHubAttached();
         PinnedBeaconUtils.ossify();
     }
 
@@ -628,12 +636,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Emitted when `VaultHub` is attached to `StakingVault`
      * @param vaultHub Address of the attached `VaultHub`
      */
-    event VaultHubAttached(address indexed vaultHub);
-
-    /**
-     * @notice Emitted when `VaultHub` is detached from `StakingVault`
-     */
-    event VaultHubDetached();
+    event VaultHubSet(address indexed vaultHub);
 
     /**
      * @notice Emitted when `Depositor` is attached
@@ -837,7 +840,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when trying to ossify vault, or to attach vault to VaultHub while it is already attached
      */
-    error VaultHubAlreadyAttached();
+    error VaultHubAttached();
 
     /**
      * @notice Thrown when trying to detach vault from VaultHub while it is not in pending disconnect status
