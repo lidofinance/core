@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, impersonate, MAX_UINT256, randomAddress } from "lib";
+import { BigIntMath, ether, findEvents, impersonate, randomAddress } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -489,6 +489,51 @@ describe("VaultHub.sol:hub", () => {
         .withArgs("_vault");
     });
 
+    it("returns 0 when stETH was not minted", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      await vault.lock(ether("5"));
+      await vault.report(ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(ether("0"));
+    });
+
+    it("returns 0 when minted small amount of stETH and vault is healthy", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 10_00n, // 10%
+        rebalanceThresholdBP: 9_00n, // 9%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      const mintingEth = ether("1");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vault.lock(ether("5"));
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      await vault.report(ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
+    });
+
     it("returns correct value for rebalance vault", async () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
@@ -521,7 +566,7 @@ describe("VaultHub.sol:hub", () => {
       });
 
       const vaultAddress = await vault.getAddress();
-      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MAX_UINT256);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
 
       await vault.fund({ value: ether("50") });
       await vault.lock(ether("50"));

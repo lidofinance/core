@@ -177,11 +177,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
         uint256 valuation = IStakingVault(_vault).valuation();
+        bool isHealthy = isVaultHealthy(_vault);
 
-        // to avoid revert below
-        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
-            // return MAX_UINT_256
-            return type(uint256).max;
+        // Health vault do not need to rebalance
+        if (isHealthy) {
+            return 0;
         }
 
         // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / TOTAL_BASIS_POINTS
@@ -194,7 +194,13 @@ contract VaultHub is PausableUntilWithRoles {
         // reserveRatio = TOTAL_BASIS_POINTS - maxMintableRatio
         // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / reserveRatio
 
-        return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
+        // Protection against underflow in division
+        if (!isHealthy && mintedStETH * TOTAL_BASIS_POINTS > valuation * maxMintableRatio) {
+            return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
+        }
+
+        // return MAX_UINT_256
+        return type(uint256).max;
     }
 
     /// @notice connects a vault to the hub
