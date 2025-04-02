@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
-import { days, ether, generatePredeposit, generateValidator, impersonate } from "lib";
+import { certainAddress, days, ether, generatePredeposit, generateValidator, impersonate } from "lib";
 import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -120,7 +120,7 @@ describe("Scenario: Vault creation", () => {
     await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
   }
 
-  it("Allows to fund an withdraw funds for dedicated roles", async () => {
+  it("Allows withdrawer role to fund an withdraw funds for dedicated roles", async () => {
     await expect(delegation.connect(funder).fund({ value: 2n }))
       .to.emit(stakingVault, "Funded")
       .withArgs(delegation, 2n);
@@ -133,7 +133,7 @@ describe("Scenario: Vault creation", () => {
     expect(await delegation.connect(owner).withdrawableEther()).to.equal(0);
   });
 
-  it("Allows to pause/resume deposits to validators", async () => {
+  it("Allows deposit pauser/resumer role to pause/resume deposits to validators", async () => {
     await expect(delegation.connect(depositPausers).pauseBeaconChainDeposits()).to.emit(
       stakingVault,
       "BeaconChainDepositsPaused",
@@ -144,7 +144,7 @@ describe("Scenario: Vault creation", () => {
     );
   });
 
-  it("Allows to ask Node Operator to withdraw funds from validator(s)", async () => {
+  it("Allows  vault owner to ask Node Operator to withdraw funds from validator(s)", async () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
     await expect(stakingVault.connect(vaultOwner).requestValidatorExit(SAMPLE_PUBKEY))
@@ -152,7 +152,7 @@ describe("Scenario: Vault creation", () => {
       .withArgs(vaultOwner, SAMPLE_PUBKEY, SAMPLE_PUBKEY);
   });
 
-  it("Allows to trigger validator withdrawal", async () => {
+  it("Allows vault owner to trigger validator withdrawal", async () => {
     const vaultOwnerAddress = await stakingVault.owner();
     const vaultOwner: ContractRunner = await impersonate(vaultOwnerAddress, ether("10000"));
 
@@ -165,7 +165,7 @@ describe("Scenario: Vault creation", () => {
       .withArgs(vaultOwnerAddress, SAMPLE_PUBKEY, [ether("1")], vaultOwnerAddress, 0);
   });
 
-  it("Allows to claim NO's fee", async () => {
+  it("Allows NO Fee claimer role to claim NO's fee", async () => {
     await delegation.connect(funder).fund({ value: ether("1") });
     await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n);
     await delegation.connect(owner).setNodeOperatorFeeBP(1n);
@@ -183,7 +183,10 @@ describe("Scenario: Vault creation", () => {
 
   describe("Reverts stETH related actions when not connected to hub", () => {
     it("Reverts on minting stETH", async () => {
-      await expect(delegation.connect(minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(owner).grantRole(await delegation.LOCK_ROLE(), minter.address);
+
+      await expect(delegation.connect(minter).mintStETH(locker, 1n)).to.be.revertedWithCustomError(
         ctx.contracts.vaultHub,
         "NotConnectedToHub",
       );
@@ -204,9 +207,18 @@ describe("Scenario: Vault creation", () => {
   });
 
   describe("Allows stETH related actions only after connecting to Hub", () => {
-    beforeEach(async () => await connectToHub(ctx, stakingVault, { reserveRatio, rebalanceThreshold }));
+    beforeEach(async () => {
+      // adding some stETH to be able to call getTotalShares to get shareLimit
+      await delegation.connect(funder).fund({ value: ether("1") });
+      await delegation.connect(locker).lock(ether("1"));
 
-    it("Allows to mint stETH", async () => {
+      const treasuryFeeBP = 5_00n; // 5% of the treasury fee
+      const shareLimit = (await ctx.contracts.lido.getTotalShares()) / 10n; // 10% of total shares
+
+      await connectToHub(ctx, stakingVault, { reserveRatio, treasuryFeeBP, rebalanceThreshold, shareLimit });
+    });
+
+    it("Allows Minter role to mint stETH", async () => {
       const { vaultHub } = ctx.contracts;
 
       // add some stETH to the vault to have valuation
@@ -217,7 +229,7 @@ describe("Scenario: Vault creation", () => {
         .withArgs(stakingVault, 1n);
     });
 
-    it("Allows to burn stETH", async () => {
+    it("Allows Burner role to burn stETH", async () => {
       const { vaultHub, lido } = ctx.contracts;
 
       // add some stETH to the vault to have valuation, mint shares and approve stETH
@@ -245,5 +257,20 @@ describe("Scenario: Vault creation", () => {
     await expect(pdg.predeposit(stakingVault, [predepositData]))
       .to.emit(stakingVault, "DepositedToBeaconChain")
       .withArgs(ctx.contracts.predepositGuarantee.address, 1, 1000000000000000000n);
+  });
+
+  it("NO manager and Vault owner can vote for transferring ownership of the vault", async () => {
+    const newOwner = certainAddress("new-owner");
+
+    await expect(await delegation.connect(nodeOperatorManager).transferStakingVaultOwnership(newOwner)).to.emit(
+      delegation,
+      "RoleMemberConfirmed",
+    );
+
+    await expect(delegation.connect(owner).transferStakingVaultOwnership(newOwner))
+      .to.emit(stakingVault, "OwnershipTransferred")
+      .withArgs(delegation, newOwner);
+
+    expect(await stakingVault.owner()).to.equal(newOwner);
   });
 });

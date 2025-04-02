@@ -24,13 +24,16 @@ export async function disconnectFromHub(ctx: ProtocolContext, stakingVault: Stak
 export async function connectToHub(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
-  { reserveRatio, rebalanceThreshold }: { reserveRatio: bigint; rebalanceThreshold: bigint },
+  {
+    reserveRatio,
+    rebalanceThreshold,
+    treasuryFeeBP,
+    shareLimit,
+  }: { reserveRatio: bigint; rebalanceThreshold: bigint; treasuryFeeBP: bigint; shareLimit: bigint },
 ) {
   const { vaultHub } = ctx.contracts;
   const agentSigner = await ctx.getSigner("agent");
 
-  const treasuryFeeBP = 5_00n; // 5% of the treasury fee
-  const shareLimit = (await ctx.contracts.lido.getTotalShares()) / 10n; // 10% of total shares
   await vaultHub
     .connect(agentSigner)
     .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
