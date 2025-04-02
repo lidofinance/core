@@ -17,7 +17,7 @@ import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {CLProofVerifier} from "./predeposit_guarantee/PredepositGuarantee.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;
@@ -409,10 +409,10 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Proves validators with correct vault WC if they are unknown to PDG
-     * @param _witnesses array of CLProofVerifier.ValidatorWitness structs containing proof data for validators
+     * @param _witnesses array of IPredepositGuarantee.ValidatorWitness structs containing proof data for validators
      * @dev requires the caller to have the `PDG_PROVE_VALIDATOR_ROLE`
      */
-    function proveUnknownValidatorsToPDG(CLProofVerifier.ValidatorWitness[] calldata _witnesses) external {
+    function proveUnknownValidatorsToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
         _proveUnknownValidatorsToPDG(_witnesses);
     }
 

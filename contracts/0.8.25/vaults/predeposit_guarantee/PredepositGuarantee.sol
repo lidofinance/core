@@ -10,6 +10,7 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 /**
  * @title PredepositGuarantee
@@ -36,7 +37,7 @@ import {IStakingVault} from "../interfaces/IStakingVault.sol";
  *          - Lido's VaultHub requires all connected vaults to use PDG to ensure security of the deposited ether
  *          - PDG can be used outside of Lido
  */
-contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
+contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableUntilWithRoles {
     /**
      * @notice represents validator stages in PDG flow
      * @param NONE  - initial stage
