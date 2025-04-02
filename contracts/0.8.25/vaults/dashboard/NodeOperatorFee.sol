@@ -11,35 +11,49 @@ import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
 
 /**
- * @title Delegation
- * @notice This contract is a contract-owner of StakingVault and includes an additional delegation layer.
+ * @title NodeOperatorFee
+ * @notice This contract manages the node operator fee and claiming mechanism.
+ * It reserves a portion of the staking rewards for the node operator, and allows
+ * the node operator to claim their fee.
+ *
+ * Key features:
+ * - Tracks node operator fees based on staking rewards
+ * - Provides fee claiming mechanism via role-based access control
+ * - Restricts withdrawals based on the fee reserved for node operators
+ * - Requires both the node operator and default admin to confirm the fee changes
+ *
+ * Node operator fees are calculated as a percentage of the staking rewards accrued
+ * between the last claimed report and the latest report in the StakingVault.
+ * If the fee was never claimed, the percentage is calculated based on the total
+ * rewards accrued since the StakingVault was created.
  */
-abstract contract Delegation is Permissions {
+abstract contract NodeOperatorFee is Permissions {
     /**
-     * @notice Total basis points; 1bp = 0.01%, 10000bp = 100%.
+     * @notice Total basis points; 1bp = 0.01%, 100_00bp = 100.00%.
      */
-    uint256 private constant TOTAL_BASIS_POINTS = 10000;
+    uint256 private constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
-     * @notice Maximum fee value; equals to 100%.
+     * @notice Maximum fee value; equals to 100.00%.
      */
     uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
 
     /**
      * @notice Node operator manager role:
      * - confirms confirm expiry;
-     * - confirms ownership transfer;
+     * - confirms node operator fee changes;
+     * - confirms the transfer of the StakingVault ownership;
      * - is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
      */
-    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.Delegation.NodeOperatorManagerRole");
+    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
      * @notice Claims node operator fee.
      */
-    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
+    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorFeeClaimRole");
 
     /**
-     * @notice Node operator fee in basis points; cannot exceed 100%, or 10,000 basis points.
+     * @notice Node operator fee in basis points; cannot exceed 100.00%.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
     uint256 public nodeOperatorFeeBP;
@@ -148,7 +162,14 @@ abstract contract Delegation is Permissions {
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
         if (_newNodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
+
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
+
+        // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
+        if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
+            nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+        }
+
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
         emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
