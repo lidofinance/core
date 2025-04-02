@@ -594,7 +594,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
     }
 
-    function checkVaultsDataProof(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) public view {
+    function checkVaultsDataProof(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) public virtual view {
         VaultHubStorage storage $ = _getVaultHubStorage();
         bytes32 root = $.vaultsDataTreeRoot;
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
