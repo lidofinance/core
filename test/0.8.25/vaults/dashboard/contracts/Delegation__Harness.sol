@@ -3,11 +3,11 @@
 
 pragma solidity 0.8.25;
 
-import {Delegation} from "contracts/0.8.25/vaults/dashboard/Delegation.sol";
+import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
-contract Delegation__Harness is Delegation {
+contract NodeOperatorFee__Harness is NodeOperatorFee {
     address public stakingVaultAddress;
 
     constructor(address _stakingVault) {

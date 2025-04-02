@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Delegation} from "./Delegation.sol";
+import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -35,7 +35,7 @@ interface IWstETH is IERC20, IERC20Permit {
  * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
-abstract contract UXLayer is Delegation {
+abstract contract UXLayer is NodeOperatorFee {
     /**
      * @notice Total basis points for fee calculations; equals to 100%.
      */
