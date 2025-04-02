@@ -95,6 +95,12 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function vaultHub() public view virtual returns (VaultHub);
 
+    /**
+     * @notice Returns roles that must confirm sensitive operations
+     * @return Array of role identifiers required for confirmation
+     */
+    function confirmingRoles() public pure virtual returns (bytes32[] memory);
+
     // ==================== Role Management Functions ====================
 
     /**
@@ -126,12 +132,6 @@ abstract contract Permissions is AccessControlConfirmable {
             revokeRole(_assignments[i].role, _assignments[i].account);
         }
     }
-
-    /**
-     * @notice Returns roles that must confirm sensitive operations
-     * @return Array of role identifiers required for confirmation
-     */
-    function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
      * @notice Funds the StakingVault with ETH
