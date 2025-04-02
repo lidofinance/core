@@ -20,6 +20,11 @@ contract Delegation is Dashboard {
     uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
 
     /**
+     * @notice bitwise AND mask that clamps the value to positive int128 range
+     */
+    uint256 private constant ADJUSTMENT_CLAMP_MASK = uint256(uint128(type(int128).max));
+
+    /**
      * @notice maximum value that can be set via manual adjustment
      */
     uint256 public constant MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
@@ -183,18 +188,35 @@ contract Delegation is Dashboard {
     }
 
     /**
+     * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()`  agree
+     * @param _newAdjustment amount to increase adjustment by
+     * @param _currentAdjustment current adjustment value for invalidating old confirmations
+     * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
+     */
+    function setAccruedRewardsAdjustment(
+        uint256 _newAdjustment,
+        uint256 _currentAdjustment
+    ) external onlyConfirmed(_confirmingRoles()) {
+        if (accruedRewardsAdjustment != _currentAdjustment)
+            revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
+        if (_newAdjustment == _currentAdjustment) revert SameAdjustment();
+        if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreaseOverLimit();
+        _setAccruedRewardsAdjustment(_newAdjustment);
+    }
+
+    /**
      *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
      *          clearing them for future deposits via `PDG.depositToBeaconChain`.
      *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
      * @param _deposits array of StakingVault.Deposit structs containing deposit data
-     * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
+     * @dev requires the caller to have the `UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
-    function trustedWithdrawAndDeposit(
+    function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
     ) public override returns (uint256 totalAmount) {
-        totalAmount = super.trustedWithdrawAndDeposit(_deposits);
+        totalAmount = super.unguaranteedDepositToBeaconChain(_deposits);
 
         _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
     }
@@ -224,7 +246,7 @@ contract Delegation is Dashboard {
         IStakingVault.Report memory latestReport = stakingVault().latestReport();
 
         // cast down safely clamping to int128.max
-        int128 adjustment = int128(int256((accruedRewardsAdjustment << 129) >> 129));
+        int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
         int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
@@ -324,4 +346,14 @@ contract Delegation is Dashboard {
      * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.
      */
     error IncreaseOverLimit();
+
+    /**
+     * @dev Error emitted when the adjustment setting vote is not valid due to changed state
+     */
+    error InvalidatedAdjustmentVote(uint256 oldAdjustment, uint256 newAdjustment);
+
+    /**
+     * @dev Error emitted when trying to set same value for adjustment
+     */
+    error SameAdjustment();
 }

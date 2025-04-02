@@ -25,7 +25,7 @@ struct DelegationConfig {
     address[] depositResumers;
     address[] pdgCompensators;
     address[] unknownValidatorProvers;
-    address[] trustedWithdrawDepositors;
+    address[] unguaranteedBeaconChainDepositors;
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
@@ -126,10 +126,10 @@ contract VaultFactory {
             );
         }
 
-        for (uint256 i = 0; i < _delegationConfig.trustedWithdrawDepositors.length; i++) {
+        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
             delegation.grantRole(
-                delegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE(),
-                _delegationConfig.trustedWithdrawDepositors[i]
+                delegation.UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+                _delegationConfig.unguaranteedBeaconChainDepositors[i]
             );
         }
 

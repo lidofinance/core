@@ -372,14 +372,14 @@ contract Dashboard is Permissions {
     }
 
     /**
-     *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
+     * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
      *          clearing them for future deposits via `PDG.depositToBeaconChain`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
-     * @dev requires the caller to have the `TRUSTED_WITHDRAW_DEPOSIT_ROLE`
+     * @dev requires the caller to have the `UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
-    function trustedWithdrawAndDeposit(
+    function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
@@ -389,7 +389,7 @@ contract Dashboard is Permissions {
             totalAmount += _deposits[i].amount;
         }
 
-        _withdrawForDeposit(totalAmount);
+        _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
 

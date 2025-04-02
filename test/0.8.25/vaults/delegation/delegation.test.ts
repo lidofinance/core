@@ -51,7 +51,7 @@ describe("Delegation.sol", () => {
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorRewardAdjuster: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
-  let trustedWithdrawDepositor: HardhatEthersSigner;
+  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
   let unknownValidatorProver: HardhatEthersSigner;
   let pdgCompensator: HardhatEthersSigner;
 
@@ -96,7 +96,7 @@ describe("Delegation.sol", () => {
       beaconOwner,
       rewarder,
       vaultDepositor,
-      trustedWithdrawDepositor,
+      unguaranteedBeaconChainDepositor,
       unknownValidatorProver,
       pdgCompensator,
     ] = await ethers.getSigners();
@@ -143,7 +143,7 @@ describe("Delegation.sol", () => {
         disconnecters: [disconnecter],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
         nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
-        trustedWithdrawDepositors: [trustedWithdrawDepositor],
+        unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],
         unknownValidatorProvers: [unknownValidatorProver],
         pdgCompensators: [pdgCompensator],
       },
@@ -239,7 +239,10 @@ describe("Delegation.sol", () => {
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
       await assertSoleMember(nodeOperatorRewardAdjuster, await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE());
-      await assertSoleMember(trustedWithdrawDepositor, await delegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE());
+      await assertSoleMember(
+        unguaranteedBeaconChainDepositor,
+        await delegation.UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+      );
       await assertSoleMember(unknownValidatorProver, await delegation.PDG_PROVE_VALIDATOR_ROLE());
       await assertSoleMember(pdgCompensator, await delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE());
 
@@ -435,7 +438,7 @@ describe("Delegation.sol", () => {
     });
 
     it("reverts if the caller is not a member of the withdrawer role", async () => {
-      await expect(delegation.connect(stranger).trustedWithdrawAndDeposit([])).to.be.revertedWithCustomError(
+      await expect(delegation.connect(stranger).unguaranteedDepositToBeaconChain([])).to.be.revertedWithCustomError(
         delegation,
         "AccessControlUnauthorizedAccount",
       );
@@ -448,7 +451,9 @@ describe("Delegation.sol", () => {
 
       const deposit = generatePostDeposit(validator, ether("32"));
 
-      const withdrawDepositTx = delegation.connect(trustedWithdrawDepositor).trustedWithdrawAndDeposit([deposit]);
+      const withdrawDepositTx = delegation
+        .connect(unguaranteedBeaconChainDepositor)
+        .unguaranteedDepositToBeaconChain([deposit]);
       await expect(withdrawDepositTx)
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, delegation, deposit.amount)
@@ -462,7 +467,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.accruedRewardsAdjustment()).to.equal(deposit.amount);
     });
 
-    it("trustedWithdrawAndDeposit can increase accruedRewardsAdjustment beyond manual limit", async () => {
+    it("unguaranteedDepositToBeaconChain can increase accruedRewardsAdjustment beyond manual limit", async () => {
       // set adjustment to manual limit
       const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
       await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT);
@@ -474,8 +479,10 @@ describe("Delegation.sol", () => {
       await delegation.connect(funder).fund({ value: amount });
       const deposit = generatePostDeposit(validator, ether("32"));
 
-      // increase adjustment with trustedWithdrawAndDeposit
-      const withdrawDepositTx = delegation.connect(trustedWithdrawDepositor).trustedWithdrawAndDeposit([deposit]);
+      // increase adjustment with unguaranteedDepositToBeaconChain
+      const withdrawDepositTx = delegation
+        .connect(unguaranteedBeaconChainDepositor)
+        .unguaranteedDepositToBeaconChain([deposit]);
       await expect(withdrawDepositTx)
         .to.emit(delegation, "AccruedRewardsAdjustmentSet")
         .withArgs(LIMIT, LIMIT + BigInt(deposit.amount));

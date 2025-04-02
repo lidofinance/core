@@ -146,7 +146,7 @@ describe("VaultFactory.sol", () => {
       disconnecters: [await vaultOwner1.getAddress()],
       nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
       pdgCompensators: [await vaultOwner1.getAddress()],
-      trustedWithdrawDepositors: [await vaultOwner1.getAddress()],
+      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
       unknownValidatorProvers: [await vaultOwner1.getAddress()],
     };
   });

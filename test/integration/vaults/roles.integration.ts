@@ -47,7 +47,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     nodeOperatorFeeClaimers: HardhatEthersSigner,
     stranger: HardhatEthersSigner,
     nodeOperatorRewardAdjusters: HardhatEthersSigner,
-    trustedWithdrawDepositors: HardhatEthersSigner,
+    unguaranteedBeaconChainDepositors: HardhatEthersSigner,
     unknownValidatorProvers: HardhatEthersSigner,
     pdgCompensators: HardhatEthersSigner;
 
@@ -74,7 +74,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       nodeOperatorFeeClaimers,
       stranger,
       nodeOperatorRewardAdjusters,
-      trustedWithdrawDepositors,
+      unguaranteedBeaconChainDepositors,
       unknownValidatorProvers,
       pdgCompensators,
     ] = allRoles;
@@ -116,7 +116,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           disconnecters: [disconnecters],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
           nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjusters],
-          trustedWithdrawDepositors: [trustedWithdrawDepositors],
+          unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositors],
           unknownValidatorProvers: [unknownValidatorProvers],
           pdgCompensators: [pdgCompensators],
         },
@@ -500,7 +500,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           disconnecters: [],
           nodeOperatorFeeClaimers: [],
           nodeOperatorRewardAdjusters: [],
-          trustedWithdrawDepositors: [],
+          unguaranteedBeaconChainDepositors: [],
           pdgCompensators: [],
           unknownValidatorProvers: [],
         },
@@ -527,7 +527,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
         testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
         testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-        testDelegation.TRUSTED_WITHDRAW_DEPOSIT_ROLE(),
+        testDelegation.UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE(),
         testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
         testDelegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
       ]);

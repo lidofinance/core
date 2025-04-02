@@ -78,7 +78,7 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for getting compensation of disproven validator predeposit from PDG
+     * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
 
@@ -88,9 +88,10 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
 
     /**
-     * @notice Permission for unsafe deposit to trusted validators
+     * @notice Permission for unguarnateed deposit to trusted validators
      */
-    bytes32 public constant TRUSTED_WITHDRAW_DEPOSIT_ROLE = keccak256("vaults.Permissions.TrustedWithdrawDeposit");
+    bytes32 public constant UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE =
+        keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
      * @notice Permission for assets recovery
@@ -294,9 +295,11 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Withdraws ether from vault to this contract for deposit to trusted validators
+     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to  validators
      */
-    function _withdrawForDeposit(uint256 _ether) internal onlyRole(TRUSTED_WITHDRAW_DEPOSIT_ROLE) {
+    function _withdrawForUnguaranteedDepositToBeaconChain(
+        uint256 _ether
+    ) internal onlyRole(UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
     }
 
