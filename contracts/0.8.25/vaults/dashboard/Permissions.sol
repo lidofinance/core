@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
