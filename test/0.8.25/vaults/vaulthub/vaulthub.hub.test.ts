@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, impersonate, randomAddress } from "lib";
+import { BigIntMath, ether, findEvents, impersonate, MAX_UINT256, randomAddress } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -71,6 +71,8 @@ describe("VaultHub.sol:hub", () => {
     },
   ) {
     const vault = await createVault(factory);
+    await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
+    await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     await vaultHub
       .connect(user)
@@ -260,6 +262,64 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("batchVaultsInfo", () => {
+    it("returns the vault info", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaults = await vaultHub.batchVaultsInfo(0n, 2n);
+
+      expect(vaults.length).to.equal(2);
+
+      const vaultInfo = vaults[0];
+      expect(vaultInfo.vault).to.equal(vaultAddress1);
+      expect(vaultInfo.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo.inOutDelta).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
+
+      const vaultInfo2 = vaults[1];
+      expect(vaultInfo2.vault).to.equal(vaultAddress2);
+      expect(vaultInfo2.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo2.inOutDelta).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
+    });
+
+    it("returns the vault info with pagination", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vault3 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaultAddress3 = await vault3.getAddress();
+
+      const vaults1 = await vaultHub.batchVaultsInfo(0n, 1n);
+      expect(vaults1.length).to.equal(1);
+      expect(vaults1[0].vault).to.equal(vaultAddress1);
+
+      const vaults2 = await vaultHub.batchVaultsInfo(1n, 1n);
+      expect(vaults2.length).to.equal(1);
+      expect(vaults2[0].vault).to.equal(vaultAddress2);
+
+      const vaults3 = await vaultHub.batchVaultsInfo(0n, 4n);
+      expect(vaults3.length).to.equal(3);
+      expect(vaults3[0].vault).to.equal(vaultAddress1);
+      expect(vaults3[1].vault).to.equal(vaultAddress2);
+      expect(vaults3[2].vault).to.equal(vaultAddress3);
+
+      const vaults4 = await vaultHub.batchVaultsInfo(1n, 3n);
+      expect(vaults4.length).to.equal(2);
+      expect(vaults4[0].vault).to.equal(vaultAddress2);
+      expect(vaults4[1].vault).to.equal(vaultAddress3);
+
+      const vaults5 = await vaultHub.batchVaultsInfo(0n, 0n);
+      expect(vaults5.length).to.equal(0);
+
+      const vaults6 = await vaultHub.batchVaultsInfo(3n, 1n);
+      expect(vaults6.length).to.equal(0);
+    });
+  });
+
   context("isVaultHealthy", () => {
     it("reverts if vault is not connected", async () => {
       await expect(vaultHub.isVaultHealthy(randomAddress())).to.be.revertedWithCustomError(
@@ -308,6 +368,7 @@ describe("VaultHub.sol:hub", () => {
 
         if (mintable > 0n) {
           const sharesToMint = await lido.getSharesByPooledEth(mintable);
+          await vault.lock(valuation);
           await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
         }
 
@@ -462,6 +523,82 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("rebalanceShortfall", () => {
+    it("does not revert when vault address is correct", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 10_00n, // 10%
+        rebalanceThresholdBP: 10_00n, // 10%
+      });
+
+      const vaultAddress = await vault.getAddress();
+      await expect(vaultHub.rebalanceShortfall(vaultAddress)).not.to.be.reverted;
+    });
+
+    it("reverts when vault address is ZeroAddress", async () => {
+      const zeroAddress = ethers.ZeroAddress;
+      await expect(vaultHub.rebalanceShortfall(zeroAddress))
+        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
+        .withArgs("_vault");
+    });
+
+    it("returns correct value for rebalance vault", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      const mintingEth = ether("25");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vault.lock(ether("50"));
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      await vault.report(ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(ether("50") / 1000n);
+    });
+
+    it("returns same value as calculated at another way", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MAX_UINT256);
+
+      await vault.fund({ value: ether("50") });
+      await vault.lock(ether("50"));
+      const mintingEth = ether("25");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      await vault.report(ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      const vaultSocket_2 = await vaultHub["vaultSocket(address)"](vaultAddress);
+      const mintedStETH_2 = await lido.getPooledEthByShares(vaultSocket_2.sharesMinted);
+      const maxMintableRatio_2 = TOTAL_BASIS_POINTS - vaultSocket_2.reserveRatioBP;
+      const vaultValuation_2 = await vault.valuation();
+      const localGap_2 =
+        (mintedStETH_2 * TOTAL_BASIS_POINTS - vaultValuation_2 * maxMintableRatio_2) / vaultSocket_2.reserveRatioBP;
+
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(localGap_2);
+    });
+  });
+
   context("connectVault", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
@@ -588,6 +725,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocketBefore.vault).to.equal(ZeroAddress);
       expect(vaultSocketBefore.pendingDisconnect).to.be.false;
 
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)
@@ -606,6 +746,9 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("allows to connect the vault with 0 share limit", async () => {
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)
@@ -616,6 +759,9 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("allows to connect the vault with 0 treasury fee", async () => {
+      await vault.connect(user).fund({ value: ether("1") });
+      await vault.connect(user).lock(ether("1"));
+
       await expect(
         vaultHub
           .connect(user)

@@ -13,7 +13,7 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { findEventsWithInterfaces } from "lib";
+import { ether, findEventsWithInterfaces, impersonate } from "lib";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -73,6 +73,11 @@ export async function createVaultProxy(
   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
   const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
+
+  //fund and lock
+  const delegationSigner = await impersonate(await delegation.getAddress(), ether("100"));
+  await stakingVault.connect(delegationSigner).fund({ value: ether("1") });
+  await stakingVault.connect(delegationSigner).lock(ether("1"));
 
   return {
     tx,

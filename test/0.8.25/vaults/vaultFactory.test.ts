@@ -132,6 +132,7 @@ describe("VaultFactory.sol", () => {
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
       minters: [await vaultOwner1.getAddress()],
+      lockers: [await vaultOwner1.getAddress()],
       burners: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
       rebalancers: [await vaultOwner1.getAddress()],

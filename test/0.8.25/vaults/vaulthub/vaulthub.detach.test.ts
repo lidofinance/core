@@ -136,6 +136,7 @@ describe("VaultHub.sol:detach", () => {
       nodeOperatorFeeBP: 200n,
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
+      lockers: [await vaultOwner1.getAddress()],
       minters: [await vaultOwner1.getAddress()],
       burners: [await vaultOwner1.getAddress()],
       rebalancers: [await vaultOwner1.getAddress()],

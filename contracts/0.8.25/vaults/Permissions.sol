@@ -37,6 +37,11 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
 
     /**
+     * @notice Permission for locking ether on StakingVault.
+     */
+    bytes32 public constant LOCK_ROLE = keccak256("vaults.Permissions.Lock");
+
+    /**
      * @notice Permission for minting stETH shares backed by the StakingVault.
      */
     bytes32 public constant MINT_ROLE = keccak256("vaults.Permissions.Mint");
@@ -189,6 +194,10 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
         stakingVault().withdraw(_recipient, _ether);
+    }
+
+    function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
+        stakingVault().lock(_locked);
     }
 
     /**
