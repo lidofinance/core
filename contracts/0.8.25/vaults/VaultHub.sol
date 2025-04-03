@@ -160,7 +160,7 @@ contract VaultHub is PausableUntilWithRoles {
         return $.sockets[$.vaultIndex[_vault]];
     }
 
-    /// @notice returns batch of vaults info. To keep results consistent use the same block for subsequent calls
+    /// @notice returns batch of vaults info
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
     /// @return batch of vaults info
@@ -169,11 +169,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 limit = _offset + _limit > $.sockets.length - 1 ? $.sockets.length - 1 - _offset : _limit;
         VaultInfo[] memory batch = new VaultInfo[](limit);
         for (uint256 i = 0; i < limit; i++) {
-            VaultSocket memory socket = $.sockets[i + 1 + _offset];
+            VaultSocket storage socket = $.sockets[i + 1 + _offset];
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
-                socket.vault,
-                socket.vault.balance,
+                address(currentVault),
+                address(currentVault).balance,
                 currentVault.inOutDelta(),
                 currentVault.withdrawalCredentials(),
                 socket.sharesMinted
