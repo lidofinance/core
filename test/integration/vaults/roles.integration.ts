@@ -6,6 +6,7 @@ import { beforeEach } from "mocha";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation } from "typechain-types";
+import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
 import { days } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -19,6 +20,9 @@ const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
+const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
+const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
+const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
@@ -88,7 +92,29 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     let testDelegation: Delegation;
 
     before(async () => {
-      const { stakingVaultFactory } = ctx.contracts;
+      const { stakingVaultFactory, operatorGrid, lido } = ctx.contracts;
+
+      const agentSigner = await ctx.getSigner("agent");
+
+      const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+
+      const tiers: TierParamsStruct[] = [
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: rebalanceThreshold,
+          treasuryFeeBP: treasuryFeeBP,
+        },
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: rebalanceThreshold,
+          treasuryFeeBP: treasuryFeeBP,
+        },
+      ];
+
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperatorManager, shareLimit);
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperatorManager, tiers);
 
       // Owner can create a vault with operator as a node operator
       const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -352,8 +378,9 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         });
 
         // requires prepared state for this test to pass, skipping for now
+        // fund 2 ether, cause vault has 1 ether locked already
         it("withdraw", async () => {
-          await testDelegation.connect(funder).fund({ value: 1n });
+          await testDelegation.connect(funder).fund({ value: ether("2") });
           await testMethod(
             testDelegation,
             "withdraw",
@@ -361,7 +388,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
               successUsers: [withdrawer],
               failingUsers: allRoles.filter((r) => r !== withdrawer),
             },
-            [stranger, 1n],
+            [stranger, ether("1")],
             await testDelegation.WITHDRAW_ROLE(),
           );
         });

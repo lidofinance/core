@@ -15,6 +15,7 @@ import {
   LidoExecutionLayerRewardsVault,
   LidoLocator,
   NodeOperatorsRegistry,
+  OperatorGrid,
   OracleDaemonConfig,
   OracleReportSanityChecker,
   PredepositGuarantee,
@@ -62,6 +63,7 @@ export type ProtocolNetworkItems = {
   stakingVaultBeacon: string;
   vaultHub: string;
   predepositGuarantee: string;
+  operatorGrid: string;
 };
 
 export interface ContractTypes {
@@ -88,6 +90,7 @@ export interface ContractTypes {
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
+  OperatorGrid: OperatorGrid;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -141,6 +144,7 @@ export type VaultsContracts = {
   stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
+  operatorGrid: LoadedContract<OperatorGrid>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &

@@ -155,7 +155,22 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Owner to create vault and assign NodeOperator and Curator roles", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { lido, stakingVaultFactory, operatorGrid } = ctx.contracts;
+
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
+    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+
+    const agentSigner = await ctx.getSigner("agent");
+
+    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, shareLimit);
+    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+      {
+        shareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: rebalanceThreshold,
+        treasuryFeeBP: treasuryFeeBP,
+      },
+    ]);
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(

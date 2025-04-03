@@ -4,7 +4,14 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__HarnessForVault } from "typechain-types";
+import {
+  LidoLocator,
+  OperatorGrid,
+  OssifiableProxy,
+  StETH__Harness,
+  VaultHub,
+  WstETH__HarnessForVault,
+} from "typechain-types";
 
 import { ether } from "lib";
 
@@ -23,6 +30,8 @@ describe("VaultHub.sol", () => {
   let wsteth: WstETH__HarnessForVault;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
 
   let originalState: string;
 
@@ -36,10 +45,18 @@ describe("VaultHub.sol", () => {
       wstETH: wsteth,
     });
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: admin });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, admin, new Uint8Array()], admin);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, admin);
+    await operatorGrid.initialize(admin);
+    await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
+
     // VaultHub
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
+      operatorGrid,
       VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
