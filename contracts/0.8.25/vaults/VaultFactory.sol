@@ -11,12 +11,19 @@ import {Permissions} from "./dashboard/Permissions.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Dashboard} from "./dashboard/Dashboard.sol";
 
+/**
+ * @title VaultFactory
+ * @notice A factory contract for creating new StakingVault and Dashboard contracts
+ */
 contract VaultFactory {
     address public immutable BEACON;
     address public immutable DASHBOARD_IMPL;
 
-    /// @param _beacon The address of the beacon contract
-    /// @param _dashboardImpl The address of the Dashboard implementation
+    /**
+     * @notice Constructor
+     * @param _beacon The address of the beacon contract
+     * @param _dashboardImpl The address of the Dashboard implementation
+     */
     constructor(address _beacon, address _dashboardImpl) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
@@ -25,13 +32,17 @@ contract VaultFactory {
         DASHBOARD_IMPL = _dashboardImpl;
     }
 
-    /// @notice Creates a new StakingVault and Dashboard contracts
-    /// @param _defaultAdmin The address of the default admin
-    /// @param _nodeOperator The address of the node operator
-    /// @param _extraParams The params of vault creation
-    /// @param _nodeOperatorManager The address of the node operator manager
-    /// @param _nodeOperatorFeeBP The node operator fee in basis points
-    /// @param _confirmExpiry The confirmation expiry
+    /**
+     * @notice Creates a new StakingVault and Dashboard contracts
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperator The address of the node operator
+     * @param _extraParams The params of vault creation
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry
+     * @param _roleAssignments The optional role assignments to be made
+     * @param _extraParams The extra params
+     */
     function createVaultWithDashboard(
         address _defaultAdmin,
         address _nodeOperator,
