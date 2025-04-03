@@ -279,14 +279,14 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultInfo = vaults[0];
       expect(vaultInfo.vault).to.equal(vaultAddress1);
-      expect(vaultInfo.balance).to.equal(0n);
-      expect(vaultInfo.inOutDelta).to.equal(0n);
+      expect(vaultInfo.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo.inOutDelta).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
 
       const vaultInfo2 = vaults[1];
       expect(vaultInfo2.vault).to.equal(vaultAddress2);
-      expect(vaultInfo2.balance).to.equal(0n);
-      expect(vaultInfo2.inOutDelta).to.equal(0n);
+      expect(vaultInfo2.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo2.inOutDelta).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
     });
 
