@@ -383,7 +383,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
       const tx = await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
 
-      await expect(tx).to.emit(delegation, "AccruedRewardsAdjustmentSet").withArgs(0n, increase);
+      await expect(tx).to.emit(delegation, "AccruedRewardsAdjustmentSet").withArgs(increase, 0n);
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
     });
@@ -423,10 +423,100 @@ describe("Delegation.sol", () => {
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, recipient, adjustedDue)
         .to.emit(delegation, "AccruedRewardsAdjustmentSet")
-        .withArgs(rewards / 2n, 0n);
+        .withArgs(0n, rewards / 2n);
 
       expect(await ethers.provider.getBalance(recipient)).to.equal(adjustedDue);
       expect(await ethers.provider.getBalance(vault)).to.equal(rewards - adjustedDue);
+    });
+  });
+
+  context("setAccruedRewardsAdjustment", () => {
+    beforeEach(async () => {
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if called by not CONFORMING_ROLE", async () => {
+      await expect(delegation.connect(stranger).setAccruedRewardsAdjustment(100n, 0n)).to.be.revertedWithCustomError(
+        delegation,
+        "SenderNotMember",
+      );
+    });
+
+    it("reverts if trying to set same adjustment", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(current, current);
+
+      await expect(
+        delegation.connect(vaultOwner).setAccruedRewardsAdjustment(current, current),
+      ).to.be.revertedWithCustomError(delegation, "SameAdjustment");
+    });
+
+    it("reverts if trying to set more than limit", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(LIMIT + 1n, current);
+
+      await expect(
+        delegation.connect(vaultOwner).setAccruedRewardsAdjustment(LIMIT + 1n, current),
+      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+    });
+
+    it("reverts vote if AccruedRewardsAdjustment changes", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      expect(current).to.equal(0n);
+      const proposed = 100n;
+      const increase = proposed - current + 100n;
+      const postIncrease = current + increase;
+
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(proposed, current);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(current);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(postIncrease);
+
+      await expect(delegation.connect(vaultOwner).setAccruedRewardsAdjustment(proposed, current))
+        .to.be.revertedWithCustomError(delegation, "InvalidatedAdjustmentVote")
+        .withArgs(postIncrease, current);
+    });
+
+    it("allows to set adjustment by committee", async () => {
+      const currentAdjustment = await delegation.accruedRewardsAdjustment();
+      expect(currentAdjustment).to.equal(0n);
+      const newAdjustment = 100n;
+
+      const msgData = delegation.interface.encodeFunctionData("setAccruedRewardsAdjustment", [
+        newAdjustment,
+        currentAdjustment,
+      ]);
+
+      let confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+
+      const firstConfirmTx = await delegation
+        .connect(nodeOperatorManager)
+        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+
+      await expect(firstConfirmTx)
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(currentAdjustment);
+
+      confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+
+      const secondConfrimTx = await delegation
+        .connect(vaultOwner)
+        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+
+      await expect(secondConfrimTx)
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(newAdjustment, currentAdjustment);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(newAdjustment);
     });
   });
 
@@ -460,7 +550,7 @@ describe("Delegation.sol", () => {
         .to.emit(delegation, "TrustedDeposit")
         .withArgs(vault, deposit.pubkey, deposit.amount)
         .to.emit(delegation, "AccruedRewardsAdjustmentSet")
-        .withArgs(0n, deposit.amount);
+        .withArgs(deposit.amount, 0n);
 
       expect(await delegation.valuation()).to.equal(0n);
       expect(await delegation.withdrawableEther()).to.equal(0n);
@@ -485,7 +575,7 @@ describe("Delegation.sol", () => {
         .unguaranteedDepositToBeaconChain([deposit]);
       await expect(withdrawDepositTx)
         .to.emit(delegation, "AccruedRewardsAdjustmentSet")
-        .withArgs(LIMIT, LIMIT + BigInt(deposit.amount));
+        .withArgs(LIMIT + BigInt(deposit.amount), LIMIT);
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT + BigInt(deposit.amount));
     });

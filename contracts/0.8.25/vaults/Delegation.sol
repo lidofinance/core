@@ -279,7 +279,7 @@ contract Delegation is Dashboard {
 
         accruedRewardsAdjustment = _newAdjustment;
 
-        emit AccruedRewardsAdjustmentSet(oldAdjustment, _newAdjustment);
+        emit AccruedRewardsAdjustmentSet(_newAdjustment, oldAdjustment);
     }
 
     /**
@@ -320,10 +320,10 @@ contract Delegation is Dashboard {
 
     /**
      * @dev Emitted when the new rewards adjustment is set.
-     * @param oldAdjustment the old adjustment value
      * @param newAdjustment the new adjustment value
+     * @param oldAdjustment previous adjustment value
      */
-    event AccruedRewardsAdjustmentSet(uint256 oldAdjustment, uint256 newAdjustment);
+    event AccruedRewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
 
     // ==================== Errors ====================
 
@@ -350,7 +350,7 @@ contract Delegation is Dashboard {
     /**
      * @dev Error emitted when the adjustment setting vote is not valid due to changed state
      */
-    error InvalidatedAdjustmentVote(uint256 oldAdjustment, uint256 newAdjustment);
+    error InvalidatedAdjustmentVote(uint256 currentAdjustment, uint256 currentAtPropositionAdjustment);
 
     /**
      * @dev Error emitted when trying to set same value for adjustment
