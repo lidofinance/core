@@ -620,9 +620,6 @@ contract Dashboard is Permissions {
 
     // ==================== Errors ====================
 
-    /// @notice Error when an argument is zero
-    error InvalidDepositContractRoot();
-
     /// @notice Error when provided permit is invalid
     error InvalidPermit(address token);
 
