@@ -82,8 +82,7 @@ describe("Integration: Negative rebase", () => {
     expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
   });
 
-  // TODO: check why it fails on CI, but works locally
-  // e.g. https://github.com/lidofinance/core/actions/runs/12390882454/job/34586841193
+  // 56 weeks of negative rebases is too much for the test and it breaks with the SocketError: other side closed
   it.skip("Should store correctly many negative rebases", async () => {
     const { locator, oracleReportSanityChecker } = ctx.contracts;
 

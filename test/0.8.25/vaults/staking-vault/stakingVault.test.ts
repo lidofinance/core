@@ -29,7 +29,6 @@ import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const MAX_INT128 = 2n ** 127n - 1n;
-const MAX_UINT128 = 2n ** 128n - 1n;
 
 const PUBLIC_KEY_LENGTH = 48;
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
@@ -179,8 +178,11 @@ describe("StakingVault.sol", () => {
     it("returns the correct locked balance", async () => {
       expect(await stakingVault.locked()).to.equal(0n);
 
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
     });
   });
 
@@ -190,9 +192,12 @@ describe("StakingVault.sol", () => {
     });
 
     it("returns 0 if locked amount is greater than valuation", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.valuation()).to.equal(ether("0"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
 
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
@@ -274,8 +279,11 @@ describe("StakingVault.sol", () => {
     });
 
     it("restores the vault to a healthy state if the vault was unhealthy", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
+      const valuation = 0n;
+      const inOutDelta = 0n;
+      const locked = ether("1.0");
+      await stakingVault.connect(vaultHubSigner).report(valuation, inOutDelta, locked);
+      expect(await stakingVault.valuation()).to.be.lessThan(locked);
 
       await stakingVault.fund({ value: ether("1") });
       expect(await stakingVault.valuation()).to.be.greaterThanOrEqual(await stakingVault.locked());
@@ -314,7 +322,7 @@ describe("StakingVault.sol", () => {
       const locked = ether("1") - 1n;
       const unlocked = balance - locked;
       await stakingVault.fund({ value: balance });
-      await stakingVault.connect(vaultHubSigner).lock(locked);
+      await stakingVault.connect(vaultOwner).lock(locked);
 
       await expect(stakingVault.withdraw(vaultOwnerAddress, balance))
         .to.be.revertedWithCustomError(stakingVault, "InsufficientUnlocked")
@@ -374,37 +382,44 @@ describe("StakingVault.sol", () => {
   });
 
   context("lock", () => {
-    it("reverts if the caller is not the vault hub", async () => {
-      await expect(stakingVault.connect(vaultOwner).lock(ether("1")))
-        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("lock", vaultOwnerAddress);
+    it("reverts if the caller is not the vault owner", async () => {
+      await expect(stakingVault.connect(stranger).lock(ether("1")))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
     });
 
     it("updates the locked amount and emits the Locked event", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("1")))
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount))
         .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("1"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+        .withArgs(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
     });
 
     it("reverts if the new locked amount is less than the current locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("2"));
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("1")))
-        .to.be.revertedWithCustomError(stakingVault, "LockedCannotDecreaseOutsideOfReport")
-        .withArgs(ether("2"), ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount - 1n)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedNotGreaterThanCurrent",
+      );
     });
 
-    it("does not revert if the new locked amount is equal to the current locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("2")))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("2"));
-    });
+    it("reverts if the new locked amount is equal to the current locked amount", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
 
-    it("does not revert if the locked amount is max uint128", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).lock(MAX_UINT128))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(MAX_UINT128);
+      await stakingVault.connect(vaultOwner).lock(amount);
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedNotGreaterThanCurrent",
+      );
     });
   });
 
@@ -577,7 +592,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the vault valuation is below the locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      await stakingVault.connect(vaultHubSigner).report(ether("0"), ether("0"), ether("1"));
       await expect(
         stakingVault
           .connect(depositor)

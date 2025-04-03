@@ -140,6 +140,10 @@ describe("VaultHub.sol:forceExit", () => {
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
+    const connectDeposit = ether("1.0");
+    await vault.connect(user).fund({ value: connectDeposit });
+    await vault.connect(user).lock(connectDeposit);
+
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
     await operatorGrid.connect(user).registerGroup(user, ether("100"));
 
@@ -150,6 +154,8 @@ describe("VaultHub.sol:forceExit", () => {
       treasuryFeeBP: TREASURY_FEE_BP,
     });
 
+    await vault.fund({ value: ether("1") });
+    await vault.lock(ether("1"));
     await vaultHub.connect(user).connectVault(vaultAddress);
 
     vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
@@ -251,6 +257,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       const valuation = ether("100");
       await demoVault.fund({ value: valuation });
+      await demoVault.connect(user).lock(valuation);
       const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
       await registerVaultWithTier(demoVault, {
