@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+import {Permissions} from "./dashboard/Permissions.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Dashboard} from "./dashboard/Dashboard.sol";
@@ -37,6 +38,7 @@ contract VaultFactory {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
+        Permissions.RoleAssignment[] calldata _roleAssignments,
         bytes calldata _extraParams
     ) external returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -45,7 +47,21 @@ contract VaultFactory {
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         vault.initialize(address(dashboard), _nodeOperator, _extraParams);
-        dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+
+        // If there are extra role assignments to be made,
+        // we initialize the dashboard with the VaultFactory as the default admin,
+        // grant the roles and revoke the VaultFactory's admin role.
+        // Otherwise, we initialize the dashboard with the default admin.
+        if (_roleAssignments.length > 0) {
+            dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+            // will revert if any role is not controlled by the default admin
+            dashboard.grantRoles(_roleAssignments);
+
+            dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
+            dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
+        } else {
+            dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        }
 
         emit VaultCreated(address(dashboard), address(vault));
         emit DashboardCreated(_defaultAdmin, address(dashboard));
