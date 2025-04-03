@@ -315,11 +315,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by VaultHub; locked amount can only be increased
      * @param _locked New amount to lock
      */
-    function lock(uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
-
+    function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
+        if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
+        if (_locked > valuation()) revert NewLockedExceedsValuation();
 
         $.locked = uint128(_locked);
 
@@ -664,10 +663,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report
-     * @param currentlyLocked Current amount of locked ether
-     * @param attemptedLocked Attempted new locked amount
      */
-    error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
+    error NewLockedNotGreaterThanCurrent();
+
+    /**
+     * @notice Thrown when the locked amount exceeds the valuation
+     */
+    error NewLockedExceedsValuation();
 
     /**
      * @notice Thrown when called on the implementation contract
