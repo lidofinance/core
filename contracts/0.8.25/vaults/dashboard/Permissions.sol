@@ -110,7 +110,7 @@ abstract contract Permissions is AccessControlConfirmable {
      *      each assignment is checked against role admin requirements;
      *      silently skips accounts that already have the specified role
      */
-    function grantRoles(RoleAssignment[] memory _assignments) public {
+    function grantRoles(RoleAssignment[] calldata _assignments) public {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
 
         for (uint256 i = 0; i < _assignments.length; i++) {
@@ -125,7 +125,7 @@ abstract contract Permissions is AccessControlConfirmable {
      *      each revocation is checked against role admin requirements;
      *      silently skips accounts that don't have the specified role
      */
-    function revokeRoles(RoleAssignment[] memory _assignments) external {
+    function revokeRoles(RoleAssignment[] calldata _assignments) external {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
 
         for (uint256 i = 0; i < _assignments.length; i++) {
