@@ -163,9 +163,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const agentSigner = await ctx.getSigner("agent");
 
     await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, shareLimit);
-    await operatorGrid
-      .connect(agentSigner)
-      .registerTier(nodeOperator, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
+    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+      {
+        shareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: rebalanceThreshold,
+        treasuryFeeBP: treasuryFeeBP,
+      },
+    ]);
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(

@@ -125,8 +125,14 @@ describe("Delegation.sol", () => {
     expect(await factory.OPERATOR_GRID()).to.equal(operatorGrid);
 
     await operatorGrid.connect(dao).registerGroup(nodeOperatorManager, ether("1000"));
-    await operatorGrid.connect(dao).registerTier(nodeOperatorManager, ether("1000"), 1000n, 1000n, 1000n);
-
+    await operatorGrid.connect(dao).registerTiers(nodeOperatorManager, [
+      {
+        shareLimit: ether("1000"),
+        reserveRatioBP: 1000n,
+        rebalanceThresholdBP: 1000n,
+        treasuryFeeBP: 1000n,
+      },
+    ]);
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
         defaultAdmin: vaultOwner,

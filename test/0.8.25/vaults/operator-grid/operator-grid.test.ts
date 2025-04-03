@@ -24,7 +24,7 @@ import {
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { certainAddress, createVaultProxy, days, /*createVaultProxy,*/ ether, impersonate } from "lib";
+import { certainAddress, createVaultProxy, days, ether, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -232,14 +232,6 @@ describe("OperatorGrid.sol", () => {
       expect(groupStruct.shareLimit).to.equal(shareLimit);
       expect(groupStruct.mintedShares).to.equal(0);
       expect(groupStruct.tiersId.length).to.equal(0);
-
-      const groupCount = await operatorGrid.groupCount();
-      expect(groupCount).to.equal(1);
-
-      const groupStructByIndex = await operatorGrid.groupByIndex(0);
-      expect(groupStructByIndex.shareLimit).to.equal(shareLimit);
-      expect(groupStructByIndex.mintedShares).to.equal(0);
-      expect(groupStructByIndex.tiersId.length).to.equal(0);
     });
 
     it("reverts when updating without `REGISTRY_ROLE` role", async function () {
@@ -273,25 +265,44 @@ describe("OperatorGrid.sol", () => {
     const reserveRatio = 2000;
     const reserveRatioThreshold = 1800;
     const treasuryFee = 500;
+    const tiers: TierParamsStruct[] = [
+      {
+        shareLimit: tierShareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: reserveRatioThreshold,
+        treasuryFeeBP: treasuryFee,
+      },
+    ];
 
     it("reverts when adding without `REGISTRY_ROLE` role", async function () {
-      await expect(
-        operatorGrid
-          .connect(stranger)
-          .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee),
-      ).to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount");
+      await expect(operatorGrid.connect(stranger).registerTiers(groupId, tiers)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
     });
 
     it("reverts if group does not exist", async function () {
-      await expect(
-        operatorGrid
-          .connect(dao)
-          .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee),
-      ).to.be.revertedWithCustomError(operatorGrid, "GroupNotExists");
+      await expect(operatorGrid.connect(dao).registerTiers(groupId, tiers)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "GroupNotExists",
+      );
     });
   });
 
   context("Vaults", () => {
+    const tierShareLimit = 1000;
+    const reserveRatio = 2000;
+    const reserveRatioThreshold = 1800;
+    const treasuryFee = 500;
+    const tiers: TierParamsStruct[] = [
+      {
+        shareLimit: tierShareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: reserveRatioThreshold,
+        treasuryFeeBP: treasuryFee,
+      },
+    ];
+
     it("reverts if operator not exists", async function () {
       await expect(operatorGrid.connect(dao).registerVault(vault_NO1_C1)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -317,25 +328,29 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(dao).registerGroup(groupId1, shareLimit);
       await operatorGrid.connect(dao).registerGroup(groupId2, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId1, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId2, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId1, tiers);
+      await operatorGrid.connect(dao).registerTiers(groupId2, tiers);
 
       await expect(operatorGrid.connect(dao).registerVault(vault_NO1_C1))
         .to.be.emit(operatorGrid, "VaultAdded")
-        .withArgs(1, 0, await vault_NO1_C1.getAddress());
+        .withArgs(groupId1, 1, await vault_NO1_C1.getAddress());
     });
   });
 
   context("mintShares", () => {
+    const tierShareLimit = 1000;
+    const reserveRatio = 2000;
+    const reserveRatioThreshold = 1800;
+    const treasuryFee = 500;
+    const tiers: TierParamsStruct[] = [
+      {
+        shareLimit: tierShareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: reserveRatioThreshold,
+        treasuryFeeBP: treasuryFee,
+      },
+    ];
+
     it("mintShares should revert if sender is not `VaultHub`", async function () {
       await expect(operatorGrid.connect(stranger).onMintedShares(vault_NO1_C1, 100)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -354,14 +369,7 @@ describe("OperatorGrid.sol", () => {
       const groupShareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, groupShareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
 
@@ -375,14 +383,7 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 999;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
 
@@ -396,22 +397,15 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
 
-      const [retGroupIndex, retTierIndex] = await operatorGrid.getVaultInfo(vault_NO1_C1);
+      const [retGroupOperator, retTierIndex] = await operatorGrid.getVaultInfo(vault_NO1_C1);
 
       await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_C1, tierShareLimit))
         .to.be.emit(operatorGrid, "SharesLimitChanged")
-        .withArgs(await vault_NO1_C1.getAddress(), retGroupIndex, retTierIndex, tierShareLimit, tierShareLimit);
+        .withArgs(await vault_NO1_C1.getAddress(), retGroupOperator, retTierIndex, tierShareLimit, tierShareLimit);
     });
 
     it("mintShares - DEFAULT_GROUP group=2000 tier=1000 NO1_vault1=999, NO2_vault2=1", async function () {
@@ -419,14 +413,7 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
       await operatorGrid.connect(dao).registerVault(vault_NO2_C1);
@@ -448,23 +435,16 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
       await operatorGrid.connect(dao).registerVault(vault_NO2_C1);
 
-      const [retGroupIndex, retTierIndex] = await operatorGrid.getVaultInfo(vault_NO1_C1);
+      const [retGroupOperator, retTierIndex] = await operatorGrid.getVaultInfo(vault_NO1_C1);
 
       await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_C1, tierShareLimit))
         .to.be.emit(operatorGrid, "SharesLimitChanged")
-        .withArgs(await vault_NO1_C1.getAddress(), retGroupIndex, retTierIndex, tierShareLimit, tierShareLimit);
+        .withArgs(vault_NO1_C1, retGroupOperator, retTierIndex, tierShareLimit, tierShareLimit);
 
       await expect(
         operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_C1, 1),
@@ -480,12 +460,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
       await operatorGrid.connect(dao).registerGroup(groupId2, shareLimit2);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      const tiers1: TierParamsStruct[] = [
+      const tiers2: TierParamsStruct[] = [
         {
           shareLimit: tierShareLimit,
           reserveRatioBP: reserveRatio,
@@ -500,8 +475,8 @@ describe("OperatorGrid.sol", () => {
         },
       ];
 
-      await operatorGrid.connect(dao).registerTiers(groupId, tiers1);
-      await operatorGrid.connect(dao).registerTiers(groupId2, tiers1);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers2);
+      await operatorGrid.connect(dao).registerTiers(groupId2, tiers2);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
       await operatorGrid.connect(dao).registerVault(vault_NO1_C2);
@@ -523,6 +498,19 @@ describe("OperatorGrid.sol", () => {
   });
 
   context("burnShares", () => {
+    const tierShareLimit = 1000;
+    const reserveRatio = 2000;
+    const reserveRatioThreshold = 1800;
+    const treasuryFee = 500;
+    const tiers: TierParamsStruct[] = [
+      {
+        shareLimit: tierShareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: reserveRatioThreshold,
+        treasuryFeeBP: treasuryFee,
+      },
+    ];
+
     it("burnShares should revert if sender is not `VaultHub`", async function () {
       await expect(operatorGrid.connect(stranger).onBurnedShares(vault_NO1_C1, 100)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -541,14 +529,7 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
-
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
 
@@ -562,17 +543,22 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
+      const tiers2: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+      ];
 
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers2);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
       await operatorGrid.connect(dao).registerVault(vault_NO1_C2);
@@ -590,17 +576,22 @@ describe("OperatorGrid.sol", () => {
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
 
-      const tierShareLimit = 1000;
-      const reserveRatio = 2000;
-      const reserveRatioThreshold = 1800;
-      const treasuryFee = 500;
+      const tiers2: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+      ];
 
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers2);
 
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
       await operatorGrid.connect(dao).registerVault(vault_NO1_C2);
@@ -626,29 +617,30 @@ describe("OperatorGrid.sol", () => {
 
     it("should return correct vault limits", async function () {
       const groupId = await vault_NO1_C1.nodeOperator();
-      const groupId2 = await vault_NO2_C1.nodeOperator();
       const shareLimit = 2000;
       await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
-      await operatorGrid.connect(dao).registerGroup(groupId2, shareLimit);
 
       const tierShareLimit = 1000;
       const reserveRatio = 2000;
       const reserveRatioThreshold = 1800;
       const treasuryFee = 500;
 
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId2, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
+      const tiers: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+      ];
 
+      await operatorGrid.connect(dao).registerTiers(groupId, tiers);
       await operatorGrid.connect(dao).registerVault(vault_NO1_C1);
 
-      const [retGroupIndex, retTierIndex, retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
+      const [retGroupOperator, retTierIndex, retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
         await operatorGrid.getVaultInfo(vault_NO1_C1);
 
-      expect(retGroupIndex).to.equal(1);
+      expect(retGroupOperator).to.equal(groupId);
       expect(retTierIndex).to.equal(1);
       expect(retShareLimit).to.equal(tierShareLimit);
       expect(retReserveRatio).to.equal(reserveRatio);
@@ -667,10 +659,14 @@ describe("OperatorGrid.sol", () => {
       const reserveRatio = 2000;
       const reserveRatioThreshold = 1800;
       const treasuryFee = 500;
-      await operatorGrid
-        .connect(dao)
-        .registerTier(groupId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-
+      await operatorGrid.connect(dao).registerTiers(groupId, [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: reserveRatioThreshold,
+          treasuryFeeBP: treasuryFee,
+        },
+      ]);
       delegationParams = {
         defaultAdmin: vaultOwner,
         nodeOperatorManager,
@@ -692,11 +688,11 @@ describe("OperatorGrid.sol", () => {
 
       const { vault } = await createVaultProxy(vaultOwner, factory, delegationParams);
 
-      const [retGroupIndex, retTierIndex, retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
+      const [retGroupOperator, retTierIndex, retShareLimit, retReserveRatio, retReserveRatioThreshold, retTreasuryFee] =
         await operatorGrid.getVaultInfo(vault);
 
-      expect(retGroupIndex).to.equal(1);
-      expect(retTierIndex).to.equal(0);
+      expect(retGroupOperator).to.equal(groupId);
+      expect(retTierIndex).to.equal(1);
       expect(retShareLimit).to.equal(tierShareLimit);
       expect(retReserveRatio).to.equal(reserveRatio);
       expect(retReserveRatioThreshold).to.equal(reserveRatioThreshold);

@@ -14,6 +14,7 @@ import {
   VaultFactory__MockForVaultHub,
   VaultHub,
 } from "typechain-types";
+import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
 import { impersonate } from "lib";
 import { findEvents } from "lib/event";
@@ -64,16 +65,15 @@ describe("VaultHub.sol:forceExit", () => {
       treasuryFeeBP?: bigint;
     },
   ) {
-    await operatorGrid
-      .connect(user)
-      .registerTier(
-        user,
-        options?.shareLimit ?? SHARE_LIMIT,
-        options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
-        options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-      );
-
+    const tiers: TierParamsStruct[] = [
+      {
+        shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+        reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+        rebalanceThresholdBP: options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+        treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
+      },
+    ];
+    await operatorGrid.connect(user).registerTiers(user, tiers);
     await operatorGrid.connect(user).registerVault(vault_);
   }
 
