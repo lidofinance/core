@@ -124,9 +124,8 @@ describe("Delegation.sol", () => {
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
     expect(await factory.OPERATOR_GRID()).to.equal(operatorGrid);
 
-    await operatorGrid.connect(dao).registerGroup(1, ether("1000"));
-    await operatorGrid.connect(dao).registerTier(1, 1, ether("1000"), 1000n, 1000n, 1000n);
-    await operatorGrid.connect(dao)["registerOperator(address)"](nodeOperatorManager);
+    await operatorGrid.connect(dao).registerGroup(nodeOperatorManager, ether("1000"));
+    await operatorGrid.connect(dao).registerTier(nodeOperatorManager, ether("1000"), 1000n, 1000n, 1000n);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {

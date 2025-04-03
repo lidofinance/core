@@ -64,15 +64,10 @@ describe("VaultHub.sol:forceExit", () => {
       treasuryFeeBP?: bigint;
     },
   ) {
-    const groupId = 1;
-    const tiersCount = (await operatorGrid.group(groupId)).tiersCount;
-    const nextTierId = tiersCount + 1n;
-
     await operatorGrid
       .connect(user)
       .registerTier(
-        groupId,
-        nextTierId,
+        user,
         options?.shareLimit ?? SHARE_LIMIT,
         options?.reserveRatioBP ?? RESERVE_RATIO_BP,
         options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
@@ -146,8 +141,7 @@ describe("VaultHub.sol:forceExit", () => {
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
-    await operatorGrid.connect(user).registerGroup(1, ether("100"));
-    await operatorGrid.connect(user)["registerOperator(address)"](user);
+    await operatorGrid.connect(user).registerGroup(user, ether("100"));
 
     await registerVaultWithTier(vault, {
       shareLimit: SHARE_LIMIT,

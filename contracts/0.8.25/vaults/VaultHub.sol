@@ -172,11 +172,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     function connectVault(address _vault) external {
         (
+            /* uint256 groupIndex */,
+            /* uint256 tierIndex */,
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 reserveRatioThresholdBP,
             uint256 treasuryFeeBP
-        ) = OPERATOR_GRID.getVaultLimits(_vault);
+        ) = OPERATOR_GRID.getVaultInfo(_vault);
         _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
     }
 
@@ -302,7 +304,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
-        OPERATOR_GRID.mintShares(_vault, _amountOfShares);
+        OPERATOR_GRID.onMintedShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -325,7 +327,7 @@ contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
-        OPERATOR_GRID.burnShares(_vault, _amountOfShares);
+        OPERATOR_GRID.onBurnedShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }

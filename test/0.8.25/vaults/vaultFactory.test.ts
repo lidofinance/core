@@ -21,6 +21,7 @@ import {
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
+import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { createVaultProxy, days, ether } from "lib";
@@ -163,24 +164,19 @@ describe("VaultFactory.sol", () => {
       assetRecoverer: await vaultOwner1.getAddress(),
     };
 
-    const groupId = 1;
-    const tierId = 1;
     const shareLimit = ether("1");
-    const reserveRatio = 120n;
-    const reserveRatioThreshold = 100n;
-    const treasuryFee = 600n;
+    const reserveRatioBP = 120n;
+    const rebalanceThresholdBP = 100n;
+    const treasuryFeeBP = 600n;
 
-    await operatorGrid.connect(admin).registerGroup(groupId, shareLimit);
-    await operatorGrid
-      .connect(admin)
-      .registerTier(groupId, tierId, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-    await operatorGrid
-      .connect(admin)
-      .registerTier(groupId, tierId + 1, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-    await operatorGrid
-      .connect(admin)
-      .registerTier(groupId, tierId + 2, shareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
-    await operatorGrid.connect(admin)["registerOperator(address)"](operator);
+    const tiers: TierParamsStruct[] = [
+      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
+      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
+      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
+    ];
+
+    await operatorGrid.connect(admin).registerGroup(operator, shareLimit);
+    await operatorGrid.connect(admin).registerTiers(operator, tiers);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

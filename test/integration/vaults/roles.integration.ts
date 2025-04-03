@@ -6,6 +6,7 @@ import { beforeEach } from "mocha";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation } from "typechain-types";
+import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
 import { days } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -93,19 +94,25 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
       const agentSigner = await ctx.getSigner("agent");
 
-      const groupId = 1;
-      const tierId = 1;
-
       const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
 
-      await operatorGrid.connect(agentSigner).registerGroup(groupId, shareLimit);
-      await operatorGrid
-        .connect(agentSigner)
-        .registerTier(groupId, tierId, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
-      await operatorGrid
-        .connect(agentSigner)
-        .registerTier(groupId, tierId + 1, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
-      await operatorGrid.connect(agentSigner)["registerOperator(address)"](nodeOperatorManager);
+      const tiers: TierParamsStruct[] = [
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: rebalanceThreshold,
+          treasuryFeeBP: treasuryFeeBP,
+        },
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          rebalanceThresholdBP: rebalanceThreshold,
+          treasuryFeeBP: treasuryFeeBP,
+        },
+      ];
+
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperatorManager, shareLimit);
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperatorManager, tiers);
 
       // Owner can create a vault with operator as a node operator
       const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
