@@ -25,7 +25,7 @@ contract VaultFactory {
         DASHBOARD_IMPL = _dashboardImpl;
     }
 
-    /// @notice Creates a new StakingVault and Delegation contracts
+    /// @notice Creates a new StakingVault and Dashboard contracts
     /// @param _defaultAdmin The address of the default admin
     /// @param _nodeOperator The address of the node operator
     /// @param _extraParams The params of vault creation
