@@ -4,8 +4,9 @@ import { ethers } from "hardhat";
 import { SecretKey } from "@chainsafe/blst";
 import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 
-import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
-import { BLS } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+import { SSZHelpers, SSZMerkleTree } from "typechain-types";
+import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+import { StakingVaultDepositStruct } from "typechain-types/contracts/0.8.25/vaults/StakingVault";
 
 import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
@@ -45,7 +46,7 @@ export const generateValidator = (customWC?: string): Validator => {
 export const generatePredeposit = async (
   validator: Validator,
   overrideAmount?: bigint,
-): Promise<{ deposit: IStakingVault.DepositStruct; depositY: BLS.DepositYStruct }> => {
+): Promise<{ deposit: StakingVaultDepositStruct; depositY: BLS12_381.DepositYStruct }> => {
   const amount = overrideAmount ?? ether("1");
   const pubkey = validator.blsPrivateKey.toPublicKey();
 
@@ -103,7 +104,7 @@ export const generatePredeposit = async (
 export const generatePostDeposit = (
   validator: SSZHelpers.ValidatorStruct,
   amount = ether("31"),
-): IStakingVault.DepositStruct => {
+): StakingVaultDepositStruct => {
   // signature is not checked for post-deposit
   const signature = zeroPadBytes("0x00", 96);
   return {

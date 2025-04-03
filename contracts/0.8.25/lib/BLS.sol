@@ -3,23 +3,15 @@ pragma solidity 0.8.25;
 
 import {SSZ} from "./SSZ.sol";
 
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
-/// @notice modified&stripped Solady BLS Lib to support ETH beacon spec for validator deposit message verification
-/// @author Lido
-/// @author Solady (https://github.com/vectorized/solady/blob/main/src/utils/BLS.sol)
-/// @author Ithaca (https://github.com/ithacaxyz/odyssey-examples/blob/main/chapter1/contracts/src/libraries/BLS.sol)
-///
-/// @dev Precompile addresses come from the BLS addresses submodule in AlphaNet, see
-/// See: (https://github.com/paradigmxyz/alphanet/blob/main/crates/precompile/src/addresses.rs)
-///
-/// Note:
-/// - This implementation uses `mcopy`, since any chain that is edgy enough to
-///   implement the BLS precompiles will definitely have implemented cancun.
-/// - For efficiency, we use the legacy `staticcall` to call the precompiles.
-///   For the intended use case in an entry points that requires gas-introspection,
-///   which requires legacy bytecode, this won't be a blocker.
-library BLS {
+/**
+ * @notice Modified & stripped BLS Lib to support ETH beacon spec for validator deposit message verification.
+ * @author Lido
+ * @author Solady (https://github.com/Vectorized/solady/blob/dcdfab80f4e6cb9ac35c91610b2a2ec42689ec79/src/utils/ext/ithaca/BLS.sol)
+ * @author Ithaca (https://github.com/ithacaxyz/odyssey-examples/blob/main/chapter1/contracts/src/libraries/BLS.sol)
+ */
+library BLS12_381 {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                          STRUCTS                           */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -76,19 +68,16 @@ library BLS {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /// @dev mask to remove sign bit from Fp via bitwise AND
-    bytes32 constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    PRECOMPILE ADDRESSES                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    // Correct Pectra addreses are not avaliable in forge
-
     /// @dev SHA256 precompile address.
     address internal constant SHA256 = 0x0000000000000000000000000000000000000002;
 
     /// @dev Mod Exp precompile address.
-    address constant MOD_EXP = 0x0000000000000000000000000000000000000005;
+    address internal constant MOD_EXP = 0x0000000000000000000000000000000000000005;
 
     /// @dev For addition of two points on the BLS12-381 G2 curve.
     address internal constant BLS12_G2ADD = 0x000000000000000000000000000000000000000d;
@@ -124,87 +113,123 @@ library BLS {
     /*                         OPERATIONS                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @dev Computes a point in G2 from a message. Modified to accept bytes32 and have DSL per ETH 2.0 spec
+    /**
+     * @notice Computes a point in G2 from a message. Modified to accept bytes32 and have DSL per ETH 2.0 spec
+     * @param message the message to hash and map to G2 point on BLS curve
+     * @dev original at https://github.com/Vectorized/solady/blob/dcdfab80f4e6cb9ac35c91610b2a2ec42689ec79/src/utils/ext/ithaca/BLS.sol#L275
+     * @dev added comments and modified to use bytes32 instead of bytes and correct DSL per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#bls-signatures
+     *  */
     function hashToG2(bytes32 message) internal view returns (G2Point memory result) {
         /// @solidity memory-safe-assembly
         assembly {
+            /// @dev Constructs the domain separation tag for hashing
             function dstPrime(o_, i_) -> _o {
-                mstore8(o_, i_) // 1.
-                mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // 32.
-                mstore(add(o_, 0x21), "SWU_RO_POP_\x2b") // 12.
-                _o := add(0x2d, o_)
+                mstore8(o_, i_) // Write a single byte at `o_` with value `i_` (counter/index)
+                mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // Write main part of DST (32 bytes)
+                mstore(add(o_, 0x21), "SWU_RO_POP_\x2b") // Write final part (12 bytes, includes '+' as 0x2b)
+                _o := add(0x2d, o_) // Return pointer to the end of DST (total 45 bytes added)
             }
 
+            /// @dev Calls SHA256 precompile with `data_` of length `n_`, returns 32-byte hash
             function sha2(data_, n_) -> _h {
                 if iszero(and(eq(returndatasize(), 0x20), staticcall(gas(), SHA256, data_, n_, 0x00, 0x20))) {
-                    revert(calldatasize(), 0x00)
+                    revert(calldatasize(), 0x00) // Revert on failure
                 }
-                _h := mload(0x00)
+                _h := mload(0x00) // Load and return hash result
             }
 
+            /// @dev Modular reduction using MOD_EXP precompile (0x05)
+            /// @param s_ Pointer to structure: [base offset][base size][modulus size][modulus]
+            /// @param b_ Pointer to base value (64 bytes for fp2 element)
             function modfield(s_, b_) {
-                mcopy(add(s_, 0x60), b_, 0x40)
+                mcopy(add(s_, 0x60), b_, 0x40) // Copy 64-byte fp2 element into structure
                 if iszero(and(eq(returndatasize(), 0x40), staticcall(gas(), MOD_EXP, s_, 0x100, b_, 0x40))) {
-                    revert(calldatasize(), 0x00)
+                    revert(calldatasize(), 0x00) // Revert on failure
                 }
             }
 
+            /// @dev Map an fp2 field element to a point in G2 curve using BLS12 precompile (0x0a)
             function mapToG2(s_, r_) {
                 if iszero(
                     and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_MAP_FP2_TO_G2, s_, 0x80, r_, 0x100))
                 ) {
-                    mstore(0x00, 0x89083b91) // `MapFp2ToG2Failed()`.
+                    mstore(0x00, 0x89083b91) // Revert with MapFp2ToG2Failed()
                     revert(0x1c, 0x04)
                 }
             }
 
-            let b := mload(0x40)
-            let s := add(b, 0x100)
-            mstore(add(s, 0x40), message)
-            let o := add(add(s, 0x40), 0x20)
-            mstore(o, shl(240, 256))
-            let b0 := sha2(s, sub(dstPrime(add(0x02, o), 0), s))
-            mstore(0x20, b0)
-            mstore(s, b0)
-            mstore(b, sha2(s, sub(dstPrime(add(0x20, s), 1), s)))
-            let j := b
+            // === Begin Main Logic ===
+
+            let b := mload(0x40) // Allocate free memory pointer `b`
+            let s := add(b, 0x100) // Pointer to working buffer after `b`
+            mstore(add(s, 0x40), message) // Store the message at `s + 0x40`
+            let o := add(add(s, 0x40), 0x20) // Pointer after message
+            mstore(o, shl(240, 256)) // Store 256 as 2-byte BE (0x0100), padded left
+
+            // === DST prime and initial hash ===
+            let b0 := sha2(s, sub(dstPrime(add(0x02, o), 0), s)) // First SHA2 with DST index 0
+            mstore(0x20, b0) // Save `b0` for use in XOF loop
+            mstore(s, b0) // Store b0 at start of buffer
+            mstore(b, sha2(s, sub(dstPrime(add(0x20, s), 1), s))) // Store next hash at `b`
+
+            // === XOF-style hash chaining ===
+            let j := b // Pointer to next position in output chain
             for {
                 let i := 2
             } 1 {
 
             } {
+                // XOR `b0` with previous output and hash it
                 mstore(s, xor(b0, mload(j)))
                 j := add(j, 0x20)
-                mstore(j, sha2(s, sub(dstPrime(add(0x20, s), i), s)))
+                mstore(j, sha2(s, sub(dstPrime(add(0x20, s), i), s))) // SHA2 with DST index `i`
                 i := add(i, 1)
                 if eq(i, 9) {
                     break
-                }
+                } // Loop from i = 2 to i = 8 (7 iterations)
             }
 
-            mstore(add(s, 0x00), 0x40)
-            mstore(add(s, 0x20), 0x20)
-            mstore(add(s, 0x40), 0x40)
-            mstore(add(s, 0xa0), 1)
+            // === Prepare MOD_EXP input structure ===
+            // Format: baseLen=0x40, base=..., modulusLen=0x20, modulus=...
+
+            // Set up structure offsets
+            mstore(add(s, 0x00), 0x40) // base size = 64
+            mstore(add(s, 0x20), 0x20) // modulus size = 32
+            mstore(add(s, 0x40), 0x40) // base size again for second call
+
+            // Prime modulus for BLS12-381 field
+            mstore(add(s, 0xa0), 1) // dummy flag
             mstore(add(s, 0xc0), 0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7)
             mstore(add(s, 0xe0), 0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab)
+
+            // Modular reduction on each 64-byte chunk at b, b+0x40, b+0x80, b+0xc0
             modfield(s, add(b, 0x00))
             modfield(s, add(b, 0x40))
             modfield(s, add(b, 0x80))
             modfield(s, add(b, 0xc0))
 
-            mapToG2(b, result)
-            mapToG2(add(0x80, b), add(0x100, result))
+            // Map two fp2 elements to G2
+            mapToG2(b, result) // result at offset 0
+            mapToG2(add(0x80, b), add(0x100, result)) // second point at result + 0x100
 
+            // Add the two G2 points together with BLS12_G2ADD precompile (0x0f)
             if iszero(and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_G2ADD, result, 0x200, result, 0x100))) {
-                mstore(0x00, 0xc55e5e33) // `G2AddFailed()`.
+                mstore(0x00, 0xc55e5e33) // Revert with G2AddFailed()
                 revert(0x1c, 0x04)
             }
         }
     }
 
+    /**
+     * @notice verifies the deposit message signature using BLS12-381 pairing check
+     * @param deposit staking vault deposit to verify
+     * @param depositY Y coordinates of uncompressed pubkey and signature
+     * @param withdrawalCredentials missing part of deposit message
+     * @dev will revert with `InvalidSignature` if the signature is invalid
+     * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     */
     function verifyDepositMessage(
-        IStakingVault.Deposit calldata deposit,
+        StakingVaultDeposit calldata deposit,
         DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) internal view {

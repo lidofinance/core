@@ -3,12 +3,12 @@
 
 pragma solidity 0.8.25;
 
-import {BLS} from "contracts/0.8.25/lib/BLS.sol";
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
+import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {
-    IStakingVault.Deposit deposit;
-    BLS.DepositY depositYComponents;
+    StakingVaultDeposit deposit;
+    BLS12_381.DepositY depositYComponents;
     bytes32 withdrawalCredentials;
 }
 
@@ -17,11 +17,11 @@ contract BLS__Harness {
     BLS__HarnessVerifier public verifier;
 
     function verifyDepositMessage(
-        IStakingVault.Deposit calldata deposit,
-        BLS.DepositY calldata depositY,
+        StakingVaultDeposit calldata deposit,
+        BLS12_381.DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) public view {
-        BLS.verifyDepositMessage(deposit, depositY, withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials);
     }
 
     constructor() {
@@ -31,18 +31,18 @@ contract BLS__Harness {
     function LOCAL_MESSAGE_1() external pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                IStakingVault.Deposit(
+                StakingVaultDeposit(
                     hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
                     hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
                     1 ether,
                     bytes32(0) // deposit data root is not checked
                 ),
-                BLS.DepositY(
-                    BLS.Fp(
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
                         0x0000000000000000000000000000000019b71bd2a9ebf09809b6c380a1d1de0c,
                         0x2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083
                     ),
-                    BLS.Fp2(
+                    BLS12_381.Fp2(
                         0x00000000000000000000000000000000160f8d804d277c7a079f451bce224fd4,
                         0x2397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb,
                         0x0000000000000000000000000000000010d96c5dcc6e32bcd43e472317e18ad9,

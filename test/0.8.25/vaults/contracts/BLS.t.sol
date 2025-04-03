@@ -9,20 +9,19 @@ import {Test} from "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 
-import {BLS, SSZ} from "contracts/0.8.25/lib/BLS.sol";
+import {BLS12_381, SSZ} from "contracts/0.8.25/lib/BLS.sol";
+import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {
-    IStakingVault.Deposit deposit;
-    BLS.DepositY depositYComponents;
+    StakingVaultDeposit deposit;
+    BLS12_381.DepositY depositYComponents;
     bytes32 withdrawalCredentials;
 }
-
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 // harness to test methods with calldata args
 contract BLSHarness {
     function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
-        BLS.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
     }
 
     function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
@@ -67,18 +66,18 @@ contract BLSVerifyingKeyTest is Test {
     function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                IStakingVault.Deposit(
+                StakingVaultDeposit(
                     hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
                     hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
                     1 ether,
                     bytes32(0) // deposit data root is not checked
                 ),
-                BLS.DepositY(
-                    BLS.Fp(
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
                         0x0000000000000000000000000000000019b71bd2a9ebf09809b6c380a1d1de0c,
                         0x2d9286a8d368a2fc75ad5ccc8aec572efdff29d50b68c63e00f6ce017c24e083
                     ),
-                    BLS.Fp2(
+                    BLS12_381.Fp2(
                         0x00000000000000000000000000000000160f8d804d277c7a079f451bce224fd4,
                         0x2397e75676d965a1ebe79e53beeb2cb48be01f4dc93c0bad8ae7560c3e8048fb,
                         0x0000000000000000000000000000000010d96c5dcc6e32bcd43e472317e18ad9,
@@ -92,18 +91,18 @@ contract BLSVerifyingKeyTest is Test {
     function LOCAL_MESSAGE_2() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                IStakingVault.Deposit(
+                StakingVaultDeposit(
                     hex"95886cccfd40156b84b29e22098f3b1b3d1811275507cdf10a3d4c29217635cc389156565a9e156c6f4797602520d959",
                     hex"87eb3d449f8b70f6aa46f7f204cdb100bdc2742fae3176cec9b864bfc5460907deed2bbb7dac911b4e79d5c9df86483c013c5ba55ab4691b6f8bd16197538c3f2413dc9c56f37cb6bd78f72dbe876f8ae2a597adbf7574eadab2dd2aad59a291",
                     1 ether,
                     bytes32(0xe019f8a516377a7bd24e571ddf9410a73e7f11968515a0241bb7993a72a9a846) // deposit data root is not checked
                 ),
-                BLS.DepositY(
-                    BLS.Fp(
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
                         0x00000000000000000000000000000000065bd597c1126394e2c2e357f9bde064,
                         0xfe5928f590adac55563d299c738458f9fb15494364ce3ee4a0a45190853f63fe
                     ),
-                    BLS.Fp2(
+                    BLS12_381.Fp2(
                         0x000000000000000000000000000000000f20e48e1255852b16cb3bc79222d426,
                         0x8eed3a566036b5608775e10833dc043b33c1f762eff29fb75c4479bea44ead3d,
                         0x000000000000000000000000000000000a9fffa1483846f01e6dd1a3212afb14,
@@ -122,18 +121,18 @@ contract BLSVerifyingKeyTest is Test {
     function BENCHMARK_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                IStakingVault.Deposit(
+                StakingVaultDeposit(
                     hex"88841e426f271030ad2257537f4eabd216b891da850c1e0e2b92ee0d6e2052b1dac5f2d87bef51b8ac19d425ed024dd1",
                     hex"99a9e9abd7d4a4de2d33b9c3253ff8440ad237378ce37250d96d5833fe84ba87bbf288bf3825763c04c3b8cdba323a3b02d542cdf5940881f55e5773766b1b185d9ca7b6e239bdd3fb748f36c0f96f6a00d2e1d314760011f2f17988e248541d",
                     32 ether,
                     bytes32(0)
                 ),
-                BLS.DepositY(
-                    BLS.Fp(
+                BLS12_381.DepositY(
+                    BLS12_381.Fp(
                         0x0000000000000000000000000000000004c46736f0aa8ec7e6e4c1126c12079f,
                         0x09dc28657695f13154565c9c31907422f48df41577401bab284458bf4ebfb45d
                     ),
-                    BLS.Fp2(
+                    BLS12_381.Fp2(
                         0x0000000000000000000000000000000010e7847980f47ceb3f994a97e246aa1d,
                         0x563dfb50c372156b0eaee0802811cd62da8325ebd37a1a498ad4728b5852872f,
                         0x0000000000000000000000000000000000c4aac6c84c230a670b4d4c53f74c0b,
@@ -162,16 +161,16 @@ contract BLSVerifyingKeyTest is Test {
         }
     }
 
-    function wrapFp(bytes memory data) internal pure returns (BLS.Fp memory) {
+    function wrapFp(bytes memory data) internal pure returns (BLS12_381.Fp memory) {
         require(data.length == 48, "Invalid Fp length");
 
         bytes32 a = slice(data, 0, 16);
         bytes32 b = slice(data, 16, 48);
 
-        return BLS.Fp(a, b);
+        return BLS12_381.Fp(a, b);
     }
 
-    function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS.Fp2 memory) {
-        return BLS.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
+    function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS12_381.Fp2 memory) {
+        return BLS12_381.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
     }
 }
