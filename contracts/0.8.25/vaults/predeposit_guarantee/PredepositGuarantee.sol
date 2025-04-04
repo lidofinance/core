@@ -315,7 +315,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
             StakingVaultDeposit calldata _deposit = _deposits[i];
 
             // this check isn't needed in  `depositToBeaconChain` because
-            // Beacon Chain doesn't enforce the signature checks for existing validators and just adds to their balance
+            // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
             BLS12_381.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {

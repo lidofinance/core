@@ -26,7 +26,7 @@ library SSZ {
 
     /// @notice calculation of signing root for deposit message
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
-    /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature )
+    /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
     function depositMessageSigningRoot(
         StakingVaultDeposit calldata deposit,
         bytes32 withdrawalCredentials
