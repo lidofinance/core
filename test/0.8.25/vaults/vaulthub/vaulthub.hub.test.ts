@@ -84,6 +84,24 @@ describe("VaultHub.sol:hub", () => {
         options?.treasuryFeeBP ?? TREASURY_FEE_BP,
       );
 
+    const count = await vaultHub.vaultsCount();
+    const valuations = [];
+    const inOutDeltas = [];
+    const locked = [];
+    const treasuryFees = [];
+
+    for (let i = 0; i < count; i++) {
+      const vaultAddr = await vaultHub.vault(i);
+      const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
+      valuations.push(await vaultContract.valuation());
+      inOutDeltas.push(await vaultContract.inOutDelta());
+      locked.push(await vaultContract.locked());
+      treasuryFees.push(0n);
+    }
+
+    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+
     return vault;
   }
 

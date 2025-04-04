@@ -49,8 +49,10 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
+        /// @notice if true, vault is waiting to be connected to the hub
+        bool pendingConnect;
         /// @notice unused gap in the slot 2
-        /// uint104 _unused_gap_;
+        /// uint96 _unused_gap_;
     }
 
     struct VaultInfo {
@@ -120,7 +122,7 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, false));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -263,9 +265,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
             revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
 
-        if (IStakingVault(_vault).locked() < CONNECT_DEPOSIT)
-            revert VaultInsufficientLocked(_vault, IStakingVault(_vault).locked(), CONNECT_DEPOSIT);
-
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             0, // sharesMinted
@@ -273,7 +272,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            true // pendingConnect
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -587,6 +587,15 @@ contract VaultHub is PausableUntilWithRoles {
 
             if (socket.pendingDisconnect) continue; // we skip disconnected vaults
 
+            if (socket.pendingConnect) {
+                if (_locked[i] < CONNECT_DEPOSIT) {
+                    continue;
+                }
+
+                socket.pendingConnect = false;
+                emit VaultConnectionConfirmed(socket.vault);
+            }
+
             uint256 treasuryFeeShares = _treasureFeeShares[i];
             if (treasuryFeeShares > 0) {
                 socket.sharesMinted += uint96(treasuryFeeShares);
@@ -623,8 +632,11 @@ contract VaultHub is PausableUntilWithRoles {
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 index = $.vaultIndex[_vault];
-        if (index == 0 || $.sockets[index].pendingDisconnect) revert NotConnectedToHub(_vault);
-        return $.sockets[index];
+        if (index == 0) revert NotConnectedToHub(_vault);
+        VaultSocket storage socket = $.sockets[index];
+        if (socket.pendingDisconnect) revert NotConnectedToHub(_vault);
+        if (socket.pendingConnect) revert VaultPendingConnection(_vault);
+        return socket;
     }
 
     function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
@@ -659,7 +671,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-
+    event VaultConnectionConfirmed(address indexed vault);
     error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
@@ -687,4 +699,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
     error InvalidVaultHubAddress(address vault, address vaultHub);
     error VaultIsOssified(address vault);
+    error VaultPendingConnection(address vault);
 }
