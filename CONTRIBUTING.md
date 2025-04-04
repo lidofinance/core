@@ -51,7 +51,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 > [!TIP]
 > On macOS with Homebrew, it is recommended to install Node.js using [`n`](https://github.com/tj/n) or
-> [ >`nvm`](https://github.com/nvm-sh/nvm) version managers.
+> [`nvm`](https://github.com/nvm-sh/nvm) version managers.
 >
 > Example setup process using `n` package manager for zsh users:
 >

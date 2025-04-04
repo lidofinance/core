@@ -5,7 +5,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForStakingVault,
-  EIP7002WithdrawalRequest_Mock,
   StakingVault,
   StakingVault__factory,
   VaultFactory__MockForStakingVault,
@@ -14,8 +13,6 @@ import {
 
 import { findEvents } from "lib";
 
-import { EIP7002_PREDEPLOYED_ADDRESS } from "test/suite";
-
 type DeployedStakingVault = {
   depositContract: DepositContract__MockForStakingVault;
   stakingVault: StakingVault;
@@ -23,22 +20,6 @@ type DeployedStakingVault = {
   vaultHub: VaultHub__MockForStakingVault;
   vaultFactory: VaultFactory__MockForStakingVault;
 };
-
-export async function deployWithdrawalsPreDeployedMock(
-  defaultRequestFee: bigint,
-): Promise<EIP7002WithdrawalRequest_Mock> {
-  const mock = await ethers.deployContract("EIP7002WithdrawalRequest_Mock");
-  const mockAddress = await mock.getAddress();
-  const mockCode = await ethers.provider.getCode(mockAddress);
-
-  await ethers.provider.send("hardhat_setCode", [EIP7002_PREDEPLOYED_ADDRESS, mockCode]);
-
-  const contract = await ethers.getContractAt("EIP7002WithdrawalRequest_Mock", EIP7002_PREDEPLOYED_ADDRESS);
-
-  await contract.setFee(defaultRequestFee);
-
-  return contract;
-}
 
 export async function deployStakingVaultBehindBeaconProxy(
   vaultOwner: HardhatEthersSigner,

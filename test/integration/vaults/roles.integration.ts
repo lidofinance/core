@@ -35,6 +35,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
     withdrawer: HardhatEthersSigner,
+    locker: HardhatEthersSigner,
     assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
@@ -59,6 +60,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       assetRecoverer,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
@@ -99,6 +101,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [funder],
           withdrawers: [withdrawer],
           minters: [minter],
+          lockers: [locker],
           burners: [burner],
           rebalancers: [rebalancer],
           depositPausers: [depositPausers],
@@ -115,6 +118,32 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    });
+
+    it("Allows anyone to read public metrics of the vault", async () => {
+      expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
+      expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
+      expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
+    });
+
+    it("Allows to retrieve roles addresses", async () => {
+      expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+    });
+
+    it("Allows NO Manager to add and remove new managers", async () => {
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .grantRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+        stranger.address,
+      ]);
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .revokeRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+      ]);
     });
 
     describe("Verify ACL for methods that require only role", () => {
@@ -293,6 +322,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
         it("mintStETH", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintStETH",
@@ -306,6 +337,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         });
 
         it("mintShares", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintShares",
@@ -333,6 +366,18 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
 
+        it("lock", async () => {
+          await testMethod(
+            testDelegation,
+            "lock",
+            {
+              successUsers: [locker],
+              failingUsers: allRoles.filter((r) => r !== locker),
+            },
+            [ether("1")],
+            await testDelegation.LOCK_ROLE(),
+          );
+        });
         // requires prepared state for this test to pass, skipping for now
         it.skip("withdrawWETH", async () => {
           await testMethod(
@@ -450,6 +495,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [],
           withdrawers: [],
           minters: [],
+          lockers: [],
           burners: [],
           rebalancers: [],
           depositPausers: [],

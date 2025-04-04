@@ -92,5 +92,6 @@ declare namespace NodeJS {
 
     /* hardhat plugins options */
     SKIP_CONTRACT_SIZE?: boolean;
+    SKIP_GAS_REPORT?: boolean;
   }
 }
