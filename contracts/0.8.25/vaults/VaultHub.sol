@@ -31,12 +31,12 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
-        /// @notice timestamp of the vaults data
-        uint256 vaultsDataTimestamp;
         /// @notice root of the vaults data tree
         bytes32 vaultsDataTreeRoot;
         /// @notice CID of the vaults data tree
         string vaultsDataTreeCid;
+        /// @notice timestamp of the vaults data
+        uint64 vaultsDataTimestamp;
     }
 
     struct VaultSocket {
@@ -277,7 +277,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function updateReportData(
-        uint256 _vaultsDataTimestamp,
+        uint64 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataTreeCid
     ) external {

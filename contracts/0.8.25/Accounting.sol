@@ -313,7 +313,7 @@ contract Accounting {
         );
 
         _contracts.vaultHub.updateReportData(
-            _report.timestamp,
+            uint64(_report.timestamp),
             _report.vaultsDataTreeRoot,
             _report.vaultsDataTreeCid
         );
