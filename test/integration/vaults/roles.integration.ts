@@ -120,6 +120,32 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
     });
 
+    it("Allows anyone to read public metrics of the vault", async () => {
+      expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
+      expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
+      expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
+    });
+
+    it("Allows to retrieve roles addresses", async () => {
+      expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+    });
+
+    it("Allows NO Manager to add and remove new managers", async () => {
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .grantRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+        stranger.address,
+      ]);
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .revokeRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+      ]);
+    });
+
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("claimNodeOperatorFee", async () => {
