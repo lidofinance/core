@@ -5,11 +5,12 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
+import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
-import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 
 /**
  * @title PredepositGuarantee
@@ -284,7 +285,8 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function predeposit(
         IStakingVault _stakingVault,
-        IStakingVault.Deposit[] calldata _deposits
+        StakingVaultDeposit[] calldata _deposits,
+        BLS12_381.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
 
@@ -310,7 +312,11 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVault.Deposit calldata _deposit = _deposits[i];
+            StakingVaultDeposit calldata _deposit = _deposits[i];
+
+            // this check isn't needed in  `depositToBeaconChain` because
+            // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
+            BLS12_381.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
                 revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
@@ -364,7 +370,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function depositToBeaconChain(
         IStakingVault _stakingVault,
-        IStakingVault.Deposit[] calldata _deposits
+        StakingVaultDeposit[] calldata _deposits
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert NotNodeOperator();
@@ -372,7 +378,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
         ERC7201Storage storage $ = _getStorage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVault.Deposit calldata _deposit = _deposits[i];
+            StakingVaultDeposit calldata _deposit = _deposits[i];
 
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
@@ -406,7 +412,7 @@ contract PredepositGuarantee is CLProofVerifier, PausableUntilWithRoles {
      */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
-        IStakingVault.Deposit[] calldata _deposits,
+        StakingVaultDeposit[] calldata _deposits,
         IStakingVault _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {

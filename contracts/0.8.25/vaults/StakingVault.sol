@@ -10,7 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 import {VaultHub} from "./VaultHub.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title StakingVault
@@ -418,7 +418,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by the depositor address
      * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
         ERC7201Storage storage $ = _getStorage();
@@ -431,7 +431,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
+            StakingVaultDeposit calldata deposit = _deposits[i];
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
