@@ -64,17 +64,4 @@ contract VaultHub__HarnessForReporting is VaultHub {
     function harness_bypassCheckVaultsDataProof(bool _bypass) public {
         bypassCheckVaultsDataProof = _bypass;
     }
-
-    function checkVaultsDataProof(
-        address _vault,
-        uint256 _valuation,
-        int256 _inOutDelta,
-        uint256 _fees,
-        uint256 _sharesMinted,
-        bytes32[] memory _proof
-    ) public view override {
-        if (!bypassCheckVaultsDataProof) {
-            super.checkVaultsDataProof(_vault, _valuation, _inOutDelta, _fees, _sharesMinted, _proof);
-        }
-    }
 }

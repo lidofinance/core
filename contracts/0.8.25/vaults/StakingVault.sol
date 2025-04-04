@@ -214,7 +214,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      including ether currently being staked on validators
      */
     function unlocked() public view returns (uint256) {
-        uint256 _valuation = checkFreshnessAndGetVauluation();
+        uint256 _valuation = valuation();
         uint256 _locked = _getStorage().locked;
 
         if (_locked > _valuation) return 0;
@@ -320,7 +320,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
-        if (_locked > valuation()) revert NewLockedExceedsValuation();
+        if (_locked > checkFreshnessAndGetVauluation()) revert NewLockedExceedsValuation();
 
         $.locked = uint128(_locked);
 
@@ -357,12 +357,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _inOutDelta New net difference between funded and withdrawn ether
      * @param _locked New amount of locked ether
      */
-    function report(uint256 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
-        $.report.timestamp = uint64(_timestamp);
+        $.report.timestamp = _timestamp;
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);

@@ -443,8 +443,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
-        vault_.report(block.timestamp, vault_.valuation(), vault_.inOutDelta(), 0);
-
         emit VaultDisconnected(_vault);
     }
 
@@ -573,11 +571,14 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _proof the proof of the reported data
     function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _feeSharesCharged, uint256 _sharesMinted, bytes32[] memory _proof) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultIndex[_vault] == 0) revert NotConnectedToHub(_vault);
+        uint256 vaultIndex = $.vaultIndex[_vault];
+        if (vaultIndex == 0) revert NotConnectedToHub(_vault);
 
-        checkVaultsDataProof(_vault, _valuation, _inOutDelta, _feeSharesCharged, _sharesMinted, _proof);
+        bytes32 root = $.vaultsDataTreeRoot;
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _feeSharesCharged, _sharesMinted))));
+        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
-        VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
+        VaultSocket storage socket = $.sockets[vaultIndex];
         if (_feeSharesCharged  < socket.feeSharesCharged) {
             revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
         }
@@ -587,17 +588,20 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
         uint256 lockedEther = Math256.max(
             LIDO.getPooledEthBySharesRoundUp(newMintedShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
-            CONNECT_DEPOSIT
+            socket.pendingDisconnect ? 0 : CONNECT_DEPOSIT
         );
 
         IStakingVault(socket.vault).report($.vaultsDataTimestamp, _valuation, _inOutDelta, lockedEther);
-    }
 
-    function checkVaultsDataProof(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _fees, uint256 _sharesMinted, bytes32[] memory _proof) public virtual view {
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _valuation, _inOutDelta, _fees, _sharesMinted))));
-        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
+        uint256 length = $.sockets.length;
+        if (socket.pendingDisconnect) {
+            // remove disconnected vault from the list
+            VaultSocket memory lastSocket = $.sockets[length - 1];
+            $.sockets[vaultIndex] = lastSocket;
+            $.vaultIndex[lastSocket.vault] = vaultIndex;
+            $.sockets.pop();
+            delete $.vaultIndex[socket.vault];
+        }
     }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
