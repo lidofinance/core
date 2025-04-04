@@ -12,7 +12,7 @@ import { UnstructuredStorage } from "./UnstructuredStorage.sol";
 //
 
 struct ExitRequestLimitData {
-    uint32 prevExitRequestsBlockNumber;        // block number of the previous exit requests
+    uint32 prevExitRequestsBlockNumber;       // block number of the previous exit requests
     uint96 prevExitRequestsLimit;             // limit value (<= `maxExitRequestLimit`) obtained on the previous exit request
     uint32 maxExitRequestsLimitGrowthBlocks;  // limit regeneration speed expressed in blocks
     uint96 maxExitRequestsLimit;              // maximum limit value
@@ -52,6 +52,8 @@ library ReportExitLimitUtilsStorage {
 
 library ReportExitLimitUtils {
 
+    error Debug(uint256 limit, uint256 block, uint256 prev);
+
     /**
     * @notice Calculate exit requests limit
     * @dev using `_constGasMin` to make gas consumption independent of the current block number
@@ -69,6 +71,8 @@ library ReportExitLimitUtils {
             projectedLimit,
             _data.maxExitRequestsLimit
         );
+
+
     }
 
 

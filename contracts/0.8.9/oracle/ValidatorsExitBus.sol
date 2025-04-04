@@ -306,10 +306,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
            revert InsufficientPayment(withdrawalFee, 1, msg.value);
         }
 
-        //TODO: check limit
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
-                // check if limit set
         if (exitRequestLimitData.isExitReportLimitSet()) {
           uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
           if (limit == 0) {
