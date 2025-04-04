@@ -7,8 +7,9 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
@@ -90,7 +91,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         }
     }
 
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
 
     function fund() external payable {}
 

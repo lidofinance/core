@@ -16,7 +16,7 @@ import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
@@ -264,11 +264,22 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice Update the locked amount of the staking vault
+     * @param _amount Amount of ether to lock
+     */
+    function lock(uint256 _amount) external {
+        _lock(_amount);
+    }
+
+    /**
      * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
      */
-    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
+    function mintShares(
+        address _recipient,
+        uint256 _amountOfShares
+    ) external payable fundable autolock(_amountOfShares) {
         _mintShares(_recipient, _amountOfShares);
     }
 
@@ -278,7 +289,10 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
-    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundable {
+    function mintStETH(
+        address _recipient,
+        uint256 _amountOfStETH
+    ) external payable fundable autolock(STETH.getSharesByPooledEth(_amountOfStETH)) {
         _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
@@ -287,7 +301,10 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfWstETH Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
+    function mintWstETH(
+        address _recipient,
+        uint256 _amountOfWstETH
+    ) external payable fundable autolock(_amountOfWstETH) {
         _mintShares(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
@@ -380,7 +397,7 @@ contract Dashboard is Permissions {
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
-        IStakingVault.Deposit[] calldata _deposits
+        StakingVaultDeposit[] calldata _deposits
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
         IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
@@ -393,7 +410,7 @@ contract Dashboard is Permissions {
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
 
-        IStakingVault.Deposit calldata deposit;
+        StakingVaultDeposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
             depositContract.deposit{value: deposit.amount}(
@@ -525,6 +542,25 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @dev Modifier to increase the locked amount if necessary
+     * @param _newShares The number of new shares to mint
+     */
+    modifier autolock(uint256 _newShares) {
+        VaultHub.VaultSocket memory socket = vaultSocket();
+
+        // Calculate the locked amount required to accommodate the new shares
+        uint256 requiredLocked = (STETH.getPooledEthBySharesRoundUp(socket.sharesMinted + _newShares) *
+            TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+
+        // If the required locked amount is greater than the current, increase the locked amount
+        if (requiredLocked > stakingVault().locked()) {
+            _lock(requiredLocked);
+        }
+
+        _;
+    }
+
+    /**
      * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
      */
     modifier safePermit(
@@ -556,8 +592,6 @@ contract Dashboard is Permissions {
         }
         revert InvalidPermit(token);
     }
-
-    /**
 
     /**
      * @dev Burns stETH tokens from the sender backed by the vault

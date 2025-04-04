@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 import {Dashboard} from "./Dashboard.sol";
 
 /**
@@ -209,12 +209,12 @@ contract Delegation is Dashboard {
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
      *          clearing them for future deposits via `PDG.depositToBeaconChain`.
      *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
-     * @param _deposits array of StakingVault.Deposit structs containing deposit data
+     * @param _deposits array of StakingVaultDeposit structs containing deposit data
      * @dev requires the caller to have the `UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
-        IStakingVault.Deposit[] calldata _deposits
+        StakingVaultDeposit[] calldata _deposits
     ) public override returns (uint256 totalAmount) {
         totalAmount = super.unguaranteedDepositToBeaconChain(_deposits);
 

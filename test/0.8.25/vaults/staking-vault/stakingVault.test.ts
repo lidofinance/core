@@ -7,19 +7,30 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
-  EIP7002WithdrawalRequest_Mock,
+  EIP7002WithdrawalRequest__Mock,
   EthRejector,
   StakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
 
-import { computeDepositDataRoot, de0x, ether, impersonate, MAX_UINT256, proxify, streccak } from "lib";
+import {
+  computeDepositDataRoot,
+  de0x,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  generatePostDeposit,
+  generateValidator,
+  impersonate,
+  MAX_UINT256,
+  proxify,
+  streccak,
+} from "lib";
 
-import { deployStakingVaultBehindBeaconProxy, deployWithdrawalsPreDeployedMock } from "test/deploy";
+import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const MAX_INT128 = 2n ** 127n - 1n;
-const MAX_UINT128 = 2n ** 128n - 1n;
 
 const PUBLIC_KEY_LENGTH = 48;
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
@@ -53,7 +64,7 @@ describe("StakingVault.sol", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let vaultHub: VaultHub__MockForStakingVault;
-  let withdrawalRequest: EIP7002WithdrawalRequest_Mock;
+  let withdrawalRequestContract: EIP7002WithdrawalRequest__Mock;
   let ethRejector: EthRejector;
 
   let vaultOwnerAddress: string;
@@ -69,8 +80,7 @@ describe("StakingVault.sol", () => {
     ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
       await deployStakingVaultBehindBeaconProxy(vaultOwner, operator, depositor));
 
-    // ERC7002 pre-deployed contract mock (0x00000961Ef480Eb55e80D19ad83579A64c007002)
-    withdrawalRequest = await deployWithdrawalsPreDeployedMock(1n);
+    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
     ethRejector = await ethers.deployContract("EthRejector");
 
     vaultOwnerAddress = await vaultOwner.getAddress();
@@ -170,8 +180,11 @@ describe("StakingVault.sol", () => {
     it("returns the correct locked balance", async () => {
       expect(await stakingVault.locked()).to.equal(0n);
 
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
     });
   });
 
@@ -181,9 +194,12 @@ describe("StakingVault.sol", () => {
     });
 
     it("returns 0 if locked amount is greater than valuation", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.valuation()).to.equal(ether("0"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
 
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
@@ -265,8 +281,11 @@ describe("StakingVault.sol", () => {
     });
 
     it("restores the vault to a healthy state if the vault was unhealthy", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
+      const valuation = 0n;
+      const inOutDelta = 0n;
+      const locked = ether("1.0");
+      await stakingVault.connect(vaultHubSigner).report(valuation, inOutDelta, locked);
+      expect(await stakingVault.valuation()).to.be.lessThan(locked);
 
       await stakingVault.fund({ value: ether("1") });
       expect(await stakingVault.valuation()).to.be.greaterThanOrEqual(await stakingVault.locked());
@@ -305,7 +324,7 @@ describe("StakingVault.sol", () => {
       const locked = ether("1") - 1n;
       const unlocked = balance - locked;
       await stakingVault.fund({ value: balance });
-      await stakingVault.connect(vaultHubSigner).lock(locked);
+      await stakingVault.connect(vaultOwner).lock(locked);
 
       await expect(stakingVault.withdraw(vaultOwnerAddress, balance))
         .to.be.revertedWithCustomError(stakingVault, "InsufficientUnlocked")
@@ -365,37 +384,44 @@ describe("StakingVault.sol", () => {
   });
 
   context("lock", () => {
-    it("reverts if the caller is not the vault hub", async () => {
-      await expect(stakingVault.connect(vaultOwner).lock(ether("1")))
-        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("lock", vaultOwnerAddress);
+    it("reverts if the caller is not the vault owner", async () => {
+      await expect(stakingVault.connect(stranger).lock(ether("1")))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(await stranger.getAddress());
     });
 
     it("updates the locked amount and emits the Locked event", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("1")))
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount))
         .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("1"));
-      expect(await stakingVault.locked()).to.equal(ether("1"));
+        .withArgs(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
     });
 
     it("reverts if the new locked amount is less than the current locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("2"));
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("1")))
-        .to.be.revertedWithCustomError(stakingVault, "LockedCannotDecreaseOutsideOfReport")
-        .withArgs(ether("2"), ether("1"));
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount - 1n)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedNotGreaterThanCurrent",
+      );
     });
 
-    it("does not revert if the new locked amount is equal to the current locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
-      await expect(stakingVault.connect(vaultHubSigner).lock(ether("2")))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("2"));
-    });
+    it("reverts if the new locked amount is equal to the current locked amount", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
 
-    it("does not revert if the locked amount is max uint128", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).lock(MAX_UINT128))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(MAX_UINT128);
+      await stakingVault.connect(vaultOwner).lock(amount);
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedNotGreaterThanCurrent",
+      );
     });
   });
 
@@ -568,7 +594,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the vault valuation is below the locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).lock(ether("1"));
+      await stakingVault.connect(vaultHubSigner).report(ether("0"), ether("0"), ether("1"));
       await expect(
         stakingVault
           .connect(depositor)
@@ -613,12 +639,9 @@ describe("StakingVault.sol", () => {
       // topup the contract with enough ETH to cover the deposits
       await setBalance(stakingVaultAddress, ether("32") * BigInt(numberOfKeys));
 
-      const deposits = Array.from({ length: numberOfKeys }, (_, i) => {
-        const pubkey = "0x" + `0${i}`.repeat(48);
-        const signature = "0x" + `0${i}`.repeat(96);
-        const amount = ether("32");
-        const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
-        return { pubkey, signature, amount, depositDataRoot };
+      const deposits = Array.from({ length: numberOfKeys }, () => {
+        const validator = generateValidator(withdrawalCredentials);
+        return generatePostDeposit(validator.container, ether("32"));
       });
 
       await expect(stakingVault.connect(depositor).depositToBeaconChain(deposits))
@@ -635,18 +658,18 @@ describe("StakingVault.sol", () => {
     });
 
     it("works with max uint256", async () => {
-      const fee = BigInt(await withdrawalRequest.fee());
+      const fee = BigInt(await withdrawalRequestContract.fee());
       expect(await stakingVault.calculateValidatorWithdrawalFee(MAX_UINT256)).to.equal(BigInt(MAX_UINT256) * fee);
     });
 
     it("calculates the total fee for given number of validator keys", async () => {
       const newFee = 100n;
-      await withdrawalRequest.setFee(newFee);
+      await withdrawalRequestContract.mock__setFee(newFee);
 
       const fee = await stakingVault.calculateValidatorWithdrawalFee(1n);
       expect(fee).to.equal(newFee);
 
-      const feePerRequest = await withdrawalRequest.fee();
+      const feePerRequest = await withdrawalRequestContract.fee();
       expect(fee).to.equal(feePerRequest);
 
       const feeForMultipleKeys = await stakingVault.calculateValidatorWithdrawalFee(2n);
@@ -699,7 +722,7 @@ describe("StakingVault.sol", () => {
     let baseFee: bigint;
 
     before(async () => {
-      baseFee = BigInt(await withdrawalRequest.fee());
+      baseFee = BigInt(await withdrawalRequestContract.fee());
     });
 
     it("reverts if msg.value is zero", async () => {
@@ -801,7 +824,7 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -813,7 +836,7 @@ describe("StakingVault.sol", () => {
           .connect(operator)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(operator, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -825,7 +848,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [0n], vaultOwnerAddress, 0n);
@@ -838,7 +861,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], vaultOwnerAddress, { value: baseFee }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, 0);
@@ -854,7 +877,7 @@ describe("StakingVault.sol", () => {
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
 
       await expect(tx)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, SAMPLE_PUBKEY, [amount], vaultOwnerAddress, overpaid);
@@ -880,9 +903,9 @@ describe("StakingVault.sol", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(pubkeys.stringified, amounts, vaultOwnerAddress, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
         .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, vaultOwnerAddress, 0n);
@@ -900,9 +923,9 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault.connect(vaultOwner).triggerValidatorWithdrawal(pubkeys.stringified, amounts, stranger, { value }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[0], amounts[0]), baseFee)
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(pubkeys.pubkeys[1], amounts[1]), baseFee)
         .and.to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(vaultOwner, pubkeys.stringified, amounts, stranger, valueToRefund);
@@ -920,7 +943,7 @@ describe("StakingVault.sol", () => {
           .connect(vaultHubSigner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: 1n }),
       )
-        .to.emit(withdrawalRequest, "eip7002MockRequestAdded")
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
     });
   });
