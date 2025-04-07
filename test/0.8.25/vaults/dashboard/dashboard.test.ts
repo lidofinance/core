@@ -12,6 +12,7 @@ import {
   ERC721_MockForDashboard,
   LidoLocator,
   Permissions,
+  PredepositGuarantee__MockForDashboard,
   StakingVault,
   StETHPermit__HarnessForDashboard,
   VaultFactory__MockForDashboard,
@@ -27,6 +28,7 @@ import {
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
+  impersonate,
   signPermit,
   stethDomain,
   wstethDomain,
@@ -50,6 +52,7 @@ describe("Dashboard.sol", () => {
   let vaultImpl: StakingVault;
   let dashboardImpl: Dashboard;
   let factory: VaultFactory__MockForDashboard;
+  let pdg: PredepositGuarantee__MockForDashboard;
   let lidoLocator: LidoLocator;
 
   let vault: StakingVault;
@@ -75,11 +78,12 @@ describe("Dashboard.sol", () => {
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth]);
     erc721 = await ethers.deployContract("ERC721_MockForDashboard");
-    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
+    pdg = await ethers.deployContract("PredepositGuarantee__MockForDashboard");
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: pdg });
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // TODO: PDG harness
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, nodeOperator, depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, pdg, depositContract]);
     expect(await vaultImpl.vaultHub()).to.equal(hub);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
@@ -1662,6 +1666,32 @@ describe("Dashboard.sol", () => {
         .withArgs(dashboard, amount)
         .to.emit(hub, "Mock__Rebalanced")
         .withArgs(amount);
+    });
+  });
+
+  context("compensateDisprovenPredepositFromPDG", () => {
+    let pdgWithdrawalSigner: HardhatEthersSigner;
+
+    before(async () => {
+      pdgWithdrawalSigner = await impersonate(certainAddress("pdg-withdrawal-signer"), ether("1"));
+      await dashboard.grantRole(await dashboard.PDG_WITHDRAWAL_ROLE(), pdgWithdrawalSigner);
+    });
+
+    it("reverts if called not by a PDG_WITHDRAWAL_ROLE", async () => {
+      await expect(
+        dashboard.connect(stranger).compensateDisprovenPredepositFromPDG(new Uint8Array(), vaultOwner),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("calls the PDG contract to compensate the disproven predeposit", async () => {
+      const pubkey = new Uint8Array(32);
+      pubkey[0] = 1;
+
+      await expect(
+        dashboard.connect(pdgWithdrawalSigner).compensateDisprovenPredepositFromPDG(pubkey, pdgWithdrawalSigner),
+      )
+        .to.emit(pdg, "Mock__CompensatedDisprovenPredeposit")
+        .withArgs(pubkey, pdgWithdrawalSigner);
     });
   });
 
