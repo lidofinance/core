@@ -4,7 +4,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOracle } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  ValidatorsExitBus__Harness,
+  ValidatorsExitBusOracle,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import { CONSENSUS_VERSION, SECONDS_PER_SLOT } from "lib";
 
@@ -38,12 +43,15 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
     context("deployment and init finishes successfully (default setup)", async () => {
       let consensus: HashConsensus__Harness;
       let oracle: ValidatorsExitBus__Harness;
+      let withdrawalVault: WithdrawalVault__MockForVebo;
 
       before(async () => {
         const deployed = await deployVEBO(admin.address);
+        withdrawalVault = deployed.withdrawalVault;
         await initVEBO({
           admin: admin.address,
           oracle: deployed.oracle,
+          withdrawalVault,
           consensus: deployed.consensus,
         });
 
