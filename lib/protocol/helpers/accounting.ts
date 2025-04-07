@@ -24,7 +24,6 @@ import { ProtocolContext } from "../types";
 const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
-const MIN_MEMBERS_COUNT = 3n;
 
 export type OracleReportParams = {
   clDiff?: bigint;
@@ -686,7 +685,7 @@ const reachConsensus = async (
 /**
  * Helper function to get report data items in the required order.
  */
-const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
+export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
   data.numValidators,
@@ -708,7 +707,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
 /**
  * Helper function to calculate hash of the report data.
  */
-const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
+export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
   const types = [
     "uint256", // consensusVersion
     "uint256", // refSlot
@@ -740,7 +739,7 @@ const getOracleCommitteeMemberAddress = (id: number) => certainAddress(`AO:HC:OC
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();
@@ -766,7 +765,7 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log.warning(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
+    await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 

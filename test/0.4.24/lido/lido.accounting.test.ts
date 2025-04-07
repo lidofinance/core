@@ -133,7 +133,7 @@ describe("Lido:accounting", () => {
 
     it("Emits an `ETHDistributed` event", async () => {
       const reportTimestamp = await getNextBlockTimestamp();
-      const preClBalance = 0n;
+      const preCLBalance = 0n;
       const clBalance = 1n;
       const withdrawals = 0n;
       const elRewards = 0n;
@@ -154,7 +154,7 @@ describe("Lido:accounting", () => {
         ),
       )
         .to.emit(lido, "ETHDistributed")
-        .withArgs(reportTimestamp, preClBalance, clBalance, withdrawals, elRewards, bufferedEther);
+        .withArgs(reportTimestamp, preCLBalance, clBalance, withdrawals, elRewards, bufferedEther);
     });
 
     type ArgsTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];

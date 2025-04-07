@@ -110,7 +110,7 @@ describe("CLProofVerifier.sol", () => {
 
     // populate merkle tree with validators
     for (let i = 1; i < 100; i++) {
-      await sszMerkleTree.addValidatorLeaf(generateValidator());
+      await sszMerkleTree.addValidatorLeaf(generateValidator().container);
     }
 
     // after adding validators, all newly added validator indexes will +n from this
@@ -180,7 +180,7 @@ describe("CLProofVerifier.sol", () => {
 
   it("can verify against dynamic merkle tree", async () => {
     const validator = generateValidator();
-    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container);
 
     // verify just the validator container tree from PK+WC node
     await sszMerkleTree.verifyProof(
@@ -191,7 +191,7 @@ describe("CLProofVerifier.sol", () => {
     );
 
     // add validator to CL state merkle tree
-    await sszMerkleTree.addValidatorLeaf(validator);
+    await sszMerkleTree.addValidatorLeaf(validator.container);
     const validatorIndex = lastValidatorIndex + 1n;
     const stateRoot = await sszMerkleTree.getMerkleRoot();
 
@@ -217,12 +217,12 @@ describe("CLProofVerifier.sol", () => {
       {
         validatorIndex,
         proof: [...proof],
-        pubkey: validator.pubkey,
+        pubkey: validator.container.pubkey,
         childBlockTimestamp: timestamp,
         slot: beaconHeader.slot,
         proposerIndex: beaconHeader.proposerIndex,
       },
-      validator.withdrawalCredentials,
+      validator.container.withdrawalCredentials,
     );
   });
 
@@ -243,7 +243,7 @@ describe("CLProofVerifier.sol", () => {
 
   it("should validate proof with different gIndex", async () => {
     const provenValidator = generateValidator();
-    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator);
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator.container);
     const pivotSlot = 1000;
 
     const prepareCLState = async (gIndex: string, slot: number) => {
@@ -252,7 +252,7 @@ describe("CLProofVerifier.sol", () => {
         gIFirstValidator,
         firstValidatorLeafIndex: localFirstValidatorLeafIndex,
       } = await prepareLocalMerkleTree(gIndex);
-      await localTree.addValidatorLeaf(provenValidator);
+      await localTree.addValidatorLeaf(provenValidator.container);
 
       const gIndexProven = await localTree.getGeneralizedIndex(localFirstValidatorLeafIndex + 1n);
       const stateProof = await localTree.getMerkleProof(localFirstValidatorLeafIndex + 1n);
@@ -295,12 +295,12 @@ describe("CLProofVerifier.sol", () => {
       {
         proof: prev.proof,
         validatorIndex: 1n,
-        pubkey: provenValidator.pubkey,
+        pubkey: provenValidator.container.pubkey,
         childBlockTimestamp: timestampPrev,
         slot: prev.beaconHeader.slot,
         proposerIndex: prev.beaconHeader.proposerIndex,
       },
-      provenValidator.withdrawalCredentials,
+      provenValidator.container.withdrawalCredentials,
     );
 
     await mine(1);
@@ -311,12 +311,12 @@ describe("CLProofVerifier.sol", () => {
       {
         proof: [...curr.proof],
         validatorIndex: 1n,
-        pubkey: provenValidator.pubkey,
+        pubkey: provenValidator.container.pubkey,
         childBlockTimestamp: timestampCurr,
         slot: curr.beaconHeader.slot,
         proposerIndex: curr.beaconHeader.proposerIndex,
       },
-      provenValidator.withdrawalCredentials,
+      provenValidator.container.withdrawalCredentials,
     );
 
     // prev fails on curr slot
@@ -325,13 +325,13 @@ describe("CLProofVerifier.sol", () => {
         {
           proof: [...prev.proof],
           validatorIndex: 1n,
-          pubkey: provenValidator.pubkey,
+          pubkey: provenValidator.container.pubkey,
           childBlockTimestamp: timestampCurr,
           // invalid slot to get wrong GIndex
           slot: curr.beaconHeader.slot,
           proposerIndex: curr.beaconHeader.proposerIndex,
         },
-        provenValidator.withdrawalCredentials,
+        provenValidator.container.withdrawalCredentials,
       ),
     ).to.be.revertedWithCustomError(CLProofVerifier, "InvalidSlot");
   });

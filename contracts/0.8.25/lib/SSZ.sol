@@ -6,6 +6,8 @@ pragma solidity 0.8.25;
 
 import {GIndex} from "./GIndex.sol";
 
+import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+
 /*
  Cut and modified version of SSZ library from CSM only has methods for merkilized SSZ proof validation
  original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
@@ -16,6 +18,36 @@ library SSZ {
     error InvalidProof();
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
+
+    /// @notice computed fork agnostic DEPOSIT_DOMAIN
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+    /// @dev fork agnostic per `apply_deposit` at https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#deposits
+    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9;
+
+    /// @notice calculation of signing root for deposit message
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
+    /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+    function depositMessageSigningRoot(
+        StakingVaultDeposit calldata deposit,
+        bytes32 withdrawalCredentials
+    ) internal view returns (bytes32 root) {
+        root = sha256Pair(
+            // merkle root of the deposit message
+            sha256Pair(
+                sha256Pair(
+                    // pubkey must be hashed to be used as leaf
+                    pubkeyRoot(deposit.pubkey),
+                    withdrawalCredentials
+                ),
+                sha256Pair(
+                    toLittleEndian(deposit.amount / 1 gwei),
+                    // filler to make leaf count power of 2
+                    bytes32(0)
+                )
+            ),
+            DEPOSIT_DOMAIN
+        );
+    }
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.

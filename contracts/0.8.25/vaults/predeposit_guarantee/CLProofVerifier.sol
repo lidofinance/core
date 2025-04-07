@@ -242,7 +242,7 @@ abstract contract CLProofVerifier {
         return abi.decode(data, (bytes32));
     }
 
-    error InvalidSlot();
     error InvalidTimestamp();
+    error InvalidSlot();
     error RootNotFound();
 }

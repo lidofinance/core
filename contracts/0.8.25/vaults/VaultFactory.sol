@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Delegation} from "./Delegation.sol";
@@ -15,10 +16,10 @@ struct DelegationConfig {
     address nodeOperatorManager;
     address assetRecoverer;
     uint256 confirmExpiry;
-    uint16 curatorFeeBP;
     uint16 nodeOperatorFeeBP;
     address[] funders;
     address[] withdrawers;
+    address[] lockers;
     address[] minters;
     address[] burners;
     address[] rebalancers;
@@ -27,8 +28,6 @@ struct DelegationConfig {
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
-    address[] curatorFeeSetters;
-    address[] curatorFeeClaimers;
     address[] nodeOperatorFeeClaimers;
 }
 
@@ -82,6 +81,9 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.withdrawers.length; i++) {
             delegation.grantRole(delegation.WITHDRAW_ROLE(), _delegationConfig.withdrawers[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.lockers.length; i++) {
+            delegation.grantRole(delegation.LOCK_ROLE(), _delegationConfig.lockers[i]);
+        }
         for (uint256 i = 0; i < _delegationConfig.minters.length; i++) {
             delegation.grantRole(delegation.MINT_ROLE(), _delegationConfig.minters[i]);
         }
@@ -112,12 +114,6 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
         }
-        for (uint256 i = 0; i < _delegationConfig.curatorFeeSetters.length; i++) {
-            delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), _delegationConfig.curatorFeeSetters[i]);
-        }
-        for (uint256 i = 0; i < _delegationConfig.curatorFeeClaimers.length; i++) {
-            delegation.grantRole(delegation.CURATOR_FEE_CLAIM_ROLE(), _delegationConfig.curatorFeeClaimers[i]);
-        }
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
@@ -125,15 +121,10 @@ contract VaultFactory {
             );
         }
 
-        // grant temporary roles to factory for setting fees
-        delegation.grantRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
-
         // set fees
-        delegation.setCuratorFeeBP(_delegationConfig.curatorFeeBP);
         delegation.setNodeOperatorFeeBP(_delegationConfig.nodeOperatorFeeBP);
 
         // revoke temporary roles from factory
-        delegation.revokeRole(delegation.CURATOR_FEE_SET_ROLE(), address(this));
         delegation.revokeRole(delegation.NODE_OPERATOR_MANAGER_ROLE(), address(this));
         delegation.revokeRole(delegation.DEFAULT_ADMIN_ROLE(), address(this));
 
