@@ -17,7 +17,16 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  getNextBlockTimestamp,
+  getRandomSigners,
+  impersonate,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -29,6 +38,7 @@ describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let funder: HardhatEthersSigner;
   let withdrawer: HardhatEthersSigner;
+  let locker: HardhatEthersSigner;
   let minter: HardhatEthersSigner;
   let burner: HardhatEthersSigner;
   let rebalancer: HardhatEthersSigner;
@@ -37,6 +47,11 @@ describe("Delegation.sol", () => {
   let validatorExitRequester: HardhatEthersSigner;
   let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
+  let pdgWithdrawer: HardhatEthersSigner;
+  let lidoVaultHubAuthorizer: HardhatEthersSigner;
+  let ossifier: HardhatEthersSigner;
+  let depositorSetter: HardhatEthersSigner;
+  let lockedResetter: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
@@ -67,6 +82,7 @@ describe("Delegation.sol", () => {
       vaultOwner,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
@@ -81,7 +97,12 @@ describe("Delegation.sol", () => {
       beaconOwner,
       rewarder,
       vaultDepositor,
-    ] = await ethers.getSigners();
+      pdgWithdrawer,
+      lidoVaultHubAuthorizer,
+      ossifier,
+      depositorSetter,
+      lockedResetter,
+    ] = await getRandomSigners(30);
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
@@ -115,7 +136,7 @@ describe("Delegation.sol", () => {
         assetRecoverer: vaultOwner,
         funders: [funder],
         withdrawers: [withdrawer],
-        lockers: [minter],
+        lockers: [locker],
         minters: [minter],
         burners: [burner],
         rebalancers: [rebalancer],
@@ -124,6 +145,11 @@ describe("Delegation.sol", () => {
         validatorExitRequesters: [validatorExitRequester],
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
+        pdgWithdrawers: [pdgWithdrawer],
+        lidoVaultHubAuthorizers: [lidoVaultHubAuthorizer],
+        ossifiers: [ossifier],
+        depositorSetters: [depositorSetter],
+        lockedResetters: [lockedResetter],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
       },
       "0x",

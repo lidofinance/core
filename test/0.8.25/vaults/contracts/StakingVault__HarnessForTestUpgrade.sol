@@ -123,6 +123,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return 0;
     }
 
+    function resetLocked() external {}
+
     function valuation() external pure returns (uint256) {
         return 0;
     }

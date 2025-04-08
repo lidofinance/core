@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { before } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -7,15 +8,45 @@ import {
   DepositContract__MockForStakingVault,
   Permissions__Harness,
   Permissions__Harness__factory,
+  PredepositGuarantee__MockPermissions,
   StakingVault,
   StakingVault__factory,
   UpgradeableBeacon,
   VaultFactory__MockPermissions,
   VaultHub__MockPermissions,
 } from "typechain-types";
-import { PermissionsConfigStruct } from "typechain-types/test/0.8.25/vaults/permissions/contracts/VaultFactory__MockPermissions";
 
-import { certainAddress, days, ether, findEvents } from "lib";
+type PermissionsConfigStruct = {
+  defaultAdmin: HardhatEthersSigner;
+  nodeOperator: HardhatEthersSigner;
+  confirmExpiry: bigint;
+  funder: HardhatEthersSigner;
+  withdrawer: HardhatEthersSigner;
+  locker: HardhatEthersSigner;
+  minter: HardhatEthersSigner;
+  burner: HardhatEthersSigner;
+  rebalancer: HardhatEthersSigner;
+  depositPauser: HardhatEthersSigner;
+  depositResumer: HardhatEthersSigner;
+  exitRequester: HardhatEthersSigner;
+  withdrawalTriggerer: HardhatEthersSigner;
+  disconnecter: HardhatEthersSigner;
+  pdgWithdrawer: HardhatEthersSigner;
+  lidoVaultHubAuthorizer: HardhatEthersSigner;
+  ossifier: HardhatEthersSigner;
+  depositorSetter: HardhatEthersSigner;
+  lockedResetter: HardhatEthersSigner;
+};
+
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  findEvents,
+  getRandomSigners,
+} from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -25,13 +56,21 @@ describe("Permissions", () => {
   let nodeOperator: HardhatEthersSigner;
   let funder: HardhatEthersSigner;
   let withdrawer: HardhatEthersSigner;
+  let locker: HardhatEthersSigner;
   let minter: HardhatEthersSigner;
   let burner: HardhatEthersSigner;
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
   let exitRequester: HardhatEthersSigner;
+  let withdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
+  let pdgWithdrawer: HardhatEthersSigner;
+  let lidoVaultHubAuthorizer: HardhatEthersSigner;
+  let ossifier: HardhatEthersSigner;
+  let depositorSetter: HardhatEthersSigner;
+  let lockedResetter: HardhatEthersSigner;
+
   let stranger: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForStakingVault;
@@ -42,6 +81,7 @@ describe("Permissions", () => {
   let vaultFactory: VaultFactory__MockPermissions;
   let stakingVault: StakingVault;
   let permissions: Permissions__Harness;
+  let pdg: PredepositGuarantee__MockPermissions;
 
   let originalState: string;
 
@@ -52,6 +92,7 @@ describe("Permissions", () => {
       nodeOperator,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
@@ -59,8 +100,16 @@ describe("Permissions", () => {
       depositResumer,
       exitRequester,
       disconnecter,
+      withdrawalTriggerer,
+      pdgWithdrawer,
+      lidoVaultHubAuthorizer,
+      ossifier,
+      depositorSetter,
+      lockedResetter,
       stranger,
-    ] = await ethers.getSigners();
+    ] = await getRandomSigners(20);
+
+    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
     // 1. Deploy DepositContract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -69,7 +118,6 @@ describe("Permissions", () => {
     vaultHub = await ethers.deployContract("VaultHub__MockPermissions");
 
     // 3. Deploy StakingVault implementation
-    // TODO: PDG harness
     stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
     expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
@@ -80,11 +128,8 @@ describe("Permissions", () => {
     permissionsImpl = await ethers.deployContract("Permissions__Harness");
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
-    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [
-      beacon,
-      permissionsImpl,
-      depositContract,
-    ]);
+    pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
+    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl, pdg]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
     const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions(
@@ -94,13 +139,20 @@ describe("Permissions", () => {
         confirmExpiry: days(7n),
         funder,
         withdrawer,
+        locker,
         minter,
         burner,
         rebalancer,
         depositPauser,
         depositResumer,
         exitRequester,
+        withdrawalTriggerer,
         disconnecter,
+        pdgWithdrawer,
+        lidoVaultHubAuthorizer,
+        ossifier,
+        depositorSetter,
+        lockedResetter,
       } as PermissionsConfigStruct,
       "0x",
     );
@@ -164,13 +216,20 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
+            locker,
             minter,
             burner,
             rebalancer,
             depositPauser,
             depositResumer,
             exitRequester,
+            withdrawalTriggerer,
             disconnecter,
+            pdgWithdrawer,
+            lidoVaultHubAuthorizer,
+            ossifier,
+            depositorSetter,
+            lockedResetter,
           } as PermissionsConfigStruct,
           "0x",
         ),
@@ -194,13 +253,20 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
+            locker,
             minter,
             burner,
             rebalancer,
             depositPauser,
             depositResumer,
             exitRequester,
+            withdrawalTriggerer,
             disconnecter,
+            pdgWithdrawer,
+            lidoVaultHubAuthorizer,
+            ossifier,
+            depositorSetter,
+            lockedResetter,
           } as PermissionsConfigStruct,
           "0x",
         ),
@@ -461,6 +527,23 @@ describe("Permissions", () => {
     });
   });
 
+  context("lock()", () => {
+    it("locks the requested amount on the StakingVault", async () => {
+      const amount = ether("1");
+      await permissions.connect(funder).fund(amount, { value: amount });
+
+      await expect(permissions.connect(locker).lock(amount)).to.emit(stakingVault, "LockedIncreased").withArgs(amount);
+    });
+
+    it("reverts if the caller is not a member of the lock role", async () => {
+      expect(await permissions.hasRole(await permissions.LOCK_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).lock(ether("1")))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.LOCK_ROLE());
+    });
+  });
+
   context("mintShares()", () => {
     it("emits mock event on the mock vault hub", async () => {
       const mintAmount = ether("1");
@@ -579,6 +662,29 @@ describe("Permissions", () => {
     });
   });
 
+  context("triggerValidatorWithdrawal()", () => {
+    const pubkeys = "0x" + "beef".repeat(24);
+    const withdrawalAmount = ether("1");
+
+    it("emits mock event on the mock vault hub", async () => {
+      await expect(
+        permissions.connect(withdrawalTriggerer).triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger, {
+          value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+        }),
+      )
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
+        .withArgs(permissions, pubkeys, [withdrawalAmount], stranger, 0n);
+    });
+
+    it("reverts if the caller is not a member of the trigger withdrawal role", async () => {
+      expect(await permissions.hasRole(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
+    });
+  });
+
   context("voluntaryDisconnect()", () => {
     it("voluntarily disconnects the StakingVault", async () => {
       await expect(permissions.connect(disconnecter).voluntaryDisconnect())
@@ -592,6 +698,24 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).voluntaryDisconnect())
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.VOLUNTARY_DISCONNECT_ROLE());
+    });
+  });
+
+  context("compensateDisprovenPredepositFromPDG()", () => {
+    const pubkeys = "0x" + "beef".repeat(24);
+
+    it("compensates the disproven predeposit from PDG", async () => {
+      await expect(permissions.connect(pdgWithdrawer).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
+        .to.emit(pdg, "Mock__CompensateDisprovenPredeposit")
+        .withArgs(pubkeys, stranger);
+    });
+
+    it("reverts if the caller is not a member of the compensate disproven predeposit role", async () => {
+      expect(await permissions.hasRole(await permissions.PDG_WITHDRAWAL_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.PDG_WITHDRAWAL_ROLE());
     });
   });
 
@@ -613,6 +737,14 @@ describe("Permissions", () => {
       ).to.be.revertedWithCustomError(permissions, "SenderNotMember");
     });
   });
+
+  // context("authorizeLidoVaultHub");
+  //
+  // context("ossifyStakingVault");
+  //
+  // context("setDepositor");
+  //
+  // context("resetLocked");
 
   async function checkSoleMember(account: HardhatEthersSigner, role: string) {
     expect(await permissions.getRoleMemberCount(role)).to.equal(1);

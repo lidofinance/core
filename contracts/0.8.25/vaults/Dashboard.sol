@@ -62,6 +62,11 @@ contract Dashboard is Permissions {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
+     * @notice Permission for assets recovery.
+     */
+    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Dashboard.AssetRecovery");
+
+    /**
      * @notice Struct containing the permit details.
      */
     struct PermitInput {

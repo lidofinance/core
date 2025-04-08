@@ -15,9 +15,9 @@ import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 struct DelegationConfig {
     address defaultAdmin;
     address nodeOperatorManager;
-    address assetRecoverer;
     uint256 confirmExpiry;
     uint16 nodeOperatorFeeBP;
+    /// Permissions
     address[] funders;
     address[] withdrawers;
     address[] lockers;
@@ -29,6 +29,14 @@ struct DelegationConfig {
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
+    address[] pdgWithdrawers;
+    address[] lidoVaultHubAuthorizers;
+    address[] ossifiers;
+    address[] depositorSetters;
+    address[] lockedResetters;
+    /// Dashboard
+    address assetRecoverer;
+    /// Delegation
     address[] nodeOperatorFeeClaimers;
 }
 
@@ -125,6 +133,20 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
         }
+
+        for (uint256 i = 0; i < _delegationConfig.pdgWithdrawers.length; i++) {
+            delegation.grantRole(delegation.PDG_WITHDRAWAL_ROLE(), _delegationConfig.pdgWithdrawers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubAuthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubAuthorizers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.ossifiers.length; i++) {
+            delegation.grantRole(delegation.OSSIFY_ROLE(), _delegationConfig.ossifiers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.depositorSetters.length; i++) {
+            delegation.grantRole(delegation.SET_DEPOSITOR_ROLE(), _delegationConfig.depositorSetters[i]);
+        }
+
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),

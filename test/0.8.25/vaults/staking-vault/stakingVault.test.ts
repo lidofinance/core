@@ -244,7 +244,7 @@ describe("StakingVault.sol", () => {
 
       await stakingVault.connect(vaultOwner).lock(amount);
       expect(await stakingVault.valuation()).to.equal(amount);
-      expect(await stakingVault.locked()).to.equal(amount + 1n);
+      expect(await stakingVault.locked()).to.equal(amount);
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
   });
