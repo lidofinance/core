@@ -86,9 +86,9 @@ describe("Delegation.sol", () => {
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
-    hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
 
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
+    hub = await ethers.deployContract("VaultHub__MockForDelegation", [lidoLocator, steth]);
 
     delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
@@ -100,7 +100,7 @@ describe("Delegation.sol", () => {
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon, delegationImpl, lidoLocator]);
+    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, delegationImpl]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);

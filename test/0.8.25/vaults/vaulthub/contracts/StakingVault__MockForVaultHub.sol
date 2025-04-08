@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.0;
 
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__MockForVaultHub {
     address public immutable VAULT_HUB;
@@ -100,7 +100,7 @@ contract StakingVault__MockForVaultHub {
         $valuation += amount;
     }
 
-    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
 
     function isOssified() external pure returns (bool) {
         return false;

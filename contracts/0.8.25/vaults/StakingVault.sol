@@ -11,7 +11,7 @@ import {VaultHub} from "./VaultHub.sol";
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title StakingVault
@@ -61,7 +61,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - Can send ETH directly to the vault (treated as rewards)
  *
  * PinnedBeaconProxy
- * The contract is designed as a extended beacon proxy implementation, allowing individual StakingVault instances
+ * The contract is designed as an extended beacon proxy implementation, allowing individual StakingVault instances
  * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
  * and contains immutable references to the beacon chain deposit contract.
  *
@@ -161,7 +161,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         $.nodeOperator = _nodeOperator;
         $.depositor = _depositor == address(0) ? _nodeOperator : _depositor;
-        $.vaultHubAttached = true;
 
         emit NodeOperatorSet(_nodeOperator);
         emit DepositorSet(_depositor);
@@ -221,7 +220,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Disconnect the vault from `VaultHub` and `Depositor`
+     * @notice Detaches the vault from `VaultHub` and `Depositor`
      * @dev Sets vaultHubAttached to false and depositor to nodeOperator
      * @dev Can only be called by the VaultHub
      * @dev Reverts if vault is not attached to VaultHub
@@ -242,7 +241,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
-     *         once ossified, the vault cannot be upgraded.
+     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
      * @dev Can only be called by the owner.
      *      Pins the current vault implementation to prevent further upgrades.
      *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
@@ -287,15 +286,23 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      including ether currently being staked on validators
      */
     function unlocked() public view returns (uint256) {
-        ERC7201Storage storage $ = _getStorage();
-        if (!$.vaultHubAttached) return address(this).balance;
-
         uint256 _valuation = valuation();
-        uint256 _locked = $.locked;
+        uint256 _locked = _getStorage().locked;
 
         if (_locked > _valuation) return 0;
 
         return _valuation - _locked;
+    }
+
+    /**
+     * @notice Resets the locked amount to 0 only when the vault is detached from VaultHub
+     * @dev Can only be called by the owner
+     * @dev Reverts if vault is attached to VaultHub
+     */
+    function resetLocked() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.vaultHubAttached) revert VaultHubAttached();
+        _getStorage().locked = 0;
     }
 
     /**
@@ -413,14 +420,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Locks ether in StakingVault
-     * @dev Can only be called by VaultHub; locked amount can only be increased
+     * @dev Can only be called by owner; locked amount can only be increased
      * @param _locked New amount to lock
      */
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
         if (_locked > valuation()) revert NewLockedExceedsValuation();
-        if (!$.vaultHubAttached) revert VaultHubDetached();
 
         $.locked = uint128(_locked);
 
@@ -519,7 +525,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by the depositor address
      * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
         ERC7201Storage storage $ = _getStorage();
@@ -532,7 +538,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
+            StakingVaultDeposit calldata deposit = _deposits[i];
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
@@ -683,13 +689,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
-     * @notice Emitted if `owner` of `StakingVault` is a contract and its `onReport` hook reverts
-     * @dev Hook used to inform `owner` contract of a new report, e.g. calculating AUM fees, etc.
-     * @param reason Revert data from `onReport` hook
-     */
-    event OnReportFailed(bytes reason);
-
-    /**
      * @notice Emitted when deposits to beacon chain are paused
      */
     event BeaconChainDepositsPaused();
@@ -793,18 +792,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error NewLockedExceedsValuation();
 
     /**
-     * @notice Thrown when called on the implementation contract
-     * @param sender Address that sent the message
-     * @param beacon Expected beacon address
-     */
-    error SenderNotBeacon(address sender, address beacon);
-
-    /**
-     * @notice Thrown when the onReport() hook reverts with an Out of Gas error
-     */
-    error UnrecoverableError();
-
-    /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
      */
     error BeaconChainDepositsPauseExpected();
@@ -857,11 +844,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to ossify vault, or to attach vault to VaultHub while it is already attached
      */
     error VaultHubAttached();
-
-    /**
-     * @notice Thrown when trying to detach vault from VaultHub while it is not in pending disconnect status
-     */
-    error VaultNotMarkedForDisconnect(address vault, bool pendingDisconnect);
 
     /**
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified

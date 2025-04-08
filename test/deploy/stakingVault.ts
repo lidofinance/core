@@ -27,7 +27,8 @@ export async function deployStakingVaultBehindBeaconProxy(
   depositor: HardhatEthersSigner,
 ): Promise<DeployedStakingVault> {
   // deploying implementation
-  const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault");
+  const lidoLocator_ = await ethers.deployContract("LidoLocator__MockForStakingVault", [depositor]);
+  const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault", [lidoLocator_]);
   const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
   const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract_]);
 

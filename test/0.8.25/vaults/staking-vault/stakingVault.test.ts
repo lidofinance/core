@@ -19,6 +19,8 @@ import {
   deployEIP7002WithdrawalRequestContract,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
+  generatePostDeposit,
+  generateValidator,
   impersonate,
   MAX_UINT256,
   proxify,
@@ -476,18 +478,6 @@ describe("StakingVault.sol", () => {
         "NewLockedExceedsValuation",
       );
     });
-
-    it("reverts if vault is not attached to VaultHub", async () => {
-      const amount = ether("1");
-      await stakingVault.fund({ value: amount });
-
-      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-
-      await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
-        stakingVault,
-        "VaultHubDetached",
-      );
-    });
   });
 
   context("rebalance", () => {
@@ -704,12 +694,9 @@ describe("StakingVault.sol", () => {
       // topup the contract with enough ETH to cover the deposits
       await setBalance(stakingVaultAddress, ether("32") * BigInt(numberOfKeys));
 
-      const deposits = Array.from({ length: numberOfKeys }, (_, i) => {
-        const pubkey = "0x" + `0${i}`.repeat(48);
-        const signature = "0x" + `0${i}`.repeat(96);
-        const amount = ether("32");
-        const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
-        return { pubkey, signature, amount, depositDataRoot };
+      const deposits = Array.from({ length: numberOfKeys }, () => {
+        const validator = generateValidator(withdrawalCredentials);
+        return generatePostDeposit(validator.container, ether("32"));
       });
 
       await expect(stakingVault.connect(depositor).depositToBeaconChain(deposits))

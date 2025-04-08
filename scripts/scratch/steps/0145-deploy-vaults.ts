@@ -44,9 +44,9 @@ export async function main() {
 
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+    locatorAddress,
     beaconAddress,
     delegationAddress,
-    locatorAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 

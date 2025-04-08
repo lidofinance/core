@@ -25,7 +25,7 @@ import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/
 import { createVaultProxy, days, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -87,12 +87,7 @@ describe("VaultFactory.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
@@ -110,7 +105,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, locator], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], {
       from: deployer,
     });
 
@@ -162,9 +157,15 @@ describe("VaultFactory.sol", () => {
         .withArgs(ZeroAddress);
     });
 
+    it("reverts if `_lidoLocator` is zero address", async () => {
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, delegation], { from: deployer }))
+        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+        .withArgs("_lidoLocator");
+    });
+
     it("reverts if `_implementation` is zero address", async () => {
       await expect(
-        ethers.deployContract("VaultFactory", [ZeroAddress, delegation, locator], {
+        ethers.deployContract("VaultFactory", [locator, ZeroAddress, delegation], {
           from: deployer,
         }),
       )
@@ -173,15 +174,9 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_delegation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress, locator], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_delegation");
-    });
-
-    it("reverts if `_lidoLocator` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, delegation, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_lidoLocator");
+        .withArgs("_delegationImpl");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
