@@ -23,7 +23,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
   let admin: HardhatEthersSigner;
   let withdrawalVault: WithdrawalVault__MockForVebo;
 
-  let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
   let exitRequestHash: string;
   let exitRequest: ExitRequestData;

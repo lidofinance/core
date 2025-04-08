@@ -6,9 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
 
-import { de0x, numberToHex } from "lib";
-
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
+import { deployVEBO, initVEBO } from "test/deploy";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -24,27 +22,11 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
   let admin: HardhatEthersSigner;
   let withdrawalVault: WithdrawalVault__MockForVebo;
 
-  let oracleVersion: bigint;
-  let exitRequests: ExitRequest[];
-  let exitRequestHash: string;
-  let exitRequest: ExitRequestData;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let validatorExitData: ValidatorExitData;
 
   const LAST_PROCESSING_REF_SLOT = 1;
-
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    valPubkey: string;
-  }
-
-  interface ExitRequestData {
-    dataFormat: number;
-    data: string;
-  }
 
   interface ValidatorExitData {
     stakingModuleId: number;
@@ -52,16 +34,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     validatorIndex: number;
     validatorPubkey: string;
   }
-
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeExitRequestHex).join("");
-  };
 
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
@@ -77,8 +49,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
-
-    oracleVersion = await oracle.getContractVersion();
   };
 
   before(async () => {
