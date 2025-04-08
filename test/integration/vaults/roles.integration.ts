@@ -330,6 +330,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.MINT_ROLE(),
           );
         });
+
         it("mintStETH", async () => {
           await testDelegation.connect(funder).fund({ value: ether("1") });
           await testDelegation.connect(locker).lock(ether("1"));
@@ -387,6 +388,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.LOCK_ROLE(),
           );
         });
+
         // requires prepared state for this test to pass, skipping for now
         it.skip("withdrawWETH", async () => {
           await testMethod(
@@ -414,6 +416,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.FUND_ROLE(),
           );
         });
+
         it("fund", async () => {
           await testMethod(
             testDelegation,
@@ -426,7 +429,61 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.FUND_ROLE(),
           );
         });
-        //burnWstETH, burnStETH,burnShares
+
+        //TODO: burnWstETH, burnStETH, burnShares
+
+        it("voluntaryDisconnect", async () => {
+          await testMethod(
+            testDelegation,
+            "voluntaryDisconnect",
+            { successUsers: [disconnecter], failingUsers: allRoles.filter((r) => r !== disconnecter) },
+            [],
+            await testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
+          );
+        });
+
+        it("authorizeLidoVaultHub", async () => {
+          await testMethod(
+            testDelegation,
+            "authorizeLidoVaultHub",
+            {
+              successUsers: [lidoVaultHubAuthorizer],
+              failingUsers: allRoles.filter((r) => r !== lidoVaultHubAuthorizer),
+            },
+            [],
+            await testDelegation.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+          );
+        });
+
+        it("ossifyStakingVault", async () => {
+          await testMethod(
+            testDelegation,
+            "ossifyStakingVault",
+            { successUsers: [ossifier], failingUsers: allRoles.filter((r) => r !== ossifier) },
+            [],
+            await testDelegation.OSSIFY_ROLE(),
+          );
+        });
+
+        it("setDepositor", async () => {
+          await testMethod(
+            testDelegation,
+            "setDepositor",
+            { successUsers: [depositorSetter], failingUsers: allRoles.filter((r) => r !== depositorSetter) },
+            [stranger],
+            await testDelegation.SET_DEPOSITOR_ROLE(),
+          );
+        });
+
+        it("resetLocked", async () => {
+          await testMethod(
+            testDelegation,
+            "resetLocked",
+            { successUsers: [lockedResetter], failingUsers: allRoles.filter((r) => r !== lockedResetter) },
+            [],
+            await testDelegation.RESET_LOCKED_ROLE(),
+          );
+        });
       });
     });
 

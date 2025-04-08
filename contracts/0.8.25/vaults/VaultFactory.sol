@@ -146,6 +146,9 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositorSetters.length; i++) {
             delegation.grantRole(delegation.SET_DEPOSITOR_ROLE(), _delegationConfig.depositorSetters[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.lockedResetters.length; i++) {
+            delegation.grantRole(delegation.RESET_LOCKED_ROLE(), _delegationConfig.lockedResetters[i]);
+        }
 
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(
