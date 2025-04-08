@@ -11,6 +11,20 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__OnRewardsMinted(uint256 _totalShares);
     event Mock__ExitedValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
 
+    event Mock__HandleActiveValidatorsExitingStatus(
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes publicKeys,
+        bytes eligibleToExitInSec
+    );
+
+    event Mock__OnTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes publicKeys,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    );
+
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));
     }
@@ -194,16 +208,14 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     event Mock__ValidatorsCountUnsafelyUpdated(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCoun
+        uint256 _exitedValidatorsCount
     );
 
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
+        uint256 _exitedValidatorsCount
     ) external {
-        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount, _stuckValidatorsCount);
+        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
     function obtainDepositData(
@@ -214,24 +226,24 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         signatures = new bytes(96 * _depositsCount);
     }
 
-    event Mock__onExitedAndStuckValidatorsCountsUpdated();
+    event Mock__onExitedValidatorsCountsUpdated();
 
-    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRevert = false;
-    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = false;
+    bool private onExitedValidatorsCountsUpdatedShouldRevert = false;
+    bool private onExitedValidatorsCountsUpdatedShouldRunOutGas = false;
 
-    function onExitedAndStuckValidatorsCountsUpdated() external {
-        require(!onExitedAndStuckValidatorsCountsUpdatedShouldRevert, "revert reason");
+    function onExitedValidatorsCountsUpdated() external {
+        require(!onExitedValidatorsCountsUpdatedShouldRevert, "revert reason");
 
-        if (onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas) {
+        if (onExitedValidatorsCountsUpdatedShouldRunOutGas) {
             revert();
         }
 
-        emit Mock__onExitedAndStuckValidatorsCountsUpdated();
+        emit Mock__onExitedValidatorsCountsUpdated();
     }
 
-    function mock__onExitedAndStuckValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
-        onExitedAndStuckValidatorsCountsUpdatedShouldRevert = shouldRevert;
-        onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
+    function mock__onExitedValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
+        onExitedValidatorsCountsUpdatedShouldRevert = shouldRevert;
+        onExitedValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
     }
 
     event Mock__WithdrawalCredentialsChanged();
@@ -252,5 +264,58 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     function mock__onWithdrawalCredentialsChanged(bool shouldRevert, bool shouldRunOutGas) external {
         onWithdrawalCredentialsChangedShouldRevert = shouldRevert;
         onWithdrawalCredentialsChangedShouldRunOutGas = shouldRunOutGas;
+    }
+
+    bool private shouldBePenalized__mocked;
+
+    function handleActiveValidatorsExitingStatus(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKeys,
+        bytes calldata _eligibleToExitInSec
+    ) external {
+        emit Mock__HandleActiveValidatorsExitingStatus(
+            _nodeOperatorId,
+            _proofSlotTimestamp,
+            _publicKeys,
+            _eligibleToExitInSec
+        );
+    }
+
+    function onTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes calldata _publicKeys,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    ) external {
+        emit Mock__OnTriggerableExit(
+            _nodeOperatorId,
+            _publicKeys,
+            _withdrawalRequestPaidFee,
+            _exitType
+        );
+    }
+
+    function shouldValidatorBePenalized(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external view returns (bool) {
+        return shouldBePenalized__mocked;
+    }
+
+    function mock__shouldValidatorBePenalized(bool _shouldBePenalized) external {
+        shouldBePenalized__mocked = _shouldBePenalized;
+    }
+
+    uint256 private exitDeadlineThreshold__mocked;
+
+    function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256) {
+        return exitDeadlineThreshold__mocked;
+    }
+
+    function mock__exitDeadlineThreshold(uint256 _threshold) external {
+        exitDeadlineThreshold__mocked = _threshold;
     }
 }
