@@ -158,8 +158,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _recipient
     ) external payable {}
 
-    function detachHub() external {}
-
     function isOssified() external pure returns (bool) {
         return false;
     }

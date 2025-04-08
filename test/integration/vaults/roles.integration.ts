@@ -7,13 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation } from "typechain-types";
 
-import { days } from "lib";
+import { days, ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { getRandomSigners } from "lib/protocol/helpers/get-random-signers";
 
 import { Snapshot } from "test/suite";
-
-import { ether } from "../../../lib/units";
 
 const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
@@ -72,9 +70,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
-
-    const { depositSecurityModule } = ctx.contracts;
-    await depositSecurityModule.DEPOSIT_CONTRACT();
   });
 
   beforeEach(async () => {
@@ -533,6 +528,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         expect(await testDelegation.getRoleMembers(role)).to.deep.equal([]);
       }
     });
+
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("claimNodeOperatorFee", async () => {

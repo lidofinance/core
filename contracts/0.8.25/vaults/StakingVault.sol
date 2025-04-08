@@ -44,9 +44,10 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
- *   - `attachVaultHubAndDepositor()`
+ *   - `authorizeLidoVaultHub()`
  *   - `ossifyStakingVault()`
  *   - `setDepositor()`
+ *   - `resetLocked()`
  * - Operator:
  *   - `triggerValidatorWithdrawal()`
  * - Depositor:
@@ -56,7 +57,7 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  *   - `report()`
  *   - `rebalance()`
  *   - `triggerValidatorWithdrawal()`
- *   - `detachVaultHubAndDepositor()`
+ *   - `deauthorizeLidoVaultHub()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
@@ -290,9 +291,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Resets the locked amount to 0 only when the vault is detached from VaultHub
+     * @notice Resets the locked amount to 0 only when the vaultHub is deauthorized
      * @dev Can only be called by the owner
-     * @dev Reverts if vault is attached to VaultHub
+     * @dev Reverts if vaultHub is authorized at the vault
      */
     function resetLocked() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
@@ -831,7 +832,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error PartialWithdrawalNotAllowed();
 
     /**
-     * @notice Thrown when trying to detach vault from VaultHub while it is not attached
+     * @notice Thrown when trying to deauthorize vaultHub while it is not authorized
      */
     error VaultHubNotAuthorized();
 

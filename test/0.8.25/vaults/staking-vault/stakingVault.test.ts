@@ -200,7 +200,7 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.resetLocked()).to.be.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
     });
 
-    it("works on detached vault", async () => {
+    it("works on deauthorized vault", async () => {
       await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
       await stakingVault.resetLocked();
       expect(await stakingVault.locked()).to.equal(0n);
@@ -329,7 +329,7 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
     });
 
-    it("ossify work on detached vault", async () => {
+    it("ossify works on deauthorized vault", async () => {
       await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
       await expect(stakingVault.ossifyStakingVault()).to.emit(stakingVault, "PinnedImplementationUpdated");
     });

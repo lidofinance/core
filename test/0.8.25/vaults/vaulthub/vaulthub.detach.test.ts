@@ -27,7 +27,7 @@ import { createVaultProxy, days, ether, impersonate } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-describe("VaultHub.sol:detach", () => {
+describe("VaultHub.sol:deauthorize", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -144,7 +144,7 @@ describe("VaultHub.sol:detach", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("ossification", () => {
-    it("ossify work on detached vault", async () => {
+    it("ossify works on deauthorized vault", async () => {
       const {
         vault,
         delegation: _delegation,
