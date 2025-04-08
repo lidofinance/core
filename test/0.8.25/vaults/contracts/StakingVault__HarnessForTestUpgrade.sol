@@ -158,17 +158,15 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _recipient
     ) external payable {}
 
-    function detachHub() external {}
-
     function isOssified() external pure returns (bool) {
         return false;
     }
 
-    function attachVaultHubAndDepositor() external {}
-    function detachVaultHubAndDepositor() external {}
+    function authorizeLidoVaultHub() external {}
+    function deauthorizeLidoVaultHub() external {}
     function ossifyStakingVault() external {}
     function setDepositor(address _depositor) external {}
-    function vaultHubAttached() external view returns (bool) {
+    function vaultHubAuthorized() external view returns (bool) {
         return true;
     }
 

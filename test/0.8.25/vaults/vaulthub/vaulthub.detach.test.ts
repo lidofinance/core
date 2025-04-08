@@ -27,7 +27,7 @@ import { createVaultProxy, days, ether, impersonate } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-describe("VaultHub.sol:detach", () => {
+describe("VaultHub.sol:deauthorize", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -144,39 +144,7 @@ describe("VaultHub.sol:detach", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("ossification", () => {
-    it("reverts on vaultHubAttached", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-      await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
-        vault,
-        "VaultHubAttached",
-      );
-    });
-
-    it("reverts on stranger", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-      await expect(vault.connect(stranger).ossifyStakingVault()).to.revertedWithCustomError(
-        vault,
-        "OwnableUnauthorizedAccount",
-      );
-    });
-
-    it("reverts on already ossified", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-      await vault.connect(delegationSigner).ossifyStakingVault();
-      await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
-        vault,
-        "AlreadyOssified",
-      );
-    });
-
-    it("ossify work on detached vault", async () => {
+    it("ossify works on deauthorized vault", async () => {
       const {
         vault,
         delegation: _delegation,
@@ -187,7 +155,7 @@ describe("VaultHub.sol:detach", () => {
       const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
 
-      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+      await vault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();
@@ -204,92 +172,6 @@ describe("VaultHub.sol:detach", () => {
       expect(vault1ImplementationAfterUpgrade).to.equal(implOld);
       expect(vault2ImplementationAfterUpgrade).to.equal(implNew);
       expect(vault1ImplementationAfterUpgrade).not.to.equal(vault2ImplementationAfterUpgrade);
-    });
-  });
-
-  context("attachVaultHubAndDepositor", () => {
-    it("reverts on invalid owner", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      await expect(vault.connect(stranger).attachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "OwnableUnauthorizedAccount",
-      );
-    });
-
-    it("reverts on vaultHubAlreadyAttached", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultHubAttached",
-      );
-    });
-
-    it("reverts on isOssified", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-      await vault.connect(delegationSigner).ossifyStakingVault();
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultIsOssified",
-      );
-    });
-
-    it("attach works on detached vault", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubAttachedSet")
-        .withArgs(true)
-        .to.emit(vault, "DepositorSet")
-        .withArgs(locator.predepositGuarantee());
-    });
-  });
-
-  context("detachVaultHubAndDepositor", () => {
-    it("reverts on unauthorized", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      await expect(vault.connect(stranger).detachVaultHubAndDepositor())
-        .to.revertedWithCustomError(vault, "NotAuthorized")
-        .withArgs("detachVaultHubAndDepositor", stranger);
-    });
-
-    it("reverts on VaultHubDetached", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-
-      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-      await expect(vault.connect(vaultHubSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultHubDetached",
-      );
-    });
-
-    it("detach works", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-
-      await expect(vault.connect(vaultHubSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubAttachedSet")
-        .withArgs(false)
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-
-      expect(await vault.vaultHubAttached()).to.equal(false);
-      expect(await vault.depositor()).to.equal(delegationParams.nodeOperatorManager);
     });
   });
 });

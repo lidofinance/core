@@ -188,28 +188,39 @@ describe("StakingVault.sol", () => {
     });
   });
 
+  context("resetLocked", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).resetLocked()).to.be.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if vaultHub already authorized", async () => {
+      await expect(stakingVault.resetLocked()).to.be.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.resetLocked();
+      expect(await stakingVault.locked()).to.equal(0n);
+    });
+  });
+
   context("unlocked", () => {
     it("returns the correct unlocked balance", async () => {
       expect(await stakingVault.unlocked()).to.equal(0n);
-    });
-
-    it("returns vault balance if vault is not attached to VaultHub", async () => {
-      const amount = ether("1");
-      await stakingVault.fund({ value: amount });
-
-      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
-
-      expect(await stakingVault.vaultHubAttached()).to.equal(false);
-      expect(await stakingVault.unlocked()).to.equal(amount);
     });
 
     it("returns 0 if locked amount is greater than valuation", async () => {
       const amount = ether("1");
       await stakingVault.fund({ value: amount });
 
-      await stakingVault.connect(vaultOwner).lock(amount);
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await stakingVault.valuation(), await stakingVault.inOutDelta(), amount + 1n);
       expect(await stakingVault.valuation()).to.equal(amount);
-      expect(await stakingVault.locked()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(amount + 1n);
 
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
@@ -244,6 +255,86 @@ describe("StakingVault.sol", () => {
     });
   });
 
+  context("authorizeLidoVaultHub", () => {
+    it("reverts on invalid owner", async () => {
+      await expect(stakingVault.connect(stranger).authorizeLidoVaultHub()).to.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on vaultHubAuthorized", async () => {
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("reverts on isOssified", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.ossifyStakingVault();
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultIsOssified");
+    });
+
+    it("reverts if depositor is not Lido Predeposit Guarantee", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.setDepositor(stranger);
+
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "InvalidDepositor");
+    });
+
+    it("authorize works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.authorizeLidoVaultHub()).to.emit(stakingVault, "VaultHubAuthorizedSet").withArgs(true);
+    });
+  });
+
+  context("deauthorizeLidoVaultHub", () => {
+    it("reverts on unauthorized", async () => {
+      await expect(stakingVault.connect(stranger).deauthorizeLidoVaultHub())
+        .to.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("deauthorizeLidoVaultHub", stranger);
+    });
+
+    it("reverts on VaultHubNotAuthorized", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+        stakingVault,
+        "VaultHubNotAuthorized",
+      );
+    });
+
+    it("deauthorize works", async () => {
+      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub())
+        .to.emit(stakingVault, "VaultHubAuthorizedSet")
+        .withArgs(false);
+
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
+      expect(await stakingVault.depositor()).to.equal(depositor);
+    });
+  });
+
+  context("ossification", () => {
+    it("reverts on vaultHubAuthorized", async () => {
+      await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("reverts on stranger", async () => {
+      await expect(stakingVault.connect(stranger).ossifyStakingVault()).to.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on already ossified", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.ossifyStakingVault();
+      await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
+    });
+
+    it("ossify works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.ossifyStakingVault()).to.emit(stakingVault, "PinnedImplementationUpdated");
+    });
+  });
+
   context("depositor", () => {
     it("returns the correct depositor", async () => {
       expect(await stakingVault.depositor()).to.equal(depositor);
@@ -264,12 +355,12 @@ describe("StakingVault.sol", () => {
     it("reverts if vault is attached to VaultHub", async () => {
       await expect(stakingVault.connect(vaultOwner).setDepositor(depositor)).to.be.revertedWithCustomError(
         stakingVault,
-        "VaultHubAttached",
+        "VaultHubAuthorized",
       );
     });
 
     it("setDepositor works", async () => {
-      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
 
       await expect(stakingVault.connect(vaultOwner).setDepositor(stranger))
         .to.emit(stakingVault, "DepositorSet")

@@ -72,7 +72,7 @@ contract VaultFactory {
             _stakingVaultInitializerExtraParams
         );
 
-        vault.attachVaultHubAndDepositor();
+        vault.authorizeLidoVaultHub();
 
         // transfer ownership of the vault back to the delegation
         OwnableUpgradeable(address(vault)).transferOwnership(address(delegation));
