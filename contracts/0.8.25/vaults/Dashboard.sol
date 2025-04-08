@@ -485,6 +485,39 @@ contract Dashboard is Permissions {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
+    /**
+     * @notice Authorizes the Lido Vault Hub to manage the staking vault.
+     */
+    function authorizeLidoVaultHub() external {
+        _authorizeLidoVaultHub();
+    }
+
+    /**
+     * @notice Ossifies the staking vault. WARNING: This operation is irreversible,
+     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
+     *         This is a one-way operation.
+     * @dev    Pins the current vault implementation to prevent further upgrades.
+     */
+    function ossifyStakingVault() external {
+        _ossifyStakingVault();
+    }
+
+    /**
+     * @notice Updates the address of the depositor for the staking vault.
+     * @param _depositor Address of the new depositor.
+     */
+    function setDepositor(address _depositor) external {
+        _setDepositor(_depositor);
+    }
+
+    /**
+     * @notice Zeroes the locked amount of the staking vault.
+     *         Can only be called on disconnected from the vault hub vaults.
+     */
+    function resetLocked() external {
+        _resetLocked();
+    }
+
     // ==================== Internal Functions ====================
 
     /**

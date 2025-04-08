@@ -290,10 +290,10 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
     });
 
-    it("reverts on isOssified", async () => {
+    it("reverts on ossified", async () => {
       await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
       await stakingVault.ossifyStakingVault();
-      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultIsOssified");
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultOssified");
     });
 
     it("reverts if depositor is not Lido Predeposit Guarantee", async () => {

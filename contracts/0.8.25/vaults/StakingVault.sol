@@ -210,7 +210,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function authorizeLidoVaultHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
-        if (isOssified()) revert VaultIsOssified();
+        if (ossified()) revert VaultOssified();
 
         address lidoPredepositGuarantee = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
         if ($.depositor != lidoPredepositGuarantee) revert InvalidDepositor($.depositor);
@@ -236,6 +236,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Returns true if the vault is attached to VaultHub
+     * @return True if the vault is attached to VaultHub, false otherwise
+     */
+    function vaultHubAuthorized() external view returns (bool) {
+        return _getStorage().vaultHubAuthorized;
+    }
+
+    /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
      *         once ossified, the vault cannot be upgraded or attached to VaultHub.
      * @dev Can only be called by the owner.
@@ -254,8 +262,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Returns true if the vault is ossified
      * @return True if the vault is ossified, false otherwise
      */
-    function isOssified() public view returns (bool) {
-        return PinnedBeaconUtils.isOssified();
+    function ossified() public view returns (bool) {
+        return PinnedBeaconUtils.ossified();
     }
 
     /**
@@ -359,14 +367,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         $.depositor = _depositor;
         emit DepositorSet(_depositor);
-    }
-
-    /**
-     * @notice Returns true if the vault is attached to VaultHub
-     * @return True if the vault is attached to VaultHub, false otherwise
-     */
-    function vaultHubAuthorized() external view returns (bool) {
-        return _getStorage().vaultHubAuthorized;
     }
 
     /**
@@ -851,7 +851,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
      */
-    error VaultIsOssified();
+    error VaultOssified();
 
     /**
      * @notice Thrown when the depositor is not the Lido Predeposit Guarantee

@@ -160,7 +160,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _recipient
     ) external payable {}
 
-    function isOssified() external pure returns (bool) {
+    function ossified() external pure returns (bool) {
         return false;
     }
 

@@ -768,7 +768,7 @@ describe("Permissions", () => {
         "PinnedImplementationUpdated",
       );
 
-      expect(await stakingVault.isOssified()).to.be.true;
+      expect(await stakingVault.ossified()).to.be.true;
     });
 
     it("reverts if the caller is not a member of the ossifier role", async () => {

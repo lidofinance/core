@@ -68,7 +68,7 @@ interface IStakingVault {
     function deauthorizeLidoVaultHub() external;
     function vaultHubAuthorized() external view returns (bool);
     function ossifyStakingVault() external;
-    function isOssified() external view returns (bool);
+    function ossified() external view returns (bool);
     function setDepositor(address _depositor) external;
     function resetLocked() external;
 }
