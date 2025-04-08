@@ -13,7 +13,6 @@ export async function main() {
 
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
@@ -47,7 +46,7 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     beaconAddress,
     delegationAddress,
-    predepositGuaranteeAddress,
+    locatorAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 
