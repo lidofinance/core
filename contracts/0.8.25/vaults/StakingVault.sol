@@ -246,7 +246,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      Pins the current vault implementation to prevent further upgrades.
      *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
      * @dev Reverts if already ossified.
-     * @dev Reverts if vault is attached to VaultHub
+     * @dev Reverts if the vault is attached to VaultHub
      */
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();

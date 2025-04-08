@@ -72,8 +72,9 @@ contract VaultFactory {
             _stakingVaultInitializerExtraParams
         );
 
-        // transfer ownership of the vault back to the delegation
         vault.attachVaultHubAndDepositor();
+
+        // transfer ownership of the vault back to the delegation
         OwnableUpgradeable(address(vault)).transferOwnership(address(delegation));
 
         // initialize Delegation
