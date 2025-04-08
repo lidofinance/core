@@ -129,6 +129,7 @@ library ReportExitLimitUtils {
         _data.maxExitRequestsLimit = uint96(_maxExitRequestsLimit);
 
         // TODO: check
+        // in the beginning should be 0 ?
         _data.prevExitRequestsBlockNumber = uint32(block.number);
 
         return _data;

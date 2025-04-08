@@ -7,6 +7,8 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
 import { Versioned } from "../utils/Versioned.sol";
 import { ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData } from "../lib/ReportExitLimitUtils.sol";
+import { PausableUntil } from "../utils/PausableUntil.sol";
+import { IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
 
 interface IWithdrawalVault {
     function addFullWithdrawalRequests(bytes calldata pubkeys) external payable;
@@ -14,7 +16,7 @@ interface IWithdrawalVault {
     function getWithdrawalRequestFee() external view returns (uint256);
 }
 
-abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
+abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ReportExitLimitUtilsStorage for bytes32;
     using ReportExitLimitUtils for ExitRequestLimitData;
@@ -56,13 +58,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
         uint256 _exitRequestsLimitIncreasePerBlock
     );
 
-
-    struct DeliveryHistory {
-      /// @dev Key index in exit request array
-      uint256 lastDeliveredKeyIndex;
-      /// @dev Block timestamp
-      uint256 timestamp;
-    }
     struct RequestStatus {
       // Total items count in report (by default type(uint32).max, update on first report delivery)
       uint256 totalItemsCount;
@@ -74,22 +69,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
       DeliveryHistory[] deliverHistory;
     }
 
-    struct ExitRequestData {
-      bytes data;
-      uint256 dataFormat;
-      // TODO: maybe add requestCount for early exit and make it more safe
-    }
-
-    struct ValidatorExitData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        uint256 validatorIndex;
-        bytes validatorPubkey;
-    }
-
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
     bytes32 public constant DIRECT_EXIT_HASH_ROLE = keccak256("DIRECT_EXIT_HASH_ROLE");
     bytes32 public constant EXIT_REPORT_LIMIT_ROLE = keccak256("EXIT_REPORT_LIMIT_ROLE");
+    /// @notice An ACL role granting the permission to pause accepting validator exit requests
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    /// @notice An ACL role granting the permission to resume accepting validator exit requests
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
+
     bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
 
     /// Length in bytes of packed request
@@ -126,12 +113,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
         LOCATOR = ILidoLocator(lidoLocator);
     }
 
-    function submitReportHash(bytes32 exitReportHash) external onlyRole(SUBMIT_REPORT_HASH_ROLE) {
+    function submitReportHash(bytes32 exitReportHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
       uint256 contractVersion = getContractVersion();
       _storeExitRequestHash(exitReportHash,  type(uint256).max, 0, contractVersion, DeliveryHistory(0,0));
     }
 
-    function emitExitEvents(ExitRequestData calldata request, uint256 contractVersion) external{
+    function emitExitEvents(ExitRequestData calldata request, uint256 contractVersion) external whenResumed {
         bytes calldata data = request.data;
         _checkContractVersion(contractVersion);
 
@@ -230,7 +217,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
     /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
     /// @dev This function verifies that the hash of the provided exit request data exists in storage
     // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
-    function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable {
+    function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable whenResumed {
         uint256 prevBalance = address(this).balance - msg.value;
         bytes calldata data = request.data;
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[keccak256(abi.encode(data, request.dataFormat))];
@@ -295,7 +282,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
         assert(address(this).balance == prevBalance);
     }
 
-    function triggerExitsDirectly(ValidatorExitData calldata validator) external payable onlyRole(DIRECT_EXIT_HASH_ROLE) {
+    function triggerExitsDirectly(ValidatorExitData calldata validator) external payable whenResumed onlyRole(DIRECT_EXIT_HASH_ROLE) returns (uint256)  {
         uint256 prevBalance = address(this).balance - msg.value;
         address locatorAddr = address(LOCATOR);
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
@@ -334,6 +321,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
         }
 
         assert(address(this).balance == prevBalance);
+
+        return refund;
     }
 
     function setExitReportLimit(uint256 _maxExitRequestsLimit, uint256 _exitRequestsLimitIncreasePerBlock) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
@@ -349,6 +338,83 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, Versioned {
       RequestStatus storage request = hashes[exitReportHash];
 
       return request.deliverHistory;
+    }
+
+    /// @notice Resume accepting validator exit requests
+    ///
+    /// @dev Reverts with `PausedExpected()` if contract is already resumed
+    /// @dev Reverts with `AccessControl:...` reason if sender has no `RESUME_ROLE`
+    ///
+    function resume() external whenPaused onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /// @notice Pause accepting validator exit requests util in after duration
+    ///
+    /// @param _duration pause duration, seconds (use `PAUSE_INFINITELY` for unlimited)
+    /// @dev Reverts with `ResumedExpected()` if contract is already paused
+    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
+    /// @dev Reverts with `ZeroPauseDuration()` if zero duration is passed
+    ///
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /// @notice Pause accepting report data
+    /// @param _pauseUntilInclusive the last second to pause until
+    /// @dev Reverts with `ResumeSinceInPast()` if the timestamp is in the past
+    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
+    /// @dev Reverts with `ResumedExpected()` if contract is already paused
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
+    }
+
+    /// Internal functions
+
+
+    function _processExitRequestsList(bytes calldata data) internal {
+        uint256 offset;
+        uint256 offsetPastEnd;
+        assembly {
+            offset := data.offset
+            offsetPastEnd := add(offset, data.length)
+        }
+
+        bytes calldata pubkey;
+
+        assembly {
+            pubkey.length := 48
+        }
+
+        uint256 timestamp = _getTimestamp();
+
+        while (offset < offsetPastEnd) {
+            uint256 dataWithoutPubkey;
+            assembly {
+                // 16 most significant bytes are taken by module id, node op id, and val index
+                dataWithoutPubkey := shr(128, calldataload(offset))
+                // the next 48 bytes are taken by the pubkey
+                pubkey.offset := add(offset, 16)
+                // totalling to 64 bytes
+                offset := add(offset, 64)
+            }
+            //                              dataWithoutPubkey
+            // MSB <---------------------------------------------------------------------- LSB
+            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+            uint64 valIndex = uint64(dataWithoutPubkey);
+            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
+            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidRequestsData();
+            }
+
+            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+        }
+    }
+
+    function _getTimestamp() internal virtual view returns (uint256) {
+        return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
     function _storeExitRequestHash(

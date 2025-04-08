@@ -6,7 +6,6 @@ import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
 import { Math256 } from "../../common/lib/Math256.sol";
-import { PausableUntil } from "../utils/PausableUntil.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
@@ -18,7 +17,7 @@ interface IOracleReportSanityChecker {
 }
 
 
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
+contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
     using ReportExitLimitUtilsStorage for bytes32;
@@ -47,20 +46,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
 
-    /// @notice An ACL role granting the permission to pause accepting validator exit requests
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-
-    /// @notice An ACL role granting the permission to resume accepting validator exit requests
-    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
-
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
 
-    /// @dev Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
-    /// A mapping from the (moduleId, nodeOpId) packed key to the last requested validator index.
-    bytes32 internal constant LAST_REQUESTED_VALIDATOR_INDICES_POSITION =
-        keccak256("lido.ValidatorsExitBusOracle.lastRequestedValidatorIndices");
+    /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
+    /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
+    /// This code was removed from the contract, but slots can still contain logic.
 
     /// @dev Storage slot: DataProcessingState dataProcessingState
     bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
@@ -91,36 +83,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
-        // TODO: after deleted last exited keys clean here slots
-    }
 
-    /// @notice Resume accepting validator exit requests
-    ///
-    /// @dev Reverts with `PausedExpected()` if contract is already resumed
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `RESUME_ROLE`
-    ///
-    function resume() external whenPaused onlyRole(RESUME_ROLE) {
-        _resume();
-    }
-
-    /// @notice Pause accepting validator exit requests util in after duration
-    ///
-    /// @param _duration pause duration, seconds (use `PAUSE_INFINITELY` for unlimited)
-    /// @dev Reverts with `ResumedExpected()` if contract is already paused
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
-    /// @dev Reverts with `ZeroPauseDuration()` if zero duration is passed
-    ///
-    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
-        _pauseFor(_duration);
-    }
-
-    /// @notice Pause accepting report data
-    /// @param _pauseUntilInclusive the last second to pause until
-    /// @dev Reverts with `ResumeSinceInPast()` if the timestamp is in the past
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
-    /// @dev Reverts with `ResumedExpected()` if contract is already paused
-    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
-        _pauseUntil(_pauseUntilInclusive);
     }
 
     ///
@@ -281,6 +244,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
 
+        // TODO: move this logic in separate method
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
         if (exitRequestLimitData.isExitReportLimitSet()) {
@@ -313,47 +277,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + data.requestsCount
         );
-    }
-
-    function _processExitRequestsList(bytes calldata data) internal {
-        uint256 offset;
-        uint256 offsetPastEnd;
-        assembly {
-            offset := data.offset
-            offsetPastEnd := add(offset, data.length)
-        }
-
-        bytes calldata pubkey;
-
-        assembly {
-            pubkey.length := 48
-        }
-
-        uint256 timestamp = _getTime();
-
-        while (offset < offsetPastEnd) {
-            uint256 dataWithoutPubkey;
-            assembly {
-                // 16 most significant bytes are taken by module id, node op id, and val index
-                dataWithoutPubkey := shr(128, calldataload(offset))
-                // the next 48 bytes are taken by the pubkey
-                pubkey.offset := add(offset, 16)
-                // totalling to 64 bytes
-                offset := add(offset, 64)
-            }
-            //                              dataWithoutPubkey
-            // MSB <---------------------------------------------------------------------- LSB
-            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-            uint64 valIndex = uint64(dataWithoutPubkey);
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidRequestsData();
-            }
-
-            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-        }
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
