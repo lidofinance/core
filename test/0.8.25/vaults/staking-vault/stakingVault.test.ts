@@ -106,19 +106,13 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts on construction if the vault hub address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositor, depositContractAddress]))
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_vaultHub");
     });
 
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress, depositContractAddress]))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_depositor");
-    });
-
-    it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, depositor, ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -132,16 +126,22 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, depositor, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, "0x")).to.be.revertedWithCustomError(
-        stakingVaultImplementation,
-        "ZeroArgument",
-      );
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, depositor, "0x"))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_nodeOperator");
+    });
+
+    it("no reverts if the `_depositor` is zero address", async () => {
+      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
+      await expect(vault_.initialize(vaultOwner, operator, ZeroAddress, "0x")).to.not.be.reverted;
+
+      expect(await vault_.depositor()).to.equal(operator);
     });
   });
 
@@ -188,6 +188,25 @@ describe("StakingVault.sol", () => {
     });
   });
 
+  context("resetLocked", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).resetLocked()).to.be.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if vaultHub already authorized", async () => {
+      await expect(stakingVault.resetLocked()).to.be.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.resetLocked();
+      expect(await stakingVault.locked()).to.equal(0n);
+    });
+  });
+
   context("unlocked", () => {
     it("returns the correct unlocked balance", async () => {
       expect(await stakingVault.unlocked()).to.equal(0n);
@@ -197,7 +216,9 @@ describe("StakingVault.sol", () => {
       const amount = ether("1");
       await stakingVault.fund({ value: amount });
 
-      await stakingVault.connect(vaultOwner).lock(amount);
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await stakingVault.valuation(), await stakingVault.inOutDelta(), amount + 1n);
       await stakingVault.connect(vaultHubSigner).report(amount - 1n, amount, amount); // locked > valuation
 
       expect(await stakingVault.valuation()).to.equal(amount - 1n);
@@ -222,9 +243,8 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.unlocked()).to.equal(halfAmount);
 
       await stakingVault.connect(vaultOwner).lock(amount);
-
       expect(await stakingVault.valuation()).to.equal(amount);
-      expect(await stakingVault.locked()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(amount + 1n);
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
   });
@@ -255,6 +275,121 @@ describe("StakingVault.sol", () => {
   context("nodeOperator", () => {
     it("returns the correct node operator", async () => {
       expect(await stakingVault.nodeOperator()).to.equal(operator);
+    });
+  });
+
+  context("authorizeLidoVaultHub", () => {
+    it("reverts on invalid owner", async () => {
+      await expect(stakingVault.connect(stranger).authorizeLidoVaultHub()).to.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on vaultHubAuthorized", async () => {
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("reverts on isOssified", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.ossifyStakingVault();
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultIsOssified");
+    });
+
+    it("reverts if depositor is not Lido Predeposit Guarantee", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.setDepositor(stranger);
+
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "InvalidDepositor");
+    });
+
+    it("authorize works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.authorizeLidoVaultHub()).to.emit(stakingVault, "VaultHubAuthorizedSet").withArgs(true);
+    });
+  });
+
+  context("deauthorizeLidoVaultHub", () => {
+    it("reverts on unauthorized", async () => {
+      await expect(stakingVault.connect(stranger).deauthorizeLidoVaultHub())
+        .to.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("deauthorizeLidoVaultHub", stranger);
+    });
+
+    it("reverts on VaultHubNotAuthorized", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+        stakingVault,
+        "VaultHubNotAuthorized",
+      );
+    });
+
+    it("deauthorize works", async () => {
+      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub())
+        .to.emit(stakingVault, "VaultHubAuthorizedSet")
+        .withArgs(false);
+
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
+      expect(await stakingVault.depositor()).to.equal(depositor);
+    });
+  });
+
+  context("ossification", () => {
+    it("reverts on vaultHubAuthorized", async () => {
+      await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
+    });
+
+    it("reverts on stranger", async () => {
+      await expect(stakingVault.connect(stranger).ossifyStakingVault()).to.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on already ossified", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.ossifyStakingVault();
+      await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
+    });
+
+    it("ossify works on deauthorized vault", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await expect(stakingVault.ossifyStakingVault()).to.emit(stakingVault, "PinnedImplementationUpdated");
+    });
+  });
+
+  context("depositor", () => {
+    it("returns the correct depositor", async () => {
+      expect(await stakingVault.depositor()).to.equal(depositor);
+    });
+
+    it("reverts if invalid owner", async () => {
+      await expect(stakingVault.connect(stranger).setDepositor(depositor))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("reverts if _depositor is zero address", async () => {
+      await expect(stakingVault.connect(vaultOwner).setDepositor(ZeroAddress))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_depositor");
+    });
+
+    it("reverts if vault is attached to VaultHub", async () => {
+      await expect(stakingVault.connect(vaultOwner).setDepositor(depositor)).to.be.revertedWithCustomError(
+        stakingVault,
+        "VaultHubAuthorized",
+      );
+    });
+
+    it("setDepositor works", async () => {
+      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+
+      await expect(stakingVault.connect(vaultOwner).setDepositor(stranger))
+        .to.emit(stakingVault, "DepositorSet")
+        .withArgs(stranger);
+
+      expect(await stakingVault.depositor()).to.equal(stranger);
     });
   });
 
@@ -445,6 +580,16 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
         stakingVault,
         "NewLockedNotGreaterThanCurrent",
+      );
+    });
+
+    it("reverts if the new locked amount exceeds the valuation", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount + 1n)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedExceedsValuation",
       );
     });
   });
