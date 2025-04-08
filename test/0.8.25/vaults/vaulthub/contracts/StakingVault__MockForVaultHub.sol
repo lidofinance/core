@@ -6,28 +6,34 @@ pragma solidity ^0.8.0;
 import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__MockForVaultHub {
-    address public vaultHub;
+    address public immutable VAULT_HUB;
     address public depositContract;
 
     address public owner;
     address public nodeOperator;
-    address immutable DEPOSITOR;
+    address public depositor_;
+    bool public vaultHubAttached;
+
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
 
     bytes32 public withdrawalCredentials;
 
-    constructor(address _vaultHub, address _depositor, address _depositContract) {
-        vaultHub = _vaultHub;
+    constructor(address _vaultHub, address _depositContract) {
+        VAULT_HUB = _vaultHub;
         depositContract = _depositContract;
-        DEPOSITOR = _depositor;
         withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
-    function initialize(address _owner, address _nodeOperator, bytes calldata) external {
+    function initialize(address _owner, address _nodeOperator, address _depositor, bytes calldata) external {
         owner = _owner;
         nodeOperator = _nodeOperator;
+        depositor_ = _depositor;
+    }
+
+    function vaultHub() external view returns (address) {
+        return VAULT_HUB;
     }
 
     function lock(uint256 amount) external {
@@ -71,7 +77,7 @@ contract StakingVault__MockForVaultHub {
     }
 
     function depositor() external view returns (address) {
-        return DEPOSITOR;
+        return depositor_;
     }
 
     function triggerValidatorWithdrawal(
@@ -95,6 +101,17 @@ contract StakingVault__MockForVaultHub {
     }
 
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
+
+    function isOssified() external pure returns (bool) {
+        return false;
+    }
+
+    function attachVaultHubAndDepositor() external {
+        vaultHubAttached = true;
+    }
+    function detachVaultHubAndDepositor() external {
+        vaultHubAttached = false;
+    }
 
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
