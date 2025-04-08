@@ -146,6 +146,7 @@ describe("ValidatorExitVerifier.sol", () => {
         GENESIS_TIME +
         (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
           SECONDS_PER_SLOT;
+      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
 
       const moduleId = 1;
       const nodeOpId = 2;
@@ -184,8 +185,9 @@ describe("ValidatorExitVerifier.sol", () => {
       const event = events[0];
       expect(event.args[0]).to.equal(moduleId);
       expect(event.args[1]).to.equal(nodeOpId);
-      expect(event.args[2]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
-      expect(event.args[3]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
+      expect(event.args[2]).to.equal(proofSlotTimestamp);
+      expect(event.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
+      expect(event.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
     });
 
     it("accepts a valid historical proof and does not revert", async () => {
@@ -194,6 +196,7 @@ describe("ValidatorExitVerifier.sol", () => {
         GENESIS_TIME +
         (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
           SECONDS_PER_SLOT;
+      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
 
       const moduleId = 1;
       const nodeOpId = 2;
@@ -233,8 +236,9 @@ describe("ValidatorExitVerifier.sol", () => {
       const event = events[0];
       expect(event.args[0]).to.equal(moduleId);
       expect(event.args[1]).to.equal(nodeOpId);
-      expect(event.args[2]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
-      expect(event.args[3]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
+      expect(event.args[2]).to.equal(proofSlotTimestamp);
+      expect(event.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
+      expect(event.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
     });
 
     it("reverts with 'UnsupportedSlot' when slot < FIRST_SUPPORTED_SLOT", async () => {

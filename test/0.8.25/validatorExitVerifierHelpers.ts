@@ -42,7 +42,7 @@ export const encodeExitRequestsDataListWithFormat = (requests: ExitRequest[]) =>
 };
 
 const stakingRouterMockEventABI = [
-  "event UnexitedValidatorReported(uint256 moduleId, uint256 nodeOperatorId, bytes publicKey, uint256 secondsSinceEligibleExitRequest)",
+  "event UnexitedValidatorReported(uint256 moduleId, uint256 nodeOperatorId, uint256 proofSlotTimestamp, bytes publicKey, uint256 secondsSinceEligibleExitRequest)",
 ];
 const stakingRouterMockInterface = new ethers.Interface(stakingRouterMockEventABI);
 type StakingRouterMockEvents = "UnexitedValidatorReported";

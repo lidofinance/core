@@ -178,23 +178,32 @@ contract ValidatorExitVerifier {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        uint64 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
+            ValidatorWitness calldata witness = validatorWitnesses[i];
+
             (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
-                validatorWitnesses[i].exitRequestIndex
+                witness.exitRequestIndex
             );
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
-                _getExitRequestTimestamp(requestsDeliveryHistory, validatorWitnesses[i].exitRequestIndex),
-                beaconBlock.header.slot,
-                validatorWitnesses[i].activationEpoch
+                requestsDeliveryHistory,
+                witness,
+                proofSlotTimestamp
             );
 
             _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            stakingRouter.reportUnexitedValidator(moduleId, nodeOpId, pubkey, secondsSinceEligibleExitRequest);
+            stakingRouter.shouldValidatorBePenalized(
+                moduleId,
+                nodeOpId,
+                proofSlotTimestamp,
+                pubkey,
+                secondsSinceEligibleExitRequest
+            );
         }
     }
 
@@ -220,23 +229,32 @@ contract ValidatorExitVerifier {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        uint64 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
+            ValidatorWitness calldata witness = validatorWitnesses[i];
+
             (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
-                validatorWitnesses[i].exitRequestIndex
+                witness.exitRequestIndex
             );
 
             uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
-                _getExitRequestTimestamp(requestsDeliveryHistory, validatorWitnesses[i].exitRequestIndex),
-                oldBlock.header.slot,
-                validatorWitnesses[i].activationEpoch
+                requestsDeliveryHistory,
+                witness,
+                proofSlotTimestamp
             );
 
-            _verifyValidatorIsNotExited(oldBlock.header, validatorWitnesses[i], pubkey, valIndex);
+            _verifyValidatorIsNotExited(oldBlock.header, witness, pubkey, valIndex);
 
-            stakingRouter.reportUnexitedValidator(moduleId, nodeOpId, pubkey, secondsSinceEligibleExitRequest);
+            stakingRouter.shouldValidatorBePenalized(
+                moduleId,
+                nodeOpId,
+                proofSlotTimestamp,
+                pubkey,
+                secondsSinceEligibleExitRequest
+            );
         }
     }
 
@@ -309,21 +327,21 @@ contract ValidatorExitVerifier {
     }
 
     /**
-     * @dev Determines how many seconds have passed since a validator was first eligible to exit after ValidatorsExitBusOracle exit request.
-     * @param validatorExitRequestTimestamp The timestamp when the validator's exit request was submitted.
-     * @param referenceSlot A reference slot, used to measure the elapsed duration since the validator became eligible to exit.
-     * @param validatorActivationEpoch The epoch in which the validator was activated.
+     * @dev Determines how many seconds have passed since a validator was first eligible
+     *      to exit after ValidatorsExitBusOracle exit request.
      * @return uint64 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitRequestEligible(
-        uint64 validatorExitRequestTimestamp,
-        uint64 referenceSlot,
-        uint64 validatorActivationEpoch
+        ExitRequestsDeliveryHistory memory history,
+        ValidatorWitness calldata witness,
+        uint64 referenceSlotTimestamp
     ) internal view returns (uint64) {
+        uint64 validatorExitRequestTimestamp = _getExitRequestTimestamp(history, witness.exitRequestIndex);
+
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
         // subsequent to its activation epoch.
         uint64 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
-            (validatorActivationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
+            (witness.activationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
             SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
         // The actual eligible timestamp is the max between the exit request submission time
@@ -332,13 +350,11 @@ contract ValidatorExitVerifier {
             ? validatorExitRequestTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
-        uint64 referenceTimestamp = GENESIS_TIME + referenceSlot * SECONDS_PER_SLOT;
-
-        if (referenceTimestamp < eligibleExitRequestTimestamp) {
-            revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceTimestamp, eligibleExitRequestTimestamp);
+        if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
+            revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
-        return referenceTimestamp - eligibleExitRequestTimestamp;
+        return referenceSlotTimestamp - eligibleExitRequestTimestamp;
     }
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
@@ -382,5 +398,9 @@ contract ValidatorExitVerifier {
         // As the loop should always end prematurely with the `return` statement,
         // this code should be unreachable. We assert `false` just to be safe.
         assert(false);
+    }
+
+    function _slotToTimestamp(uint64 slot) internal view returns (uint64) {
+        return GENESIS_TIME + slot * SECONDS_PER_SLOT;
     }
 }

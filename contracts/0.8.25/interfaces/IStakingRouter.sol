@@ -5,10 +5,11 @@
 pragma solidity 0.8.25;
 
 interface IStakingRouter {
-    function reportUnexitedValidator(
-        uint256 moduleId,
-        uint256 nodeOperatorId,
-        bytes calldata publicKey,
-        uint256 secondsSinceEligibleExitRequest
+    function shouldValidatorBePenalized(
+        uint256 _moduleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
     ) external;
 }
