@@ -205,7 +205,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by the owner
      * @dev Reverts if vault is already attached to VaultHub
      * @dev Reverts if vault is ossified
-     * @dev Reverts if vault socket is occupied by another vault
      */
     function attachVaultHubAndDepositor() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
