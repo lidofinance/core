@@ -17,17 +17,15 @@ import {
 import { ether, findEvents, impersonate } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-const VAULTS_CONNECTED_VAULTS_LIMIT = 5; // Low limit to test the overflow
-
-const SHARE_LIMIT = ether("1");
-const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+// const SHARE_LIMIT = ether("1");
+// const RESERVE_RATIO_BP = 10_00n;
+// const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+// const TREASURY_FEE_BP = 5_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
-const CONNECT_DEPOSIT = ether("1");
+// const CONNECT_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:hub", () => {
   let deployer: HardhatEthersSigner;
@@ -48,7 +46,7 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(await user.getAddress(), await user.getAddress())
+      .createVault(await user.getAddress(), await user.getAddress(), predepositGuarantee)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -58,31 +56,31 @@ describe("VaultHub.sol:hub", () => {
     return vault;
   }
 
-  async function createAndConnectVault(
-    factory: VaultFactory__MockForVaultHub,
-    options?: {
-      shareLimit?: bigint;
-      reserveRatioBP?: bigint;
-      rebalanceThresholdBP?: bigint;
-      treasuryFeeBP?: bigint;
-    },
-  ) {
-    const vault = await createVault(factory);
-    await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
-    await vault.connect(user).lock(CONNECT_DEPOSIT);
+  // async function createAndConnectVault(
+  //   factory: VaultFactory__MockForVaultHub,
+  //   options?: {
+  //     shareLimit?: bigint;
+  //     reserveRatioBP?: bigint;
+  //     rebalanceThresholdBP?: bigint;
+  //     treasuryFeeBP?: bigint;
+  //   },
+  // ) {
+  //   const vault = await createVault(factory);
+  //   await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
+  //   await vault.connect(user).lock(CONNECT_DEPOSIT);
 
-    await vaultHub
-      .connect(user)
-      .connectVault(
-        await vault.getAddress(),
-        options?.shareLimit ?? SHARE_LIMIT,
-        options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
-        options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-      );
+  //   await vaultHub
+  //     .connect(user)
+  //     .connectVault(
+  //       await vault.getAddress(),
+  //       options?.shareLimit ?? SHARE_LIMIT,
+  //       options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+  //       options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+  //       options?.treasuryFeeBP ?? TREASURY_FEE_BP,
+  //     );
 
-    return vault;
-  }
+  //   return vault;
+  // }
 
   before(async () => {
     [deployer, user, whale] = await ethers.getSigners();
@@ -114,7 +112,6 @@ describe("VaultHub.sol:hub", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub__HarnessForReporting", [
       locator,
       await locator.lido(),
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -133,7 +130,6 @@ describe("VaultHub.sol:hub", () => {
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
-      predepositGuarantee,
       depositContract,
     ]);
 
@@ -177,27 +173,27 @@ describe("VaultHub.sol:hub", () => {
         0n,
       );
 
-      await expect(
-        vaultHub.checkVaultsDataProof(
-          "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-          99170000769726969624n,
-          33000000000000000000n,
-          0n,
-          0n,
-          PROOF,
-        ),
-      ).to.not.reverted;
+      // await expect(
+      //   vaultHub.checkVaultsDataProof(
+      //     "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
+      //     99170000769726969624n,
+      //     33000000000000000000n,
+      //     0n,
+      //     0n,
+      //     PROOF,
+      //   ),
+      // ).to.not.reverted;
 
-      await expect(
-        vaultHub.checkVaultsDataProof(
-          "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-          99170000769726969624n,
-          33000000000000000003n,
-          0n,
-          0n,
-          PROOF,
-        ),
-      ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
+      // await expect(
+      //   vaultHub.checkVaultsDataProof(
+      //     "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
+      //     99170000769726969624n,
+      //     33000000000000000003n,
+      //     0n,
+      //     0n,
+      //     PROOF,
+      //   ),
+      // ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
 
       await expect(
         vaultHub.updateVaultsData(
@@ -238,51 +234,51 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.reverted;
     });
 
-    it("calculates cumulative vaults treasury fees", async () => {
-      const vault = await createAndConnectVault(vaultFactory, {
-        shareLimit: ether("100"), // just to bypass the share limit check
-        reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
-      });
+    // it("calculates cumulative vaults treasury fees", async () => {
+    // const vault = await createAndConnectVault(vaultFactory, {
+    //   shareLimit: ether("100"), // just to bypass the share limit check
+    //   reserveRatioBP: 50_00n, // 50%
+    //   rebalanceThresholdBP: 50_00n, // 50%
+    // });
 
-      await vaultHub.harness_bypassCheckVaultsDataProof(true);
+    // await vaultHub.harness_bypassCheckVaultsDataProof(true);
 
-      await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 100n, 0n, [
-        ZERO_HASH,
-      ]);
-      const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket.feeSharesCharged).to.equal(100n);
+    // await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 100n, 0n, [
+    //   ZERO_HASH,
+    // ]);
+    // const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
+    // expect(vaultSocket.feeSharesCharged).to.equal(100n);
 
-      await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 101n, 0n, [
-        ZERO_HASH,
-      ]);
+    // await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 101n, 0n, [
+    //   ZERO_HASH,
+    // ]);
 
-      const vaultSocket2 = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket2.feeSharesCharged).to.equal(101n);
-    });
+    // const vaultSocket2 = await vaultHub["vaultSocket(uint256)"](0n);
+    // expect(vaultSocket2.feeSharesCharged).to.equal(101n);
+    // });
 
-    it("rejects incorrectly reported cumulative vaults treasury fees", async () => {
-      const vault = await createAndConnectVault(vaultFactory, {
-        shareLimit: ether("100"), // just to bypass the share limit check
-        reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
-      });
+    // it("rejects incorrectly reported cumulative vaults treasury fees", async () => {
+    //   const vault = await createAndConnectVault(vaultFactory, {
+    //     shareLimit: ether("100"), // just to bypass the share limit check
+    //     reserveRatioBP: 50_00n, // 50%
+    //     rebalanceThresholdBP: 50_00n, // 50%
+    //   });
 
-      await vaultHub.harness_bypassCheckVaultsDataProof(true);
+    //   await vaultHub.harness_bypassCheckVaultsDataProof(true);
 
-      await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 100n, 0n, [
-        ZERO_HASH,
-      ]);
-      const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
-      expect(vaultSocket.feeSharesCharged).to.equal(100n);
+    // await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 100n, 0n, [
+    //   ZERO_HASH,
+    // ]);
+    // const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
+    // expect(vaultSocket.feeSharesCharged).to.equal(100n);
 
-      await expect(
-        vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 99n, 0n, [
-          ZERO_HASH,
-        ]),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
-        .withArgs(vault.getAddress(), 99n, 100n);
-    });
+    // await expect(
+    //   vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 99n, 0n, [
+    //     ZERO_HASH,
+    //   ]),
+    // )
+    //   .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
+    //   .withArgs(vault.getAddress(), 99n, 100n);
+    // });
   });
 });

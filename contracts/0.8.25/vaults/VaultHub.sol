@@ -85,8 +85,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
-    /// @notice limit for the number of vaults that can ever be connected to the vault hub
-    uint256 private immutable CONNECTED_VAULTS_LIMIT;
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
 
@@ -97,22 +95,18 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
-    /// @param _connectedVaultsLimit Maximum number of vaults that can be connected simultaneously
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
     ) {
-        if (_connectedVaultsLimit == 0) revert ZeroArgument("_connectedVaultsLimit");
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-        CONNECTED_VAULTS_LIMIT = _connectedVaultsLimit;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
         _disableInitializers();
@@ -258,7 +252,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (_rebalanceThresholdBP > _reserveRatioBP)
             revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
-        if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (vault_.isOssified()) revert VaultIsOssified(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -267,11 +263,15 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
-        if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
+        if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
+            revert VaultDepositorNotAllowed(vault_.depositor());
 
-        if (IStakingVault(_vault).locked() < CONNECT_DEPOSIT)
-            revert VaultInsufficientLocked(_vault, IStakingVault(_vault).locked(), CONNECT_DEPOSIT);
+        if (vault_.locked() < CONNECT_DEPOSIT)
+            revert VaultInsufficientLocked(_vault, vault_.locked(), CONNECT_DEPOSIT);
+        if (_vault.balance < CONNECT_DEPOSIT)
+            revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+
+        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
@@ -368,6 +368,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 minLocked = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+
         if (minLocked > vault_.locked()) {
             revert VaultInsufficientLocked(_vault, vault_.locked(), minLocked);
         }
@@ -626,6 +627,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
         if (socket.pendingDisconnect) {
             // remove disconnected vault from the list
+            IStakingVault(socket.vault).detachVaultHubAndDepositor();
             VaultSocket memory lastSocket = $.sockets[length - 1];
             $.sockets[vaultIndex] = lastSocket;
             $.vaultIndex[lastSocket.vault] = vaultIndex;
@@ -682,32 +684,27 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-
-    error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
-    error RebalanceFailed(address vault);
     error NotAuthorized(string operation, address addr);
     error ZeroArgument(string argument);
-    error NotEnoughBalance(address vault, uint256 balance, uint256 shouldBe);
-    error TooManyVaults();
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error RebalanceThresholdTooHigh(address vault, uint256 rebalanceThresholdBP, uint256 maxRebalanceThresholdBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error ExternalSharesCapReached(address vault, uint256 capShares, uint256 maxMintableExternalShares);
     error InsufficientValuationToMint(address vault, uint256 valuation);
     error AlreadyExists(bytes32 codehash);
     error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
     error VaultProxyNotAllowed(address beacon);
     error InvalidPubkeysLength();
-    error ConnectedVaultsLimitTooLow(uint256 connectedVaultsLimit, uint256 currentVaultsCount);
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
     error InvalidProof();
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
+    error VaultIsOssified(address vault);
+    error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
 }

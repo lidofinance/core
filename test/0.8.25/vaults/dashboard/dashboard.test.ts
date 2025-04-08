@@ -40,6 +40,7 @@ describe("Dashboard.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let depositor: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
@@ -63,7 +64,7 @@ describe("Dashboard.sol", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+    [factoryOwner, vaultOwner, nodeOperator, stranger, depositor] = await ethers.getSigners();
 
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
@@ -79,18 +80,22 @@ describe("Dashboard.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // TODO: PDG harness
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, nodeOperator, depositContract]);
-    expect(await vaultImpl.vaultHub()).to.equal(hub);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
     expect(await dashboardImpl.WETH()).to.equal(weth);
     expect(await dashboardImpl.WSTETH()).to.equal(wsteth);
 
-    factory = await ethers.deployContract("VaultFactory__MockForDashboard", [factoryOwner, vaultImpl, dashboardImpl]);
+    factory = await ethers.deployContract("VaultFactory__MockForDashboard", [
+      factoryOwner,
+      vaultImpl,
+      dashboardImpl,
+      depositor,
+    ]);
     expect(await factory.owner()).to.equal(factoryOwner);
     expect(await factory.implementation()).to.equal(vaultImpl);
-    expect(await factory.dashboardImpl()).to.equal(dashboardImpl);
+    expect(await factory.DASHBOARD_IMPL()).to.equal(dashboardImpl);
 
     const createVaultTx = await factory.connect(vaultOwner).createVault(nodeOperator);
     const createVaultReceipt = await createVaultTx.wait();
@@ -101,6 +106,7 @@ describe("Dashboard.sol", () => {
 
     const vaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", vaultAddress, vaultOwner);
+    expect(await vault.vaultHub()).to.equal(hub);
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);

@@ -4,16 +4,16 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconProxy,
   Delegation,
   OssifiableProxy,
   OssifiableProxy__factory,
+  PinnedBeaconProxy,
   StakingVault,
   VaultFactory,
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { findEventsWithInterfaces } from "lib";
+import { ether, findEventsWithInterfaces, impersonate } from "lib";
 
 interface ProxifyArgs<T> {
   impl: T;
@@ -40,7 +40,7 @@ export async function proxify<T extends BaseContract>({
 
 interface CreateVaultResponse {
   tx: ContractTransactionResponse;
-  proxy: BeaconProxy;
+  proxy: PinnedBeaconProxy;
   vault: StakingVault;
   delegation: Delegation;
 }
@@ -70,9 +70,14 @@ export async function createVaultProxy(
 
   const { delegation: delegationAddress } = delegationEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("BeaconProxy", vault, caller)) as BeaconProxy;
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
   const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
+
+  //fund and lock
+  const delegationSigner = await impersonate(await delegation.getAddress(), ether("100"));
+  await stakingVault.connect(delegationSigner).fund({ value: ether("1") });
+  await stakingVault.connect(delegationSigner).lock(ether("1"));
 
   return {
     tx,

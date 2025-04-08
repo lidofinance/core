@@ -17,9 +17,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _connectedVaultsLimit,
         uint256 _relativeShareLimitBP
-    ) VaultHub(_locator, _lido, _connectedVaultsLimit, _relativeShareLimitBP) {
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {
         bypassCheckVaultsDataProof = false;
     }
 

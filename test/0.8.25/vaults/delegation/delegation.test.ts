@@ -95,9 +95,9 @@ describe("Delegation.sol", () => {
     steth = await ethers.deployContract("StETH__MockForDelegation");
     weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
-    hub = await ethers.deployContract("VaultHub__MockForDelegation", [steth]);
 
-    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
+    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
+    hub = await ethers.deployContract("VaultHub__MockForDelegation", [lidoLocator, steth]);
 
     delegationImpl = await ethers.deployContract("Delegation", [weth, lidoLocator]);
     expect(await delegationImpl.WETH()).to.equal(weth);
@@ -105,15 +105,15 @@ describe("Delegation.sol", () => {
     expect(await delegationImpl.WSTETH()).to.equal(wsteth);
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [hub, vaultDepositor, depositContract]);
-    expect(await vaultImpl.vaultHub()).to.equal(hub);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [beacon.getAddress(), delegationImpl.getAddress()]);
+    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, delegationImpl]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
+    expect(await factory.LIDO_LOCATOR()).to.equal(lidoLocator);
 
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
@@ -146,6 +146,7 @@ describe("Delegation.sol", () => {
 
     const stakingVaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", stakingVaultAddress, vaultOwner);
+    expect(await vault.vaultHub()).to.equal(hub);
 
     const delegationCreatedEvents = findEvents(vaultCreationReceipt, "DelegationCreated");
     expect(delegationCreatedEvents.length).to.equal(1);

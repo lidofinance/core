@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Delegation, StakingVault } from "typechain-types";
+import { Delegation, StakingVault, VaultFactory } from "typechain-types";
 
 import {
   certainAddress,
@@ -21,7 +21,7 @@ import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/proto
 
 import { Snapshot } from "test/suite";
 
-import { connectToHub, setupLido } from "../../../lib/protocol/vaults";
+import { setupLido } from "../../../lib/protocol/vaults";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
@@ -34,6 +34,9 @@ describe("Scenario: actions on vault creation", () => {
 
   let delegation: Delegation;
   let stakingVault: StakingVault;
+
+  let delegationWithoutConnect: Delegation;
+
   let owner: HardhatEthersSigner,
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
@@ -54,6 +57,42 @@ describe("Scenario: actions on vault creation", () => {
   let allRoles: HardhatEthersSigner[];
   let snapshot: string;
   let originalSnapshot: string;
+
+  async function createVaultAndDelegation(
+    stakingVaultFactory: VaultFactory & { address: string },
+  ): Promise<{ stakingVault: StakingVault; delegation: Delegation }> {
+    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
+      {
+        defaultAdmin: owner,
+        nodeOperatorManager: nodeOperatorManager,
+        assetRecoverer: assetRecoverer,
+        nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
+        confirmExpiry: days(7n),
+        funders: [funder],
+        withdrawers: [withdrawer],
+        minters: [minter],
+        lockers: [locker],
+        burners: [burner],
+        rebalancers: [rebalancer],
+        depositPausers: [depositPauser],
+        depositResumers: [depositResumer],
+        validatorExitRequesters: [validatorExitRequester],
+        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
+        disconnecters: [disconnecter],
+        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
+      },
+      "0x",
+    );
+    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
+    const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+
+    expect(createVaultEvents.length).to.equal(1n);
+
+    const stakingVault_ = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
+    const delegation_ = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+
+    return { stakingVault: stakingVault_, delegation: delegation_ };
+  }
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -84,35 +123,37 @@ describe("Scenario: actions on vault creation", () => {
     ] = allRoles;
 
     // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
-      {
-        defaultAdmin: owner,
-        nodeOperatorManager: nodeOperatorManager,
-        assetRecoverer: assetRecoverer,
-        nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-        confirmExpiry: days(7n),
-        funders: [funder],
-        withdrawers: [withdrawer],
-        minters: [minter],
-        lockers: [locker],
-        burners: [burner],
-        rebalancers: [rebalancer],
-        depositPausers: [depositPauser],
-        depositResumers: [depositResumer],
-        validatorExitRequesters: [validatorExitRequester],
-        validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
-        disconnecters: [disconnecter],
-        nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
-      },
-      "0x",
-    );
-    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-    const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+    const { stakingVault: stakingVault_, delegation: delegation_ } =
+      await createVaultAndDelegation(stakingVaultFactory);
+    const { delegation: delegationWithoutConnect_ } = await createVaultAndDelegation(stakingVaultFactory);
 
-    expect(createVaultEvents.length).to.equal(1n);
+    stakingVault = stakingVault_;
+    delegation = delegation_;
 
-    stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
-    delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    delegationWithoutConnect = delegationWithoutConnect_;
+
+    //connect to vaultHub
+    const delegationSigner = await impersonate(await delegation.getAddress(), ether("100"));
+    await stakingVault.connect(delegationSigner).fund({ value: ether("1") });
+    await stakingVault.connect(delegationSigner).lock(ether("1"));
+
+    const { vaultHub, locator } = ctx.contracts;
+
+    const treasuryFeeBP = 5_00n; // 5% of the treasury fee
+    const shareLimit = (await ctx.contracts.lido.getTotalShares()) / 10n; // 10% of total shares
+
+    const deployer = await ctx.getSigner("agent");
+    await vaultHub
+      .connect(deployer)
+      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
+
+    const valuations = [await stakingVault.valuation()];
+    const inOutDeltas = [await stakingVault.inOutDelta()];
+    const locked = [await stakingVault.locked()];
+    const treasuryFees = [0n];
+
+    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
 
     await setupLido(ctx);
   });
@@ -180,10 +221,12 @@ describe("Scenario: actions on vault creation", () => {
 
   context("Disconnected vault", () => {
     it("Reverts on minting stETH", async () => {
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(owner).grantRole(await delegation.LOCK_ROLE(), minter.address);
+      await delegationWithoutConnect.connect(funder).fund({ value: ether("1") });
+      await delegationWithoutConnect
+        .connect(owner)
+        .grantRole(await delegationWithoutConnect.LOCK_ROLE(), minter.address);
 
-      await expect(delegation.connect(minter).mintStETH(locker, 1n)).to.be.revertedWithCustomError(
+      await expect(delegationWithoutConnect.connect(minter).mintStETH(locker, 1n)).to.be.revertedWithCustomError(
         ctx.contracts.vaultHub,
         "NotConnectedToHub",
       );
@@ -196,7 +239,7 @@ describe("Scenario: actions on vault creation", () => {
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
       await lido.connect(accountingSigner).mintShares(burner, 1n);
 
-      await expect(delegation.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
+      await expect(delegationWithoutConnect.connect(burner).burnStETH(1n)).to.be.revertedWithCustomError(
         vaultHub,
         "NotConnectedToHub",
       );
@@ -204,17 +247,6 @@ describe("Scenario: actions on vault creation", () => {
   });
 
   describe("Connected vault", () => {
-    beforeEach(async () => {
-      // adding some stETH to be able to call getTotalShares to get shareLimit
-      await delegation.connect(funder).fund({ value: ether("1") });
-      await delegation.connect(locker).lock(ether("1"));
-
-      const treasuryFeeBP = 5_00n; // 5% of the treasury fee
-      const shareLimit = (await ctx.contracts.lido.getTotalShares()) / 10n; // 10% of total shares
-
-      await connectToHub(ctx, stakingVault, { reserveRatio, treasuryFeeBP, rebalanceThreshold, shareLimit });
-    });
-
     it("Allows minting stETH", async () => {
       const { vaultHub } = ctx.contracts;
 
