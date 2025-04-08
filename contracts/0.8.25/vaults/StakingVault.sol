@@ -299,6 +299,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         _getStorage().locked = 0;
+
+        emit LockedReset();
     }
 
     /**
@@ -675,6 +677,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param locked New amount of locked ether
      */
     event LockedIncreased(uint256 locked);
+
+    /**
+     * @notice Emitted when the locked amount is reset to 0
+     */
+    event LockedReset();
 
     /**
      * @notice Emitted when a new report is submitted to `StakingVault`

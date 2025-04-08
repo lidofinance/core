@@ -16,6 +16,19 @@ import {
   VaultHub__MockPermissions,
 } from "typechain-types";
 
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  findEvents,
+  getRandomSigners,
+} from "lib";
+
+import { deployLidoLocator } from "test/deploy";
+import { Snapshot } from "test/suite";
+
 type PermissionsConfigStruct = {
   defaultAdmin: HardhatEthersSigner;
   nodeOperator: HardhatEthersSigner;
@@ -37,18 +50,6 @@ type PermissionsConfigStruct = {
   depositorSetter: HardhatEthersSigner;
   lockedResetter: HardhatEthersSigner;
 };
-
-import {
-  certainAddress,
-  days,
-  deployEIP7002WithdrawalRequestContract,
-  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-  ether,
-  findEvents,
-  getRandomSigners,
-} from "lib";
-
-import { Snapshot } from "test/suite";
 
 describe("Permissions", () => {
   let deployer: HardhatEthersSigner;
@@ -111,11 +112,14 @@ describe("Permissions", () => {
 
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
+    pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
+
     // 1. Deploy DepositContract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
+    const lidoLocator = await deployLidoLocator({ predepositGuarantee: pdg });
 
     // 2. Deploy VaultHub
-    vaultHub = await ethers.deployContract("VaultHub__MockPermissions");
+    vaultHub = await ethers.deployContract("VaultHub__MockPermissions", [lidoLocator]);
 
     // 3. Deploy StakingVault implementation
     stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
@@ -128,7 +132,7 @@ describe("Permissions", () => {
     permissionsImpl = await ethers.deployContract("Permissions__Harness");
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
-    pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
+
     vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl, pdg]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
@@ -738,13 +742,78 @@ describe("Permissions", () => {
     });
   });
 
-  // context("authorizeLidoVaultHub");
-  //
-  // context("ossifyStakingVault");
-  //
-  // context("setDepositor");
-  //
-  // context("resetLocked");
+  context("authorizeLidoVaultHub()", () => {
+    it("sets vault hub authorization", async () => {
+      await expect(permissions.connect(lidoVaultHubAuthorizer).authorizeLidoVaultHub()).to.emit(
+        stakingVault,
+        "VaultHubAuthorizedSet",
+      );
+
+      expect(await stakingVault.vaultHubAuthorized()).to.be.true;
+    });
+
+    it("reverts if the caller is not a member of the lido vault hub authorization role", async () => {
+      expect(await permissions.hasRole(await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).authorizeLidoVaultHub())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
+    });
+  });
+
+  context("ossifyStakingVault()", () => {
+    it("ossifies the StakingVault", async () => {
+      await expect(permissions.connect(ossifier).ossifyStakingVault()).to.emit(
+        stakingVault,
+        "PinnedImplementationUpdated",
+      );
+
+      expect(await stakingVault.isOssified()).to.be.true;
+    });
+
+    it("reverts if the caller is not a member of the ossifier role", async () => {
+      expect(await permissions.hasRole(await permissions.OSSIFY_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).ossifyStakingVault())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.OSSIFY_ROLE());
+    });
+  });
+
+  context("setDepositor()", () => {
+    it("sets the depositor", async () => {
+      await expect(permissions.connect(depositorSetter).setDepositor(certainAddress("new-depositor"))).to.emit(
+        stakingVault,
+        "DepositorSet",
+      );
+
+      expect(await stakingVault.depositor()).to.equal(certainAddress("new-depositor"));
+    });
+
+    it("reverts if the caller is not a member of the set depositor role", async () => {
+      expect(await permissions.hasRole(await permissions.SET_DEPOSITOR_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).setDepositor(certainAddress("new-depositor")))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.SET_DEPOSITOR_ROLE());
+    });
+  });
+
+  context("resetLocked()", () => {
+    it("resets the locked state", async () => {
+      await expect(permissions.connect(lockedResetter).resetLocked()).to.emit(stakingVault, "LockedReset");
+
+      expect(await stakingVault.locked()).to.equal(0n);
+    });
+
+    it("reverts if the caller is not a member of the reset locked role", async () => {
+      expect(await permissions.hasRole(await permissions.RESET_LOCKED_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).resetLocked())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.RESET_LOCKED_ROLE());
+    });
+  });
 
   async function checkSoleMember(account: HardhatEthersSigner, role: string) {
     expect(await permissions.getRoleMemberCount(role)).to.equal(1);
