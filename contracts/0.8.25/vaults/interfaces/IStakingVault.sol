@@ -64,9 +64,10 @@ interface IStakingVault {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable;
-    function attachVaultHubAndDepositor() external;
-    function detachVaultHubAndDepositor() external;
-    function vaultHubAttached() external view returns (bool);
+    function authorizeLidoVaultHub() external;
+    function deauthorizeLidoVaultHub() external;
+    function vaultHubAuthorized() external view returns (bool);
     function ossifyStakingVault() external;
     function isOssified() external view returns (bool);
+    function setDepositor(address _depositor) external;
 }
