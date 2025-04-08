@@ -80,7 +80,7 @@ describe("Dashboard.sol", () => {
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // TODO: PDG harness
-    vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
+    vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
 
     dashboardImpl = await ethers.deployContract("Dashboard", [weth, lidoLocator]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
@@ -91,13 +91,11 @@ describe("Dashboard.sol", () => {
       factoryOwner,
       vaultImpl,
       dashboardImpl,
-      hub,
       depositor,
     ]);
     expect(await factory.owner()).to.equal(factoryOwner);
     expect(await factory.implementation()).to.equal(vaultImpl);
     expect(await factory.DASHBOARD_IMPL()).to.equal(dashboardImpl);
-    expect(await factory.VAULT_HUB()).to.equal(hub);
 
     const createVaultTx = await factory.connect(vaultOwner).createVault(nodeOperator);
     const createVaultReceipt = await createVaultTx.wait();
@@ -202,7 +200,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -239,7 +236,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -262,7 +258,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -283,7 +278,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -304,7 +298,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -333,7 +326,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -360,7 +352,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -384,7 +375,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -406,7 +396,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -431,7 +420,6 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
-        pendingConnect: false,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);

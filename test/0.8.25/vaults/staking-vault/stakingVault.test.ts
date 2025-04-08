@@ -95,12 +95,22 @@ describe("StakingVault.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
+    it("sets the vault hub address in the implementation", async () => {
+      expect(await stakingVaultImplementation.vaultHub()).to.equal(vaultHubAddress);
+    });
+
     it("sets the deposit contract address in the implementation", async () => {
       expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContractAddress);
     });
 
+    it("reverts on construction if the vault hub address is zero", async () => {
+      await expect(ethers.deployContract("StakingVault", [ZeroAddress, depositContractAddress]))
+        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
+        .withArgs("_vaultHub");
+    });
+
     it("reverts on construction if the deposit contract address is zero", async () => {
-      await expect(ethers.deployContract("StakingVault", [ZeroAddress]))
+      await expect(ethers.deployContract("StakingVault", [vaultHubAddress, ZeroAddress]))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_beaconChainDepositContract");
     });
@@ -114,27 +124,20 @@ describe("StakingVault.sol", () => {
 
     it("reverts on initialization", async () => {
       await expect(
-        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, vaultHubAddress, depositor, "0x"),
+        stakingVaultImplementation.connect(stranger).initialize(vaultOwner, operator, depositor, "0x"),
       ).to.be.revertedWithCustomError(stakingVaultImplementation, "InvalidInitialization");
     });
 
     it("reverts if the node operator is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, ZeroAddress, vaultHubAddress, depositor, "0x"))
+      await expect(vault_.initialize(vaultOwner, ZeroAddress, depositor, "0x"))
         .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
         .withArgs("_nodeOperator");
     });
 
-    it("reverts if the `_vaultHub` is zero address", async () => {
-      const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, operator, ZeroAddress, depositor, "0x"))
-        .to.be.revertedWithCustomError(stakingVaultImplementation, "ZeroArgument")
-        .withArgs("_vaultHub");
-    });
-
     it("no reverts if the `_depositor` is zero address", async () => {
       const [vault_] = await proxify({ impl: stakingVaultImplementation, admin: vaultOwner });
-      await expect(vault_.initialize(vaultOwner, operator, vaultHubAddress, ZeroAddress, "0x")).to.not.be.reverted;
+      await expect(vault_.initialize(vaultOwner, operator, ZeroAddress, "0x")).to.not.be.reverted;
 
       expect(await vault_.depositor()).to.equal(operator);
     });
@@ -188,6 +191,16 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
 
+    it("returns vault balance if vault is not attached to VaultHub", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+
+      expect(await stakingVault.vaultHubAttached()).to.equal(false);
+      expect(await stakingVault.unlocked()).to.equal(amount);
+    });
+
     it("returns 0 if locked amount is greater than valuation", async () => {
       const amount = ether("1");
       await stakingVault.fund({ value: amount });
@@ -226,6 +239,41 @@ describe("StakingVault.sol", () => {
   context("nodeOperator", () => {
     it("returns the correct node operator", async () => {
       expect(await stakingVault.nodeOperator()).to.equal(operator);
+    });
+  });
+
+  context("depositor", () => {
+    it("returns the correct depositor", async () => {
+      expect(await stakingVault.depositor()).to.equal(depositor);
+    });
+
+    it("reverts if invalid owner", async () => {
+      await expect(stakingVault.connect(stranger).setDepositor(depositor))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("reverts if _depositor is zero address", async () => {
+      await expect(stakingVault.connect(vaultOwner).setDepositor(ZeroAddress))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_depositor");
+    });
+
+    it("reverts if vault is attached to VaultHub", async () => {
+      await expect(stakingVault.connect(vaultOwner).setDepositor(depositor)).to.be.revertedWithCustomError(
+        stakingVault,
+        "VaultHubAttached",
+      );
+    });
+
+    it("setDepositor works", async () => {
+      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+
+      await expect(stakingVault.connect(vaultOwner).setDepositor(stranger))
+        .to.emit(stakingVault, "DepositorSet")
+        .withArgs(stranger);
+
+      expect(await stakingVault.depositor()).to.equal(stranger);
     });
   });
 
@@ -416,6 +464,28 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
         stakingVault,
         "NewLockedNotGreaterThanCurrent",
+      );
+    });
+
+    it("reverts if the new locked amount exceeds the valuation", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount + 1n)).to.be.revertedWithCustomError(
+        stakingVault,
+        "NewLockedExceedsValuation",
+      );
+    });
+
+    it("reverts if vault is not attached to VaultHub", async () => {
+      const amount = ether("1");
+      await stakingVault.fund({ value: amount });
+
+      await stakingVault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+
+      await expect(stakingVault.connect(vaultOwner).lock(amount)).to.be.revertedWithCustomError(
+        stakingVault,
+        "VaultHubDetached",
       );
     });
   });

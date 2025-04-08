@@ -23,6 +23,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     uint64 private constant _version = 2;
 
+    VaultHub private immutable VAULT_HUB;
+
     address public immutable DEPOSIT_CONTRACT;
 
     uint256 public constant PUBLIC_KEY_LENGTH = 48;
@@ -31,9 +33,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     bytes32 private constant VAULT_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
-    constructor(address _beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
+        VAULT_HUB = VaultHub(_vaultHub);
         DEPOSIT_CONTRACT = _beaconChainDepositContract;
 
         // Prevents reinitialization of the implementation
@@ -43,19 +47,16 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        address _vaultHub,
         address _depositor,
         bytes calldata /* _params */
     ) external reinitializer(_version) {
         if (owner() != address(0)) revert VaultAlreadyInitialized();
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         __StakingVault_init_v2();
         __Ownable_init(_owner);
 
         ERC7201Storage storage $ = _getStorage();
         $.nodeOperator = _nodeOperator;
-        $.vaultHub = _vaultHub;
         $.depositor = _depositor;
     }
 
@@ -161,6 +162,14 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function isOssified() external pure returns (bool) {
         return false;
+    }
+
+    function attachVaultHubAndDepositor() external {}
+    function detachVaultHubAndDepositor() external {}
+    function ossifyStakingVault() external {}
+    function setDepositor(address _depositor) external {}
+    function vaultHubAttached() external view returns (bool) {
+        return true;
     }
 
     error ZeroArgument(string name);

@@ -65,9 +65,7 @@ describe("PredepositGuarantee.sol", () => {
     operator: HardhatEthersSigner,
     vaultHub_: VaultHub__MockForStakingVault,
   ): Promise<StakingVault> {
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
-      await depositContract.getAddress(),
-    ]);
+    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract]);
 
     // deploying factory/beacon
     const vaultFactory_: VaultFactory__MockForStakingVault = await ethers.deployContract(
@@ -76,7 +74,7 @@ describe("PredepositGuarantee.sol", () => {
     );
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator, vaultHub_, pdg).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
@@ -120,8 +118,8 @@ describe("PredepositGuarantee.sol", () => {
     expect(await locator.predepositGuarantee()).to.equal(await pdg.getAddress());
     vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault");
     stakingVault = await deployStakingVault(vaultOwner, vaultOperator, vaultHub);
-    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [depositContract]);
-    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, vaultHub, pdg, "0x00");
+    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
+    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, pdg, "0x00");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

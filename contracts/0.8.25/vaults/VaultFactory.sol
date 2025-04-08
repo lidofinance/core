@@ -5,9 +5,9 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Delegation} from "./Delegation.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
@@ -34,21 +34,18 @@ struct DelegationConfig {
 contract VaultFactory {
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
-    address public immutable VAULT_HUB;
-    address public immutable PREDEPOSIT_GUARANTEE;
+    address public immutable LIDO_LOCATOR;
 
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl, address _vaultHub, address _predepositGuarantee) {
+    constructor(address _beacon, address _delegationImpl, address _lidoLocator) {
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
-        VAULT_HUB = _vaultHub;
-        PREDEPOSIT_GUARANTEE = _predepositGuarantee;
+        LIDO_LOCATOR = _lidoLocator;
     }
 
     /// @notice Creates a new StakingVault and Delegation contracts
@@ -69,8 +66,7 @@ contract VaultFactory {
         vault.initialize(
             address(delegation),
             _delegationConfig.nodeOperatorManager,
-            VAULT_HUB,
-            PREDEPOSIT_GUARANTEE,
+            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
             _stakingVaultInitializerExtraParams
         );
 

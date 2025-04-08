@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { keccak256, ZeroAddress } from "ethers";
+import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -46,7 +46,6 @@ describe("VaultHub.sol:detach", () => {
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let delegation: Delegation;
   let vaultFactory: VaultFactory;
-  let invalidVaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
   let weth: WETH9__MockForVault;
@@ -60,26 +59,6 @@ describe("VaultHub.sol:detach", () => {
   let originalState: string;
 
   let delegationParams: DelegationConfigStruct;
-
-  async function report() {
-    const count = await vaultHub.vaultsCount();
-    const valuations = [];
-    const inOutDeltas = [];
-    const locked = [];
-    const treasuryFees = [];
-
-    for (let i = 0; i < count; i++) {
-      const vaultAddr = await vaultHub.vault(i);
-      const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
-      valuations.push(await vaultContract.valuation());
-      inOutDeltas.push(await vaultContract.inOutDelta());
-      locked.push(await vaultContract.locked());
-      treasuryFees.push(0n);
-    }
-
-    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
-  }
 
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
@@ -113,8 +92,10 @@ describe("VaultHub.sol:detach", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [depositContract], { from: deployer });
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
+      from: deployer,
+    });
 
     //beacon
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
@@ -123,16 +104,9 @@ describe("VaultHub.sol:detach", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, vaultHub, predepositGuarantee], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, locator], {
       from: deployer,
     });
-    invalidVaultFactory = await ethers.deployContract(
-      "VaultFactory",
-      [beacon, delegation, stranger, predepositGuarantee],
-      {
-        from: deployer,
-      },
-    );
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -140,9 +114,10 @@ describe("VaultHub.sol:detach", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(
-      implOld.initialize(stranger, operator, vaultHub, predepositGuarantee, "0x"),
-    ).to.revertedWithCustomError(implOld, "InvalidInitialization");
+    await expect(implOld.initialize(stranger, operator, predepositGuarantee, "0x")).to.revertedWithCustomError(
+      implOld,
+      "InvalidInitialization",
+    );
 
     //add proxy code hash to whitelist
     const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
@@ -173,520 +148,8 @@ describe("VaultHub.sol:detach", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  context("createVaultWithDelegation", () => {
-    it("reverts on invalid vaultHub", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      )
-        .to.revertedWithCustomError(vaultHub, "InvalidVaultHubAddress")
-        .withArgs(vault, stranger);
-    });
-
-    it("reverts on invalid owner", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
-
-      await expect(vault.connect(stranger).detachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "OwnableUnauthorizedAccount",
-      );
-    });
-
-    it("reverts when attachVaultHub on invalid vaultHub address", async () => {
-      const { vault, delegation: _delegation } = await createVaultProxy(
-        vaultOwner1,
-        invalidVaultFactory,
-        delegationParams,
-      );
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(ZeroAddress, predepositGuarantee))
-        .to.revertedWithCustomError(vault, "ZeroArgument")
-        .withArgs("_vaultHub");
-    });
-
-    it("reverts when attachVaultHub on invalid owner", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, invalidVaultFactory, delegationParams);
-
-      await expect(
-        vault.connect(stranger).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
-      ).to.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
-    });
-
-    it("reverts if vault has mintedShares", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(mintShares).to.equal(socket.sharesMinted);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.revertedWithCustomError(vault, "VaultNotMarkedForDisconnect")
-        .withArgs(vault, false);
-    });
-
-    it("reverts if vault no mintedShares, but is connected", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(0).to.equal(socket.sharesMinted);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultNotMarkedForDisconnect",
-      );
-    });
-
-    it("reverts when vaultHub already detached", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
-      const { vault: vault2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
-
-      const vault1VaultHubBefore = await vault.vaultHub();
-      const vault2VaultHubBefore = await vault2.vaultHub();
-
-      expect(vault1VaultHubBefore).to.equal(vault2VaultHubBefore);
-      expect(vault1VaultHubBefore).not.to.equal(ZeroAddress);
-
-      //disconnect vault
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(0).to.equal(socket.sharesMinted);
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
-        vault,
-        "VaultHubAlreadyDetached",
-      );
-    });
-
-    it("detach vaultHub works after voluntaryDisconnect", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
-      const { vault: vault2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
-
-      const vault1VaultHubBefore = await vault.vaultHub();
-      const vault2VaultHubBefore = await vault2.vaultHub();
-
-      expect(vault1VaultHubBefore).to.equal(vault2VaultHubBefore);
-      expect(vault1VaultHubBefore).not.to.equal(ZeroAddress);
-
-      //disconnect vault
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(0).to.equal(socket.sharesMinted);
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubSet")
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-
-      const vault1VaultHubAfterDetach = await vault.vaultHub();
-      const vault2VaultHubAfterDetach = await vault2.vaultHub();
-
-      expect(vault1VaultHubAfterDetach).to.equal(ZeroAddress);
-      expect(vault2VaultHubAfterDetach).to.equal(vault2VaultHubBefore);
-
-      //upgrade beacon to new implementation
-      await beacon.connect(admin).upgradeTo(implNew);
-
-      const vault1VaultHubAfterUpgrade = await vault.vaultHub();
-      const vault2VaultHubAfterUpgrade = await vault2.vaultHub();
-
-      expect(vault1VaultHubAfterUpgrade).to.equal(ZeroAddress);
-      expect(vault2VaultHubAfterUpgrade).to.equal(vault2VaultHubBefore);
-    });
-
-    it("detach vaultHub works after voluntaryDisconnect and updateVaults", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
-      const { vault: vault2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
-
-      const vault1VaultHubBefore = await vault.vaultHub();
-      const vault2VaultHubBefore = await vault2.vaultHub();
-
-      expect(vault1VaultHubBefore).to.equal(vault2VaultHubBefore);
-      expect(vault1VaultHubBefore).not.to.equal(ZeroAddress);
-
-      //disconnect vault
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(0).to.equal(socket.sharesMinted);
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-
-      const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-      await vaultHub.connect(accountingSigner).updateVaults([], [], [], []);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubSet")
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-
-      const vault1VaultHubAfterDetach = await vault.vaultHub();
-      const vault2VaultHubAfterDetach = await vault2.vaultHub();
-
-      expect(vault1VaultHubAfterDetach).to.equal(ZeroAddress);
-      expect(vault2VaultHubAfterDetach).to.equal(vault2VaultHubBefore);
-
-      //upgrade beacon to new implementation
-      await beacon.connect(admin).upgradeTo(implNew);
-
-      const vault1VaultHubAfterUpgrade = await vault.vaultHub();
-      const vault2VaultHubAfterUpgrade = await vault2.vaultHub();
-
-      expect(vault1VaultHubAfterUpgrade).to.equal(ZeroAddress);
-      expect(vault2VaultHubAfterUpgrade).to.equal(vault2VaultHubBefore);
-    });
-
-    it("reverts when vault is ossified", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
-      await vault.connect(delegationSigner).ossifyStakingVault();
-
-      await expect(
-        vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
-      ).to.revertedWithCustomError(vault, "VaultIsOssified");
-    });
-
-    it("reverts when attach vaultHub already attached", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await expect(
-        vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee),
-      ).to.revertedWithCustomError(vault, "VaultHubAttached");
-    });
-
-    it("attach vaultHub works", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
-      const { vault: vault2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
-
-      const vault1VaultHubBefore = await vault.vaultHub();
-      const vault2VaultHubBefore = await vault2.vaultHub();
-
-      expect(vault1VaultHubBefore).to.equal(vault2VaultHubBefore);
-      expect(vault1VaultHubBefore).not.to.equal(ZeroAddress);
-
-      //disconnect vault
-      const socket = await vaultHub["vaultSocket(address)"](vault);
-      expect(0).to.equal(socket.sharesMinted);
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubSet")
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, predepositGuarantee))
-        .to.emit(vault, "VaultHubSet")
-        .withArgs(vaultHub)
-        .to.emit(vault, "DepositorSet")
-        .withArgs(predepositGuarantee);
-    });
-
-    it("depositor set to nodeOperatorManager if zero address is provided", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
-      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-
-      await expect(vault.connect(delegationSigner).detachVaultHubAndDepositor())
-        .to.emit(vault, "VaultHubSet")
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-
-      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor(vaultHub, ZeroAddress))
-        .to.emit(vault, "VaultHubSet")
-        .withArgs(vaultHub)
-        .to.emit(vault, "DepositorSet")
-        .withArgs(delegationParams.nodeOperatorManager);
-    });
-
-    it("reverts when ossify by stranger", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      await expect(vault.connect(stranger).ossifyStakingVault()).to.revertedWithCustomError(
-        vault,
-        "OwnableUnauthorizedAccount",
-      );
-    });
-
-    it("reverts when vault is attached to VaultHub", async () => {
+  context("ossification", () => {
+    it("reverts on vaultHubAttached", async () => {
       const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
@@ -696,33 +159,21 @@ describe("VaultHub.sol:detach", () => {
       );
     });
 
-    it("reverts when vault is already ossified", async () => {
+    it("reverts on stranger", async () => {
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      await expect(vault.connect(stranger).ossifyStakingVault()).to.revertedWithCustomError(
+        vault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on already ossified", async () => {
       const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
 
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
+      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
       await vault.connect(delegationSigner).ossifyStakingVault();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.revertedWithCustomError(
         vault,
@@ -730,53 +181,18 @@ describe("VaultHub.sol:detach", () => {
       );
     });
 
-    it("ossify implementation works", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
+    it("ossify work on detached vault", async () => {
       const {
         vault,
         delegation: _delegation,
         proxy: proxy1,
       } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
-
-      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
-
-      await vault.connect(delegationSigner).fund({ value: 1000n });
-
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
-
-      await report();
-
-      const mintShares = 10;
-
-      await vaultHub.connect(delegationSigner).mintShares(vault, stranger, mintShares);
-      await steth.connect(stranger).transferShares(vaultHub, mintShares);
-      await vaultHub.connect(delegationSigner).burnShares(vault, mintShares);
-
       const { proxy: proxy2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
 
-      const vault1ImplementationBefore = await proxy1.implementation();
-      const vault2ImplementationBefore = await proxy2.implementation();
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
 
-      expect(vault1ImplementationBefore).to.equal(vault2ImplementationBefore);
-
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vault.connect(delegationSigner).detachVaultHubAndDepositor();
+      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();
@@ -790,31 +206,95 @@ describe("VaultHub.sol:detach", () => {
       const vault1ImplementationAfterUpgrade = await proxy1.implementation();
       const vault2ImplementationAfterUpgrade = await proxy2.implementation();
 
-      expect(vault1ImplementationAfterUpgrade).to.equal(vault1ImplementationBefore);
+      expect(vault1ImplementationAfterUpgrade).to.equal(implOld);
       expect(vault2ImplementationAfterUpgrade).to.equal(implNew);
+      expect(vault1ImplementationAfterUpgrade).not.to.equal(vault2ImplementationAfterUpgrade);
     });
+  });
 
-    it("connect vault works with valid vaultHub", async () => {
-      const config = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-
+  context("attachVaultHubAndDepositor", () => {
+    it("reverts on invalid owner", async () => {
       const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
 
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            vault,
-            config.shareLimit,
-            config.minReserveRatioBP,
-            config.rebalanceThresholdBP,
-            config.treasuryFeeBP,
-          ),
-      ).to.emit(vaultHub, "VaultConnected");
+      await expect(vault.connect(stranger).attachVaultHubAndDepositor()).to.revertedWithCustomError(
+        vault,
+        "OwnableUnauthorizedAccount",
+      );
+    });
+
+    it("reverts on vaultHubAlreadyAttached", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor()).to.revertedWithCustomError(
+        vault,
+        "VaultHubAttached",
+      );
+    });
+
+    it("reverts on isOssified", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+      await vault.connect(delegationSigner).ossifyStakingVault();
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor()).to.revertedWithCustomError(
+        vault,
+        "VaultIsOssified",
+      );
+    });
+
+    it("attach works on detached vault", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+      await expect(vault.connect(delegationSigner).attachVaultHubAndDepositor())
+        .to.emit(vault, "VaultHubAttachedSet")
+        .withArgs(true)
+        .to.emit(vault, "DepositorSet")
+        .withArgs(locator.predepositGuarantee());
+    });
+  });
+
+  context("detachVaultHubAndDepositor", () => {
+    it("reverts on unauthorized", async () => {
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      await expect(vault.connect(stranger).detachVaultHubAndDepositor())
+        .to.revertedWithCustomError(vault, "NotAuthorized")
+        .withArgs("detachVaultHubAndDepositor", stranger);
+    });
+
+    it("reverts on VaultHubDetached", async () => {
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+
+      await vault.connect(vaultHubSigner).detachVaultHubAndDepositor();
+      await expect(vault.connect(vaultHubSigner).detachVaultHubAndDepositor()).to.revertedWithCustomError(
+        vault,
+        "VaultHubDetached",
+      );
+    });
+
+    it("detach works", async () => {
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+
+      await expect(vault.connect(vaultHubSigner).detachVaultHubAndDepositor())
+        .to.emit(vault, "VaultHubAttachedSet")
+        .withArgs(false)
+        .to.emit(vault, "DepositorSet")
+        .withArgs(delegationParams.nodeOperatorManager);
+
+      expect(await vault.vaultHubAttached()).to.equal(false);
+      expect(await vault.depositor()).to.equal(delegationParams.nodeOperatorManager);
     });
   });
 });

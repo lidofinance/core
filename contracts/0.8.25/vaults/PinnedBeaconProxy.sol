@@ -23,7 +23,7 @@ import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
  *
  */
 contract PinnedBeaconProxy is BeaconProxy {
-    constructor(address beacon, bytes memory data) BeaconProxy(beacon, data) {}
+    constructor(address beacon, bytes memory data) BeaconProxy(beacon, data) payable {}
 
     function _implementation() internal view virtual override returns (address) {
         address pinnedImpl = PinnedBeaconUtils.getPinnedImplementation();
@@ -33,7 +33,7 @@ contract PinnedBeaconProxy is BeaconProxy {
         return IBeacon(_getBeacon()).implementation();
     }
 
-    function implementation() external view returns(address) {
+    function implementation() external view returns (address) {
         return _implementation();
     }
 }

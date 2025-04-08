@@ -11,23 +11,19 @@ import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
 
 contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     address public immutable DASHBOARD_IMPL;
-    address public immutable VAULT_HUB;
-    address public immutable DEPOSITOR;
+    address public immutable PREDEPOSIT_GUARANTEE;
 
     constructor(
         address _owner,
         address _stakingVaultImpl,
         address _dashboardImpl,
-        address _vaultHub,
-        address _depositor
+        address _predeposit_guarantee
     ) UpgradeableBeacon(_stakingVaultImpl, _owner) {
         if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
+        if (_predeposit_guarantee == address(0)) revert ZeroArgument("_predeposit_guarantee");
 
         DASHBOARD_IMPL = _dashboardImpl;
-        VAULT_HUB = _vaultHub;
-        DEPOSITOR = _depositor;
+        PREDEPOSIT_GUARANTEE = _predeposit_guarantee;
     }
 
     function createVault(address _operator) external returns (IStakingVault vault, Dashboard dashboard) {
@@ -36,7 +32,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        vault.initialize(address(dashboard), _operator, VAULT_HUB, DEPOSITOR, "");
+        vault.initialize(address(dashboard), _operator, PREDEPOSIT_GUARANTEE, "");
 
         dashboard.initialize(address(this), 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);

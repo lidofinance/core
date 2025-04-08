@@ -52,7 +52,7 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(user, user, vaultHub, predepositGuarantee)
+      .createVault(user, user, predepositGuarantee)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
@@ -152,7 +152,7 @@ describe("VaultHub.sol:hub", () => {
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
 
-    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [depositContract]);
+    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
     const vault = await createVault(vaultFactory);
@@ -716,6 +716,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if proxy codehash is not added", async () => {
       const stakingVault2Impl = await ethers.deployContract("StakingVault__MockForVaultHub", [
+        vaultHub,
         await depositContract.getAddress(),
       ]);
       const vault2Factory = await ethers.deployContract("VaultFactory__MockForVaultHub", [

@@ -27,7 +27,7 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
-    function initialize(address _owner, address _operator, address _vaultHub, address _depositor, bytes calldata _params) external;
+    function initialize(address _owner, address _operator, address _depositor, bytes calldata _params) external;
     function version() external pure returns (uint64);
     function owner() external view returns (address);
     function getInitializedVersion() external view returns (uint64);
@@ -56,5 +56,9 @@ interface IStakingVault {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable;
+    function attachVaultHubAndDepositor() external;
+    function detachVaultHubAndDepositor() external;
+    function vaultHubAttached() external view returns (bool);
+    function ossifyStakingVault() external;
     function isOssified() external view returns (bool);
 }

@@ -19,7 +19,10 @@ export async function main() {
   const wethContract = state.delegation.deployParameters.wethContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [depositContract]);
+  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
+    vaultHubAddress,
+    depositContract,
+  ]);
   const impAddress = await imp.getAddress();
 
   // Deploy Delegation implementation contract
@@ -44,7 +47,6 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     beaconAddress,
     delegationAddress,
-    vaultHubAddress,
     predepositGuaranteeAddress,
   ]);
   console.log("Factory address", await factory.getAddress());

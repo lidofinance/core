@@ -49,10 +49,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
-        /// @notice if true, vault is waiting to be connected to the hub
-        bool pendingConnect;
         /// @notice unused gap in the slot 2
-        /// uint96 _unused_gap_;
+        /// uint104 _unused_gap_;
     }
 
     struct VaultInfo {
@@ -122,7 +120,7 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -252,8 +250,9 @@ contract VaultHub is PausableUntilWithRoles {
             revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
         if (vaultsCount() == CONNECTED_VAULTS_LIMIT) revert TooManyVaults();
-        if (IStakingVault(_vault).vaultHub() != address(this)) revert InvalidVaultHubAddress(_vault, IStakingVault(_vault).vaultHub());
-        if (IStakingVault(_vault).isOssified()) revert VaultIsOssified(_vault);
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (vault_.isOssified()) revert VaultIsOssified(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -262,8 +261,13 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
-        if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
+        if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
+            revert VaultDepositorNotAllowed(vault_.depositor());
+
+        if (vault_.locked() < CONNECT_DEPOSIT || _vault.balance < CONNECT_DEPOSIT)
+            revert VaultInsufficientLocked(_vault, vault_.locked(), CONNECT_DEPOSIT);
+
+        vault_.report(_vault.balance, vault_.inOutDelta(), vault_.locked());
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
@@ -272,8 +276,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false, // pendingDisconnect
-            true // pendingConnect
+            false // pendingDisconnect
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -347,6 +350,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 minLocked = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+
         if (minLocked > vault_.locked()) {
             revert VaultInsufficientLocked(_vault, vault_.locked(), minLocked);
         }
@@ -587,15 +591,6 @@ contract VaultHub is PausableUntilWithRoles {
 
             if (socket.pendingDisconnect) continue; // we skip disconnected vaults
 
-            if (socket.pendingConnect) {
-                if (_locked[i] < CONNECT_DEPOSIT) {
-                    continue;
-                }
-
-                socket.pendingConnect = false;
-                emit VaultConnectionConfirmed(socket.vault);
-            }
-
             uint256 treasuryFeeShares = _treasureFeeShares[i];
             if (treasuryFeeShares > 0) {
                 socket.sharesMinted += uint96(treasuryFeeShares);
@@ -609,6 +604,9 @@ contract VaultHub is PausableUntilWithRoles {
         for (uint256 i = 1; i < length; i++) {
             VaultSocket memory socket = $.sockets[i];
             if (socket.pendingDisconnect) {
+                // detach vault from the hub
+                IStakingVault(socket.vault).detachVaultHubAndDepositor();
+
                 // remove disconnected vault from the list
                 VaultSocket memory lastSocket = $.sockets[length - 1];
                 $.sockets[i] = lastSocket;
@@ -632,11 +630,8 @@ contract VaultHub is PausableUntilWithRoles {
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 index = $.vaultIndex[_vault];
-        if (index == 0) revert NotConnectedToHub(_vault);
-        VaultSocket storage socket = $.sockets[index];
-        if (socket.pendingDisconnect) revert NotConnectedToHub(_vault);
-        if (socket.pendingConnect) revert VaultPendingConnection(_vault);
-        return socket;
+        if (index == 0 || $.sockets[index].pendingDisconnect) revert NotConnectedToHub(_vault);
+        return $.sockets[index];
     }
 
     function _getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
@@ -671,7 +666,6 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-    event VaultConnectionConfirmed(address indexed vault);
     error StETHMintFailed(address vault);
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
@@ -697,7 +691,5 @@ contract VaultHub is PausableUntilWithRoles {
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
-    error InvalidVaultHubAddress(address vault, address vaultHub);
     error VaultIsOssified(address vault);
-    error VaultPendingConnection(address vault);
 }
