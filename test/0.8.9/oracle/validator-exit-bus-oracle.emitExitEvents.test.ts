@@ -67,8 +67,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
-
-    oracleVersion = await oracle.getContractVersion();
   };
 
   before(async () => {
