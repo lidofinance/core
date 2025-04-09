@@ -356,13 +356,19 @@ describe("Delegation.sol", () => {
       );
     });
 
+    it("revert for zero increase", async () => {
+      await expect(
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(0n),
+      ).to.be.revertedWithCustomError(delegation, "SameAdjustment");
+    });
+
     it("reverts if manually adjust more than limit", async () => {
       const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
       const increase = ether("1");
 
       await expect(
         delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT + 1n),
-      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
 
       expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
 
@@ -371,7 +377,7 @@ describe("Delegation.sol", () => {
 
       await expect(
         delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT),
-      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
 
       const increase2 = LIMIT - increase;
       await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase2);
@@ -379,7 +385,7 @@ describe("Delegation.sol", () => {
 
       await expect(
         delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(1n),
-      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
     });
 
     it("adjuster can increaseAccruedRewardsAdjustment", async () => {
@@ -466,7 +472,7 @@ describe("Delegation.sol", () => {
 
       await expect(
         delegation.connect(vaultOwner).setAccruedRewardsAdjustment(LIMIT + 1n, current),
-      ).to.be.revertedWithCustomError(delegation, "IncreaseOverLimit");
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
     });
 
     it("reverts vote if AccruedRewardsAdjustment changes", async () => {

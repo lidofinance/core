@@ -189,7 +189,7 @@ contract Delegation is Dashboard {
     ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
         uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
-        if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreaseOverLimit();
+        if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
         _setAccruedRewardsAdjustment(newAdjustment);
     }
 
@@ -205,7 +205,7 @@ contract Delegation is Dashboard {
     ) external onlyConfirmed(_confirmingRoles()) {
         if (accruedRewardsAdjustment != _currentAdjustment)
             revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
-        if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreaseOverLimit();
+        if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
         _setAccruedRewardsAdjustment(_newAdjustment);
     }
 
@@ -353,7 +353,7 @@ contract Delegation is Dashboard {
     /**
      * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.
      */
-    error IncreaseOverLimit();
+    error IncreasedOverLimit();
 
     /**
      * @dev Error emitted when the adjustment setting vote is not valid due to changed state
