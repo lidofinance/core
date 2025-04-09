@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
@@ -25,7 +26,7 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-describe("ValidatorsExitBusOracle.sol:happyPath", () => {
+describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -39,7 +40,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
 
   const LAST_PROCESSING_REF_SLOT = 1;
 
@@ -99,7 +99,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   };
 
   before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+    [admin, member1, member2, member3] = await ethers.getSigners();
 
     await deploy();
   });
@@ -142,6 +142,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
       { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
     ];
 
     reportFields = {
@@ -181,38 +182,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
   });
 
-  it("non-member cannot submit the data", async () => {
-    await expect(oracle.connect(stranger).submitReportData(reportFields, oracleVersion)).to.be.revertedWithCustomError(
-      oracle,
-      "SenderNotAllowed",
-    );
-  });
-
-  it("the data cannot be submitted passing a different contract version", async () => {
-    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion - 1n))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-      .withArgs(oracleVersion, oracleVersion - 1n);
-  });
-
-  it("the data cannot be submitted passing a different consensus version", async () => {
-    const invalidReport = { ...reportFields, consensusVersion: CONSENSUS_VERSION + 1n };
-    await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedConsensusVersion")
-      .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION + 1n);
-  });
-
-  it("a data not matching the consensus hash cannot be submitted", async () => {
-    const invalidReport = {
-      ...reportFields,
-      requestsCount: reportFields.requestsCount + 1,
-    };
-    const invalidReportHash = calcValidatorsExitBusReportDataHash(invalidReport);
-
-    await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
-      .withArgs(reportHash, invalidReportHash);
-  });
-
   it("a committee member submits the report data, exit requests are emitted", async () => {
     const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
@@ -242,17 +211,69 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   });
 
   it("last requested validator indices are updated", async () => {
-    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n]);
-    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n]);
+    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n, 3n]);
+    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n, 3n]);
 
-    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n]);
-    expect([...indices2]).to.have.ordered.members([1n, -1n, -1n]);
+    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n, -1n]);
+    expect([...indices2]).to.have.ordered.members([3n, -1n, -1n, -1n]);
   });
 
-  it("no data can be submitted for the same reference slot again", async () => {
-    await expect(oracle.connect(member2).submitReportData(reportFields, oracleVersion)).to.be.revertedWithCustomError(
-      oracle,
-      "RefSlotAlreadyProcessing",
+  it("someone submitted exit report data and triggered exit", async () => {
+    const tx = await oracle.triggerExits(
+      { data: reportFields.data, dataFormat: reportFields.dataFormat },
+      [0, 1, 2, 3],
+      { value: 4 },
     );
+
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs("0x" + concatenatedPubKeys);
+  });
+
+  it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
+    const tx = await oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
+      value: 10,
+    });
+
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs("0x" + concatenatedPubKeys);
+
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
+  });
+
+  it("Not enough fee", async () => {
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1], {
+        value: 1,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "InsufficientPayment")
+      .withArgs(1, 2, 1);
+  });
+
+  it("Should trigger withdrawals only for validators that were requested for voluntary exit by trusted entities earlier", async () => {
+    await expect(
+      oracle.triggerExits(
+        {
+          data: "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
+          dataFormat: reportFields.dataFormat,
+        },
+        [0],
+        { value: 2 },
+      ),
+    ).to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted");
+  });
+
+  it("Requested index out of range", async () => {
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], { value: 2 }),
+    )
+      .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
+      .withArgs(5, 4);
   });
 });

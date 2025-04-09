@@ -1,7 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  ReportProcessor__Mock,
+  ValidatorsExitBusOracle,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -34,6 +39,10 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ad
   return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
 }
 
+async function deployWithdrawalVault() {
+  return await ethers.deployContract("WithdrawalVault__MockForVebo");
+}
+
 export async function deployVEBO(
   admin: string,
   {
@@ -58,9 +67,12 @@ export async function deployVEBO(
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
+  const withdrawalVault = await deployWithdrawalVault();
+
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: await ao.getAddress(),
+    withdrawalVault,
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
@@ -77,6 +89,7 @@ export async function deployVEBO(
     oracle,
     consensus,
     oracleReportSanityChecker,
+    withdrawalVault,
   };
 }
 
@@ -84,6 +97,7 @@ interface VEBOConfig {
   admin: string;
   oracle: ValidatorsExitBusOracle;
   consensus: HashConsensus__Harness;
+  withdrawalVault: WithdrawalVault__MockForVebo;
   dataSubmitter?: string;
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
@@ -100,6 +114,8 @@ export async function initVEBO({
   resumeAfterDeploy = false,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
+
+  await oracle.finalizeUpgrade_v2();
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
