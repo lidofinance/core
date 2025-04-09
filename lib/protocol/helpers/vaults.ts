@@ -29,6 +29,7 @@ export type VaultRoles = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
+  lidoVaultHubDeauthorizer: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
 };
 
@@ -62,7 +63,7 @@ export async function createVaultWithDelegation(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDelegation> {
-  const defaultRoles = await getRandomSigners(13);
+  const defaultRoles = await getRandomSigners(14);
 
   const [
     assetRecoverer,
@@ -77,6 +78,7 @@ export async function createVaultWithDelegation(
     validatorExitRequester,
     validatorWithdrawalTriggerer,
     disconnecter,
+    lidoVaultHubDeauthorizer,
     nodeOperatorFeeClaimer,
   ] = defaultRoles;
 
@@ -93,6 +95,7 @@ export async function createVaultWithDelegation(
     validatorExitRequester: rolesOverrides.validatorExitRequester ?? validatorExitRequester,
     validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
     disconnecter: rolesOverrides.disconnecter ?? disconnecter,
+    lidoVaultHubDeauthorizer: rolesOverrides.lidoVaultHubDeauthorizer ?? lidoVaultHubDeauthorizer,
     nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
   };
 
@@ -114,6 +117,7 @@ export async function createVaultWithDelegation(
       validatorExitRequesters: [roles.validatorExitRequester],
       validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
       disconnecters: [roles.disconnecter],
+      lidoVaultHubDeauthorizers: [roles.lidoVaultHubDeauthorizer],
       nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
     },
     "0x",

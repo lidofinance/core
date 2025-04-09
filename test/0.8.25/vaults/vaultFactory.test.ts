@@ -137,6 +137,7 @@ describe("VaultFactory.sol", () => {
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
+      lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
       assetRecoverer: await vaultOwner1.getAddress(),
     };
   });

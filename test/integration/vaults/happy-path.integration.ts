@@ -54,7 +54,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let curator: HardhatEthersSigner;
-
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
@@ -182,6 +181,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         validatorExitRequesters: [curator],
         validatorWithdrawalTriggerers: [curator],
         disconnecters: [curator],
+        lidoVaultHubDeauthorizers: [curator],
         nodeOperatorFeeClaimers: [nodeOperator],
       },
       "0x",

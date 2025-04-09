@@ -43,6 +43,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     validatorExitRequesters: HardhatEthersSigner,
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
+    lidoVaultHubDeauthorizers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -67,6 +68,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       validatorExitRequesters,
       validatorWithdrawalTriggerers,
       disconnecters,
+      lidoVaultHubDeauthorizers,
       nodeOperatorFeeClaimers,
       stranger,
     ] = allRoles;
@@ -104,6 +106,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [validatorExitRequesters],
           validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
           disconnecters: [disconnecters],
+          lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizers],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
         },
         "0x",
@@ -498,6 +501,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [],
           validatorWithdrawalTriggerers: [],
           disconnecters: [],
+          lidoVaultHubDeauthorizers: [],
           nodeOperatorFeeClaimers: [],
         },
         "0x",

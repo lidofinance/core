@@ -480,6 +480,13 @@ contract Dashboard is Permissions {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
+    /**
+     * @notice Deauthorizes the Lido Vault Hub from managing the staking vault.
+     */
+    function deauthorizeLidoVaultHub() external {
+        _deauthorizeLidoVaultHub();
+    }
+
     // ==================== Internal Functions ====================
 
     /**
