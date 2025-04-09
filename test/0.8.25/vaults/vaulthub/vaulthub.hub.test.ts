@@ -30,8 +30,6 @@ const TREASURY_FEE_BP = 5_00n;
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
 
-const VAULTS_CONNECTED_VAULTS_LIMIT = 5; // Low limit to test the overflow
-
 describe("VaultHub.sol:hub", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -52,14 +50,13 @@ describe("VaultHub.sol:hub", () => {
 
   async function createVault(factory: VaultFactory__MockForVaultHub) {
     const vaultCreationTx = (await factory
-      .createVault(await user.getAddress(), await user.getAddress())
+      .createVault(user, user, predepositGuarantee)
       .then((tx) => tx.wait())) as ContractTransactionReceipt;
 
     const events = findEvents(vaultCreationTx, "VaultCreated");
     const vaultCreatedEvent = events[0];
 
-    const vault = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
-    return vault;
+    return await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
   }
 
   async function createAndConnectVault(
@@ -84,6 +81,24 @@ describe("VaultHub.sol:hub", () => {
         options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
         options?.treasuryFeeBP ?? TREASURY_FEE_BP,
       );
+
+    const count = await vaultHub.vaultsCount();
+    const valuations = [];
+    const inOutDeltas = [];
+    const locked = [];
+    const treasuryFees = [];
+
+    for (let i = 0; i < count; i++) {
+      const vaultAddr = await vaultHub.vault(i);
+      const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
+      valuations.push(await vaultContract.valuation());
+      inOutDeltas.push(await vaultContract.inOutDelta());
+      locked.push(await vaultContract.locked());
+      treasuryFees.push(0n);
+    }
+
+    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
 
     return vault;
   }
@@ -118,7 +133,6 @@ describe("VaultHub.sol:hub", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -135,11 +149,7 @@ describe("VaultHub.sol:hub", () => {
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
 
-    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
-      await vaultHub.getAddress(),
-      predepositGuarantee,
-      depositContract,
-    ]);
+    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
     const vault = await createVault(vaultFactory);
@@ -264,6 +274,64 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
       expect(vaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
       expect(vaultSocket.pendingDisconnect).to.equal(false);
+    });
+  });
+
+  context("batchVaultsInfo", () => {
+    it("returns the vault info", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaults = await vaultHub.batchVaultsInfo(0n, 2n);
+
+      expect(vaults.length).to.equal(2);
+
+      const vaultInfo = vaults[0];
+      expect(vaultInfo.vault).to.equal(vaultAddress1);
+      expect(vaultInfo.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo.inOutDelta).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
+
+      const vaultInfo2 = vaults[1];
+      expect(vaultInfo2.vault).to.equal(vaultAddress2);
+      expect(vaultInfo2.balance).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo2.inOutDelta).to.equal(CONNECT_DEPOSIT);
+      expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
+    });
+
+    it("returns the vault info with pagination", async () => {
+      const vault1 = await createAndConnectVault(vaultFactory);
+      const vault2 = await createAndConnectVault(vaultFactory);
+      const vault3 = await createAndConnectVault(vaultFactory);
+      const vaultAddress1 = await vault1.getAddress();
+      const vaultAddress2 = await vault2.getAddress();
+      const vaultAddress3 = await vault3.getAddress();
+
+      const vaults1 = await vaultHub.batchVaultsInfo(0n, 1n);
+      expect(vaults1.length).to.equal(1);
+      expect(vaults1[0].vault).to.equal(vaultAddress1);
+
+      const vaults2 = await vaultHub.batchVaultsInfo(1n, 1n);
+      expect(vaults2.length).to.equal(1);
+      expect(vaults2[0].vault).to.equal(vaultAddress2);
+
+      const vaults3 = await vaultHub.batchVaultsInfo(0n, 4n);
+      expect(vaults3.length).to.equal(3);
+      expect(vaults3[0].vault).to.equal(vaultAddress1);
+      expect(vaults3[1].vault).to.equal(vaultAddress2);
+      expect(vaults3[2].vault).to.equal(vaultAddress3);
+
+      const vaults4 = await vaultHub.batchVaultsInfo(1n, 3n);
+      expect(vaults4.length).to.equal(2);
+      expect(vaults4[0].vault).to.equal(vaultAddress2);
+      expect(vaults4[1].vault).to.equal(vaultAddress3);
+
+      const vaults5 = await vaultHub.batchVaultsInfo(0n, 0n);
+      expect(vaults5.length).to.equal(0);
+
+      const vaults6 = await vaultHub.batchVaultsInfo(3n, 1n);
+      expect(vaults6.length).to.equal(0);
     });
   });
 
@@ -658,19 +726,6 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.revertedWithCustomError(vaultHub, "TreasuryFeeTooHigh");
     });
 
-    it("reverts if max vault size is exceeded", async () => {
-      const vaultsCount = await vaultHub.vaultsCount();
-      for (let i = vaultsCount; i < VAULTS_CONNECTED_VAULTS_LIMIT; i++) {
-        await createAndConnectVault(vaultFactory);
-      }
-
-      await expect(
-        vaultHub
-          .connect(user)
-          .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "TooManyVaults");
-    });
-
     it("reverts if vault is already connected", async () => {
       const connectedVault = await createAndConnectVault(vaultFactory);
       const connectedVaultAddress = await connectedVault.getAddress();
@@ -690,8 +745,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if proxy codehash is not added", async () => {
       const stakingVault2Impl = await ethers.deployContract("StakingVault__MockForVaultHub", [
-        await vaultHub.getAddress(),
-        await predepositGuarantee.getAddress(),
+        vaultHub,
         await depositContract.getAddress(),
       ]);
       const vault2Factory = await ethers.deployContract("VaultFactory__MockForVaultHub", [

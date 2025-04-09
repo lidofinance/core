@@ -18,7 +18,7 @@
     "format": "prettier . --write",
     "test": "hardhat test test/**/*.test.ts --parallel",
     "test:forge": "forge test",
-    "test:coverage": "hardhat coverage",
+    "test:coverage": "COVERAGE=true hardhat coverage",
     "test:sequential": "hardhat test test/**/*.test.ts",
     "test:trace": "hardhat test test/**/*.test.ts --trace --disabletracer",
     "test:fulltrace": "hardhat test test/**/*.test.ts --fulltrace --disabletracer",
@@ -49,6 +49,8 @@
     ]
   },
   "devDependencies": {
+    "@chainsafe/blst": "^2.2.0",
+    "@chainsafe/ssz": "^1.0.2",
     "@commitlint/cli": "19.8.0",
     "@commitlint/config-conventional": "19.8.0",
     "@eslint/compat": "1.2.7",

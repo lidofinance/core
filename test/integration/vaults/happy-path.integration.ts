@@ -1,16 +1,19 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, randomBytes, TransactionResponse, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
 
 import {
-  computeDepositDataRoot,
   days,
+  deployBLSPrecompileStubs,
   ether,
+  generatePostDeposit,
+  generatePredeposit,
   generateValidator,
   impersonate,
   log,
@@ -78,6 +81,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
+
+    // TODO: remove stubs when hardhat fork supports BLS precompiles
+    await deployBLSPrecompileStubs();
 
     snapshot = await Snapshot.take();
   });
@@ -177,6 +183,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         validatorWithdrawalTriggerers: [curator],
         disconnecters: [curator],
         nodeOperatorFeeClaimers: [nodeOperator],
+        nodeOperatorRewardAdjusters: [nodeOperator],
+        unguaranteedBeaconChainDepositors: [curator],
+        unknownValidatorProvers: [curator],
+        pdgCompensators: [curator],
       },
       "0x",
     );
@@ -248,33 +258,32 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const validators: {
       container: SSZHelpers.ValidatorStruct;
+      blsPrivateKey: SecretKey;
       index: number;
       proof: string[];
     }[] = [];
 
-    // TODO: BLS signature support
     for (let i = 0; i < keysToAdd; i++) {
-      validators.push({ container: generateValidator(withdrawalCredentials), index: 0, proof: [] });
+      validators.push({ ...generateValidator(withdrawalCredentials), index: 0, proof: [] });
     }
 
-    const predeposits = validators.map((validator) => {
-      const pubkey = hexlify(validator.container.pubkey);
-      const signature = hexlify(randomBytes(96));
-      return {
-        pubkey: pubkey,
-        signature: signature,
-        amount: predepositAmount,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, predepositAmount),
-      };
-    });
+    const predeposits = await Promise.all(
+      validators.map((validator) => {
+        return generatePredeposit(validator);
+      }),
+    );
 
-    const pdg = await ctx.contracts.predepositGuarantee.connect(nodeOperator);
+    const pdg = ctx.contracts.predepositGuarantee.connect(nodeOperator);
 
     // top up PDG balance
     await pdg.topUpNodeOperatorBalance(nodeOperator, { value: ether(VALIDATORS_PER_VAULT.toString()) });
 
     // predeposit validators
-    await pdg.predeposit(stakingVault, predeposits);
+    await pdg.predeposit(
+      stakingVault,
+      predeposits.map((p) => p.deposit),
+      predeposits.map((p) => p.depositY),
+    );
 
     const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
 
@@ -301,15 +310,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
     const postdeposits = validators.map((validator) => {
-      const pubkey = hexlify(validator.container.pubkey);
-      const signature = hexlify(randomBytes(96));
-
-      return {
-        pubkey,
-        signature,
-        amount: postDepositAmount,
-        depositDataRoot: computeDepositDataRoot(withdrawalCredentials, pubkey, signature, postDepositAmount),
-      };
+      return generatePostDeposit(validator.container, postDepositAmount);
     });
 
     await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
@@ -323,7 +324,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Curator to mint max stETH", async () => {
-    const { lido } = ctx.contracts;
+    const { lido, locator, vaultHub } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -336,6 +337,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       "Max shares": stakingVaultMaxMintingShares,
     });
 
+    //report
+    const valuations = [await stakingVault.valuation()];
+    const inOutDeltas = [await stakingVault.inOutDelta()];
+    const locked = [await stakingVault.locked()];
+    const treasuryFees = [0n];
+
+    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+
+    // mint
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 
@@ -377,9 +388,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
     expect(socket.sharesMinted).to.be.gt(stakingVaultMaxMintingShares);
-
-    const errorReportingEvent = ctx.getEvents(reportTxReceipt, "OnReportFailed", [stakingVault.interface]);
-    expect(errorReportingEvent.length).to.equal(0n);
 
     const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
     expect(vaultReportedEvent.length).to.equal(1n);

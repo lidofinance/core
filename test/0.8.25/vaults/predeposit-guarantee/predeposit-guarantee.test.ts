@@ -7,10 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForStakingVault,
   EthRejector,
+  IPredepositGuarantee,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
-  SSZHelpers,
   SSZMerkleTree,
   StakingVault,
   StakingVault__factory,
@@ -18,10 +18,10 @@ import {
   VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
-import { CLProofVerifier } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
   addressToWC,
+  deployBLSPrecompileStubs,
   ether,
   findEvents,
   generateBeaconHeader,
@@ -31,6 +31,7 @@ import {
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
+  Validator,
 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
@@ -60,12 +61,12 @@ describe("PredepositGuarantee.sol", () => {
 
   let originalState: string;
 
-  async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
-      vaultHub,
-      pdg,
-      await depositContract.getAddress(),
-    ]);
+  async function deployStakingVault(
+    owner: HardhatEthersSigner,
+    operator: HardhatEthersSigner,
+    vaultHub_: VaultHub__MockForStakingVault,
+  ): Promise<StakingVault> {
+    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract]);
 
     // deploying factory/beacon
     const vaultFactory_: VaultFactory__MockForStakingVault = await ethers.deployContract(
@@ -74,7 +75,7 @@ describe("PredepositGuarantee.sol", () => {
     );
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
@@ -88,6 +89,8 @@ describe("PredepositGuarantee.sol", () => {
 
   before(async () => {
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
+
+    await deployBLSPrecompileStubs();
 
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
@@ -116,10 +119,10 @@ describe("PredepositGuarantee.sol", () => {
     // PDG dependants
     locator = await deployLidoLocator({ predepositGuarantee: pdg });
     expect(await locator.predepositGuarantee()).to.equal(await pdg.getAddress());
-    vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault");
-    stakingVault = await deployStakingVault(vaultOwner, vaultOperator);
-    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract, pdg]);
-    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, "0x00");
+    vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault", [locator]);
+    stakingVault = await deployStakingVault(vaultOwner, vaultOperator, vaultHub);
+    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
+    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, pdg, "0x00");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -183,23 +186,23 @@ describe("PredepositGuarantee.sol", () => {
       const validator = generateValidator(vaultWC);
 
       // NO runs predeposit for the vault
-      const predepositData = generatePredeposit(validator);
-      const predepositTX = pdg.predeposit(stakingVault, [predepositData]);
+      const { deposit, depositY } = await generatePredeposit(validator);
+      const predepositTX = pdg.predeposit(stakingVault, [deposit], [depositY]);
 
       await expect(predepositTX)
         .to.emit(pdg, "ValidatorPreDeposited")
-        .withArgs(predepositData.pubkey, vaultOperator, stakingVault, vaultWC)
+        .withArgs(deposit.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(pdg, 1, predepositData.amount)
+        .withArgs(pdg, 1, deposit.amount)
         .to.emit(depositContract, "DepositEvent")
-        .withArgs(predepositData.pubkey, vaultWC, predepositData.signature, predepositData.depositDataRoot);
+        .withArgs(deposit.pubkey, vaultWC, deposit.signature, deposit.depositDataRoot);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
       expect(operatorBondLocked).to.equal(ether("1"));
 
       // Validator is added to CL merkle tree
-      await sszMerkleTree.addValidatorLeaf(validator);
+      await sszMerkleTree.addValidatorLeaf(validator.container);
       const validatorLeafIndex = firstValidatorLeafIndex + 1n;
       const validatorIndex = 1n;
 
@@ -212,21 +215,21 @@ describe("PredepositGuarantee.sol", () => {
       const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
       // NO collects validator proof
-      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+      const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container);
       const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       // NO posts proof and triggers deposit to total of 32 ether
-      const postDepositData = generatePostDeposit(validator, ether("31"));
+      const postDepositData = generatePostDeposit(validator.container, ether("31"));
       const proveAndDepositTx = pdg.proveAndDeposit(
-        [{ pubkey: validator.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
+        [{ pubkey: validator.container.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
         [postDepositData],
         stakingVault,
       );
 
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
-        .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC)
+        .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(pdg, 1, postDepositData.amount)
         .to.emit(depositContract, "DepositEvent")
@@ -262,7 +265,9 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts when setting guarantor with in-flight deposits", async () => {
         await stakingVault.fund({ value: ether("32") });
-        await pdg.predeposit(stakingVault, [generatePredeposit(generateValidator())], { value: ether("1") });
+        const validator = generateValidator();
+        const predeposit = await generatePredeposit(validator);
+        await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY], { value: ether("1") });
 
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([ether("1"), ether("1")]);
 
@@ -507,7 +512,8 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(0n, balance);
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
-        await pdg.predeposit(stakingVault, [generatePredeposit(generateValidator())]);
+        const predeposit = await generatePredeposit(generateValidator());
+        await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, stranger))
           .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
@@ -560,35 +566,39 @@ describe("PredepositGuarantee.sol", () => {
     context("predeposit", () => {
       it("reverts when the 'predeposit' got empty deposits", async () => {
         // NO runs predeposit for the vault without predepositData
-        await expect(pdg.connect(stranger).predeposit(stakingVault, [])).to.be.revertedWithCustomError(
+        await expect(pdg.connect(stranger).predeposit(stakingVault, [], [])).to.be.revertedWithCustomError(
           pdg,
           "EmptyDeposits",
         );
       });
 
       it("revert when not NO tries to predeposit", async () => {
-        const predeposit = generatePredeposit(generateValidator());
-        await expect(pdg.connect(vaultOwner).predeposit(stakingVault, [predeposit])).to.be.revertedWithCustomError(
-          pdg,
-          "NotNodeOperator",
-        );
-        await expect(pdg.connect(stranger).predeposit(stakingVault, [predeposit])).to.be.revertedWithCustomError(
-          pdg,
-          "NotNodeOperator",
-        );
+        const { deposit, depositY } = await generatePredeposit(generateValidator());
+        await expect(
+          pdg.connect(vaultOwner).predeposit(stakingVault, [deposit], [depositY]),
+        ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
+        await expect(
+          pdg.connect(stranger).predeposit(stakingVault, [deposit], [depositY]),
+        ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
       });
 
       it("reverts when using locked balance", async () => {
-        const predeposit = generatePredeposit(generateValidator());
-        await expect(pdg.predeposit(stakingVault, [predeposit]))
+        const predeposit = await generatePredeposit(generateValidator());
+        await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
           .withArgs(0n, ether("1"));
 
-        const predeposit2 = generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator());
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
 
-        await expect(pdg.predeposit(stakingVault, [predeposit, predeposit2]))
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predeposit.deposit, predeposit2.deposit],
+            [predeposit.depositY, predeposit2.depositY],
+          ),
+        )
           .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
           .withArgs(ether("1"), ether("2"));
       });
@@ -596,33 +606,37 @@ describe("PredepositGuarantee.sol", () => {
       it("reverts on re-use of validator", async () => {
         await stakingVault.fund({ value: ether("32") });
         const validator = generateValidator();
-        const predeposit = generatePredeposit(validator);
+        const predeposit = await generatePredeposit(validator);
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
         const PREDEPOSITED_STAGE = 1n;
 
-        await pdg.predeposit(stakingVault, [predeposit]);
-        const validatorStatus = await pdg.validatorStatus(validator.pubkey);
+        await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
+        const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
         expect(validatorStatus.stage).to.equal(PREDEPOSITED_STAGE);
 
-        const predeposit2 = generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator());
 
-        await expect(pdg.predeposit(stakingVault, [predeposit2, predeposit]))
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predeposit2.deposit, predeposit.deposit],
+            [predeposit2.depositY, predeposit.depositY],
+          ),
+        )
           .to.be.revertedWithCustomError(pdg, "ValidatorNotNew")
-          .withArgs(validator.pubkey, PREDEPOSITED_STAGE);
+          .withArgs(validator.container.pubkey, PREDEPOSITED_STAGE);
       });
 
       it("reverts on invalid predeposit amount", async () => {
         await stakingVault.fund({ value: ether("32") });
         const validator = generateValidator();
-        const predeposit = generatePredeposit(validator);
+        const predeposit = await generatePredeposit(validator, ether("2"));
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
-        predeposit.amount = ether("2");
-
-        await expect(pdg.predeposit(stakingVault, [predeposit]))
+        await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "PredepositAmountInvalid")
-          .withArgs(validator.pubkey, predeposit.amount);
+          .withArgs(validator.container.pubkey, predeposit.deposit.amount);
       });
 
       it("reverts on top up with predeposit if has guarantor", async () => {
@@ -639,11 +653,10 @@ describe("PredepositGuarantee.sol", () => {
         const validator = generateValidator(vaultWC);
 
         // NO runs predeposit for the vault
-        const predepositData = generatePredeposit(validator);
-        await expect(pdg.predeposit(stakingVault, [predepositData], { value: balance })).to.revertedWithCustomError(
-          pdg,
-          "NotGuarantor",
-        );
+        const predepositData = await generatePredeposit(validator);
+        await expect(
+          pdg.predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY], { value: balance }),
+        ).to.revertedWithCustomError(pdg, "NotGuarantor");
       });
 
       it("allows NO as self-guarantor to top up on predeposit", async () => {
@@ -661,8 +674,10 @@ describe("PredepositGuarantee.sol", () => {
         expect(locked).to.equal(0n);
 
         // NO runs predeposit for the vault
-        const predepositData = generatePredeposit(validator);
-        const predepositTX = pdg.predeposit(stakingVault, [predepositData], { value: balance });
+        const predeposit = await generatePredeposit(validator);
+        const predepositTX = pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY], {
+          value: balance,
+        });
 
         await expect(predepositTX).to.emit(pdg, "BalanceToppedUp").withArgs(vaultOperator, vaultOperator, balance);
 
@@ -678,16 +693,21 @@ describe("PredepositGuarantee.sol", () => {
         const vaultWC = await stakingVault.withdrawalCredentials();
 
         const validators = Array.from({ length: Number(batchCount) }, () => generateValidator(vaultWC));
-        const predeposits = validators.map((validator) => generatePredeposit(validator));
+        const predeposits = await Promise.all(validators.map((validator) => generatePredeposit(validator)));
 
-        const predepositTX = await pdg.predeposit(stakingVault, predeposits, { value: totalBalance });
+        const predepositTX = await pdg.predeposit(
+          stakingVault,
+          predeposits.map((p) => p.deposit),
+          predeposits.map((p) => p.depositY),
+          { value: totalBalance },
+        );
 
         await Promise.all(
           validators.map(async (validator) => {
             await expect(predepositTX)
               .to.emit(pdg, "ValidatorPreDeposited")
-              .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC);
-            const validatorStatus = await pdg.validatorStatus(validator.pubkey);
+              .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC);
+            const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
             expect(validatorStatus.stage).to.equal(1n);
             expect(validatorStatus.nodeOperator).to.equal(vaultOperator);
             expect(validatorStatus.stakingVault).to.equal(stakingVault);
@@ -718,17 +738,17 @@ describe("PredepositGuarantee.sol", () => {
 
         for (let version = 0n; version < 5n; version++) {
           wc = `0x0${version.toString()}` + wc.slice(4);
-          const predeposit = generatePredeposit(generateValidator(wc));
+          const predeposit = await generatePredeposit(generateValidator(wc));
           await wcMockStakingVault.mock__setWithdrawalCredentials(wc);
 
           const shouldRevert = version < min || version > max;
 
           if (shouldRevert) {
-            await expect(pdg.predeposit(wcMockStakingVault, [predeposit]))
+            await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
               .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsInvalidVersion")
               .withArgs(version);
           } else {
-            await pdg.predeposit(wcMockStakingVault, [predeposit]);
+            await pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]);
           }
         }
       });
@@ -738,8 +758,8 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("200") });
         wc = wc.slice(0, 4) + "ff" + wc.slice(6);
         await wcMockStakingVault.mock__setWithdrawalCredentials(wc);
-        const predeposit = generatePredeposit(generateValidator(wc));
-        await expect(pdg.predeposit(wcMockStakingVault, [predeposit]))
+        const predeposit = await generatePredeposit(generateValidator(wc));
+        await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsMisformed")
           .withArgs(wc);
       });
@@ -748,8 +768,8 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("200") });
         await wcMockStakingVault.mock__setWithdrawalCredentials(addressToWC(stranger.address));
         const wc = await wcMockStakingVault.withdrawalCredentials();
-        const predeposit = generatePredeposit(generateValidator(wc));
-        await expect(pdg.predeposit(wcMockStakingVault, [predeposit]))
+        const predeposit = await generatePredeposit(generateValidator(wc));
+        await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsMismatch")
           .withArgs(await wcMockStakingVault.getAddress(), stranger.address);
       });
@@ -763,20 +783,20 @@ describe("PredepositGuarantee.sol", () => {
 
         const wc = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(wc);
-        await sszMerkleTree.addValidatorLeaf(validator);
+        await sszMerkleTree.addValidatorLeaf(validator.container);
         const validatorIndex = 1n;
         const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
         const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
         const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
         const proof = [
-          ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validator)).proof,
+          ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container)).proof,
           ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + validatorIndex)),
           ...beaconProof,
         ];
 
         const witness = {
           validatorIndex,
-          pubkey: validator.pubkey,
+          pubkey: validator.container.pubkey,
           proof,
           childBlockTimestamp,
         };
@@ -784,24 +804,25 @@ describe("PredepositGuarantee.sol", () => {
         // stage NONE
         await expect(pdg.proveValidatorWC(witness))
           .to.be.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validator.pubkey, 0n);
+          .withArgs(validator.container.pubkey, 0n);
 
         // stage PREDEPOSITED
-        await pdg.predeposit(stakingVault, [generatePredeposit(validator)]);
+        const { deposit, depositY } = await generatePredeposit(validator);
+        await pdg.predeposit(stakingVault, [deposit], [depositY]);
 
         const proveTx = await pdg.proveValidatorWC(witness);
         await expect(proveTx)
           .to.emit(pdg, "BalanceUnlocked")
           .withArgs(vaultOperator.address, balance, 0)
           .to.emit(pdg, "ValidatorProven")
-          .withArgs(validator.pubkey, vaultOperator.address, await stakingVault.getAddress(), wc);
+          .withArgs(validator.container.pubkey, vaultOperator.address, await stakingVault.getAddress(), wc);
 
-        expect((await pdg.validatorStatus(validator.pubkey)).stage).to.equal(2n);
+        expect((await pdg.validatorStatus(validator.container.pubkey)).stage).to.equal(2n);
 
         // stage PROVEN
         await expect(pdg.proveValidatorWC(witness))
           .to.be.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validator.pubkey, 2n);
+          .withArgs(validator.container.pubkey, 2n);
       });
 
       it("allows NO to proveValidatorWC", async () => {
@@ -817,11 +838,11 @@ describe("PredepositGuarantee.sol", () => {
         const validator = generateValidator(vaultWC);
 
         // NO runs predeposit for the vault
-        const predepositData = generatePredeposit(validator);
-        await pdg.predeposit(stakingVault, [predepositData]);
+        const predepositData = await generatePredeposit(validator);
+        await pdg.predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]);
 
         // Validator is added to CL merkle tree
-        await sszMerkleTree.addValidatorLeaf(validator);
+        await sszMerkleTree.addValidatorLeaf(validator.container);
         const validatorLeafIndex = firstValidatorLeafIndex + 1n;
         const validatorIndex = 1n;
 
@@ -834,13 +855,13 @@ describe("PredepositGuarantee.sol", () => {
         const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
         // NO collects validator proof
-        const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+        const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container);
         const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
         const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
         // NO posts proof and triggers deposit to total of 32 ether
         const witness = {
-          pubkey: validator.pubkey,
+          pubkey: validator.container.pubkey,
           validatorIndex,
           childBlockTimestamp,
           proof: concatenatedProof,
@@ -852,9 +873,9 @@ describe("PredepositGuarantee.sol", () => {
           .to.emit(pdg, "BalanceUnlocked")
           .withArgs(vaultOperator, ether("1"), ether("0"))
           .to.emit(pdg, "ValidatorProven")
-          .withArgs(validator.pubkey, vaultOperator, stakingVault, vaultWC);
+          .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC);
 
-        const validatorStatus = await pdg.validatorStatus(validator.pubkey);
+        const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
         expect(validatorStatus.stage).to.equal(2n);
         expect(validatorStatus.stakingVault).to.equal(stakingVault);
         expect(validatorStatus.nodeOperator).to.equal(vaultOperator);
@@ -864,9 +885,9 @@ describe("PredepositGuarantee.sol", () => {
     context("depositToBeaconChain", () => {
       it("reverts for not PROVEN validator", async () => {
         const validator = generateValidator();
-        const predeposit = generatePredeposit(validator);
+        const deposit = generatePostDeposit(validator.container);
 
-        await expect(pdg.depositToBeaconChain(stakingVault, [predeposit])).to.be.revertedWithCustomError(
+        await expect(pdg.depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(
           pdg,
           "DepositToUnprovenValidator",
         );
@@ -874,16 +895,17 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts for stranger to deposit", async () => {
         const validator = generateValidator();
-        const predeposit = generatePredeposit(validator);
+        const deposit = generatePostDeposit(validator.container);
 
-        await expect(
-          pdg.connect(stranger).depositToBeaconChain(stakingVault, [predeposit]),
-        ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
+        await expect(pdg.connect(stranger).depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(
+          pdg,
+          "NotNodeOperator",
+        );
       });
 
       it("reverts to deposit someone else validators", async () => {
-        const sideStakingVault = await deployStakingVault(stranger, stranger);
-        const sameNOVault = await deployStakingVault(stranger, vaultOperator);
+        const sideStakingVault = await deployStakingVault(stranger, stranger, vaultHub);
+        const sameNOVault = await deployStakingVault(stranger, vaultOperator, vaultHub);
         const sideValidator = generateValidator(await sideStakingVault.withdrawalCredentials());
         const mainValidator = generateValidator(await stakingVault.withdrawalCredentials());
         const sameNOValidator = generateValidator(await sameNOVault.withdrawalCredentials());
@@ -898,63 +920,66 @@ describe("PredepositGuarantee.sol", () => {
         await sameNOVault.fund({ value: ether("320") });
 
         // predeposit both validators
-        await pdg.predeposit(stakingVault, [generatePredeposit(mainValidator)]);
-        await pdg.predeposit(sameNOVault, [generatePredeposit(sameNOValidator)]);
-        await pdg.connect(stranger).predeposit(sideStakingVault, [generatePredeposit(sideValidator)]);
+        let predeposit = await generatePredeposit(mainValidator);
+        await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
+        predeposit = await generatePredeposit(sameNOValidator);
+        await pdg.predeposit(sameNOVault, [predeposit.deposit], [predeposit.depositY]);
+        predeposit = await generatePredeposit(sideValidator);
+        await pdg.connect(stranger).predeposit(sideStakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         // add them to CL
-        await sszMerkleTree.addValidatorLeaf(mainValidator);
+        await sszMerkleTree.addValidatorLeaf(mainValidator.container);
         const mainValidatorIndex = 1n;
-        await sszMerkleTree.addValidatorLeaf(sideValidator);
+        await sszMerkleTree.addValidatorLeaf(sideValidator.container);
         const sideValidatorIndex = 2n;
-        await sszMerkleTree.addValidatorLeaf(sameNOValidator);
+        await sszMerkleTree.addValidatorLeaf(sameNOValidator.container);
         const sameNoValidatorIndex = 3n;
         const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
         const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
         const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
 
         // Collect proofs
-        const mainValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(mainValidator);
+        const mainValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(mainValidator.container);
         const mainStateProof = await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + mainValidatorIndex);
         const mainProof = [...mainValidatorProof.proof, ...mainStateProof, ...beaconProof];
 
-        const sideValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(sideValidator);
+        const sideValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(sideValidator.container);
         const sideStateProof = await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + sideValidatorIndex);
         const sideProof = [...sideValidatorProof.proof, ...sideStateProof, ...beaconProof];
 
-        const sameNoValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(sameNOValidator);
+        const sameNoValidatorProof = await sszMerkleTree.getValidatorPubkeyWCParentProof(sameNOValidator.container);
         const sameNoStateProof = await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + sameNoValidatorIndex);
         const sameNoProof = [...sameNoValidatorProof.proof, ...sameNoStateProof, ...beaconProof];
 
         // prove
         await pdg.proveValidatorWC({
           proof: mainProof,
-          pubkey: mainValidator.pubkey,
+          pubkey: mainValidator.container.pubkey,
           validatorIndex: mainValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
         });
 
         await pdg.proveValidatorWC({
           proof: sideProof,
-          pubkey: sideValidator.pubkey,
+          pubkey: sideValidator.container.pubkey,
           validatorIndex: sideValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
         });
 
         await pdg.proveValidatorWC({
           proof: sameNoProof,
-          pubkey: sameNOValidator.pubkey,
+          pubkey: sameNOValidator.container.pubkey,
           validatorIndex: sameNoValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
         });
 
-        expect((await pdg.validatorStatus(mainValidator.pubkey)).stage).to.deep.equal(2n);
-        expect((await pdg.validatorStatus(sideValidator.pubkey)).stage).to.deep.equal(2n);
-        expect((await pdg.validatorStatus(sameNOValidator.pubkey)).stage).to.deep.equal(2n);
+        expect((await pdg.validatorStatus(mainValidator.container.pubkey)).stage).to.deep.equal(2n);
+        expect((await pdg.validatorStatus(sideValidator.container.pubkey)).stage).to.deep.equal(2n);
+        expect((await pdg.validatorStatus(sameNOValidator.container.pubkey)).stage).to.deep.equal(2n);
 
-        const mainDeposit = generatePostDeposit(mainValidator, ether("31"));
-        const sideDeposit = generatePostDeposit(sideValidator, ether("31"));
-        const sameNoDeposit = generatePostDeposit(sameNOValidator, ether("31"));
+        const mainDeposit = generatePostDeposit(mainValidator.container, ether("31"));
+        const sideDeposit = generatePostDeposit(sideValidator.container, ether("31"));
+        const sameNoDeposit = generatePostDeposit(sameNOValidator.container, ether("31"));
 
         await expect(pdg.depositToBeaconChain(stakingVault, [mainDeposit, sideDeposit])).to.be.revertedWithCustomError(
           pdg,
@@ -982,7 +1007,7 @@ describe("PredepositGuarantee.sol", () => {
         witness = {
           validatorIndex: 1n,
           childBlockTimestamp: 1n,
-          pubkey: hexlify(generateValidator().pubkey),
+          pubkey: hexlify(generateValidator().container.pubkey),
           proof: [],
         };
 
@@ -996,7 +1021,7 @@ describe("PredepositGuarantee.sol", () => {
         const unknownValidator = generateValidator(vaultWC);
 
         // Validator is added to CL merkle tree
-        await sszMerkleTree.addValidatorLeaf(unknownValidator);
+        await sszMerkleTree.addValidatorLeaf(unknownValidator.container);
         const validatorLeafIndex = firstValidatorLeafIndex + 1n;
         const validatorIndex = 1n;
 
@@ -1009,16 +1034,16 @@ describe("PredepositGuarantee.sol", () => {
         const childBlockTimestamp = await setBeaconBlockRoot(beaconBlockMerkle.root);
 
         // NO collects validator proof
-        const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(unknownValidator);
+        const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(unknownValidator.container);
         const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
         const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
-        let validatorStatusTx = await pdg.validatorStatus(unknownValidator.pubkey);
+        let validatorStatusTx = await pdg.validatorStatus(unknownValidator.container.pubkey);
         // ValidatorStatus.stage
         expect(validatorStatusTx[0]).to.equal(0n); // 0n is NONE
 
         const witness = {
-          pubkey: unknownValidator.pubkey,
+          pubkey: unknownValidator.container.pubkey,
           validatorIndex,
           childBlockTimestamp,
           proof: concatenatedProof,
@@ -1028,9 +1053,9 @@ describe("PredepositGuarantee.sol", () => {
 
         await expect(proveUnknownValidatorTx)
           .to.emit(pdg, "ValidatorProven")
-          .withArgs(unknownValidator.pubkey, vaultOperator, stakingVault, vaultWC);
+          .withArgs(unknownValidator.container.pubkey, vaultOperator, stakingVault, vaultWC);
 
-        validatorStatusTx = await pdg.validatorStatus(unknownValidator.pubkey);
+        validatorStatusTx = await pdg.validatorStatus(unknownValidator.container.pubkey);
         // ValidatorStatus.stage
         expect(validatorStatusTx[0]).to.equal(2n); // 2n is PROVEN
 
@@ -1043,15 +1068,15 @@ describe("PredepositGuarantee.sol", () => {
 
     context("proveInvalidValidatorWC", () => {
       let invalidWC: string;
-      let invalidValidator: SSZHelpers.ValidatorStruct;
-      let invalidValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let invalidValidator: Validator;
+      let invalidValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       let validWC: string;
-      let validValidator: SSZHelpers.ValidatorStruct;
-      let validValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validValidator: Validator;
+      let validValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
-      let validNotPredepostedValidator: SSZHelpers.ValidatorStruct;
-      let validNotPredepostedValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validNotPredepostedValidator: Validator;
+      let validNotPredepostedValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });
@@ -1067,11 +1092,18 @@ describe("PredepositGuarantee.sol", () => {
         validValidator = generateValidator(validWC);
         validNotPredepostedValidator = generateValidator(validWC);
 
-        await pdg.predeposit(stakingVault, [generatePredeposit(invalidValidator), generatePredeposit(validValidator)]);
+        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        const validPredeposit = await generatePredeposit(validValidator);
 
-        await sszMerkleTree.addValidatorLeaf(invalidValidator);
-        await sszMerkleTree.addValidatorLeaf(validValidator);
-        await sszMerkleTree.addValidatorLeaf(validNotPredepostedValidator);
+        await pdg.predeposit(
+          stakingVault,
+          [invalidaPredeposit.deposit, validPredeposit.deposit],
+          [invalidaPredeposit.depositY, validPredeposit.depositY],
+        );
+
+        await sszMerkleTree.addValidatorLeaf(invalidValidator.container);
+        await sszMerkleTree.addValidatorLeaf(validValidator.container);
+        await sszMerkleTree.addValidatorLeaf(validNotPredepostedValidator.container);
         const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
         const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
         const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
@@ -1079,9 +1111,9 @@ describe("PredepositGuarantee.sol", () => {
         invalidValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 1n,
-          pubkey: invalidValidator.pubkey,
+          pubkey: invalidValidator.container.pubkey,
           proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator)).proof,
+            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 1n)),
             ...beaconProof,
           ],
@@ -1090,9 +1122,9 @@ describe("PredepositGuarantee.sol", () => {
         validValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 2n,
-          pubkey: validValidator.pubkey,
+          pubkey: validValidator.container.pubkey,
           proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator)).proof,
+            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 2n)),
             ...beaconProof,
           ],
@@ -1101,9 +1133,9 @@ describe("PredepositGuarantee.sol", () => {
         validNotPredepostedValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 3n,
-          pubkey: validNotPredepostedValidator.pubkey,
+          pubkey: validNotPredepostedValidator.container.pubkey,
           proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validNotPredepostedValidator)).proof,
+            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validNotPredepostedValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 3n)),
             ...beaconProof,
           ],
@@ -1114,10 +1146,11 @@ describe("PredepositGuarantee.sol", () => {
         // Not predeposited
         await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(validNotPredepostedValidatorWitness, validWC))
           .to.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validNotPredepostedValidator.pubkey, 0n);
+          .withArgs(validNotPredepostedValidator.container.pubkey, 0n);
 
+        const predeposit = await generatePredeposit(validNotPredepostedValidator);
         // predepsit
-        await pdg.predeposit(stakingVault, [generatePredeposit(validNotPredepostedValidator)]);
+        await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         // Predeposited but it's valid
         await expect(
@@ -1128,7 +1161,7 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.proveValidatorWC(validNotPredepostedValidatorWitness);
         await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(validNotPredepostedValidatorWitness, validWC))
           .to.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validNotPredepostedValidator.pubkey, 2n);
+          .withArgs(validNotPredepostedValidator.container.pubkey, 2n);
       });
 
       it("reverts when trying to prove valid validator", async () => {
@@ -1139,29 +1172,29 @@ describe("PredepositGuarantee.sol", () => {
 
       it("allows to prove validator as invalid", async () => {
         // predeposted
-        expect((await pdg.validatorStatus(invalidValidator.pubkey)).stage).to.equal(1n);
+        expect((await pdg.validatorStatus(invalidValidator.container.pubkey)).stage).to.equal(1n);
         const [total, locked] = await pdg.nodeOperatorBalance(vaultOperator);
 
         const proveInvalidTX = await pdg.connect(stranger).proveInvalidValidatorWC(invalidValidatorWitness, invalidWC);
         await expect(proveInvalidTX)
           .to.emit(pdg, "ValidatorDisproven")
-          .withArgs(invalidValidator.pubkey, vaultOperator, stakingVault, invalidWC);
+          .withArgs(invalidValidator.container.pubkey, vaultOperator, stakingVault, invalidWC);
 
         const [totalAfter, lockedAfter] = await pdg.nodeOperatorBalance(vaultOperator);
         expect(totalAfter).to.equal(total);
         expect(lockedAfter).to.equal(locked);
 
         // disproven
-        expect((await pdg.validatorStatus(invalidValidator.pubkey)).stage).to.equal(3n);
+        expect((await pdg.validatorStatus(invalidValidator.container.pubkey)).stage).to.equal(3n);
       });
     });
 
     context("compensateDisprovenPredeposit", () => {
       let invalidWC: string;
-      let invalidValidator: SSZHelpers.ValidatorStruct;
+      let invalidValidator: Validator;
 
       let validWC: string;
-      let validValidator: SSZHelpers.ValidatorStruct;
+      let validValidator: Validator;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });
@@ -1176,10 +1209,17 @@ describe("PredepositGuarantee.sol", () => {
         invalidValidator = generateValidator(invalidWC);
         validValidator = generateValidator(validWC);
 
-        await pdg.predeposit(stakingVault, [generatePredeposit(invalidValidator), generatePredeposit(validValidator)]);
+        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        const validPredeposit = await generatePredeposit(validValidator);
 
-        await sszMerkleTree.addValidatorLeaf(invalidValidator);
-        await sszMerkleTree.addValidatorLeaf(validValidator);
+        await pdg.predeposit(
+          stakingVault,
+          [invalidaPredeposit.deposit, validPredeposit.deposit],
+          [invalidaPredeposit.depositY, validPredeposit.depositY],
+        );
+
+        await sszMerkleTree.addValidatorLeaf(invalidValidator.container);
+        await sszMerkleTree.addValidatorLeaf(validValidator.container);
         const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
         const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
         const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
@@ -1187,9 +1227,9 @@ describe("PredepositGuarantee.sol", () => {
         const invalidValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 1n,
-          pubkey: invalidValidator.pubkey,
+          pubkey: invalidValidator.container.pubkey,
           proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator)).proof,
+            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 1n)),
             ...beaconProof,
           ],
@@ -1198,9 +1238,9 @@ describe("PredepositGuarantee.sol", () => {
         const validValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 2n,
-          pubkey: validValidator.pubkey,
+          pubkey: validValidator.container.pubkey,
           proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator)).proof,
+            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 2n)),
             ...beaconProof,
           ],
@@ -1211,7 +1251,9 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("reverts if _recipient is zero address", async () => {
-        await expect(pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.pubkey, ZeroAddress))
+        await expect(
+          pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.container.pubkey, ZeroAddress),
+        )
           .to.be.revertedWithCustomError(pdg, "ZeroArgument")
           .withArgs("_recipient");
       });
@@ -1220,29 +1262,31 @@ describe("PredepositGuarantee.sol", () => {
         await expect(
           pdg
             .connect(vaultOwner)
-            .compensateDisprovenPredeposit(invalidValidator.pubkey, await stakingVault.getAddress()),
+            .compensateDisprovenPredeposit(invalidValidator.container.pubkey, await stakingVault.getAddress()),
         ).to.be.revertedWithCustomError(pdg, "CompensateToVaultNotAllowed");
       });
 
       it("reverts if trying to compensate when not staking vault owner", async () => {
         await expect(
-          pdg.connect(stranger).compensateDisprovenPredeposit(invalidValidator.pubkey, vaultOperator.address),
+          pdg.connect(stranger).compensateDisprovenPredeposit(invalidValidator.container.pubkey, vaultOperator.address),
         ).to.be.revertedWithCustomError(pdg, "NotStakingVaultOwner");
       });
 
       it("reverts if trying to compensate not disproven validator", async () => {
         await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(validValidator.pubkey, vaultOperator.address),
+          pdg.connect(vaultOwner).compensateDisprovenPredeposit(validValidator.container.pubkey, vaultOperator.address),
         ).to.be.revertedWithCustomError(pdg, "ValidatorNotDisproven");
 
         await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(generateValidator().pubkey, vaultOperator.address),
+          pdg
+            .connect(vaultOwner)
+            .compensateDisprovenPredeposit(generateValidator().container.pubkey, vaultOperator.address),
         ).to.be.revertedWithCustomError(pdg, "ValidatorNotDisproven");
       });
 
       it("reverts if compensation is rejected", async () => {
         await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.pubkey, rejector),
+          pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.container.pubkey, rejector),
         ).to.revertedWithCustomError(pdg, "CompensateFailed");
       });
 
@@ -1250,7 +1294,7 @@ describe("PredepositGuarantee.sol", () => {
         const PREDEPOSIT_AMOUNT = await pdg.PREDEPOSIT_AMOUNT();
         const [balanceTotal, balanceLocked] = await pdg.nodeOperatorBalance(vaultOperator.address);
 
-        let validatorStatus = await pdg.validatorStatus(invalidValidator.pubkey);
+        let validatorStatus = await pdg.validatorStatus(invalidValidator.container.pubkey);
         expect(validatorStatus.stage).to.equal(3n); // 3n is DISPROVEN
         expect(validatorStatus.stakingVault).to.equal(stakingVault);
         expect(validatorStatus.nodeOperator).to.equal(vaultOperator.address);
@@ -1258,7 +1302,7 @@ describe("PredepositGuarantee.sol", () => {
         // Call compensateDisprovenPredeposit and expect it to succeed
         const compensateDisprovenPredepositTx = pdg
           .connect(vaultOwner)
-          .compensateDisprovenPredeposit(invalidValidator.pubkey, vaultOperator.address);
+          .compensateDisprovenPredeposit(invalidValidator.container.pubkey, vaultOperator.address);
 
         await expect(compensateDisprovenPredepositTx)
           .to.emit(pdg, "BalanceCompensated")
@@ -1270,7 +1314,7 @@ describe("PredepositGuarantee.sol", () => {
           )
           .to.emit(pdg, "ValidatorCompensated")
           .withArgs(
-            invalidValidator.pubkey,
+            invalidValidator.container.pubkey,
             vaultOperator.address,
             await stakingVault.getAddress(),
             vaultOperator.address,
@@ -1283,7 +1327,7 @@ describe("PredepositGuarantee.sol", () => {
         expect(nodeOperatorBalance.total).to.equal(balanceTotal - PREDEPOSIT_AMOUNT);
         expect(nodeOperatorBalance.locked).to.equal(balanceLocked - PREDEPOSIT_AMOUNT);
 
-        validatorStatus = await pdg.validatorStatus(invalidValidator.pubkey);
+        validatorStatus = await pdg.validatorStatus(invalidValidator.container.pubkey);
         expect(validatorStatus.stage).to.equal(4n); // 4n is COMPENSATED
       });
     });
@@ -1316,7 +1360,7 @@ describe("PredepositGuarantee.sol", () => {
 
       const witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
 
-      await expect(pdg.predeposit(stakingVault, [])).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.predeposit(stakingVault, [], [])).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.proveValidatorWC(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.depositToBeaconChain(stakingVault, [])).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.proveAndDeposit([], [], stakingVault)).to.revertedWithCustomError(pdg, "ResumedExpected");

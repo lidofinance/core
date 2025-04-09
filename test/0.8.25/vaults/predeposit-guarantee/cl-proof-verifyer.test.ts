@@ -108,7 +108,7 @@ describe("CLProofVerifier.sol", () => {
 
     // populate merkle tree with validators
     for (let i = 1; i < 100; i++) {
-      await sszMerkleTree.addValidatorLeaf(generateValidator());
+      await sszMerkleTree.addValidatorLeaf(generateValidator().container);
     }
 
     // after adding validators, all newly added validator indexes will +n from this
@@ -175,7 +175,7 @@ describe("CLProofVerifier.sol", () => {
 
   it("can verify against dynamic merkle tree", async () => {
     const validator = generateValidator();
-    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator);
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container);
 
     // verify just the validator container tree from PK+WC node
     await sszMerkleTree.verifyProof(
@@ -186,7 +186,7 @@ describe("CLProofVerifier.sol", () => {
     );
 
     // add validator to CL state merkle tree
-    await sszMerkleTree.addValidatorLeaf(validator);
+    await sszMerkleTree.addValidatorLeaf(validator.container);
     const validatorIndex = lastValidatorIndex + 1n;
     const stateRoot = await sszMerkleTree.getMerkleRoot();
 
@@ -211,10 +211,10 @@ describe("CLProofVerifier.sol", () => {
       {
         validatorIndex,
         proof: [...proof],
-        pubkey: validator.pubkey,
+        pubkey: validator.container.pubkey,
         childBlockTimestamp: timestamp,
       },
-      validator.withdrawalCredentials,
+      validator.container.withdrawalCredentials,
     );
   });
 

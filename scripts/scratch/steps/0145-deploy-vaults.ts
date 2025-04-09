@@ -20,7 +20,6 @@ export async function main() {
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
     vaultHubAddress,
-    state[Sk.predepositGuarantee].proxy.address,
     depositContract,
   ]);
   const impAddress = await imp.getAddress();
@@ -37,7 +36,7 @@ export async function main() {
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
-  const vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beaconAddress, "0x"]);
+  const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beaconAddress, "0x"]);
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
@@ -45,6 +44,7 @@ export async function main() {
 
   // Deploy VaultFactory contract
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+    locatorAddress,
     beaconAddress,
     delegationAddress,
   ]);

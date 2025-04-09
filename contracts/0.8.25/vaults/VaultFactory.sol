@@ -4,12 +4,13 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Delegation} from "./Delegation.sol";
+import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 struct DelegationConfig {
     address defaultAdmin;
@@ -25,22 +26,30 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
+    address[] pdgCompensators;
+    address[] unknownValidatorProvers;
+    address[] unguaranteedBeaconChainDepositors;
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
     address[] nodeOperatorFeeClaimers;
+    address[] nodeOperatorRewardAdjusters;
 }
 
 contract VaultFactory {
+    address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
 
+    /// @param _lidoLocator The address of the Lido Locator contract
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl) {
+    constructor(address _lidoLocator, address _beacon, address _delegationImpl) {
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
-        if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_delegationImpl == address(0)) revert ZeroArgument("_delegationImpl");
 
+        LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
     }
@@ -53,7 +62,7 @@ contract VaultFactory {
         bytes calldata _stakingVaultInitializerExtraParams
     ) external returns (IStakingVault vault, Delegation delegation) {
         // create StakingVault
-        vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
 
         // create Delegation
         bytes memory immutableArgs = abi.encode(vault);
@@ -61,10 +70,16 @@ contract VaultFactory {
 
         // initialize StakingVault
         vault.initialize(
-            address(delegation),
+            address(this),
             _delegationConfig.nodeOperatorManager,
+            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
             _stakingVaultInitializerExtraParams
         );
+
+        vault.authorizeLidoVaultHub();
+
+        // transfer ownership of the vault back to the delegation
+        OwnableUpgradeable(address(vault)).transferOwnership(address(delegation));
 
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmExpiry);
@@ -99,6 +114,18 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
+            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
+            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
+            delegation.grantRole(
+                delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+                _delegationConfig.unguaranteedBeaconChainDepositors[i]
+            );
+        }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
             delegation.grantRole(
                 delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
@@ -118,6 +145,12 @@ contract VaultFactory {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
                 _delegationConfig.nodeOperatorFeeClaimers[i]
+            );
+        }
+        for (uint256 i = 0; i < _delegationConfig.nodeOperatorRewardAdjusters.length; i++) {
+            delegation.grantRole(
+                delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+                _delegationConfig.nodeOperatorRewardAdjusters[i]
             );
         }
 
