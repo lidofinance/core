@@ -269,28 +269,21 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket2.feeSharesCharged).to.equal(101n);
     });
 
-    // it("rejects incorrectly reported cumulative vaults treasury fees", async () => {
-    //   const vault = await createAndConnectVault(vaultFactory, {
-    //     shareLimit: ether("100"), // just to bypass the share limit check
-    //     reserveRatioBP: 50_00n, // 50%
-    //     rebalanceThresholdBP: 50_00n, // 50%
-    //   });
+    it("rejects incorrectly reported cumulative vaults treasury fees", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
 
-    //   await vaultHub.harness_bypassCheckVaultsDataProof(true);
+      await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);
 
-    //   await vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 100n, 0n, [
-    //     ZERO_HASH,
-    //   ]);
-    //   const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
-    //   expect(vaultSocket.feeSharesCharged).to.equal(100n);
+      const vaultSocket = await vaultHub["vaultSocket(uint256)"](0n);
+      expect(vaultSocket.feeSharesCharged).to.equal(100n);
 
-    //   await expect(
-    //     vaultHub.updateVaultsData(vault.getAddress(), 99170000769726969624n, 33000000000000000000n, 99n, 0n, [
-    //       ZERO_HASH,
-    //     ]),
-    //   )
-    //     .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
-    //     .withArgs(vault.getAddress(), 99n, 100n);
-    // });
+      await expect(updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 99n, 0n))
+        .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
+        .withArgs(vault.getAddress(), 99n, 100n);
+    });
   });
 });
