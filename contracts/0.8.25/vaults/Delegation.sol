@@ -66,7 +66,7 @@ contract Delegation is Dashboard {
      *          - can be set via `setAccruedRewardsAdjustment` to by `_confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
      *          - reset to zero after `claimNodeOperatorFee`
-     *        This amount will be deducted from rewards during NO fee calculation and can be used effectively reduce fees to zero.
+     *        This amount will be deducted from rewards during NO fee calculation and can be used effectively write off NO's accrued fees.
      *
      */
     uint256 public accruedRewardsAdjustment;
