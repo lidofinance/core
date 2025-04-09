@@ -30,6 +30,10 @@ export type VaultRoles = {
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
+  nodeOperatorRewardAdjuster: HardhatEthersSigner;
+  pdgCompensator: HardhatEthersSigner;
+  unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  unknownValidatorProver: HardhatEthersSigner;
 };
 
 export interface VaultWithDelegation {
@@ -62,7 +66,7 @@ export async function createVaultWithDelegation(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDelegation> {
-  const defaultRoles = await getRandomSigners(13);
+  const defaultRoles = await getRandomSigners(30);
 
   const [
     assetRecoverer,
@@ -78,6 +82,10 @@ export async function createVaultWithDelegation(
     validatorWithdrawalTriggerer,
     disconnecter,
     nodeOperatorFeeClaimer,
+    nodeOperatorRewardAdjuster,
+    pdgCompensator,
+    unguaranteedBeaconChainDepositor,
+    unknownValidatorProver,
   ] = defaultRoles;
 
   const roles: VaultRoles = {
@@ -94,6 +102,11 @@ export async function createVaultWithDelegation(
     validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
     disconnecter: rolesOverrides.disconnecter ?? disconnecter,
     nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
+    nodeOperatorRewardAdjuster: rolesOverrides.nodeOperatorRewardAdjuster ?? nodeOperatorRewardAdjuster,
+    pdgCompensator: rolesOverrides.pdgCompensator ?? pdgCompensator,
+    unguaranteedBeaconChainDepositor:
+      rolesOverrides.unguaranteedBeaconChainDepositor ?? unguaranteedBeaconChainDepositor,
+    unknownValidatorProver: rolesOverrides.unknownValidatorProver ?? unknownValidatorProver,
   };
 
   const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -115,6 +128,10 @@ export async function createVaultWithDelegation(
       validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
       disconnecters: [roles.disconnecter],
       nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
+      nodeOperatorRewardAdjusters: [roles.nodeOperatorRewardAdjuster],
+      pdgCompensators: [roles.pdgCompensator],
+      unguaranteedBeaconChainDepositors: [roles.unguaranteedBeaconChainDepositor],
+      unknownValidatorProvers: [roles.unknownValidatorProver],
     },
     "0x",
   );
