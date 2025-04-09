@@ -15,13 +15,20 @@ struct PermissionsConfig {
     uint256 confirmExpiry;
     address funder;
     address withdrawer;
+    address locker;
     address minter;
     address burner;
     address rebalancer;
     address depositPauser;
     address depositResumer;
     address exitRequester;
+    address withdrawalTriggerer;
     address disconnecter;
+    address pdgWithdrawer;
+    address lidoVaultHubAuthorizer;
+    address ossifier;
+    address depositorSetter;
+    address lockedResetter;
 }
 
 contract VaultFactory__MockPermissions {
@@ -69,6 +76,7 @@ contract VaultFactory__MockPermissions {
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
         permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
+        permissions.grantRole(permissions.LOCK_ROLE(), _permissionsConfig.locker);
         permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
         permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
         permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
@@ -76,7 +84,16 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
+        permissions.grantRole(permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _permissionsConfig.withdrawalTriggerer);
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.PDG_WITHDRAWAL_ROLE(), _permissionsConfig.pdgWithdrawer);
+        permissions.grantRole(
+            permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+            _permissionsConfig.lidoVaultHubAuthorizer
+        );
+        permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
+        permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
+        permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -111,6 +128,7 @@ contract VaultFactory__MockPermissions {
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
         permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
+        permissions.grantRole(permissions.LOCK_ROLE(), _permissionsConfig.locker);
         permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
         permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
         permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
@@ -118,7 +136,16 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
+        permissions.grantRole(permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _permissionsConfig.withdrawalTriggerer);
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.PDG_WITHDRAWAL_ROLE(), _permissionsConfig.pdgWithdrawer);
+        permissions.grantRole(
+            permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+            _permissionsConfig.lidoVaultHubAuthorizer
+        );
+        permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
+        permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
+        permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -151,6 +178,7 @@ contract VaultFactory__MockPermissions {
         // setup roles
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
         permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
+        permissions.grantRole(permissions.LOCK_ROLE(), _permissionsConfig.locker);
         permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
         permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
         permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
@@ -158,7 +186,16 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
+        permissions.grantRole(permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), _permissionsConfig.withdrawalTriggerer);
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(permissions.PDG_WITHDRAWAL_ROLE(), _permissionsConfig.pdgWithdrawer);
+        permissions.grantRole(
+            permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+            _permissionsConfig.lidoVaultHubAuthorizer
+        );
+        permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
+        permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
+        permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 

@@ -147,6 +147,16 @@ describe("Lido.sol:externalShares", () => {
       expect(await lido.getMaxMintableExternalShares()).to.equal(MAX_UINT256);
     });
 
+    it("Returns zero when external shares exceed the max ratio threshold", async () => {
+      const initialMaxShares = await lido.getMaxMintableExternalShares();
+      await lido.connect(vaultHubSigner).mintExternalShares(whale, initialMaxShares);
+
+      const lowerRatio = maxExternalRatioBP / 2n;
+      await lido.setMaxExternalRatioBP(lowerRatio);
+
+      expect(await lido.getMaxMintableExternalShares()).to.equal(0n);
+    });
+
     it("Increases when total pooled ether increases", async () => {
       const initialMax = await lido.getMaxMintableExternalShares();
 

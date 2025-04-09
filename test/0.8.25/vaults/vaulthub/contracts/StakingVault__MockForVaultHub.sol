@@ -102,7 +102,7 @@ contract StakingVault__MockForVaultHub {
 
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
 
-    function isOssified() external pure returns (bool) {
+    function ossified() external pure returns (bool) {
         return false;
     }
 

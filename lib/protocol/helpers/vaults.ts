@@ -6,12 +6,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault, VaultFactory } from "typechain-types";
 
-import { days, impersonate, MAX_UINT256 } from "lib";
+import { days, getRandomSigners, impersonate, MAX_UINT256 } from "lib";
 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
-
-import { getRandomSigners } from "./get-random-signers";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -29,6 +27,11 @@ export type VaultRoles = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
+  pdgWithdrawer: HardhatEthersSigner;
+  lidoVaultHubAuthorizer: HardhatEthersSigner;
+  ossifier: HardhatEthersSigner;
+  depositorSetter: HardhatEthersSigner;
+  lockedResetter: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
 };
 
@@ -62,7 +65,7 @@ export async function createVaultWithDelegation(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDelegation> {
-  const defaultRoles = await getRandomSigners(13);
+  const defaultRoles = await getRandomSigners(20);
 
   const [
     assetRecoverer,
@@ -78,6 +81,11 @@ export async function createVaultWithDelegation(
     validatorWithdrawalTriggerer,
     disconnecter,
     nodeOperatorFeeClaimer,
+    pdgWithdrawer,
+    lidoVaultHubAuthorizer,
+    ossifier,
+    depositorSetter,
+    lockedResetter,
   ] = defaultRoles;
 
   const roles: VaultRoles = {
@@ -94,6 +102,11 @@ export async function createVaultWithDelegation(
     validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
     disconnecter: rolesOverrides.disconnecter ?? disconnecter,
     nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
+    pdgWithdrawer: rolesOverrides.pdgWithdrawer ?? pdgWithdrawer,
+    lidoVaultHubAuthorizer: rolesOverrides.lidoVaultHubAuthorizer ?? lidoVaultHubAuthorizer,
+    ossifier: rolesOverrides.ossifier ?? ossifier,
+    depositorSetter: rolesOverrides.depositorSetter ?? depositorSetter,
+    lockedResetter: rolesOverrides.lockedResetter ?? lockedResetter,
   };
 
   const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -114,6 +127,11 @@ export async function createVaultWithDelegation(
       validatorExitRequesters: [roles.validatorExitRequester],
       validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
       disconnecters: [roles.disconnecter],
+      pdgWithdrawers: [roles.pdgWithdrawer],
+      lidoVaultHubAuthorizers: [roles.lidoVaultHubAuthorizer],
+      ossifiers: [roles.ossifier],
+      depositorSetters: [roles.depositorSetter],
+      lockedResetters: [roles.lockedResetter],
       nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
     },
     "0x",

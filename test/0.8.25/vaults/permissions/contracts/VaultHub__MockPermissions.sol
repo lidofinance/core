@@ -8,6 +8,13 @@ contract VaultHub__MockPermissions {
     event Mock__SharesBurned(address indexed _stakingVault, uint256 _shares);
     event Mock__Rebalanced(uint256 _ether);
     event Mock__VoluntaryDisconnect(address indexed _stakingVault);
+    event Mock__LidoVaultHubAuthorized();
+
+    address public immutable LIDO_LOCATOR;
+
+    constructor(address _lidoLocator) {
+        LIDO_LOCATOR = _lidoLocator;
+    }
 
     function mintShares(address _stakingVault, address _recipient, uint256 _shares) external {
         emit Mock__SharesMinted(_stakingVault, _recipient, _shares);

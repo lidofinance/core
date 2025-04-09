@@ -123,6 +123,8 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return 0;
     }
 
+    function resetLocked() external {}
+
     function valuation() external pure returns (uint256) {
         return 0;
     }
@@ -158,7 +160,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _recipient
     ) external payable {}
 
-    function isOssified() external pure returns (bool) {
+    function ossified() external pure returns (bool) {
         return false;
     }
 

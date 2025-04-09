@@ -219,9 +219,32 @@ describe("StakingVault.sol", () => {
       await stakingVault
         .connect(vaultHubSigner)
         .report(await stakingVault.valuation(), await stakingVault.inOutDelta(), amount + 1n);
-      expect(await stakingVault.valuation()).to.equal(amount);
-      expect(await stakingVault.locked()).to.equal(amount + 1n);
+      await stakingVault.connect(vaultHubSigner).report(amount - 1n, amount, amount); // locked > valuation
 
+      expect(await stakingVault.valuation()).to.equal(amount - 1n);
+      expect(await stakingVault.locked()).to.equal(amount);
+      expect(await stakingVault.unlocked()).to.equal(0n);
+    });
+
+    it("returns the difference between valuation and locked if locked amount is less than or equal to valuation", async () => {
+      const amount = ether("1");
+
+      await stakingVault.fund({ value: amount });
+
+      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(0n);
+      expect(await stakingVault.unlocked()).to.equal(amount);
+
+      const halfAmount = amount / 2n;
+      await stakingVault.connect(vaultOwner).lock(halfAmount);
+
+      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(halfAmount);
+      expect(await stakingVault.unlocked()).to.equal(halfAmount);
+
+      await stakingVault.connect(vaultOwner).lock(amount);
+      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.locked()).to.equal(amount);
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
   });
@@ -267,10 +290,10 @@ describe("StakingVault.sol", () => {
       await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultHubAuthorized");
     });
 
-    it("reverts on isOssified", async () => {
+    it("reverts on ossified", async () => {
       await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
       await stakingVault.ossifyStakingVault();
-      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultIsOssified");
+      await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultOssified");
     });
 
     it("reverts if depositor is not Lido Predeposit Guarantee", async () => {
@@ -467,7 +490,7 @@ describe("StakingVault.sol", () => {
         .withArgs(unlocked);
     });
 
-    it.skip("reverts if vault is unhealthy", async () => {});
+    it.skip("reverts if vault valuation is less than locked amount (reentrancy)", async () => {});
 
     it("does not revert on max int128", async () => {
       const forGas = ether("10");
