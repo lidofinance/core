@@ -393,14 +393,15 @@ contract Dashboard is Permissions {
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
      *          clearing them for future deposits via `PDG.depositToBeaconChain`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
-     * @dev requires the caller to have the `UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE`
+     * @return totalAmount total amount of ether deposited to beacon chain
+     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
         StakingVaultDeposit[] calldata _deposits
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
-        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+        IDepositContract depositContract = IDepositContract(stakingVault.DEPOSIT_CONTRACT());
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -420,7 +421,7 @@ contract Dashboard is Permissions {
                 deposit.depositDataRoot
             );
 
-            emit TrustedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
+            emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
         }
     }
 
@@ -434,9 +435,12 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Withdraws ether of disproven validator from PDG
+     * @notice Compensates ether of disproven validator's predeposit from PDG to the recipient.
+     *         Can be called if validator which was predeposited via `PDG.predeposit` with vault funds
+     *         was frontrun by NO's with non-vault WC (effectively NO's stealing the predeposit) and then
+     *         proof of the validator's invalidity has been provided via `PDG.proveInvalidValidatorWC`.
      * @param _pubkey of validator that was proven invalid in PDG
-     * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     * @param _recipient address to receive the `PDG.PREDEPOSIT_AMOUNT`
      * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
      * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
      */
@@ -634,12 +638,12 @@ contract Dashboard is Permissions {
      * @param pubkey of the validator to be deposited
      * @param amount of ether deposited to validator
      */
-    event TrustedDeposit(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
+    event UnguaranteedDeposit(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
 
     /**
-     * @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
+     * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)
      * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC20 token (zero address for Ether)
+     * @param token The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
      * @param amount The amount of the token recovered
      */
     event ERC20Recovered(address indexed to, address indexed token, uint256 amount);

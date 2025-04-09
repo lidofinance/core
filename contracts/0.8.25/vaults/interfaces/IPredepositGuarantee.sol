@@ -9,7 +9,7 @@ import {IStakingVault} from "./IStakingVault.sol";
 /**
  * @title IPredepositGuarantee
  * @author Lido
- * @notice Interface for the `IPredepositGuarantee` contract
+ * @notice Interface for the `PredepositGuarantee` contract
  */
 interface IPredepositGuarantee {
     /**

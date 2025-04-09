@@ -50,7 +50,7 @@ contract Delegation is Dashboard {
         keccak256("vaults.Delegation.NodeOperatorRewardsAdjustRole");
 
     /**
-     * @notice Node operator fee in basis points; combined with curator fee cannot exceed 100%, or 10,000 basis points.
+     * @notice Node operator fee in basis points cannot exceed 100%, or 10,000 basis points.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
     uint256 public nodeOperatorFeeBP;
@@ -61,7 +61,13 @@ contract Delegation is Dashboard {
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
 
     /**
-     * @notice adjustment for inOut to allow fee correction during side deposits
+     * @notice adjustment to allow fee correction during side deposits or consolidations.
+     *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
+     *          - can be set via `setAccruedRewardsAdjustment` to by `_confirmingRoles()`
+     *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
+     *          - reset to zero after `claimNodeOperatorFee`
+     *        This amount will be deducted from rewards during NO fee calculation and can be used effectively reduce fees to zero.
+     *
      */
     uint256 public accruedRewardsAdjustment;
 
@@ -110,7 +116,7 @@ contract Delegation is Dashboard {
     /**
      * @notice Returns the unreserved amount of ether,
      * i.e. the amount of ether that is not locked in the StakingVault
-     * and not reserved for curator and node operator fees.
+     * and not reserved for node operator fees.
      * This amount does not account for the current balance of the StakingVault and
      * can return a value greater than the actual balance of the StakingVault.
      * @return uint256: the amount of unreserved ether.
@@ -124,7 +130,7 @@ contract Delegation is Dashboard {
 
     /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fees.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
@@ -145,7 +151,7 @@ contract Delegation is Dashboard {
     /**
      * @notice Sets the node operator fee.
      * The node operator fee is the percentage (in basis points) of node operator's share of the StakingVault rewards.
-     * The node operator fee combined with the curator fee cannot exceed 100%.
+     * The node operator fee cannot exceed 100%.
      * Note that the function reverts if the node operator fee is unclaimed and all the confirms must be recasted to execute it again,
      * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
@@ -189,7 +195,7 @@ contract Delegation is Dashboard {
 
     /**
      * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()`  agree
-     * @param _newAdjustment amount to increase adjustment by
+     * @param _newAdjustment ew adjustment amount
      * @param _currentAdjustment current adjustment value for invalidating old confirmations
      * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
      */
@@ -199,7 +205,6 @@ contract Delegation is Dashboard {
     ) external onlyConfirmed(_confirmingRoles()) {
         if (accruedRewardsAdjustment != _currentAdjustment)
             revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
-        if (_newAdjustment == _currentAdjustment) revert SameAdjustment();
         if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreaseOverLimit();
         _setAccruedRewardsAdjustment(_newAdjustment);
     }
@@ -207,10 +212,11 @@ contract Delegation is Dashboard {
     /**
      *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
-     *          clearing them for future deposits via `PDG.depositToBeaconChain`.
+     *          clearing them for future top-up deposits via `PDG.depositToBeaconChain`.
      *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
      * @param _deposits array of StakingVaultDeposit structs containing deposit data
-     * @dev requires the caller to have the `UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE`
+     * @return totalAmount total amount of ether deposited to beacon chain
+     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
@@ -234,7 +240,7 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @dev Calculates the curator/node operator fee amount based on the fee and the last claimed report.
+     * @dev Calculates the node operator fee amount based on the fee and the last claimed report.
      * @param _feeBP The fee in basis points.
      * @param _lastClaimedReport The last claimed report.
      * @return The accrued fee amount.
@@ -277,6 +283,8 @@ contract Delegation is Dashboard {
     function _setAccruedRewardsAdjustment(uint256 _newAdjustment) internal {
         uint256 oldAdjustment = accruedRewardsAdjustment;
 
+        if (_newAdjustment == oldAdjustment) revert SameAdjustment();
+
         accruedRewardsAdjustment = _newAdjustment;
 
         emit AccruedRewardsAdjustmentSet(_newAdjustment, oldAdjustment);
@@ -285,8 +293,8 @@ contract Delegation is Dashboard {
     /**
      * @notice Returns the roles that can:
      * - change the confirm expiry;
-     * - set the curator fee;
      * - set the node operator fee;
+     * - set rewards adjustment
      * - transfer the ownership of the StakingVault.
      * @return roles is an array of roles that form the confirming roles.
      */
@@ -299,7 +307,7 @@ contract Delegation is Dashboard {
     /**
      * @dev Overrides the Permissions' internal withdraw function to add a check for the unreserved amount.
      * Cannot withdraw more than the unreserved amount: which is the amount of ether
-     * that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * that is not locked in the StakingVault and not reserved for node operator fees.
      * Does not include a check for the balance of the StakingVault, this check is present
      * on the StakingVault itself.
      * @param _recipient The address to which the ether will be sent.

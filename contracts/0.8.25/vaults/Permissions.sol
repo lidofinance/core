@@ -95,7 +95,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Permission for unguarnateed deposit to trusted validators
      */
-    bytes32 public constant UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE =
+    bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
@@ -304,11 +304,11 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to  validators
+     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
      */
     function _withdrawForUnguaranteedDepositToBeaconChain(
         uint256 _ether
-    ) internal onlyRole(UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE) {
+    ) internal onlyRole(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
         stakingVault().withdraw(address(this), _ether);
     }
 

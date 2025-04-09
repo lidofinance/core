@@ -242,7 +242,7 @@ describe("Delegation.sol", () => {
       await assertSoleMember(nodeOperatorRewardAdjuster, await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE());
       await assertSoleMember(
         unguaranteedBeaconChainDepositor,
-        await delegation.UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+        await delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
       );
       await assertSoleMember(unknownValidatorProver, await delegation.PDG_PROVE_VALIDATOR_ROLE());
       await assertSoleMember(pdgCompensator, await delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE());
@@ -538,6 +538,18 @@ describe("Delegation.sol", () => {
       );
     });
 
+    it("reverts if the  deposit is empty", async () => {
+      await expect(
+        delegation.connect(unguaranteedBeaconChainDepositor).unguaranteedDepositToBeaconChain([]),
+      ).to.be.revertedWithCustomError(delegation, "ZeroArgument");
+
+      await expect(
+        delegation
+          .connect(unguaranteedBeaconChainDepositor)
+          .unguaranteedDepositToBeaconChain([generatePostDeposit(generateValidator().container, 0n)]),
+      ).to.be.revertedWithCustomError(delegation, "ZeroArgument");
+    });
+
     it("allows to trustedWithdrawAndDeposit and increases accruedRewardsAdjustment", async () => {
       const validator = generateValidator(await vault.withdrawalCredentials()).container;
       const amount = ether("32");
@@ -551,7 +563,7 @@ describe("Delegation.sol", () => {
       await expect(withdrawDepositTx)
         .to.emit(vault, "Withdrawn")
         .withArgs(delegation, delegation, deposit.amount)
-        .to.emit(delegation, "TrustedDeposit")
+        .to.emit(delegation, "UnguaranteedDeposit")
         .withArgs(vault, deposit.pubkey, deposit.amount)
         .to.emit(delegation, "AccruedRewardsAdjustmentSet")
         .withArgs(deposit.amount, 0n);

@@ -103,6 +103,18 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
+            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
+            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
+            delegation.grantRole(
+                delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+                _delegationConfig.unguaranteedBeaconChainDepositors[i]
+            );
+        }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
             delegation.grantRole(
                 delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
@@ -129,21 +141,6 @@ contract VaultFactory {
                 delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
                 _delegationConfig.nodeOperatorRewardAdjusters[i]
             );
-        }
-
-        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
-            delegation.grantRole(
-                delegation.UNGUARNATEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-                _delegationConfig.unguaranteedBeaconChainDepositors[i]
-            );
-        }
-
-        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
-            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
-        }
-
-        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
-            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
         }
 
         // set fees
