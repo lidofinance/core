@@ -224,6 +224,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Deauthorizes the `VaultHub` from the vault
      * @dev Can only be called by the owner
      * @dev Reverts if vaultHub is already deauthorized
+     * @dev Reverts if vault is already connected to VaultHub
      */
     function deauthorizeLidoVaultHub() external onlyOwner {
         VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
