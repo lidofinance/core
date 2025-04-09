@@ -1,16 +1,16 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
 import {GIndex} from "./GIndex.sol";
 
 import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 /*
- Cut and modified version of SSZ library from CSM only has methods for merkilized SSZ proof validation
- original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
+ SSZ library from CSM
+ original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
 */
 library SSZ {
     error BranchHasMissingItem();
@@ -47,6 +47,166 @@ library SSZ {
             ),
             DEPOSIT_DOMAIN
         );
+    }
+
+    /// @notice SSZ hash tree root of a CL Beacon Block Header
+    /// @param header Beacon Block Header container struct
+    function hashTreeRoot(BeaconBlockHeader memory header) internal view returns (bytes32 root) {
+        bytes32[8] memory nodes = [
+            toLittleEndian(header.slot),
+            toLittleEndian(header.proposerIndex),
+            header.parentRoot,
+            header.stateRoot,
+            header.bodyRoot,
+            bytes32(0),
+            bytes32(0),
+            bytes32(0)
+        ];
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Count of nodes to hash
+            let count := 8
+
+            // Loop over levels
+            // prettier-ignore
+            for { } 1 { } {
+                // Loop over nodes at the given depth
+
+                // Initialize `offset` to the offset of `proof` elements in memory.
+                let target := nodes
+                let source := nodes
+                let end := add(source, shl(5, count))
+
+                // prettier-ignore
+                for { } 1 { } {
+                    // Read next two hashes to hash
+                    mcopy(0x00, source, 0x40)
+
+                    // Call sha256 precompile
+                    let result := staticcall(
+                        gas(),
+                        0x02,
+                        0x00,
+                        0x40,
+                        0x00,
+                        0x20
+                    )
+
+                    if iszero(result) {
+                        // Precompiles returns no data on OutOfGas error.
+                        revert(0, 0)
+                    }
+
+                    // Store the resulting hash at the target location
+                    mstore(target, mload(0x00))
+
+                    // Advance the pointers
+                    target := add(target, 0x20)
+                    source := add(source, 0x40)
+
+                    if iszero(lt(source, end)) {
+                        break
+                    }
+                }
+
+                count := shr(1, count)
+                if eq(count, 1) {
+                    root := mload(0x00)
+                    break
+                }
+            }
+        }
+    }
+
+    /// @notice SSZ hash tree root of a CL validator container
+    /// @param validator Validator container struct
+    function hashTreeRoot(Validator memory validator) internal view returns (bytes32 root) {
+        bytes32 _pubkeyRoot;
+
+        assembly {
+            // Dynamic data types such as bytes are stored at the specified offset.
+            let offset := mload(validator)
+            // Copy the pubkey to the scratch space.
+            mcopy(0x00, add(offset, 32), 48)
+            // Clear the last 16 bytes.
+            mcopy(48, 0x60, 16)
+            // Call sha256 precompile.
+            let result := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+
+            if iszero(result) {
+                // Precompiles returns no data on OutOfGas error.
+                revert(0, 0)
+            }
+
+            _pubkeyRoot := mload(0x00)
+        }
+
+        bytes32[8] memory nodes = [
+            _pubkeyRoot,
+            validator.withdrawalCredentials,
+            toLittleEndian(validator.effectiveBalance),
+            toLittleEndian(validator.slashed),
+            toLittleEndian(validator.activationEligibilityEpoch),
+            toLittleEndian(validator.activationEpoch),
+            toLittleEndian(validator.exitEpoch),
+            toLittleEndian(validator.withdrawableEpoch)
+        ];
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Count of nodes to hash
+            let count := 8
+
+            // Loop over levels
+            // prettier-ignore
+            for { } 1 { } {
+                // Loop over nodes at the given depth
+
+                // Initialize `offset` to the offset of `proof` elements in memory.
+                let target := nodes
+                let source := nodes
+                let end := add(source, shl(5, count))
+
+                // prettier-ignore
+                for { } 1 { } {
+                    // Read next two hashes to hash
+                    mcopy(0x00, source, 0x40)
+
+                    // Call sha256 precompile
+                    let result := staticcall(
+                        gas(),
+                        0x02,
+                        0x00,
+                        0x40,
+                        0x00,
+                        0x20
+                    )
+
+                    if iszero(result) {
+                        // Precompiles returns no data on OutOfGas error.
+                        revert(0, 0)
+                    }
+
+                    // Store the resulting hash at the target location
+                    mstore(target, mload(0x00))
+
+                    // Advance the pointers
+                    target := add(target, 0x20)
+                    source := add(source, 0x40)
+
+                    if iszero(lt(source, end)) {
+                        break
+                    }
+                }
+
+                count := shr(1, count)
+                if eq(count, 1) {
+                    root := mload(0x00)
+                    break
+                }
+            }
+        }
     }
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
@@ -181,5 +341,9 @@ library SSZ {
             ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
         v = (v >> 128) | (v << 128);
         return bytes32(v);
+    }
+
+    function toLittleEndian(bool v) internal pure returns (bytes32) {
+        return bytes32(v ? 1 << 248 : 0);
     }
 }

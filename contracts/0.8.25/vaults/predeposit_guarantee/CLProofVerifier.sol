@@ -188,6 +188,5 @@ abstract contract CLProofVerifier {
         return GI_FIRST_VALIDATOR.shr(_offset);
     }
 
-    error InvalidTimestamp();
     error RootNotFound();
 }

@@ -401,7 +401,7 @@ contract Dashboard is Permissions {
         StakingVaultDeposit[] calldata _deposits
     ) public virtual returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
-        IDepositContract depositContract = IDepositContract(stakingVault.DEPOSIT_CONTRACT());
+        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
