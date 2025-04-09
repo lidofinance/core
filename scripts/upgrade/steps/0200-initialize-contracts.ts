@@ -23,7 +23,7 @@ export async function main(): Promise<void> {
   const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
-  const vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [stakingVaultBeaconAddress, "0x"]);
+  const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [stakingVaultBeaconAddress, "0x"]);
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
   console.log("BeaconProxy address", await vaultBeaconProxy.getAddress());

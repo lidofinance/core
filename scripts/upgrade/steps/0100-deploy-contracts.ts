@@ -130,7 +130,6 @@ export async function main() {
   // Deploy StakingVault implementation contract
   const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
     vaultHub.address,
-    predepositGuarantee.address,
     depositContract,
   ]);
   const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
@@ -152,6 +151,7 @@ export async function main() {
 
   // Deploy VaultFactory contract
   const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+    locatorAddress,
     beaconAddress,
     delegationAddress,
   ]);
