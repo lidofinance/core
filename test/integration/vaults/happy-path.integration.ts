@@ -27,7 +27,7 @@ import {
   report,
   sdvtEnsureOperators,
 } from "lib/protocol";
-import { updateVaultsDataWithProof } from "lib/protocol/vaults";
+import { updateVaultsDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
@@ -182,6 +182,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         validatorWithdrawalTriggerers: [curator],
         disconnecters: [curator],
         nodeOperatorFeeClaimers: [nodeOperator],
+        nodeOperatorRewardAdjusters: [nodeOperator],
+        unguaranteedBeaconChainDepositors: [curator],
+        unknownValidatorProvers: [curator],
+        pdgCompensators: [curator],
       },
       "0x",
     );

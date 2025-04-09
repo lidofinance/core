@@ -12,7 +12,7 @@ contract StakingVault__MockForVaultHub {
     address public owner;
     address public nodeOperator;
     address public depositor_;
-    bool public vaultHubAttached;
+    bool public vaultHubAuthorized;
 
     uint256 public $locked;
     uint256 public $valuation;
@@ -108,11 +108,12 @@ contract StakingVault__MockForVaultHub {
         return false;
     }
 
-    function attachVaultHubAndDepositor() external {
-        vaultHubAttached = true;
+    function authorizeLidoVaultHub() external {
+        vaultHubAuthorized = true;
     }
-    function detachVaultHubAndDepositor() external {
-        vaultHubAttached = false;
+
+    function deauthorizeLidoVaultHub() external {
+        vaultHubAuthorized = false;
     }
 
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);

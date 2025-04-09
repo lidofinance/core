@@ -16,7 +16,7 @@ import {
 } from "typechain-types";
 
 import { ether, findEvents, getCurrentBlockTimestamp, impersonate } from "lib";
-import { createVaultsReportTree, VaultReportItem } from "lib/protocol/vaults";
+import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";

@@ -44,9 +44,10 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
- *   - `attachVaultHubAndDepositor()`
+ *   - `authorizeLidoVaultHub()`
  *   - `ossifyStakingVault()`
  *   - `setDepositor()`
+ *   - `resetLocked()`
  * - Operator:
  *   - `triggerValidatorWithdrawal()`
  * - Depositor:
@@ -56,7 +57,7 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  *   - `report()`
  *   - `rebalance()`
  *   - `triggerValidatorWithdrawal()`
- *   - `detachVaultHubAndDepositor()`
+ *   - `deauthorizeLidoVaultHub()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
@@ -75,7 +76,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
      * @custom:depositor Address of the depositor
-     * @custom:vaultHubAttached Whether the vault is attached to VaultHub
+     * @custom:vaultHubAuthorized Whether the vaultHub is authorized at the vault
      * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -84,7 +85,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         int128 inOutDelta;
         address nodeOperator;
         address depositor;
-        bool vaultHubAttached;
+        bool vaultHubAuthorized;
         bool beaconChainDepositsPaused;
     }
 
@@ -203,43 +204,38 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Attaches the vault to a `VaultHub` and `Depositor`
+     * @notice Authorizes the `VaultHub` at the vault
      * @dev Can only be called by the owner
-     * @dev Reverts if vault is already attached to VaultHub
+     * @dev Reverts if vaultHub is already authorized
      * @dev Reverts if vault is ossified
+     * @dev Reverts if the depositor is not the Lido Predeposit Guarantee
      */
-    function attachVaultHubAndDepositor() external onlyOwner {
+    function authorizeLidoVaultHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHubAttached) revert VaultHubAttached();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         if (isOssified()) revert VaultIsOssified();
 
-        address depositor_ = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
+        address lidoPredepositGuarantee = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
+        if ($.depositor != lidoPredepositGuarantee) revert InvalidDepositor($.depositor);
 
-        $.vaultHubAttached = true;
-        $.depositor = depositor_;
+        $.vaultHubAuthorized = true;
 
-        emit VaultHubAttachedSet(true);
-        emit DepositorSet(depositor_);
+        emit VaultHubAuthorizedSet(true);
     }
 
     /**
-     * @notice Detaches the vault from `VaultHub` and `Depositor`
-     * @dev Sets vaultHubAttached to false and depositor to nodeOperator
+     * @notice Deauthorizes the `VaultHub` from the vault
      * @dev Can only be called by the VaultHub
-     * @dev Reverts if vault is not attached to VaultHub
+     * @dev Reverts if vaultHub is already deauthorized
      */
-    function detachVaultHubAndDepositor() external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("detachVaultHubAndDepositor", msg.sender);
+    function deauthorizeLidoVaultHub() external {
+        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("deauthorizeLidoVaultHub", msg.sender);
         ERC7201Storage storage $ = _getStorage();
-        if (!$.vaultHubAttached) revert VaultHubDetached();
+        if (!$.vaultHubAuthorized) revert VaultHubNotAuthorized();
 
-        address depositor_ = $.nodeOperator;
+        $.vaultHubAuthorized = false;
 
-        $.vaultHubAttached = false;
-        $.depositor = depositor_;
-
-        emit VaultHubAttachedSet(false);
-        emit DepositorSet(depositor_);
+        emit VaultHubAuthorizedSet(false);
     }
 
     /**
@@ -249,11 +245,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *      Pins the current vault implementation to prevent further upgrades.
      *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
      * @dev Reverts if already ossified.
-     * @dev Reverts if the vault is attached to VaultHub
+     * @dev Reverts if vaultHub is authorized at the vault
      */
     function ossifyStakingVault() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHubAttached) revert VaultHubAttached();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         PinnedBeaconUtils.ossify();
     }
 
@@ -298,13 +294,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Resets the locked amount to 0 only when the vault is detached from VaultHub
+     * @notice Resets the locked amount to 0 only when the vaultHub is deauthorized
      * @dev Can only be called by the owner
-     * @dev Reverts if vault is attached to VaultHub
+     * @dev Reverts if vaultHub is authorized at the vault
      */
     function resetLocked() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHubAttached) revert VaultHubAttached();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         _getStorage().locked = 0;
     }
 
@@ -361,7 +357,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         ERC7201Storage storage $ = _getStorage();
-        if ($.vaultHubAttached) revert VaultHubAttached();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         $.depositor = _depositor;
         emit DepositorSet(_depositor);
     }
@@ -370,8 +366,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Returns true if the vault is attached to VaultHub
      * @return True if the vault is attached to VaultHub, false otherwise
      */
-    function vaultHubAttached() external view returns (bool) {
-        return _getStorage().vaultHubAttached;
+    function vaultHubAuthorized() external view returns (bool) {
+        return _getStorage().vaultHubAuthorized;
     }
 
     /**
@@ -756,10 +752,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     );
 
     /**
-     * @notice Emitted when `VaultHub` is attached or detached from `StakingVault`
-     * @param attached True if `VaultHub` is attached, false otherwise
+     * @notice Emitted when `VaultHub` is authorized or deauthorized from `StakingVault`
+     * @param authorized True if `VaultHub` is authorized, false otherwise
      */
-    event VaultHubAttachedSet(bool attached);
+    event VaultHubAuthorizedSet(bool authorized);
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -859,15 +855,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     error PartialWithdrawalNotAllowed();
 
-        /**
-     * @notice Thrown when trying to detach vault from VaultHub while it is not attached
+    /**
+     * @notice Thrown when trying to deauthorize vaultHub while it is not authorized
      */
-    error VaultHubDetached();
+    error VaultHubNotAuthorized();
 
     /**
      * @notice Thrown when trying to ossify vault, or to attach vault to VaultHub while it is already attached
      */
-    error VaultHubAttached();
+    error VaultHubAuthorized();
 
     /**
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
@@ -878,4 +874,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when a fresh report is required
      */
     error FreshReportRequired();
+
+    /**
+     * @notice Thrown when the depositor is not the Lido Predeposit Guarantee
+     * @param depositor Address of the depositor
+     */
+    error InvalidDepositor(address depositor);
 }

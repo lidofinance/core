@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+
 /**
  * @notice validator deposit from the `StakingVault` to the beacon chain
  * @dev withdrawal credentials are provided by the vault
@@ -36,6 +38,8 @@ interface IStakingVault {
         uint64 timestamp;
     }
 
+    function DEPOSIT_CONTRACT() external view returns (IDepositContract);
+
     function initialize(address _owner, address _operator, address _depositor, bytes calldata _params) external;
     function version() external pure returns (uint64);
     function owner() external view returns (address);
@@ -65,9 +69,10 @@ interface IStakingVault {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable;
-    function attachVaultHubAndDepositor() external;
-    function detachVaultHubAndDepositor() external;
-    function vaultHubAttached() external view returns (bool);
+    function authorizeLidoVaultHub() external;
+    function deauthorizeLidoVaultHub() external;
+    function vaultHubAuthorized() external view returns (bool);
     function ossifyStakingVault() external;
     function isOssified() external view returns (bool);
+    function setDepositor(address _depositor) external;
 }
