@@ -27,6 +27,7 @@ import {
   report,
   sdvtEnsureOperators,
 } from "lib/protocol";
+import { updateVaultsDataWithProof } from "lib/protocol/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
@@ -319,7 +320,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Curator to mint max stETH", async () => {
-    const { lido, locator, vaultHub } = ctx.contracts;
+    const { lido } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -333,13 +334,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     //report
-    const valuations = [await stakingVault.valuation()];
-    const inOutDeltas = [await stakingVault.inOutDelta()];
-    const locked = [await stakingVault.locked()];
-    const treasuryFees = [0n];
-
-    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+    await updateVaultsDataWithProof(ctx, stakingVault);
 
     // mint
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);

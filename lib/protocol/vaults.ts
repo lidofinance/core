@@ -1,6 +1,8 @@
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
+
 import { StakingVault } from "typechain-types";
 
-import { impersonate } from "lib";
+import { getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { ether } from "../units";
 
@@ -43,5 +45,38 @@ export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: St
   const { vaultHub } = ctx.contracts;
   const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
   const rewards = ether("1");
-  await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
+  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
+}
+
+// Address, valuation, inOutDelta, treasuryFees, sharesMinted
+export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
+
+export function createVaultsReportTree(vaults: VaultReportItem[]) {
+  const tree = StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
+  return tree;
+}
+
+export async function updateVaultsDataWithProof(ctx: ProtocolContext, stakingVault: StakingVault) {
+  const { vaultHub, locator } = ctx.contracts;
+  const vaultReport: VaultReportItem = [
+    await stakingVault.getAddress(),
+    await stakingVault.valuation(),
+    await stakingVault.inOutDelta(),
+    0n,
+    0n,
+  ];
+  const reportTree = createVaultsReportTree([vaultReport]);
+
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
+  await vaultHub
+    .connect(accountingSigner)
+    .updateVaultsData(
+      await stakingVault.getAddress(),
+      await stakingVault.valuation(),
+      await stakingVault.inOutDelta(),
+      0n,
+      0n,
+      reportTree.getProof(0),
+    );
 }

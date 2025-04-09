@@ -12,15 +12,11 @@ contract VaultHub__HarnessForReporting is VaultHub {
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
-    bool public bypassCheckVaultsDataProof;
-
     constructor(
         ILidoLocator _locator,
         ILido _lido,
         uint256 _relativeShareLimitBP
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {
-        bypassCheckVaultsDataProof = false;
-    }
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
 
     function harness_getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
         assembly {
@@ -58,9 +54,5 @@ contract VaultHub__HarnessForReporting is VaultHub {
         $.sockets.push(vsocket);
 
         emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
-    }
-
-    function harness_bypassCheckVaultsDataProof(bool _bypass) public {
-        bypassCheckVaultsDataProof = _bypass;
     }
 }

@@ -14,6 +14,7 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  getCurrentBlockTimestamp,
   impersonate,
   prepareLocalMerkleTree,
 } from "lib";
@@ -21,7 +22,7 @@ import { getProtocolContext, getRandomSigners, ProtocolContext } from "lib/proto
 
 import { Snapshot } from "test/suite";
 
-import { setupLido } from "../../../lib/protocol/vaults";
+import { createVaultsReportTree, setupLido, VaultReportItem } from "../../../lib/protocol/vaults";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
@@ -147,13 +148,29 @@ describe("Scenario: actions on vault creation", () => {
       .connect(deployer)
       .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
-    const valuations = [await stakingVault.valuation()];
-    const inOutDeltas = [await stakingVault.inOutDelta()];
-    const locked = [await stakingVault.locked()];
-    const treasuryFees = [0n];
+    const vaultReport: VaultReportItem = [
+      await stakingVault.getAddress(),
+      await stakingVault.valuation(),
+      await stakingVault.inOutDelta(),
+      0n,
+      0n,
+    ];
+    const vaultsReportTree = createVaultsReportTree([vaultReport]);
 
     const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+    await vaultHub
+      .connect(accountingSigner)
+      .updateReportData(await getCurrentBlockTimestamp(), vaultsReportTree.root, "");
+    await vaultHub
+      .connect(accountingSigner)
+      .updateVaultsData(
+        await stakingVault.getAddress(),
+        await stakingVault.valuation(),
+        await stakingVault.inOutDelta(),
+        0n,
+        0n,
+        vaultsReportTree.getProof(0),
+      );
 
     await setupLido(ctx);
   });
@@ -168,7 +185,7 @@ describe("Scenario: actions on vault creation", () => {
     const { vaultHub } = ctx.contracts;
     const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
     const rewards = ether("1");
-    await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
+    await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
   }
 
   it("Allows fund and withdraw", async () => {
