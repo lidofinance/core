@@ -66,7 +66,7 @@ export async function createVaultWithDelegation(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDelegation> {
-  const defaultRoles = await getRandomSigners(13);
+  const defaultRoles = await getRandomSigners(30);
 
   const [
     assetRecoverer,
