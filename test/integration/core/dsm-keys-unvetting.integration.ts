@@ -139,6 +139,10 @@ describe("Integration: DSM keys unvetting", () => {
     const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
     const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
     expect(totalVettedValidatorsBefore).to.be.not.equal(vettedSigningKeysCount);
+    const totalVettedValidatorsAfter = Math.max(
+      Number(vettedSigningKeysCount),
+      Number(nodeOperatorBefore.totalDepositedValidators),
+    );
 
     // Unvet signing keys
     const tx = await dsm
@@ -150,11 +154,11 @@ describe("Integration: DSM keys unvetting", () => {
     const unvetEvents = findEventsWithInterfaces(receipt!, "VettedSigningKeysCountChanged", [nor.interface]);
     expect(unvetEvents.length).to.equal(1);
     expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
-    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(vettedSigningKeysCount);
+    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
 
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
-    expect(nodeOperatorAfter.totalVettedValidators).to.equal(vettedSigningKeysCount);
+    expect(nodeOperatorAfter.totalVettedValidators).to.equal(totalVettedValidatorsAfter);
   });
 
   it("Should allow guardian to unvet signing keys directly", async () => {
@@ -176,8 +180,12 @@ describe("Integration: DSM keys unvetting", () => {
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
 
     // Get node operator state before unvetting
-    const nodeOperatorsBefore = await nor.getNodeOperator(operatorId, true);
-    const totalDepositedValidatorsBefore = nodeOperatorsBefore.totalDepositedValidators;
+    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
+    const totalDepositedValidatorsBefore = nodeOperatorBefore.totalDepositedValidators;
+    const totalVettedValidatorsAfter = Math.max(
+      Number(vettedSigningKeysCount),
+      Number(nodeOperatorBefore.totalDepositedValidators),
+    );
     expect(totalDepositedValidatorsBefore).to.be.gte(1n);
 
     // Pack operator IDs into bytes (8 bytes per ID)
@@ -199,12 +207,12 @@ describe("Integration: DSM keys unvetting", () => {
     const unvetEvents = findEventsWithInterfaces(receipt!, "VettedSigningKeysCountChanged", [nor.interface]);
     expect(unvetEvents.length).to.equal(1);
     expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
-    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(vettedSigningKeysCount);
+    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
 
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
     expect(nodeOperatorAfter.totalDepositedValidators).to.equal(totalDepositedValidatorsBefore);
-    expect(nodeOperatorAfter.totalVettedValidators).to.equal(vettedSigningKeysCount);
+    expect(nodeOperatorAfter.totalVettedValidators).to.equal(totalVettedValidatorsAfter);
   });
 
   it("Should allow guardian to decrease vetted signing keys count", async () => {

@@ -36,8 +36,8 @@ export const provision = async (ctx: ProtocolContext) => {
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
 
-  await norEnsureOperators(ctx, 3n, 5n);
-  await sdvtEnsureOperators(ctx, 3n, 5n);
+  await norEnsureOperators(ctx, 5n, 9n);
+  await sdvtEnsureOperators(ctx, 5n, 9n);
 
   await finalizeWithdrawalQueue(ctx);
 
