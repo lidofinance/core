@@ -649,7 +649,7 @@ contract Dashboard is Permissions {
     event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
 
     /**
-     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered  (i.e. transferred)
+     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered (i.e. transferred)
      * @param to The address of the recovery recipient
      * @param token The address of the recovered ERC721 token
      * @param tokenId id of token recovered

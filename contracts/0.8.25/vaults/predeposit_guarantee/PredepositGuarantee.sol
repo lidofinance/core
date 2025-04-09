@@ -41,7 +41,7 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableUntilWithRoles {
     /**
      * @notice represents validator stages in PDG flow
-     * @param NONE  - initial stage
+     * @param NONE - initial stage
      * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
      * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
      * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be compensated to staking vault owner

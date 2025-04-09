@@ -194,7 +194,7 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()`  agree
+     * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()` agree
      * @param _newAdjustment ew adjustment amount
      * @param _currentAdjustment current adjustment value for invalidating old confirmations
      * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
