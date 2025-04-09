@@ -15,6 +15,7 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  impersonate,
   log,
   prepareLocalMerkleTree,
   updateBalance,
@@ -285,7 +286,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Curator to mint max stETH", async () => {
-    const { lido } = ctx.contracts;
+    const { lido, locator, vaultHub } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
     stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
@@ -298,6 +299,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       "Max shares": stakingVaultMaxMintingShares,
     });
 
+    //report
+    const valuations = [await stakingVault.valuation()];
+    const inOutDeltas = [await stakingVault.inOutDelta()];
+    const locked = [await stakingVault.locked()];
+    const treasuryFees = [0n];
+
+    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+
+    // mint
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 

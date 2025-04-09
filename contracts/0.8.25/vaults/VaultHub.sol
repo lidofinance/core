@@ -244,6 +244,8 @@ contract VaultHub is PausableUntilWithRoles {
             revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (vault_.isOssified()) revert VaultIsOssified(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -252,11 +254,15 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
 
-        if (IStakingVault(_vault).depositor() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositorNotAllowed(IStakingVault(_vault).depositor());
+        if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
+            revert VaultDepositorNotAllowed(vault_.depositor());
 
-        if (IStakingVault(_vault).locked() < CONNECT_DEPOSIT)
-            revert VaultInsufficientLocked(_vault, IStakingVault(_vault).locked(), CONNECT_DEPOSIT);
+        if (vault_.locked() < CONNECT_DEPOSIT)
+            revert VaultInsufficientLocked(_vault, vault_.locked(), CONNECT_DEPOSIT);
+        if (_vault.balance < CONNECT_DEPOSIT)
+            revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+
+        vault_.report(_vault.balance, vault_.inOutDelta(), vault_.locked());
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
@@ -339,6 +345,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 minLocked = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+
         if (minLocked > vault_.locked()) {
             revert VaultInsufficientLocked(_vault, vault_.locked(), minLocked);
         }
@@ -590,8 +597,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
 
         for (uint256 i = 1; i < length; i++) {
-            VaultSocket storage socket = $.sockets[i];
+            VaultSocket memory socket = $.sockets[i];
             if (socket.pendingDisconnect) {
+                // deauthorize vaultHub from the vault
+                IStakingVault(socket.vault).deauthorizeLidoVaultHub();
+
                 // remove disconnected vault from the list
                 VaultSocket memory lastSocket = $.sockets[length - 1];
                 $.sockets[i] = lastSocket;
@@ -651,7 +661,6 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
@@ -671,4 +680,6 @@ contract VaultHub is PausableUntilWithRoles {
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
+    error VaultIsOssified(address vault);
+    error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
 }
