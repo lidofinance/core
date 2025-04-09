@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  EIP7002WithdrawalRequest_Mock,
+  EIP7002WithdrawalRequest__Mock,
   ERC20__Harness,
   ERC721__Harness,
   Lido__MockForWithdrawalVault,
@@ -14,16 +14,11 @@ import {
   WithdrawalVault__Harness,
 } from "typechain-types";
 
-import { MAX_UINT256, proxify, streccak } from "lib";
+import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS, MAX_UINT256, proxify, streccak } from "lib";
 
+import { findEIP7002MockEvents, testEIP7002Mock } from "test/common/lib/triggerableWithdrawals/eip7002Mock";
+import { generateWithdrawalRequestPayload } from "test/common/lib/triggerableWithdrawals/utils";
 import { Snapshot } from "test/suite";
-
-import { findEip7002MockEvents, testEip7002Mock } from "../common/lib/triggerableWithdrawals/eip7002Mock";
-import {
-  deployWithdrawalsPredeployedMock,
-  generateWithdrawalRequestPayload,
-  withdrawalsPredeployedHardcodedAddress,
-} from "../common/lib/triggerableWithdrawals/utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
@@ -40,7 +35,7 @@ describe("WithdrawalVault.sol", () => {
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
 
-  let withdrawalsPredeployed: EIP7002WithdrawalRequest_Mock;
+  let withdrawalsPredeployed: EIP7002WithdrawalRequest__Mock;
 
   let impl: WithdrawalVault__Harness;
   let vault: WithdrawalVault__Harness;
@@ -49,9 +44,9 @@ describe("WithdrawalVault.sol", () => {
   before(async () => {
     [owner, treasury, validatorsExitBus, stranger] = await ethers.getSigners();
 
-    withdrawalsPredeployed = await deployWithdrawalsPredeployedMock(1n);
+    withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContract(1n);
 
-    expect(await withdrawalsPredeployed.getAddress()).to.equal(withdrawalsPredeployedHardcodedAddress);
+    expect(await withdrawalsPredeployed.getAddress()).to.equal(EIP7002_ADDRESS);
 
     lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
     lidoAddress = await lido.getAddress();
@@ -273,7 +268,7 @@ describe("WithdrawalVault.sol", () => {
 
   context("get triggerable withdrawal request fee", () => {
     it("Should get fee from the EIP 7002 contract", async function () {
-      await withdrawalsPredeployed.setFee(333n);
+      await withdrawalsPredeployed.mock__setFee(333n);
       expect(
         (await vault.getWithdrawalRequestFee()) == 333n,
         "withdrawal request should use fee from the EIP 7002 contract",
@@ -281,13 +276,13 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Should revert if fee read fails", async function () {
-      await withdrawalsPredeployed.setFailOnGetFee(true);
+      await withdrawalsPredeployed.mock__setFailOnGetFee(true);
       await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
       it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
-        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+        await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
         await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "WithdrawalFeeInvalidData");
       });
@@ -332,7 +327,7 @@ describe("WithdrawalVault.sol", () => {
     it("Should revert if not enough fee is sent", async function () {
       const { pubkeysHexString } = generateWithdrawalRequestPayload(1);
 
-      await withdrawalsPredeployed.setFee(3n); // Set fee to 3 gwei
+      await withdrawalsPredeployed.mock__setFee(3n); // Set fee to 3 gwei
 
       // 1. Should revert if no fee is sent
       await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString))
@@ -377,7 +372,7 @@ describe("WithdrawalVault.sol", () => {
       const fee = await getFee();
 
       // Set mock to fail on add
-      await withdrawalsPredeployed.setFailOnAddRequest(true);
+      await withdrawalsPredeployed.mock__setFailOnAddRequest(true);
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
@@ -385,7 +380,7 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Should revert when fee read fails", async function () {
-      await withdrawalsPredeployed.setFailOnGetFee(true);
+      await withdrawalsPredeployed.mock__setFailOnGetFee(true);
 
       const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
       const fee = 10n;
@@ -397,7 +392,7 @@ describe("WithdrawalVault.sol", () => {
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
       it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
-        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+        await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
         const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
         const fee = 10n;
@@ -420,7 +415,7 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
       const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
 
       await expect(
@@ -441,10 +436,10 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(3n);
+      await withdrawalsPredeployed.mock__setFee(3n);
       const expectedTotalWithdrawalFee = 9n;
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -456,10 +451,10 @@ describe("WithdrawalVault.sol", () => {
 
       // Check extremely high fee
       const highFee = ethers.parseEther("10");
-      await withdrawalsPredeployed.setFee(highFee);
+      await withdrawalsPredeployed.mock__setFee(highFee);
       const expectedLargeTotalWithdrawalFee = ethers.parseEther("30");
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -475,10 +470,10 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
       const withdrawalFee = 9n + 1n; // 3 request * 3 gwei (fee) + 1 gwei (extra fee)= 10 gwei
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: withdrawalFee }),
         pubkeys,
         fullWithdrawalAmounts,
@@ -488,7 +483,7 @@ describe("WithdrawalVault.sol", () => {
       // Check when the provided fee extremely exceeds the required amount
       const largeWithdrawalFee = ethers.parseEther("10");
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: largeWithdrawalFee }),
         pubkeys,
@@ -502,12 +497,12 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
       const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
 
       const initialBalance = await getWithdrawalCredentialsContractBalance();
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -520,7 +515,7 @@ describe("WithdrawalVault.sol", () => {
 
       const excessTotalWithdrawalFee = 9n + 1n; // 3 requests * 3 gwei (fee) + 1 gwei (extra fee) = 10 gwei
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -538,13 +533,13 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
       const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
       const excessFee = 1n;
 
       const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
 
-      const { receipt } = await testEip7002Mock(
+      const { receipt } = await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -564,13 +559,13 @@ describe("WithdrawalVault.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(3n);
+      await withdrawalsPredeployed.mock__setFee(3n);
       const expectedTotalWithdrawalFee = 9n;
       const excessTotalWithdrawalFee = 9n + 1n;
 
       let initialBalance = await getWithdrawalsPredeployedContractBalance();
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -583,7 +578,7 @@ describe("WithdrawalVault.sol", () => {
       expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
 
       initialBalance = await getWithdrawalsPredeployedContractBalance();
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -607,7 +602,7 @@ describe("WithdrawalVault.sol", () => {
 
       const receipt = await tx.wait();
 
-      const events = findEip7002MockEvents(receipt!, "eip7002MockRequestAdded");
+      const events = findEIP7002MockEvents(receipt!);
       expect(events.length).to.equal(requestCount);
 
       for (let i = 0; i < requestCount; i++) {
@@ -642,7 +637,7 @@ describe("WithdrawalVault.sol", () => {
         const initialBalance = await getWithdrawalCredentialsContractBalance();
         const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
 
-        const { receipt } = await testEip7002Mock(
+        const { receipt } = await testEIP7002Mock(
           () =>
             vault
               .connect(validatorsExitBus)
