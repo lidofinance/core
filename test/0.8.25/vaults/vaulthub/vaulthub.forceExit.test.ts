@@ -236,27 +236,6 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
-      const preTotalPooledEther = await steth.getTotalPooledEther();
-      const preTotalShares = await steth.getTotalShares();
-
-      const rebase = await vaultHub.calculateVaultsRebase(
-        [0n, valuation - penalty],
-        preTotalShares,
-        preTotalPooledEther,
-        preTotalShares - cap,
-        preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares,
-        0n,
-      );
-
-      const totalMintedShares =
-        (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted + rebase.treasuryFeeShares[1];
-      const withReserve = (totalMintedShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
-      const predictedLockedEther = await steth.getPooledEthByShares(withReserve);
-
-      expect(predictedLockedEther).to.equal(rebase.lockedEther[1]);
-
-      await demoVault.report(0n, valuation - penalty, valuation, rebase.lockedEther[1]);
-
       expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
