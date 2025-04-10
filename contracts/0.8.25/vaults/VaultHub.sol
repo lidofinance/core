@@ -194,6 +194,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return amount to rebalance
     function rebalanceShortfall(address _vault) public view returns (uint256) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        bool isHealthy = isVaultHealthy(_vault);
+
+        // Health vault do not need to rebalance
+        if (isHealthy) {
+            return 0;
+        }
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -202,8 +208,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
         uint256 valuation = IStakingVault(_vault).valuation();
 
-        // to avoid revert below
-        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
+        // Protection against underflow in division
+        if (mintedStETH > valuation) {
             // return MAX_UINT_256
             return type(uint256).max;
         }
