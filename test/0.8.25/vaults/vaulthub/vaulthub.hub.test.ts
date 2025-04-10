@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, keccak256, MaxInt256,ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, keccak256, MaxInt256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -602,7 +602,7 @@ describe("VaultHub.sol:hub", () => {
       expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
     });
 
-    it("Different cases when vault is healthy, unhealthy and minted > valuation", async () => {
+    it("different cases when vault is healthy, unhealthy and minted > valuation", async () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
