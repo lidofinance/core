@@ -27,16 +27,12 @@ contract NodeOperatorExitManager {
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     );
-    event PenaltyApplied(
-        uint256 indexed nodeOperatorId,
-        bytes publicKey,
-        uint256 penaltyAmount,
-        string penaltyType
-    );
+    event PenaltyApplied(uint256 indexed nodeOperatorId, bytes publicKey, uint256 penaltyAmount, string penaltyType);
     event ExitDeadlineThresholdChanged(uint256 threshold);
 
     // Storage positions
-    bytes32 internal constant EXIT_DEADLINE_THRESHOLD_POSITION = keccak256("lido.NodeOperatorExitManager.exitDeadlineThreshold");
+    bytes32 internal constant EXIT_DEADLINE_THRESHOLD_POSITION =
+        keccak256("lido.NodeOperatorExitManager.exitDeadlineThreshold");
 
     // Struct to store exit-related data for each validator
     struct ValidatorExitRecord {
@@ -139,6 +135,7 @@ contract NodeOperatorExitManager {
         require(record.lastUpdatedTimestamp > 0, "VALIDATOR_RECORD_NOT_FOUND");
 
         // Set the triggerable exit fee
+        // TODO: validation?
         record.triggerableExitFee = _withdrawalRequestPaidFee;
 
         emit TriggerableExitFeeSet(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
@@ -167,11 +164,7 @@ contract NodeOperatorExitManager {
         uint256 _eligibleToExitInSec
     ) internal view returns (bool) {
         // If the validator has exceeded the exit deadline, it should be penalized
-        if (_eligibleToExitInSec >= _getExitDeadlineThreshold()) {
-            return true;
-        }
-
-        return false;
+        return _eligibleToExitInSec >= _getExitDeadlineThreshold();
     }
 
     /**
@@ -194,53 +187,39 @@ contract NodeOperatorExitManager {
         uint256 _nodeOperatorId,
         bytes32 _publicKeyHash,
         uint256 _sharesInStETH
-    ) internal returns (uint256) {
-        // Check if record exists before attempting to apply penalties
+    ) internal returns (uint256, bool) {
         ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][_publicKeyHash];
-        if (record.lastUpdatedTimestamp == 0) {
-            return _sharesInStETH;
-        }
 
-        // If there are no penalties, return the original shares
-        if (record.penalizedFee == 0 && record.triggerableExitFee == 0) {
-            return _sharesInStETH;
+        if (record.lastUpdatedTimestamp == 0) {
+            return (_sharesInStETH, false);
         }
 
         uint256 remainingSharesInStETH = _sharesInStETH;
 
-        // Apply penalties for exceeding exit deadline
         if (record.penalizedFee > 0) {
-            if (record.penalizedFee >= remainingSharesInStETH) {
-                // Not enough shares to cover the full penalty
-                record.penalizedFee = record.penalizedFee.sub(
-                   remainingSharesInStETH
-                );
+            if (record.penalizedFee > remainingSharesInStETH) {
+                record.penalizedFee = record.penalizedFee.sub(remainingSharesInStETH);
                 remainingSharesInStETH = 0;
             } else {
-                // Enough shares to cover the penalty
                 remainingSharesInStETH = remainingSharesInStETH.sub(record.penalizedFee);
                 record.penalizedFee = 0;
                 record.isPenalized = true;
             }
         }
 
-        // Apply penalties for triggerable exit fees
         if (remainingSharesInStETH > 0 && record.triggerableExitFee > 0) {
-            if (record.triggerableExitFee >= remainingSharesInStETH) {
-                // Not enough shares to cover the full fee
-                record.triggerableExitFee = record.triggerableExitFee.sub(
-                   remainingSharesInStETH
-                );
+            if (record.triggerableExitFee > remainingSharesInStETH) {
+                record.triggerableExitFee = record.triggerableExitFee.sub(remainingSharesInStETH);
                 remainingSharesInStETH = 0;
             } else {
-                // Enough shares to cover the fee
                 remainingSharesInStETH = remainingSharesInStETH.sub(record.triggerableExitFee);
                 record.triggerableExitFee = 0;
                 record.isExited = true;
             }
         }
 
-        return remainingSharesInStETH;
+        bool completed = record.isPenalized && record.isExited;
+        return (remainingSharesInStETH, completed);
     }
 
     /**
@@ -249,50 +228,33 @@ contract NodeOperatorExitManager {
      * @param _sharesInStETH Amount of shares being distributed to the operator
      * @return Adjusted shares after penalties
      */
-    function _applyAllPenalties(
-        uint256 _nodeOperatorId,
-        uint256 _sharesInStETH
-    ) internal returns (uint256) {
+    function _applyAllPenalties(uint256 _nodeOperatorId, uint256 _sharesInStETH) internal returns (uint256) {
         uint256 remainingSharesInStETH = _sharesInStETH;
         bytes32[] storage validatorKeys = operatorWatchableValidatorKeys[_nodeOperatorId];
-
-        // Iterate through all validator keys for this operator
-        for (uint256 i = 0; i < validatorKeys.length; i++) {
-            remainingSharesInStETH = _applyPenaltiesByHash(
-                _nodeOperatorId,
-                validatorKeys[i],
-                remainingSharesInStETH
-            );
-
-            if (remainingSharesInStETH == 0) break;
-        }
-        // Clean up completed validators from the watchable keys array
-        // TODO: combine with _applyPenaltiesByHash to avoid double iteration
-        _cleanupCompletedValidators(_nodeOperatorId);
-
-        return remainingSharesInStETH;
-    }
-
-     /**
-     * @notice Clean up validators that have completed processing from the watchable keys array
-     * @param _nodeOperatorId The ID of the node operator
-     */
-    function _cleanupCompletedValidators(uint256 _nodeOperatorId) internal {
-        bytes32[] storage watchableKeys = operatorWatchableValidatorKeys[_nodeOperatorId];
         uint256 i = 0;
 
-        while (i < watchableKeys.length) {
-            ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][watchableKeys[i]];
+        while (i < validatorKeys.length) {
+            bytes32 key = validatorKeys[i];
 
-            if (record.isPenalized && record.isExited) {
-                // If both conditions are met, remove from watchable keys by swapping with the last element
-                watchableKeys[i] = watchableKeys[watchableKeys.length - 1];
-                watchableKeys.length--;
-                // Don't increment i as we need to process the swapped element
+            (uint256 updatedShares, bool completed) = _applyPenaltiesByHash(
+                _nodeOperatorId,
+                key,
+                remainingSharesInStETH
+            );
+            remainingSharesInStETH = updatedShares;
+
+            if (completed) {
+                validatorKeys[i] = validatorKeys[validatorKeys.length - 1];
+                validatorKeys.length--;
             } else {
-                // Move to next key
                 i++;
             }
+
+            if (remainingSharesInStETH == 0) {
+                break;
+            }
         }
+
+        return remainingSharesInStETH;
     }
 }
