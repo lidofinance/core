@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, keccak256, MaxInt256, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, keccak256, MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -622,9 +622,9 @@ describe("VaultHub.sol:hub", () => {
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
       expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(1n);
 
-      await vault.report(ether("0.5") - ether("0.4"), ether("1"), ether("1")); // minted > valuation
+      await vault.report(ether("0.5") - ether("0.5"), ether("1"), ether("1")); // minted > valuation
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
-      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MaxInt256);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MaxUint256);
     });
 
     it("returns correct value for rebalance vault", async () => {
