@@ -103,10 +103,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     return { reportData, reportHash };
   };
 
-  // async function getLastRequestedValidatorIndex(moduleId: number, nodeOpId: number) {
-  //   return (await oracle.getLastRequestedValidatorIndices(moduleId, [nodeOpId]))[0];
-  // }
-
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;

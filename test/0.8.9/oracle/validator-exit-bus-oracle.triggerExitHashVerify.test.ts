@@ -210,14 +210,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
   });
 
-  // it("last requested validator indices are updated", async () => {
-  //   const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n, 3n]);
-  //   const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n, 3n]);
-
-  //   expect([...indices1]).to.have.ordered.members([2n, -1n, -1n, -1n]);
-  //   expect([...indices2]).to.have.ordered.members([3n, -1n, -1n, -1n]);
-  // });
-
   it("someone submitted exit report data and triggered exit", async () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },

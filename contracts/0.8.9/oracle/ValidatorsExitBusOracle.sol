@@ -283,7 +283,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         if (requestsCount == 0) {
             return;
         }
-        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(requestsCount - 1, block.timestamp));
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(requestsCount - 1, _getTimestamp()));
     }
 
     ///
