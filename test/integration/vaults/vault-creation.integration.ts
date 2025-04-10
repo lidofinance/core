@@ -228,9 +228,9 @@ describe("Scenario: Actions on vault creation", () => {
       .withArgs(ctx.contracts.predepositGuarantee.address, 1, ether("1"));
 
     // Step 3: Prove and deposit the validator
-    const slot = await predepositGuarantee.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+    const slot = await predepositGuarantee.PIVOT_SLOT();
 
-    const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+    const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
     const { validatorIndex } = await mockCLtree.addValidator(validator.container);
     const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
     const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
@@ -241,7 +241,16 @@ describe("Scenario: Actions on vault creation", () => {
 
     postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
 
-    const witnesses = [{ proof, pubkey, validatorIndex, childBlockTimestamp }];
+    const witnesses = [
+      {
+        proof,
+        pubkey,
+        validatorIndex,
+        childBlockTimestamp,
+        slot: beaconBlockHeader.slot,
+        proposerIndex: beaconBlockHeader.proposerIndex,
+      },
+    ];
 
     await expect(
       predepositGuarantee.connect(nodeOperatorManager).proveAndDeposit(witnesses, [postdeposit], stakingVault),

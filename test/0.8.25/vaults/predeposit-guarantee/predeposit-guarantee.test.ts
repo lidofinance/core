@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { hexlify, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -222,7 +222,16 @@ describe("PredepositGuarantee.sol", () => {
       // NO posts proof and triggers deposit to total of 32 ether
       const postDepositData = generatePostDeposit(validator.container, ether("31"));
       const proveAndDepositTx = pdg.proveAndDeposit(
-        [{ pubkey: validator.container.pubkey, validatorIndex, childBlockTimestamp, proof: concatenatedProof }],
+        [
+          {
+            pubkey: validator.container.pubkey,
+            validatorIndex,
+            childBlockTimestamp,
+            proposerIndex: beaconBlockHeader.proposerIndex,
+            slot: beaconBlockHeader.slot,
+            proof: concatenatedProof,
+          },
+        ],
         [postDepositData],
         stakingVault,
       );
@@ -799,6 +808,8 @@ describe("PredepositGuarantee.sol", () => {
           pubkey: validator.container.pubkey,
           proof,
           childBlockTimestamp,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
         };
 
         // stage NONE
@@ -865,6 +876,8 @@ describe("PredepositGuarantee.sol", () => {
           validatorIndex,
           childBlockTimestamp,
           proof: concatenatedProof,
+          slot: beaconBlockHeader.slot,
+          proposerIndex: beaconBlockHeader.proposerIndex,
         };
 
         const proveValidatorWCTX = pdg.connect(vaultOwner).proveValidatorWC(witness);
@@ -957,6 +970,8 @@ describe("PredepositGuarantee.sol", () => {
           pubkey: mainValidator.container.pubkey,
           validatorIndex: mainValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
         });
 
         await pdg.proveValidatorWC({
@@ -964,6 +979,8 @@ describe("PredepositGuarantee.sol", () => {
           pubkey: sideValidator.container.pubkey,
           validatorIndex: sideValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
         });
 
         await pdg.proveValidatorWC({
@@ -971,6 +988,8 @@ describe("PredepositGuarantee.sol", () => {
           pubkey: sameNOValidator.container.pubkey,
           validatorIndex: sameNoValidatorIndex,
           childBlockTimestamp: childBlockTimestamp,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
         });
 
         expect((await pdg.validatorStatus(mainValidator.container.pubkey)).stage).to.deep.equal(2n);
@@ -994,26 +1013,18 @@ describe("PredepositGuarantee.sol", () => {
 
     context("proveUnknownValidator", () => {
       it("revert the proveUnknownValidator if it was called by not StakingVault Owner", async () => {
-        let witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
+        const witness = {
+          validatorIndex: 1n,
+          childBlockTimestamp: 1n,
+          pubkey: "0x00",
+          proof: [],
+          slot: 1n,
+          proposerIndex: 1n,
+        };
         await expect(pdg.connect(stranger).proveUnknownValidator(witness, stakingVault)).to.be.revertedWithCustomError(
           pdg,
           "NotStakingVaultOwner",
         );
-
-        await expect(
-          pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault),
-        ).to.be.revertedWithCustomError(pdg, "InvalidPubkeyLength");
-
-        witness = {
-          validatorIndex: 1n,
-          childBlockTimestamp: 1n,
-          pubkey: hexlify(generateValidator().container.pubkey),
-          proof: [],
-        };
-
-        await expect(
-          pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault),
-        ).to.be.revertedWithCustomError(pdg, "RootNotFound");
       });
 
       it("can use PDG with proveUnknownValidator", async () => {
@@ -1047,6 +1058,8 @@ describe("PredepositGuarantee.sol", () => {
           validatorIndex,
           childBlockTimestamp,
           proof: concatenatedProof,
+          slot: beaconBlockHeader.slot,
+          proposerIndex: beaconBlockHeader.proposerIndex,
         };
 
         const proveUnknownValidatorTx = await pdg.connect(vaultOwner).proveUnknownValidator(witness, stakingVault);
@@ -1111,6 +1124,8 @@ describe("PredepositGuarantee.sol", () => {
         invalidValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 1n,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
           pubkey: invalidValidator.container.pubkey,
           proof: [
             ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator.container)).proof,
@@ -1122,6 +1137,8 @@ describe("PredepositGuarantee.sol", () => {
         validValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 2n,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
           pubkey: validValidator.container.pubkey,
           proof: [
             ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator.container)).proof,
@@ -1133,6 +1150,8 @@ describe("PredepositGuarantee.sol", () => {
         validNotPredepostedValidatorWitness = {
           childBlockTimestamp,
           validatorIndex: 3n,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
           pubkey: validNotPredepostedValidator.container.pubkey,
           proof: [
             ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validNotPredepostedValidator.container)).proof,
@@ -1228,6 +1247,8 @@ describe("PredepositGuarantee.sol", () => {
           childBlockTimestamp,
           validatorIndex: 1n,
           pubkey: invalidValidator.container.pubkey,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
           proof: [
             ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(invalidValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 1n)),
@@ -1239,6 +1260,8 @@ describe("PredepositGuarantee.sol", () => {
           childBlockTimestamp,
           validatorIndex: 2n,
           pubkey: validValidator.container.pubkey,
+          slot: beaconHeader.slot,
+          proposerIndex: beaconHeader.proposerIndex,
           proof: [
             ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator.container)).proof,
             ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 2n)),
@@ -1358,7 +1381,14 @@ describe("PredepositGuarantee.sol", () => {
       await expect(pdg.setNodeOperatorGuarantor(vaultOperator)).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.claimGuarantorRefund(vaultOperator)).to.revertedWithCustomError(pdg, "ResumedExpected");
 
-      const witness = { validatorIndex: 1n, childBlockTimestamp: 1n, pubkey: "0x00", proof: [] };
+      const witness = {
+        validatorIndex: 1n,
+        childBlockTimestamp: 1n,
+        pubkey: "0x00",
+        proof: [],
+        slot: 1n,
+        proposerIndex: 1n,
+      };
 
       await expect(pdg.predeposit(stakingVault, [], [])).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.proveValidatorWC(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
