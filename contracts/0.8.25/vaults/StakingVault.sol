@@ -417,7 +417,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (checkFreshnessAndGetVauluation() < $.locked) revert ValuationBelowLockedAmount();
+        if (_checkFreshnessAndGetVauluation() < $.locked) revert ValuationBelowLockedAmount();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -430,7 +430,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
-        if (_locked > checkFreshnessAndGetVauluation()) revert NewLockedExceedsValuation();
+        if (_locked > _checkFreshnessAndGetVauluation()) revert NewLockedExceedsValuation();
 
         $.locked = uint128(_locked);
 
@@ -446,7 +446,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        uint256 valuation_ = checkFreshnessAndGetVauluation();
+        uint256 valuation_ = _checkFreshnessAndGetVauluation();
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
@@ -613,7 +613,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isValuationBelowLocked = checkFreshnessAndGetVauluation() < $.locked;
+        bool isValuationBelowLocked = _checkFreshnessAndGetVauluation() < $.locked;
         if (isValuationBelowLocked) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
@@ -644,17 +644,21 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
-    function _isReportFresh() internal view returns (bool) {
+    function isReportFresh() public view returns (bool) {
         ERC7201Storage storage $ = _getStorage();
         if (!$.vaultHubAuthorized) return true;
         return block.timestamp - $.report.timestamp < REPORT_FRESHNESS_DELTA;
     }
 
-    function _checkReportFreshness() internal view {
-        if (!_isReportFresh()) revert FreshReportRequired();
+    function ensureReportFreshness() public view {
+        if (!isReportFresh()) revert FreshReportRequired();
     }
 
-    function checkFreshnessAndGetVauluation() internal view returns (uint256) {
+    function _checkReportFreshness() internal view {
+        if (!isReportFresh()) revert FreshReportRequired();
+    }
+
+    function _checkFreshnessAndGetVauluation() internal view returns (uint256) {
         _checkReportFreshness();
         return valuation();
     }

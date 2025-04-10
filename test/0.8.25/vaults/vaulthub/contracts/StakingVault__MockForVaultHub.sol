@@ -116,6 +116,12 @@ contract StakingVault__MockForVaultHub {
         vaultHubAuthorized = false;
     }
 
+    function isReportFresh() external view returns (bool) {
+        return true;
+    }
+
+    function ensureReportFreshness() external view {}
+
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
     error Mock__HealthyVault();

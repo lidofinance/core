@@ -75,4 +75,6 @@ interface IStakingVault {
     function ossifyStakingVault() external;
     function isOssified() external view returns (bool);
     function setDepositor(address _depositor) external;
+    function isReportFresh() external view returns (bool);
+    function ensureReportFreshness() external view;
 }

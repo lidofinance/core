@@ -192,6 +192,7 @@ contract VaultHub is PausableUntilWithRoles {
     function isVaultHealthy(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (socket.sharesMinted == 0) return true;
+        IStakingVault(_vault).ensureReportFreshness();
 
         return
             ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
@@ -359,6 +360,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
         IStakingVault vault_ = IStakingVault(_vault);
+        vault_.ensureReportFreshness();
+
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
         uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
