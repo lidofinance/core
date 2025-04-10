@@ -41,7 +41,8 @@ interface ILido is IERC20, IERC20Permit {
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _reportClBalance,
+        uint256 _externalEtherDeficit
     ) external;
 
     function collectRewardsAndProcessWithdrawals(
