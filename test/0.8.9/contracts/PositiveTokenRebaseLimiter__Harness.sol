@@ -5,7 +5,6 @@
 pragma solidity 0.8.9;
 
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "contracts/0.8.9/lib/PositiveTokenRebaseLimiter.sol";
-import "hardhat/console.sol";
 
 contract PositiveTokenRebaseLimiter__Harness {
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;

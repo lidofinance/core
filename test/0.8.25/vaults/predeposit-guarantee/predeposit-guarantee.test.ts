@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForStakingVault,
   EthRejector,
+  IPredepositGuarantee,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
@@ -17,7 +18,6 @@ import {
   VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
-import { CLProofVerifier } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
   addressToWC,
@@ -61,12 +61,12 @@ describe("PredepositGuarantee.sol", () => {
 
   let originalState: string;
 
-  async function deployStakingVault(owner: HardhatEthersSigner, operator: HardhatEthersSigner): Promise<StakingVault> {
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [
-      vaultHub,
-      pdg,
-      await depositContract.getAddress(),
-    ]);
+  async function deployStakingVault(
+    owner: HardhatEthersSigner,
+    operator: HardhatEthersSigner,
+    vaultHub_: VaultHub__MockForStakingVault,
+  ): Promise<StakingVault> {
+    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract]);
 
     // deploying factory/beacon
     const vaultFactory_: VaultFactory__MockForStakingVault = await ethers.deployContract(
@@ -75,7 +75,7 @@ describe("PredepositGuarantee.sol", () => {
     );
 
     // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator).then((tx) => tx.wait());
+    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
     if (!vaultCreation) throw new Error("Vault creation failed");
     const events = findEvents(vaultCreation, "VaultCreated");
     if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
@@ -119,10 +119,10 @@ describe("PredepositGuarantee.sol", () => {
     // PDG dependants
     locator = await deployLidoLocator({ predepositGuarantee: pdg });
     expect(await locator.predepositGuarantee()).to.equal(await pdg.getAddress());
-    vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault");
-    stakingVault = await deployStakingVault(vaultOwner, vaultOperator);
-    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract, pdg]);
-    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, "0x00");
+    vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault", [locator]);
+    stakingVault = await deployStakingVault(vaultOwner, vaultOperator, vaultHub);
+    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
+    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, pdg, "0x00");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -917,8 +917,8 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("reverts to deposit someone else validators", async () => {
-        const sideStakingVault = await deployStakingVault(stranger, stranger);
-        const sameNOVault = await deployStakingVault(stranger, vaultOperator);
+        const sideStakingVault = await deployStakingVault(stranger, stranger, vaultHub);
+        const sameNOVault = await deployStakingVault(stranger, vaultOperator, vaultHub);
         const sideValidator = generateValidator(await sideStakingVault.withdrawalCredentials());
         const mainValidator = generateValidator(await stakingVault.withdrawalCredentials());
         const sameNOValidator = generateValidator(await sameNOVault.withdrawalCredentials());
@@ -1082,14 +1082,14 @@ describe("PredepositGuarantee.sol", () => {
     context("proveInvalidValidatorWC", () => {
       let invalidWC: string;
       let invalidValidator: Validator;
-      let invalidValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let invalidValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       let validWC: string;
       let validValidator: Validator;
-      let validValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       let validNotPredepostedValidator: Validator;
-      let validNotPredepostedValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validNotPredepostedValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });

@@ -7,9 +7,11 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {StETH__MockForDelegation} from "./StETH__MockForDelegation.sol";
 
 contract VaultHub__MockForDelegation {
+    address public immutable LIDO_LOCATOR;
     StETH__MockForDelegation public immutable steth;
 
-    constructor(StETH__MockForDelegation _steth) {
+    constructor(address _lidoLocator, StETH__MockForDelegation _steth) {
+        LIDO_LOCATOR = _lidoLocator;
         steth = _steth;
     }
 

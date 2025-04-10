@@ -7,6 +7,8 @@ pragma solidity 0.8.25;
 import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
 import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+
 /**
  * @title CLProofVerifier
  * @author Lido
@@ -19,24 +21,6 @@ import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
  *
  */
 abstract contract CLProofVerifier {
-    /**
-     * @notice user input for validator proof verification
-     * @custom:proof array of merkle proofs from parent(pubkey,wc) node to Beacon block root
-     * @custom:pubkey of validator to prove
-     * @custom:validatorIndex of validator in CL state tree
-     * @custom:childBlockTimestamp of EL block that has parent block beacon root in BEACON_ROOTS contract
-     * @custom:slot of the Beacon block that has the state root
-     * @custom:proposerIndex of the Beacon block that has the state root
-     */
-    struct ValidatorWitness {
-        bytes32[] proof;
-        bytes pubkey;
-        uint256 validatorIndex;
-        uint64 childBlockTimestamp;
-        uint64 slot;
-        uint64 proposerIndex;
-    }
-
     /**
      * @notice CLProofVerifier accepts concatenated Merkle proofs to verify existence of correct pubkey+WC validator on CL
      * Proof consists of:
@@ -162,7 +146,10 @@ abstract contract CLProofVerifier {
      * @param _withdrawalCredentials to verify proof with
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
-    function _validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) internal view {
+    function _validatePubKeyWCProof(
+        IPredepositGuarantee.ValidatorWitness calldata _witness,
+        bytes32 _withdrawalCredentials
+    ) internal view {
         // verifies user provided slot against user provided proof
         // proof verification is done in `SSZ.verifyProof` and is not affected by slot
         uint64 provenSlot = _verifySlot(_witness);
@@ -205,7 +192,7 @@ abstract contract CLProofVerifier {
      * So verification of full `pk+wc -> beacon root` proof later in code also verifies `slot -> beacon root`
      * This approach is more gas efficient and takes advantage of merkle tree multi-proof property.
      */
-    function _verifySlot(ValidatorWitness calldata _witness) internal view returns (uint64) {
+    function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view returns (uint64) {
         bytes32 parentSlotProposer = SSZ.sha256Pair(
             SSZ.toLittleEndian(_witness.slot),
             SSZ.toLittleEndian(_witness.proposerIndex)
