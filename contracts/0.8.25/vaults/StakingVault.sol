@@ -126,6 +126,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     /**
+     * @notice The time delta for report freshness check
+     */
+    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+
+    /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
@@ -639,17 +644,19 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
-    function checkFreshnessAndGetVauluation() internal view returns (uint256) {
-        _checkReportFreshness();
-        return valuation();
-    }
-
     function _isReportFresh() internal view returns (bool) {
-        return block.timestamp - _getStorage().report.timestamp < 1 days;
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.vaultHubAuthorized) return true;
+        return block.timestamp - $.report.timestamp < REPORT_FRESHNESS_DELTA;
     }
 
     function _checkReportFreshness() internal view {
         if (!_isReportFresh()) revert FreshReportRequired();
+    }
+
+    function checkFreshnessAndGetVauluation() internal view returns (uint256) {
+        _checkReportFreshness();
+        return valuation();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
