@@ -99,6 +99,12 @@ abstract contract Permissions is AccessControlConfirmable {
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
+     * @dev Permission for deauthorizing Lido VaultHub from the StakingVault.
+     */
+    bytes32 public constant LIDO_VAULTHUB_DEAUTHORIZATION_ROLE =
+        keccak256("vaults.Permissions.LidoVaultHubDeauthorization");
+
+    /**
      * @notice Permission for assets recovery
      */
     bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
@@ -318,6 +324,13 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+    }
+
+    /**
+     * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
+     */
+    function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
+        stakingVault().deauthorizeLidoVaultHub();
     }
 
     /**

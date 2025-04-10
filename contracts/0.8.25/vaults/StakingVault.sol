@@ -40,11 +40,13 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  *   - `fund()`
  *   - `withdraw()`
  *   - `rebalance()`
+ *   - `lock()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
  *   - `authorizeLidoVaultHub()`
+ *   - `deauthorizeLidoVaultHub()`
  *   - `ossifyStakingVault()`
  *   - `setDepositor()`
  *   - `resetLocked()`
@@ -53,11 +55,9 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * - Depositor:
  *   - `depositToBeaconChain()`
  * - VaultHub:
- *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
  *   - `triggerValidatorWithdrawal()`
- *   - `deauthorizeLidoVaultHub()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
@@ -222,11 +222,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Deauthorizes the `VaultHub` from the vault
-     * @dev Can only be called by the VaultHub
+     * @dev Can only be called by the owner
      * @dev Reverts if vaultHub is already deauthorized
+     * @dev Reverts if vault is already connected to VaultHub
      */
-    function deauthorizeLidoVaultHub() external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("deauthorizeLidoVaultHub", msg.sender);
+    function deauthorizeLidoVaultHub() external onlyOwner {
+        VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
+        if (socket.vault != address(0)) {
+            revert VaultConnected();
+        }
+
         ERC7201Storage storage $ = _getStorage();
         if (!$.vaultHubAuthorized) revert VaultHubNotAuthorized();
 
@@ -442,15 +447,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
-        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == address(VAULT_HUB))) {
-            $.inOutDelta -= int128(int256(_ether));
 
-            emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+        bool isAuthorized = (owner() == msg.sender
+            || (valuation_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+        );
+        if (!isAuthorized) revert NotAuthorized("rebalance", msg.sender);
 
-            VAULT_HUB.rebalance{value: _ether}();
-        } else {
-            revert NotAuthorized("rebalance", msg.sender);
-        }
+        $.inOutDelta -= int128(int256(_ether));
+
+        emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+
+        VAULT_HUB.rebalance{value: _ether}();
     }
 
     /**
@@ -461,7 +468,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         ERC7201Storage storage $ = _getStorage();
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
+        if (msg.sender != address(VAULT_HUB) || !$.vaultHubAuthorized) revert NotAuthorized("report", msg.sender);
 
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
@@ -614,7 +621,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         bool isAuthorized = (msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB))
+            (isValuationBelowLocked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
         );
 
 
@@ -851,4 +858,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param depositor Address of the depositor
      */
     error InvalidDepositor(address depositor);
+
+    /**
+     * @notice Thrown when the vault is connected to VaultHub
+     */
+    error VaultConnected();
 }
