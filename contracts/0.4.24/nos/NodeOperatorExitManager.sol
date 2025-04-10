@@ -6,11 +6,6 @@ pragma solidity 0.4.24;
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
-interface IStETH {
-    function getSharesByPooledEth(uint256 _ethAmount) external view returns (uint256);
-    function getPooledEthByShares(uint256 _sharesAmount) external view returns (uint256);
-}
-
 /**
  * @title NodeOperatorExitManager
  * @notice Base contract for handling triggerable withdrawals and penalties for validators
@@ -46,7 +41,7 @@ contract NodeOperatorExitManager {
     // Struct to store exit-related data for each validator
     struct ValidatorExitRecord {
         uint256 eligibleToExitInSec;
-        uint256 pinalizedFee;
+        uint256 penalizedFee;
         uint256 triggerableExitFee;
         uint256 lastUpdatedTimestamp;
         bool isPenalized;
@@ -61,11 +56,11 @@ contract NodeOperatorExitManager {
 
     /**
      * @notice Initialize the contract with a default exit deadline threshold
-     * @param _exitDeadlineThreshold The number of seconds after which a validator is considered late
+     * @param _getExitDeadlineThreshold The number of seconds after which a validator is considered late
      */
-    function _initializeNodeOperatorExitManager(uint256 _exitDeadlineThreshold) internal {
-        EXIT_DEADLINE_THRESHOLD_POSITION.setStorageUint256(_exitDeadlineThreshold);
-        emit ExitDeadlineThresholdChanged(_exitDeadlineThreshold);
+    function _initializeNodeOperatorExitManager(uint256 _getExitDeadlineThreshold) internal {
+        EXIT_DEADLINE_THRESHOLD_POSITION.setStorageUint256(_getExitDeadlineThreshold);
+        emit ExitDeadlineThresholdChanged(_getExitDeadlineThreshold);
     }
 
     /**
@@ -90,7 +85,7 @@ contract NodeOperatorExitManager {
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) internal {
-        require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "INVALID_EXIT_TIME");
+        require(_eligibleToExitInSec >= _getExitDeadlineThreshold(), "INVALID_EXIT_TIME");
         require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
 
         // Hash the public key to use as a mapping key
@@ -109,13 +104,11 @@ contract NodeOperatorExitManager {
         record.lastUpdatedTimestamp = _proofSlotTimestamp;
 
         // Calculate penalty if the validator has exceeded the exit deadline
-        if (record.pinalizedFee != 0) {
-            // Calculate penalty based on the excess time
-            uint256 excessTime = _eligibleToExitInSec.sub(_exitDeadlineThreshold());
-            uint256 penaltyAmount = _calculatePenalty(excessTime);
+        if (record.penalizedFee == 0) {
+            uint256 penaltyAmount = _getPenalty();
 
             // Add to the penalized fee
-            record.pinalizedFee = record.pinalizedFee.add(penaltyAmount);
+            record.penalizedFee = record.penalizedFee.add(penaltyAmount);
 
             emit PenaltyApplied(_nodeOperatorId, _publicKey, penaltyAmount, "EXCESS_EXIT_TIME");
         }
@@ -139,10 +132,11 @@ contract NodeOperatorExitManager {
         require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
 
         // Hash the public key to use as a mapping key
-        bytes32 publicKeyHash = keccak256(_publicKey);
+        bytes32 _publicKeyHash = keccak256(_publicKey);
 
         // Get or initialize the validator exit record
-        ValidatorExitRecord storage record = _getValidatorExitRecordByHash(_nodeOperatorId, publicKeyHash);
+        ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][_publicKeyHash];
+        require(record.lastUpdatedTimestamp > 0, "VALIDATOR_RECORD_NOT_FOUND");
 
         // Set the triggerable exit fee
         record.triggerableExitFee = _withdrawalRequestPaidFee;
@@ -154,7 +148,7 @@ contract NodeOperatorExitManager {
      * @notice Returns the number of seconds after which a validator is considered late
      * @return The exit deadline threshold in seconds
      */
-    function _exitDeadlineThreshold() public view returns (uint256) {
+    function _getExitDeadlineThreshold() public view returns (uint256) {
         return EXIT_DEADLINE_THRESHOLD_POSITION.getStorageUint256();
     }
 
@@ -173,7 +167,7 @@ contract NodeOperatorExitManager {
         uint256 _eligibleToExitInSec
     ) internal view returns (bool) {
         // If the validator has exceeded the exit deadline, it should be penalized
-        if (_eligibleToExitInSec >= _exitDeadlineThreshold()) {
+        if (_eligibleToExitInSec >= _getExitDeadlineThreshold()) {
             return true;
         }
 
@@ -181,170 +175,102 @@ contract NodeOperatorExitManager {
     }
 
     /**
-     * @notice Get the exit record for a validator using its public key hash
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _publicKeyHash Hash of the validator's public key
-     * @return Record data: eligibleToExitInSec, pinalizedFee, triggerableExitFee, lastUpdatedTimestamp
-     */
-    function _getValidatorExitRecordByHash(
-        uint256 _nodeOperatorId,
-        bytes32 _publicKeyHash
-    ) internal view returns (uint256, uint256, uint256, uint256) {
-        ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][_publicKeyHash];
-        require(record.lastUpdatedTimestamp > 0, "VALIDATOR_RECORD_NOT_FOUND");
-
-        return (
-            record.eligibleToExitInSec,
-            record.pinalizedFee,
-            record.triggerableExitFee,
-            record.lastUpdatedTimestamp
-        );
-    }
-
-    /**
-     * @notice Get the exit record for a validator using its public key
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _publicKey The public key of the validator
-     * @return Record data: eligibleToExitInSec, pinalizedFee, triggerableExitFee, lastUpdatedTimestamp
-     */
-    function _getValidatorExitRecord(
-        uint256 _nodeOperatorId,
-        bytes _publicKey
-    ) internal view returns (uint256, uint256, uint256, uint256) {
-        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
-        bytes32 publicKeyHash = keccak256(_publicKey);
-
-        return _getValidatorExitRecordByHash(_nodeOperatorId, publicKeyHash);
-    }
-
-    /**
      * @notice Helper function to calculate penalty based on excess time
-     * @param _excessTime Time in seconds beyond the exit deadline
-     * @return Penalty amount in ETH
+     * @return Penalty amount in stETH
      */
-    function _calculatePenalty(uint256 _excessTime) internal pure returns (uint256) {
+    function _getPenalty() internal pure returns (uint256) {
         // TODO: get the penalty rate from analytics team
-        return _excessTime.mul(1 ether).div(86400);
+        return 1 ether;
     }
 
     /**
      * @notice Apply penalties to an operator's rewards using public key hash
      * @param _nodeOperatorId The ID of the node operator
      * @param _publicKeyHash Hash of the validator's public key
-     * @param _stETH Interface to the stETH token
-     * @param _shares Amount of shares being distributed to the operator
+     * @param _sharesInStETH Amount of shares being distributed to the operator in stETH
      * @return Adjusted shares after penalties
      */
     function _applyPenaltiesByHash(
         uint256 _nodeOperatorId,
         bytes32 _publicKeyHash,
-        IStETH _stETH,
-        uint256 _shares
+        uint256 _sharesInStETH
     ) internal returns (uint256) {
         // Check if record exists before attempting to apply penalties
         ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][_publicKeyHash];
         if (record.lastUpdatedTimestamp == 0) {
-            return _shares;
+            return _sharesInStETH;
         }
 
         // If there are no penalties, return the original shares
-        if (record.pinalizedFee == 0 && record.triggerableExitFee == 0) {
-            return _shares;
+        if (record.penalizedFee == 0 && record.triggerableExitFee == 0) {
+            return _sharesInStETH;
         }
 
-        uint256 remainingShares = _shares;
+        uint256 remainingSharesInStETH = _sharesInStETH;
 
         // Apply penalties for exceeding exit deadline
-        if (record.pinalizedFee > 0) {
-            uint256 pinalizedShares = _stETH.getSharesByPooledEth(record.pinalizedFee);
-
-            if (pinalizedShares >= remainingShares) {
+        if (record.penalizedFee > 0) {
+            if (record.penalizedFee >= remainingSharesInStETH) {
                 // Not enough shares to cover the full penalty
-                record.pinalizedFee = record.pinalizedFee.sub(
-                    _stETH.getPooledEthByShares(remainingShares)
+                record.penalizedFee = record.penalizedFee.sub(
+                   remainingSharesInStETH
                 );
-                remainingShares = 0;
+                remainingSharesInStETH = 0;
             } else {
                 // Enough shares to cover the penalty
-                remainingShares = remainingShares.sub(pinalizedShares);
-                record.pinalizedFee = 0;
+                remainingSharesInStETH = remainingSharesInStETH.sub(record.penalizedFee);
+                record.penalizedFee = 0;
                 record.isPenalized = true;
             }
         }
 
-
         // Apply penalties for triggerable exit fees
-        if (remainingShares > 0 && record.triggerableExitFee > 0) {
-            uint256 triggerableShares = _stETH.getSharesByPooledEth(record.triggerableExitFee);
-
-            if (triggerableShares >= remainingShares) {
+        if (remainingSharesInStETH > 0 && record.triggerableExitFee > 0) {
+            if (record.triggerableExitFee >= remainingSharesInStETH) {
                 // Not enough shares to cover the full fee
                 record.triggerableExitFee = record.triggerableExitFee.sub(
-                    _stETH.getPooledEthByShares(remainingShares)
+                   remainingSharesInStETH
                 );
-                remainingShares = 0;
+                remainingSharesInStETH = 0;
             } else {
                 // Enough shares to cover the fee
-                remainingShares = remainingShares.sub(triggerableShares);
+                remainingSharesInStETH = remainingSharesInStETH.sub(record.triggerableExitFee);
                 record.triggerableExitFee = 0;
                 record.isExited = true;
             }
         }
 
-        return remainingShares;
-    }
-
-    /**
-     * @notice Apply penalties to an operator's rewards using public key
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _publicKey The public key of the validator
-     * @param _stETH Interface to the stETH token
-     * @param _shares Amount of shares being distributed to the operator
-     * @return Adjusted shares after penalties
-     */
-    function _applyPenalties(
-        uint256 _nodeOperatorId,
-        bytes _publicKey,
-        IStETH _stETH,
-        uint256 _shares
-    ) internal returns (uint256) {
-        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
-        bytes32 publicKeyHash = keccak256(_publicKey);
-
-        return _applyPenaltiesByHash(_nodeOperatorId, publicKeyHash, _stETH, _shares);
+        return remainingSharesInStETH;
     }
 
     /**
      * @notice Apply penalties to all validators of an operator
      * @param _nodeOperatorId The ID of the node operator
-     * @param _stETH Interface to the stETH token
-     * @param _shares Amount of shares being distributed to the operator
+     * @param _sharesInStETH Amount of shares being distributed to the operator
      * @return Adjusted shares after penalties
      */
     function _applyAllPenalties(
         uint256 _nodeOperatorId,
-        IStETH _stETH,
-        uint256 _shares
+        uint256 _sharesInStETH
     ) internal returns (uint256) {
-        uint256 remainingShares = _shares;
-        bytes32[] storage validatorKeys = operatorValidatorKeys[_nodeOperatorId];
+        uint256 remainingSharesInStETH = _sharesInStETH;
+        bytes32[] storage validatorKeys = operatorWatchableValidatorKeys[_nodeOperatorId];
 
         // Iterate through all validator keys for this operator
         for (uint256 i = 0; i < validatorKeys.length; i++) {
-            remainingShares = _applyPenaltiesByHash(
+            remainingSharesInStETH = _applyPenaltiesByHash(
                 _nodeOperatorId,
                 validatorKeys[i],
-                _stETH,
-                remainingShares
+                remainingSharesInStETH
             );
 
-            if (remainingShares == 0) break;
+            if (remainingSharesInStETH == 0) break;
         }
         // Clean up completed validators from the watchable keys array
         // TODO: combine with _applyPenaltiesByHash to avoid double iteration
         _cleanupCompletedValidators(_nodeOperatorId);
 
-        return remainingShares;
+        return remainingSharesInStETH;
     }
 
      /**
@@ -368,14 +294,5 @@ contract NodeOperatorExitManager {
                 i++;
             }
         }
-    }
-
-    /**
-     * @notice Get the count of validators with exit records for a node operator
-     * @param _nodeOperatorId The ID of the node operator
-     * @return Count of validators with exit records
-     */
-    function _getValidatorExitRecordCount(uint256 _nodeOperatorId) internal view returns (uint256) {
-        return operatorWatchableValidatorKeys[_nodeOperatorId].length;
     }
 }
