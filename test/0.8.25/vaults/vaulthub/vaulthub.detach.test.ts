@@ -90,7 +90,6 @@ describe("VaultHub.sol:deauthorize", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
-
     //vault implementation
     implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
@@ -102,8 +101,7 @@ describe("VaultHub.sol:deauthorize", () => {
 
     vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
-
-    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [weth, wsteth, locator], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], {
       from: deployer,
     });

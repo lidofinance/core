@@ -104,7 +104,7 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
-    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
+    delegation = await ethers.deployContract("Delegation", [weth, wsteth, locator], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], {
       from: deployer,
     });
