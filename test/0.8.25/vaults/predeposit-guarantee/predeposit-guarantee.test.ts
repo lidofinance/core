@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForStakingVault,
   EthRejector,
+  IPredepositGuarantee,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
@@ -17,7 +18,6 @@ import {
   VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
-import { CLProofVerifier } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
   addressToWC,
@@ -1069,14 +1069,14 @@ describe("PredepositGuarantee.sol", () => {
     context("proveInvalidValidatorWC", () => {
       let invalidWC: string;
       let invalidValidator: Validator;
-      let invalidValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let invalidValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       let validWC: string;
       let validValidator: Validator;
-      let validValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       let validNotPredepostedValidator: Validator;
-      let validNotPredepostedValidatorWitness: CLProofVerifier.ValidatorWitnessStruct;
+      let validNotPredepostedValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });

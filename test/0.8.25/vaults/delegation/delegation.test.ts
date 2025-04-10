@@ -17,7 +17,17 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { advanceChainTime, certainAddress, days, ether, findEvents, getNextBlockTimestamp, impersonate } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  generatePostDeposit,
+  generateValidator,
+  getNextBlockTimestamp,
+  impersonate,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -40,7 +50,11 @@ describe("Delegation.sol", () => {
   let lidoVaultHubDeauthorizer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
+  let nodeOperatorRewardAdjuster: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
+  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  let unknownValidatorProver: HardhatEthersSigner;
+  let pdgCompensator: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
@@ -79,10 +93,14 @@ describe("Delegation.sol", () => {
       lidoVaultHubDeauthorizer,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
+      nodeOperatorRewardAdjuster,
       stranger,
       beaconOwner,
       rewarder,
       vaultDepositor,
+      unguaranteedBeaconChainDepositor,
+      unknownValidatorProver,
+      pdgCompensator,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
@@ -128,6 +146,10 @@ describe("Delegation.sol", () => {
         disconnecters: [disconnecter],
         lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizer],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
+        nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
+        unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],
+        unknownValidatorProvers: [unknownValidatorProver],
+        pdgCompensators: [pdgCompensator],
       },
       "0x",
     );
@@ -208,6 +230,7 @@ describe("Delegation.sol", () => {
       expect(await delegation.vaultHub()).to.equal(hub);
 
       await assertSoleMember(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE());
+      await assertSoleMember(vaultOwner, await delegation.ASSET_RECOVERY_ROLE());
       await assertSoleMember(funder, await delegation.FUND_ROLE());
       await assertSoleMember(withdrawer, await delegation.WITHDRAW_ROLE());
       await assertSoleMember(minter, await delegation.MINT_ROLE());
@@ -220,6 +243,13 @@ describe("Delegation.sol", () => {
       await assertSoleMember(disconnecter, await delegation.VOLUNTARY_DISCONNECT_ROLE());
       await assertSoleMember(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE());
       await assertSoleMember(nodeOperatorFeeClaimer, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE());
+      await assertSoleMember(nodeOperatorRewardAdjuster, await delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE());
+      await assertSoleMember(
+        unguaranteedBeaconChainDepositor,
+        await delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+      );
+      await assertSoleMember(unknownValidatorProver, await delegation.PDG_PROVE_VALIDATOR_ROLE());
+      await assertSoleMember(pdgCompensator, await delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE());
 
       expect(await delegation.nodeOperatorFeeBP()).to.equal(0n);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
@@ -312,6 +342,268 @@ describe("Delegation.sol", () => {
         .withArgs(delegation, recipient, expectedDue);
       expect(await ethers.provider.getBalance(recipient)).to.equal(expectedDue);
       expect(await ethers.provider.getBalance(vault)).to.equal(rewards - expectedDue + vaultBalanceBefore);
+    });
+  });
+
+  context("increaseAccruedRewardsAdjustment", () => {
+    beforeEach(async () => {
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if non NODE_OPERATOR_REWARDS_ADJUST_ROLE sets adjustment", async () => {
+      await expect(delegation.connect(stranger).increaseAccruedRewardsAdjustment(100n)).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("revert for zero increase", async () => {
+      await expect(
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(0n),
+      ).to.be.revertedWithCustomError(delegation, "SameAdjustment");
+    });
+
+    it("reverts if manually adjust more than limit", async () => {
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      const increase = ether("1");
+
+      await expect(
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT + 1n),
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
+
+      await expect(
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT),
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
+
+      const increase2 = LIMIT - increase;
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase2);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT);
+
+      await expect(
+        delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(1n),
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
+    });
+
+    it("adjuster can increaseAccruedRewardsAdjustment", async () => {
+      const increase = ether("10");
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(0n);
+      const tx = await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
+
+      await expect(tx).to.emit(delegation, "AccruedRewardsAdjustmentSet").withArgs(increase, 0n);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(increase);
+    });
+
+    it("manual increase can decrease NO fee", async () => {
+      const operatorFee = await delegation.nodeOperatorFeeBP();
+
+      const rewards = ether("10");
+      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      const expectedDue = (rewards * operatorFee) / BP_BASE;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue / 2n);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(0n);
+    });
+
+    it("adjustment is reset after fee claim", async () => {
+      const operatorFee = await delegation.nodeOperatorFeeBP();
+
+      const rewards = ether("10");
+      await delegation.connect(funder).fund({ value: rewards });
+      await vault.connect(hubSigner).report(rewards, 0n, 0n);
+      const expectedDue = (rewards * operatorFee) / BP_BASE;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(rewards / 2n);
+
+      const adjustedDue = expectedDue / 2n;
+      expect(await delegation.nodeOperatorUnclaimedFee()).to.equal(adjustedDue);
+
+      const claimTx = delegation.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient);
+      await expect(claimTx)
+        .to.emit(vault, "Withdrawn")
+        .withArgs(delegation, recipient, adjustedDue)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(0n, rewards / 2n);
+
+      expect(await ethers.provider.getBalance(recipient)).to.equal(adjustedDue);
+      expect(await ethers.provider.getBalance(vault)).to.equal(rewards - adjustedDue);
+    });
+  });
+
+  context("setAccruedRewardsAdjustment", () => {
+    beforeEach(async () => {
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if called by not CONFORMING_ROLE", async () => {
+      await expect(delegation.connect(stranger).setAccruedRewardsAdjustment(100n, 0n)).to.be.revertedWithCustomError(
+        delegation,
+        "SenderNotMember",
+      );
+    });
+
+    it("reverts if trying to set same adjustment", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(current, current);
+
+      await expect(
+        delegation.connect(vaultOwner).setAccruedRewardsAdjustment(current, current),
+      ).to.be.revertedWithCustomError(delegation, "SameAdjustment");
+    });
+
+    it("reverts if trying to set more than limit", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(LIMIT + 1n, current);
+
+      await expect(
+        delegation.connect(vaultOwner).setAccruedRewardsAdjustment(LIMIT + 1n, current),
+      ).to.be.revertedWithCustomError(delegation, "IncreasedOverLimit");
+    });
+
+    it("reverts vote if AccruedRewardsAdjustment changes", async () => {
+      const current = await delegation.accruedRewardsAdjustment();
+      expect(current).to.equal(0n);
+      const proposed = 100n;
+      const increase = proposed - current + 100n;
+      const postIncrease = current + increase;
+
+      await delegation.connect(nodeOperatorManager).setAccruedRewardsAdjustment(proposed, current);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(current);
+
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(postIncrease);
+
+      await expect(delegation.connect(vaultOwner).setAccruedRewardsAdjustment(proposed, current))
+        .to.be.revertedWithCustomError(delegation, "InvalidatedAdjustmentVote")
+        .withArgs(postIncrease, current);
+    });
+
+    it("allows to set adjustment by committee", async () => {
+      const currentAdjustment = await delegation.accruedRewardsAdjustment();
+      expect(currentAdjustment).to.equal(0n);
+      const newAdjustment = 100n;
+
+      const msgData = delegation.interface.encodeFunctionData("setAccruedRewardsAdjustment", [
+        newAdjustment,
+        currentAdjustment,
+      ]);
+
+      let confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+
+      const firstConfirmTx = await delegation
+        .connect(nodeOperatorManager)
+        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+
+      await expect(firstConfirmTx)
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(nodeOperatorManager, await delegation.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(currentAdjustment);
+
+      confirmTimestamp = (await getNextBlockTimestamp()) + (await delegation.getConfirmExpiry());
+
+      const secondConfrimTx = await delegation
+        .connect(vaultOwner)
+        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+
+      await expect(secondConfrimTx)
+        .to.emit(delegation, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, await delegation.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(newAdjustment, currentAdjustment);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(newAdjustment);
+    });
+  });
+
+  context("trustedWithdrawAndDeposit", () => {
+    beforeEach(async () => {
+      const operatorFee = 10_00n; // 10%
+      await delegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
+      await delegation.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+    });
+
+    it("reverts if the caller is not a member of the withdrawer role", async () => {
+      await expect(delegation.connect(stranger).unguaranteedDepositToBeaconChain([])).to.be.revertedWithCustomError(
+        delegation,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if the  deposit is empty", async () => {
+      await expect(
+        delegation.connect(unguaranteedBeaconChainDepositor).unguaranteedDepositToBeaconChain([]),
+      ).to.be.revertedWithCustomError(delegation, "ZeroArgument");
+
+      await expect(
+        delegation
+          .connect(unguaranteedBeaconChainDepositor)
+          .unguaranteedDepositToBeaconChain([generatePostDeposit(generateValidator().container, 0n)]),
+      ).to.be.revertedWithCustomError(delegation, "ZeroArgument");
+    });
+
+    it("allows to trustedWithdrawAndDeposit and increases accruedRewardsAdjustment", async () => {
+      const validator = generateValidator(await vault.withdrawalCredentials()).container;
+      const amount = ether("32");
+      await delegation.connect(funder).fund({ value: amount });
+
+      const deposit = generatePostDeposit(validator, ether("32"));
+
+      const withdrawDepositTx = delegation
+        .connect(unguaranteedBeaconChainDepositor)
+        .unguaranteedDepositToBeaconChain([deposit]);
+      await expect(withdrawDepositTx)
+        .to.emit(vault, "Withdrawn")
+        .withArgs(delegation, delegation, deposit.amount)
+        .to.emit(delegation, "UnguaranteedDeposit")
+        .withArgs(vault, deposit.pubkey, deposit.amount)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(deposit.amount, 0n);
+
+      expect(await delegation.valuation()).to.equal(0n);
+      expect(await delegation.withdrawableEther()).to.equal(0n);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(deposit.amount);
+    });
+
+    it("unguaranteedDepositToBeaconChain can increase accruedRewardsAdjustment beyond manual limit", async () => {
+      // set adjustment to manual limit
+      const LIMIT = await delegation.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      await delegation.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT);
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT);
+
+      // prep for shortcut deposit
+      const validator = generateValidator(await vault.withdrawalCredentials()).container;
+      const amount = ether("32");
+      await delegation.connect(funder).fund({ value: amount });
+      const deposit = generatePostDeposit(validator, ether("32"));
+
+      // increase adjustment with unguaranteedDepositToBeaconChain
+      const withdrawDepositTx = delegation
+        .connect(unguaranteedBeaconChainDepositor)
+        .unguaranteedDepositToBeaconChain([deposit]);
+      await expect(withdrawDepositTx)
+        .to.emit(delegation, "AccruedRewardsAdjustmentSet")
+        .withArgs(LIMIT + BigInt(deposit.amount), LIMIT);
+
+      expect(await delegation.accruedRewardsAdjustment()).to.equal(LIMIT + BigInt(deposit.amount));
     });
   });
 

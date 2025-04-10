@@ -142,6 +142,10 @@ describe("VaultHub.sol:deauthorize", () => {
       disconnecters: [await vaultOwner1.getAddress()],
       lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
+      nodeOperatorRewardAdjusters: [await operator.getAddress()],
+      pdgCompensators: [await vaultOwner1.getAddress()],
+      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
+      unknownValidatorProvers: [await vaultOwner1.getAddress()],
     };
   });
 
