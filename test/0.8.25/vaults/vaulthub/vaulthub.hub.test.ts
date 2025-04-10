@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, keccak256, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, keccak256, MaxInt256,ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -600,6 +600,31 @@ describe("VaultHub.sol:hub", () => {
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
       expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
+    });
+
+    it("Different cases when vault is healthy, unhealthy and minted > valuation", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("1") });
+      await vaultHub.connect(user).mintShares(vaultAddress, user, ether("0.25"));
+
+      await vault.report(ether("0.5"), ether("1"), ether("1")); // at the threshold
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(true);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
+
+      await vault.report(ether("0.5") - 1n, ether("1"), ether("1")); // below the threshold
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(1n);
+
+      await vault.report(ether("0.5") - ether("0.4"), ether("1"), ether("1")); // minted > valuation
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.equal(false);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MaxInt256);
     });
 
     it("returns correct value for rebalance vault", async () => {
