@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
 import { Math256 } from "../../common/lib/Math256.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
@@ -27,7 +26,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
-    error InvalidRequestsDataSortOrder();
     error ArgumentOutOfBounds();
 
     event WarnDataIncompleteProcessing(
@@ -244,24 +242,26 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
 
-        // TODO: move this logic in separate method
+        // Check VEB common limit
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
         if (exitRequestLimitData.isExitReportLimitSet()) {
           uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
 
-          if (limit < data.requestsCount) {
+          if (data.requestsCount > limit) {
             revert ExitRequestsLimit();
           }
 
-          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount));
+          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+            exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount)
+          );
         }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        _processExitRequestsList(data.data);
+        _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
@@ -283,7 +283,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         if (requestsCount == 0) {
             return;
         }
-        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(block.timestamp, requestsCount - 1));
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(requestsCount - 1, block.timestamp));
     }
 
     ///

@@ -125,7 +125,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
 
   it("Emit ValidatorExit event", async () => {
     const emitTx = await oracle.emitExitEvents(exitRequest, 2);
-    const block = await emitTx.getBlock();
+    const timestamp = await oracle.getTime();
 
     await expect(emitTx)
       .to.emit(oracle, "ValidatorExitRequest")
@@ -134,7 +134,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[0].nodeOpId,
         exitRequests[0].valIndex,
         exitRequests[0].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
 
     await expect(emitTx)
@@ -144,7 +144,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[1].nodeOpId,
         exitRequests[1].valIndex,
         exitRequests[1].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
 
     await expect(emitTx)
@@ -154,7 +154,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[2].nodeOpId,
         exitRequests[2].valIndex,
         exitRequests[2].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
 
     await expect(emitTx)
@@ -164,7 +164,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[3].nodeOpId,
         exitRequests[3].valIndex,
         exitRequests[3].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
   });
 
@@ -216,7 +216,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     const receipt = await emitTx.wait();
     expect(receipt?.logs.length).to.eq(2);
 
-    const block = await emitTx.getBlock();
+    const timestamp = await oracle.getTime();
 
     await expect(emitTx)
       .to.emit(oracle, "ValidatorExitRequest")
@@ -225,7 +225,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[0].nodeOpId,
         exitRequests[0].valIndex,
         exitRequests[0].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
 
     await expect(emitTx)
@@ -235,20 +235,17 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[1].nodeOpId,
         exitRequests[1].valIndex,
         exitRequests[1].valPubkey,
-        block?.timestamp,
+        timestamp,
       );
 
     const history1 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history1.length).to.eq(2);
-    expect(history1[0].lastDeliveredKeyIndex).to.eq(0);
-    expect(history1[1].lastDeliveredKeyIndex).to.eq(1);
+    expect(history1.length).to.eq(1);
+    expect(history1[0].lastDeliveredKeyIndex).to.eq(1);
 
     const emitTx2 = await oracle.emitExitEvents(exitRequest, 2);
 
     const receipt2 = await emitTx2.wait();
     expect(receipt2?.logs.length).to.eq(1);
-
-    const block2 = await emitTx2.getBlock();
 
     await expect(emitTx2)
       .to.emit(oracle, "ValidatorExitRequest")
@@ -257,21 +254,17 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[2].nodeOpId,
         exitRequests[2].valIndex,
         exitRequests[2].valPubkey,
-        block2?.timestamp,
+        timestamp,
       );
 
     const history2 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history2.length).to.eq(3);
-    expect(history2[0].lastDeliveredKeyIndex).to.eq(0);
-    expect(history2[1].lastDeliveredKeyIndex).to.eq(1);
-    expect(history2[2].lastDeliveredKeyIndex).to.eq(2);
+    expect(history2.length).to.eq(2);
+    expect(history2[1].lastDeliveredKeyIndex).to.eq(2);
 
     const emitTx3 = await oracle.emitExitEvents(exitRequest, 2);
 
     const receipt3 = await emitTx2.wait();
     expect(receipt3?.logs.length).to.eq(1);
-
-    const block3 = await emitTx3.getBlock();
 
     await expect(emitTx3)
       .to.emit(oracle, "ValidatorExitRequest")
@@ -280,22 +273,17 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[3].nodeOpId,
         exitRequests[3].valIndex,
         exitRequests[3].valPubkey,
-        block3?.timestamp,
+        timestamp,
       );
 
     const history3 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history3.length).to.eq(4);
-    expect(history3[0].lastDeliveredKeyIndex).to.eq(0);
-    expect(history3[1].lastDeliveredKeyIndex).to.eq(1);
-    expect(history3[2].lastDeliveredKeyIndex).to.eq(2);
-    expect(history3[3].lastDeliveredKeyIndex).to.eq(3);
+    expect(history3.length).to.eq(3);
+    expect(history3[2].lastDeliveredKeyIndex).to.eq(3);
 
     const emitTx4 = await oracle.emitExitEvents(exitRequest, 2);
 
     const receipt4 = await emitTx2.wait();
     expect(receipt4?.logs.length).to.eq(1);
-
-    const block4 = await emitTx4.getBlock();
 
     await expect(emitTx4)
       .to.emit(oracle, "ValidatorExitRequest")
@@ -304,16 +292,12 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         exitRequests[4].nodeOpId,
         exitRequests[4].valIndex,
         exitRequests[4].valPubkey,
-        block4?.timestamp,
+        timestamp,
       );
 
     const history4 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history4.length).to.eq(5);
-    expect(history4[0].lastDeliveredKeyIndex).to.eq(0);
-    expect(history4[1].lastDeliveredKeyIndex).to.eq(1);
-    expect(history4[2].lastDeliveredKeyIndex).to.eq(2);
-    expect(history4[3].lastDeliveredKeyIndex).to.eq(3);
-    expect(history4[4].lastDeliveredKeyIndex).to.eq(4);
+    expect(history4.length).to.eq(4);
+    expect(history4[3].lastDeliveredKeyIndex).to.eq(4);
 
     await expect(oracle.emitExitEvents(exitRequest, 2)).to.be.revertedWithCustomError(
       oracle,

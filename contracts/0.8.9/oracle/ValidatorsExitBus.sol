@@ -31,7 +31,6 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     error UnsupportedRequestsDataFormat(uint256 format);
     error InvalidRequestsDataLength();
     error InvalidRequestsData();
-    error ActorOutOfReportLimit();
     error RequestsAlreadyDelivered();
     error ExitRequestsLimit();
 
@@ -137,81 +136,38 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         }
 
         // TODO: hash requestsCount too
-
         if (requestStatus.totalItemsCount == type(uint256).max ) {
           requestStatus.totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         }
 
         uint256 deliveredItemsCount = requestStatus.deliveredItemsCount;
-        uint256 restToDeliver = requestStatus.totalItemsCount - deliveredItemsCount;
+        uint256 undeliveredItemsCount = requestStatus.totalItemsCount - deliveredItemsCount;
 
-        if (restToDeliver == 0 ) {
-          revert RequestsAlreadyDelivered();
+        if (undeliveredItemsCount == 0 ) {
+            revert RequestsAlreadyDelivered();
         }
 
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+        uint256 toDeliver;
 
-        uint256 requestsToDeliver;
-
-        // check if limit set
         if (exitRequestLimitData.isExitReportLimitSet()) {
           uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
           if (limit == 0) {
             revert ExitRequestsLimit();
           }
 
-          requestsToDeliver = restToDeliver <= limit ? restToDeliver : limit;
+          toDeliver = undeliveredItemsCount > limit
+            ? limit
+            : undeliveredItemsCount;
 
-          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - requestsToDeliver));
+          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - toDeliver));
         } else {
-           // TODO: do we need to store prev exit limit here
-           requestsToDeliver = restToDeliver;
+           toDeliver = undeliveredItemsCount;
         }
+        _processExitRequestsList(request.data, deliveredItemsCount, toDeliver);
 
-        uint256 offset;
-        uint256 offsetPastEnd;
-
-        assembly {
-            offset := add(data.offset, mul(deliveredItemsCount, PACKED_REQUEST_LENGTH))
-            offsetPastEnd := add(offset, mul(requestsToDeliver, PACKED_REQUEST_LENGTH))
-        }
-
-        bytes calldata pubkey;
-
-        assembly {
-            pubkey.length := 48
-        }
-
-        uint256 timestamp = block.timestamp;
-        uint256 lastDeliveredKeyIndex = deliveredItemsCount;
-
-        while (offset < offsetPastEnd) {
-            uint256 dataWithoutPubkey;
-            assembly {
-                // 16 most significant bytes are taken by module id, node op id, and val index
-                dataWithoutPubkey := shr(128, calldataload(offset))
-                // the next 48 bytes are taken by the pubkey
-                pubkey.offset := add(offset, 16)
-                // totalling to 64 bytes
-                offset := add(offset, 64)
-            }
-
-            uint64 valIndex = uint64(dataWithoutPubkey);
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                // emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-                revert InvalidRequestsData();
-            }
-
-            requestStatus.deliverHistory.push(DeliveryHistory(lastDeliveredKeyIndex, timestamp));
-            lastDeliveredKeyIndex = lastDeliveredKeyIndex + 1;
-
-            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-        }
-
-        requestStatus.deliveredItemsCount = deliveredItemsCount + requestsToDeliver;
+        requestStatus.deliverHistory.push(DeliveryHistory(deliveredItemsCount + toDeliver - 1, _getTimestamp()));
+        requestStatus.deliveredItemsCount += toDeliver;
     }
 
     /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
@@ -287,7 +243,6 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         address locatorAddr = address(LOCATOR);
         address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        uint256 timestamp = block.timestamp;
 
         if (msg.value < withdrawalFee ) {
            revert InsufficientPayment(withdrawalFee, 1, msg.value);
@@ -306,7 +261,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value:  withdrawalFee}(validator.validatorPubkey);
 
-        emit ValidatorExitRequest(validator.stakingModuleId, validator.nodeOperatorId, validator.validatorIndex, validator.validatorPubkey, timestamp);
+        emit ValidatorExitRequest(validator.stakingModuleId, validator.nodeOperatorId, validator.validatorIndex, validator.validatorPubkey, _getTimestamp());
 
         uint256 refund = msg.value - withdrawalFee;
 
@@ -371,13 +326,13 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
     /// Internal functions
 
-
-    function _processExitRequestsList(bytes calldata data) internal {
+    function _processExitRequestsList(bytes calldata data, uint256 startIndex, uint256 count) internal {
         uint256 offset;
         uint256 offsetPastEnd;
+
         assembly {
-            offset := data.offset
-            offsetPastEnd := add(offset, data.length)
+            offset := add(data.offset, mul(startIndex, PACKED_REQUEST_LENGTH))
+            offsetPastEnd := add(offset, mul(count, PACKED_REQUEST_LENGTH))
         }
 
         bytes calldata pubkey;
@@ -417,6 +372,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
+    // this method
     function _storeExitRequestHash(
         bytes32 exitRequestHash,
         uint256 totalItemsCount,
@@ -427,9 +383,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
         RequestStatus storage request = hashes[exitRequestHash];
 
-        if (request.contractVersion != 0) {
-          return;
-        }
+        require(request.contractVersion == 0, "Hash already exists");
 
         request.totalItemsCount = totalItemsCount;
         request.deliveredItemsCount = deliveredItemsCount;

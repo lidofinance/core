@@ -90,7 +90,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(validatorExitData, {
       value: 2,
     });
-    const block = await tx.getBlock();
+    const timestamp = await oracle.getTime();
     await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(PUBKEYS[0]);
     await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
 
@@ -101,7 +101,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         validatorExitData.nodeOperatorId,
         validatorExitData.validatorIndex,
         validatorExitData.validatorPubkey,
-        block?.timestamp,
+        timestamp,
       );
   });
 });

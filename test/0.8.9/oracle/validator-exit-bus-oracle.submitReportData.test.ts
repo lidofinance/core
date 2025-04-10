@@ -645,27 +645,16 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       };
 
       const emitTx = await oracle.emitExitEvents(exitRequest, 2);
-      const block = await emitTx.getBlock();
+
+      const timestamp = await oracle.getTime();
 
       await expect(emitTx)
         .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          requests[0].moduleId,
-          requests[0].nodeOpId,
-          requests[0].valIndex,
-          requests[0].valPubkey,
-          block?.timestamp,
-        );
+        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
 
       await expect(emitTx)
         .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          requests[1].moduleId,
-          requests[1].nodeOpId,
-          requests[1].valIndex,
-          requests[1].valPubkey,
-          block?.timestamp,
-        );
+        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
     });
 
     it("emits ValidatorExitRequest events", async () => {
