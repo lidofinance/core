@@ -447,15 +447,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
-        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)) {
-            $.inOutDelta -= int128(int256(_ether));
 
-            emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+        bool isAuthorized = (owner() == msg.sender
+            || (valuation_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+        );
+        if (!isAuthorized) revert NotAuthorized("rebalance", msg.sender);
 
-            VAULT_HUB.rebalance{value: _ether}();
-        } else {
-            revert NotAuthorized("rebalance", msg.sender);
-        }
+        $.inOutDelta -= int128(int256(_ether));
+
+        emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+
+        VAULT_HUB.rebalance{value: _ether}();
     }
 
     /**
