@@ -713,13 +713,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event Reported(uint64 timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
-     * @notice Emitted if `owner` of `StakingVault` is a contract and its `onReport` hook reverts
-     * @dev Hook used to inform `owner` contract of a new report, e.g. calculating AUM fees, etc.
-     * @param reason Revert data from `onReport` hook
-     */
-    event OnReportFailed(bytes reason);
-
-    /**
      * @notice Emitted when deposits to beacon chain are paused
      */
     event BeaconChainDepositsPaused();
