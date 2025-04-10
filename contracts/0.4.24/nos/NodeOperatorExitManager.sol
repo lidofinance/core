@@ -90,13 +90,16 @@ contract NodeOperatorExitManager {
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) internal {
+        require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "INVALID_EXIT_TIME");
         require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
 
         // Hash the public key to use as a mapping key
         bytes32 publicKeyHash = keccak256(_publicKey);
 
         // Track this validator key if it's new
-        _ensureValidatorKeyTracked(_nodeOperatorId, publicKeyHash, _publicKey);
+        if (validatorExitRecords[_nodeOperatorId][_publicKeyHash].lastUpdatedTimestamp == 0) {
+            operatorWatchableValidatorKeys[_nodeOperatorId].push(_publicKeyHash);
+        }
 
         // Get or initialize the validator exit record
         ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][publicKeyHash];
@@ -106,9 +109,9 @@ contract NodeOperatorExitManager {
         record.lastUpdatedTimestamp = _proofSlotTimestamp;
 
         // Calculate penalty if the validator has exceeded the exit deadline
-        if (_eligibleToExitInSec > _exitDeadlineThreshold(_nodeOperatorId)) {
+        if (record.pinalizedFee != 0) {
             // Calculate penalty based on the excess time
-            uint256 excessTime = _eligibleToExitInSec.sub(_exitDeadlineThreshold(_nodeOperatorId));
+            uint256 excessTime = _eligibleToExitInSec.sub(_exitDeadlineThreshold());
             uint256 penaltyAmount = _calculatePenalty(excessTime);
 
             // Add to the penalized fee
@@ -138,11 +141,8 @@ contract NodeOperatorExitManager {
         // Hash the public key to use as a mapping key
         bytes32 publicKeyHash = keccak256(_publicKey);
 
-        // Track this validator key if it's new
-        _ensureValidatorKeyTracked(_nodeOperatorId, publicKeyHash, _publicKey);
-
         // Get or initialize the validator exit record
-        ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][publicKeyHash];
+        ValidatorExitRecord storage record = _getValidatorExitRecordByHash(_nodeOperatorId, publicKeyHash);
 
         // Set the triggerable exit fee
         record.triggerableExitFee = _withdrawalRequestPaidFee;
@@ -151,29 +151,10 @@ contract NodeOperatorExitManager {
     }
 
     /**
-     * @notice Ensures a validator key is tracked in the operatorWatchableValidatorKeys array
-     * @param _nodeOperatorId The node operator ID
-     * @param _publicKeyHash Hash of the validator public key
-     * @param _publicKey Original public key (for events)
-     */
-    function _ensureValidatorKeyTracked(
-        uint256 _nodeOperatorId,
-        bytes32 _publicKeyHash,
-        bytes _publicKey
-    ) internal {
-        // Only add to tracking if this is a new record
-        if (validatorExitRecords[_nodeOperatorId][_publicKeyHash].lastUpdatedTimestamp == 0) {
-            operatorWatchableValidatorKeys[_nodeOperatorId].push(_publicKeyHash);
-        }
-    }
-
-    /**
      * @notice Returns the number of seconds after which a validator is considered late
-     * @param _nodeOperatorId The ID of the node operator
      * @return The exit deadline threshold in seconds
      */
-    function _exitDeadlineThreshold(uint256 _nodeOperatorId) public view returns (uint256) {
-        // Currently using a global threshold, but could be extended to support per-operator thresholds
+    function _exitDeadlineThreshold() public view returns (uint256) {
         return EXIT_DEADLINE_THRESHOLD_POSITION.getStorageUint256();
     }
 
@@ -186,33 +167,13 @@ contract NodeOperatorExitManager {
      * @return bool Returns true if the contract should receive the updated status
      */
     function _shouldValidatorBePenalized(
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes _publicKey,
+        uint256, // _nodeOperatorId,
+        uint256, // _proofSlotTimestamp,
+        bytes, // _publicKey,
         uint256 _eligibleToExitInSec
     ) internal view returns (bool) {
-        bytes32 publicKeyHash = keccak256(_publicKey);
-
-        // Check if record exists, otherwise it's a new record and should be updated
-        ValidatorExitRecord storage record = validatorExitRecords[_nodeOperatorId][publicKeyHash];
-        bool recordExists = record.lastUpdatedTimestamp > 0;
-
-        if (!recordExists) {
-            return true;
-        }
-
         // If the validator has exceeded the exit deadline, it should be penalized
-        if (_eligibleToExitInSec > _exitDeadlineThreshold(_nodeOperatorId)) {
-            return true;
-        }
-
-        // If the validator's exit status has changed, it should be updated
-        if (_eligibleToExitInSec != record.eligibleToExitInSec) {
-            return true;
-        }
-
-        // If proof timestamp is newer than last updated, it should be updated
-        if (_proofSlotTimestamp > record.lastUpdatedTimestamp) {
+        if (_eligibleToExitInSec >= _exitDeadlineThreshold()) {
             return true;
         }
 
@@ -407,35 +368,6 @@ contract NodeOperatorExitManager {
                 i++;
             }
         }
-    }
-
-    /**
-     * @notice Check if a validator exit record exists using key hash
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _publicKeyHash Hash of the validator public key
-     * @return True if record exists
-     */
-    function _validatorExitRecordExistsByHash(
-        uint256 _nodeOperatorId,
-        bytes32 _publicKeyHash
-    ) internal view returns (bool) {
-        return validatorExitRecords[_nodeOperatorId][_publicKeyHash].lastUpdatedTimestamp > 0;
-    }
-
-    /**
-     * @notice Check if a validator exit record exists
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _publicKey The public key of the validator
-     * @return True if record exists
-     */
-    function _validatorExitRecordExists(
-        uint256 _nodeOperatorId,
-        bytes _publicKey
-    ) internal view returns (bool) {
-        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
-        bytes32 publicKeyHash = keccak256(_publicKey);
-
-        return _validatorExitRecordExistsByHash(_nodeOperatorId, publicKeyHash);
     }
 
     /**
