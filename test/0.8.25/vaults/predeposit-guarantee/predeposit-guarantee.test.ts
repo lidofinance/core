@@ -21,7 +21,6 @@ import {
 
 import {
   addressToWC,
-  deployBLSPrecompileStubs,
   ether,
   findEvents,
   generateBeaconHeader,
@@ -89,8 +88,6 @@ describe("PredepositGuarantee.sol", () => {
 
   before(async () => {
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
-
-    await deployBLSPrecompileStubs();
 
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();

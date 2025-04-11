@@ -144,17 +144,6 @@ export const setBeaconBlockRoot = async (root: string) => {
   return block.timestamp;
 };
 
-export const deployBLSPrecompileStubs = async () => {
-  const g2Add = await ethers.deployContract("BLSG2ADD__Mock");
-  await setCode("0x000000000000000000000000000000000000000d", (await g2Add.getDeployedCode()) as string);
-
-  const pair = await ethers.deployContract("BKSPAIR__Mock");
-  await setCode("0x000000000000000000000000000000000000000F", (await pair.getDeployedCode()) as string);
-
-  const mapFp2 = await ethers.deployContract("BKSMAPFP2__Mock");
-  await setCode("0x0000000000000000000000000000000000000011", (await mapFp2.getDeployedCode()) as string);
-};
-
 // Default mainnet values for validator state tree
 export const prepareLocalMerkleTree = async (
   gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
