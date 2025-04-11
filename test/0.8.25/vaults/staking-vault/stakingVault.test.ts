@@ -253,8 +253,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("returns the latest report", async () => {
-      await stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("2"), ether("0"));
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), 0n]);
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("2"), ether("0"));
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), timestamp]);
     });
   });
 
@@ -684,17 +685,22 @@ describe("StakingVault.sol", () => {
       await stakingVault.deauthorizeLidoVaultHub();
       expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
 
-      await expect(stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("2"), ether("3")))
+      await expect(
+        stakingVault
+          .connect(vaultHubSigner)
+          .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3")),
+      )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("report", vaultHubSigner);
     });
 
     it("updates the state and emits the Reported event", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("2"), ether("3")))
+      const timestamp = await getCurrentBlockTimestamp();
+      await expect(stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("2"), ether("3")))
         .to.emit(stakingVault, "Reported")
-        .withArgs(0n, ether("1"), ether("2"), ether("3"));
+        .withArgs(timestamp, ether("1"), ether("2"), ether("3"));
 
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), 0n]);
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), timestamp]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
     });
   });
@@ -1161,7 +1167,8 @@ describe("StakingVault.sol", () => {
 
     it("requests a validator withdrawal if called by the vault hub, when vaultHub is deauthorized", async () => {
       await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(0n, ether("1"), ether("1"), ether("1.1")); // slashing
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("1"), ether("1.1")); // slashing
 
       await stakingVault.deauthorizeLidoVaultHub();
       expect(await stakingVault.vaultHubAuthorized()).to.equal(false);

@@ -514,6 +514,8 @@ contract VaultHub is PausableUntilWithRoles {
         socket.feeSharesCharged = uint96(_feeSharesCharged);
 
         uint256 newMintedShares = Math256.max(socket.sharesMinted, _sharesMinted);
+        // locked ether can only be increased asynchronously once the oracle settled the new floor value
+        // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
             LIDO.getPooledEthBySharesRoundUp(newMintedShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
             socket.pendingDisconnect ? 0 : CONNECT_DEPOSIT
@@ -524,11 +526,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
         if (socket.pendingDisconnect) {
             // remove disconnected vault from the list
+            address vaultAddress = socket.vault;
             VaultSocket memory lastSocket = $.sockets[length - 1];
             $.sockets[vaultIndex] = lastSocket;
             $.vaultIndex[lastSocket.vault] = vaultIndex;
             $.sockets.pop();
-            delete $.vaultIndex[socket.vault];
+            delete $.vaultIndex[vaultAddress];
         }
     }
 
@@ -552,6 +555,10 @@ contract VaultHub is PausableUntilWithRoles {
         assembly {
             $.slot := VAULT_HUB_STORAGE_LOCATION
         }
+    }
+
+    function getVaultIndex(address addr) public view returns (uint256) {
+        return _getVaultHubStorage().vaultIndex[addr];
     }
 
     /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP

@@ -22,7 +22,8 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether } from "lib";
+import { days, ether } from "lib";
+import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";

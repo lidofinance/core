@@ -789,7 +789,7 @@ describe("Delegation.sol", () => {
       const totalRewards = ether("1");
       const inOutDelta = 0n;
       const locked = 0n;
-      await vault.connect(hubSigner).report(0n, totalRewards, inOutDelta, locked);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), totalRewards, inOutDelta, locked);
       expect(await delegation.nodeOperatorUnclaimedFee()).to.equal((totalRewards * newOperatorFee) / BP_BASE);
 
       // attempt to change the performance fee to 6%

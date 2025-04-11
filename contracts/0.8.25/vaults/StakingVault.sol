@@ -409,7 +409,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
 
         ERC7201Storage storage $ = _getStorage();
-        int256 inOutDelta_ = $.inOutDelta;
         $.inOutDelta -= int128(int256(_ether));
 
         (bool success, ) = _recipient.call{value: _ether}("");
@@ -418,7 +417,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (isReportFresh()) {
             if (valuation() < $.locked) revert ValuationBelowLockedAmount();
         } else {
-            if (inOutDelta_ < int256(uint256($.locked))) revert ValuationBelowLockedAmount();
+            if (address(this).balance < $.locked) revert ValuationBelowLockedAmount();
         }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
@@ -432,7 +431,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
-        if (_locked > _checkFreshnessAndGetValuation()) revert NewLockedExceedsValuation();
+        if (isReportFresh()) {
+            if (_locked > valuation()) revert NewLockedExceedsValuation();
+        } else {
+            if (_locked > address(this).balance) revert NewLockedExceedsValuation();
+        }
 
         $.locked = uint128(_locked);
 
