@@ -2,7 +2,6 @@ import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "et
 import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 
 import { SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
@@ -142,17 +141,6 @@ export const setBeaconBlockRoot = async (root: string) => {
     .then((tx) => tx.getBlock());
   if (!block) throw new Error("ivariant");
   return block.timestamp;
-};
-
-export const deployBLSPrecompileStubs = async () => {
-  const g2Add = await ethers.deployContract("BLSG2ADD__Mock");
-  await setCode("0x000000000000000000000000000000000000000d", (await g2Add.getDeployedCode()) as string);
-
-  const pair = await ethers.deployContract("BKSPAIR__Mock");
-  await setCode("0x000000000000000000000000000000000000000F", (await pair.getDeployedCode()) as string);
-
-  const mapFp2 = await ethers.deployContract("BKSMAPFP2__Mock");
-  await setCode("0x0000000000000000000000000000000000000011", (await mapFp2.getDeployedCode()) as string);
 };
 
 // Default mainnet values for validator state tree

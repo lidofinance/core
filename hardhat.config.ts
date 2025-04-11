@@ -44,6 +44,7 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
     },
     // local nodes
     "local": {
