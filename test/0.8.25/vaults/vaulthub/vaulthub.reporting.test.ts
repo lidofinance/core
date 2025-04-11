@@ -163,7 +163,7 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("updateVaultsData", () => {
+  context("updateVaultData", () => {
     it("accepts prooved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
@@ -176,7 +176,7 @@ describe("VaultHub.sol:hub", () => {
       );
 
       await expect(
-        vaultHub.updateVaultsData(
+        vaultHub.updateVaultData(
           "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
           99170000769726969624n,
           33000000000000000001n,
@@ -200,7 +200,7 @@ describe("VaultHub.sol:hub", () => {
       );
 
       await expect(
-        vaultHub.updateVaultsData(
+        vaultHub.updateVaultData(
           "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
           99170000769726969624n,
           33000000000000000000n,
@@ -241,7 +241,7 @@ describe("VaultHub.sol:hub", () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
       await vaultHub.connect(accountingAddress).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
 
-      await vaultHub.updateVaultsData(
+      await vaultHub.updateVaultData(
         vault.getAddress(),
         valuation,
         inOutDelta,

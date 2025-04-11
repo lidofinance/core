@@ -187,7 +187,7 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, delegation: De
 }
 
 export async function initialReport(ctx: ProtocolContext, stakingVault: StakingVault) {
-  await updateVaultsDataWithProof(ctx, stakingVault);
+  await updateVaultDataWithProof(ctx, stakingVault);
 }
 
 type ConnectToHubParams = {
@@ -250,7 +250,7 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
   return tree;
 }
 
-export async function updateVaultsDataWithProof(ctx: ProtocolContext, stakingVault: StakingVault) {
+export async function updateVaultDataWithProof(ctx: ProtocolContext, stakingVault: StakingVault) {
   const { vaultHub, locator } = ctx.contracts;
   const vaultReport: VaultReportItem = [
     await stakingVault.getAddress(),
@@ -265,7 +265,7 @@ export async function updateVaultsDataWithProof(ctx: ProtocolContext, stakingVau
   await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
   await vaultHub
     .connect(accountingSigner)
-    .updateVaultsData(
+    .updateVaultData(
       await stakingVault.getAddress(),
       await stakingVault.valuation(),
       await stakingVault.inOutDelta(),

@@ -236,7 +236,7 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
-      expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "ForceValidatorExitTriggered")

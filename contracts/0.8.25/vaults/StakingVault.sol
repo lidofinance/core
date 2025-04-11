@@ -126,11 +126,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     /**
-     * @notice The time delta for report freshness check
-     */
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
-
-    /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
@@ -165,14 +160,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         __Ownable_init(_owner);
 
         ERC7201Storage storage $ = _getStorage();
-        // NOTE: Do we need to refresh report here?
-        $.report.timestamp = uint64(block.timestamp);
         $.nodeOperator = _nodeOperator;
         $.depositor = _depositor == address(0) ? _nodeOperator : _depositor;
 
         emit NodeOperatorSet(_nodeOperator);
         emit DepositorSet(_depositor);
-
     }
 
     /**
@@ -417,7 +409,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (_checkFreshnessAndGetVauluation() < $.locked) revert ValuationBelowLockedAmount();
+        if (_checkFreshnessAndGetValuation() < $.locked) revert ValuationBelowLockedAmount();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -430,7 +422,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
-        if (_locked > _checkFreshnessAndGetVauluation()) revert NewLockedExceedsValuation();
+        if (_locked > _checkFreshnessAndGetValuation()) revert NewLockedExceedsValuation();
 
         $.locked = uint128(_locked);
 
@@ -446,7 +438,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        uint256 valuation_ = _checkFreshnessAndGetVauluation();
+        uint256 valuation_ = valuation();
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
@@ -471,6 +463,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
+        uint64 currentTimestamp = $.report.timestamp;
+        if (currentTimestamp >= _timestamp) revert ReportTooOld(currentTimestamp, _timestamp);
+
         $.report.timestamp = _timestamp;
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
@@ -613,7 +608,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isValuationBelowLocked = _checkFreshnessAndGetVauluation() < $.locked;
+        bool isValuationBelowLocked = _checkFreshnessAndGetValuation() < $.locked;
         if (isValuationBelowLocked) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
@@ -647,19 +642,15 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function isReportFresh() public view returns (bool) {
         ERC7201Storage storage $ = _getStorage();
         if (!$.vaultHubAuthorized) return true;
-        return block.timestamp - $.report.timestamp < REPORT_FRESHNESS_DELTA;
+        return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
     }
 
     function ensureReportFreshness() public view {
-        if (!isReportFresh()) revert FreshReportRequired();
+        if (!isReportFresh()) revert ReportStaled();
     }
 
-    function _checkReportFreshness() internal view {
-        if (!isReportFresh()) revert FreshReportRequired();
-    }
-
-    function _checkFreshnessAndGetVauluation() internal view returns (uint256) {
-        _checkReportFreshness();
+    function _checkFreshnessAndGetValuation() internal view returns (uint256) {
+        ensureReportFreshness();
         return valuation();
     }
 
@@ -710,7 +701,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      * @param locked Amount of ether locked in `StakingVault`
      */
-    event Reported(uint64 timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
+    event Reported(uint64 indexed timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
      * @notice Emitted when deposits to beacon chain are paused
@@ -875,9 +866,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error VaultIsOssified();
 
     /**
-     * @notice Thrown when a fresh report is required
+     * @notice Thrown when a report is staled
      */
-    error FreshReportRequired();
+    error ReportStaled();
+
+    /**
+     * @notice Thrown when a report is too old
+     */
+    error ReportTooOld(uint64 currentTimestamp, uint64 newTimestamp);
 
     /**
      * @notice Thrown when the depositor is not the Lido Predeposit Guarantee

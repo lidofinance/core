@@ -27,7 +27,7 @@ import {
   report,
   sdvtEnsureOperators,
 } from "lib/protocol";
-import { updateVaultsDataWithProof } from "lib/protocol/helpers/vaults";
+import { updateVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { CURATED_MODULE_ID, MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
@@ -338,7 +338,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     //report
-    await updateVaultsDataWithProof(ctx, stakingVault);
+    await updateVaultDataWithProof(ctx, stakingVault);
 
     // mint
     const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);

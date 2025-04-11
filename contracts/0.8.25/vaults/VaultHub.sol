@@ -84,6 +84,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal constant CONNECT_DEPOSIT = 1 ether;
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    /// @notice The time delta for report freshness check
+    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
@@ -189,10 +191,9 @@ contract VaultHub is PausableUntilWithRoles {
     ///         against the current value of minted shares
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
-    function isVaultHealthy(address _vault) public view returns (bool) {
+    function isVaultHealthyAsOfLatestReport(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (socket.sharesMinted == 0) return true;
-        IStakingVault(_vault).ensureReportFreshness();
 
         return
             ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
@@ -272,6 +273,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault.balance < CONNECT_DEPOSIT)
             revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
+        // here we intentionally prohibit all reports having referenceSlot earlier than the current block
         vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
 
         VaultSocket memory vsocket = VaultSocket(
@@ -312,12 +314,13 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataTreeCid
     ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaultsData", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateReportData", msg.sender);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
         $.vaultsDataTimestamp = _vaultsDataTimestamp;
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataTreeCid = _vaultsDataTreeCid;
+        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataTreeCid);
     }
 
     /// @notice force disconnects a vault from the hub
@@ -479,14 +482,21 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultDisconnected(_vault);
     }
 
-    /// @notice update the vaults data for vault's owner
+    /// @notice Permissionless update of the vault data
     /// @param _vault the address of the vault
     /// @param _valuation the valuation of the vault
     /// @param _inOutDelta the inOutDelta of the vault
     /// @param _feeSharesCharged the feeSharesCharged of the vault
     /// @param _sharesMinted the sharesMinted of the vault
     /// @param _proof the proof of the reported data
-    function updateVaultsData(address _vault, uint256 _valuation, int256 _inOutDelta, uint256 _feeSharesCharged, uint256 _sharesMinted, bytes32[] memory _proof) external {
+    function updateVaultData(
+        address _vault,
+        uint256 _valuation,
+        int256 _inOutDelta,
+        uint256 _feeSharesCharged,
+        uint256 _sharesMinted,
+        bytes32[] calldata _proof
+    ) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 vaultIndex = $.vaultIndex[_vault];
         if (vaultIndex == 0) revert NotConnectedToHub(_vault);
@@ -496,6 +506,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
         VaultSocket storage socket = $.sockets[vaultIndex];
+        // NB: charged fees can only cumulatively increase with time
         if (_feeSharesCharged  < socket.feeSharesCharged) {
             revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
         }
@@ -553,7 +564,8 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _requireUnhealthy(address _vault) internal view {
-        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
+        IStakingVault(_vault).ensureReportFreshness();
+        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
     }
 
     event VaultConnected(
@@ -563,6 +575,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 rebalanceThreshold,
         uint256 treasuryFeeBP
     );
+
+    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
+
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
