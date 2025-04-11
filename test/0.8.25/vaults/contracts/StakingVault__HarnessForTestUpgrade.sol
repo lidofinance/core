@@ -185,8 +185,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return true;
     }
 
-    function ensureReportFreshness() external view {}
-
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 }

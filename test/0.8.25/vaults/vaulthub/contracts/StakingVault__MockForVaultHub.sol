@@ -120,8 +120,6 @@ contract StakingVault__MockForVaultHub {
         return true;
     }
 
-    function ensureReportFreshness() external view {}
-
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
     error Mock__HealthyVault();

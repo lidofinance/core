@@ -363,7 +363,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        vault_.ensureReportFreshness();
+        if (!vault_.isReportFresh()) revert VaultReportStaled(_vault);
 
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
         uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
@@ -566,7 +566,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _requireUnhealthy(address _vault) internal view {
-        IStakingVault(_vault).ensureReportFreshness();
+        if (!IStakingVault(_vault).isReportFresh()) revert VaultReportStaled(_vault);
         if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
     }
 
@@ -610,4 +610,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
     error VaultIsOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
+    error VaultReportStaled(address vault);
 }

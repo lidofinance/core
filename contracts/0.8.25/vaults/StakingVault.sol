@@ -660,12 +660,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
     }
 
-    function ensureReportFreshness() public view {
-        if (!isReportFresh()) revert ReportStaled();
-    }
-
     function _checkFreshnessAndGetValuation() internal view returns (uint256) {
-        ensureReportFreshness();
+        if (!isReportFresh()) revert ReportStaled();
         return valuation();
     }
 
