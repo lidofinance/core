@@ -601,34 +601,31 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
-        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
 
-        uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
-        if (keysCount != _amounts.length) revert InvalidAmountsLength();
-
+        // If the refund recipient is not set, use the sender as the refund recipient
         if (_refundRecipient == address(0)) {
             _refundRecipient = msg.sender;
         }
 
         ERC7201Storage storage $ = _getStorage();
+
+        bool isAuthorized = msg.sender == $.nodeOperator || msg.sender == owner();
+
+        // @dev When valuation drops below the locked amount:
+        //      1. Block partial withdrawals to prevent forced withdrawals from front-running
+        //      2. Authorize VaultHub to initiate forced full withdrawals
         bool isValuationBelowLocked = valuation() < $.locked;
         if (isValuationBelowLocked) {
-            // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
             }
+            isAuthorized = isAuthorized || (msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized);
         }
-
-        bool isAuthorized = (msg.sender == $.nodeOperator ||
-            msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
-        );
-
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = feePerRequest * keysCount;
+        uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
 
         TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
@@ -813,11 +810,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the length of the validator public keys is invalid
      */
     error InvalidPubkeysLength();
-
-    /**
-     * @notice Thrown when the length of the amounts is not equal to the length of the pubkeys
-     */
-    error InvalidAmountsLength();
 
     /**
      * @notice Thrown when the validator withdrawal fee is insufficient
