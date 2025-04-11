@@ -524,7 +524,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 length = $.sockets.length;
         if (socket.pendingDisconnect) {
             // remove disconnected vault from the list
-            IStakingVault(socket.vault).deauthorizeLidoVaultHub();
             VaultSocket memory lastSocket = $.sockets[length - 1];
             $.sockets[vaultIndex] = lastSocket;
             $.vaultIndex[lastSocket.vault] = vaultIndex;

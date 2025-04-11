@@ -32,6 +32,7 @@ struct DelegationConfig {
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
+    address[] lidoVaultHubDeauthorizers;
     address[] nodeOperatorFeeClaimers;
     address[] nodeOperatorRewardAdjusters;
 }
@@ -140,6 +141,9 @@ contract VaultFactory {
         }
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubDeauthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubDeauthorizers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(

@@ -142,6 +142,7 @@ describe("VaultFactory.sol", () => {
       pdgCompensators: [await vaultOwner1.getAddress()],
       unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
       unknownValidatorProvers: [await vaultOwner1.getAddress()],
+      lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
     };
   });
 

@@ -48,6 +48,7 @@ describe("Delegation.sol", () => {
   let validatorExitRequester: HardhatEthersSigner;
   let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
+  let lidoVaultHubDeauthorizer: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorRewardAdjuster: HardhatEthersSigner;
@@ -90,6 +91,7 @@ describe("Delegation.sol", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
+      lidoVaultHubDeauthorizer,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       nodeOperatorRewardAdjuster,
@@ -143,6 +145,7 @@ describe("Delegation.sol", () => {
         validatorExitRequesters: [validatorExitRequester],
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
+        lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizer],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
         nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
         unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],

@@ -30,6 +30,7 @@ export type VaultRoles = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
+  lidoVaultHubDeauthorizer: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
   nodeOperatorRewardAdjuster: HardhatEthersSigner;
   pdgCompensator: HardhatEthersSigner;
@@ -82,6 +83,7 @@ export async function createVaultWithDelegation(
     validatorExitRequester,
     validatorWithdrawalTriggerer,
     disconnecter,
+    lidoVaultHubDeauthorizer,
     nodeOperatorFeeClaimer,
     nodeOperatorRewardAdjuster,
     pdgCompensator,
@@ -102,6 +104,7 @@ export async function createVaultWithDelegation(
     validatorExitRequester: rolesOverrides.validatorExitRequester ?? validatorExitRequester,
     validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
     disconnecter: rolesOverrides.disconnecter ?? disconnecter,
+    lidoVaultHubDeauthorizer: rolesOverrides.lidoVaultHubDeauthorizer ?? lidoVaultHubDeauthorizer,
     nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
     nodeOperatorRewardAdjuster: rolesOverrides.nodeOperatorRewardAdjuster ?? nodeOperatorRewardAdjuster,
     pdgCompensator: rolesOverrides.pdgCompensator ?? pdgCompensator,
@@ -128,6 +131,7 @@ export async function createVaultWithDelegation(
       validatorExitRequesters: [roles.validatorExitRequester],
       validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
       disconnecters: [roles.disconnecter],
+      lidoVaultHubDeauthorizers: [roles.lidoVaultHubDeauthorizer],
       nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
       nodeOperatorRewardAdjusters: [roles.nodeOperatorRewardAdjuster],
       pdgCompensators: [roles.pdgCompensator],
