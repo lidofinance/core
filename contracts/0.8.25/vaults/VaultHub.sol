@@ -566,7 +566,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _requireUnhealthy(address _vault) internal view {
-        if (!IStakingVault(_vault).isReportFresh()) revert VaultReportStaled(_vault);
         if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
     }
 
