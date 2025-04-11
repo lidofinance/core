@@ -17,6 +17,7 @@ contract StakingVault__MockForVaultHub {
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
+    uint64 public $timestamp;
 
     bytes32 public withdrawalCredentials;
 
@@ -70,7 +71,8 @@ contract StakingVault__MockForVaultHub {
         $inOutDelta -= int256(amount);
     }
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+        $timestamp = _timestamp;
         $valuation = _valuation;
         $inOutDelta = _inOutDelta;
         $locked = _locked;
@@ -112,6 +114,10 @@ contract StakingVault__MockForVaultHub {
 
     function deauthorizeLidoVaultHub() external {
         vaultHubAuthorized = false;
+    }
+
+    function isReportFresh() external view returns (bool) {
+        return true;
     }
 
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);

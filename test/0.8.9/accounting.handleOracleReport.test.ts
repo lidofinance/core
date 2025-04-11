@@ -406,8 +406,10 @@ describe("Accounting.sol:report", () => {
         elRewardsVaultBalance: 0n,
         sharesRequestedToBurn: 0n,
         withdrawalFinalizationBatches: [],
-        vaultValues: [],
-        inOutDeltas: [],
+        vaultsTotalTreasuryFeesShares: 0n,
+        vaultsTotalDeficit: 0n,
+        vaultsDataTreeRoot: ethers.ZeroHash,
+        vaultsDataTreeCid: "",
         ...overrides,
       };
     }

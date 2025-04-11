@@ -35,6 +35,7 @@ interface IStakingVault {
     struct Report {
         uint128 valuation;
         int128 inOutDelta;
+        uint64 timestamp;
     }
 
     function DEPOSIT_CONTRACT() external view returns (IDepositContract);
@@ -55,7 +56,7 @@ interface IStakingVault {
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
     function latestReport() external view returns (Report memory);
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
     function withdrawalCredentials() external view returns (bytes32);
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
@@ -74,4 +75,5 @@ interface IStakingVault {
     function ossifyStakingVault() external;
     function isOssified() external view returns (bool);
     function setDepositor(address _depositor) external;
+    function isReportFresh() external view returns (bool);
 }

@@ -1,12 +1,14 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt } from "ethers";
+import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
-import { Delegation, StakingVault, VaultFactory } from "typechain-types";
+import { Delegation, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
+import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { days, impersonate, MAX_UINT256 } from "lib";
+import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate, MAX_UINT256 } from "lib";
 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
@@ -189,18 +191,6 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, delegation: De
   await stakingVault.connect(delegationSigner).lock(ether("1"));
 }
 
-export async function initialReport(ctx: ProtocolContext, stakingVault: StakingVault) {
-  const { vaultHub, locator } = ctx.contracts;
-
-  const valuations = [await stakingVault.valuation()];
-  const inOutDeltas = [await stakingVault.inOutDelta()];
-  const locked = [await stakingVault.locked()];
-  const treasuryFees = [0n];
-
-  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
-}
-
 type ConnectToHubParams = {
   reserveRatio: bigint;
   rebalanceThreshold: bigint;
@@ -242,13 +232,92 @@ export async function connectToHub(
   await vaultHub
     .connect(agentSigner)
     .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
-
-  await initialReport(ctx, stakingVault);
 }
 
 export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault) {
   const { vaultHub } = ctx.contracts;
   const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
   const rewards = ether("1");
-  await stakingVault.connect(hubSigner).report(rewards, 0n, 0n);
+  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
+}
+
+// Address, valuation, inOutDelta, treasuryFees, sharesMinted
+export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
+
+export function createVaultsReportTree(vaults: VaultReportItem[]) {
+  const tree = StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
+  return tree;
+}
+
+export async function reportVaultDataWithProof(stakingVault: StakingVault) {
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
+  const vaultReport: VaultReportItem = [
+    await stakingVault.getAddress(),
+    await stakingVault.valuation(),
+    await stakingVault.inOutDelta(),
+    0n,
+    0n,
+  ];
+  const reportTree = createVaultsReportTree([vaultReport]);
+
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
+  await vaultHub.updateVaultData(
+    await stakingVault.getAddress(),
+    await stakingVault.valuation(),
+    await stakingVault.inOutDelta(),
+    0n,
+    0n,
+    reportTree.getProof(0),
+  );
+}
+
+interface CreateVaultResponse {
+  tx: ContractTransactionResponse;
+  proxy: PinnedBeaconProxy;
+  vault: StakingVault;
+  delegation: Delegation;
+}
+
+export async function createVaultProxy(
+  caller: HardhatEthersSigner,
+  vaultFactory: VaultFactory,
+  delegationParams: DelegationConfigStruct,
+  stakingVaultInitializerExtraParams: BytesLike = "0x",
+): Promise<CreateVaultResponse> {
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDelegation(delegationParams, stakingVaultInitializerExtraParams);
+
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+
+  if (events.length === 0) throw new Error("Vault creation event not found");
+
+  const event = events[0];
+  const { vault } = event.args;
+
+  const delegationEvents = findEventsWithInterfaces(receipt, "DelegationCreated", [vaultFactory.interface]);
+
+  if (delegationEvents.length === 0) throw new Error("Delegation creation event not found");
+
+  const { delegation: delegationAddress } = delegationEvents[0].args;
+
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const delegation = (await ethers.getContractAt("Delegation", delegationAddress, caller)) as Delegation;
+
+  //fund and lock
+  const delegationSigner = await impersonate(await delegation.getAddress(), ether("100"));
+  await stakingVault.connect(delegationSigner).fund({ value: ether("1") });
+  await stakingVault.connect(delegationSigner).lock(ether("1"));
+
+  return {
+    tx,
+    proxy,
+    vault: stakingVault,
+    delegation,
+  };
 }

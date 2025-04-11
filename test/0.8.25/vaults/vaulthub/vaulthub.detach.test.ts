@@ -22,7 +22,8 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether, impersonate } from "lib";
+import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -205,7 +206,9 @@ describe("VaultHub.sol:deauthorize", () => {
         .connect(admin)
         .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
       await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await vaultHub.connect(accountingSigner).updateVaults([1n], [1n], [1n], [0n]);
+      const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
+      await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+      await vaultHub.updateVaultData(await vault.getAddress(), 1n, 1n, 1n, 0n, tree.getProof(0));
       await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
       expect(await vault.vaultHubAuthorized()).to.equal(false);
     });

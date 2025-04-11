@@ -90,7 +90,12 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         ERC7201Storage storage $ = _getStorage();
-        return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
+        return
+            IStakingVault.Report({
+                timestamp: $.report.timestamp,
+                valuation: $.report.valuation,
+                inOutDelta: $.report.inOutDelta
+            });
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -113,7 +118,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function rebalance(uint256 _ether) external {}
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
 
     function lock(uint256 _locked) external {}
 
@@ -173,6 +178,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function setDepositor(address _depositor) external {}
 
     function vaultHubAuthorized() external view returns (bool) {
+        return true;
+    }
+
+    function isReportFresh() external view returns (bool) {
         return true;
     }
 

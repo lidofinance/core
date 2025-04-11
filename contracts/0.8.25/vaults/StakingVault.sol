@@ -414,7 +414,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (isReportFresh()) {
+            if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        } else {
+            if (address(this).balance < $.locked) revert ValuationBelowLockedAmount();
+        }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -427,7 +431,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
-        if (_locked > valuation()) revert NewLockedExceedsValuation();
+        if (isReportFresh()) {
+            if (_locked > valuation()) revert NewLockedExceedsValuation();
+        } else {
+            if (_locked > address(this).balance) revert NewLockedExceedsValuation();
+        }
 
         $.locked = uint128(_locked);
 
@@ -466,15 +474,19 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _inOutDelta New net difference between funded and withdrawn ether
      * @param _locked New amount of locked ether
      */
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         ERC7201Storage storage $ = _getStorage();
         if (msg.sender != address(VAULT_HUB) || !$.vaultHubAuthorized) revert NotAuthorized("report", msg.sender);
 
+        uint64 currentTimestamp = $.report.timestamp;
+        if (currentTimestamp >= _timestamp) revert ReportTooOld(currentTimestamp, _timestamp);
+
+        $.report.timestamp = _timestamp;
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
 
-        emit Reported(_valuation, _inOutDelta, _locked);
+        emit Reported(_timestamp, _valuation, _inOutDelta, _locked);
     }
 
     /**
@@ -612,7 +624,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         bool isValuationBelowLocked = valuation() < $.locked;
-        if (isValuationBelowLocked) {
+        if (isValuationBelowLocked || !isReportFresh()) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
@@ -640,6 +652,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+    }
+
+    function isReportFresh() public view returns (bool) {
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.vaultHubAuthorized) return true;
+        return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
+    }
+
+    function _checkFreshnessAndGetValuation() internal view returns (uint256) {
+        if (!isReportFresh()) revert ReportStaled();
+        return valuation();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -689,7 +712,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      * @param locked Amount of ether locked in `StakingVault`
      */
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
+    event Reported(uint64 indexed timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
      * @notice Emitted when deposits to beacon chain are paused
@@ -852,6 +875,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
      */
     error VaultIsOssified();
+
+    /**
+     * @notice Thrown when a report is staled
+     */
+    error ReportStaled();
+
+    /**
+     * @notice Thrown when a report is too old
+     */
+    error ReportTooOld(uint64 currentTimestamp, uint64 newTimestamp);
 
     /**
      * @notice Thrown when the depositor is not the Lido Predeposit Guarantee
