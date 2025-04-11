@@ -940,7 +940,7 @@ describe("StakingVault.sol", () => {
         stakingVault
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(INVALID_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
-      ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
+      ).to.be.revertedWithCustomError(stakingVault, "MalformedPubkeysArray");
     });
 
     it("reverts if called by a non-owner or the node operator", async () => {
@@ -968,7 +968,7 @@ describe("StakingVault.sol", () => {
         stakingVault
           .connect(vaultOwner)
           .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1"), ether("2")], vaultOwnerAddress, { value: 1n }),
-      ).to.be.revertedWithCustomError(stakingVault, "InvalidAmountsLength");
+      ).to.be.revertedWithCustomError(stakingVault, "MismatchedArrayLengths");
     });
 
     it("reverts if the fee is less than the required fee", async () => {
