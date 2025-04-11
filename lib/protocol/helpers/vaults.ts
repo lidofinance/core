@@ -232,8 +232,6 @@ export async function connectToHub(
   await vaultHub
     .connect(agentSigner)
     .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
-
-  await reportVaultDataWithProof(stakingVault);
 }
 
 export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault) {
