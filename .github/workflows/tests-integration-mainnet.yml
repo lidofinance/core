@@ -16,11 +16,12 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.23.0
+        image: ghcr.io/lidofinance/hardhat-node:2.23.0.1
         ports:
           - 8545:8545
         env:
           ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+          HARDFORK: "prague"
 
     steps:
       - uses: actions/checkout@v4
