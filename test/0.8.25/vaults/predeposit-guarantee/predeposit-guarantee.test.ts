@@ -262,7 +262,7 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts when setting guarantor with in-flight deposits", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
+        const validator = generateValidator(await stakingVault.withdrawalCredentials());
         const predeposit = await generatePredeposit(validator);
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY], { value: ether("1") });
 
@@ -509,7 +509,7 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(0n, balance);
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
-        const predeposit = await generatePredeposit(generateValidator());
+        const predeposit = await generatePredeposit(generateValidator(await stakingVault.withdrawalCredentials()));
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, stranger))
@@ -570,7 +570,9 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("revert when not NO tries to predeposit", async () => {
-        const { deposit, depositY } = await generatePredeposit(generateValidator());
+        const { deposit, depositY } = await generatePredeposit(
+          generateValidator(await stakingVault.withdrawalCredentials()),
+        );
         await expect(
           pdg.connect(vaultOwner).predeposit(stakingVault, [deposit], [depositY]),
         ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
@@ -580,12 +582,13 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("reverts when using locked balance", async () => {
-        const predeposit = await generatePredeposit(generateValidator());
+        const wc = await stakingVault.withdrawalCredentials();
+        const predeposit = await generatePredeposit(generateValidator(wc));
         await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
           .withArgs(0n, ether("1"));
 
-        const predeposit2 = await generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator(wc));
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
 
@@ -602,7 +605,8 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts on re-use of validator", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
         const predeposit = await generatePredeposit(validator);
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
@@ -612,7 +616,7 @@ describe("PredepositGuarantee.sol", () => {
         const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
         expect(validatorStatus.stage).to.equal(PREDEPOSITED_STAGE);
 
-        const predeposit2 = await generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator(wc));
 
         await expect(
           pdg.predeposit(
@@ -627,7 +631,8 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts on invalid predeposit amount", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
         const predeposit = await generatePredeposit(validator, ether("2"));
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
@@ -1089,13 +1094,17 @@ describe("PredepositGuarantee.sol", () => {
         validValidator = generateValidator(validWC);
         validNotPredepostedValidator = generateValidator(validWC);
 
-        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        // sign predeposit with valid WC
+        const invalidPredeposit = await generatePredeposit({
+          ...invalidValidator,
+          container: { ...invalidValidator.container, withdrawalCredentials: validWC },
+        });
         const validPredeposit = await generatePredeposit(validValidator);
 
         await pdg.predeposit(
           stakingVault,
-          [invalidaPredeposit.deposit, validPredeposit.deposit],
-          [invalidaPredeposit.depositY, validPredeposit.depositY],
+          [invalidPredeposit.deposit, validPredeposit.deposit],
+          [invalidPredeposit.depositY, validPredeposit.depositY],
         );
 
         await sszMerkleTree.addValidatorLeaf(invalidValidator.container);
@@ -1206,13 +1215,18 @@ describe("PredepositGuarantee.sol", () => {
         invalidValidator = generateValidator(invalidWC);
         validValidator = generateValidator(validWC);
 
-        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        const invalidValidatorHackedWC = {
+          ...invalidValidator,
+          container: { ...invalidValidator.container, withdrawalCredentials: validWC },
+        };
+
+        const invalidPredeposit = await generatePredeposit(invalidValidatorHackedWC);
         const validPredeposit = await generatePredeposit(validValidator);
 
         await pdg.predeposit(
           stakingVault,
-          [invalidaPredeposit.deposit, validPredeposit.deposit],
-          [invalidaPredeposit.depositY, validPredeposit.depositY],
+          [invalidPredeposit.deposit, validPredeposit.deposit],
+          [invalidPredeposit.depositY, validPredeposit.depositY],
         );
 
         await sszMerkleTree.addValidatorLeaf(invalidValidator.container);

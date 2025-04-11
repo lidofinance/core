@@ -2,7 +2,6 @@ import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "et
 import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 
 import { SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
