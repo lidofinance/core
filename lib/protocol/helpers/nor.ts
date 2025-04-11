@@ -43,7 +43,7 @@ export const norEnsureOperators = async (
   });
 
   if (newOperatorsCount > 0) {
-    await depositAndReportValidators(ctx, NOR_MODULE_ID, newOperatorsCount);
+    await depositAndReportValidators(ctx, NOR_MODULE_ID, newOperatorsCount * (minOperatorKeysCount / 2n));
   }
 };
 
