@@ -409,12 +409,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
 
         ERC7201Storage storage $ = _getStorage();
+        int256 inOutDelta_ = $.inOutDelta;
         $.inOutDelta -= int128(int256(_ether));
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (_checkFreshnessAndGetValuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (isReportFresh()) {
+            if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        } else {
+            if (inOutDelta_ < int256(uint256($.locked))) revert ValuationBelowLockedAmount();
+        }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
