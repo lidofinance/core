@@ -80,7 +80,7 @@
     "eslint-plugin-prettier": "5.2.6",
     "eslint-plugin-simple-import-sort": "12.1.1",
     "ethereumjs-util": "7.1.5",
-    "ethers": "6.13.6",
+    "ethers": "6.13.5",
     "glob": "11.0.1",
     "globals": "15.15.0",
     "hardhat": "2.23.0",
