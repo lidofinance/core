@@ -209,10 +209,6 @@ describe("VaultHub.sol:deauthorize", () => {
       const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
       await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
       await vaultHub.updateVaultData(await vault.getAddress(), 1n, 1n, 1n, 0n, tree.getProof(0));
-      const count = await vaultHub.vaultsCount();
-      console.log("count", count);
-      const storage = await vaultHub.getVaultIndex(await vault.getAddress());
-      console.log("storage", storage);
       await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
       expect(await vault.vaultHubAuthorized()).to.equal(false);
     });

@@ -956,6 +956,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the invalid pubkey is provided", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -964,6 +967,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if called by a non-owner or the node operator", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(stranger)
@@ -974,6 +980,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if called by the vault hub on a healthy vault", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultHubSigner)
@@ -997,6 +1006,9 @@ describe("StakingVault.sol", () => {
       const amounts = Array(numberOfKeys).fill(ether("1"));
       const value = baseFee * BigInt(numberOfKeys) - 1n;
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1012,6 +1024,9 @@ describe("StakingVault.sol", () => {
       const pubkeys = getPubkeys(numberOfKeys);
       const value = baseFee * BigInt(numberOfKeys) + overpaid;
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1072,6 +1087,9 @@ describe("StakingVault.sol", () => {
 
     it("requests a partial validator withdrawal", async () => {
       const amount = ether("0.1");
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1088,6 +1106,9 @@ describe("StakingVault.sol", () => {
       const overpaid = 100n;
       const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       const tx = await stakingVault
         .connect(vaultOwner)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
@@ -1114,6 +1135,9 @@ describe("StakingVault.sol", () => {
         .fill(0)
         .map((_, i) => BigInt(i * 100)); // trigger full and partial withdrawals
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)

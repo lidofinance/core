@@ -557,10 +557,6 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function getVaultIndex(address addr) public view returns (uint256) {
-        return _getVaultHubStorage().vaultIndex[addr];
-    }
-
     /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP
     function _checkShareLimitUpperBound(address _vault, uint256 _shareLimit) internal view {
         uint256 relativeMaxShareLimitPerVault = (LIDO.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;

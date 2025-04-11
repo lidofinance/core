@@ -33,7 +33,6 @@ const FEE = 2n;
 describe("VaultHub.sol:forceExit", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
 
   let vaultHub: VaultHub;
@@ -71,7 +70,7 @@ describe("VaultHub.sol:forceExit", () => {
   }
 
   before(async () => {
-    [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
+    [deployer, user, feeRecipient] = await ethers.getSigners();
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
@@ -170,9 +169,18 @@ describe("VaultHub.sol:forceExit", () => {
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      await expect(vaultHub.forceValidatorExit(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+      const vaultCreationTx = (await vaultFactory
+        .createVault(user, user, predepositGuarantee)
+        .then((tx) => tx.wait())) as ContractTransactionReceipt;
+
+      const events = findEvents(vaultCreationTx, "VaultCreated");
+      const vaultCreatedEvent = events[0];
+
+      await expect(
+        vaultHub.forceValidatorExit(vaultCreatedEvent.args.vault, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
+      )
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
-        .withArgs(stranger.address);
+        .withArgs(vaultCreatedEvent.args.vault);
     });
 
     it("reverts if called for a disconnected vault", async () => {

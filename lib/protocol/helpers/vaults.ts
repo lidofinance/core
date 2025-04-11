@@ -252,8 +252,6 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 }
 
 export async function reportVaultDataWithProof(stakingVault: StakingVault) {
-  console.log("stakingVault.vaultHub()", await stakingVault.vaultHub());
-
   const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
   const vaultReport: VaultReportItem = [
