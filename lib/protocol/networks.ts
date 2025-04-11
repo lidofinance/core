@@ -50,6 +50,7 @@ const defaultEnv = {
   elRewardsVault: "EL_REWARDS_VAULT_ADDRESS",
   legacyOracle: "LEGACY_ORACLE_ADDRESS",
   lido: "LIDO_ADDRESS",
+  accounting: "ACCOUNTING_ADDRESS",
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",
   burner: "BURNER_ADDRESS",
   stakingRouter: "STAKING_ROUTER_ADDRESS",
@@ -57,6 +58,7 @@ const defaultEnv = {
   withdrawalQueue: "WITHDRAWAL_QUEUE_ADDRESS",
   withdrawalVault: "WITHDRAWAL_VAULT_ADDRESS",
   oracleDaemonConfig: "ORACLE_DAEMON_CONFIG_ADDRESS",
+  wstETH: "WSTETH_ADDRESS",
   // aragon contracts
   kernel: "ARAGON_KERNEL_ADDRESS",
   acl: "ARAGON_ACL_ADDRESS",
@@ -65,6 +67,9 @@ const defaultEnv = {
   sdvt: "SIMPLE_DVT_REGISTRY_ADDRESS",
   // hash consensus
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
+  // vaults
+  stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
+  stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -73,7 +78,7 @@ const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
 const getDefaults = (obj: ProtocolNetworkItems) =>
   Object.fromEntries(Object.entries(obj).map(([key]) => [key, ""])) as ProtocolNetworkItems;
 
-async function getLocalNetworkConfig(network: string, source: string): Promise<ProtocolNetworkConfig> {
+async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"): Promise<ProtocolNetworkConfig> {
   const config = await parseDeploymentJson(network);
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
@@ -81,6 +86,8 @@ async function getLocalNetworkConfig(network: string, source: string): Promise<P
     agentAddress: config["app:aragon-agent"].proxy.address,
     votingAddress: config["app:aragon-voting"].proxy.address,
     easyTrackAddress: config["app:aragon-voting"].proxy.address,
+    stakingVaultFactory: config["stakingVaultFactory"].address,
+    stakingVaultBeacon: config["stakingVaultBeacon"].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -92,21 +99,26 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
     agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
     votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
+    stakingVaultFactory: "",
+    stakingVaultBeacon: "",
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
-    case "local":
-      return getLocalNetworkConfig(network, "fork");
-    case "mainnet-fork":
-      return getMainnetForkNetworkConfig();
     case "hardhat":
       if (isNonForkingHardhatNetwork()) {
         return getLocalNetworkConfig(network, "scratch");
       }
       return getMainnetForkNetworkConfig();
+    case "local":
+      return getLocalNetworkConfig(network, "fork");
+    case "mainnet-fork":
+      return getMainnetForkNetworkConfig();
+    case "holesky-vaults-devnet-0":
+      return getLocalNetworkConfig(network, "fork");
+
     default:
       throw new Error(`Network ${network} is not supported`);
   }

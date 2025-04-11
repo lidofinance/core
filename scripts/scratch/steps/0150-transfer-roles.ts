@@ -23,6 +23,8 @@ export async function main() {
     { name: "WithdrawalQueueERC721", address: state.withdrawalQueueERC721.proxy.address },
     { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
     { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
+    { name: "VaultHub", address: state.vaultHub.proxy.address },
+    { name: "PredepositGuarantee", address: state.predepositGuarantee.proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {
@@ -38,6 +40,8 @@ export async function main() {
     state.accountingOracle.proxy.address,
     state.validatorsExitBusOracle.proxy.address,
     state.withdrawalQueueERC721.proxy.address,
+    state.vaultHub.proxy.address,
+    state.predepositGuarantee.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {
@@ -45,7 +49,7 @@ export async function main() {
     await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
   }
 
-  // Change DepositSecurityModule admin if not using predefined address
+  // Change DepositSecurityModule admin if not using a predefined address
   if (state[Sk.depositSecurityModule].deployParameters.usePredefinedAddressInstead === null) {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
