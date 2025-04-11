@@ -615,8 +615,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isValuationBelowLocked = _checkFreshnessAndGetValuation() < $.locked;
-        if (isValuationBelowLocked) {
+        bool isValuationBelowLocked = valuation() < $.locked;
+        if (isValuationBelowLocked || !isReportFresh()) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
