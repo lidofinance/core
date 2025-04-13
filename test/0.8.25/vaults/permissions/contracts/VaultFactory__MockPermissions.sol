@@ -56,7 +56,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            PREDEPOSIT_GUARANTEE,
+            _stakingVaultInitializerExtraParams
+        );
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -91,7 +96,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            PREDEPOSIT_GUARANTEE,
+            _stakingVaultInitializerExtraParams
+        );
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -128,7 +138,12 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, _stakingVaultInitializerExtraParams);
+        vault.initialize(
+            address(permissions),
+            _permissionsConfig.nodeOperator,
+            PREDEPOSIT_GUARANTEE,
+            _stakingVaultInitializerExtraParams
+        );
 
         // should revert here
         permissions.initialize(address(0), _permissionsConfig.confirmExpiry);

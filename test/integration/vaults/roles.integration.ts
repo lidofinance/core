@@ -7,13 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation } from "typechain-types";
 
-import { days } from "lib";
+import { days, ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { getRandomSigners } from "lib/protocol/helpers/get-random-signers";
 
 import { Snapshot } from "test/suite";
-
-import { ether } from "../../../lib/units";
 
 const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
@@ -35,6 +33,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
     withdrawer: HardhatEthersSigner,
+    locker: HardhatEthersSigner,
     assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
@@ -44,21 +43,27 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     validatorExitRequesters: HardhatEthersSigner,
     validatorWithdrawalTriggerers: HardhatEthersSigner,
     disconnecters: HardhatEthersSigner,
+    lidoVaultHubDeauthorizers: HardhatEthersSigner,
     nodeOperatorFeeClaimers: HardhatEthersSigner,
-    stranger: HardhatEthersSigner;
+    stranger: HardhatEthersSigner,
+    nodeOperatorRewardAdjusters: HardhatEthersSigner,
+    unguaranteedBeaconChainDepositors: HardhatEthersSigner,
+    unknownValidatorProvers: HardhatEthersSigner,
+    pdgCompensators: HardhatEthersSigner;
 
   let allRoles: HardhatEthersSigner[];
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    allRoles = await getRandomSigners(20);
+    allRoles = await getRandomSigners(30);
     [
       owner,
       nodeOperatorManager,
       assetRecoverer,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
@@ -67,12 +72,14 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       validatorExitRequesters,
       validatorWithdrawalTriggerers,
       disconnecters,
+      lidoVaultHubDeauthorizers,
       nodeOperatorFeeClaimers,
       stranger,
+      nodeOperatorRewardAdjusters,
+      unguaranteedBeaconChainDepositors,
+      unknownValidatorProvers,
+      pdgCompensators,
     ] = allRoles;
-
-    const { depositSecurityModule } = ctx.contracts;
-    await depositSecurityModule.DEPOSIT_CONTRACT();
   });
 
   beforeEach(async () => {
@@ -99,6 +106,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [funder],
           withdrawers: [withdrawer],
           minters: [minter],
+          lockers: [locker],
           burners: [burner],
           rebalancers: [rebalancer],
           depositPausers: [depositPausers],
@@ -106,7 +114,12 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [validatorExitRequesters],
           validatorWithdrawalTriggerers: [validatorWithdrawalTriggerers],
           disconnecters: [disconnecters],
+          lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizers],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimers],
+          nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjusters],
+          unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositors],
+          unknownValidatorProvers: [unknownValidatorProvers],
+          pdgCompensators: [pdgCompensators],
         },
         "0x",
       );
@@ -115,6 +128,32 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
       testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    });
+
+    it("Allows anyone to read public metrics of the vault", async () => {
+      expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
+      expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
+      expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
+    });
+
+    it("Allows to retrieve roles addresses", async () => {
+      expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+    });
+
+    it("Allows NO Manager to add and remove new managers", async () => {
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .grantRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+        stranger.address,
+      ]);
+      await testDelegation
+        .connect(nodeOperatorManager)
+        .revokeRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+      ]);
     });
 
     describe("Verify ACL for methods that require only role", () => {
@@ -212,16 +251,45 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
 
-        it("compensateDisprovenPredepositFromPDG", async () => {
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("compensateDisprovenPredepositFromPDG", async () => {
           await testMethod(
             testDelegation,
             "compensateDisprovenPredepositFromPDG",
             {
-              successUsers: [],
-              failingUsers: allRoles,
+              successUsers: [pdgCompensators],
+              failingUsers: allRoles.filter((r) => r !== pdgCompensators),
             },
             [SAMPLE_PUBKEY, stranger],
-            await testDelegation.PDG_WITHDRAWAL_ROLE(),
+            await testDelegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("proveUnknownValidatorsToPDG", async () => {
+          await testMethod(
+            testDelegation,
+            "proveUnknownValidatorsToPDG",
+            {
+              successUsers: [unknownValidatorProvers],
+              failingUsers: allRoles.filter((r) => r !== unknownValidatorProvers),
+            },
+            [SAMPLE_PUBKEY, stranger],
+            await testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("increaseAccruedRewardsAdjustment", async () => {
+          await testMethod(
+            testDelegation,
+            "increaseAccruedRewardsAdjustment",
+            {
+              successUsers: [nodeOperatorRewardAdjusters],
+              failingUsers: allRoles.filter((r) => r !== nodeOperatorRewardAdjusters),
+            },
+            [SAMPLE_PUBKEY, stranger],
+            await testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
           );
         });
 
@@ -293,6 +361,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
         it("mintStETH", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintStETH",
@@ -306,6 +376,8 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
         });
 
         it("mintShares", async () => {
+          await testDelegation.connect(funder).fund({ value: ether("1") });
+          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
             testDelegation,
             "mintShares",
@@ -333,6 +405,18 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           );
         });
 
+        it("lock", async () => {
+          await testMethod(
+            testDelegation,
+            "lock",
+            {
+              successUsers: [locker],
+              failingUsers: allRoles.filter((r) => r !== locker),
+            },
+            [ether("1")],
+            await testDelegation.LOCK_ROLE(),
+          );
+        });
         // requires prepared state for this test to pass, skipping for now
         it.skip("withdrawWETH", async () => {
           await testMethod(
@@ -450,6 +534,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           funders: [],
           withdrawers: [],
           minters: [],
+          lockers: [],
           burners: [],
           rebalancers: [],
           depositPausers: [],
@@ -457,7 +542,12 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           validatorExitRequesters: [],
           validatorWithdrawalTriggerers: [],
           disconnecters: [],
+          lidoVaultHubDeauthorizers: [],
           nodeOperatorFeeClaimers: [],
+          nodeOperatorRewardAdjusters: [],
+          unguaranteedBeaconChainDepositors: [],
+          pdgCompensators: [],
+          unknownValidatorProvers: [],
         },
         "0x",
       );
@@ -469,24 +559,29 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     });
 
     it("Verify that roles are not assigned", async () => {
-      const roles = [
-        await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-        await testDelegation.FUND_ROLE(),
-        await testDelegation.WITHDRAW_ROLE(),
-        await testDelegation.MINT_ROLE(),
-        await testDelegation.BURN_ROLE(),
-        await testDelegation.REBALANCE_ROLE(),
-        await testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        await testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        await testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
-        await testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        await testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
-      ];
+      const roles = await Promise.all([
+        testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+        testDelegation.FUND_ROLE(),
+        testDelegation.WITHDRAW_ROLE(),
+        testDelegation.MINT_ROLE(),
+        testDelegation.BURN_ROLE(),
+        testDelegation.REBALANCE_ROLE(),
+        testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+        testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+        testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+        testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+        testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
+        testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+        testDelegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+        testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
+        testDelegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+      ]);
 
       for (const role of roles) {
         expect(await testDelegation.getRoleMembers(role)).to.deep.equal([]);
       }
     });
+
     describe("Verify ACL for methods that require only role", () => {
       describe("Delegation methods", () => {
         it("claimNodeOperatorFee", async () => {

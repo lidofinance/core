@@ -9,7 +9,7 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {PredepositGuarantee} from "./predeposit_guarantee/PredepositGuarantee.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 /**
@@ -35,6 +35,11 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Permission for withdrawing funds from the StakingVault.
      */
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
+
+    /**
+     * @notice Permission for locking ether on StakingVault.
+     */
+    bytes32 public constant LOCK_ROLE = keccak256("vaults.Permissions.Lock");
 
     /**
      * @notice Permission for minting stETH shares backed by the StakingVault.
@@ -78,9 +83,26 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for withdrawing disproven validator predeposit from PDG
+     * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
-    bytes32 public constant PDG_WITHDRAWAL_ROLE = keccak256("vaults.Permissions.PDGWithdrawal");
+    bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
+
+    /**
+     * @notice Permission for proving valid vault validators unknown to the PDG
+     */
+    bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
+
+    /**
+     * @notice Permission for unguarnateed deposit to trusted validators
+     */
+    bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
+        keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
+
+    /**
+     * @dev Permission for deauthorizing Lido VaultHub from the StakingVault.
+     */
+    bytes32 public constant LIDO_VAULTHUB_DEAUTHORIZATION_ROLE =
+        keccak256("vaults.Permissions.LidoVaultHubDeauthorization");
 
     /**
      * @notice Permission for assets recovery
@@ -191,6 +213,10 @@ abstract contract Permissions is AccessControlConfirmable {
         stakingVault().withdraw(_recipient, _ether);
     }
 
+    function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
+        stakingVault().lock(_locked);
+    }
+
     /**
      * @dev Checks the MINT_ROLE and mints shares backed by the StakingVault.
      * @param _recipient The address to mint the shares to.
@@ -260,11 +286,36 @@ abstract contract Permissions is AccessControlConfirmable {
         vaultHub.voluntaryDisconnect(address(stakingVault()));
     }
 
+    /**
+     * @dev Claims disproven predeposit from PDG
+     */
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
-    ) internal onlyRole(PDG_WITHDRAWAL_ROLE) returns (uint256) {
-        return PredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+    ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
+        return IPredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+    }
+
+    /**
+     * @dev Proves validators unknown to PDG that have correct vault WC
+     */
+    function _proveUnknownValidatorsToPDG(
+        IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
+    ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
+        IStakingVault vault = stakingVault();
+        IPredepositGuarantee pdg = IPredepositGuarantee(vault.depositor());
+        for (uint256 i = 0; i < _witnesses.length; i++) {
+            pdg.proveUnknownValidator(_witnesses[i], vault);
+        }
+    }
+
+    /**
+     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
+     */
+    function _withdrawForUnguaranteedDepositToBeaconChain(
+        uint256 _ether
+    ) internal onlyRole(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
+        stakingVault().withdraw(address(this), _ether);
     }
 
     /**
@@ -273,6 +324,13 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+    }
+
+    /**
+     * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
+     */
+    function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
+        stakingVault().deauthorizeLidoVaultHub();
     }
 
     /**

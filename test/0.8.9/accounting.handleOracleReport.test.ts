@@ -25,7 +25,7 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/Accou
 import { certainAddress, ether, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -76,7 +76,7 @@ describe("Accounting.sol:report", () => {
 
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",
-      [locator, lido, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      [locator, lido, VAULTS_RELATIVE_SHARE_LIMIT_BP],
       deployer,
     );
     const vaultHubProxy = await ethers.deployContract(
@@ -406,8 +406,10 @@ describe("Accounting.sol:report", () => {
         elRewardsVaultBalance: 0n,
         sharesRequestedToBurn: 0n,
         withdrawalFinalizationBatches: [],
-        vaultValues: [],
-        inOutDeltas: [],
+        vaultsTotalTreasuryFeesShares: 0n,
+        vaultsTotalDeficit: 0n,
+        vaultsDataTreeRoot: ethers.ZeroHash,
+        vaultsDataTreeCid: "",
         ...overrides,
       };
     }

@@ -3,31 +3,38 @@
 
 pragma solidity ^0.8.0;
 
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__MockForVaultHub {
-    address public vaultHub;
+    address public immutable VAULT_HUB;
     address public depositContract;
 
     address public owner;
     address public nodeOperator;
-    address immutable DEPOSITOR;
+    address public depositor_;
+    bool public vaultHubAuthorized;
+
     uint256 public $locked;
     uint256 public $valuation;
     int256 public $inOutDelta;
+    uint64 public $timestamp;
 
     bytes32 public withdrawalCredentials;
 
-    constructor(address _vaultHub, address _depositor, address _depositContract) {
-        vaultHub = _vaultHub;
+    constructor(address _vaultHub, address _depositContract) {
+        VAULT_HUB = _vaultHub;
         depositContract = _depositContract;
-        DEPOSITOR = _depositor;
         withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
-    function initialize(address _owner, address _nodeOperator, bytes calldata) external {
+    function initialize(address _owner, address _nodeOperator, address _depositor, bytes calldata) external {
         owner = _owner;
         nodeOperator = _nodeOperator;
+        depositor_ = _depositor;
+    }
+
+    function vaultHub() external view returns (address) {
+        return VAULT_HUB;
     }
 
     function lock(uint256 amount) external {
@@ -64,14 +71,15 @@ contract StakingVault__MockForVaultHub {
         $inOutDelta -= int256(amount);
     }
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+        $timestamp = _timestamp;
         $valuation = _valuation;
         $inOutDelta = _inOutDelta;
         $locked = _locked;
     }
 
     function depositor() external view returns (address) {
-        return DEPOSITOR;
+        return depositor_;
     }
 
     function triggerValidatorWithdrawal(
@@ -94,7 +102,23 @@ contract StakingVault__MockForVaultHub {
         $valuation += amount;
     }
 
-    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
+
+    function isOssified() external pure returns (bool) {
+        return false;
+    }
+
+    function authorizeLidoVaultHub() external {
+        vaultHubAuthorized = true;
+    }
+
+    function deauthorizeLidoVaultHub() external {
+        vaultHubAuthorized = false;
+    }
+
+    function isReportFresh() external view returns (bool) {
+        return true;
+    }
 
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
