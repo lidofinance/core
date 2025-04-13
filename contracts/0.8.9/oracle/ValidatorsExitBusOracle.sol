@@ -10,6 +10,7 @@ import { PausableUntil } from "../utils/PausableUntil.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
+import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
 
 
 interface IOracleReportSanityChecker {
@@ -17,7 +18,7 @@ interface IOracleReportSanityChecker {
 }
 
 
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
+contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
 
@@ -48,6 +49,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         uint256 indexed refSlot,
         uint256 requestsProcessed,
         uint256 requestsCount
+    );
+
+    event StoreOracleExitRequestHashStart(
+        bytes32 exitRequestHash
     );
 
     struct DataProcessingState {
@@ -107,6 +112,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
+    }
+
+    function finalizeUpgrade_v2() external {
+        _updateContractVersion(2);
+        _setLocatorAddress(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
@@ -192,9 +202,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
 
-    /// Length in bytes of packed request
-    uint256 internal constant PACKED_REQUEST_LENGTH = 64;
-
     /// @notice Submits report data for processing.
     ///
     /// @param data The data. See the `ReportData` structure's docs for details.
@@ -216,10 +223,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
+        bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
-        _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data)));
+        bytes32 reportDataHash = keccak256(abi.encode(data));
+        _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
+        _storeOracleExitRequestHash(dataHash, data.requestsCount, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -336,6 +346,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
             revert InvalidRequestsDataLength();
         }
 
+        // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
 
@@ -437,6 +448,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     function _computeNodeOpKey(uint256 moduleId, uint256 nodeOpId) internal pure returns (uint256) {
         return (moduleId << 40) | nodeOpId;
+    }
+
+    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+        if (requestsCount == 0) {
+            return;
+        }
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
     }
 
     ///
