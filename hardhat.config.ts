@@ -44,6 +44,7 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
     },
     // local nodes
     "local": {
@@ -71,6 +72,14 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     customChains: [
+      {
+        network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
       {
         network: "local-devnet",
         chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),

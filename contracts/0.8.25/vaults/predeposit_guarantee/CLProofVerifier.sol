@@ -7,6 +7,8 @@ pragma solidity 0.8.25;
 import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
 import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+
 /**
  * @title CLProofVerifier
  * @author Lido
@@ -19,20 +21,6 @@ import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
  *
  */
 abstract contract CLProofVerifier {
-    /**
-     * @notice user input for validator proof verification
-     * @custom:proof array of merkle proofs from parent(pubkey,wc) node to Beacon block root
-     * @custom:pubkey of validator to prove
-     * @custom:validatorIndex of validator in CL state tree
-     * @custom:childBlockTimestamp of EL block that has parent block beacon root in BEACON_ROOTS contract
-     */
-    struct ValidatorWitness {
-        bytes32[] proof;
-        bytes pubkey;
-        uint256 validatorIndex;
-        uint64 childBlockTimestamp;
-    }
-
     /**
      * @notice CLProofVerifier accepts concatenated Merkle proofs to verify existence of correct pubkey+WC validator on CL
      * Proof consists of:
@@ -152,7 +140,10 @@ abstract contract CLProofVerifier {
      * @param _withdrawalCredentials to verify proof with
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
-    function _validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) internal view {
+    function _validatePubKeyWCProof(
+        IPredepositGuarantee.ValidatorWitness calldata _witness,
+        bytes32 _withdrawalCredentials
+    ) internal view {
         // parent node for first two leaves in validator container tree: pubkey & wc
         // we use 'leaf' instead of 'node' due to proving a subtree where this node is a leaf
         bytes32 leaf = SSZ.sha256Pair(SSZ.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
@@ -197,6 +188,5 @@ abstract contract CLProofVerifier {
         return GI_FIRST_VALIDATOR.shr(_offset);
     }
 
-    error InvalidTimestamp();
     error RootNotFound();
 }

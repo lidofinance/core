@@ -13,8 +13,11 @@ import {VaultHub} from "./VaultHub.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;
@@ -261,11 +264,22 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice Update the locked amount of the staking vault
+     * @param _amount Amount of ether to lock
+     */
+    function lock(uint256 _amount) external {
+        _lock(_amount);
+    }
+
+    /**
      * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
      */
-    function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
+    function mintShares(
+        address _recipient,
+        uint256 _amountOfShares
+    ) external payable fundable autolock(_amountOfShares) {
         _mintShares(_recipient, _amountOfShares);
     }
 
@@ -275,7 +289,10 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
-    function mintStETH(address _recipient, uint256 _amountOfStETH) external payable virtual fundable {
+    function mintStETH(
+        address _recipient,
+        uint256 _amountOfStETH
+    ) external payable fundable autolock(STETH.getSharesByPooledEth(_amountOfStETH)) {
         _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
@@ -284,7 +301,10 @@ contract Dashboard is Permissions {
      * @param _recipient Address of the recipient
      * @param _amountOfWstETH Amount of tokens to mint
      */
-    function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
+    function mintWstETH(
+        address _recipient,
+        uint256 _amountOfWstETH
+    ) external payable fundable autolock(_amountOfWstETH) {
         _mintShares(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
@@ -369,10 +389,60 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice withdraws ether of disproven validator from PDG
+     * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
+     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
+     *          clearing them for future deposits via `PDG.depositToBeaconChain`
+     * @param _deposits array of IStakingVault.Deposit structs containing deposit data
+     * @return totalAmount total amount of ether deposited to beacon chain
+     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
+     * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
+     */
+    function unguaranteedDepositToBeaconChain(
+        StakingVaultDeposit[] calldata _deposits
+    ) public virtual returns (uint256 totalAmount) {
+        IStakingVault stakingVault = stakingVault();
+        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+
+        for (uint256 i = 0; i < _deposits.length; i++) {
+            totalAmount += _deposits[i].amount;
+        }
+
+        _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
+
+        bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
+
+        StakingVaultDeposit calldata deposit;
+        for (uint256 i = 0; i < _deposits.length; i++) {
+            deposit = _deposits[i];
+            depositContract.deposit{value: deposit.amount}(
+                deposit.pubkey,
+                withdrawalCredentials,
+                deposit.signature,
+                deposit.depositDataRoot
+            );
+
+            emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
+        }
+    }
+
+    /**
+     * @notice Proves validators with correct vault WC if they are unknown to PDG
+     * @param _witnesses array of IPredepositGuarantee.ValidatorWitness structs containing proof data for validators
+     * @dev requires the caller to have the `PDG_PROVE_VALIDATOR_ROLE`
+     */
+    function proveUnknownValidatorsToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
+        _proveUnknownValidatorsToPDG(_witnesses);
+    }
+
+    /**
+     * @notice Compensates ether of disproven validator's predeposit from PDG to the recipient.
+     *         Can be called if validator which was predeposited via `PDG.predeposit` with vault funds
+     *         was frontrun by NO's with non-vault WC (effectively NO's stealing the predeposit) and then
+     *         proof of the validator's invalidity has been provided via `PDG.proveInvalidValidatorWC`.
      * @param _pubkey of validator that was proven invalid in PDG
-     * @param _recipient address to receive the `PREDEPOSIT_AMOUNT`
+     * @param _recipient address to receive the `PDG.PREDEPOSIT_AMOUNT`
      * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
+     * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
      */
     function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
         _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
@@ -463,6 +533,13 @@ contract Dashboard is Permissions {
         _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
     }
 
+    /**
+     * @notice Deauthorizes the Lido Vault Hub from managing the staking vault.
+     */
+    function deauthorizeLidoVaultHub() external {
+        _deauthorizeLidoVaultHub();
+    }
+
     // ==================== Internal Functions ====================
 
     /**
@@ -472,6 +549,25 @@ contract Dashboard is Permissions {
         if (msg.value > 0) {
             _fund(msg.value);
         }
+        _;
+    }
+
+    /**
+     * @dev Modifier to increase the locked amount if necessary
+     * @param _newShares The number of new shares to mint
+     */
+    modifier autolock(uint256 _newShares) {
+        VaultHub.VaultSocket memory socket = vaultSocket();
+
+        // Calculate the locked amount required to accommodate the new shares
+        uint256 requiredLocked = (STETH.getPooledEthBySharesRoundUp(socket.sharesMinted + _newShares) *
+            TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
+
+        // If the required locked amount is greater than the current, increase the locked amount
+        if (requiredLocked > stakingVault().locked()) {
+            _lock(requiredLocked);
+        }
+
         _;
     }
 
@@ -509,8 +605,6 @@ contract Dashboard is Permissions {
     }
 
     /**
-
-    /**
      * @dev Burns stETH tokens from the sender backed by the vault
      * @param _amountOfStETH Amount of tokens to burn
      */
@@ -545,16 +639,28 @@ contract Dashboard is Permissions {
 
     // ==================== Events ====================
 
-    /// @notice Emitted when the ERC20 `token` or Ether is recovered (i.e. transferred)
-    /// @param to The address of the recovery recipient
-    /// @param token The address of the recovered ERC20 token (zero address for Ether)
-    /// @param amount The amount of the token recovered
+    /**
+     * @notice Emitted when ether was withdrawn from the staking vault and deposited to validators directly bypassing PDG
+     * @param stakingVault the address of owned staking vault
+     * @param pubkey of the validator to be deposited
+     * @param amount of ether deposited to validator
+     */
+    event UnguaranteedDeposit(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
+
+    /**
+     * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)
+     * @param to The address of the recovery recipient
+     * @param token The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
+     * @param amount The amount of the token recovered
+     */
     event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
 
-    /// @notice Emitted when the ERC721-compatible `token` (NFT) recovered  (i.e. transferred)
-    /// @param to The address of the recovery recipient
-    /// @param token The address of the recovered ERC721 token
-    /// @param tokenId id of token recovered
+    /**
+     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered (i.e. transferred)
+     * @param to The address of the recovery recipient
+     * @param token The address of the recovered ERC721 token
+     * @param tokenId id of token recovered
+     */
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================

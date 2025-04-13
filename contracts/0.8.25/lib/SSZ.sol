@@ -1,22 +1,16 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
 import {GIndex} from "./GIndex.sol";
 
-struct BeaconBlockHeader {
-    uint64 slot;
-    uint64 proposerIndex;
-    bytes32 parentRoot;
-    bytes32 stateRoot;
-    bytes32 bodyRoot;
-}
+import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 /*
- Cut and modified version of SSZ library from CSM only has methods for merkilized SSZ proof validation
- original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
+ SSZ library from CSM
+ original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
 */
 library SSZ {
     error BranchHasMissingItem();
@@ -25,9 +19,39 @@ library SSZ {
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
 
-    /// @notice Modified version of `hashTreeRoot` from CSM to verify beacon block header against beacon root
-    /// @dev Reverts with  InvalidBlockHeader` if calculated root doesn't match expected root
-    function verifyBeaconBlockHeader(BeaconBlockHeader calldata header, bytes32 expectedRoot) internal view {
+    /// @notice computed fork agnostic DEPOSIT_DOMAIN
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+    /// @dev fork agnostic per `apply_deposit` at https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#deposits
+    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9;
+
+    /// @notice calculation of signing root for deposit message
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
+    /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+    function depositMessageSigningRoot(
+        StakingVaultDeposit calldata deposit,
+        bytes32 withdrawalCredentials
+    ) internal view returns (bytes32 root) {
+        root = sha256Pair(
+            // merkle root of the deposit message
+            sha256Pair(
+                sha256Pair(
+                    // pubkey must be hashed to be used as leaf
+                    pubkeyRoot(deposit.pubkey),
+                    withdrawalCredentials
+                ),
+                sha256Pair(
+                    toLittleEndian(deposit.amount / 1 gwei),
+                    // filler to make leaf count power of 2
+                    bytes32(0)
+                )
+            ),
+            DEPOSIT_DOMAIN
+        );
+    }
+
+    /// @notice SSZ hash tree root of a CL Beacon Block Header
+    /// @param header Beacon Block Header container struct
+    function hashTreeRoot(BeaconBlockHeader memory header) internal view returns (bytes32 root) {
         bytes32[8] memory nodes = [
             toLittleEndian(header.slot),
             toLittleEndian(header.proposerIndex),
@@ -38,8 +62,6 @@ library SSZ {
             bytes32(0),
             bytes32(0)
         ];
-
-        bytes32 root;
 
         /// @solidity memory-safe-assembly
         assembly {
@@ -95,9 +117,95 @@ library SSZ {
                 }
             }
         }
+    }
 
-        if (root != expectedRoot) {
-            revert InvalidProof();
+    /// @notice SSZ hash tree root of a CL validator container
+    /// @param validator Validator container struct
+    function hashTreeRoot(Validator memory validator) internal view returns (bytes32 root) {
+        bytes32 _pubkeyRoot;
+
+        assembly {
+            // Dynamic data types such as bytes are stored at the specified offset.
+            let offset := mload(validator)
+            // Copy the pubkey to the scratch space.
+            mcopy(0x00, add(offset, 32), 48)
+            // Clear the last 16 bytes.
+            mcopy(48, 0x60, 16)
+            // Call sha256 precompile.
+            let result := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+
+            if iszero(result) {
+                // Precompiles returns no data on OutOfGas error.
+                revert(0, 0)
+            }
+
+            _pubkeyRoot := mload(0x00)
+        }
+
+        bytes32[8] memory nodes = [
+            _pubkeyRoot,
+            validator.withdrawalCredentials,
+            toLittleEndian(validator.effectiveBalance),
+            toLittleEndian(validator.slashed),
+            toLittleEndian(validator.activationEligibilityEpoch),
+            toLittleEndian(validator.activationEpoch),
+            toLittleEndian(validator.exitEpoch),
+            toLittleEndian(validator.withdrawableEpoch)
+        ];
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Count of nodes to hash
+            let count := 8
+
+            // Loop over levels
+            // prettier-ignore
+            for { } 1 { } {
+                // Loop over nodes at the given depth
+
+                // Initialize `offset` to the offset of `proof` elements in memory.
+                let target := nodes
+                let source := nodes
+                let end := add(source, shl(5, count))
+
+                // prettier-ignore
+                for { } 1 { } {
+                    // Read next two hashes to hash
+                    mcopy(0x00, source, 0x40)
+
+                    // Call sha256 precompile
+                    let result := staticcall(
+                        gas(),
+                        0x02,
+                        0x00,
+                        0x40,
+                        0x00,
+                        0x20
+                    )
+
+                    if iszero(result) {
+                        // Precompiles returns no data on OutOfGas error.
+                        revert(0, 0)
+                    }
+
+                    // Store the resulting hash at the target location
+                    mstore(target, mload(0x00))
+
+                    // Advance the pointers
+                    target := add(target, 0x20)
+                    source := add(source, 0x40)
+
+                    if iszero(lt(source, end)) {
+                        break
+                    }
+                }
+
+                count := shr(1, count)
+                if eq(count, 1) {
+                    root := mload(0x00)
+                    break
+                }
+            }
         }
     }
 
@@ -233,5 +341,9 @@ library SSZ {
             ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
         v = (v >> 128) | (v << 128);
         return bytes32(v);
+    }
+
+    function toLittleEndian(bool v) internal pure returns (bytes32) {
+        return bytes32(v ? 1 << 248 : 0);
     }
 }

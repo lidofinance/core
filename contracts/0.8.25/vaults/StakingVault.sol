@@ -8,9 +8,10 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
 import {VaultHub} from "./VaultHub.sol";
+import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title StakingVault
@@ -39,27 +40,31 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  *   - `fund()`
  *   - `withdraw()`
  *   - `rebalance()`
+ *   - `lock()`
  *   - `pauseBeaconChainDeposits()`
  *   - `resumeBeaconChainDeposits()`
  *   - `requestValidatorExit()`
  *   - `triggerValidatorWithdrawal()`
+ *   - `authorizeLidoVaultHub()`
+ *   - `deauthorizeLidoVaultHub()`
+ *   - `ossifyStakingVault()`
+ *   - `setDepositor()`
+ *   - `resetLocked()`
  * - Operator:
  *   - `triggerValidatorWithdrawal()`
  * - Depositor:
  *   - `depositToBeaconChain()`
  * - VaultHub:
- *   - `lock()`
  *   - `report()`
  *   - `rebalance()`
  *   - `triggerValidatorWithdrawal()`
  * - Anyone:
  *   - Can send ETH directly to the vault (treated as rewards)
  *
- * BeaconProxy
- * The contract is designed as a beacon proxy implementation, allowing all StakingVault instances
- * to be upgraded simultaneously through the beacon contract. The implementation is petrified
- * (non-initializable) and contains immutable references to the VaultHub and the beacon chain
- * deposit contract.
+ * PinnedBeaconProxy
+ * The contract is designed as an extended beacon proxy implementation, allowing individual StakingVault instances
+ * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
+ * and contains immutable references to the beacon chain deposit contract.
  *
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
@@ -70,6 +75,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
+     * @custom:depositor Address of the depositor
+     * @custom:vaultHubAuthorized Whether the vaultHub is authorized at the vault
      * @custom:beaconChainDepositsPaused Whether beacon deposits are paused by the vault owner
      */
     struct ERC7201Storage {
@@ -77,6 +84,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         uint128 locked;
         int128 inOutDelta;
         address nodeOperator;
+        address depositor;
+        bool vaultHubAuthorized;
         bool beaconChainDepositsPaused;
     }
 
@@ -91,12 +100,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         Set immutably in the constructor to avoid storage costs
      */
     VaultHub private immutable VAULT_HUB;
-
-    /**
-     * @notice Address of depositor
-     *         Set immutably in the constructor to avoid storage costs
-     */
-    address private immutable DEPOSITOR;
 
     /**
      * @notice Address of `BeaconChainDepositContract`
@@ -125,17 +128,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Constructs the implementation of `StakingVault`
      * @param _vaultHub Address of `VaultHub`
-     * @param _depositor Address of the depositor
      * @param _beaconChainDepositContract Address of `BeaconChainDepositContract`
      * @dev Fixes `VaultHub` and `BeaconChainDepositContract` addresses in the bytecode of the implementation
      */
-    constructor(address _vaultHub, address _depositor, address _beaconChainDepositContract) {
+    constructor(address _vaultHub, address _beaconChainDepositContract) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_depositor == address(0)) revert ZeroArgument("_depositor");
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
-        DEPOSITOR = _depositor;
         DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
@@ -146,13 +146,25 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
      * @param _nodeOperator Address of the node operator
+     * @param _depositor Address of the depositor. If zero address, _nodeOperator will be used
      * @param - Additional initialization parameters
      */
-    function initialize(address _owner, address _nodeOperator, bytes calldata /* _params */) external initializer {
+    function initialize(
+        address _owner,
+        address _nodeOperator,
+        address _depositor,
+        bytes calldata /* _params */
+    ) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
         __Ownable_init(_owner);
-        _getStorage().nodeOperator = _nodeOperator;
+
+        ERC7201Storage storage $ = _getStorage();
+        $.nodeOperator = _nodeOperator;
+        $.depositor = _depositor == address(0) ? _nodeOperator : _depositor;
+
+        emit NodeOperatorSet(_nodeOperator);
+        emit DepositorSet(_depositor);
     }
 
     /**
@@ -189,6 +201,69 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Authorizes the `VaultHub` at the vault
+     * @dev Can only be called by the owner
+     * @dev Reverts if vaultHub is already authorized
+     * @dev Reverts if vault is ossified
+     * @dev Reverts if the depositor is not the Lido Predeposit Guarantee
+     */
+    function authorizeLidoVaultHub() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
+        if (isOssified()) revert VaultIsOssified();
+
+        address lidoPredepositGuarantee = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
+        if ($.depositor != lidoPredepositGuarantee) revert InvalidDepositor($.depositor);
+
+        $.vaultHubAuthorized = true;
+
+        emit VaultHubAuthorizedSet(true);
+    }
+
+    /**
+     * @notice Deauthorizes the `VaultHub` from the vault
+     * @dev Can only be called by the owner
+     * @dev Reverts if vaultHub is already deauthorized
+     * @dev Reverts if vault is already connected to VaultHub
+     */
+    function deauthorizeLidoVaultHub() external onlyOwner {
+        VaultHub.VaultSocket memory socket = VaultHub(VAULT_HUB).vaultSocket(address(this));
+        if (socket.vault != address(0)) {
+            revert VaultConnected();
+        }
+
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.vaultHubAuthorized) revert VaultHubNotAuthorized();
+
+        $.vaultHubAuthorized = false;
+
+        emit VaultHubAuthorizedSet(false);
+    }
+
+    /**
+     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
+     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
+     * @dev Can only be called by the owner.
+     *      Pins the current vault implementation to prevent further upgrades.
+     *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
+     * @dev Reverts if already ossified.
+     * @dev Reverts if vaultHub is authorized at the vault
+     */
+    function ossifyStakingVault() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
+        PinnedBeaconUtils.ossify();
+    }
+
+    /**
+     * @notice Returns true if the vault is ossified
+     * @return True if the vault is ossified, false otherwise
+     */
+    function isOssified() public view returns (bool) {
+        return PinnedBeaconUtils.isOssified();
+    }
+
+    /**
      * @notice Returns the total valuation of `StakingVault` in ether
      * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
      */
@@ -218,6 +293,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_locked > _valuation) return 0;
 
         return _valuation - _locked;
+    }
+
+    /**
+     * @notice Resets the locked amount to 0 only when the vaultHub is deauthorized
+     * @dev Can only be called by the owner
+     * @dev Reverts if vaultHub is authorized at the vault
+     */
+    function resetLocked() external onlyOwner {
+        ERC7201Storage storage $ = _getStorage();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
+        _getStorage().locked = 0;
     }
 
     /**
@@ -260,7 +346,30 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @return Address of the depositor
      */
     function depositor() external view returns (address) {
-        return DEPOSITOR;
+        return _getStorage().depositor;
+    }
+
+    /**
+     * @notice Sets the address of the depositor
+     * @dev Can only be called by the owner
+     * @dev Reverts if the `_depositor` is the zero address
+     * @dev Reverts if the vault is attached to VaultHub
+     */
+    function setDepositor(address _depositor) external onlyOwner {
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
+
+        ERC7201Storage storage $ = _getStorage();
+        if ($.vaultHubAuthorized) revert VaultHubAuthorized();
+        $.depositor = _depositor;
+        emit DepositorSet(_depositor);
+    }
+
+    /**
+     * @notice Returns true if the vault is attached to VaultHub
+     * @return True if the vault is attached to VaultHub, false otherwise
+     */
+    function vaultHubAuthorized() external view returns (bool) {
+        return _getStorage().vaultHubAuthorized;
     }
 
     /**
@@ -305,21 +414,28 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (isReportFresh()) {
+            if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        } else {
+            if (address(this).balance < $.locked) revert ValuationBelowLockedAmount();
+        }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
 
     /**
      * @notice Locks ether in StakingVault
-     * @dev Can only be called by VaultHub; locked amount can only be increased
+     * @dev Can only be called by owner; locked amount can only be increased
      * @param _locked New amount to lock
      */
-    function lock(uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("lock", msg.sender);
-
+    function lock(uint256 _locked) external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
-        if ($.locked > _locked) revert LockedCannotDecreaseOutsideOfReport($.locked, _locked);
+        if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
+        if (isReportFresh()) {
+            if (_locked > valuation()) revert NewLockedExceedsValuation();
+        } else {
+            if (_locked > address(this).balance) revert NewLockedExceedsValuation();
+        }
 
         $.locked = uint128(_locked);
 
@@ -339,15 +455,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
-        if (owner() == msg.sender || (valuation_ < $.locked && msg.sender == address(VAULT_HUB))) {
-            $.inOutDelta -= int128(int256(_ether));
 
-            emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+        bool isAuthorized = (owner() == msg.sender
+            || (valuation_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+        );
+        if (!isAuthorized) revert NotAuthorized("rebalance", msg.sender);
 
-            VAULT_HUB.rebalance{value: _ether}();
-        } else {
-            revert NotAuthorized("rebalance", msg.sender);
-        }
+        $.inOutDelta -= int128(int256(_ether));
+
+        emit Withdrawn(msg.sender, address(VAULT_HUB), _ether);
+
+        VAULT_HUB.rebalance{value: _ether}();
     }
 
     /**
@@ -356,16 +474,19 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _inOutDelta New net difference between funded and withdrawn ether
      * @param _locked New amount of locked ether
      */
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("report", msg.sender);
-
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
         ERC7201Storage storage $ = _getStorage();
+        if (msg.sender != address(VAULT_HUB) || !$.vaultHubAuthorized) revert NotAuthorized("report", msg.sender);
 
+        uint64 currentTimestamp = $.report.timestamp;
+        if (currentTimestamp >= _timestamp) revert ReportTooOld(currentTimestamp, _timestamp);
+
+        $.report.timestamp = _timestamp;
         $.report.valuation = uint128(_valuation);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
 
-        emit Reported(_valuation, _inOutDelta, _locked);
+        emit Reported(_timestamp, _valuation, _inOutDelta, _locked);
     }
 
     /**
@@ -419,12 +540,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Can only be called by the depositor address
      * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-        if (msg.sender != DEPOSITOR) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
         if (valuation() < $.locked) revert ValuationBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
@@ -432,7 +553,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
+            StakingVaultDeposit calldata deposit = _deposits[i];
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
@@ -503,7 +624,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         bool isValuationBelowLocked = valuation() < $.locked;
-        if (isValuationBelowLocked) {
+        if (isValuationBelowLocked || !isReportFresh()) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
@@ -512,7 +633,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         bool isAuthorized = (msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB)));
+            (isValuationBelowLocked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+        );
+
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
@@ -531,11 +654,34 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
     }
 
+    function isReportFresh() public view returns (bool) {
+        ERC7201Storage storage $ = _getStorage();
+        if (!$.vaultHubAuthorized) return true;
+        return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
+    }
+
+    function _checkFreshnessAndGetValuation() internal view returns (uint256) {
+        if (!isReportFresh()) revert ReportStaled();
+        return valuation();
+    }
+
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
         }
     }
+
+    /**
+     * @notice Emitted when `NodeOperator` is set
+     * @param nodeOperator Address of the set `NodeOperator`
+     */
+    event NodeOperatorSet(address indexed nodeOperator);
+
+    /**
+     * @notice Emitted when `Depositor` is attached
+     * @param depositor Address of the attached `Depositor`
+     */
+    event DepositorSet(address indexed depositor);
 
     /**
      * @notice Emitted when `StakingVault` is funded with ether
@@ -566,14 +712,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      * @param locked Amount of ether locked in `StakingVault`
      */
-    event Reported(uint256 valuation, int256 inOutDelta, uint256 locked);
-
-    /**
-     * @notice Emitted if `owner` of `StakingVault` is a contract and its `onReport` hook reverts
-     * @dev Hook used to inform `owner` contract of a new report, e.g. calculating AUM fees, etc.
-     * @param reason Revert data from `onReport` hook
-     */
-    event OnReportFailed(bytes reason);
+    event Reported(uint64 indexed timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
 
     /**
      * @notice Emitted when deposits to beacon chain are paused
@@ -617,6 +756,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         address _refundRecipient,
         uint256 _excess
     );
+
+    /**
+     * @notice Emitted when `VaultHub` is authorized or deauthorized from `StakingVault`
+     * @param authorized True if `VaultHub` is authorized, false otherwise
+     */
+    event VaultHubAuthorizedSet(bool authorized);
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -664,22 +809,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report
-     * @param currentlyLocked Current amount of locked ether
-     * @param attemptedLocked Attempted new locked amount
      */
-    error LockedCannotDecreaseOutsideOfReport(uint256 currentlyLocked, uint256 attemptedLocked);
+    error NewLockedNotGreaterThanCurrent();
 
     /**
-     * @notice Thrown when called on the implementation contract
-     * @param sender Address that sent the message
-     * @param beacon Expected beacon address
+     * @notice Thrown when the locked amount exceeds the valuation
      */
-    error SenderNotBeacon(address sender, address beacon);
-
-    /**
-     * @notice Thrown when the onReport() hook reverts with an Out of Gas error
-     */
-    error UnrecoverableError();
+    error NewLockedExceedsValuation();
 
     /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
@@ -724,4 +860,40 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when partial withdrawals are not allowed when valuation is below locked
      */
     error PartialWithdrawalNotAllowed();
+
+    /**
+     * @notice Thrown when trying to deauthorize vaultHub while it is not authorized
+     */
+    error VaultHubNotAuthorized();
+
+    /**
+     * @notice Thrown when trying to ossify vault, or to attach vault to VaultHub while it is already attached
+     */
+    error VaultHubAuthorized();
+
+    /**
+     * @notice Thrown when trying to attach vault to VaultHub while it is ossified
+     */
+    error VaultIsOssified();
+
+    /**
+     * @notice Thrown when a report is staled
+     */
+    error ReportStaled();
+
+    /**
+     * @notice Thrown when a report is too old
+     */
+    error ReportTooOld(uint64 currentTimestamp, uint64 newTimestamp);
+
+    /**
+     * @notice Thrown when the depositor is not the Lido Predeposit Guarantee
+     * @param depositor Address of the depositor
+     */
+    error InvalidDepositor(address depositor);
+
+    /**
+     * @notice Thrown when the vault is connected to VaultHub
+     */
+    error VaultConnected();
 }
