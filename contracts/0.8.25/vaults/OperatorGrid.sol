@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -24,7 +25,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     ILidoLocator public immutable LIDO_LOCATOR;
 
     /// @notice Default group ID
-    address public constant DEFAULT_GROUP_OPERATOR_ADDRESS = address(1);
+    uint256 public constant DEFAULT_GROUP_ID = 1;
 
     // -----------------------------
     //            STRUCTS
@@ -49,6 +50,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         address[] vaults;
     }
 
+    struct VaultTier {
+        uint128 tierIndex;
+        uint128 tierIndexRequested;
+    }
+
     // -----------------------------
     //        STORAGE
     // -----------------------------
@@ -57,7 +63,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint256 groupsCount;
 
         Tier[] tiers;
-        mapping(address vault => uint256 tierIndex) tierIndex;
+        mapping(address vault => VaultTier) vaultTier;
 
         NodeOperator[] nodeOperators;
         mapping(address nodeOperator => uint256 nodeOperatorIndex) nodeOperatorIndex;
@@ -92,8 +98,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         $.tiers.push(Tier(0, 0, 0, 0, 0, 0));
         $.nodeOperators.push(NodeOperator(0, new address[](0)));
 
-        //0 index uses as default group
-        $.groupsCount++;
+        // 0 - index uses as undefined group
+        // 1 - index uses as default group
+        $.groupsCount = 2;
     }
 
     /// @notice Registers a new group
@@ -177,6 +184,42 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         }
     }
 
+    /// @notice Appends a single tier to an existing group
+    /// @param groupId Group ID
+    /// @param tier Parameters for the new tier
+    function appendTier(
+        uint256 groupId,
+        TierParams calldata tier
+    ) external onlyRole(REGISTRY_ROLE) {
+        ERC7201Storage storage $ = _getStorage();
+        if (groupId >= $.groupsCount) revert GroupNotExists();
+
+        Group storage group_ = $.groups[groupId];
+
+        uint256 tierIndex = $.tiers.length;
+
+        Tier memory newTier = Tier({
+            groupId: groupId,
+            shareLimit: uint96(tier.shareLimit),
+            reserveRatioBP: uint16(tier.reserveRatioBP),
+            rebalanceThresholdBP: uint16(tier.rebalanceThresholdBP),
+            treasuryFeeBP: uint16(tier.treasuryFeeBP),
+            mintedShares: 0
+        });
+
+        $.tiers.push(newTier);
+        group_.tiersId.push(tierIndex);
+
+        emit TierAdded(
+            groupId,
+            tierIndex,
+            uint96(tier.shareLimit),
+            uint16(tier.reserveRatioBP),
+            uint16(tier.rebalanceThresholdBP),
+            uint16(tier.treasuryFeeBP)
+        );
+    }
+
     /// @notice Registers a new operator
     /// @param _operator address of the operator
     function registerOperator(address _operator) external {
@@ -220,26 +263,60 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (vault == address(0)) revert ZeroArgument("_vault");
 
         ERC7201Storage storage $ = _getStorage();
-        if ($.tierIndex[vault] > 0) revert VaultExists();
+        VaultTier storage vaultTier = $.vaultTier[vault];
+        if (vaultTier.tierIndex > 0) revert VaultExists();
 
         address nodeOperatorAddr = IStakingVault(vault).nodeOperator();
         uint256 nodeOperatorIndex = $.nodeOperatorIndex[nodeOperatorAddr];
         if (nodeOperatorIndex == 0) revert NodeOperatorNotExists();
 
-        NodeOperator storage nodeOperator = $.nodeOperators[nodeOperatorIndex];
-        uint256 groupId = nodeOperator.groupId;
-        Group storage group_ = $.groups[groupId];
+        Group storage defaultGroup = $.groups[DEFAULT_GROUP_ID];
+        if (defaultGroup.tiersId.length == 0) revert TiersNotAvailable();
 
-        //get next tier for NO in current group
-        uint256 nextTierIndex = nodeOperator.vaults.length;
-        if (nextTierIndex >= group_.tiersId.length) revert TiersNotAvailable();
+        uint256 tierId = defaultGroup.tiersId[0];
+        vaultTier.tierIndex = uint128(tierId);
 
-        nodeOperator.vaults.push(vault);
+        emit VaultAdded(0, 0, vault);
+    }
 
-        uint256 tierId = group_.tiersId[nextTierIndex];
-        $.tierIndex[vault] = tierId;
+    /// @notice Request to change tier
+    /// @param _vault address of the vault
+    /// @param _tierId id of the tier
+    function changeTierRequest(address _vault, uint256 _tierId) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (msg.sender != OwnableUpgradeable(_vault).owner()) revert NotAuthorized("changeTierRequest", msg.sender);
 
-        emit VaultAdded(groupId, tierId, vault);
+        ERC7201Storage storage $ = _getStorage();
+        if ($.tiers[_tierId].groupId == 0) revert TiersNotAvailable();
+
+        VaultTier storage vaultTier = $.vaultTier[_vault];
+        uint256 requestedTierId = vaultTier.tierIndexRequested;
+        if (requestedTierId != 0) revert RequestAlreadyExists();
+        if (vaultTier.tierIndex == _tierId) revert TierAlreadySet();
+
+        vaultTier.tierIndexRequested = uint128(_tierId);
+
+        emit TierChangeRequested(_vault, _tierId);
+    }
+
+    /// @notice Approve tier change request
+    /// @param _vault address of the vault
+    function approveTierRequest(address _vault) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized("approveTierRequest", msg.sender);
+
+        ERC7201Storage storage $ = _getStorage();
+        VaultTier storage vaultTier = $.vaultTier[_vault];
+        uint256 requestedTierId = vaultTier.tierIndexRequested;
+        if (requestedTierId == 0) revert RequestNotExists();
+
+        uint256 nodeOperatorIndex = $.nodeOperatorIndex[msg.sender];
+        if (nodeOperatorIndex == 0) revert NodeOperatorNotExists();
+
+        vaultTier.tierIndex = uint128(requestedTierId);
+        vaultTier.tierIndexRequested = 0;
+
+        emit TierChanged(_vault, requestedTierId);
     }
 
    // -----------------------------
@@ -257,7 +334,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint256 tierId = $.tierIndex[vaultAddr];
+        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
+        uint256 tierId = vaultTier.tierIndex;
         if (tierId == 0) revert VaultNotExists();
 
         uint96 amount_ = uint96(amount);
@@ -285,7 +363,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint256 tierId = $.tierIndex[vaultAddr];
+        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
+        uint256 tierId = vaultTier.tierIndex;
         if (tierId == 0) revert VaultNotExists();
 
         uint96 amount_ = uint96(amount);
@@ -324,7 +403,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     {
         ERC7201Storage storage $ = _getStorage();
 
-        tierId = $.tierIndex[vaultAddr];
+        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
+        tierId = vaultTier.tierIndex;
         if (tierId == 0) revert VaultNotExists();
 
         Tier memory t = $.tiers[tierId];
@@ -352,6 +432,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     event VaultAdded(uint256 indexed groupId, uint256 indexed tierId, address indexed vault);
     event SharesLimitChanged(uint256 indexed groupId, uint256 indexed tierId, address indexed vault, uint256 tierSharesMinted, uint256 groupSharesMinted);
     event NodeOperatorAdded(uint256 indexed groupId, address indexed nodeOperator);
+    event TierChanged(address indexed vault, uint256 indexed tierId);
+    event TierChangeRequested(address indexed vault, uint256 indexed tierId);
     // -----------------------------
     //            ERRORS
     // -----------------------------
@@ -371,4 +453,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error NodeOperatorExists();
     error VaultExists();
     error VaultNotExists();
+    error RequestNotExists();
+    error RequestAlreadyExists();
+    error TierAlreadySet();
 }

@@ -191,24 +191,11 @@ describe("OperatorGrid.sol", () => {
 
   context("Groups", () => {
     it("reverts when adding without `REGISTRY_ROLE` role", async function () {
-      const groupId = certainAddress("node-operator");
       const shareLimit = 1000;
 
-      await expect(operatorGrid.connect(stranger).registerGroup(groupId, shareLimit)).to.be.revertedWithCustomError(
+      await expect(operatorGrid.connect(stranger).registerGroup(shareLimit)).to.be.revertedWithCustomError(
         operatorGrid,
         "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("reverts when adding an existing group", async function () {
-      const groupId = certainAddress("default-address");
-      const shareLimit = 1000;
-
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
-
-      await expect(operatorGrid.connect(dao).registerGroup(groupId, shareLimit)).to.be.revertedWithCustomError(
-        operatorGrid,
-        "GroupExists",
       );
     });
 
@@ -220,10 +207,10 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("add a new group", async function () {
-      const groupId = certainAddress("new-operator-group");
+      const groupId = 2;
       const shareLimit = 2001;
 
-      await expect(operatorGrid.connect(dao).registerGroup(groupId, shareLimit))
+      await expect(operatorGrid.connect(dao).registerGroup(shareLimit))
         .to.emit(operatorGrid, "GroupAdded")
         .withArgs(groupId, shareLimit);
 
@@ -242,11 +229,11 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("update group share limit", async function () {
-      const groupId = certainAddress("new-operator-group");
+      const groupId = 2;
       const shareLimit = 2000;
       const newShareLimit = 9999;
 
-      await expect(operatorGrid.connect(dao).registerGroup(groupId, shareLimit))
+      await expect(operatorGrid.connect(dao).registerGroup(shareLimit))
         .to.emit(operatorGrid, "GroupAdded")
         .withArgs(groupId, shareLimit);
 
@@ -306,27 +293,16 @@ describe("OperatorGrid.sol", () => {
     it("reverts if operator not exists", async function () {
       await expect(operatorGrid.connect(dao).registerVault(vault_NO1_C1)).to.be.revertedWithCustomError(
         operatorGrid,
-        "GroupNotExists",
-      );
-    });
-
-    it("reverts if tiers not available", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
-      const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
-
-      await expect(operatorGrid.connect(dao).registerVault(vault_NO1_C1)).to.be.revertedWithCustomError(
-        operatorGrid,
-        "TiersNotAvailable",
+        "NodeOperatorNotExists",
       );
     });
 
     it("add an vault", async function () {
-      const groupId1 = await vault_NO1_C1.nodeOperator();
-      const groupId2 = certainAddress("new-operator-group-2");
+      const groupId1 = 2;
+      const groupId2 = 3;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId1, shareLimit);
-      await operatorGrid.connect(dao).registerGroup(groupId2, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId1, tiers);
       await operatorGrid.connect(dao).registerTiers(groupId2, tiers);
@@ -365,9 +341,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares should revert if tier shares limit is exceeded", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const groupShareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, groupShareLimit);
+      await operatorGrid.connect(dao).registerGroup(groupShareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -379,9 +355,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares should revert if group shares limit is exceeded", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 999;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -393,9 +369,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares - group=2000 tier=1000 vault1=1000", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -409,9 +385,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares - DEFAULT_GROUP group=2000 tier=1000 NO1_vault1=999, NO2_vault2=1", async function () {
-      const groupId = await operatorGrid.DEFAULT_GROUP_OPERATOR_ADDRESS();
+      const groupId = await operatorGrid.DEFAULT_GROUP_ID();
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).updateGroupShareLimit(groupId, shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -431,9 +407,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares - DEFAULT_GROUP group=2000 tier=1000 NO1_vault1=1000, NO2_vault2=1, reverts TierLimitExceeded", async function () {
-      const groupId = await operatorGrid.DEFAULT_GROUP_OPERATOR_ADDRESS();
+      const groupId = await operatorGrid.DEFAULT_GROUP_ID();
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).updateGroupShareLimit(groupId, shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -452,13 +428,13 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("mintShares - group1=2000, group2=1000, g1Tier1=1000, g2Tier1=1000", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
-      const groupId2 = await vault_NO2_C1.nodeOperator();
+      const groupId = 2;
+      const groupId2 = 3;
       const shareLimit = 2000;
       const shareLimit2 = 1000;
 
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
-      await operatorGrid.connect(dao).registerGroup(groupId2, shareLimit2);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit2);
 
       const tiers2: TierParamsStruct[] = [
         {
@@ -525,9 +501,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("burnShares should revert if group shares limit is underflow", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       await operatorGrid.connect(dao).registerTiers(groupId, tiers);
 
@@ -539,9 +515,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("burnShares should revert if vault shares limit is underflow", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       const tiers2: TierParamsStruct[] = [
         {
@@ -572,9 +548,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("burnShares works", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       const tiers2: TierParamsStruct[] = [
         {
@@ -616,9 +592,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("should return correct vault limits", async function () {
-      const groupId = await vault_NO1_C1.nodeOperator();
+      const groupId = 2;
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).registerGroup(shareLimit);
 
       const tierShareLimit = 1000;
       const reserveRatio = 2000;
@@ -651,9 +627,9 @@ describe("OperatorGrid.sol", () => {
 
   context("VaultFactory - createVault", async function () {
     it("creates a vault", async function () {
-      const groupId = await operatorGrid.DEFAULT_GROUP_OPERATOR_ADDRESS();
+      const groupId = await operatorGrid.DEFAULT_GROUP_ID();
       const shareLimit = 2000;
-      await operatorGrid.connect(dao).registerGroup(groupId, shareLimit);
+      await operatorGrid.connect(dao).updateGroupShareLimit(groupId, shareLimit);
 
       const tierShareLimit = 1000;
       const reserveRatio = 2000;
@@ -673,6 +649,7 @@ describe("OperatorGrid.sol", () => {
         assetRecoverer: vaultOwner,
         confirmExpiry: days(7n),
         nodeOperatorFeeBP: 200n,
+        lockers: [vaultOwner],
         funders: [funder],
         withdrawers: [withdrawer],
         minters: [minter],
