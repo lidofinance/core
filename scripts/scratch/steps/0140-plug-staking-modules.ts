@@ -36,7 +36,7 @@ export async function main() {
     stakingRouter,
     "addStakingModule",
     [
-      state.nodeOperatorsRegistry.deployParameters.stakingModuleTypeId,
+      state.nodeOperatorsRegistry.deployParameters.stakingModuleName,
       state[Sk.appNodeOperatorsRegistry].proxy.address,
       NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
       NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
@@ -53,7 +53,7 @@ export async function main() {
     stakingRouter,
     "addStakingModule",
     [
-      state.simpleDvt.deployParameters.stakingModuleTypeId,
+      state.simpleDvt.deployParameters.stakingModuleName,
       state[Sk.appSimpleDvt].proxy.address,
       SDVT_STAKING_MODULE_TARGET_SHARE_BP,
       SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,

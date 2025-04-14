@@ -5,24 +5,22 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { EIP7002WithdrawalRequest_Mock, TriggerableWithdrawals_Harness } from "typechain-types";
+import { EIP7002WithdrawalRequest__Mock, TriggerableWithdrawals__Harness } from "typechain-types";
+
+import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS } from "lib";
 
 import { Snapshot } from "test/suite";
 
-import { findEip7002MockEvents, testEip7002Mock } from "./eip7002Mock";
-import {
-  deployWithdrawalsPredeployedMock,
-  generateWithdrawalRequestPayload,
-  withdrawalsPredeployedHardcodedAddress,
-} from "./utils";
+import { findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
+import { generateWithdrawalRequestPayload } from "./utils";
 
 const EMPTY_PUBKEYS = "0x";
 
 describe("TriggerableWithdrawals.sol", () => {
   let actor: HardhatEthersSigner;
 
-  let withdrawalsPredeployed: EIP7002WithdrawalRequest_Mock;
-  let triggerableWithdrawals: TriggerableWithdrawals_Harness;
+  let withdrawalsPredeployed: EIP7002WithdrawalRequest__Mock;
+  let triggerableWithdrawals: TriggerableWithdrawals__Harness;
 
   let originalState: string;
 
@@ -41,10 +39,10 @@ describe("TriggerableWithdrawals.sol", () => {
   before(async () => {
     [actor] = await ethers.getSigners();
 
-    withdrawalsPredeployed = await deployWithdrawalsPredeployedMock(1n);
-    triggerableWithdrawals = await ethers.deployContract("TriggerableWithdrawals_Harness");
+    withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContract(1n);
+    triggerableWithdrawals = await ethers.deployContract("TriggerableWithdrawals__Harness");
 
-    expect(await withdrawalsPredeployed.getAddress()).to.equal(withdrawalsPredeployedHardcodedAddress);
+    expect(await withdrawalsPredeployed.getAddress()).to.equal(EIP7002_ADDRESS);
 
     await triggerableWithdrawals.connect(actor).deposit({ value: ethers.parseEther("1") });
   });
@@ -59,15 +57,13 @@ describe("TriggerableWithdrawals.sol", () => {
 
   context("eip 7002 contract", () => {
     it("Should return the address of the EIP 7002 contract", async function () {
-      expect(await triggerableWithdrawals.getWithdrawalsContractAddress()).to.equal(
-        withdrawalsPredeployedHardcodedAddress,
-      );
+      expect(await triggerableWithdrawals.getWithdrawalsContractAddress()).to.equal(EIP7002_ADDRESS);
     });
   });
 
   context("get triggerable withdrawal request fee", () => {
     it("Should get fee from the EIP 7002 contract", async function () {
-      await withdrawalsPredeployed.setFee(333n);
+      await withdrawalsPredeployed.mock__setFee(333n);
       expect(
         (await triggerableWithdrawals.getWithdrawalRequestFee()) == 333n,
         "withdrawal request should use fee from the EIP 7002 contract",
@@ -75,7 +71,7 @@ describe("TriggerableWithdrawals.sol", () => {
     });
 
     it("Should revert if fee read fails", async function () {
-      await withdrawalsPredeployed.setFailOnGetFee(true);
+      await withdrawalsPredeployed.mock__setFailOnGetFee(true);
       await expect(triggerableWithdrawals.getWithdrawalRequestFee()).to.be.revertedWithCustomError(
         triggerableWithdrawals,
         "WithdrawalFeeReadFailed",
@@ -84,7 +80,7 @@ describe("TriggerableWithdrawals.sol", () => {
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
       it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
-        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
+        await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
         await expect(triggerableWithdrawals.getWithdrawalRequestFee()).to.be.revertedWithCustomError(
           triggerableWithdrawals,
@@ -139,21 +135,21 @@ describe("TriggerableWithdrawals.sol", () => {
       const { pubkeysHexString } = generateWithdrawalRequestPayload(1);
       const amounts = [10n];
 
-      await withdrawalsPredeployed.setFee(3n); // Set fee to 3 gwei
+      await withdrawalsPredeployed.mock__setFee(3n); // Set fee to 3 gwei
 
       // 2. Should revert if fee is less than required
       const insufficientFee = 2n;
-      await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
-        .withArgs(2n, 3n);
+      await expect(
+        triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, insufficientFee),
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
 
-      await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, amounts, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
-        .withArgs(2n, 3n);
+      await expect(
+        triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, amounts, insufficientFee),
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
 
-      await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, amounts, insufficientFee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "InsufficientWithdrawalFee")
-        .withArgs(2n, 3n);
+      await expect(
+        triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, amounts, insufficientFee),
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
     });
 
     it("Should revert if pubkey is not 48 bytes", async function () {
@@ -206,7 +202,7 @@ describe("TriggerableWithdrawals.sol", () => {
       const fee = await getFee();
 
       // Set mock to fail on add
-      await withdrawalsPredeployed.setFailOnAddRequest(true);
+      await withdrawalsPredeployed.mock__setFailOnAddRequest(true);
 
       await expect(
         triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
@@ -235,103 +231,24 @@ describe("TriggerableWithdrawals.sol", () => {
       const keysCount = 2;
       const fee = 10n;
       const balance = 19n;
-      const expectedMinimalBalance = 20n;
 
       const { pubkeysHexString, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(keysCount);
 
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
       await setBalance(await triggerableWithdrawals.getAddress(), balance);
-
-      await expect(triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
-        .withArgs(balance, expectedMinimalBalance);
-
-      await expect(triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
-        .withArgs(balance, expectedMinimalBalance);
-
-      await expect(triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee))
-        .to.be.revertedWithCustomError(triggerableWithdrawals, "TotalWithdrawalFeeExceededBalance")
-        .withArgs(balance, expectedMinimalBalance);
-    });
-
-    it("Should revert when fee read fails", async function () {
-      await withdrawalsPredeployed.setFailOnGetFee(true);
-
-      const { pubkeysHexString, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
-        generateWithdrawalRequestPayload(2);
-      const fee = 10n;
 
       await expect(
         triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
 
       await expect(
         triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
 
       await expect(
         triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
-      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeReadFailed");
-    });
-
-    ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
-      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
-        await withdrawalsPredeployed.setFeeRaw(unexpectedFee);
-
-        const { pubkeysHexString, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
-          generateWithdrawalRequestPayload(2);
-        const fee = 10n;
-
-        await expect(
-          triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
-        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
-
-        await expect(
-          triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee),
-        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
-
-        await expect(
-          triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
-        ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalFeeInvalidData");
-      });
-    });
-
-    it("Should accept withdrawal requests with minimal possible fee when fee not provided", async function () {
-      const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
-        generateWithdrawalRequestPayload(requestCount);
-
-      const fee = 3n;
-      const fee_not_provided = 0n;
-      await withdrawalsPredeployed.setFee(fee);
-
-      await testEip7002Mock(
-        () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee_not_provided),
-        pubkeys,
-        fullWithdrawalAmounts,
-        fee,
-      );
-
-      await testEip7002Mock(
-        () =>
-          triggerableWithdrawals.addPartialWithdrawalRequests(
-            pubkeysHexString,
-            partialWithdrawalAmounts,
-            fee_not_provided,
-          ),
-        pubkeys,
-        partialWithdrawalAmounts,
-        fee,
-      );
-
-      await testEip7002Mock(
-        () => triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee_not_provided),
-        pubkeys,
-        mixedWithdrawalAmounts,
-        fee,
-      );
+      ).to.be.revertedWithCustomError(triggerableWithdrawals, "WithdrawalRequestAdditionFailed");
     });
 
     it("Should accept withdrawal requests when the provided fee matches the exact required amount", async function () {
@@ -340,23 +257,23 @@ describe("TriggerableWithdrawals.sol", () => {
         generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
-      await withdrawalsPredeployed.setFee(fee);
+      await withdrawalsPredeployed.mock__setFee(fee);
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, fee),
         pubkeys,
         fullWithdrawalAmounts,
         fee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, fee),
         pubkeys,
         partialWithdrawalAmounts,
         fee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, fee),
         pubkeys,
         mixedWithdrawalAmounts,
@@ -365,25 +282,25 @@ describe("TriggerableWithdrawals.sol", () => {
 
       // Check extremely high fee
       const highFee = ethers.parseEther("10");
-      await withdrawalsPredeployed.setFee(highFee);
+      await withdrawalsPredeployed.mock__setFee(highFee);
 
       await triggerableWithdrawals.connect(actor).deposit({ value: highFee * BigInt(requestCount) * 3n });
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, highFee),
         pubkeys,
         fullWithdrawalAmounts,
         highFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, highFee),
         pubkeys,
         partialWithdrawalAmounts,
         highFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, highFee),
         pubkeys,
         mixedWithdrawalAmounts,
@@ -396,17 +313,17 @@ describe("TriggerableWithdrawals.sol", () => {
       const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts, mixedWithdrawalAmounts } =
         generateWithdrawalRequestPayload(requestCount);
 
-      await withdrawalsPredeployed.setFee(3n);
+      await withdrawalsPredeployed.mock__setFee(3n);
       const excessFee = 4n;
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, excessFee),
         pubkeys,
         fullWithdrawalAmounts,
         excessFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           triggerableWithdrawals.addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, excessFee),
         pubkeys,
@@ -414,7 +331,7 @@ describe("TriggerableWithdrawals.sol", () => {
         excessFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, excessFee),
         pubkeys,
         mixedWithdrawalAmounts,
@@ -425,14 +342,14 @@ describe("TriggerableWithdrawals.sol", () => {
       const extremelyHighFee = ethers.parseEther("10");
       await triggerableWithdrawals.connect(actor).deposit({ value: extremelyHighFee * BigInt(requestCount) * 3n });
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addFullWithdrawalRequests(pubkeysHexString, extremelyHighFee),
         pubkeys,
         fullWithdrawalAmounts,
         extremelyHighFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () =>
           triggerableWithdrawals.addPartialWithdrawalRequests(
             pubkeysHexString,
@@ -444,7 +361,7 @@ describe("TriggerableWithdrawals.sol", () => {
         extremelyHighFee,
       );
 
-      await testEip7002Mock(
+      await testEIP7002Mock(
         () => triggerableWithdrawals.addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, extremelyHighFee),
         pubkeys,
         mixedWithdrawalAmounts,
@@ -531,7 +448,7 @@ describe("TriggerableWithdrawals.sol", () => {
         const tx = await addRequests();
         const receipt = await tx.wait();
 
-        const events = findEip7002MockEvents(receipt!, "eip7002MockRequestAdded");
+        const events = findEIP7002MockEvents(receipt!);
         expect(events.length).to.equal(requestCount);
 
         for (let i = 0; i < requestCount; i++) {
@@ -574,21 +491,17 @@ describe("TriggerableWithdrawals.sol", () => {
     ) {
       const initialBalance = await getWithdrawalCredentialsContractBalance();
 
-      await testEip7002Mock(addRequests, expectedPubkeys, expectedAmounts, expectedFee);
+      await testEIP7002Mock(addRequests, expectedPubkeys, expectedAmounts, expectedFee);
 
       expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance - expectedTotalWithdrawalFee);
     }
 
     const testCasesForWithdrawalRequests = [
-      { requestCount: 1, fee: 0n },
       { requestCount: 1, fee: 100n },
       { requestCount: 1, fee: 100_000_000_000n },
-      { requestCount: 3, fee: 0n },
       { requestCount: 3, fee: 1n },
       { requestCount: 7, fee: 3n },
-      { requestCount: 10, fee: 0n },
       { requestCount: 10, fee: 100_000_000_000n },
-      { requestCount: 100, fee: 0n },
     ];
 
     testCasesForWithdrawalRequests.forEach(({ requestCount, fee }) => {

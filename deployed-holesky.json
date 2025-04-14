@@ -175,7 +175,7 @@
   "app:simple-dvt": {
     "stakingRouterModuleParams": {
       "moduleName": "SimpleDVT",
-      "moduleType": "simple-dvt-onchain-v1",
+      "moduleType": "curated-onchain-v1",
       "targetShare": 50,
       "moduleFee": 800,
       "treasuryFee": 200,

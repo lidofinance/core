@@ -14,7 +14,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0x082d16150BF75BB8F2197eEC1d293DbA96c93638",
+      "address": "0x51675877eB673629e3D9d718eCB97A436808BBE1",
       "constructorArgs": [
         "0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7",
         "0x3e3FE7dBc6B4C189E7128855dD526361c49b40Af",
@@ -145,7 +145,7 @@
   "app:node-operators-registry": {
     "implementation": {
       "contract": "contracts/0.4.24/nos/NodeOperatorsRegistry.sol",
-      "address": "0xC3704E12c34D929e082257B793c8F114b7Bc7546",
+      "address": "0xa603c624571417253AE8C910f66590C9aA92c0e1",
       "constructorArgs": []
     },
     "aragonApp": {
@@ -413,7 +413,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x604dc1776eEbe7ddCf4cf5429226Ad20a5a294eE",
+      "address": "0x0443517a541cFf1527d2395D6F893Fc74239E791",
       "constructorArgs": [
         [
           "0xd497Be005638efCf09F6BFC8DAFBBB0BB72cD991",
@@ -421,7 +421,7 @@
           "0x94B1B8e2680882f8652882e7F196169dE3d9a3B2",
           "0x3483c140EF7F2716460198Ff831a8e53F05F1606",
           "0x3e3FE7dBc6B4C189E7128855dD526361c49b40Af",
-          "0xbac2A471443F18aC5C31078b96C5797A78fCc680",
+          "0x69CBE6A06a450f2a2b8942b1091D53490b5A7A15",
           "0x3483c140EF7F2716460198Ff831a8e53F05F1606",
           "0x61Bb0Ef69262d5EF1cc2873cf61766751D99B699",
           "0x4F36aAEb18Ab56A4e380241bea6ebF215b9cb12c",
@@ -449,6 +449,11 @@
   },
   "lidoTemplateCreateStdAppReposTx": "0x2802c93e3a1ca061bfe2afadea564361368dad3f4c1f7bac0bacc24c6a890b23",
   "lidoTemplateNewDaoTx": "0x5ca036d147e01895921280bd89a4c3920a847b4cf66d5caa397a30e522a6c39f",
+  "minFirstAllocationStrategy": {
+    "contract": "contracts/common/lib/MinFirstAllocationStrategy.sol",
+    "address": "0x8D1267FEbF6607b7427db8652F5095820F3C609E",
+    "constructorArgs": []
+  },
   "miniMeTokenFactory": {
     "address": "0x9D381f44d1fbdf8190fA0EcdC028e2Af24DdD3FE"
   },
@@ -489,14 +494,14 @@
       "maxPositiveTokenRebase": 5000000
     },
     "contract": "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol",
-    "address": "0xbac2A471443F18aC5C31078b96C5797A78fCc680",
+    "address": "0x69CBE6A06a450f2a2b8942b1091D53490b5A7A15",
     "constructorArgs": [
       "0x8f6254332f69557A72b0DA2D5F0Bc07d4CA991E7",
-      "0x6885E36BFcb68CB383DfE90023a462C03BCB2AE5",
-      [1500, 500, 1000, 250, 2000, 100, 100, 128, 5000000],
-      [[], [], [], [], [], [], [], [], [], []]
+      "0x32A0E5828B62AAb932362a4816ae03b860b65e83",
+      [1500, 0, 1000, 250, 2000, 100, 100, 128, 5000000, 1000, 101, 74]
     ]
   },
+  "scratchDeployGasUsed": "143759466",
   "sepoliaDepositAdapter": {
     "implementation": {
       "contract": "contracts/0.8.9/SepoliaDepositAdapter.sol",

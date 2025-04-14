@@ -89,7 +89,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 1
+      "consensusVersion": 2
     }
   },
   "depositSecurityModule": {
@@ -131,13 +131,15 @@
   },
   "nodeOperatorsRegistry": {
     "deployParameters": {
+      "stakingModuleName": "Curated",
       "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 172800
     }
   },
   "simpleDvt": {
     "deployParameters": {
-      "stakingModuleTypeId": "simple-dvt-onchain-v1",
+      "stakingModuleName": "SimpleDVT",
+      "stakingModuleTypeId": "curated-onchain-v1",
       "stuckPenaltyDelay": 432000
     }
   },
