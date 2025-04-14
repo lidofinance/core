@@ -139,9 +139,9 @@ describe("Integration: DSM keys unvetting", () => {
     const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
     const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
     expect(totalVettedValidatorsBefore).to.be.not.equal(vettedSigningKeysCount);
-    const totalVettedValidatorsAfter = Math.max(
-      Number(vettedSigningKeysCount),
-      Number(nodeOperatorBefore.totalDepositedValidators),
+    const totalVettedValidatorsAfter = BigIntMath.max(
+      vettedSigningKeysCount,
+      nodeOperatorBefore.totalDepositedValidators,
     );
 
     // Unvet signing keys

@@ -26,11 +26,11 @@ import { SDVT_MODULE_ID } from "lib/protocol/helpers/sdvt";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
-import { Burner__factory, NodeOperatorsRegistry } from "../../../typechain-types";
+import { Burner__factory, NodeOperatorsRegistry } from "typechain-types";
 
 const MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM = 24;
 const MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION = 8;
-const CSM_MODULE_ID = BigInt(3);
+const CSM_MODULE_ID = 3n;
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -262,7 +262,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
     await lido.connect(voting).removeStakingLimit();
 
     // Fill deposit buffer
-    await fillDepositBuffer(Number(totalDepositableKeys));
+    await fillDepositBuffer(totalDepositableKeys);
 
     const keysPerDeposit = 50;
 
@@ -279,11 +279,11 @@ describe("Integration: AccountingOracle extra data full items", () => {
     }
   }
 
-  async function fillDepositBuffer(totalKeys: number): Promise<void> {
+  async function fillDepositBuffer(totalKeys: bigint): Promise<void> {
     const { lido } = ctx.contracts;
 
     // Calculate required ETH for deposits (32 ETH per validator)
-    const requiredEth = ether(String(totalKeys * 32));
+    const requiredEth = ether(String(totalKeys * 32n));
 
     // Get current balance
     const currentBalance = await ethers.provider.getBalance(lido.target);
