@@ -9,6 +9,7 @@ import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upg
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {VaultHub} from "./VaultHub.sol";
 
 struct TierParams {
     uint256 shareLimit;
@@ -313,6 +314,36 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint256 nodeOperatorIndex = $.nodeOperatorIndex[msg.sender];
         if (nodeOperatorIndex == 0) revert NodeOperatorNotExists();
 
+        NodeOperator memory nodeOperator = $.nodeOperators[nodeOperatorIndex];
+        uint256 operatorGroupId = nodeOperator.groupId;
+
+        Tier memory requestedTier = $.tiers[requestedTierId];
+        uint256 requestedTierGroupId = requestedTier.groupId;
+
+        // check if tier belongs to the same group as the operator
+        if (operatorGroupId != requestedTierGroupId) revert TierNotInOperatorGroup();
+
+        VaultHub vaultHub = VaultHub(IStakingVault(_vault).vaultHub());
+        uint256 vaultShares = vaultHub.vaultSocket(_vault).sharesMinted;
+
+        //check if tier limit is exceeded
+        if (requestedTier.mintedShares + vaultShares > requestedTier.shareLimit) revert TierLimitExceeded();
+
+        //check if group limit is exceeded
+        Group storage requestedGroup = $.groups[requestedTierGroupId];
+        if (requestedGroup.mintedShares + vaultShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
+
+        Tier storage currentTier = $.tiers[vaultTier.tierIndex];
+        Group storage currentGroup = $.groups[currentTier.groupId];
+
+        // update new tier and group shares
+        requestedTier.mintedShares += uint96(vaultShares);
+        requestedGroup.mintedShares += uint96(vaultShares);
+
+        // update current tier and group shares
+        currentTier.mintedShares -= uint96(vaultShares);
+        currentGroup.mintedShares -= uint96(vaultShares);
+
         vaultTier.tierIndex = uint128(requestedTierId);
         vaultTier.tierIndexRequested = 0;
 
@@ -456,4 +487,5 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error RequestNotExists();
     error RequestAlreadyExists();
     error TierAlreadySet();
+    error TierNotInOperatorGroup();
 }
