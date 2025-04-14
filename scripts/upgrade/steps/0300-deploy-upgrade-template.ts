@@ -1,26 +1,25 @@
 import { ethers } from "hardhat";
 
+import { OssifiableProxy__factory } from "typechain-types";
+
 import { deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
 import { readUpgradeParameters } from "../upgrade-utils";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
+  const deployerSigner = await ethers.provider.getSigner();
+  const deployer = deployerSigner.address;
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
+
+  const locator = OssifiableProxy__factory.connect(state[Sk.lidoLocator].proxy.address, deployerSigner);
+  const oldLocatorImpl = await locator.proxy__getImplementation();
 
   const allowNonSingleBlockUpgrade = true;
   await deployWithoutProxy(Sk.upgradeTemplateV3, "UpgradeTemplateV3", deployer, [
     [
-      // New proxy contracts
-      state[Sk.accounting].proxy.address,
-      state[Sk.vaultHub].proxy.address,
-      state[Sk.predepositGuarantee].proxy.address,
-
       // New non-proxy contracts
-      state[Sk.burner].address,
-      state[Sk.oracleReportSanityChecker].address,
       state[Sk.stakingVaultFactory].address,
 
       // New fancy proxy contracts
@@ -36,6 +35,7 @@ export async function main() {
       state[Sk.lidoLocator].implementation.address,
 
       // Existing proxies and contracts
+      oldLocatorImpl,
       state[Sk.appAgent].proxy.address,
       state[Sk.aragonLidoAppRepo].proxy.address,
       parameters["csm"].accounting,
@@ -43,7 +43,6 @@ export async function main() {
       state[Sk.appNodeOperatorsRegistry].proxy.address,
       state[Sk.appSimpleDvt].proxy.address,
       state[Sk.appVoting].proxy.address,
-      state[Sk.wstETH].address,
     ],
     allowNonSingleBlockUpgrade,
   ]);

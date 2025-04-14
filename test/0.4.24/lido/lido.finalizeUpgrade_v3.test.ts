@@ -5,9 +5,15 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Burner, Burner__MockForMigration, Lido__HarnessForFinalizeUpgradeV3, LidoLocator } from "typechain-types";
+import {
+  Burner,
+  Burner__MockForMigration,
+  ICSModule__factory,
+  Lido__HarnessForFinalizeUpgradeV3,
+  LidoLocator,
+} from "typechain-types";
 
-import { certainAddress, proxify } from "lib";
+import { certainAddress, ether, impersonate, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -24,13 +30,13 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
   const finalizeVersion = 3n;
 
   let withdrawalQueueAddress: string;
-  let accountingAddress: string;
   let burner: Burner;
   let oldBurner: Burner__MockForMigration;
+
   const dummyLocatorAddress = certainAddress("dummy-locator");
-  const simpleDvtAddress = certainAddress("simple-dvt");
-  const nodeOperatorsRegistryAddress = certainAddress("node-operators-registry");
-  const csmAccountingAddress = certainAddress("csm-accounting");
+  let simpleDvtAddress: string;
+  let nodeOperatorsRegistryAddress: string;
+  let csmAccountingAddress: string;
 
   const oldCoverSharesBurnRequested = 100n;
   const oldNonCoverSharesBurnRequested = 200n;
@@ -46,16 +52,31 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     [lido] = await proxify({ impl, admin: deployer });
 
     burner = await ethers.deployContract("Burner", [deployer.address, dummyLocatorAddress, lido.target, true]);
+    const stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoUpgrade");
 
-    locator = await deployLidoLocator({ burner: burner.target });
+    nodeOperatorsRegistryAddress = (await stakingRouter.getStakingModule(1)).stakingModuleAddress;
+    simpleDvtAddress = (await stakingRouter.getStakingModule(2)).stakingModuleAddress;
+    csmAccountingAddress = await ICSModule__factory.connect(
+      (await stakingRouter.getStakingModule(3)).stakingModuleAddress,
+      deployer,
+    ).accounting();
 
-    [withdrawalQueueAddress, accountingAddress] = await Promise.all([locator.withdrawalQueue(), locator.accounting()]);
+    locator = await deployLidoLocator({ burner: burner.target, stakingRouter: stakingRouter.target });
+
+    withdrawalQueueAddress = await locator.withdrawalQueue();
 
     oldBurner = await ethers.deployContract("Burner__MockForMigration", []);
     await oldBurner
       .connect(deployer)
       .setSharesRequestedToBurn(oldCoverSharesBurnRequested, oldNonCoverSharesBurnRequested);
     await oldBurner.connect(deployer).setSharesBurnt(oldTotalCoverSharesBurnt, oldTotalNonCoverSharesBurnt);
+
+    await lido
+      .connect(await impersonate(nodeOperatorsRegistryAddress, ether("1")))
+      .approve(oldBurner.target, MaxUint256);
+    await lido.connect(await impersonate(simpleDvtAddress, ether("1"))).approve(oldBurner.target, MaxUint256);
+    await lido.connect(await impersonate(csmAccountingAddress, ether("1"))).approve(oldBurner.target, MaxUint256);
+    await lido.connect(await impersonate(withdrawalQueueAddress, ether("1"))).approve(oldBurner.target, MaxUint256);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -67,9 +88,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       .and.to.emit(lido, "ContractVersionSet")
       .withArgs(initialVersion);
 
-    await expect(lido.finalizeUpgrade_v3(ZeroAddress, ZeroAddress, ZeroAddress, ZeroAddress)).to.be.revertedWith(
-      "NOT_INITIALIZED",
-    );
+    await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.revertedWith("NOT_INITIALIZED");
   });
 
   context("initialized", () => {
@@ -85,19 +104,15 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     it("Reverts if contract version does not equal 2", async () => {
       const unexpectedVersion = 1n;
       await lido.harness_setContractVersion(unexpectedVersion);
-      await expect(lido.finalizeUpgrade_v3(ZeroAddress, ZeroAddress, ZeroAddress, ZeroAddress)).to.be.reverted;
+      await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
     });
 
     it("Reverts if old burner is the same as new burner", async () => {
-      await expect(lido.finalizeUpgrade_v3(burner.target, ZeroAddress, ZeroAddress, ZeroAddress)).to.be.revertedWith(
-        "OLD_BURNER_SAME_AS_NEW",
-      );
+      await expect(lido.finalizeUpgrade_v3(burner.target)).to.be.revertedWith("OLD_BURNER_SAME_AS_NEW");
     });
 
     it("Sets contract version to 3", async () => {
-      await expect(
-        lido.finalizeUpgrade_v3(oldBurner.target, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress),
-      )
+      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(finalizeVersion);
 
@@ -108,9 +123,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       await lido.harness_mintShares(oldBurner.target, sharesOnOldBurner);
       expect(await lido.sharesOf(oldBurner.target)).to.equal(sharesOnOldBurner);
 
-      await expect(
-        lido.finalizeUpgrade_v3(oldBurner.target, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress),
-      )
+      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
         .and.to.emit(lido, "TransferShares")
         .withArgs(oldBurner.target, burner.target, sharesOnOldBurner);
 
@@ -124,17 +137,16 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       expect(nonCoverShares).to.equal(oldNonCoverSharesBurnRequested);
 
       // Check old burner allowances are revoked
-      expect(await lido.allowance(withdrawalQueueAddress, oldBurner.target)).to.equal(0n);
-      expect(await lido.allowance(simpleDvtAddress, oldBurner.target)).to.equal(0n);
       expect(await lido.allowance(nodeOperatorsRegistryAddress, oldBurner.target)).to.equal(0n);
+      expect(await lido.allowance(simpleDvtAddress, oldBurner.target)).to.equal(0n);
       expect(await lido.allowance(csmAccountingAddress, oldBurner.target)).to.equal(0n);
+      expect(await lido.allowance(withdrawalQueueAddress, oldBurner.target)).to.equal(0n);
 
       // Check new burner allowances are set
-      expect(await lido.allowance(simpleDvtAddress, burner.target)).to.equal(MaxUint256);
       expect(await lido.allowance(nodeOperatorsRegistryAddress, burner.target)).to.equal(MaxUint256);
+      expect(await lido.allowance(simpleDvtAddress, burner.target)).to.equal(MaxUint256);
       expect(await lido.allowance(csmAccountingAddress, burner.target)).to.equal(MaxUint256);
       expect(await lido.allowance(withdrawalQueueAddress, burner.target)).to.equal(MaxUint256);
-      expect(await lido.allowance(accountingAddress, burner.target)).to.equal(MaxUint256);
     });
   });
 });

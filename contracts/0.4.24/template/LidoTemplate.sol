@@ -4,30 +4,32 @@
 
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/factory/APMRegistryFactory.sol";
-import "@aragon/os/contracts/acl/ACL.sol";
-import "@aragon/os/contracts/apm/Repo.sol";
-import "@aragon/os/contracts/apm/APMRegistry.sol";
-import "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
-import "@aragon/os/contracts/kernel/Kernel.sol";
-import "@aragon/os/contracts/lib/ens/ENS.sol";
-import "@aragon/os/contracts/lib/ens/PublicResolver.sol";
-import "@aragon/os/contracts/factory/DAOFactory.sol";
-import "@aragon/os/contracts/common/IsContract.sol";
+import { APMRegistryFactory } from "@aragon/os/contracts/factory/APMRegistryFactory.sol";
+import { ACL } from "@aragon/os/contracts/acl/ACL.sol";
+import { Repo } from "@aragon/os/contracts/apm/Repo.sol";
+import { APMRegistry } from "@aragon/os/contracts/apm/APMRegistry.sol";
+import { ENSSubdomainRegistrar } from "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
+import { Kernel } from "@aragon/os/contracts/kernel/Kernel.sol";
+import { ENS } from "@aragon/os/contracts/lib/ens/ENS.sol";
+import { PublicResolver } from "@aragon/os/contracts/lib/ens/PublicResolver.sol";
+import { DAOFactory } from "@aragon/os/contracts/factory/DAOFactory.sol";
+import { IsContract } from "@aragon/os/contracts/common/IsContract.sol";
+import { MiniMeToken, MiniMeTokenFactory } from "@aragon/minime/contracts/MiniMeToken.sol";
+import { EVMScriptRegistry } from "@aragon/os/contracts/evmscript/EVMScriptRegistry.sol";
 
-import "@aragon/apps-agent/contracts/Agent.sol";
-import "@aragon/apps-vault/contracts/Vault.sol";
 
-import "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
+import { Agent } from "@aragon/apps-agent/contracts/Agent.sol";
+import { Vault } from "@aragon/apps-vault/contracts/Vault.sol";
 
-import "@aragon/apps-finance/contracts/Finance.sol";
-import "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
+import { Voting } from "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
+import { Finance } from "@aragon/apps-finance/contracts/Finance.sol";
+import { TokenManager } from "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
 
-import "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
+import { IFIFSResolvingRegistrar } from "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
 
-import "../Lido.sol";
-import "../oracle/LegacyOracle.sol";
-import "../nos/NodeOperatorsRegistry.sol";
+import { Lido } from "../Lido.sol";
+import { LegacyOracle } from "../oracle/LegacyOracle.sol";
+import { NodeOperatorsRegistry } from "../nos/NodeOperatorsRegistry.sol";
 
 contract LidoTemplate is IsContract {
     // Configuration errors

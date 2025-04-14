@@ -4,17 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import { IAccessControlEnumerable } from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import { IBurner as IBurnerWithoutAccessControl } from "contracts/common/interfaces/IBurner.sol";
+import { ILido } from "contracts/0.8.25/interfaces/ILido.sol";
+import { ILidoLocator } from "contracts/common/interfaces/ILidoLocator.sol";
+import { IVersioned } from "contracts/common/interfaces/IVersioned.sol";
 
-interface IAccessControlEnumerable {
-    function grantRole(bytes32 role, address account) external;
-    function renounceRole(bytes32 role, address account) external;
-    function getRoleMemberCount(bytes32 role) external view returns (uint256);
-    function getRoleMember(bytes32 role, uint256 index) external view returns (address);
-}
-
-interface IVersioned {
-    function getContractVersion() external view returns (uint256);
-}
 
 interface IPausableUntil {
     function isPaused() external view returns (bool);
@@ -36,22 +31,32 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
     function getConsensusContract() external view returns (address);
 }
 
+interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
+}
+
+interface ILidoLocatorOld {
+    function accountingOracle() external view returns(address);
+    function depositSecurityModule() external view returns(address);
+    function elRewardsVault() external view returns(address);
+    function legacyOracle() external view returns(address);
+    function lido() external view returns(address);
+    function oracleReportSanityChecker() external view returns(address);
+    function burner() external view returns(address);
+    function stakingRouter() external view returns(address);
+    function treasury() external view returns(address);
+    function validatorsExitBusOracle() external view returns(address);
+    function withdrawalQueue() external view returns(address);
+    function withdrawalVault() external view returns(address);
+    function postTokenRebaseReceiver() external view returns(address);
+    function oracleDaemonConfig() external view returns(address);
+}
+
 interface IAccountingOracle is IBaseOracle, IOssifiableProxy {
     function initialize(address admin, address consensusContract, uint256 consensusVersion) external;
 }
 
-interface IAccounting is IOssifiableProxy {
-}
-
 interface IAragonAppRepo {
     function getLatest() external view returns (uint16[3] memory, address, bytes memory);
-}
-
-interface IBurner is IAccessControlEnumerable {
-    function getCoverSharesBurnt() external view returns (uint256);
-    function getNonCoverSharesBurnt() external view returns (uint256);
-    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares);
-    function isMigrationAllowed() external view returns (bool);
 }
 
 interface IStakingRouter is IAccessControlEnumerable {
@@ -75,32 +80,6 @@ interface IVaultFactory {
 interface IVaultHub is IPausableUntilWithRoles, IOssifiableProxy {
 }
 
-interface ILido is IVersioned {
-    function allowance(address _owner, address _spender) external view returns (uint256);
-    function balanceOf(address _account) external view returns (uint256);
-}
-
-interface ILidoLocator is IOssifiableProxy {
-    function accountingOracle() external view returns(address);
-    function depositSecurityModule() external view returns(address);
-    function elRewardsVault() external view returns(address);
-    function legacyOracle() external view returns(address);
-    function lido() external view returns(address);
-    function oracleReportSanityChecker() external view returns(address);
-    function postTokenRebaseReceiver() external view returns(address);
-    function burner() external view returns(address);
-    function stakingRouter() external view returns(address);
-    function treasury() external view returns(address);
-    function validatorsExitBusOracle() external view returns(address);
-    function withdrawalQueue() external view returns(address);
-    function withdrawalVault() external view returns(address);
-    function oracleDaemonConfig() external view returns(address);
-    function accounting() external view returns(address);
-    function predepositGuarantee() external view returns(address);
-    function wstETH() external view returns(address);
-    function vaultHub() external view returns(address);
-}
-
 interface IOracleReportSanityChecker is IAccessControlEnumerable {
 }
 
@@ -121,14 +100,7 @@ contract UpgradeTemplateV3 {
     event UpgradeFinished();
 
     struct UpgradeTemplateV3Params {
-        // New proxy contracts
-        address accounting;
-        address vaultHub;
-        address predepositGuarantee;
-
         // New non-proxy contracts
-        address burner;
-        address oracleReportSanityChecker;
         address vaultFactory;
 
         // New fancy proxy contracts
@@ -144,6 +116,7 @@ contract UpgradeTemplateV3 {
         address newLocatorImplementation;
 
         // Existing proxies and contracts
+        address oldLocatorImpl;
         address agent;
         address aragonAppLidoRepo;
         address csmAccounting;
@@ -151,49 +124,49 @@ contract UpgradeTemplateV3 {
         address nodeOperatorsRegistry;
         address simpleDvt;
         address voting;
-        address wstETH;
     }
+
     // Old upgraded non-proxy contracts
-    IBurner public immutable _oldBurner;
-    IOracleReportSanityChecker public immutable _oldOracleReportSanityChecker;
+    IBurner public immutable OLD_BURNER;
+    IOracleReportSanityChecker public immutable OLD_ORACLE_REPORT_SANITY_CHECKER;
 
     // New proxy contracts
-    IAccounting public immutable _accounting;
-    IVaultHub public immutable _vaultHub;
-    IPredepositGuarantee public immutable _predepositGuarantee;
+    address public immutable ACCOUNTING;
+    IVaultHub public immutable VAULT_HUB;
+    IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
 
     // New non-proxy contracts
-    IBurner public immutable _burner;
-    IOracleReportSanityChecker public immutable _oracleReportSanityChecker;
-    IVaultFactory public immutable _vaultFactory;
+    IBurner public immutable BURNER;
+    IOracleReportSanityChecker public immutable ORACLE_REPORT_SANITY_CHECKER;
+    IVaultFactory public immutable VAULT_FACTORY;
 
     // New fancy proxy contracts
-    IUpgradeableBeacon public immutable _upgradeableBeacon;
-    address public immutable _stakingVaultImplementation;
-    address public immutable _delegationImplementation;
+    IUpgradeableBeacon public immutable UPGRADEABLE_BEACON;
+    address public immutable STAKING_VAULT_IMPLEMENTATION;
+    address public immutable DELEGATION_IMPLEMENTATION;
 
     // Aragon Apps new implementations
-    address public immutable _lidoImplementation;
+    address public immutable LIDO_IMPLEMENTATION;
 
     // New non-aragon implementations
-    address public immutable _accountingOracleImplementation;
-    address public immutable _newLocatorImplementation;
+    address public immutable ACCOUNTING_ORACLE_IMPLEMENTATION;
+    address public immutable NEW_LOCATOR_IMPLEMENTATION;
 
     // Existing proxies and contracts
-    address public immutable _agent;
-    IAragonAppRepo public immutable _aragonAppLidoRepo;
-    IAccountingOracle public immutable _accountingOracle;
-    address public immutable _csmAccounting;
-    address public immutable _elRewardsVault;
-    ILido public immutable _lido;
-    ILidoLocator public immutable _locator;
-    address public immutable _nodeOperatorsRegistry;
-    address public immutable _simpleDvt;
-    IStakingRouter public immutable _stakingRouter;
-    address public immutable _validatorsExitBusOracle;
-    address public immutable _voting;
-    address public immutable _withdrawalQueue;
-    address public immutable _wstETH;
+    address public immutable AGENT;
+    IAragonAppRepo public immutable ARAGON_APP_LIDO_REPO;
+    IAccountingOracle public immutable ACCOUNTING_ORACLE;
+    address public immutable CSM_ACCOUNTING;
+    address public immutable EL_REWARDS_VAULT;
+    ILido public immutable LIDO;
+    ILidoLocator public immutable LOCATOR;
+    address public immutable NODE_OPERATORS_REGISTRY;
+    address public immutable SIMPLE_DVT;
+    IStakingRouter public immutable STAKING_ROUTER;
+    address public immutable VALIDATORS_EXIT_BUS_ORACLE;
+    address public immutable VOTING;
+    address public immutable WITHDRAWAL_QUEUE;
+    address public immutable WSTETH;
 
     // Values to set
 
@@ -272,47 +245,50 @@ contract UpgradeTemplateV3 {
     /// @param params Parameters for the upgrade template
     /// @param allowNonSingleBlockUpgrade Hack to allow mocking DAO upgrade (in multiple blocks)
     constructor(UpgradeTemplateV3Params memory params, bool allowNonSingleBlockUpgrade) {
+        if (params.newLocatorImplementation == params.oldLocatorImpl) {
+            revert NewAndOldLocatorImplementationsMustBeDifferent();
+        }
+
         ALLOW_NON_SINGLE_BLOCK_UPGRADE = allowNonSingleBlockUpgrade;
 
-        _accounting = IAccounting(params.accounting);
-        _vaultHub = IVaultHub(params.vaultHub);
-        // NB: we pass some of the addresses available in the new locator as parameters
-        //     because at the template creation time locator is not upgraded
-        _predepositGuarantee = IPredepositGuarantee(params.predepositGuarantee);
-        _burner = IBurner(params.burner);
-        _vaultFactory = IVaultFactory(params.vaultFactory);
-        _upgradeableBeacon = IUpgradeableBeacon(params.upgradeableBeacon);
-        _stakingVaultImplementation = params.stakingVaultImplementation;
-        _delegationImplementation = params.delegationImplementation;
+        NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
+        LOCATOR = ILidoLocator(params.locator);
 
-        _locator = ILidoLocator(params.locator);
-        _agent = params.agent;
-        _aragonAppLidoRepo = IAragonAppRepo(params.aragonAppLidoRepo);
-        _csmAccounting = params.csmAccounting;
-        _voting = params.voting;
-        _nodeOperatorsRegistry = params.nodeOperatorsRegistry;
-        _simpleDvt = params.simpleDvt;
-        _wstETH = params.wstETH;
+        ILidoLocatorOld oldLocatorImpl = ILidoLocatorOld(params.oldLocatorImpl);
+        OLD_BURNER = IBurner(oldLocatorImpl.burner());
+        OLD_ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(oldLocatorImpl.oracleReportSanityChecker());
+        ACCOUNTING_ORACLE = IAccountingOracle(oldLocatorImpl.accountingOracle());
+        EL_REWARDS_VAULT = oldLocatorImpl.elRewardsVault();
+        STAKING_ROUTER = IStakingRouter(oldLocatorImpl.stakingRouter());
+        LIDO = ILido(oldLocatorImpl.lido());
+        VALIDATORS_EXIT_BUS_ORACLE = oldLocatorImpl.validatorsExitBusOracle();
+        WITHDRAWAL_QUEUE = oldLocatorImpl.withdrawalQueue();
 
-        _lidoImplementation = params.lidoImplementation;
+        ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
+        ACCOUNTING = newLocatorImpl.accounting();
+        VAULT_HUB = IVaultHub(newLocatorImpl.vaultHub());
+        PREDEPOSIT_GUARANTEE = IPredepositGuarantee(newLocatorImpl.predepositGuarantee());
+        BURNER = IBurner(newLocatorImpl.burner());
+        WSTETH = newLocatorImpl.wstETH();
+        ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
 
-        _accountingOracleImplementation = params.accountingOracleImplementation;
-        _newLocatorImplementation = params.newLocatorImplementation;
-
-        _oldBurner = IBurner(_locator.burner());
-        _oldOracleReportSanityChecker = IOracleReportSanityChecker(_locator.oracleReportSanityChecker());
-        _oracleReportSanityChecker = IOracleReportSanityChecker(params.oracleReportSanityChecker);
-        _accountingOracle = IAccountingOracle(_locator.accountingOracle());
-        _elRewardsVault = _locator.elRewardsVault();
-        _stakingRouter = IStakingRouter(_locator.stakingRouter());
-        _lido = ILido(_locator.lido());
-        _validatorsExitBusOracle = _locator.validatorsExitBusOracle();
-        _withdrawalQueue = _locator.withdrawalQueue();
+        VAULT_FACTORY = IVaultFactory(params.vaultFactory);
+        UPGRADEABLE_BEACON = IUpgradeableBeacon(params.upgradeableBeacon);
+        STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
+        DELEGATION_IMPLEMENTATION = params.delegationImplementation;
+        AGENT = params.agent;
+        ARAGON_APP_LIDO_REPO = IAragonAppRepo(params.aragonAppLidoRepo);
+        VOTING = params.voting;
+        CSM_ACCOUNTING = params.csmAccounting;
+        NODE_OPERATORS_REGISTRY = params.nodeOperatorsRegistry;
+        SIMPLE_DVT = params.simpleDvt;
+        LIDO_IMPLEMENTATION = params.lidoImplementation;
+        ACCOUNTING_ORACLE_IMPLEMENTATION = params.accountingOracleImplementation;
     }
 
     /// @notice Must be called after LidoLocator is upgraded
     function startUpgrade() external {
-        if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
+        if (msg.sender != VOTING) revert OnlyVotingCanUpgrade();
         _assertNotExpired();
         if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
 
@@ -322,15 +298,15 @@ contract UpgradeTemplateV3 {
         }
 
         // Save initial state for the check after burner migration
-        _initialOldBurnerStethBalance = _lido.balanceOf(address(_oldBurner));
+        _initialOldBurnerStethBalance = LIDO.balanceOf(address(OLD_BURNER));
 
-        _assertProxyImplementation(_locator, _newLocatorImplementation);
+        _assertProxyImplementation(IOssifiableProxy(address(LOCATOR)), NEW_LOCATOR_IMPLEMENTATION);
         _assertNewLocatorAddresses();
         _assertOldBurnerAllowances();
     }
 
     function finishUpgrade() external {
-        if (msg.sender != _voting) revert OnlyVotingCanUpgrade();
+        if (msg.sender != VOTING) revert OnlyVotingCanUpgrade();
         _assertNotExpired();
         if (_isUpgradeFinished) revert CanOnlyFinishOnce();
         _isUpgradeFinished = true;
@@ -347,36 +323,36 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertNewLocatorAddresses() internal view {
-        ILidoLocator locator = _locator;
-        if (locator.burner() != address(_burner)
-         || locator.oracleReportSanityChecker() != address(_oracleReportSanityChecker)
-         || locator.accounting() != address(_accounting)
-         || locator.wstETH() != address(_wstETH)
-         || locator.vaultHub() != address(_vaultHub)
-         || locator.predepositGuarantee() != address(_predepositGuarantee)
+        ILidoLocator locator = LOCATOR;
+        if (locator.burner() != address(BURNER)
+         || locator.oracleReportSanityChecker() != address(ORACLE_REPORT_SANITY_CHECKER)
+         || locator.accounting() != ACCOUNTING
+         || locator.wstETH() != address(WSTETH)
+         || locator.vaultHub() != address(VAULT_HUB)
+         || locator.predepositGuarantee() != address(PREDEPOSIT_GUARANTEE)
         ) {
             revert IncorrectLocatorAddresses();
         }
     }
 
     function _assertOldBurnerAllowances() internal view {
-        address oldBurner = address(_oldBurner);
+        address oldBurner = address(OLD_BURNER);
         uint256 infiniteAllowance = type(uint256).max;
 
-        if (_lido.allowance(_withdrawalQueue, oldBurner) != infiniteAllowance) {
-            revert IncorrectOldBurnerAllowance(_withdrawalQueue);
+        if (LIDO.allowance(WITHDRAWAL_QUEUE, oldBurner) != infiniteAllowance) {
+            revert IncorrectOldBurnerAllowance(WITHDRAWAL_QUEUE);
         }
 
-        if (_lido.allowance(_simpleDvt, oldBurner) != infiniteAllowance) {
-            revert IncorrectOldBurnerAllowance(_simpleDvt);
+        if (LIDO.allowance(SIMPLE_DVT, oldBurner) != infiniteAllowance) {
+            revert IncorrectOldBurnerAllowance(SIMPLE_DVT);
         }
 
-        if (_lido.allowance(_nodeOperatorsRegistry, oldBurner) != infiniteAllowance) {
-            revert IncorrectOldBurnerAllowance(_nodeOperatorsRegistry);
+        if (LIDO.allowance(NODE_OPERATORS_REGISTRY, oldBurner) != infiniteAllowance) {
+            revert IncorrectOldBurnerAllowance(NODE_OPERATORS_REGISTRY);
         }
 
-        if (_lido.allowance(_csmAccounting, oldBurner) != infiniteAllowance) {
-            revert IncorrectOldBurnerAllowance(_csmAccounting);
+        if (LIDO.allowance(CSM_ACCOUNTING, oldBurner) != infiniteAllowance) {
+            revert IncorrectOldBurnerAllowance(CSM_ACCOUNTING);
         }
     }
 
@@ -392,8 +368,8 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertOracleReportSanityCheckerRoles() internal view {
-        IOracleReportSanityChecker checker = _oracleReportSanityChecker;
-        _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, _agent);
+        IOracleReportSanityChecker checker = ORACLE_REPORT_SANITY_CHECKER;
+        _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, AGENT);
         _assertZeroOZRoleHolders(checker, ALL_LIMITS_MANAGER_ROLE);
         _assertZeroOZRoleHolders(checker, EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE);
         _assertZeroOZRoleHolders(checker, APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE);
@@ -441,7 +417,7 @@ contract UpgradeTemplateV3 {
     }
 
     function _passAdminRolesFromTemplateToAgent() internal {
-        _transferOZAdminFromThisToAgent(_burner);
+        _transferOZAdminFromThisToAgent(BURNER);
     }
 
     function _assertStateAfterUpgrade() internal view {
@@ -451,74 +427,70 @@ contract UpgradeTemplateV3 {
 
         _checkBurnerMigratedCorrectly();
 
-        _assertAragonAppImplementation(_aragonAppLidoRepo, _lidoImplementation);
+        _assertAragonAppImplementation(ARAGON_APP_LIDO_REPO, LIDO_IMPLEMENTATION);
 
-        _assertProxyImplementation(_accountingOracle, _accountingOracleImplementation);
+        _assertProxyImplementation(ACCOUNTING_ORACLE, ACCOUNTING_ORACLE_IMPLEMENTATION);
 
         _assertBurnerAllowances();
 
-        if (_vaultFactory.BEACON() != address(_upgradeableBeacon)) {
-            revert IncorrectVaultFactoryBeacon(address(_vaultFactory), address(_upgradeableBeacon));
+        if (VAULT_FACTORY.BEACON() != address(UPGRADEABLE_BEACON)) {
+            revert IncorrectVaultFactoryBeacon(address(VAULT_FACTORY), address(UPGRADEABLE_BEACON));
         }
-        if (_vaultFactory.DELEGATION_IMPL() != _delegationImplementation) {
-            revert IncorrectVaultFactoryDelegationImplementation(address(_vaultFactory), _delegationImplementation);
-        }
-
-        if (_upgradeableBeacon.owner() != address(_agent)) {
-            revert IncorrectUpgradeableBeaconOwner(address(_upgradeableBeacon), _agent);
+        if (VAULT_FACTORY.DELEGATION_IMPL() != DELEGATION_IMPLEMENTATION) {
+            revert IncorrectVaultFactoryDelegationImplementation(address(VAULT_FACTORY), DELEGATION_IMPLEMENTATION);
         }
 
-        if (_upgradeableBeacon.implementation() != _stakingVaultImplementation) {
-            revert IncorrectUpgradeableBeaconImplementation(address(_upgradeableBeacon), _stakingVaultImplementation);
+        if (UPGRADEABLE_BEACON.owner() != address(AGENT)) {
+            revert IncorrectUpgradeableBeaconOwner(address(UPGRADEABLE_BEACON), AGENT);
+        }
+
+        if (UPGRADEABLE_BEACON.implementation() != STAKING_VAULT_IMPLEMENTATION) {
+            revert IncorrectUpgradeableBeaconImplementation(address(UPGRADEABLE_BEACON), STAKING_VAULT_IMPLEMENTATION);
         }
     }
 
     function _assertBurnerAllowances() internal view {
-        if (_lido.allowance(_withdrawalQueue, address(_oldBurner)) != 0) {
-            revert IncorrectBurnerAllowance(_withdrawalQueue, address(_oldBurner));
+        if (LIDO.allowance(WITHDRAWAL_QUEUE, address(OLD_BURNER)) != 0) {
+            revert IncorrectBurnerAllowance(WITHDRAWAL_QUEUE, address(OLD_BURNER));
         }
-        if (_lido.allowance(_withdrawalQueue, address(_burner)) != type(uint256).max) {
-            revert IncorrectBurnerAllowance(_withdrawalQueue, address(_burner));
-        }
-
-        if (_lido.allowance(address(_simpleDvt), address(_oldBurner)) != 0) {
-            revert IncorrectBurnerAllowance(address(_simpleDvt), address(_oldBurner));
-        }
-        if (_lido.allowance(address(_simpleDvt), address(_burner)) != type(uint256).max) {
-            revert IncorrectBurnerAllowance(address(_simpleDvt), address(_burner));
+        if (LIDO.allowance(WITHDRAWAL_QUEUE, address(BURNER)) != type(uint256).max) {
+            revert IncorrectBurnerAllowance(WITHDRAWAL_QUEUE, address(BURNER));
         }
 
-        if (_lido.allowance(address(_nodeOperatorsRegistry), address(_oldBurner)) != 0) {
-            revert IncorrectBurnerAllowance(address(_nodeOperatorsRegistry), address(_oldBurner));
+        if (LIDO.allowance(address(SIMPLE_DVT), address(OLD_BURNER)) != 0) {
+            revert IncorrectBurnerAllowance(address(SIMPLE_DVT), address(OLD_BURNER));
         }
-        if (_lido.allowance(address(_nodeOperatorsRegistry), address(_burner)) != type(uint256).max) {
-            revert IncorrectBurnerAllowance(address(_nodeOperatorsRegistry), address(_burner));
-        }
-
-        if (_lido.allowance(address(_csmAccounting), address(_oldBurner)) != 0) {
-            revert IncorrectBurnerAllowance(address(_csmAccounting), address(_oldBurner));
-        }
-        if (_lido.allowance(address(_csmAccounting), address(_burner)) != type(uint256).max) {
-            revert IncorrectBurnerAllowance(address(_csmAccounting), address(_burner));
+        if (LIDO.allowance(address(SIMPLE_DVT), address(BURNER)) != type(uint256).max) {
+            revert IncorrectBurnerAllowance(address(SIMPLE_DVT), address(BURNER));
         }
 
-        if (_lido.allowance(address(_accounting), address(_burner)) != type(uint256).max) {
-            revert IncorrectBurnerAllowance(address(_accounting), address(_burner));
+        if (LIDO.allowance(address(NODE_OPERATORS_REGISTRY), address(OLD_BURNER)) != 0) {
+            revert IncorrectBurnerAllowance(address(NODE_OPERATORS_REGISTRY), address(OLD_BURNER));
+        }
+        if (LIDO.allowance(address(NODE_OPERATORS_REGISTRY), address(BURNER)) != type(uint256).max) {
+            revert IncorrectBurnerAllowance(address(NODE_OPERATORS_REGISTRY), address(BURNER));
+        }
+
+        if (LIDO.allowance(address(CSM_ACCOUNTING), address(OLD_BURNER)) != 0) {
+            revert IncorrectBurnerAllowance(address(CSM_ACCOUNTING), address(OLD_BURNER));
+        }
+        if (LIDO.allowance(address(CSM_ACCOUNTING), address(BURNER)) != type(uint256).max) {
+            revert IncorrectBurnerAllowance(address(CSM_ACCOUNTING), address(BURNER));
         }
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
-        (uint256 oldCoverShares, uint256 oldNonCoverShares) = _oldBurner.getSharesRequestedToBurn();
-        (uint256 newCoverShares, uint256 newNonCoverShares) = _burner.getSharesRequestedToBurn();
+        (uint256 oldCoverShares, uint256 oldNonCoverShares) = OLD_BURNER.getSharesRequestedToBurn();
+        (uint256 newCoverShares, uint256 newNonCoverShares) = BURNER.getSharesRequestedToBurn();
 
         if (
-            _oldBurner.getCoverSharesBurnt() != _burner.getCoverSharesBurnt() ||
-            _oldBurner.getNonCoverSharesBurnt() != _burner.getNonCoverSharesBurnt() ||
+            OLD_BURNER.getCoverSharesBurnt() != BURNER.getCoverSharesBurnt() ||
+            OLD_BURNER.getNonCoverSharesBurnt() != BURNER.getNonCoverSharesBurnt() ||
             oldCoverShares != newCoverShares ||
             oldNonCoverShares != newNonCoverShares ||
-            _lido.balanceOf(address(_oldBurner)) != 0 ||
-            _lido.balanceOf(address(_burner)) != _initialOldBurnerStethBalance ||
-            _burner.isMigrationAllowed()
+            LIDO.balanceOf(address(OLD_BURNER)) != 0 ||
+            LIDO.balanceOf(address(BURNER)) != _initialOldBurnerStethBalance ||
+            BURNER.isMigrationAllowed()
         ) {
             revert IncorrectBurnerMigration();
         }
@@ -532,53 +504,53 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertFinalACL() internal view {
-        address agent = _agent;
+        address agent = AGENT;
 
         // Burner
-        IBurner burner = _burner;
+        IBurner burner = BURNER;
         _assertSingleOZRoleHolder(burner, DEFAULT_ADMIN_ROLE, agent);
         {
             address[] memory holders = new address[](4);
-            holders[0] = address(_lido);
-            holders[1] = _nodeOperatorsRegistry;
-            holders[2] = _simpleDvt;
-            holders[3] = address(_accounting);
+            holders[0] = address(LIDO);
+            holders[1] = NODE_OPERATORS_REGISTRY;
+            holders[2] = SIMPLE_DVT;
+            holders[3] = ACCOUNTING;
             _assertOZRoleHolders(burner, REQUEST_BURN_SHARES_ROLE, holders);
         }
         // NB: we don't check REQUEST_BURN_SHARES_ROLE on the old burner is revoked
         //     because it is left intentionally to simplify aragon voting operations
 
         // VaultHub
-        _assertSingleOZRoleHolder(_vaultHub, DEFAULT_ADMIN_ROLE, _agent);
-        _assertSingleOZRoleHolder(_vaultHub, VAULT_MASTER_ROLE, _agent);
-        _assertZeroOZRoleHolders(_vaultHub, VAULT_REGISTRY_ROLE);
-        _assertProxyAdmin(_vaultHub, _agent);
+        _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(VAULT_HUB, VAULT_MASTER_ROLE, agent);
+        _assertZeroOZRoleHolders(VAULT_HUB, VAULT_REGISTRY_ROLE);
+        _assertProxyAdmin(VAULT_HUB, agent);
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle
-        _assertSingleOZRoleHolder(_accountingOracle, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, agent);
 
         // OracleReportSanityChecker
         _assertOracleReportSanityCheckerRoles();
 
         // Accounting
-        _assertProxyAdmin(_accounting, _agent);
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), agent);
 
         // PredepositGuarantee
-        _assertProxyAdmin(_predepositGuarantee, _agent);
+        _assertProxyAdmin(PREDEPOSIT_GUARANTEE, agent);
 
         // StakingRouter
         {
             address[] memory holders = new address[](2);
-            holders[0] = address(_lido);
-            holders[1] = address(_accounting);
-            _assertOZRoleHolders(_stakingRouter, REPORT_REWARDS_MINTED_ROLE, holders);
+            holders[0] = address(LIDO);
+            holders[1] = ACCOUNTING;
+            _assertOZRoleHolders(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, holders);
         }
     }
 
     function _checkContractVersions() internal view {
-        _assertContractVersion(_lido, EXPECTED_FINAL_LIDO_VERSION);
-        _assertContractVersion(_accountingOracle, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
+        _assertContractVersion(LIDO, EXPECTED_FINAL_LIDO_VERSION);
+        _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
     }
 
     function _assertContractVersion(IVersioned versioned, uint256 expectedVersion) internal view {
@@ -588,7 +560,7 @@ contract UpgradeTemplateV3 {
     }
 
     function _transferOZAdminFromThisToAgent(IAccessControlEnumerable accessControlled) internal {
-        accessControlled.grantRole(DEFAULT_ADMIN_ROLE, _agent);
+        accessControlled.grantRole(DEFAULT_ADMIN_ROLE, AGENT);
         accessControlled.renounceRole(DEFAULT_ADMIN_ROLE, address(this));
     }
 
@@ -636,4 +608,5 @@ contract UpgradeTemplateV3 {
     error IncorrectVaultFactoryDelegationImplementation(address factory, address delegation);
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
+    error NewAndOldLocatorImplementationsMustBeDifferent();
 }

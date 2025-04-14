@@ -5,6 +5,8 @@
 // solhint-disable-next-line
 pragma solidity >=0.4.24 <0.9.0;
 
+// import { IAccessControlEnumerable } from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+
 interface IBurner {
     /**
      * Commit cover/non-cover burning requests and logs cover/non-cover shares amount just burnt.
@@ -40,4 +42,10 @@ interface IBurner {
      *      along with the call of this function.
      */
     function migrate(address _oldBurner) external;
+
+    /**
+     * @notice Returns whether migration is allowed.
+     * @return bool indicating if migration is allowed
+     */
+    function isMigrationAllowed() external view returns (bool);
 }

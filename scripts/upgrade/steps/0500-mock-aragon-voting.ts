@@ -34,8 +34,6 @@ export async function main(): Promise<void> {
   const accountingAddress = state[Sk.accounting].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const upgradeTemplateV3Address = state[Sk.upgradeTemplateV3].address;
-  const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
-  const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
 
   // Disable automine to ensure all transactions happen in the same block
   // TODO: automine false and mempool fifo order and manual nonce management still doesn't work!
@@ -49,7 +47,6 @@ export async function main(): Promise<void> {
   const parameters = readUpgradeParameters();
   const aoConsensusVersion = parameters[Sk.accountingOracle].deployParameters.consensusVersion;
   const lidoAppNewVersion = parameters[Sk.appLido].newVersion;
-  const csmAccountingAddress = parameters["csm"].accounting;
 
   const agentSigner = await impersonate(agentAddress, ether("1"));
   const votingSigner = await impersonate(votingAddress, ether("1"));
@@ -82,11 +79,10 @@ export async function main(): Promise<void> {
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);
-  await lido
-    .connect(votingSigner)
-    .finalizeUpgrade_v3(oldBurnerAddress, simpleDvtAddress, nodeOperatorsRegistryAddress, csmAccountingAddress, {
-      nonce: votingNonce,
-    }); // can be called by anyone
+
+  await lido.connect(votingSigner).finalizeUpgrade_v3(oldBurnerAddress, {
+    nonce: votingNonce,
+  }); // can be called by anyone
   votingNonce += 1;
   // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
