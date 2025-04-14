@@ -15,9 +15,9 @@ import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 struct DelegationConfig {
     address defaultAdmin;
     address nodeOperatorManager;
-    address assetRecoverer;
     uint256 confirmExpiry;
     uint16 nodeOperatorFeeBP;
+    /// Permissions
     address[] funders;
     address[] withdrawers;
     address[] lockers;
@@ -26,10 +26,22 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
+    address[] pdgCompensators;
+    address[] unknownValidatorProvers;
+    address[] unguaranteedBeaconChainDepositors;
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
+    address[] lidoVaultHubAuthorizers;
+    address[] lidoVaultHubDeauthorizers;
+    address[] ossifiers;
+    address[] depositorSetters;
+    address[] lockedResetters;
+    /// Dashboard
+    address assetRecoverer;
+    /// Delegation
     address[] nodeOperatorFeeClaimers;
+    address[] nodeOperatorRewardAdjusters;
 }
 
 contract VaultFactory {
@@ -110,6 +122,18 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
+            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
+            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
+            delegation.grantRole(
+                delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+                _delegationConfig.unguaranteedBeaconChainDepositors[i]
+            );
+        }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
             delegation.grantRole(
                 delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
@@ -125,10 +149,31 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubAuthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubAuthorizers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubDeauthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubDeauthorizers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.ossifiers.length; i++) {
+            delegation.grantRole(delegation.OSSIFY_ROLE(), _delegationConfig.ossifiers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.depositorSetters.length; i++) {
+            delegation.grantRole(delegation.SET_DEPOSITOR_ROLE(), _delegationConfig.depositorSetters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lockedResetters.length; i++) {
+            delegation.grantRole(delegation.RESET_LOCKED_ROLE(), _delegationConfig.lockedResetters[i]);
+        }
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
                 _delegationConfig.nodeOperatorFeeClaimers[i]
+            );
+        }
+        for (uint256 i = 0; i < _delegationConfig.nodeOperatorRewardAdjusters.length; i++) {
+            delegation.grantRole(
+                delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+                _delegationConfig.nodeOperatorRewardAdjusters[i]
             );
         }
 

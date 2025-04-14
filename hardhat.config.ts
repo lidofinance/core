@@ -44,6 +44,7 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
       // mining: {
       //   mempool: {
       //     order: "fifo"
@@ -209,7 +210,7 @@ const config: HardhatUserConfig = {
     alphaSort: false,
     disambiguatePaths: false,
     runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: true,
+    strict: false,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };

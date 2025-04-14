@@ -9,7 +9,6 @@ import { Delegation, StakingVault } from "typechain-types";
 import {
   certainAddress,
   computeDepositDataRoot,
-  deployBLSPrecompileStubs,
   ether,
   generatePostDeposit,
   generatePredeposit,
@@ -51,9 +50,6 @@ describe("Scenario: Actions on vault creation", () => {
     originalSnapshot = await Snapshot.take();
 
     await setupLido(ctx);
-
-    // TODO: remove stubs when hardhat fork supports BLS precompiles
-    await deployBLSPrecompileStubs();
 
     [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
 
