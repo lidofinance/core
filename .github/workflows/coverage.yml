@@ -25,7 +25,7 @@ jobs:
         run: yarn test:coverage
 
       - name: Produce the coverage report
-        uses: insightsengineering/coverage-action@v2
+        uses: lidofinance/coverage-action@a94351baa279790f736655b1891178b1515594ea
         with:
           path: ./coverage/cobertura-coverage.xml
           publish: true

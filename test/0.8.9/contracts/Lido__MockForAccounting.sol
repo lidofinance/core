@@ -27,7 +27,7 @@ contract Lido__MockForAccounting {
      */
     event TransferShares(address indexed from, address indexed to, uint256 sharesValue);
 
-    function setMockedDepositedValidators(uint256 _amount) external {
+    function mock__setDepositedValidators(uint256 _amount) external {
         depositedValidatorsValue = _amount;
     }
 
