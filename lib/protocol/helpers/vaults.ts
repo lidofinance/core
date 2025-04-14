@@ -13,8 +13,6 @@ import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate, 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
 
-import { getRandomSigners } from "./get-random-signers";
-
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
 
@@ -22,21 +20,25 @@ export type VaultRoles = {
   assetRecoverer: HardhatEthersSigner;
   funder: HardhatEthersSigner;
   withdrawer: HardhatEthersSigner;
-  minter: HardhatEthersSigner;
   locker: HardhatEthersSigner;
+  minter: HardhatEthersSigner;
   burner: HardhatEthersSigner;
   rebalancer: HardhatEthersSigner;
   depositPauser: HardhatEthersSigner;
   depositResumer: HardhatEthersSigner;
-  validatorExitRequester: HardhatEthersSigner;
-  validatorWithdrawalTriggerer: HardhatEthersSigner;
-  disconnecter: HardhatEthersSigner;
-  lidoVaultHubDeauthorizer: HardhatEthersSigner;
-  nodeOperatorFeeClaimer: HardhatEthersSigner;
-  nodeOperatorRewardAdjuster: HardhatEthersSigner;
   pdgCompensator: HardhatEthersSigner;
   unguaranteedBeaconChainDepositor: HardhatEthersSigner;
   unknownValidatorProver: HardhatEthersSigner;
+  validatorExitRequester: HardhatEthersSigner;
+  validatorWithdrawalTriggerer: HardhatEthersSigner;
+  disconnecter: HardhatEthersSigner;
+  lidoVaultHubAuthorizer: HardhatEthersSigner;
+  lidoVaultHubDeauthorizer: HardhatEthersSigner;
+  ossifier: HardhatEthersSigner;
+  depositorSetter: HardhatEthersSigner;
+  lockedResetter: HardhatEthersSigner;
+  nodeOperatorFeeClaimer: HardhatEthersSigner;
+  nodeOperatorRewardAdjuster: HardhatEthersSigner;
 };
 
 export interface VaultWithDelegation {
@@ -69,49 +71,57 @@ export async function createVaultWithDelegation(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDelegation> {
-  const defaultRoles = await getRandomSigners(30);
+  const defaultRoles = await ethers.getSigners();
 
   const [
     assetRecoverer,
     funder,
     withdrawer,
-    minter,
     locker,
+    minter,
     burner,
     rebalancer,
     depositPauser,
     depositResumer,
-    validatorExitRequester,
-    validatorWithdrawalTriggerer,
-    disconnecter,
-    lidoVaultHubDeauthorizer,
-    nodeOperatorFeeClaimer,
-    nodeOperatorRewardAdjuster,
     pdgCompensator,
     unguaranteedBeaconChainDepositor,
     unknownValidatorProver,
+    validatorExitRequester,
+    validatorWithdrawalTriggerer,
+    disconnecter,
+    lidoVaultHubAuthorizer,
+    lidoVaultHubDeauthorizer,
+    ossifier,
+    depositorSetter,
+    lockedResetter,
+    nodeOperatorFeeClaimer,
+    nodeOperatorRewardAdjuster,
   ] = defaultRoles;
 
   const roles: VaultRoles = {
     assetRecoverer: rolesOverrides.assetRecoverer ?? assetRecoverer,
     funder: rolesOverrides.funder ?? funder,
     withdrawer: rolesOverrides.withdrawer ?? withdrawer,
-    minter: rolesOverrides.minter ?? minter,
     locker: rolesOverrides.locker ?? locker,
+    minter: rolesOverrides.minter ?? minter,
     burner: rolesOverrides.burner ?? burner,
     rebalancer: rolesOverrides.rebalancer ?? rebalancer,
     depositPauser: rolesOverrides.depositPauser ?? depositPauser,
     depositResumer: rolesOverrides.depositResumer ?? depositResumer,
-    validatorExitRequester: rolesOverrides.validatorExitRequester ?? validatorExitRequester,
-    validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
-    disconnecter: rolesOverrides.disconnecter ?? disconnecter,
-    lidoVaultHubDeauthorizer: rolesOverrides.lidoVaultHubDeauthorizer ?? lidoVaultHubDeauthorizer,
-    nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
-    nodeOperatorRewardAdjuster: rolesOverrides.nodeOperatorRewardAdjuster ?? nodeOperatorRewardAdjuster,
     pdgCompensator: rolesOverrides.pdgCompensator ?? pdgCompensator,
     unguaranteedBeaconChainDepositor:
       rolesOverrides.unguaranteedBeaconChainDepositor ?? unguaranteedBeaconChainDepositor,
     unknownValidatorProver: rolesOverrides.unknownValidatorProver ?? unknownValidatorProver,
+    validatorExitRequester: rolesOverrides.validatorExitRequester ?? validatorExitRequester,
+    validatorWithdrawalTriggerer: rolesOverrides.validatorWithdrawalTriggerer ?? validatorWithdrawalTriggerer,
+    disconnecter: rolesOverrides.disconnecter ?? disconnecter,
+    lidoVaultHubAuthorizer: rolesOverrides.lidoVaultHubAuthorizer ?? lidoVaultHubAuthorizer,
+    lidoVaultHubDeauthorizer: rolesOverrides.lidoVaultHubDeauthorizer ?? lidoVaultHubDeauthorizer,
+    ossifier: rolesOverrides.ossifier ?? ossifier,
+    depositorSetter: rolesOverrides.depositorSetter ?? depositorSetter,
+    lockedResetter: rolesOverrides.lockedResetter ?? lockedResetter,
+    nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
+    nodeOperatorRewardAdjuster: rolesOverrides.nodeOperatorRewardAdjuster ?? nodeOperatorRewardAdjuster,
   };
 
   const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
@@ -123,21 +133,25 @@ export async function createVaultWithDelegation(
       assetRecoverer: roles.assetRecoverer,
       funders: [roles.funder],
       withdrawers: [roles.withdrawer],
-      minters: [roles.minter],
       lockers: [roles.locker],
+      minters: [roles.minter],
       burners: [roles.burner],
       rebalancers: [roles.rebalancer],
       depositPausers: [roles.depositPauser],
       depositResumers: [roles.depositResumer],
-      validatorExitRequesters: [roles.validatorExitRequester],
-      validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
-      disconnecters: [roles.disconnecter],
-      lidoVaultHubDeauthorizers: [roles.lidoVaultHubDeauthorizer],
-      nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
-      nodeOperatorRewardAdjusters: [roles.nodeOperatorRewardAdjuster],
       pdgCompensators: [roles.pdgCompensator],
       unguaranteedBeaconChainDepositors: [roles.unguaranteedBeaconChainDepositor],
       unknownValidatorProvers: [roles.unknownValidatorProver],
+      validatorExitRequesters: [roles.validatorExitRequester],
+      validatorWithdrawalTriggerers: [roles.validatorWithdrawalTriggerer],
+      disconnecters: [roles.disconnecter],
+      lidoVaultHubAuthorizers: [roles.lidoVaultHubAuthorizer],
+      lidoVaultHubDeauthorizers: [roles.lidoVaultHubDeauthorizer],
+      nodeOperatorFeeClaimers: [roles.nodeOperatorFeeClaimer],
+      nodeOperatorRewardAdjusters: [roles.nodeOperatorRewardAdjuster],
+      ossifiers: [roles.ossifier],
+      depositorSetters: [roles.depositorSetter],
+      lockedResetters: [roles.lockedResetter],
     },
     "0x",
   );

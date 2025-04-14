@@ -256,7 +256,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        if (vault_.isOssified()) revert VaultIsOssified(_vault);
+        if (vault_.ossified()) revert VaultOssified(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -607,7 +607,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidProof();
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
-    error VaultIsOssified(address vault);
+    error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
 }

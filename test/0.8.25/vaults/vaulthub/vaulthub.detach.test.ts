@@ -138,15 +138,19 @@ describe("VaultHub.sol:deauthorize", () => {
       rebalancers: [await vaultOwner1.getAddress()],
       depositPausers: [await vaultOwner1.getAddress()],
       depositResumers: [await vaultOwner1.getAddress()],
+      pdgCompensators: [await vaultOwner1.getAddress()],
+      unknownValidatorProvers: [await vaultOwner1.getAddress()],
+      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
+      lidoVaultHubAuthorizers: [await vaultOwner1.getAddress()],
       lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
+      ossifiers: [await vaultOwner1.getAddress()],
+      depositorSetters: [await vaultOwner1.getAddress()],
+      lockedResetters: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
       nodeOperatorRewardAdjusters: [await operator.getAddress()],
-      pdgCompensators: [await vaultOwner1.getAddress()],
-      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
-      unknownValidatorProvers: [await vaultOwner1.getAddress()],
     };
   });
 

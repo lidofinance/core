@@ -210,7 +210,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function authorizeLidoVaultHub() external onlyOwner {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
-        if (isOssified()) revert VaultIsOssified();
+        if (ossified()) revert VaultOssified();
 
         address lidoPredepositGuarantee = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
         if ($.depositor != lidoPredepositGuarantee) revert InvalidDepositor($.depositor);
@@ -241,6 +241,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
+     * @notice Returns true if the vault is attached to VaultHub
+     * @return True if the vault is attached to VaultHub, false otherwise
+     */
+    function vaultHubAuthorized() external view returns (bool) {
+        return _getStorage().vaultHubAuthorized;
+    }
+
+    /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
      *         once ossified, the vault cannot be upgraded or attached to VaultHub.
      * @dev Can only be called by the owner.
@@ -259,8 +267,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Returns true if the vault is ossified
      * @return True if the vault is ossified, false otherwise
      */
-    function isOssified() public view returns (bool) {
-        return PinnedBeaconUtils.isOssified();
+    function ossified() public view returns (bool) {
+        return PinnedBeaconUtils.ossified();
     }
 
     /**
@@ -304,6 +312,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         _getStorage().locked = 0;
+
+        emit LockedReset();
     }
 
     /**
@@ -362,14 +372,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         $.depositor = _depositor;
         emit DepositorSet(_depositor);
-    }
-
-    /**
-     * @notice Returns true if the vault is attached to VaultHub
-     * @return True if the vault is attached to VaultHub, false otherwise
-     */
-    function vaultHubAuthorized() external view returns (bool) {
-        return _getStorage().vaultHubAuthorized;
     }
 
     /**
@@ -707,6 +709,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     event LockedIncreased(uint256 locked);
 
     /**
+     * @notice Emitted when the locked amount is reset to 0
+     */
+    event LockedReset();
+
+    /**
      * @notice Emitted when a new report is submitted to `StakingVault`
      * @param valuation Sum of the vault's validator balances and the balance of `StakingVault`
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
@@ -874,7 +881,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
      */
-    error VaultIsOssified();
+    error VaultOssified();
 
     /**
      * @notice Thrown when a report is staled

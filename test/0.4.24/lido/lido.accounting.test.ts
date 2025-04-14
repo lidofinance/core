@@ -8,15 +8,19 @@ import {
   Burner__MockForAccounting,
   Burner__MockForAccounting__factory,
   Lido,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
   LidoLocator,
   LidoLocator__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
   WithdrawalQueue__MockForAccounting,
   WithdrawalQueue__MockForAccounting__factory,
+  WithdrawalVault__MockForLidoAccounting,
+  WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types";
 
-import { ether, getNextBlockTimestamp, impersonate } from "lib";
+import { ether, getNextBlockTimestamp, impersonate, updateBalance } from "lib";
 
 import { deployLidoDao } from "test/deploy";
 
@@ -31,14 +35,18 @@ describe("Lido:accounting", () => {
   let stakingRouter: StakingRouter__MockForLidoAccounting;
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
   let burner: Burner__MockForAccounting;
+  let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
+  let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
 
   beforeEach(async () => {
     [deployer, stranger] = await ethers.getSigners();
 
-    [stakingRouter, withdrawalQueue, burner] = await Promise.all([
+    [stakingRouter, withdrawalQueue, burner, elRewardsVault, withdrawalVault] = await Promise.all([
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
       new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
       new Burner__MockForAccounting__factory(deployer).deploy(),
+      new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
+      new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
     ]);
 
     ({ lido, acl } = await deployLidoDao({
@@ -48,6 +56,8 @@ describe("Lido:accounting", () => {
         withdrawalQueue,
         stakingRouter,
         burner,
+        elRewardsVault,
+        withdrawalVault,
       },
     }));
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
@@ -129,6 +139,77 @@ describe("Lido:accounting", () => {
 
       await lido.collectRewardsAndProcessWithdrawals(...args({ etherToLockOnWithdrawalQueue: ethToLock }));
       expect(await lido.getBufferedEther()).to.equal(initialBufferedEther - ethToLock);
+    });
+
+    it("Withdraws execution layer rewards and adds them to the buffer", async () => {
+      const elRewardsToWithdraw = ether("1.0");
+      const initialBufferedEther = await lido.getBufferedEther();
+
+      await updateBalance(await elRewardsVault.getAddress(), elRewardsToWithdraw);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
+
+      await expect(lido.collectRewardsAndProcessWithdrawals(...args({ elRewardsToWithdraw })))
+        .to.emit(lido, "ELRewardsReceived")
+        .withArgs(elRewardsToWithdraw)
+        .and.to.emit(lido, "ETHDistributed")
+        .withArgs(0n, 0n, 0n, 0n, elRewardsToWithdraw, initialBufferedEther + elRewardsToWithdraw);
+
+      expect(await lido.getBufferedEther()).to.equal(initialBufferedEther + elRewardsToWithdraw);
+      expect(await ethers.provider.getBalance(await elRewardsVault.getAddress())).to.equal(0n);
+    });
+
+    it("Withdraws withdrawals and adds them to the buffer", async () => {
+      const withdrawalsToWithdraw = ether("2.0");
+      const initialBufferedEther = await lido.getBufferedEther();
+
+      await updateBalance(await withdrawalVault.getAddress(), withdrawalsToWithdraw);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
+
+      await expect(lido.collectRewardsAndProcessWithdrawals(...args({ withdrawalsToWithdraw })))
+        .to.emit(lido, "WithdrawalsReceived")
+        .withArgs(withdrawalsToWithdraw)
+        .and.to.emit(lido, "ETHDistributed")
+        .withArgs(0n, 0n, 0n, withdrawalsToWithdraw, 0n, initialBufferedEther + withdrawalsToWithdraw);
+
+      expect(await lido.getBufferedEther()).to.equal(initialBufferedEther + withdrawalsToWithdraw);
+      expect(await ethers.provider.getBalance(await withdrawalVault.getAddress())).to.equal(0n);
+    });
+
+    it("Withdraws both EL rewards and withdrawals and adds them to the buffer", async () => {
+      const elRewardsToWithdraw = ether("1.0");
+      const withdrawalsToWithdraw = ether("2.0");
+      const initialBufferedEther = await lido.getBufferedEther();
+
+      await updateBalance(await elRewardsVault.getAddress(), elRewardsToWithdraw);
+      await updateBalance(await withdrawalVault.getAddress(), withdrawalsToWithdraw);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
+      lido = lido.connect(accountingSigner);
+
+      await expect(lido.collectRewardsAndProcessWithdrawals(...args({ elRewardsToWithdraw, withdrawalsToWithdraw })))
+        .to.emit(lido, "ELRewardsReceived")
+        .withArgs(elRewardsToWithdraw)
+        .and.to.emit(lido, "WithdrawalsReceived")
+        .withArgs(withdrawalsToWithdraw)
+        .and.to.emit(lido, "ETHDistributed")
+        .withArgs(
+          0n,
+          0n,
+          0n,
+          withdrawalsToWithdraw,
+          elRewardsToWithdraw,
+          initialBufferedEther + withdrawalsToWithdraw + elRewardsToWithdraw,
+        );
+
+      expect(await lido.getBufferedEther()).to.equal(
+        initialBufferedEther + elRewardsToWithdraw + withdrawalsToWithdraw,
+      );
+      expect(await ethers.provider.getBalance(await elRewardsVault.getAddress())).to.equal(0n);
+      expect(await ethers.provider.getBalance(await withdrawalVault.getAddress())).to.equal(0n);
     });
 
     it("Emits an `ETHDistributed` event", async () => {

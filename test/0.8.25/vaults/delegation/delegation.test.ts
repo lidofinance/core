@@ -40,22 +40,27 @@ describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let funder: HardhatEthersSigner;
   let withdrawer: HardhatEthersSigner;
+  let locker: HardhatEthersSigner;
   let minter: HardhatEthersSigner;
   let burner: HardhatEthersSigner;
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
+  let pdgCompensator: HardhatEthersSigner;
+  let unknownValidatorProver: HardhatEthersSigner;
+  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
   let validatorExitRequester: HardhatEthersSigner;
   let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
+  let lidoVaultHubAuthorizer: HardhatEthersSigner;
   let lidoVaultHubDeauthorizer: HardhatEthersSigner;
+  let ossifier: HardhatEthersSigner;
+  let depositorSetter: HardhatEthersSigner;
+  let lockedResetter: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
   let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorRewardAdjuster: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
-  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
-  let unknownValidatorProver: HardhatEthersSigner;
-  let pdgCompensator: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
   let beaconOwner: HardhatEthersSigner;
@@ -83,15 +88,23 @@ describe("Delegation.sol", () => {
       vaultOwner,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
       depositPauser,
       depositResumer,
+      pdgCompensator,
+      unknownValidatorProver,
+      unguaranteedBeaconChainDepositor,
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
+      lidoVaultHubAuthorizer,
       lidoVaultHubDeauthorizer,
+      ossifier,
+      depositorSetter,
+      lockedResetter,
       nodeOperatorManager,
       nodeOperatorFeeClaimer,
       nodeOperatorRewardAdjuster,
@@ -99,9 +112,6 @@ describe("Delegation.sol", () => {
       beaconOwner,
       rewarder,
       vaultDepositor,
-      unguaranteedBeaconChainDepositor,
-      unknownValidatorProver,
-      pdgCompensator,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForDelegation");
@@ -133,24 +143,28 @@ describe("Delegation.sol", () => {
         nodeOperatorManager,
         confirmExpiry: days(7n),
         nodeOperatorFeeBP: 0n,
-        assetRecoverer: vaultOwner,
         funders: [funder],
         withdrawers: [withdrawer],
-        lockers: [minter],
+        lockers: [locker],
         minters: [minter],
         burners: [burner],
         rebalancers: [rebalancer],
         depositPausers: [depositPauser],
         depositResumers: [depositResumer],
+        pdgCompensators: [pdgCompensator],
+        unknownValidatorProvers: [unknownValidatorProver],
+        unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],
         validatorExitRequesters: [validatorExitRequester],
         validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
         disconnecters: [disconnecter],
+        lidoVaultHubAuthorizers: [lidoVaultHubAuthorizer],
         lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizer],
+        ossifiers: [ossifier],
+        depositorSetters: [depositorSetter],
+        lockedResetters: [lockedResetter],
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
         nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
-        unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],
-        unknownValidatorProvers: [unknownValidatorProver],
-        pdgCompensators: [pdgCompensator],
+        assetRecoverer: vaultOwner,
       },
       "0x",
     );
