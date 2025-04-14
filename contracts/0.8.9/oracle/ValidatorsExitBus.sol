@@ -181,9 +181,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         if (requestStatus.contractVersion == 0) {
           revert ExitHashWasNotSubmitted();
         }
-
-        address locatorAddr = address(LOCATOR);
-        address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
+        address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
         if (msg.value < keyIndexes.length * withdrawalFee ) {
@@ -240,8 +238,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
     function triggerExitsDirectly(ValidatorExitData calldata validator) external payable whenResumed onlyRole(DIRECT_EXIT_HASH_ROLE) returns (uint256)  {
         uint256 prevBalance = address(this).balance - msg.value;
-        address locatorAddr = address(LOCATOR);
-        address withdrawalVaultAddr = ILidoLocator(locatorAddr).withdrawalVault();
+        address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
         if (msg.value < withdrawalFee ) {

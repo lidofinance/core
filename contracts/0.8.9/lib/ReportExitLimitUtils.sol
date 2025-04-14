@@ -51,9 +51,6 @@ library ReportExitLimitUtilsStorage {
 }
 
 library ReportExitLimitUtils {
-
-    error Debug(uint256 limit, uint256 block, uint256 prev);
-
     /**
     * @notice Calculate exit requests limit
     * @dev using `_constGasMin` to make gas consumption independent of the current block number
