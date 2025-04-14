@@ -52,7 +52,7 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
             totalItemsCount,
             deliveredItemsCount,
             contractVersion,
-            lastDeliveredKeyIndex
+            DeliveryHistory(lastDeliveredKeyIndex, block.timestamp)
         );
     }
 }
