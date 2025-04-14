@@ -9,7 +9,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {Delegation} from "./Delegation.sol";
+import {Delegation} from "./dashboard/Delegation.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 struct DelegationConfig {

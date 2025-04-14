@@ -7,7 +7,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
-import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
+import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
 
 contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     address public immutable DASHBOARD_IMPL;

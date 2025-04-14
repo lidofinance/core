@@ -8,7 +8,7 @@ import {Permissions} from "./Permissions.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {VaultHub} from "./VaultHub.sol";
+import {VaultHub} from "../VaultHub.sol";
 
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
@@ -16,8 +16,8 @@ import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
-import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
     function withdraw(uint256) external;

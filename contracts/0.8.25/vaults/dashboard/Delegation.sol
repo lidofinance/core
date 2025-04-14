@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {Dashboard} from "./Dashboard.sol";
 
 /**
