@@ -21,6 +21,7 @@ import {
   ether,
   generatePostDeposit,
   generateValidator,
+  getCurrentBlockTimestamp,
   impersonate,
   MAX_UINT256,
   proxify,
@@ -34,6 +35,7 @@ const MAX_INT128 = 2n ** 127n - 1n;
 
 const PUBLIC_KEY_LENGTH = 48;
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
+const INVALID_PUBKEY = "0x" + "ab".repeat(47);
 
 const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
@@ -66,6 +68,7 @@ describe("StakingVault.sol", () => {
   let vaultHub: VaultHub__MockForStakingVault;
   let withdrawalRequestContract: EIP7002WithdrawalRequest__Mock;
   let ethRejector: EthRejector;
+  let stakingVaultTimestamp: bigint;
 
   let vaultOwnerAddress: string;
   let stakingVaultAddress: string;
@@ -80,6 +83,7 @@ describe("StakingVault.sol", () => {
     ({ stakingVault, vaultHub, stakingVaultImplementation, depositContract } =
       await deployStakingVaultBehindBeaconProxy(vaultOwner, operator, depositor));
 
+    stakingVaultTimestamp = (await stakingVault.latestReport())[2];
     withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
     ethRejector = await ethers.deployContract("EthRejector");
 
@@ -158,7 +162,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
-      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n]);
+      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n, stakingVaultTimestamp]);
       expect(await stakingVault.nodeOperator()).to.equal(operator);
       expect((await stakingVault.withdrawalCredentials()).toLowerCase()).to.equal(
         ("0x02" + "00".repeat(11) + de0x(stakingVaultAddress)).toLowerCase(),
@@ -201,7 +205,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("works on deauthorized vault", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await stakingVault.resetLocked();
       expect(await stakingVault.locked()).to.equal(0n);
     });
@@ -218,8 +222,14 @@ describe("StakingVault.sol", () => {
 
       await stakingVault
         .connect(vaultHubSigner)
-        .report(await stakingVault.valuation(), await stakingVault.inOutDelta(), amount + 1n);
-      await stakingVault.connect(vaultHubSigner).report(amount - 1n, amount, amount); // locked > valuation
+        .report(
+          await getCurrentBlockTimestamp(),
+          await stakingVault.valuation(),
+          await stakingVault.inOutDelta(),
+          amount + 1n,
+        );
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, amount - 1n, amount, amount); // locked > valuation
 
       expect(await stakingVault.valuation()).to.equal(amount - 1n);
       expect(await stakingVault.locked()).to.equal(amount);
@@ -230,7 +240,6 @@ describe("StakingVault.sol", () => {
       const amount = ether("1");
 
       await stakingVault.fund({ value: amount });
-
       expect(await stakingVault.valuation()).to.equal(amount);
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(amount);
@@ -263,12 +272,13 @@ describe("StakingVault.sol", () => {
 
   context("latestReport", () => {
     it("returns zeros initially", async () => {
-      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n]);
+      expect(await stakingVault.latestReport()).to.deep.equal([0n, 0n, stakingVaultTimestamp]);
     });
 
     it("returns the latest report", async () => {
-      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("0"));
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("2"), ether("0"));
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), timestamp]);
     });
   });
 
@@ -291,41 +301,47 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts on ossified", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await stakingVault.ossifyStakingVault();
       await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultOssified");
     });
 
     it("reverts if depositor is not Lido Predeposit Guarantee", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await stakingVault.setDepositor(stranger);
 
       await expect(stakingVault.authorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "InvalidDepositor");
     });
 
     it("authorize works on deauthorized vault", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await expect(stakingVault.authorizeLidoVaultHub()).to.emit(stakingVault, "VaultHubAuthorizedSet").withArgs(true);
     });
   });
 
   context("deauthorizeLidoVaultHub", () => {
     it("reverts on unauthorized", async () => {
-      await expect(stakingVault.connect(stranger).deauthorizeLidoVaultHub())
-        .to.revertedWithCustomError(stakingVault, "NotAuthorized")
-        .withArgs("deauthorizeLidoVaultHub", stranger);
+      await expect(stakingVault.connect(stranger).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+        stakingVault,
+        "OwnableUnauthorizedAccount",
+      );
     });
 
     it("reverts on VaultHubNotAuthorized", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
-      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+      await stakingVault.deauthorizeLidoVaultHub();
+      await expect(stakingVault.deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         stakingVault,
         "VaultHubNotAuthorized",
       );
     });
 
+    it("reverts if vault connected to VaultHub", async () => {
+      await vaultHub.addVaultSocket(stakingVault);
+      await expect(stakingVault.deauthorizeLidoVaultHub()).to.revertedWithCustomError(stakingVault, "VaultConnected");
+    });
+
     it("deauthorize works", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub())
+      await expect(stakingVault.deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
 
@@ -347,13 +363,13 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts on already ossified", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await stakingVault.ossifyStakingVault();
       await expect(stakingVault.ossifyStakingVault()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
     });
 
     it("ossify works on deauthorized vault", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
       await expect(stakingVault.ossifyStakingVault()).to.emit(stakingVault, "PinnedImplementationUpdated");
     });
   });
@@ -383,7 +399,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("setDepositor works", async () => {
-      await stakingVault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await stakingVault.deauthorizeLidoVaultHub();
 
       await expect(stakingVault.connect(vaultOwner).setDepositor(stranger))
         .to.emit(stakingVault, "DepositorSet")
@@ -443,7 +459,8 @@ describe("StakingVault.sol", () => {
       const valuation = 0n;
       const inOutDelta = 0n;
       const locked = ether("1.0");
-      await stakingVault.connect(vaultHubSigner).report(valuation, inOutDelta, locked);
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, valuation, inOutDelta, locked);
       expect(await stakingVault.valuation()).to.be.lessThan(locked);
 
       await stakingVault.fund({ value: ether("1") });
@@ -526,7 +543,9 @@ describe("StakingVault.sol", () => {
 
     it("makes inOutDelta negative if withdrawals are greater than deposits (after rewards)", async () => {
       const valuation = ether("10");
-      await stakingVault.connect(vaultHubSigner).report(valuation, ether("0"), ether("0"));
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), valuation, ether("0"), ether("0"));
       expect(await stakingVault.valuation()).to.equal(valuation);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
 
@@ -625,6 +644,29 @@ describe("StakingVault.sol", () => {
         .withArgs("rebalance", stranger);
     });
 
+    it("not reverts if the caller is vaultHub, but vaultHub is authorized", async () => {
+      await stakingVault.fund({ value: ether("2") });
+
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(true);
+
+      await expect(stakingVault.rebalance(ether("1")))
+        .to.emit(stakingVault, "Withdrawn")
+        .withArgs(vaultOwnerAddress, vaultHubAddress, ether("1"))
+        .to.emit(vaultHub, "Mock__Rebalanced")
+        .withArgs(stakingVaultAddress, ether("1"));
+    });
+
+    it("reverts if the caller is vaultHub, but vaultHub is deauthorized", async () => {
+      await stakingVault.fund({ value: ether("2") });
+
+      await stakingVault.deauthorizeLidoVaultHub();
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
+
+      await expect(stakingVault.connect(vaultHubSigner).rebalance(ether("1")))
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("rebalance", vaultHubSigner);
+    });
+
     it("can be called by the owner", async () => {
       await stakingVault.fund({ value: ether("2") });
       const inOutDeltaBefore = await stakingVault.inOutDelta();
@@ -639,7 +681,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("can be called by the vault hub when the vault is unhealthy", async () => {
-      await stakingVault.connect(vaultHubSigner).report(ether("1"), ether("0.1"), ether("1.1"));
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("0.1"), ether("1.1"));
       expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: ether("0.1") });
@@ -655,17 +699,31 @@ describe("StakingVault.sol", () => {
 
   context("report", () => {
     it("reverts if the caller is not the vault hub", async () => {
-      await expect(stakingVault.connect(stranger).report(ether("1"), ether("2"), ether("3")))
+      await expect(stakingVault.connect(stranger).report(0n, ether("1"), ether("2"), ether("3")))
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("report", stranger);
     });
 
-    it("updates the state and emits the Reported event", async () => {
-      await expect(stakingVault.connect(vaultHubSigner).report(ether("1"), ether("2"), ether("3")))
-        .to.emit(stakingVault, "Reported")
-        .withArgs(ether("1"), ether("2"), ether("3"));
+    it("reverts if the caller is the vault hub, but vaultHub is deauthorized", async () => {
+      await stakingVault.deauthorizeLidoVaultHub();
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
 
-      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2")]);
+      await expect(
+        stakingVault
+          .connect(vaultHubSigner)
+          .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3")),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("report", vaultHubSigner);
+    });
+
+    it("updates the state and emits the Reported event", async () => {
+      const timestamp = await getCurrentBlockTimestamp();
+      await expect(stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("2"), ether("3")))
+        .to.emit(stakingVault, "Reported")
+        .withArgs(timestamp, ether("1"), ether("2"), ether("3"));
+
+      expect(await stakingVault.latestReport()).to.deep.equal([ether("1"), ether("2"), timestamp]);
       expect(await stakingVault.locked()).to.equal(ether("3"));
     });
   });
@@ -763,7 +821,8 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the vault valuation is below the locked amount", async () => {
-      await stakingVault.connect(vaultHubSigner).report(ether("0"), ether("0"), ether("1"));
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, ether("0"), ether("0"), ether("1"));
       await expect(
         stakingVault
           .connect(depositor)
@@ -860,9 +919,10 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the length of the pubkeys is not a multiple of 48", async () => {
-      await expect(
-        stakingVault.connect(vaultOwner).requestValidatorExit("0x" + "ab".repeat(47)),
-      ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
+      await expect(stakingVault.connect(vaultOwner).requestValidatorExit(INVALID_PUBKEY)).to.be.revertedWithCustomError(
+        stakingVault,
+        "InvalidPubkeysLength",
+      );
     });
 
     it("emits the `ValidatorExitRequested` event for a single validator key", async () => {
@@ -918,7 +978,21 @@ describe("StakingVault.sol", () => {
         .withArgs("_amounts");
     });
 
+    it("reverts if the invalid pubkey is provided", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawal(INVALID_PUBKEY, [ether("1")], vaultOwnerAddress, { value: 1n }),
+      ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
+    });
+
     it("reverts if called by a non-owner or the node operator", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(stranger)
@@ -929,6 +1003,9 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if called by the vault hub on a healthy vault", async () => {
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultHubSigner)
@@ -952,6 +1029,9 @@ describe("StakingVault.sol", () => {
       const amounts = Array(numberOfKeys).fill(ether("1"));
       const value = baseFee * BigInt(numberOfKeys) - 1n;
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -967,6 +1047,9 @@ describe("StakingVault.sol", () => {
       const pubkeys = getPubkeys(numberOfKeys);
       const value = baseFee * BigInt(numberOfKeys) + overpaid;
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -978,7 +1061,9 @@ describe("StakingVault.sol", () => {
 
     it("reverts if partial withdrawals is called on an unhealthy vault", async () => {
       await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("0.9"), ether("1"), ether("1.1")); // slashing
 
       await expect(
         stakingVault
@@ -1025,6 +1110,9 @@ describe("StakingVault.sol", () => {
 
     it("requests a partial validator withdrawal", async () => {
       const amount = ether("0.1");
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1041,6 +1129,9 @@ describe("StakingVault.sol", () => {
       const overpaid = 100n;
       const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       const tx = await stakingVault
         .connect(vaultOwner)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
@@ -1067,6 +1158,9 @@ describe("StakingVault.sol", () => {
         .fill(0)
         .map((_, i) => BigInt(i * 100)); // trigger full and partial withdrawals
 
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1105,7 +1199,9 @@ describe("StakingVault.sol", () => {
 
     it("requests a validator withdrawal if called by the vault hub on an unhealthy vault", async () => {
       await stakingVault.fund({ value: ether("1") });
-      await stakingVault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+      await stakingVault
+        .connect(vaultHubSigner)
+        .report(await getCurrentBlockTimestamp(), ether("0.9"), ether("1"), ether("1.1")); // slashing
 
       await expect(
         stakingVault
@@ -1114,6 +1210,23 @@ describe("StakingVault.sol", () => {
       )
         .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, 0n), baseFee);
+    });
+
+    it("requests a validator withdrawal if called by the vault hub, when vaultHub is deauthorized", async () => {
+      await stakingVault.fund({ value: ether("1") });
+      const timestamp = await getCurrentBlockTimestamp();
+      await stakingVault.connect(vaultHubSigner).report(timestamp, ether("1"), ether("1"), ether("1.1")); // slashing
+
+      await stakingVault.deauthorizeLidoVaultHub();
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(false);
+
+      await expect(
+        stakingVault
+          .connect(vaultHubSigner)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0n], vaultOwnerAddress, { value: 1n }),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("triggerValidatorWithdrawal", vaultHubSigner);
     });
   });
 });

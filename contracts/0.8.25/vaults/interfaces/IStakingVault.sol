@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+
 /**
  * @notice validator deposit from the `StakingVault` to the beacon chain
  * @dev withdrawal credentials are provided by the vault
@@ -33,7 +35,10 @@ interface IStakingVault {
     struct Report {
         uint128 valuation;
         int128 inOutDelta;
+        uint64 timestamp;
     }
+
+    function DEPOSIT_CONTRACT() external view returns (IDepositContract);
 
     function initialize(address _owner, address _operator, address _depositor, bytes calldata _params) external;
     function version() external pure returns (uint64);
@@ -51,7 +56,7 @@ interface IStakingVault {
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
     function latestReport() external view returns (Report memory);
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
     function withdrawalCredentials() external view returns (bytes32);
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
@@ -71,4 +76,5 @@ interface IStakingVault {
     function ossified() external view returns (bool);
     function setDepositor(address _depositor) external;
     function resetLocked() external;
+    function isReportFresh() external view returns (bool);
 }

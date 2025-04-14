@@ -203,6 +203,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -237,6 +238,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -259,6 +261,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -279,6 +282,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -299,6 +303,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -327,6 +332,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -353,6 +359,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -376,6 +383,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -397,6 +405,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -421,6 +430,7 @@ describe("Dashboard.sol", () => {
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
+        feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
@@ -1624,10 +1634,10 @@ describe("Dashboard.sol", () => {
 
     beforeEach(async () => {
       pdgWithdrawalSigner = await impersonate(certainAddress("pdg-withdrawal-signer"), ether("1"));
-      await dashboard.grantRole(await dashboard.PDG_WITHDRAWAL_ROLE(), pdgWithdrawalSigner);
+      await dashboard.grantRole(await dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(), pdgWithdrawalSigner);
     });
 
-    it("reverts if called not by a PDG_WITHDRAWAL_ROLE", async () => {
+    it("reverts if called not by a PDG_COMPENSATE_PREDEPOSIT_ROLE", async () => {
       await expect(
         dashboard.connect(stranger).compensateDisprovenPredepositFromPDG(new Uint8Array(), vaultOwner),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");

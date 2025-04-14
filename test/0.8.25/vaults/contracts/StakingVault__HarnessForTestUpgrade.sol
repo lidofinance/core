@@ -7,6 +7,8 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
@@ -25,7 +27,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     VaultHub private immutable VAULT_HUB;
 
-    address public immutable DEPOSIT_CONTRACT;
+    IDepositContract public immutable DEPOSIT_CONTRACT;
 
     uint256 public constant PUBLIC_KEY_LENGTH = 48;
 
@@ -38,7 +40,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
         VAULT_HUB = VaultHub(_vaultHub);
-        DEPOSIT_CONTRACT = _beaconChainDepositContract;
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -88,7 +90,12 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function latestReport() external view returns (IStakingVault.Report memory) {
         ERC7201Storage storage $ = _getStorage();
-        return IStakingVault.Report({valuation: $.report.valuation, inOutDelta: $.report.inOutDelta});
+        return
+            IStakingVault.Report({
+                timestamp: $.report.timestamp,
+                valuation: $.report.valuation,
+                inOutDelta: $.report.inOutDelta
+            });
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -111,7 +118,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function rebalance(uint256 _ether) external {}
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
 
     function lock(uint256 _locked) external {}
 
@@ -165,10 +172,18 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     }
 
     function authorizeLidoVaultHub() external {}
+
     function deauthorizeLidoVaultHub() external {}
+
     function ossifyStakingVault() external {}
+
     function setDepositor(address _depositor) external {}
+
     function vaultHubAuthorized() external view returns (bool) {
+        return true;
+    }
+
+    function isReportFresh() external view returns (bool) {
         return true;
     }
 

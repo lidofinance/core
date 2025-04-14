@@ -102,8 +102,10 @@ describe("Accounting.sol:report", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultValues: [],
-      inOutDeltas: [],
+      vaultsTotalTreasuryFeesShares: 0n,
+      vaultsTotalDeficit: 0n,
+      vaultsDataTreeRoot: ethers.ZeroHash,
+      vaultsDataTreeCid: "",
       ...overrides,
     };
   }
@@ -132,9 +134,6 @@ describe("Accounting.sol:report", () => {
       expect(simulated.postInternalEther).to.equal(preTotalPooledEther);
       expect(simulated.postTotalShares).to.equal(preTotalShares);
       expect(simulated.postTotalPooledEther).to.equal(preTotalPooledEther);
-      expect(simulated.vaultsLockedEther).to.deep.equal([]);
-      expect(simulated.vaultsTreasuryFeeShares).to.deep.equal([]);
-      expect(simulated.totalVaultsTreasuryFeeShares).to.equal(0n);
     });
   });
 

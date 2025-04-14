@@ -41,11 +41,14 @@ type PermissionsConfigStruct = {
   rebalancer: HardhatEthersSigner;
   depositPauser: HardhatEthersSigner;
   depositResumer: HardhatEthersSigner;
-  exitRequester: HardhatEthersSigner;
-  withdrawalTriggerer: HardhatEthersSigner;
+  pdgCompensator: HardhatEthersSigner;
+  unknownValidatorProver: HardhatEthersSigner;
+  unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  validatorExitRequester: HardhatEthersSigner;
+  validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
-  pdgWithdrawer: HardhatEthersSigner;
   lidoVaultHubAuthorizer: HardhatEthersSigner;
+  lidoVaultHubDeauthorizer: HardhatEthersSigner;
   ossifier: HardhatEthersSigner;
   depositorSetter: HardhatEthersSigner;
   lockedResetter: HardhatEthersSigner;
@@ -63,11 +66,14 @@ describe("Permissions", () => {
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
-  let exitRequester: HardhatEthersSigner;
-  let withdrawalTriggerer: HardhatEthersSigner;
+  let pdgCompensator: HardhatEthersSigner;
+  let unknownValidatorProver: HardhatEthersSigner;
+  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
-  let pdgWithdrawer: HardhatEthersSigner;
   let lidoVaultHubAuthorizer: HardhatEthersSigner;
+  let lidoVaultHubDeauthorizer: HardhatEthersSigner;
   let ossifier: HardhatEthersSigner;
   let depositorSetter: HardhatEthersSigner;
   let lockedResetter: HardhatEthersSigner;
@@ -99,16 +105,19 @@ describe("Permissions", () => {
       rebalancer,
       depositPauser,
       depositResumer,
-      exitRequester,
+      pdgCompensator,
+      unknownValidatorProver,
+      unguaranteedBeaconChainDepositor,
+      validatorExitRequester,
       disconnecter,
-      withdrawalTriggerer,
-      pdgWithdrawer,
+      validatorWithdrawalTriggerer,
       lidoVaultHubAuthorizer,
+      lidoVaultHubDeauthorizer,
       ossifier,
       depositorSetter,
       lockedResetter,
       stranger,
-    ] = await getRandomSigners(20);
+    ] = await getRandomSigners(30);
 
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
@@ -149,11 +158,14 @@ describe("Permissions", () => {
         rebalancer,
         depositPauser,
         depositResumer,
-        exitRequester,
-        withdrawalTriggerer,
+        pdgCompensator,
+        unknownValidatorProver,
+        unguaranteedBeaconChainDepositor,
+        validatorExitRequester,
+        validatorWithdrawalTriggerer,
         disconnecter,
-        pdgWithdrawer,
         lidoVaultHubAuthorizer,
+        lidoVaultHubDeauthorizer,
         ossifier,
         depositorSetter,
         lockedResetter,
@@ -205,8 +217,20 @@ describe("Permissions", () => {
       await checkSoleMember(rebalancer, await permissions.REBALANCE_ROLE());
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await checkSoleMember(exitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
+      await checkSoleMember(pdgCompensator, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
+      await checkSoleMember(unknownValidatorProver, await permissions.PDG_PROVE_VALIDATOR_ROLE());
+      await checkSoleMember(
+        unguaranteedBeaconChainDepositor,
+        await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+      );
+      await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
+      await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
+      await checkSoleMember(lidoVaultHubAuthorizer, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
+      await checkSoleMember(lidoVaultHubDeauthorizer, await permissions.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE());
+      await checkSoleMember(ossifier, await permissions.OSSIFY_ROLE());
+      await checkSoleMember(depositorSetter, await permissions.SET_DEPOSITOR_ROLE());
+      await checkSoleMember(lockedResetter, await permissions.RESET_LOCKED_ROLE());
     });
   });
 
@@ -226,11 +250,14 @@ describe("Permissions", () => {
             rebalancer,
             depositPauser,
             depositResumer,
-            exitRequester,
-            withdrawalTriggerer,
+            pdgCompensator,
+            unknownValidatorProver,
+            unguaranteedBeaconChainDepositor,
+            validatorExitRequester,
+            validatorWithdrawalTriggerer,
             disconnecter,
-            pdgWithdrawer,
             lidoVaultHubAuthorizer,
+            lidoVaultHubDeauthorizer,
             ossifier,
             depositorSetter,
             lockedResetter,
@@ -263,11 +290,14 @@ describe("Permissions", () => {
             rebalancer,
             depositPauser,
             depositResumer,
-            exitRequester,
-            withdrawalTriggerer,
+            pdgCompensator,
+            unknownValidatorProver,
+            unguaranteedBeaconChainDepositor,
+            validatorExitRequester,
+            validatorWithdrawalTriggerer,
             disconnecter,
-            pdgWithdrawer,
             lidoVaultHubAuthorizer,
+            lidoVaultHubDeauthorizer,
             ossifier,
             depositorSetter,
             lockedResetter,
@@ -428,7 +458,7 @@ describe("Permissions", () => {
         { role: rebalanceRole, account: rebalancer },
         { role: pauseDepositRole, account: depositPauser },
         { role: resumeDepositRole, account: depositResumer },
-        { role: exitRequesterRole, account: exitRequester },
+        { role: exitRequesterRole, account: validatorExitRequester },
         { role: disconnectRole, account: disconnecter },
       ];
 
@@ -448,7 +478,7 @@ describe("Permissions", () => {
         .and.to.emit(permissions, "RoleRevoked")
         .withArgs(resumeDepositRole, depositResumer, defaultAdmin)
         .and.to.emit(permissions, "RoleRevoked")
-        .withArgs(exitRequesterRole, exitRequester, defaultAdmin)
+        .withArgs(exitRequesterRole, validatorExitRequester, defaultAdmin)
         .and.to.emit(permissions, "RoleRevoked")
         .withArgs(disconnectRole, disconnecter, defaultAdmin);
 
@@ -652,7 +682,7 @@ describe("Permissions", () => {
   context("requestValidatorExit()", () => {
     it("requests a validator exit", async () => {
       const pubkeys = "0x" + "beef".repeat(24);
-      await expect(permissions.connect(exitRequester).requestValidatorExit(pubkeys))
+      await expect(permissions.connect(validatorExitRequester).requestValidatorExit(pubkeys))
         .to.emit(stakingVault, "ValidatorExitRequested")
         .withArgs(permissions, pubkeys, pubkeys);
     });
@@ -672,9 +702,11 @@ describe("Permissions", () => {
 
     it("emits mock event on the mock vault hub", async () => {
       await expect(
-        permissions.connect(withdrawalTriggerer).triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger, {
-          value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-        }),
+        permissions
+          .connect(validatorWithdrawalTriggerer)
+          .triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger, {
+            value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+          }),
       )
         .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
         .withArgs(permissions, pubkeys, [withdrawalAmount], stranger, 0n);
@@ -709,17 +741,17 @@ describe("Permissions", () => {
     const pubkeys = "0x" + "beef".repeat(24);
 
     it("compensates the disproven predeposit from PDG", async () => {
-      await expect(permissions.connect(pdgWithdrawer).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
+      await expect(permissions.connect(pdgCompensator).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
         .to.emit(pdg, "Mock__CompensateDisprovenPredeposit")
         .withArgs(pubkeys, stranger);
     });
 
     it("reverts if the caller is not a member of the compensate disproven predeposit role", async () => {
-      expect(await permissions.hasRole(await permissions.PDG_WITHDRAWAL_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), stranger)).to.be.false;
 
       await expect(permissions.connect(stranger).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.PDG_WITHDRAWAL_ROLE());
+        .withArgs(stranger, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
     });
   });
 

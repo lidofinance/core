@@ -22,10 +22,16 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether, impersonate } from "lib";
+import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+
+const SHARE_LIMIT = ether("1");
+const RESERVE_RATIO_BP = 10_00n;
+const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const TREASURY_FEE_BP = 5_00n;
 
 describe("VaultHub.sol:deauthorize", () => {
   let deployer: HardhatEthersSigner;
@@ -132,21 +138,85 @@ describe("VaultHub.sol:deauthorize", () => {
       rebalancers: [await vaultOwner1.getAddress()],
       depositPausers: [await vaultOwner1.getAddress()],
       depositResumers: [await vaultOwner1.getAddress()],
+      pdgCompensators: [await vaultOwner1.getAddress()],
+      unknownValidatorProvers: [await vaultOwner1.getAddress()],
+      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
-      pdgWithdrawers: [await vaultOwner1.getAddress()],
       lidoVaultHubAuthorizers: [await vaultOwner1.getAddress()],
+      lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
       ossifiers: [await vaultOwner1.getAddress()],
       depositorSetters: [await vaultOwner1.getAddress()],
       lockedResetters: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
+      nodeOperatorRewardAdjusters: [await operator.getAddress()],
     };
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
+
+  context("deauthorization flow", () => {
+    it("authorize=on, authorize=off", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      expect(await vault.vaultHubAuthorized()).to.equal(true);
+      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
+      expect(await vault.vaultHubAuthorized()).to.equal(false);
+    });
+
+    it("authorize=on, connect vault, authorize=exception", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      expect(await vault.vaultHubAuthorized()).to.equal(true);
+
+      await vaultHub
+        .connect(admin)
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+      await expect(vault.connect(delegationSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+        vault,
+        "VaultConnected",
+      );
+    });
+
+    it("authorize=on, connect vault, pendingDisonnect, authorize=exception", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+
+      expect(await vault.vaultHubAuthorized()).to.equal(true);
+
+      await vaultHub
+        .connect(admin)
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await expect(vault.connect(delegationSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+        vault,
+        "VaultConnected",
+      );
+    });
+
+    it("authorize=on, connect vault, pendingDisonnect, report, authorize=off", async () => {
+      const { vault, delegation: _delegation } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
+      const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+
+      expect(await vault.vaultHubAuthorized()).to.equal(true);
+
+      await vaultHub
+        .connect(admin)
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
+      await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+      await vaultHub.updateVaultData(await vault.getAddress(), 1n, 1n, 1n, 0n, tree.getProof(0));
+      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
+      expect(await vault.vaultHubAuthorized()).to.equal(false);
+    });
+  });
 
   context("ossification", () => {
     it("ossify works on deauthorized vault", async () => {
@@ -157,10 +227,9 @@ describe("VaultHub.sol:deauthorize", () => {
       } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
       const { proxy: proxy2 } = await createVaultProxy(vaultOwner2, vaultFactory, delegationParams);
 
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
       const delegationSigner = await impersonate(await _delegation.getAddress(), ether("100"));
 
-      await vault.connect(vaultHubSigner).deauthorizeLidoVaultHub();
+      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
       await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();
