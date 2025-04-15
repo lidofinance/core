@@ -94,7 +94,6 @@ async function getLocatorConfig(locatorAddress: string) {
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",

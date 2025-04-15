@@ -18,8 +18,8 @@ import {
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 
-export const V1_ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
-export const V1_ORACLE_LAST_REPORT_SLOT = V1_ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
+export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
+export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
 
 async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
@@ -31,7 +31,7 @@ async function deployMockAccountingAndStakingRouter() {
 export async function deployAccountingOracleSetup(
   admin: string,
   {
-    initialEpoch = 0n,
+    initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME,
     epochsPerFrame = EPOCHS_PER_FRAME,
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
@@ -158,9 +158,17 @@ async function configureAccountingOracleSetup({
   // this is done as a part of the protocol upgrade voting execution
 
   const frameConfig = await consensus.getFrameConfig();
-  const initialEpoch = frameConfig.epochsPerFrame;
+  const initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + frameConfig.epochsPerFrame;
   const updateInitialEpochIx = await consensus.updateInitialEpoch(initialEpoch);
-  const initTx = await initAccountingOracle({ admin, oracle, consensus, dataSubmitter, consensusVersion });
+
+  const initTx = await initAccountingOracle({
+    admin,
+    oracle,
+    consensus,
+    dataSubmitter,
+    consensusVersion,
+    lastProcessingRefSlot: ORACLE_LAST_REPORT_SLOT,
+  });
 
   return { updateInitialEpochIx, initTx };
 }
@@ -173,7 +181,7 @@ export async function deployAndConfigureAccountingOracle(admin: string) {
 
   // pretend we're after the legacy oracle's last proc epoch but before the new oracle's initial epoch
   expect(EPOCHS_PER_FRAME).to.be.greaterThan(1);
-  const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
+  const voteExecTime = GENESIS_TIME + (ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
   await deployed.consensus.setTime(voteExecTime);
 
   /// this is done as a part of the protocol upgrade voting execution:
@@ -184,7 +192,7 @@ export async function deployAndConfigureAccountingOracle(admin: string) {
   const finalizeResult = await configureAccountingOracleSetup({ admin, ...deployed });
 
   // pretend we're at the first slot of the new oracle's initial epoch
-  const initialEpoch = V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME;
+  const initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME;
   await deployed.consensus.setTime(GENESIS_TIME + initialEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT);
 
   return { ...deployed, ...finalizeResult };

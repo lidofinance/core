@@ -19,9 +19,8 @@ import {
   deployAccountingOracleSetup,
   deployAndConfigureAccountingOracle,
   initAccountingOracle,
-  V1_ORACLE_LAST_COMPLETED_EPOCH,
+  ORACLE_LAST_COMPLETED_EPOCH,
 } from "test/deploy";
-import { Snapshot } from "test/suite";
 
 describe("AccountingOracle.sol:deploy", () => {
   context("Deployment and initial configuration", () => {
@@ -35,38 +34,10 @@ describe("AccountingOracle.sol:deploy", () => {
 
     const updateInitialEpoch = async (consensus: HashConsensus__Harness) => {
       // pretend we're after the legacy oracle's last proc epoch but before the new oracle's initial epoch
-      const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
+      const voteExecTime = GENESIS_TIME + (ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
       await consensus.setTime(voteExecTime);
-      await consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME);
+      await consensus.updateInitialEpoch(ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME);
     };
-
-    it(`init fails if the initial epoch of the new oracle is not the next frame's first epoch`, async () => {
-      const deployed = await deployAccountingOracleSetup(admin.address);
-
-      const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
-      await deployed.consensus.setTime(voteExecTime);
-
-      let originalState = await Snapshot.take();
-      await deployed.consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME - 1n);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(2);
-      await Snapshot.restore(originalState);
-
-      originalState = await Snapshot.take();
-      await deployed.consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME + 1n);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(2);
-      await Snapshot.restore(originalState);
-
-      originalState = await Snapshot.take();
-      await deployed.consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + 2n * EPOCHS_PER_FRAME);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(2);
-      await Snapshot.restore(originalState);
-    });
 
     it("reverts when slotsPerSecond is zero", async () => {
       await expect(deployAccountingOracleSetup(admin.address, { secondsPerSlot: 0n })).to.be.revertedWithCustomError(
@@ -78,9 +49,9 @@ describe("AccountingOracle.sol:deploy", () => {
     it("deployment and init finishes successfully otherwise", async () => {
       const deployed = await deployAccountingOracleSetup(admin.address);
 
-      const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
+      const voteExecTime = GENESIS_TIME + (ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
       await deployed.consensus.setTime(voteExecTime);
-      await deployed.consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME);
+      await deployed.consensus.updateInitialEpoch(ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME);
 
       await initAccountingOracle({ admin: admin.address, ...deployed });
 

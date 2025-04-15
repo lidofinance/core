@@ -34,11 +34,11 @@ import {
 
 import {
   deployAndConfigureAccountingOracle,
+  ORACLE_LAST_REPORT_SLOT,
   SECONDS_PER_EPOCH,
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
   timestampAtSlot,
-  V1_ORACLE_LAST_REPORT_SLOT,
 } from "test/deploy";
 
 describe("AccountingOracle.sol:happyPath", () => {
@@ -112,7 +112,7 @@ describe("AccountingOracle.sol:happyPath", () => {
 
   it("reference slot of the empty initial consensus report is set to the last processed slot", async () => {
     const report = await oracle.getConsensusReport();
-    expect(report.refSlot).to.equal(V1_ORACLE_LAST_REPORT_SLOT);
+    expect(report.refSlot).to.equal(ORACLE_LAST_REPORT_SLOT);
   });
 
   it("committee reaches consensus on a report hash", async () => {
@@ -238,7 +238,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     const lastOracleReportCall = await mockAccounting.lastCall__handleOracleReport();
     expect(lastOracleReportCall.callCount).to.equal(1);
     expect(lastOracleReportCall.arg.timeElapsed).to.equal(
-      (reportFields.refSlot - V1_ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
+      (reportFields.refSlot - ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
     );
     expect(lastOracleReportCall.arg.clValidators).to.equal(reportFields.numValidators);
     expect(lastOracleReportCall.arg.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
