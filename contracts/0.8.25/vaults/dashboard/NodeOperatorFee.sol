@@ -6,51 +6,64 @@ pragma solidity 0.8.25;
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
-import {Dashboard} from "./Dashboard.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {Permissions} from "./Permissions.sol";
+import {VaultHub} from "../VaultHub.sol";
 
 /**
- * @title Delegation
- * @notice This contract is a contract-owner of StakingVault and includes an additional delegation layer.
+ * @title NodeOperatorFee
+ * @notice This contract manages the node operator fee and claiming mechanism.
+ * It reserves a portion of the staking rewards for the node operator, and allows
+ * the node operator to claim their fee.
+ *
+ * Key features:
+ * - Tracks node operator fees based on staking rewards
+ * - Provides fee claiming mechanism via role-based access control
+ * - Restricts withdrawals based on the fee reserved for node operators
+ * - Requires both the node operator and default admin to confirm the fee changes
+ *
+ * Node operator fees are calculated as a percentage of the staking rewards accrued
+ * between the last claimed report and the latest report in the StakingVault.
+ * If the fee was never claimed, the percentage is calculated based on the total
+ * rewards accrued since the StakingVault was created.
  */
-contract Delegation is Dashboard {
+abstract contract NodeOperatorFee is Permissions {
     /**
-     * @notice Maximum combined feeBP value; equals to 100%.
+     * @notice Total basis points; 1bp = 0.01%, 100_00bp = 100.00%.
      */
-    uint256 private constant MAX_FEE_BP = TOTAL_BASIS_POINTS;
+    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
-     * @notice bitwise AND mask that clamps the value to positive int128 range
+     * @notice Bitwise AND mask that clamps the value to positive int128 range
      */
     uint256 private constant ADJUSTMENT_CLAMP_MASK = uint256(uint128(type(int128).max));
 
     /**
-     * @notice maximum value that can be set via manual adjustment
+     * @notice Maximum value that can be set via manual adjustment
      */
     uint256 public constant MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
 
     /**
      * @notice Node operator manager role:
      * - confirms confirm expiry;
-     * - confirms ownership transfer;
-     * - assigns NODE_OPERATOR_FEE_CONFIRM_ROLE;
-     * - assigns NODE_OPERATOR_FEE_CLAIM_ROLE.
+     * - confirms node operator fee changes;
+     * - confirms the transfer of the StakingVault ownership;
+     * - is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
      */
-    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.Delegation.NodeOperatorManagerRole");
+    bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
      * @notice Claims node operator fee.
      */
-    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.Delegation.NodeOperatorFeeClaimRole");
+    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.NodeOperatorFee.FeeClaimRole");
 
     /**
-     * @notice adjusts rewards to allow fee correction during side deposits or consolidations
+     * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
      */
-    bytes32 public constant NODE_OPERATOR_REWARDS_ADJUST_ROLE =
-        keccak256("vaults.Delegation.NodeOperatorRewardsAdjustRole");
+    bytes32 public constant NODE_OPERATOR_REWARDS_ADJUST_ROLE = keccak256("vaults.NodeOperatorFee.RewardsAdjustRole");
 
     /**
-     * @notice Node operator fee in basis points cannot exceed 100%, or 10,000 basis points.
+     * @notice Node operator fee in basis points; cannot exceed 100.00%.
      * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
      */
     uint256 public nodeOperatorFeeBP;
@@ -61,7 +74,7 @@ contract Delegation is Dashboard {
     IStakingVault.Report public nodeOperatorFeeClaimedReport;
 
     /**
-     * @notice adjustment to allow fee correction during side deposits or consolidations.
+     * @notice Adjustment to allow fee correction during side deposits or consolidations.
      *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
      *          - can be set via `setAccruedRewardsAdjustment` to by `_confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
@@ -71,32 +84,37 @@ contract Delegation is Dashboard {
      */
     uint256 public accruedRewardsAdjustment;
 
-    /**
-     * @notice Constructs the contract.
-     * @dev Stores token addresses in the bytecode to reduce gas costs.
-     * @param _weth Address of the weth token contract.
-     * @param _lidoLocator Address of the Lido locator contract.
-     */
-    constructor(address _weth, address _lidoLocator) Dashboard(_weth, _lidoLocator) {}
+    function initialize(
+        address _defaultAdmin,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry
+    ) public virtual {
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
+        if (_nodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-    /**
-     * @notice Initializes the contract:
-     * - sets up the roles;
-     * - sets the confirm expiry to 7 days (can be changed later by DEFAULT_ADMIN_ROLE and NODE_OPERATOR_MANAGER_ROLE).
-     * @dev The msg.sender here is VaultFactory. The VaultFactory is temporarily granted
-     * DEFAULT_ADMIN_ROLE AND NODE_OPERATOR_MANAGER_ROLE to be able to set initial fees and roles in VaultFactory.
-     * All the roles are revoked from VaultFactory by the end of the initialization.
-     */
-    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external override {
-        _initialize(_defaultAdmin, _confirmExpiry);
+        nodeOperatorFeeBP = _nodeOperatorFeeBP;
 
-        // the next line implies that the msg.sender is an operator
-        // however, the msg.sender is the VaultFactory, and the role will be revoked
-        // at the end of the initialization
-        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _defaultAdmin);
+        _setConfirmExpiry(_confirmExpiry);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+    }
+
+    /**
+     * @notice Returns the roles that can:
+     * - change the confirm expiry;
+     * - set the node operator fee;
+     * - transfer the ownership of the StakingVault.
+     * @return roles is an array of roles that form the confirming roles.
+     */
+    function confirmingRoles() public pure override returns (bytes32[] memory roles) {
+        roles = new bytes32[](2);
+        roles[0] = DEFAULT_ADMIN_ROLE;
+        roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
     /**
@@ -110,13 +128,23 @@ contract Delegation is Dashboard {
      * @return uint256: the amount of unclaimed fee in ether.
      */
     function nodeOperatorUnclaimedFee() public view returns (uint256) {
-        return _calculateFee(nodeOperatorFeeBP, nodeOperatorFeeClaimedReport);
+        IStakingVault.Report memory latestReport = stakingVault().latestReport();
+        IStakingVault.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
+
+        // cast down safely clamping to int128.max
+        int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
+
+        int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
+            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
+            adjustment;
+
+        return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
     }
 
     /**
      * @notice Returns the unreserved amount of ether,
      * i.e. the amount of ether that is not locked in the StakingVault
-     * and not reserved for node operator fees.
+     * and not reserved for node operator fee.
      * This amount does not account for the current balance of the StakingVault and
      * can return a value greater than the actual balance of the StakingVault.
      * @return uint256: the amount of unreserved ether.
@@ -129,22 +157,12 @@ contract Delegation is Dashboard {
     }
 
     /**
-     * @notice Returns the amount of ether that can be withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fees.
-     * @dev This method overrides the Dashboard's withdrawableEther() method
-     * @return The amount of ether that can be withdrawn.
-     */
-    function withdrawableEther() external view override returns (uint256) {
-        return Math256.min(address(stakingVault()).balance, unreserved());
-    }
-
-    /**
      * @notice Sets the confirm expiry.
      * Confirm expiry is a period during which the confirm is counted. Once the period is over,
      * the confirm is considered expired, no longer counts and must be recasted.
      * @param _newConfirmExpiry The new confirm expiry in seconds.
      */
-    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(_confirmingRoles()) {
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(confirmingRoles()) {
         _setConfirmExpiry(_newConfirmExpiry);
     }
 
@@ -156,10 +174,17 @@ contract Delegation is Dashboard {
      * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(_confirmingRoles()) {
-        if (_newNodeOperatorFeeBP > MAX_FEE_BP) revert FeeValueExceed100Percent();
+    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
+        if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
+
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
+
+        // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
+        if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
+            nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+        }
+
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
         emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
@@ -172,9 +197,15 @@ contract Delegation is Dashboard {
      * @param _recipient The address to which the node operator fee will be sent.
      */
     function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIM_ROLE) {
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+
         uint256 fee = nodeOperatorUnclaimedFee();
+        if (fee == 0) revert NoUnclaimedFee();
+
+        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
         nodeOperatorFeeClaimedReport = stakingVault().latestReport();
-        _claimFee(_recipient, fee);
+
+        stakingVault().withdraw(_recipient, fee);
     }
 
     /**
@@ -202,32 +233,12 @@ contract Delegation is Dashboard {
     function setAccruedRewardsAdjustment(
         uint256 _newAdjustment,
         uint256 _currentAdjustment
-    ) external onlyConfirmed(_confirmingRoles()) {
+    ) external onlyConfirmed(confirmingRoles()) {
         if (accruedRewardsAdjustment != _currentAdjustment)
             revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
         if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
         _setAccruedRewardsAdjustment(_newAdjustment);
     }
-
-    /**
-     *  @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
-     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
-     *          clearing them for future top-up deposits via `PDG.depositToBeaconChain`.
-     *          Additionally, increases accrued rewards adjustment by total amount of deposits to correct fee calculation
-     * @param _deposits array of StakingVaultDeposit structs containing deposit data
-     * @return totalAmount total amount of ether deposited to beacon chain
-     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
-     * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
-     */
-    function unguaranteedDepositToBeaconChain(
-        StakingVaultDeposit[] calldata _deposits
-    ) public override returns (uint256 totalAmount) {
-        totalAmount = super.unguaranteedDepositToBeaconChain(_deposits);
-
-        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
-    }
-
-    // ==================== Internal Functions ====================
 
     /**
      * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
@@ -237,43 +248,6 @@ contract Delegation is Dashboard {
         uint256 withdrawable = unreserved();
         if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
         _;
-    }
-
-    /**
-     * @dev Calculates the node operator fee amount based on the fee and the last claimed report.
-     * @param _feeBP The fee in basis points.
-     * @param _lastClaimedReport The last claimed report.
-     * @return The accrued fee amount.
-     */
-    function _calculateFee(
-        uint256 _feeBP,
-        IStakingVault.Report memory _lastClaimedReport
-    ) internal view returns (uint256) {
-        IStakingVault.Report memory latestReport = stakingVault().latestReport();
-
-        // cast down safely clamping to int128.max
-        int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
-
-        int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
-            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
-            adjustment;
-
-        return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * _feeBP) / TOTAL_BASIS_POINTS : 0;
-    }
-
-    /**
-     * @dev Claims the node operator fee amount.
-     * @param _recipient The address to which the fee will be sent.
-     * @param _fee The accrued fee amount.
-     * @dev Use `Permissions._unsafeWithdraw()` to avoid the `WITHDRAW_ROLE` check.
-     */
-    function _claimFee(address _recipient, uint256 _fee) internal onlyIfUnreserved(_fee) {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_fee == 0) revert ZeroArgument("_fee");
-
-        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-
-        stakingVault().withdraw(_recipient, _fee);
     }
 
     /**
@@ -288,33 +262,6 @@ contract Delegation is Dashboard {
         accruedRewardsAdjustment = _newAdjustment;
 
         emit AccruedRewardsAdjustmentSet(_newAdjustment, oldAdjustment);
-    }
-
-    /**
-     * @notice Returns the roles that can:
-     * - change the confirm expiry;
-     * - set the node operator fee;
-     * - set rewards adjustment
-     * - transfer the ownership of the StakingVault.
-     * @return roles is an array of roles that form the confirming roles.
-     */
-    function _confirmingRoles() internal pure override returns (bytes32[] memory roles) {
-        roles = new bytes32[](2);
-        roles[0] = DEFAULT_ADMIN_ROLE;
-        roles[1] = NODE_OPERATOR_MANAGER_ROLE;
-    }
-
-    /**
-     * @dev Overrides the Permissions' internal withdraw function to add a check for the unreserved amount.
-     * Cannot withdraw more than the unreserved amount: which is the amount of ether
-     * that is not locked in the StakingVault and not reserved for node operator fees.
-     * Does not include a check for the balance of the StakingVault, this check is present
-     * on the StakingVault itself.
-     * @param _recipient The address to which the ether will be sent.
-     * @param _ether The amount of ether to withdraw.
-     */
-    function _withdraw(address _recipient, uint256 _ether) internal override onlyIfUnreserved(_ether) {
-        super._withdraw(_recipient, _ether);
     }
 
     // ==================== Events ====================
@@ -339,6 +286,11 @@ contract Delegation is Dashboard {
      * @dev Error emitted when the node operator fee is unclaimed.
      */
     error NodeOperatorFeeUnclaimed();
+
+    /**
+     * @dev Error emitted when the fee is 0.
+     */
+    error NoUnclaimedFee();
 
     /**
      * @dev Error emitted when the combined feeBPs exceed 100%.

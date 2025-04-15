@@ -136,10 +136,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bool public initialized;
 
-    /**
-     * @notice Address of the VaultHub contract
-     */
-    VaultHub public vaultHub;
 
     constructor() {
         _SELF = address(this);
@@ -151,7 +147,6 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         initialized = true;
-        vaultHub = VaultHub(stakingVault().vaultHub());
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
 
         _setConfirmExpiry(_confirmExpiry);
@@ -164,7 +159,11 @@ abstract contract Permissions is AccessControlConfirmable {
      * @return The address of the StakingVault.
      */
     function stakingVault() public view returns (IStakingVault) {
-        return IStakingVault(_loadStakingVaultAddress());
+        return IStakingVault(_stakingVaultAddress());
+    }
+
+    function vaultHub() public view returns (VaultHub) {
+        return VaultHub(_vaultHubAddress());
     }
 
     // ==================== Role Management Functions ====================
@@ -205,11 +204,7 @@ abstract contract Permissions is AccessControlConfirmable {
      *      which are introduced further in the inheritance chain.
      * @return The roles that need to confirm the call.
      */
-    function _confirmingRoles() internal pure virtual returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](1);
-        roles[0] = DEFAULT_ADMIN_ROLE;
-        return roles;
-    }
+    function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
      * @dev Checks the FUND_ROLE and funds the StakingVault.
@@ -244,7 +239,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        vaultHub.mintShares(address(stakingVault()), _recipient, _shares);
+        vaultHub().mintShares(_stakingVaultAddress(), _recipient, _shares);
     }
 
     /**
@@ -253,7 +248,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        vaultHub.burnShares(address(stakingVault()), _shares);
+        vaultHub().burnShares(_stakingVaultAddress(), _shares);
     }
 
     /**
@@ -303,7 +298,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        vaultHub.voluntaryDisconnect(address(stakingVault()));
+        vaultHub().voluntaryDisconnect(_stakingVaultAddress());
     }
 
     /**
@@ -345,7 +340,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the confirming roles and transfers the StakingVault ownership.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
-    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
+    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
     }
 
@@ -389,11 +384,19 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Loads the address of the underlying StakingVault.
      * @return addr The address of the StakingVault.
      */
-    function _loadStakingVaultAddress() internal view returns (address addr) {
+    function _stakingVaultAddress() internal view returns (address addr) {
         bytes memory args = Clones.fetchCloneArgs(address(this));
         assembly {
             addr := mload(add(args, 32))
         }
+    }
+
+    /**
+     * @dev Loads the address of the VaultHub from the StakingVault.
+     * @return addr The address of the VaultHub.
+     */
+    function _vaultHubAddress() internal view returns (address addr) {
+        return stakingVault().vaultHub();
     }
 
     /**

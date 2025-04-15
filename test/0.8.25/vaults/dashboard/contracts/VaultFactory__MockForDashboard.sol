@@ -34,7 +34,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
 
         vault.initialize(address(dashboard), _operator, PREDEPOSIT_GUARANTEE, "");
 
-        dashboard.initialize(address(this), 7 days);
+        dashboard.initialize(address(this), _operator, 0, 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.FUND_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.WITHDRAW_ROLE(), msg.sender);

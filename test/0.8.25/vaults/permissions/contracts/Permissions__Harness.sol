@@ -15,8 +15,10 @@ contract Permissions__Harness is Permissions {
         _initialize(_defaultAdmin, _confirmExpiry);
     }
 
-    function confirmingRoles() external pure returns (bytes32[] memory) {
-        return _confirmingRoles();
+    function confirmingRoles() public pure override returns (bytes32[] memory) {
+        bytes32[] memory roles = new bytes32[](1);
+        roles[0] = DEFAULT_ADMIN_ROLE;
+        return roles;
     }
 
     function fund(uint256 _ether) external payable {

@@ -4,19 +4,18 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Permissions} from "./Permissions.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
-
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {VaultHub} from "../VaultHub.sol";
-
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {NodeOperatorFee} from "./NodeOperatorFee.sol";
+import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 interface IWETH9 is IERC20 {
@@ -38,11 +37,8 @@ interface IWstETH is IERC20, IERC20Permit {
  * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
-contract Dashboard is Permissions {
-    /**
-     * @notice Total basis points for fee calculations; equals to 100%.
-     */
-    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
+contract Dashboard is NodeOperatorFee {
+    bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
 
     /**
      * @notice The stETH token contract
@@ -63,11 +59,6 @@ contract Dashboard is Permissions {
      * @notice ETH address convention per EIP-7528
      */
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
-    /**
-     * @notice Permission for assets recovery.
-     */
-    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Dashboard.AssetRecovery");
 
     /**
      * @notice Struct containing the permit details.
@@ -94,35 +85,27 @@ contract Dashboard is Permissions {
         WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
     }
 
-    /**
-     * @notice Initializes the contract
-     * @param _defaultAdmin Address of the default admin
-     * @param _confirmExpiry Confirm expiry in seconds
-     */
-    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external virtual {
+    function initialize(
+        address _defaultAdmin,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry
+    ) public override {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        _initialize(_defaultAdmin, _confirmExpiry);
+        super.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
     }
 
     // ==================== View Functions ====================
-
-    /**
-     * @notice Returns the roles that need to confirm multi-role operations.
-     * @return The roles that need to confirm the call.
-     */
-    function confirmingRoles() external pure returns (bytes32[] memory) {
-        return _confirmingRoles();
-    }
 
     /**
      * @notice Returns the vault socket data for the staking vault.
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(address(stakingVault()));
+        return vaultHub().vaultSocket(_stakingVaultAddress());
     }
 
     /**
@@ -178,7 +161,7 @@ contract Dashboard is Permissions {
      * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(stakingVault().valuation());
+        return _totalMintableShares(_mintableValuation());
     }
 
     /**
@@ -187,7 +170,7 @@ contract Dashboard is Permissions {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _etherToFund);
+        uint256 _totalShares = _totalMintableShares(_mintableValuation() + _etherToFund);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -196,10 +179,12 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
-    function withdrawableEther() external view virtual returns (uint256) {
-        return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
+    function withdrawableEther() external view returns (uint256) {
+        return Math256.min(_stakingVaultAddress().balance, unreserved());
     }
 
     // ==================== Vault Management Functions ====================
@@ -221,7 +206,7 @@ contract Dashboard is Permissions {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
+        uint256 shares = vaultHub().vaultSocket(_stakingVaultAddress()).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -323,7 +308,7 @@ contract Dashboard is Permissions {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -355,7 +340,7 @@ contract Dashboard is Permissions {
         uint256 _amountOfShares,
         PermitInput calldata _permit
     ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -404,7 +389,7 @@ contract Dashboard is Permissions {
      */
     function unguaranteedDepositToBeaconChain(
         StakingVaultDeposit[] calldata _deposits
-    ) public virtual returns (uint256 totalAmount) {
+    ) public returns (uint256 totalAmount) {
         IStakingVault stakingVault = stakingVault();
         IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
 
@@ -428,6 +413,8 @@ contract Dashboard is Permissions {
 
             emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
         }
+
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
     }
 
     /**
@@ -458,7 +445,7 @@ contract Dashboard is Permissions {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(ASSET_RECOVERY_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -485,7 +472,7 @@ contract Dashboard is Permissions {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(ASSET_RECOVERY_ROLE) {
+    ) external onlyRole(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -643,12 +630,38 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice Returns the valuation with the node operator fee subtracted,
+     *         because the fee cannot be used to mint shares.
+     * @return The amount of ether in wei that can be used to mint shares.
+     */
+    function _mintableValuation() internal view returns (uint256) {
+        return stakingVault().valuation() - nodeOperatorUnclaimedFee();
+    }
+
+    /**
+     * @notice Mints shares within the mintable valuation,
+     *         and reverts if the resulting backing is greater than the mintable valuation.
+     * @param _recipient The address of the recipient.
+     * @param _amountOfShares The amount of shares to mint.
+     */
+    function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
+        _mintShares(_recipient, _amountOfShares);
+
+        uint256 locked = stakingVault().locked();
+        uint256 mintableValuation = _mintableValuation();
+
+        if (locked > mintableValuation) {
+            revert MintableValuationExceeded(locked, mintableValuation);
+        }
+    }
+
+    /**
      * @dev Burns stETH tokens from the sender backed by the vault
      * @param _amountOfStETH Amount of tokens to burn
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -661,7 +674,7 @@ contract Dashboard is Permissions {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(vaultHub), unwrappedShares);
+        STETH.transferShares(_vaultHubAddress(), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 
@@ -703,9 +716,18 @@ contract Dashboard is Permissions {
 
     // ==================== Errors ====================
 
-    /// @notice Error when provided permit is invalid
+    /**
+     * @notice Error thrown when provided permit is invalid
+     */
     error InvalidPermit(address token);
 
-    /// @notice Error when recovery of ETH fails on transfer to recipient
+    /**
+     * @notice Error thrown when recovery of ETH fails on transfer to recipient
+     */
     error EthTransferFailed(address recipient, uint256 amount);
+
+    /**
+     * @notice Error thrown when mintable valuation is breached
+     */
+    error MintableValuationExceeded(uint256 locked, uint256 mintableValuation);
 }
