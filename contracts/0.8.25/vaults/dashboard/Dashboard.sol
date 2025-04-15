@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC2
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
 
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
@@ -18,7 +17,7 @@ import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
-interface IWstETH is IERC20, IERC20Permit {
+interface IWstETH is IERC20 {
     function wrap(uint256) external returns (uint256);
 
     function unwrap(uint256) external returns (uint256);
@@ -48,17 +47,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice ETH address convention per EIP-7528
      */
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
-    /**
-     * @notice Struct containing the permit details.
-     */
-    struct PermitInput {
-        uint256 value;
-        uint256 deadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
 
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses.
@@ -300,45 +288,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Burns stETH shares backed by the vault from the sender using permit (with value in stETH).
-     * @param _amountOfShares Amount of stETH shares to burn
-     * @param _permit data required for the stETH.permit() with amount in stETH
-     */
-    function burnSharesWithPermit(
-        uint256 _amountOfShares,
-        PermitInput calldata _permit
-    ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
-        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
-        _burnShares(_amountOfShares);
-    }
-
-    /**
-     * @notice Burns stETH tokens backed by the vault from the sender using permit.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountOfStETH Amount of stETH to burn
-     * @param _permit data required for the stETH.permit() method to set the allowance
-     */
-    function burnStETHWithPermit(
-        uint256 _amountOfStETH,
-        PermitInput calldata _permit
-    ) external safePermit(address(STETH), msg.sender, address(this), _permit) {
-        _burnStETH(_amountOfStETH);
-    }
-
-    /**
-     * @notice Burns wstETH tokens backed by the vault from the sender using EIP-2612 Permit.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
-     * @param _amountOfWstETH Amount of wstETH tokens to burn
-     * @param _permit data required for the wstETH.permit() method to set the allowance
-     */
-    function burnWstETHWithPermit(
-        uint256 _amountOfWstETH,
-        PermitInput calldata _permit
-    ) external safePermit(address(WSTETH), msg.sender, address(this), _permit) {
-        _burnWstETH(_amountOfWstETH);
-    }
-
-    /**
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
@@ -565,39 +514,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
-     */
-    modifier safePermit(
-        address token,
-        address owner,
-        address spender,
-        PermitInput calldata permitInput
-    ) {
-        // Try permit() before allowance check to advance nonce if possible
-        try
-            IERC20Permit(token).permit(
-                owner,
-                spender,
-                permitInput.value,
-                permitInput.deadline,
-                permitInput.v,
-                permitInput.r,
-                permitInput.s
-            )
-        {
-            _;
-            return;
-        } catch {
-            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
-            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
-                _;
-                return;
-            }
-        }
-        revert InvalidPermit(token);
-    }
-
-    /**
      * @notice Returns the valuation with the node operator fee subtracted,
      *         because the fee cannot be used to mint shares.
      * @return The amount of ether in wei that can be used to mint shares.
@@ -683,11 +599,6 @@ contract Dashboard is NodeOperatorFee {
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
-
-    /**
-     * @notice Error thrown when provided permit is invalid
-     */
-    error InvalidPermit(address token);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
