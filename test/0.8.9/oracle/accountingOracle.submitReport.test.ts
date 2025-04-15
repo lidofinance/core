@@ -10,7 +10,6 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
-  LegacyOracle__MockForAccountingOracle,
   OracleReportSanityChecker,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
@@ -52,7 +51,6 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraData: ExtraDataType;
   let mockAccounting: Accounting__MockForAccountingOracle;
   let sanityChecker: OracleReportSanityChecker;
-  let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
   let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
   let snapshot: string;
 
@@ -116,7 +114,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     mockStakingRouter = deployed.stakingRouter;
     mockAccounting = deployed.accounting;
     sanityChecker = deployed.oracleReportSanityChecker;
-    mockLegacyOracle = deployed.legacyOracle;
     mockWithdrawalQueue = deployed.withdrawalQueue;
   };
 
@@ -507,15 +504,6 @@ describe("AccountingOracle.sol:submitReport", () => {
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(newReportFields.refSlot, anyValue);
         const lastOracleReportToStakingRouter = await mockStakingRouter.lastCall_updateExitedKeysByModule();
         expect(lastOracleReportToStakingRouter.callCount).to.equal(0);
-      });
-
-      it("should call handleConsensusLayerReport on legacyOracle", async () => {
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        const lastCall = await mockLegacyOracle.lastCall__handleConsensusLayerReport();
-        expect(lastCall.totalCalls).to.equal(1);
-        expect(lastCall.refSlot).to.equal(reportFields.refSlot);
-        expect(lastCall.clBalance).to.equal(getBigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-        expect(lastCall.clValidators).to.equal(reportFields.numValidators);
       });
 
       it("should call onOracleReport on WithdrawalQueue", async () => {

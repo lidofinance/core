@@ -9,7 +9,6 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
-  LegacyOracle__MockForAccountingOracle,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
@@ -49,7 +48,6 @@ describe("AccountingOracle.sol:happyPath", () => {
   let mockAccounting: Accounting__MockForAccountingOracle;
   let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
   let mockStakingRouter: StakingRouter__MockForAccountingOracle;
-  let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
 
   let extraData: ExtraDataType;
   let extraDataItems: string[];
@@ -74,7 +72,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     mockAccounting = deployed.accounting;
     mockWithdrawalQueue = deployed.withdrawalQueue;
     mockStakingRouter = deployed.stakingRouter;
-    mockLegacyOracle = deployed.legacyOracle;
 
     oracleVersion = Number(await oracle.getContractVersion());
 
@@ -270,14 +267,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(lastExitedKeysByModuleCall.exitedKeysCounts.map(Number)).to.have.ordered.members(
       reportFields.numExitedValidatorsByStakingModule,
     );
-  });
-
-  it("legacy oracle got CL data report", async () => {
-    const lastLegacyOracleCall = await mockLegacyOracle.lastCall__handleConsensusLayerReport();
-    expect(lastLegacyOracleCall.totalCalls).to.equal(1);
-    expect(lastLegacyOracleCall.refSlot).to.equal(reportFields.refSlot);
-    expect(lastLegacyOracleCall.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-    expect(lastLegacyOracleCall.clValidators).to.equal(reportFields.numValidators);
   });
 
   it("no data can be submitted for the same reference slot again", async () => {

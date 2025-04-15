@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus__Harness, LegacyOracle, ReportProcessor__Mock } from "typechain-types";
+import { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import {
   AO_CONSENSUS_VERSION,
@@ -21,18 +21,6 @@ import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 export const V1_ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const V1_ORACLE_LAST_REPORT_SLOT = V1_ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
 
-export async function deployMockLegacyOracle({
-  epochsPerFrame = EPOCHS_PER_FRAME,
-  slotsPerEpoch = SLOTS_PER_EPOCH,
-  secondsPerSlot = SECONDS_PER_SLOT,
-  genesisTime = GENESIS_TIME,
-  lastCompletedEpochId = V1_ORACLE_LAST_COMPLETED_EPOCH,
-} = {}) {
-  const legacyOracle = await ethers.deployContract("LegacyOracle__MockForAccountingOracle");
-  await legacyOracle.setParams(epochsPerFrame, slotsPerEpoch, secondsPerSlot, genesisTime, lastCompletedEpochId);
-  return legacyOracle;
-}
-
 async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
@@ -43,30 +31,21 @@ async function deployMockAccountingAndStakingRouter() {
 export async function deployAccountingOracleSetup(
   admin: string,
   {
-    initialEpoch = null as bigint | null,
+    initialEpoch = 0n,
     epochsPerFrame = EPOCHS_PER_FRAME,
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
     getLidoAndStakingRouter = deployMockAccountingAndStakingRouter,
-    getLegacyOracle = deployMockLegacyOracle,
     lidoLocatorAddr = null as string | null,
-    legacyOracleAddr = null as string | null,
   } = {},
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
   const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
 
-  const legacyOracle = await getLegacyOracle();
-
-  if (initialEpoch == null) {
-    initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + epochsPerFrame;
-  }
-
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
-    legacyOracleAddr || (await legacyOracle.getAddress()),
     secondsPerSlot,
     genesisTime,
   ]);
@@ -101,7 +80,6 @@ export async function deployAccountingOracleSetup(
     stakingRouter,
     withdrawalQueue,
     locatorAddr,
-    legacyOracle,
     oracle,
     consensus,
     oracleReportSanityChecker,
@@ -166,7 +144,6 @@ interface AccountingOracleSetup {
   admin: string;
   consensus: HashConsensus__Harness;
   oracle: AccountingOracle;
-  legacyOracle: LegacyOracle;
   dataSubmitter?: string;
   consensusVersion?: bigint;
 }
@@ -175,18 +152,13 @@ async function configureAccountingOracleSetup({
   admin,
   consensus,
   oracle,
-  legacyOracle,
   dataSubmitter = undefined,
   consensusVersion = AO_CONSENSUS_VERSION,
 }: AccountingOracleSetup) {
   // this is done as a part of the protocol upgrade voting execution
 
   const frameConfig = await consensus.getFrameConfig();
-  // TODO: Double check it
-  await consensus.setTimeInEpochs(await legacyOracle.getLastCompletedEpochId());
-
-  const initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + frameConfig.epochsPerFrame;
-
+  const initialEpoch = frameConfig.epochsPerFrame;
   const updateInitialEpochIx = await consensus.updateInitialEpoch(initialEpoch);
   const initTx = await initAccountingOracle({ admin, oracle, consensus, dataSubmitter, consensusVersion });
 

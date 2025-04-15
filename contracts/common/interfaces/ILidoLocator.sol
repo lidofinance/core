@@ -9,7 +9,6 @@ interface ILidoLocator {
     function accountingOracle() external view returns(address);
     function depositSecurityModule() external view returns(address);
     function elRewardsVault() external view returns(address);
-    function legacyOracle() external view returns(address);
     function lido() external view returns(address);
     function oracleReportSanityChecker() external view returns(address);
     function burner() external view returns(address);

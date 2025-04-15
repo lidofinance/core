@@ -9,7 +9,6 @@ import {
   AccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
-  LegacyOracle,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
@@ -19,7 +18,6 @@ import { AO_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT,
 import {
   deployAccountingOracleSetup,
   deployAndConfigureAccountingOracle,
-  deployMockLegacyOracle,
   initAccountingOracle,
   V1_ORACLE_LAST_COMPLETED_EPOCH,
 } from "test/deploy";
@@ -41,42 +39,6 @@ describe("AccountingOracle.sol:deploy", () => {
       await consensus.setTime(voteExecTime);
       await consensus.updateInitialEpoch(V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME);
     };
-
-    it("init fails if the chain config is different from the one of the legacy oracle", async () => {
-      let deployed = await deployAccountingOracleSetup(admin.address, {
-        getLegacyOracle: () => deployMockLegacyOracle({ slotsPerEpoch: SLOTS_PER_EPOCH + 1n }),
-      });
-      await updateInitialEpoch(deployed.consensus);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(0);
-
-      deployed = await deployAccountingOracleSetup(admin.address, {
-        getLegacyOracle: () => deployMockLegacyOracle({ secondsPerSlot: SECONDS_PER_SLOT + 1n }),
-      });
-      await updateInitialEpoch(deployed.consensus);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(0);
-
-      deployed = await deployAccountingOracleSetup(admin.address, {
-        getLegacyOracle: () => deployMockLegacyOracle({ genesisTime: GENESIS_TIME + 1n }),
-      });
-      await updateInitialEpoch(deployed.consensus);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(0);
-    });
-
-    it("init fails if the frame size is different from the one of the legacy oracle", async () => {
-      const deployed = await deployAccountingOracleSetup(admin.address, {
-        getLegacyOracle: () => deployMockLegacyOracle({ epochsPerFrame: EPOCHS_PER_FRAME - 1n }),
-      });
-      await updateInitialEpoch(deployed.consensus);
-      await expect(initAccountingOracle({ admin: admin.address, ...deployed }))
-        .to.be.revertedWithCustomError(deployed.oracle, "IncorrectOracleMigration")
-        .withArgs(1);
-    });
 
     it(`init fails if the initial epoch of the new oracle is not the next frame's first epoch`, async () => {
       const deployed = await deployAccountingOracleSetup(admin.address);
@@ -123,8 +85,7 @@ describe("AccountingOracle.sol:deploy", () => {
       await initAccountingOracle({ admin: admin.address, ...deployed });
 
       const refSlot = await deployed.oracle.getLastProcessingRefSlot();
-      const epoch = await deployed.legacyOracle.getLastCompletedEpochId();
-      expect(refSlot).to.equal(epoch * BigInt(SLOTS_PER_EPOCH));
+      expect(refSlot).to.equal(0n);
     });
 
     context("deployment and init finishes successfully (default setup)", async () => {
@@ -133,7 +94,6 @@ describe("AccountingOracle.sol:deploy", () => {
       let mockAccounting: Accounting__MockForAccountingOracle;
       let mockStakingRouter: StakingRouter__MockForAccountingOracle;
       let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
-      let legacyOracle: LegacyOracle;
       let locatorAddr: string;
 
       before(async () => {
@@ -143,7 +103,6 @@ describe("AccountingOracle.sol:deploy", () => {
         mockAccounting = deployed.accounting;
         mockStakingRouter = deployed.stakingRouter;
         mockWithdrawalQueue = deployed.withdrawalQueue;
-        legacyOracle = deployed.legacyOracle;
         locatorAddr = deployed.locatorAddr;
       });
 
@@ -171,11 +130,6 @@ describe("AccountingOracle.sol:deploy", () => {
         expect(onOracleReportLastCall.callCount).to.equal(0);
       });
 
-      it("the initial reference slot is greater than the last one of the legacy oracle", async () => {
-        const legacyRefSlot = (await legacyOracle.getLastCompletedEpochId()) * BigInt(SLOTS_PER_EPOCH);
-        expect((await consensus.getCurrentFrame()).refSlot).to.be.greaterThan(legacyRefSlot);
-      });
-
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
         expect(await oracle.getConsensusVersion()).to.equal(AO_CONSENSUS_VERSION);
@@ -187,12 +141,6 @@ describe("AccountingOracle.sol:deploy", () => {
         await expect(
           deployAccountingOracleSetup(admin.address, { lidoLocatorAddr: ZeroAddress }),
         ).to.be.revertedWithCustomError(defaultOracle, "LidoLocatorCannotBeZero");
-      });
-
-      it("constructor reverts if legacy oracle address is zero", async () => {
-        await expect(
-          deployAccountingOracleSetup(admin.address, { legacyOracleAddr: ZeroAddress }),
-        ).to.be.revertedWithCustomError(defaultOracle, "LegacyOracleCannotBeZero");
       });
 
       it("initialize reverts if admin address is zero", async () => {

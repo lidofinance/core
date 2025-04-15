@@ -18,7 +18,6 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     burner: certainAddress("dummy-locator:burner"),
     depositSecurityModule: certainAddress("dummy-locator:depositSecurityModule"),
     elRewardsVault: certainAddress("dummy-locator:elRewardsVault"),
-    legacyOracle: certainAddress("dummy-locator:legacyOracle"),
     lido: certainAddress("dummy-locator:lido"),
     oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     oracleReportSanityChecker: certainAddress("dummy-locator:oracleReportSanityChecker"),
