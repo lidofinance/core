@@ -242,59 +242,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         initialized();
     }
 
-    /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once
-    /// For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    function finalizeUpgrade_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) external {
-        require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
-        _checkContractVersion(0);
-        _initialize_v2(_locator, _type, _stuckPenaltyDelay);
-
-        uint256 totalOperators = getNodeOperatorsCount();
-        Packed64x4.Packed memory signingKeysStats;
-        Packed64x4.Packed memory operatorTargetStats;
-        Packed64x4.Packed memory summarySigningKeysStats = Packed64x4.Packed(0);
-        uint256 vettedSigningKeysCountBefore;
-        uint256 totalSigningKeysCount;
-        uint256 depositedSigningKeysCount;
-        for (uint256 nodeOperatorId; nodeOperatorId < totalOperators; ++nodeOperatorId) {
-            signingKeysStats = _loadOperatorSigningKeysStats(nodeOperatorId);
-            vettedSigningKeysCountBefore = signingKeysStats.get(TOTAL_VETTED_KEYS_COUNT_OFFSET);
-            totalSigningKeysCount = signingKeysStats.get(TOTAL_KEYS_COUNT_OFFSET);
-            depositedSigningKeysCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
-
-            uint256 vettedSigningKeysCountAfter;
-            if (!_nodeOperators[nodeOperatorId].active) {
-                // trim vetted signing keys count when node operator is not active
-                vettedSigningKeysCountAfter = depositedSigningKeysCount;
-            } else {
-                vettedSigningKeysCountAfter = Math256.min(
-                    totalSigningKeysCount,
-                    Math256.max(depositedSigningKeysCount, vettedSigningKeysCountBefore)
-                );
-            }
-
-            if (vettedSigningKeysCountBefore != vettedSigningKeysCountAfter) {
-                signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-                _saveOperatorSigningKeysStats(nodeOperatorId, signingKeysStats);
-                emit VettedSigningKeysCountChanged(nodeOperatorId, vettedSigningKeysCountAfter);
-            }
-
-            operatorTargetStats = _loadOperatorTargetValidatorsStats(nodeOperatorId);
-            operatorTargetStats.set(MAX_VALIDATORS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-            _saveOperatorTargetValidatorsStats(nodeOperatorId, operatorTargetStats);
-
-            summarySigningKeysStats.add(SUMMARY_MAX_VALIDATORS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-            summarySigningKeysStats.add(SUMMARY_DEPOSITED_KEYS_COUNT_OFFSET, depositedSigningKeysCount);
-            summarySigningKeysStats.add(
-                SUMMARY_EXITED_KEYS_COUNT_OFFSET,
-                signingKeysStats.get(TOTAL_EXITED_KEYS_COUNT_OFFSET)
-            );
-        }
-
-        _saveSummarySigningKeysStats(summarySigningKeysStats);
-        _increaseValidatorsKeysNonce();
-    }
-
     function _initialize_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) internal {
         _onlyNonZeroAddress(_locator);
         LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
@@ -310,17 +257,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         emit LocatorContractSet(_locator);
         emit StakingModuleTypeSet(_type);
-    }
-
-    function finalizeUpgrade_v3() external {
-        require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
-        _checkContractVersion(2);
-        _initialize_v3();
-
-        // clear deprecated total keys count storage
-        Packed64x4.Packed memory summarySigningKeysStats = _loadSummarySigningKeysStats();
-        summarySigningKeysStats.set(SUMMARY_TOTAL_KEYS_COUNT_OFFSET, 0);
-        _saveSummarySigningKeysStats(summarySigningKeysStats);
     }
 
     function _initialize_v3() internal {
