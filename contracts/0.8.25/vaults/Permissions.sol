@@ -99,9 +99,31 @@ abstract contract Permissions is AccessControlConfirmable {
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
-     * @notice Permission for assets recovery
+     * @dev Permission for deauthorizing Lido VaultHub from the StakingVault.
      */
-    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Permissions.AssetRecovery");
+    bytes32 public constant LIDO_VAULTHUB_DEAUTHORIZATION_ROLE =
+        keccak256("vaults.Permissions.LidoVaultHubDeauthorization");
+
+    /**
+     * @dev Permission for granting authorization to Lido VaultHub on the StakingVault.
+     */
+    bytes32 public constant LIDO_VAULTHUB_AUTHORIZATION_ROLE =
+        keccak256("vaults.Permissions.LidoVaultHubAuthorization");
+
+    /**
+     * @dev Permission for ossifying the StakingVault.
+     */
+    bytes32 public constant OSSIFY_ROLE = keccak256("vaults.Permissions.Ossify");
+
+    /**
+     * @dev Permission for setting depositor on the StakingVault.
+     */
+    bytes32 public constant SET_DEPOSITOR_ROLE = keccak256("vaults.Permissions.SetDepositor");
+
+    /**
+     * @dev Permission for resetting locked amount on the disconnected StakingVault.
+     */
+    bytes32 public constant RESET_LOCKED_ROLE = keccak256("vaults.Permissions.ResetLocked");
 
     /**
      * @notice Address of the implementation contract
@@ -207,6 +229,10 @@ abstract contract Permissions is AccessControlConfirmable {
         stakingVault().withdraw(_recipient, _ether);
     }
 
+    /**
+     * @dev Checks the LOCK_ROLE and increases the locked amount on the StakingVault.
+     * @param _locked The amount of locked ether, must be greater or equal to the current locked amount.
+     */
     function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
         stakingVault().lock(_locked);
     }
@@ -281,7 +307,10 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Claims disproven predeposit from PDG
+     * @dev Checks the PDG_COMPENSATE_PREDEPOSIT_ROLE and claims disproven predeposit from PDG.
+     * @param _pubkey The pubkey of the validator.
+     * @param _recipient The address to compensate the disproven validator predeposit to.
+     * @return The amount of ether compensated.
      */
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
@@ -318,6 +347,42 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(_confirmingRoles()) {
         OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+    }
+
+    /**
+     * @dev Checks the LIDO_VAULTHUB_AUTHORIZATION_ROLE and authorizes Lido VaultHub on the StakingVault.
+     */
+    function _authorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_AUTHORIZATION_ROLE) {
+        stakingVault().authorizeLidoVaultHub();
+    }
+
+    /**
+     * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
+     */
+    function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
+        stakingVault().deauthorizeLidoVaultHub();
+    }
+
+    /**
+     * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
+     */
+    function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
+        stakingVault().ossifyStakingVault();
+    }
+
+    /**
+     * @dev Checks the SET_DEPOSITOR_ROLE and sets the depositor on the StakingVault.
+     * @param _depositor The address to set the depositor to.
+     */
+    function _setDepositor(address _depositor) internal onlyRole(SET_DEPOSITOR_ROLE) {
+        stakingVault().setDepositor(_depositor);
+    }
+
+    /**
+     * @dev Checks the RESET_LOCKED_ROLE and resets the locked amount on the disconnected StakingVault.
+     */
+    function _resetLocked() internal onlyRole(RESET_LOCKED_ROLE) {
+        stakingVault().resetLocked();
     }
 
     /**

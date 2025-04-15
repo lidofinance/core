@@ -15,13 +15,23 @@ struct PermissionsConfig {
     uint256 confirmExpiry;
     address funder;
     address withdrawer;
+    address locker;
     address minter;
     address burner;
     address rebalancer;
     address depositPauser;
     address depositResumer;
-    address exitRequester;
+    address pdgCompensator;
+    address unknownValidatorProver;
+    address unguaranteedBeaconChainDepositor;
+    address validatorExitRequester;
+    address validatorWithdrawalTriggerer;
     address disconnecter;
+    address lidoVaultHubAuthorizer;
+    address lidoVaultHubDeauthorizer;
+    address ossifier;
+    address depositorSetter;
+    address lockedResetter;
 }
 
 contract VaultFactory__MockPermissions {
@@ -67,16 +77,7 @@ contract VaultFactory__MockPermissions {
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
 
         // setup roles
-        permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
-        permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
-        permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
-        permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
-        permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
-        permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
-        permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
-        permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
-        permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        _setupRoles(permissions, _permissionsConfig);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -109,16 +110,7 @@ contract VaultFactory__MockPermissions {
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
 
         // setup roles
-        permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
-        permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
-        permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
-        permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
-        permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
-        permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
-        permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
-        permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
-        permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        _setupRoles(permissions, _permissionsConfig);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
@@ -149,21 +141,48 @@ contract VaultFactory__MockPermissions {
         permissions.initialize(address(0), _permissionsConfig.confirmExpiry);
 
         // setup roles
-        permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
-        permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
-        permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
-        permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
-        permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
-        permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
-        permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
-        permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
-        permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.exitRequester);
-        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        _setupRoles(permissions, _permissionsConfig);
 
         permissions.revokeRole(permissions.DEFAULT_ADMIN_ROLE(), address(this));
 
         emit VaultCreated(address(permissions), address(vault));
         emit PermissionsCreated(_permissionsConfig.defaultAdmin, address(permissions));
+    }
+
+    /// @dev Helper function to setup roles for permissions
+    function _setupRoles(Permissions__Harness permissions, PermissionsConfig calldata _permissionsConfig) private {
+        permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
+        permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
+        permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
+        permissions.grantRole(permissions.LOCK_ROLE(), _permissionsConfig.locker);
+        permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
+        permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
+        permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
+        permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
+        permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
+        permissions.grantRole(permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _permissionsConfig.pdgCompensator);
+        permissions.grantRole(permissions.PDG_PROVE_VALIDATOR_ROLE(), _permissionsConfig.unknownValidatorProver);
+        permissions.grantRole(
+            permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+            _permissionsConfig.unguaranteedBeaconChainDepositor
+        );
+        permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.validatorExitRequester);
+        permissions.grantRole(
+            permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+            _permissionsConfig.validatorWithdrawalTriggerer
+        );
+        permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
+        permissions.grantRole(
+            permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+            _permissionsConfig.lidoVaultHubAuthorizer
+        );
+        permissions.grantRole(
+            permissions.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
+            _permissionsConfig.lidoVaultHubDeauthorizer
+        );
+        permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
+        permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
+        permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
     }
 
     /**

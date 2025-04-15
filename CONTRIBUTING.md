@@ -430,7 +430,7 @@ jobs:
 
     services:
       mainnet-fork:
-        image: hardhat/hardhat:2.22.8 # note: this is an example image, choose the appropriate one for your needs
+        image: hardhat/hardhat:2.23.0 # note: this is an example image, choose the appropriate one for your needs
         ports:
           - 8545:8545
         env:

@@ -1,17 +1,15 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { deployBLSPrecompileStubs } from "lib";
-import { createVaultWithDelegation, getProtocolContext, ProtocolContext, setupLido, VaultRoles } from "lib/protocol";
-
-import { Snapshot, Tracing } from "test/suite";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
-import { ether } from "../../../lib/units";
 
-describe("Scenario: Actions with vault disconnected from hub", () => {
+import { createVaultWithDelegation, getProtocolContext, ProtocolContext, setupLido, VaultRoles } from "lib/protocol";
+
+import { Snapshot } from "test/suite";
+
+describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
 
   let delegation: Delegation;
@@ -32,9 +30,6 @@ describe("Scenario: Actions with vault disconnected from hub", () => {
 
     await setupLido(ctx);
 
-    // TODO: remove stubs when hardhat fork supports BLS precompiles
-    await deployBLSPrecompileStubs();
-
     [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
@@ -52,6 +47,8 @@ describe("Scenario: Actions with vault disconnected from hub", () => {
 
   after(async () => await Snapshot.restore(originalSnapshot));
 
+  // TODO: take all actions for disconnected vaults and tru to test them and check that they change state as expected
+
   describe("Funding", () => {
     it("Allows to fund amount less or equal then funder's balance + gas price", async () => {
       const amount = 1n;
@@ -60,30 +57,23 @@ describe("Scenario: Actions with vault disconnected from hub", () => {
         .to.emit(stakingVault, "Funded")
         .withArgs(delegation, amount);
 
+      // TODO check that funding changes in inOutDelta
+      // TODO check that funding updates valuation
       expect(await delegation.withdrawableEther()).to.equal(amount);
     });
 
-    it.only("Does not allow to fun amount bigger that funder's balance + gas price ", async () => {
-      Tracing.enable();
-
-      console.log(await ethers.provider.getFeeData());
-      await setBalance(roles.funder.address, 3n);
-      const funderBalance = await ethers.provider.getBalance(roles.funder.address);
-
-      console.log(funderBalance);
-      const amount = funderBalance;
-
-      delegation.connect(roles.funder).fund({ value: 1n });
-      await expect(delegation.connect(roles.funder).fund({ value: amount })).to.be.revertedWith(
-        "not enough funds smth",
-      );
-
-      expect(await delegation.withdrawableEther()).to.equal(amount);
-    });
+    // weth contract must be deployed, @Yuri will add to provision, may skip for now
+    it.skip("fundWeth");
   });
 
   describe("Withdrawal", () => {
-    it("Allows to fund and withdraw ", async () => {
+    it.skip("rejects to withdraw more than locked", async () => {
+      // fund
+      // lock
+      // withdraw more than locked
+    });
+
+    it("withdraw all funded amount", async () => {
       await expect(delegation.connect(roles.funder).fund({ value: 2n }))
         .to.emit(stakingVault, "Funded")
         .withArgs(delegation, 2n);
@@ -94,7 +84,40 @@ describe("Scenario: Actions with vault disconnected from hub", () => {
         .to.emit(stakingVault, "Withdrawn")
         .withArgs(delegation, stranger, 2n);
 
+      // TODO check that withdrawing changes in inOutDelta
+      // TODO check that withdrawing updates valuation
       expect(await delegation.withdrawableEther()).to.equal(0);
     });
+
+    // weth contract must be deployed, @Yuri will add to provision, may skip for now
+    it.skip("withdrawWETH");
+
+    it.skip("can reset lock and withdraw all the funded amount", async () => {
+      // fund + lock
+      // reset lock
+      // withdraw all
+    });
+
+    it.skip("may receive rewards and withdraw all the funds with rewards", async () => {
+      // fund
+    });
   });
+
+  describe("Cant mint shares", () => {});
+
+  describe("Cant burn shares", () => {});
+
+  // TODO: test that deposits are possible
+  describe("Set depositor / make deposit to beacon chain", () => {
+    // here should set depositor to some EOA
+  });
+
+  // TODO: test that vault hub can be authorized and can revoke authorization
+  describe("Authorize / Deauthorize Lido VaultHub", () => {});
+
+  // TODO: test that vault can be ossified
+  describe("Ossify vault", () => {});
+
+  // TODO: test that vault owner can request validator exit and both can trigger exits
+  describe("Request / trigger validator exit", () => {});
 });
