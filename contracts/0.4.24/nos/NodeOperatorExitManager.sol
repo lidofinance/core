@@ -88,8 +88,8 @@ contract NodeOperatorExitManager {
         bytes32 publicKeyHash = keccak256(_publicKey);
 
         // Track this validator key if it's new
-        if (validatorExitRecords[_nodeOperatorId][_publicKeyHash].lastUpdatedTimestamp == 0) {
-            operatorWatchableValidatorKeys[_nodeOperatorId].push(_publicKeyHash);
+        if (validatorExitRecords[_nodeOperatorId][publicKeyHash].lastUpdatedTimestamp == 0) {
+            operatorWatchableValidatorKeys[_nodeOperatorId].push(publicKeyHash);
         }
 
         // Get or initialize the validator exit record
@@ -151,9 +151,6 @@ contract NodeOperatorExitManager {
 
     /**
      * @notice Determines whether a validator's exit status should be updated
-     * @param _nodeOperatorId The ID of the node operator
-     * @param _proofSlotTimestamp The timestamp when the validator was last known to be active
-     * @param _publicKey The public key of the validator
      * @param _eligibleToExitInSec The number of seconds the validator was eligible to exit
      * @return bool Returns true if the contract should receive the updated status
      */
