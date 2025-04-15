@@ -136,22 +136,32 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bool public initialized;
 
-
+    /**
+     * @notice Constructor sets the address of the implementation contract.
+     */
     constructor() {
         _SELF = address(this);
     }
 
-    function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal {
+    /**
+     * @notice Modifier to prevent reinitialization of the contract.
+     * @dev Extracted to modifier to avoid Slither warning.
+     */
+    modifier initializer() {
         if (initialized) revert AlreadyInitialized();
         if (address(this) == _SELF) revert NonProxyCallsForbidden();
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         initialized = true;
+        _;
+
+        emit Initialized();
+    }
+
+    function initialize(address _defaultAdmin, uint256 _confirmExpiry) public initializer {
+        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
-
         _setConfirmExpiry(_confirmExpiry);
-
-        emit Initialized(_defaultAdmin);
     }
 
     /**
@@ -402,7 +412,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Emitted when the contract is initialized
      */
-    event Initialized(address _defaultAdmin);
+    event Initialized();
 
     /**
      * @notice Error when direct calls to the implementation are forbidden
