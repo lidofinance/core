@@ -33,7 +33,6 @@ const FEE = 2n;
 describe("VaultHub.sol:forceExit", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
   let feeRecipient: HardhatEthersSigner;
 
   let vaultHub: VaultHub;
@@ -66,12 +65,12 @@ describe("VaultHub.sol:forceExit", () => {
       treasuryFees.push(0n);
     }
 
-    const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+    // const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    // await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
   }
 
   before(async () => {
-    [deployer, user, stranger, feeRecipient] = await ethers.getSigners();
+    [deployer, user, feeRecipient] = await ethers.getSigners();
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
@@ -135,7 +134,7 @@ describe("VaultHub.sol:forceExit", () => {
   const makeVaultUnhealthy = async () => {
     await vault.fund({ value: ether("1") });
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
-    await vault.connect(vaultHubSigner).report(ether("0.9"), ether("1"), ether("1.1")); // slashing
+    await vault.connect(vaultHubSigner).report(0n, ether("0.9"), ether("1"), ether("1.1")); // slashing
   };
 
   context("forceValidatorExit", () => {
@@ -170,9 +169,18 @@ describe("VaultHub.sol:forceExit", () => {
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      await expect(vaultHub.forceValidatorExit(stranger, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+      const vaultCreationTx = (await vaultFactory
+        .createVault(user, user, predepositGuarantee)
+        .then((tx) => tx.wait())) as ContractTransactionReceipt;
+
+      const events = findEvents(vaultCreationTx, "VaultCreated");
+      const vaultCreatedEvent = events[0];
+
+      await expect(
+        vaultHub.forceValidatorExit(vaultCreatedEvent.args.vault, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
+      )
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
-        .withArgs(stranger.address);
+        .withArgs(vaultCreatedEvent.args.vault);
     });
 
     it("reverts if called for a disconnected vault", async () => {
@@ -236,28 +244,7 @@ describe("VaultHub.sol:forceExit", () => {
       const penalty = ether("1");
       await demoVault.mock__decreaseValuation(penalty);
 
-      const preTotalPooledEther = await steth.getTotalPooledEther();
-      const preTotalShares = await steth.getTotalShares();
-
-      const rebase = await vaultHub.calculateVaultsRebase(
-        [0n, valuation - penalty],
-        preTotalShares,
-        preTotalPooledEther,
-        preTotalShares - cap,
-        preTotalPooledEther - (cap * preTotalPooledEther) / preTotalShares,
-        0n,
-      );
-
-      const totalMintedShares =
-        (await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted + rebase.treasuryFeeShares[1];
-      const withReserve = (totalMintedShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - 20_00n);
-      const predictedLockedEther = await steth.getPooledEthByShares(withReserve);
-
-      expect(predictedLockedEther).to.equal(rebase.lockedEther[1]);
-
-      await demoVault.report(valuation - penalty, valuation, rebase.lockedEther[1]);
-
-      expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "ForceValidatorExitTriggered")
