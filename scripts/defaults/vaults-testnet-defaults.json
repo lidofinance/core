@@ -158,7 +158,7 @@
   },
   "delegation": {
     "deployParameters": {
-      "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
+      "wethContract": "0x2387fd72c1da19f6486b843f5da562679fbb4057"
     }
   },
   "predepositGuarantee": {

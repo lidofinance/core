@@ -107,16 +107,15 @@
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "exitedValidatorsPerDayLimit": 1500,
-      "appearedValidatorsPerDayLimit": 1500,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
+      "exitedValidatorsPerDayLimit": 9000,
+      "appearedValidatorsPerDayLimit": 43200,
       "annualBalanceIncreaseBPLimit": 1000,
-      "simulatedShareRateDeviationBPLimit": 250,
-      "maxValidatorExitRequestsPerReport": 2000,
+      "simulatedShareRateDeviationBPLimit": 50,
+      "maxValidatorExitRequestsPerReport": 600,
       "maxItemsPerExtraDataTransaction": 8,
       "maxNodeOperatorsPerExtraDataItem": 24,
       "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 5000000,
+      "maxPositiveTokenRebase": 750000,
       "initialSlashingAmountPWei": 1000,
       "inactivityPenaltiesAmountPWei": 101,
       "clBalanceOraclesErrorUpperBPLimit": 50
