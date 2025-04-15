@@ -6,9 +6,8 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
-import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+
 import {Permissions} from "./dashboard/Permissions.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -16,16 +15,19 @@ import {Dashboard} from "./dashboard/Dashboard.sol";
 
 /**
  * @title VaultFactory
- * @notice A factory contract for creating new StakingVault and Dashboard contracts
+ * @author Lido
+ * @notice The factory contract for StakingVaults
  */
 contract VaultFactory {
     address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DASHBOARD_IMPL;
 
-    /// @param _lidoLocator The address of the Lido Locator contract
-    /// @param _beacon The address of the beacon contract
-    /// @param _dashboardImpl The address of the Dashboard implementation
+    /**
+     * @param _lidoLocator The address of the LidoLocator contract
+     * @param _beacon The address of the Beacon contract for StakingVaults
+     * @param _dashboardImpl The address of the Dashboard implementation contract
+     */
     constructor(address _lidoLocator, address _beacon, address _dashboardImpl) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
@@ -38,14 +40,13 @@ contract VaultFactory {
 
     /**
      * @notice Creates a new StakingVault and Dashboard contracts
-     * @param _defaultAdmin The address of the default admin
-     * @param _nodeOperator The address of the node operator
-     * @param _extraParams The params of vault creation
-     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _defaultAdmin The address of the default admin of the Dashboard
+     * @param _nodeOperator The address of the node operator of the StakingVault
+     * @param _nodeOperatorManager The address of the node operator manager in the Dashboard
      * @param _nodeOperatorFeeBP The node operator fee in basis points
-     * @param _confirmExpiry The confirmation expiry
+     * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
-     * @param _extraParams The extra params
+     * @param _extraParams The extra params for the StakingVault
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -89,23 +90,23 @@ contract VaultFactory {
             dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
         }
 
-        emit VaultCreated(address(dashboard), address(vault));
-        emit DashboardCreated(_defaultAdmin, address(dashboard));
+        emit VaultCreated(address(vault), address(dashboard));
+        emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 
     /**
      * @notice Event emitted on a Vault creation
-     * @param owner The address of the Vault owner
      * @param vault The address of the created Vault
+     * @param owner The address of the owner of the Vault
      */
-    event VaultCreated(address indexed owner, address indexed vault);
+    event VaultCreated(address indexed vault, address indexed owner);
 
     /**
      * @notice Event emitted on a Dashboard creation
-     * @param admin The address of the Dashboard admin
      * @param dashboard The address of the created Dashboard
+     * @param admin The address of the Dashboard admin
      */
-    event DashboardCreated(address indexed admin, address indexed dashboard);
+    event DashboardCreated(address indexed dashboard, address indexed admin);
 
     /**
      * @notice Error thrown for when a given value cannot be zero
