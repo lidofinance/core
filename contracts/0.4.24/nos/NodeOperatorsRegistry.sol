@@ -8,8 +8,6 @@ import {AragonApp} from "@aragon/os/contracts/apps/AragonApp.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
-import {NodeOperatorExitManager} from "./NodeOperatorExitManager.sol";
-
 import {Math256} from "../../common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
@@ -29,7 +27,7 @@ interface IStETH {
 /// @dev Must implement the full version of IStakingModule interface, not only the one declared locally.
 ///      It's also responsible for distributing rewards to node operators.
 /// NOTE: the code below assumes moderate amount of node operators, i.e. up to `MAX_NODE_OPERATORS_COUNT`.
-contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager {
+contract NodeOperatorsRegistry is AragonApp, Versioned {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
     using SigningKeys for bytes32;
@@ -64,6 +62,21 @@ contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager 
     event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
     event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
     event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
+
+    event ValidatorExitStatusUpdated(
+        uint256 indexed nodeOperatorId,
+        bytes publicKey,
+        uint256 eligibleToExitInSec,
+        uint256 proofSlotTimestamp
+    );
+    event TriggerableExitFeeSet(
+        uint256 indexed nodeOperatorId,
+        bytes publicKey,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    );
+    event PenaltyApplied(uint256 indexed nodeOperatorId, bytes publicKey, uint256 penaltyAmount, string penaltyType);
+    event ExitDeadlineThresholdChanged(uint256 threshold);
 
     // Enum to represent the state of the reward distribution process
     enum RewardDistributionState {
@@ -317,8 +330,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager 
 
      function _initialize_v4() internal {
         _setContractVersion(4);
-        // TODO: after devnet-1 set correct value
-        _initializeNodeOperatorExitManager(60 * 60 * 24 * 2);
+        // TODO: after devnet-1 set correct logic
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1194,6 +1206,19 @@ contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager 
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
+    function _getExitDeadlineThreshold() public view returns (uint256) {
+        return 60 * 60 * 24 * 2; // 2 days
+    }
+
+    function _shouldValidatorBePenalized(
+        uint256, // _nodeOperatorId
+        uint256, // _proofSlotTimestamp
+        bytes, // _publicKey
+        uint256 _eligibleToExitInSec
+    ) internal view returns (bool) {
+        return _eligibleToExitInSec >= _getExitDeadlineThreshold();
+    }
+
     function handleActiveValidatorsExitingStatus(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -1201,9 +1226,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager 
         uint256 _eligibleToExitInSec
     ) external {
         _auth(STAKING_ROUTER_ROLE);
-        return _handleActiveValidatorsExitingStatus(
-            _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
-        );
+        require(_eligibleToExitInSec >= 0, "INVALID_EXIT_TIME"); // placeholder check
+        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
+
+        emit PenaltyApplied(_nodeOperatorId, _publicKey, 1 ether, "EXCESS_EXIT_TIME");
+        emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
 
     function onTriggerableExit(
@@ -1213,7 +1240,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager 
         uint256 _exitType
     ) external {
         _auth(STAKING_ROUTER_ROLE);
-        return _onTriggerableExit(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
+        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
+
+        emit TriggerableExitFeeSet(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
     }
 
     function exitDeadlineThreshold(uint256 /* _nodeOperatorId */) external view returns (uint256) {
