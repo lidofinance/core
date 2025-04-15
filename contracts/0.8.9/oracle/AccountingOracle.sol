@@ -219,11 +219,14 @@ contract AccountingOracle is BaseOracle {
         /// Liquid Staking Vaults
         ///
 
-        /// @dev The values of the vaults as observed at the reference slot.
-        /// Sum of all the balances of Lido validators of the vault plus the balance of the vault itself.
-        uint256[] vaultsValues;
-        /// @dev The in-out deltas (deposits - withdrawals) of the vaults as observed at the reference slot.
-        int256[] vaultsInOutDeltas;
+        /// @dev The total vaults treasury fees as observed at the reference slot.
+        uint256 vaultsTotalTreasuryFeesShares;
+        /// @dev The total vaults deficit as observed at the reference slot.
+        uint256 vaultsTotalDeficit;
+        /// @dev Merkle Tree root of the vaults data.
+        bytes32 vaultsDataTreeRoot;
+        /// @notice CID of the published Merkle tree of the vault data.
+        string vaultsDataTreeCid;
         ///
         /// Extra data — the oracle information that allows asynchronous processing in
         /// chunks, after the main data is processed. The oracle doesn't enforce that extra data
@@ -581,8 +584,10 @@ contract AccountingOracle is BaseOracle {
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
-                data.vaultsValues,
-                data.vaultsInOutDeltas
+                data.vaultsTotalTreasuryFeesShares,
+                data.vaultsTotalDeficit,
+                data.vaultsDataTreeRoot,
+                data.vaultsDataTreeCid
             )
         );
 

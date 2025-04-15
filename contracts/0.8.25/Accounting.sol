@@ -73,14 +73,6 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
-        /// @notice amount of ether to be locked in the vaults
-        uint256[] vaultsLockedEther;
-        /// @notice amount of shares to be minted as vault fees to the treasury
-        uint256[] vaultsTreasuryFeeShares;
-        /// @notice total amount of shares to be minted as vault fees to the treasury
-        uint256 totalVaultsTreasuryFeeShares;
-        /// @notice total amount of deficit to be covered by the treasury
-        uint256 totalVaultsDeficit;
     }
 
     struct StakingRewardsDistribution {
@@ -224,17 +216,9 @@ contract Accounting {
 
         update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
 
-        // Calculate the amount of ether locked in the vaults to back external balance of stETH
-        // and the amount of shares to mint as fees to the treasury for each vault
-        (update.vaultsLockedEther, update.vaultsTreasuryFeeShares, update.totalVaultsTreasuryFeeShares, update.totalVaultsDeficit) =
-            _contracts.vaultHub.calculateVaultsRebase(
-                _report.vaultValues,
-                ShareRate(_pre.totalPooledEther, _pre.totalShares),
-                ShareRate(update.postInternalEther, update.postInternalShares),
-                update.sharesToMintAsFees
-            );
+        // Calculate the amount of shares to mint as fees to the treasury for vaults
 
-        uint256 externalShares = _pre.externalShares + update.totalVaultsTreasuryFeeShares;
+        uint256 externalShares = _pre.externalShares + _report.vaultsTotalTreasuryFeesShares;
 
         update.postTotalShares = update.postInternalShares + externalShares;
         update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
@@ -332,16 +316,13 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        // TODO: Remove this once decide on vaults reporting
-        _contracts.vaultHub.updateVaults(
-            _report.vaultValues,
-            _report.inOutDeltas,
-            _update.vaultsLockedEther,
-            _update.vaultsTreasuryFeeShares
+        _contracts.vaultHub.updateReportData(
+            uint64(_report.timestamp),
+            _report.vaultsDataTreeRoot,
+            _report.vaultsDataTreeCid
         );
-
-        if (_update.totalVaultsTreasuryFeeShares > 0) {
-            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_update.totalVaultsTreasuryFeeShares);
+        if (_report.vaultsTotalTreasuryFeesShares > 0) {
+            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFeesShares);
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);

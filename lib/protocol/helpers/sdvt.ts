@@ -8,7 +8,7 @@ import { ProtocolContext } from "../types";
 import { getOperatorManagerAddress, getOperatorName, getOperatorRewardAddress } from "./nor";
 import { depositAndReportValidators } from "./staking";
 
-const SDVT_MODULE_ID = 2n;
+export const SDVT_MODULE_ID = 2n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 

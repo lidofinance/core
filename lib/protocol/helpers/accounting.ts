@@ -24,7 +24,6 @@ import { ProtocolContext } from "../types";
 const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
-const MIN_MEMBERS_COUNT = 3n;
 
 export type OracleReportParams = {
   clDiff?: bigint;
@@ -47,8 +46,10 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
-  vaultValues?: bigint[];
-  inOutDeltas?: bigint[];
+  vaultsTotalTreasuryFeesShares?: bigint;
+  vaultsTotalDeficit?: bigint;
+  vaultsDataTreeRoot?: string;
+  vaultsDataTreeCid?: string;
   silent?: boolean;
 };
 
@@ -83,8 +84,10 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    vaultValues = [],
-    inOutDeltas = [],
+    vaultsTotalTreasuryFeesShares = 0n,
+    vaultsTotalDeficit = 0n,
+    vaultsDataTreeRoot = ZERO_BYTES32,
+    vaultsDataTreeCid = "",
   }: OracleReportParams = {},
 ): Promise<OracleReportResults> => {
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
@@ -143,8 +146,10 @@ export const report = async (
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      vaultValues,
-      inOutDeltas,
+      vaultsTotalTreasuryFeesShares,
+      vaultsTotalDeficit,
+      vaultsDataTreeRoot,
+      vaultsDataTreeCid,
     });
 
     if (!simulatedReport) {
@@ -187,8 +192,10 @@ export const report = async (
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsValues: vaultValues,
-    vaultsInOutDeltas: inOutDeltas,
+    vaultsTotalTreasuryFeesShares,
+    vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -276,8 +283,10 @@ type SimulateReportParams = {
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultValues: bigint[];
-  inOutDeltas: bigint[];
+  vaultsTotalTreasuryFeesShares: bigint;
+  vaultsTotalDeficit: bigint;
+  vaultsDataTreeRoot: string;
+  vaultsDataTreeCid: string;
 };
 
 type SimulateReportResult = {
@@ -298,8 +307,10 @@ const simulateReport = async (
     clBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultValues,
-    inOutDeltas,
+    vaultsTotalTreasuryFeesShares,
+    vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -326,8 +337,10 @@ const simulateReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultValues,
-      inOutDeltas,
+      vaultsTotalTreasuryFeesShares,
+      vaultsTotalDeficit,
+      vaultsDataTreeRoot,
+      vaultsDataTreeCid,
     },
     0n,
   );
@@ -353,8 +366,10 @@ type HandleOracleReportParams = {
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultValues?: bigint[];
-  inOutDeltas?: bigint[];
+  vaultsTotalTreasuryFeesShares: bigint;
+  vaultsTotalDeficit: bigint;
+  vaultsDataTreeRoot: string;
+  vaultsDataTreeCid: string;
 };
 
 export const handleOracleReport = async (
@@ -365,8 +380,10 @@ export const handleOracleReport = async (
     sharesRequestedToBurn,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultValues = [],
-    inOutDeltas = [],
+    vaultsTotalTreasuryFeesShares,
+    vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
@@ -396,8 +413,10 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      vaultValues,
-      inOutDeltas,
+      vaultsTotalTreasuryFeesShares,
+      vaultsTotalDeficit,
+      vaultsDataTreeRoot,
+      vaultsDataTreeCid,
     });
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
@@ -499,8 +518,10 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultsValues: bigint[];
-  vaultsInOutDeltas: bigint[];
+  vaultsTotalTreasuryFeesShares?: bigint;
+  vaultsTotalDeficit?: bigint;
+  vaultsDataTreeRoot?: string;
+  vaultsDataTreeCid?: string;
   extraDataFormat?: bigint;
   extraDataHash?: string;
   extraDataItemsCount?: bigint;
@@ -529,8 +550,10 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultsValues = [],
-    vaultsInOutDeltas = [],
+    vaultsTotalTreasuryFeesShares = 0n,
+    vaultsTotalDeficit = 0n,
+    vaultsDataTreeRoot = ZERO_BYTES32,
+    vaultsDataTreeCid = "",
     extraDataFormat = 0n,
     extraDataHash = ZERO_BYTES32,
     extraDataItemsCount = 0n,
@@ -550,8 +573,10 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults values": vaultsValues,
-    "Vaults in-out deltas": vaultsInOutDeltas,
+    "Vaults total treasury fees": vaultsTotalTreasuryFeesShares,
+    "Vaults total deficit": vaultsTotalDeficit,
+    "Vaults data tree root": vaultsDataTreeRoot,
+    "Vaults data tree cid": vaultsDataTreeCid,
     "Extra data format": extraDataFormat,
     "Extra data hash": extraDataHash,
     "Extra data items count": extraDataItemsCount,
@@ -573,8 +598,10 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsValues,
-    vaultsInOutDeltas,
+    vaultsTotalTreasuryFeesShares,
+    vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
     extraDataFormat,
     extraDataHash,
     extraDataItemsCount,
@@ -686,7 +713,7 @@ const reachConsensus = async (
 /**
  * Helper function to get report data items in the required order.
  */
-const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
+export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
   data.numValidators,
@@ -698,8 +725,10 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
-  data.vaultsValues,
-  data.vaultsInOutDeltas,
+  data.vaultsTotalTreasuryFeesShares,
+  data.vaultsTotalDeficit,
+  data.vaultsDataTreeRoot,
+  data.vaultsDataTreeCid,
   data.extraDataFormat,
   data.extraDataHash,
   data.extraDataItemsCount,
@@ -708,7 +737,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
 /**
  * Helper function to calculate hash of the report data.
  */
-const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
+export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
   const types = [
     "uint256", // consensusVersion
     "uint256", // refSlot
@@ -721,8 +750,10 @@ const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
-    "uint256[]", // vaultsValues
-    "int256[]", // vaultsInOutDeltas
+    "uint256", // vaultsTotalTreasuryFeesShares
+    "uint256", // vaultsTotalDeficit
+    "bytes32", // vaultsDataTreeRoot
+    "string", // vaultsDataTreeCid
     "uint256", // extraDataFormat
     "bytes32", // extraDataHash
     "uint256", // extraDataItemsCount
@@ -740,7 +771,7 @@ const getOracleCommitteeMemberAddress = (id: number) => certainAddress(`AO:HC:OC
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();
@@ -766,7 +797,7 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log.warning(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
+    await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 

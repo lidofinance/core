@@ -7,7 +7,7 @@ import { ProtocolContext, StakingModuleName } from "../types";
 
 import { depositAndReportValidators } from "./staking";
 
-const NOR_MODULE_ID = 1n;
+export const NOR_MODULE_ID = 1n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
@@ -90,10 +90,8 @@ const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = M
     const operatorId = before + count;
 
     const operator = {
-      operatorId,
       name: getOperatorName("nor", operatorId),
       rewardAddress: getOperatorRewardAddress("nor", operatorId),
-      managerAddress: getOperatorManagerAddress("nor", operatorId),
     };
 
     await norAddNodeOperator(ctx, operator);
@@ -114,33 +112,31 @@ const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = M
 export const norAddNodeOperator = async (
   ctx: ProtocolContext,
   params: {
-    operatorId: bigint;
     name: string;
     rewardAddress: string;
-    managerAddress: string;
   },
 ) => {
   const { nor } = ctx.contracts;
-  const { operatorId, name, rewardAddress, managerAddress } = params;
+  const { name, rewardAddress } = params;
 
-  log.debug(`Adding fake NOR operator ${operatorId}`, {
-    "Operator ID": operatorId,
+  log.debug(`Adding fake NOR operator`, {
     "Name": name,
     "Reward address": rewardAddress,
-    "Manager address": managerAddress,
   });
 
   const agentSigner = await ctx.getSigner("agent");
+  const operatorId = await nor.getNodeOperatorsCount();
   await nor.connect(agentSigner).addNodeOperator(name, rewardAddress);
 
   log.debug("Added NOR fake operator", {
     "Operator ID": operatorId,
     "Name": name,
     "Reward address": rewardAddress,
-    "Manager address": managerAddress,
   });
 
   log.success(`Added fake NOR operator ${operatorId}`);
+
+  return operatorId;
 };
 
 /**
@@ -168,12 +164,7 @@ export const norAddOperatorKeys = async (
 
   await nor
     .connect(votingSigner)
-    .addSigningKeys(
-      operatorId,
-      keysToAdd,
-      randomBytes(Number(keysToAdd * PUBKEY_LENGTH)),
-      randomBytes(Number(keysToAdd * SIGNATURE_LENGTH)),
-    );
+    .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
 
   const totalKeysAfter = await nor.getTotalSigningKeyCount(operatorId);
   const unusedKeysAfter = await nor.getUnusedSigningKeyCount(operatorId);
@@ -194,9 +185,23 @@ export const norAddOperatorKeys = async (
 };
 
 /**
+ * Generates an array of random pubkeys in the correct format for NOR
+ */
+export const randomPubkeys = (count: number) => {
+  return randomBytes(count * Number(PUBKEY_LENGTH));
+};
+
+/**
+ * Generates an array of random signatures in the correct format for NOR
+ */
+export const randomSignatures = (count: number) => {
+  return randomBytes(count * Number(SIGNATURE_LENGTH));
+};
+
+/**
  * Sets the staking limit for the operator.
  */
-const norSetOperatorStakingLimit = async (
+export const norSetOperatorStakingLimit = async (
   ctx: ProtocolContext,
   params: {
     operatorId: bigint;

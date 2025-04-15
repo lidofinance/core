@@ -20,7 +20,6 @@ The repository contains bash scripts for deploying the DAO across various enviro
 
 - Local Node Deployment - `scripts/dao-local-deploy.sh` (Supports Ganache, Anvil, Hardhat Network, and other local
   Ethereum nodes)
-- Holešky Testnet Deployment – `scripts/dao-holesky-deploy.sh`
 
 The protocol requires configuration of numerous parameters for a scratch deployment. The default configurations are
 stored in JSON files named `deployed-<deploy env>-defaults.json`, where `<deploy env>` represents the target
@@ -102,10 +101,10 @@ mnemonic.
 
 Follow these steps for local deployment:
 
-1. Run `yarn install` (get sure repo dependencies are installed)
+1. Run `yarn install` (ensure repo dependencies are installed)
 2. Run the node on port 8555 (for the commands, see subsections below)
-3. Run the deploy script `bash scripts/dao-local-deploy.sh` from root repo directory
-4. Check out the deploy artifacts in `deployed-local.json`
+3. Run the script `bash scripts/dao-local-deploy.sh` from root repo directory
+4. Check out the artifacts in `deployed-local.json`
 
 #### Supported Local Nodes
 
@@ -121,33 +120,32 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 yarn hardhat node
 ```
 
-### Holešky Testnet Deployment
+### Testnet Deployment
 
-To do Holešky deployment, the following parameters must be set up via env variables:
+To do a testnet deployment, the following parameters must be set up via env variables:
 
 - `DEPLOYER`. The deployer address. The deployer must own its private key. To ensure proper operation, it should have an
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
-- `RPC_URL`. Address of the Ethereum RPC node to use. E.g. for Infura it is
-  `https://holesky.infura.io/v3/<yourProjectId>`
+- `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `GATE_SEAL_FACTORY`. Address of the [GateSeal Factory](https://github.com/lidofinance/gate-seals) contract. Must be
   deployed in advance. Can be set to any `0x0000000000000000000000000000000000000000` to debug deployment
-- `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC712. By default not set (left an empty string)
+- `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC721. By default not set (left an empty string)
 - `DSM_PREDEFINED_ADDRESS`. Address to use instead of deploying `DepositSecurityModule` or `null` otherwise. If used,
   the deposits can be made by calling `Lido.deposit` from the address.
 
-Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
+Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/<network>` like `"<network>": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
-To start the deployment, run (the env variables must already defined) from the root repo directory, e.g.:
+To start the deployment, run (the env variables must already be defined) from the root repo directory, e.g.:
 
 ```shell
-bash scripts/scratch/dao-holesky-deploy.sh
+bash scripts/scratch/dao-<network>-deploy.sh
 ```
 
-Deploy artifacts information will be stored in `deployed-holesky.json`.
+Deployment artifacts information will be stored in `deployed-<network>.json`.
 
 ## Post-Deployment Tasks
 
@@ -169,18 +167,18 @@ There are some contracts deployed from other contracts for which automatic hardh
 - `CallsScript` -- Aragon internal contract
 - `EVMScriptRegistry` -- Aragon internal contract
 
-The workaround used during Holešky deployment is to deploy auxiliary instances of these contracts standalone and verify
+The workaround used during Holesky deployment is to deploy auxiliary instances of these contracts standalone and verify
 them via hardhat Etherscan plugin. After this Etherscan will mark the target contracts as verified by "Similar Match
 Source Code".
 
-NB, that some contracts require additional auxiliary contract to be deployed. Namely, the constructor of
+Note that some contracts require additional auxiliary contracts to be deployed. Namely, the constructor of
 `AppProxyPinned` depends on proxy implementation ("base" in Aragon terms) contract with `initialize()` function and
 `Kernel` contract, which must return the implementation by call `kernel().getApp(KERNEL_APP_BASES_NAMESPACE, _appId)`.
 See `@aragon/os/contracts/apps/AppProxyBase.sol` for the details.
 
 ### Initialization to Fully Operational State
 
-In order to make the protocol fully operational, the additional steps are required:
+In order to make the protocol fully operational, the following additional steps are required:
 
 - add oracle committee members to `HashConsensus` contracts for `AccountingOracle` and `ValidatorsExitBusOracle`:
   `HashConsensus.addMember`;
@@ -194,7 +192,7 @@ In order to make the protocol fully operational, the additional steps are requir
 - set staking limits for the Node Operators: `NodeOperatorsRegistry.setNodeOperatorStakingLimit`.
 
 > [!NOTE]
-> That part of the actions require prior granting of the required roles, e.g. `STAKING_MODULE_MANAGE_ROLE` for
+> Some of these actions require prior granting of the required roles, e.g. `STAKING_MODULE_MANAGE_ROLE` for
 > `StakingRouter.addStakingModule`:
 
 ```js
@@ -215,7 +213,7 @@ await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { fr
 
 ## Protocol Parameters
 
-This section describes part of the parameters and their values used at the deployment. The values are specified in
+This section describes part of the parameters and their values used during deployment. The values are specified in
 `testnet-defaults.json`.
 
 ### OracleDaemonConfig
