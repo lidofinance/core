@@ -5,6 +5,7 @@ pragma solidity 0.8.9;
 
 interface IWithdrawalVault {
     function addFullWithdrawalRequests(bytes calldata pubkeys) external payable;
+    function addPartialWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts) external payable;
     function getWithdrawalRequestFee() external view returns (uint256);
 }
 
@@ -27,5 +28,12 @@ contract RefundFailureTester {
 
         // withdrawal vault should fail to refund
         withdrawalVault.addFullWithdrawalRequests{value: msg.value}(pubkeys);
+    }
+
+    function addPartialWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts) external payable {
+        require(msg.value > withdrawalVault.getWithdrawalRequestFee(), "Not enough eth for Refund");
+
+        // withdrawal vault should fail to refund
+        withdrawalVault.addPartialWithdrawalRequests{value: msg.value}(pubkeys, amounts);
     }
 }

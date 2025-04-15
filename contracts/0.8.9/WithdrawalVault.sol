@@ -10,8 +10,9 @@ import "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
+
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {WithdrawalVaultEIP7685} from "./WithdrawalVaultEIP7685.sol";
 
 interface ILido {
     /**
@@ -25,13 +26,11 @@ interface ILido {
 /**
  * @title A vault for temporary storage of withdrawals
  */
-contract WithdrawalVault is AccessControlEnumerable, Versioned {
+contract WithdrawalVault is AccessControlEnumerable, Versioned, WithdrawalVaultEIP7685 {
     using SafeERC20 for IERC20;
 
     ILido public immutable LIDO;
     address public immutable TREASURY;
-
-    bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
 
     // Events
     /**
@@ -51,12 +50,6 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
     error NotLido();
     error NotEnoughEther(uint256 requested, uint256 balance);
     error ZeroAmount();
-    error InsufficientTriggerableWithdrawalFee(
-        uint256 providedTotalFee,
-        uint256 requiredTotalFee,
-        uint256 requestCount
-    );
-    error TriggerableWithdrawalRefundFailed();
 
     /**
      * @param _lido the Lido token (stETH) address
@@ -140,59 +133,6 @@ contract WithdrawalVault is AccessControlEnumerable, Versioned {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
         _token.transferFrom(address(this), TREASURY, _tokenId);
-    }
-
-    /**
-     * @dev Submits EIP-7002 full withdrawal requests for the specified public keys.
-     *      Each request instructs a validator to fully withdraw its stake and exit its duties as a validator.
-     *      Refunds any excess fee to the caller after deducting the total fees,
-     *      which are calculated based on the number of public keys and the current minimum fee per withdrawal request.
-     *
-     * @param pubkeys A tightly packed array of 48-byte public keys corresponding to validators requesting full withdrawals.
-     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @notice Reverts if:
-     *         - The caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE`.
-     *         - Validation of any of the provided public keys fails.
-     *         - The provided total withdrawal fee is insufficient to cover all requests.
-     *         - Refund of the excess fee fails.
-     */
-    function addFullWithdrawalRequests(
-        bytes calldata pubkeys
-    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) {
-        uint256 prevBalance = address(this).balance - msg.value;
-
-        uint256 minFeePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
-        uint256 totalFee = (pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH) * minFeePerRequest;
-
-        if (totalFee > msg.value) {
-            revert InsufficientTriggerableWithdrawalFee(
-                msg.value,
-                totalFee,
-                pubkeys.length / TriggerableWithdrawals.PUBLIC_KEY_LENGTH
-            );
-        }
-
-        TriggerableWithdrawals.addFullWithdrawalRequests(pubkeys, minFeePerRequest);
-
-        uint256 refund = msg.value - totalFee;
-        if (refund > 0) {
-            (bool success, ) = msg.sender.call{value: refund}("");
-
-            if (!success) {
-                revert TriggerableWithdrawalRefundFailed();
-            }
-        }
-
-        assert(address(this).balance == prevBalance);
-    }
-
-    /**
-     * @dev Retrieves the current EIP-7002 withdrawal fee.
-     * @return The minimum fee required per withdrawal request.
-     */
-    function getWithdrawalRequestFee() external view returns (uint256) {
-        return TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
     function _onlyNonZeroAddress(address _address) internal pure {

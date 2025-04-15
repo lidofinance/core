@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { ContractTransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -23,6 +23,7 @@ import { Snapshot } from "test/suite";
 const PETRIFIED_VERSION = MAX_UINT256;
 
 const ADD_FULL_WITHDRAWAL_REQUEST_ROLE = streccak("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+const ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE = streccak("ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE");
 
 describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
@@ -309,6 +310,7 @@ describe("WithdrawalVault.sol", () => {
     beforeEach(async () => {
       await vault.initialize(owner);
       await vault.connect(owner).grantRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
+      await vault.connect(owner).grantRole(ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
     });
 
     it("Should revert if the caller is not Validator Exit Bus", async () => {
@@ -316,31 +318,89 @@ describe("WithdrawalVault.sol", () => {
         stranger.address,
         ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
       );
+
+      await expect(
+        vault.connect(stranger).addPartialWithdrawalRequests("0x1234", [1n]),
+      ).to.be.revertedWithOZAccessControlError(stranger.address, ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE);
     });
 
     it("Should revert if empty arrays are provided", async function () {
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests("0x", { value: 1n }),
       ).to.be.revertedWithCustomError(vault, "NoWithdrawalRequests");
+
+      await expect(
+        vault.connect(validatorsExitBus).addPartialWithdrawalRequests("0x", [], { value: 1n }),
+      ).to.be.revertedWithCustomError(vault, "NoWithdrawalRequests");
+    });
+
+    it("Should revert if array lengths do not match", async function () {
+      const requestCount = 2;
+      const { pubkeysHexString } = generateWithdrawalRequestPayload(requestCount);
+      const amounts = [1n];
+
+      const totalWithdrawalFee = (await getFee()) * BigInt(requestCount);
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, amounts, { value: totalWithdrawalFee }),
+      )
+        .to.be.revertedWithCustomError(vault, "MismatchedArrayLengths")
+        .withArgs(requestCount, amounts.length);
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, [], { value: totalWithdrawalFee }),
+      )
+        .to.be.revertedWithCustomError(vault, "MismatchedArrayLengths")
+        .withArgs(requestCount, 0);
+    });
+
+    it("Should revert when a full withdrawal amount is included in 'addPartialWithdrawalRequests'", async function () {
+      const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
+      const amounts = [1n, 0n]; // Partial and Full withdrawal
+      const totalWithdrawalFee = (await getFee()) * BigInt(pubkeysHexString.length);
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, amounts, { value: totalWithdrawalFee }),
+      ).to.be.revertedWithCustomError(vault, "PartialWithdrawalRequired");
     });
 
     it("Should revert if not enough fee is sent", async function () {
-      const { pubkeysHexString } = generateWithdrawalRequestPayload(1);
+      const { pubkeysHexString, partialWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
 
       await withdrawalsPredeployed.mock__setFee(3n); // Set fee to 3 gwei
 
       // 1. Should revert if no fee is sent
       await expect(vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString))
-        .to.be.revertedWithCustomError(vault, "InsufficientTriggerableWithdrawalFee")
-        .withArgs(0, 3n, 1);
+        .to.be.revertedWithCustomError(vault, "InsufficientFee")
+        .withArgs(0, 3n);
+
+      await expect(
+        vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts),
+      )
+        .to.be.revertedWithCustomError(vault, "InsufficientFee")
+        .withArgs(0, 3n);
 
       // 2. Should revert if fee is less than required
       const insufficientFee = 2n;
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: insufficientFee }),
       )
-        .to.be.revertedWithCustomError(vault, "InsufficientTriggerableWithdrawalFee")
-        .withArgs(2n, 3n, 1);
+        .to.be.revertedWithCustomError(vault, "InsufficientFee")
+        .withArgs(2n, 3n);
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: insufficientFee }),
+      )
+        .to.be.revertedWithCustomError(vault, "InsufficientFee")
+        .withArgs(2n, 3n);
     });
 
     it("Should revert if pubkey is not 48 bytes", async function () {
@@ -351,6 +411,10 @@ describe("WithdrawalVault.sol", () => {
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(invalidPubkeyHexString, { value: fee }),
+      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+
+      await expect(
+        vault.connect(validatorsExitBus).addPartialWithdrawalRequests(invalidPubkeyHexString, [1n], { value: fee }),
       ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
     });
 
@@ -365,10 +429,14 @@ describe("WithdrawalVault.sol", () => {
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+
+      await expect(
+        vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, [1n, 2n], { value: fee }),
+      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
-      const { pubkeysHexString } = generateWithdrawalRequestPayload(1);
+      const { pubkeysHexString, partialWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
       const fee = await getFee();
 
       // Set mock to fail on add
@@ -377,28 +445,46 @@ describe("WithdrawalVault.sol", () => {
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "WithdrawalRequestAdditionFailed");
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: fee }),
+      ).to.be.revertedWithCustomError(vault, "WithdrawalRequestAdditionFailed");
     });
 
     it("Should revert when fee read fails", async function () {
       await withdrawalsPredeployed.mock__setFailOnGetFee(true);
 
-      const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
+      const { pubkeysHexString, partialWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
       const fee = 10n;
 
       await expect(
         vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
+
+      await expect(
+        vault
+          .connect(validatorsExitBus)
+          .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: fee }),
+      ).to.be.revertedWithCustomError(vault, "WithdrawalFeeReadFailed");
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
-      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+      it(`Should revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
         await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
-        const { pubkeysHexString } = generateWithdrawalRequestPayload(2);
+        const { pubkeysHexString, partialWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
         const fee = 10n;
 
         await expect(
           vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: fee }),
+        ).to.be.revertedWithCustomError(vault, "WithdrawalFeeInvalidData");
+
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: fee }),
         ).to.be.revertedWithCustomError(vault, "WithdrawalFeeInvalidData");
       });
     });
@@ -410,9 +496,10 @@ describe("WithdrawalVault.sol", () => {
       const refundFailureTesterAddress = await refundFailureTester.getAddress();
 
       await vault.connect(owner).grantRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE, refundFailureTesterAddress);
+      await vault.connect(owner).grantRole(ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE, refundFailureTesterAddress);
 
       const requestCount = 3;
-      const { pubkeysHexString } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, partialWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
@@ -422,18 +509,31 @@ describe("WithdrawalVault.sol", () => {
         refundFailureTester
           .connect(stranger)
           .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + 1n }),
-      ).to.be.revertedWithCustomError(vault, "TriggerableWithdrawalRefundFailed");
+      ).to.be.revertedWithCustomError(vault, "ExcessFeeRefundFailed");
+
+      await expect(
+        refundFailureTester.connect(stranger).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+          value: expectedTotalWithdrawalFee + 1n,
+        }),
+      ).to.be.revertedWithCustomError(vault, "ExcessFeeRefundFailed");
 
       await expect(
         refundFailureTester
           .connect(stranger)
           .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee + ethers.parseEther("1") }),
-      ).to.be.revertedWithCustomError(vault, "TriggerableWithdrawalRefundFailed");
+      ).to.be.revertedWithCustomError(vault, "ExcessFeeRefundFailed");
+
+      await expect(
+        refundFailureTester.connect(stranger).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+          value: expectedTotalWithdrawalFee + ethers.parseEther("1"),
+        }),
+      ).to.be.revertedWithCustomError(vault, "ExcessFeeRefundFailed");
     });
 
     it("Should accept withdrawal requests when the provided fee matches the exact required amount", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(3n);
@@ -446,6 +546,16 @@ describe("WithdrawalVault.sol", () => {
             .addFullWithdrawalRequests(pubkeysHexString, { value: expectedTotalWithdrawalFee }),
         pubkeys,
         fullWithdrawalAmounts,
+        fee,
+      );
+
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: expectedTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
         fee,
       );
 
@@ -463,11 +573,22 @@ describe("WithdrawalVault.sol", () => {
         fullWithdrawalAmounts,
         highFee,
       );
+
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: expectedLargeTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        highFee,
+      );
     });
 
     it("Should accept withdrawal requests when the provided fee exceeds the required amount", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
@@ -477,6 +598,16 @@ describe("WithdrawalVault.sol", () => {
         () => vault.connect(validatorsExitBus).addFullWithdrawalRequests(pubkeysHexString, { value: withdrawalFee }),
         pubkeys,
         fullWithdrawalAmounts,
+        fee,
+      );
+
+      await testEIP7002Mock(
+        () =>
+          vault
+            .connect(validatorsExitBus)
+            .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: withdrawalFee }),
+        pubkeys,
+        partialWithdrawalAmounts,
         fee,
       );
 
@@ -490,11 +621,22 @@ describe("WithdrawalVault.sol", () => {
         fullWithdrawalAmounts,
         fee,
       );
+
+      await testEIP7002Mock(
+        () =>
+          vault
+            .connect(validatorsExitBus)
+            .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: largeWithdrawalFee }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
     });
 
     it("Should not affect contract balance", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
@@ -513,6 +655,17 @@ describe("WithdrawalVault.sol", () => {
       );
       expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
 
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: expectedTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
+      expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
+
       const excessTotalWithdrawalFee = 9n + 1n; // 3 requests * 3 gwei (fee) + 1 gwei (extra fee) = 10 gwei
 
       await testEIP7002Mock(
@@ -526,20 +679,33 @@ describe("WithdrawalVault.sol", () => {
       );
 
       expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
+
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: excessTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
+
+      expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
     });
 
     it("Should refund excess fee", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
       const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
       const excessFee = 1n;
 
-      const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
+      let vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
 
-      const { receipt } = await testEIP7002Mock(
+      const { receipt: fullWithdrawalReceipt } = await testEIP7002Mock(
         () =>
           vault
             .connect(validatorsExitBus)
@@ -550,13 +716,32 @@ describe("WithdrawalVault.sol", () => {
       );
 
       expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
-        vebInitialBalance - expectedTotalWithdrawalFee - receipt.gasUsed * receipt.gasPrice,
+        vebInitialBalance - expectedTotalWithdrawalFee - fullWithdrawalReceipt.gasUsed * fullWithdrawalReceipt.gasPrice,
+      );
+
+      vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
+
+      const { receipt: partialWithdrawalReceipt } = await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: expectedTotalWithdrawalFee + excessFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
+
+      expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
+        vebInitialBalance -
+          expectedTotalWithdrawalFee -
+          partialWithdrawalReceipt.gasUsed * partialWithdrawalReceipt.gasPrice,
       );
     });
 
     it("Should transfer the total calculated fee to the EIP-7002 withdrawal contract", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(3n);
@@ -578,6 +763,20 @@ describe("WithdrawalVault.sol", () => {
       expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
 
       initialBalance = await getWithdrawalsPredeployedContractBalance();
+
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: expectedTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
+
+      expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
+
+      initialBalance = await getWithdrawalsPredeployedContractBalance();
       await testEIP7002Mock(
         () =>
           vault
@@ -587,33 +786,61 @@ describe("WithdrawalVault.sol", () => {
         fullWithdrawalAmounts,
         fee,
       );
-      // Only the expected fee should be transferred
+
+      expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
+
+      initialBalance = await getWithdrawalsPredeployedContractBalance();
+      await testEIP7002Mock(
+        () =>
+          vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+            value: excessTotalWithdrawalFee,
+          }),
+        pubkeys,
+        partialWithdrawalAmounts,
+        fee,
+      );
+
       expect(await getWithdrawalsPredeployedContractBalance()).to.equal(initialBalance + expectedTotalWithdrawalFee);
     });
 
     it("Should ensure withdrawal requests are encoded as expected with a 48-byte pubkey and 8-byte amount", async function () {
       const requestCount = 16;
-      const { pubkeysHexString, pubkeys } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexString, pubkeys, partialWithdrawalAmounts, fullWithdrawalAmounts } =
+        generateWithdrawalRequestPayload(requestCount);
       const totalWithdrawalFee = 333n;
 
-      const tx = await vault
+      const testEncoding = async (
+        tx: ContractTransactionResponse,
+        expectedPubkeys: string[],
+        expectedAmounts: bigint[],
+      ) => {
+        const receipt = await tx.wait();
+
+        const events = findEIP7002MockEvents(receipt!);
+        expect(events.length).to.equal(requestCount);
+
+        for (let i = 0; i < requestCount; i++) {
+          const encodedRequest = events[i].args[0];
+          // 0x (2 characters) + 48-byte pubkey (96 characters) + 8-byte amount (16 characters) = 114 characters
+          expect(encodedRequest.length).to.equal(114);
+
+          expect(encodedRequest.slice(0, 2)).to.equal("0x");
+          expect(encodedRequest.slice(2, 98)).to.equal(expectedPubkeys[i]);
+          expect(encodedRequest.slice(98, 114)).to.equal(expectedAmounts[i].toString(16).padStart(16, "0"));
+        }
+      };
+
+      const txFullWithdrawal = await vault
         .connect(validatorsExitBus)
         .addFullWithdrawalRequests(pubkeysHexString, { value: totalWithdrawalFee });
 
-      const receipt = await tx.wait();
+      await testEncoding(txFullWithdrawal, pubkeys, fullWithdrawalAmounts);
 
-      const events = findEIP7002MockEvents(receipt!);
-      expect(events.length).to.equal(requestCount);
+      const txPartialWithdrawal = await vault
+        .connect(validatorsExitBus)
+        .addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, { value: totalWithdrawalFee });
 
-      for (let i = 0; i < requestCount; i++) {
-        const encodedRequest = events[i].args[0];
-        // 0x (2 characters) + 48-byte pubkey (96 characters) + 8-byte amount (16 characters) = 114 characters
-        expect(encodedRequest.length).to.equal(114);
-
-        expect(encodedRequest.slice(0, 2)).to.equal("0x");
-        expect(encodedRequest.slice(2, 98)).to.equal(pubkeys[i]);
-        expect(encodedRequest.slice(98, 114)).to.equal("0".repeat(16)); // Amount is 0
-      }
+      await testEncoding(txPartialWithdrawal, pubkeys, partialWithdrawalAmounts);
     });
 
     const testCasesForWithdrawalRequests = [
@@ -630,14 +857,15 @@ describe("WithdrawalVault.sol", () => {
 
     testCasesForWithdrawalRequests.forEach(({ requestCount, extraFee }) => {
       it(`Should successfully add ${requestCount} requests with extra fee ${extraFee}`, async () => {
-        const { pubkeysHexString, pubkeys, fullWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const { pubkeysHexString, pubkeys, fullWithdrawalAmounts, partialWithdrawalAmounts } =
+          generateWithdrawalRequestPayload(requestCount);
         const expectedFee = await getFee();
         const expectedTotalWithdrawalFee = expectedFee * BigInt(requestCount);
 
         const initialBalance = await getWithdrawalCredentialsContractBalance();
-        const vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
+        let vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
 
-        const { receipt } = await testEIP7002Mock(
+        const { receipt: receiptFullWithdrawal } = await testEIP7002Mock(
           () =>
             vault
               .connect(validatorsExitBus)
@@ -649,7 +877,27 @@ describe("WithdrawalVault.sol", () => {
 
         expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
         expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
-          vebInitialBalance - expectedTotalWithdrawalFee - receipt.gasUsed * receipt.gasPrice,
+          vebInitialBalance -
+            expectedTotalWithdrawalFee -
+            receiptFullWithdrawal.gasUsed * receiptFullWithdrawal.gasPrice,
+        );
+
+        vebInitialBalance = await ethers.provider.getBalance(validatorsExitBus.address);
+        const { receipt: receiptPartialWithdrawal } = await testEIP7002Mock(
+          () =>
+            vault.connect(validatorsExitBus).addPartialWithdrawalRequests(pubkeysHexString, partialWithdrawalAmounts, {
+              value: expectedTotalWithdrawalFee + extraFee,
+            }),
+          pubkeys,
+          partialWithdrawalAmounts,
+          expectedFee,
+        );
+
+        expect(await getWithdrawalCredentialsContractBalance()).to.equal(initialBalance);
+        expect(await ethers.provider.getBalance(validatorsExitBus.address)).to.equal(
+          vebInitialBalance -
+            expectedTotalWithdrawalFee -
+            receiptPartialWithdrawal.gasUsed * receiptPartialWithdrawal.gasPrice,
         );
       });
     });
