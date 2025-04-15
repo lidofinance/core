@@ -27,7 +27,7 @@ import {VaultHub} from "../VaultHub.sol";
  * If the fee was never claimed, the percentage is calculated based on the total
  * rewards accrued since the StakingVault was created.
  */
-abstract contract NodeOperatorFee is Permissions {
+contract NodeOperatorFee is Permissions {
     /**
      * @notice Total basis points; 1bp = 0.01%, 100_00bp = 100.00%.
      */
