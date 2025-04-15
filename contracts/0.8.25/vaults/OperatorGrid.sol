@@ -299,6 +299,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         vaultTier.tierIndex = uint128(requestedTierId);
         vaultTier.tierIndexRequested = 0;
 
+        VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
+            _vault,
+            requestedTier.shareLimit,
+            requestedTier.reserveRatioBP,
+            requestedTier.rebalanceThresholdBP,
+            requestedTier.treasuryFeeBP
+        );
+
         emit TierChanged(_vault, requestedTierId);
     }
 

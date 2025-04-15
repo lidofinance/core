@@ -324,6 +324,27 @@ contract VaultHub is PausableUntilWithRoles {
         emit ShareLimitUpdated(_vault, _shareLimit);
     }
 
+    function updateConnection(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _rebalanceThresholdBP,
+        uint256 _treasuryFeeBP
+    ) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        _checkShareLimitUpperBound(_vault, _shareLimit);
+        if (msg.sender != address(OPERATOR_GRID)) revert NotAuthorized("updateConnection", msg.sender);
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        socket.shareLimit = uint96(_shareLimit);
+        socket.reserveRatioBP = uint16(_reserveRatioBP);
+        socket.rebalanceThresholdBP = uint16(_rebalanceThresholdBP);
+        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+
+        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+    }
+
     function updateReportData(
         uint64 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
@@ -603,6 +624,8 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+    event VaultConnectionUpdated(address indexed vault, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFeeBP);
+
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
