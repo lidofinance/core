@@ -390,7 +390,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        _requireUnhealthy(_vault);
 
         uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
         uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
@@ -430,7 +429,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        _requireUnhealthy(_vault);
+        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
@@ -638,10 +637,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
-    }
-
-    function _requireUnhealthy(address _vault) internal view {
-        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
     }
 
     event VaultConnected(
