@@ -459,7 +459,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
+        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
