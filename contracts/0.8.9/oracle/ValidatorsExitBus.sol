@@ -16,7 +16,7 @@ interface IWithdrawalVault {
     function getWithdrawalRequestFee() external view returns (uint256);
 }
 
-abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
+contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ReportExitLimitUtilsStorage for bytes32;
     using ReportExitLimitUtils for ExitRequestLimitData;
@@ -33,6 +33,8 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     error InvalidRequestsData();
     error RequestsAlreadyDelivered();
     error ExitRequestsLimit();
+    error InvalidPubkeysArray();
+    error NoExitRequestProvided();
 
     /// @dev Events
     event MadeRefund(
@@ -55,6 +57,13 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     event ExitRequestsLimitSet(
         uint256 _maxExitRequestsLimit,
         uint256 _exitRequestsLimitIncreasePerBlock
+    );
+
+    event DirectExitRequest(
+        uint256 indexed stakingModuleId,
+        uint256 indexed nodeOperatorId,
+        bytes validatorsPubkeys,
+        uint256 timestamp
     );
 
     struct RequestStatus {
@@ -236,31 +245,28 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         assert(address(this).balance == prevBalance);
     }
 
-    function triggerExitsDirectly(ValidatorExitData calldata validator) external payable whenResumed onlyRole(DIRECT_EXIT_HASH_ROLE) returns (uint256)  {
+    function triggerExitsDirectly(DirectExitData calldata exitData) external payable whenResumed onlyRole(DIRECT_EXIT_HASH_ROLE) returns (uint256)  {
         uint256 prevBalance = address(this).balance - msg.value;
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
-        if (msg.value < withdrawalFee ) {
-           revert InsufficientPayment(withdrawalFee, 1, msg.value);
+        if (exitData.validatorsPubkeys.length == 0) {
+          revert NoExitRequestProvided();
         }
 
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-
-        if (exitRequestLimitData.isExitReportLimitSet()) {
-          uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
-          if (limit == 0) {
-            revert ExitRequestsLimit();
-          }
-
-          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - 1));
+        if ( exitData.validatorsPubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+          revert InvalidPubkeysArray();
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value:  withdrawalFee}(validator.validatorPubkey);
+        if (msg.value < withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH )) {
+           revert InsufficientPayment(withdrawalFee,(exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH ), msg.value);
+        }
 
-        emit ValidatorExitRequest(validator.stakingModuleId, validator.nodeOperatorId, validator.validatorIndex, validator.validatorPubkey, _getTimestamp());
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH )}(exitData.validatorsPubkeys);
 
-        uint256 refund = msg.value - withdrawalFee;
+        emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, exitData.validatorsPubkeys, _getTimestamp());
+
+        uint256 refund = msg.value - withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH );
 
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
@@ -285,11 +291,70 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         emit ExitRequestsLimitSet(_maxExitRequestsLimit, _exitRequestsLimitIncreasePerBlock);
     }
 
-    function getDeliveryHistory(bytes32 exitReportHash) external view returns (DeliveryHistory[] memory) {
-      mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
-      RequestStatus storage request = hashes[exitReportHash];
+    function getExitRequestsDeliveryHistory(
+        bytes32 exitRequestsHash
+    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
 
-      return request.deliverHistory;
+        if (requestStatus.contractVersion == 0) {
+            revert ExitHashWasNotSubmitted();
+        }
+
+        return (requestStatus.totalItemsCount, requestStatus.deliveredItemsCount, requestStatus.deliverHistory);
+    }
+
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
+        if (dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+
+        if (exitRequests.length % PACKED_REQUEST_LENGTH != 0) {
+            revert InvalidRequestsDataLength();
+        }
+
+        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
+            revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+        }
+
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, index))
+
+            // Load the first 16 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), and valIndex (64 bits).
+            dataWithoutPubkey := shr(128, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (128 bits total):
+        // MSB <-------------------- 128 bits --------------------> LSB
+        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+
+        valIndex = uint64(dataWithoutPubkey);
+        nodeOpId = uint40(dataWithoutPubkey >> 64);
+        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+        // Allocate a new bytes array in memory for the pubkey
+        pubkey = new bytes(PUBLIC_KEY_LENGTH);
+
+        assembly {
+            // Starting offset in calldata for the pubkey part
+            let pubkeyCalldataOffset := add(itemOffset, 16)
+
+            // Memory location of the 'pubkey' bytes array data
+            let pubkeyMemPtr := add(pubkey, 32)
+
+            // Copy the 48 bytes of the pubkey from calldata into memory
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        return (pubkey, nodeOpId, moduleId, valIndex);
     }
 
     /// @notice Resume accepting validator exit requests

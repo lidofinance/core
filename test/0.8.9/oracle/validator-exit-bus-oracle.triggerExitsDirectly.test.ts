@@ -16,7 +16,7 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
+describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
@@ -24,15 +24,14 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
 
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let validatorExitData: ValidatorExitData;
+  let exitData: DirectExitData;
 
   const LAST_PROCESSING_REF_SLOT = 1;
 
-  interface ValidatorExitData {
+  interface DirectExitData {
     stakingModuleId: number;
     nodeOperatorId: number;
-    validatorIndex: number;
-    validatorPubkey: string;
+    validatorsPubkeys: string;
   }
 
   const deploy = async () => {
@@ -58,16 +57,18 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
   });
 
   it("Should revert without DIRECT_EXIT_HASH_ROLE role", async () => {
-    validatorExitData = {
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+
+    exitData = {
       stakingModuleId: 1,
       nodeOperatorId: 0,
-      validatorIndex: 0,
-      validatorPubkey: PUBKEYS[0],
+      validatorsPubkeys: "0x" + concatenatedPubKeys
     };
 
     await expect(
-      oracle.connect(stranger).triggerExitsDirectly(validatorExitData, {
-        value: 2,
+      oracle.connect(stranger).triggerExitsDirectly(exitData, {
+        value: 4,
       }),
     ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.DIRECT_EXIT_HASH_ROLE());
   });
@@ -78,29 +79,28 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     await oracle.grantRole(role, authorizedEntity);
 
     await expect(
-      oracle.connect(authorizedEntity).triggerExitsDirectly(validatorExitData, {
-        value: 0,
+      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+        value: 2,
       }),
     )
       .to.be.revertedWithCustomError(oracle, "InsufficientPayment")
-      .withArgs(1, 1, 0);
+      .withArgs(1, 3, 2);
   });
 
   it("Emit ValidatorExit event and should trigger withdrawals", async () => {
-    const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(validatorExitData, {
-      value: 2,
+    const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+      value: 4,
     });
     const timestamp = await oracle.getTime();
-    await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(PUBKEYS[0]);
+    await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(exitData.validatorsPubkeys);
     await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
 
     await expect(tx)
-      .to.emit(oracle, "ValidatorExitRequest")
+      .to.emit(oracle, "DirectExitRequest")
       .withArgs(
-        validatorExitData.stakingModuleId,
-        validatorExitData.nodeOperatorId,
-        validatorExitData.validatorIndex,
-        validatorExitData.validatorPubkey,
+        exitData.stakingModuleId,
+        exitData.nodeOperatorId,
+        exitData.validatorsPubkeys,
         timestamp,
       );
   });

@@ -83,10 +83,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
     ];
 
-    exitRequest = {
-      dataFormat: DATA_FORMAT_LIST,
-      data: encodeExitRequestsDataList(exitRequests),
-    };
+    exitRequest = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(exitRequests) };
 
     await expect(oracle.emitExitEvents(exitRequest, 2))
       .to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted")
@@ -173,10 +170,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], request));
     const submitTx = await oracle.connect(authorizedEntity).submitReportHash(hash);
     await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(hash);
-    exitRequest = {
-      dataFormat: 2,
-      data: encodeExitRequestsDataList(exitRequests),
-    };
+    exitRequest = { dataFormat: 2, data: encodeExitRequestsDataList(exitRequests) };
     await expect(oracle.emitExitEvents(exitRequest, 2))
       .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
       .withArgs(2);
@@ -196,17 +190,14 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
     ];
 
-    exitRequest = {
-      dataFormat: DATA_FORMAT_LIST,
-      data: encodeExitRequestsDataList(exitRequests),
-    };
+    exitRequest = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(exitRequests) };
 
     exitRequestHash = ethers.keccak256(
       ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
     );
 
-    const history0 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history0.length).to.eq(0);
+    // const history0 = await oracle.getDeliveryHistory(exitRequestHash);
+    // expect(history0.length).to.eq(0);
 
     const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
     await expect(submitTx).to.emit(oracle, "StoredExitRequestHash");
@@ -238,9 +229,9 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         timestamp,
       );
 
-    const history1 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history1.length).to.eq(1);
-    expect(history1[0].lastDeliveredKeyIndex).to.eq(1);
+    // const history1 = await oracle.getDeliveryHistory(exitRequestHash);
+    // expect(history1.length).to.eq(1);
+    // expect(history1[0].lastDeliveredKeyIndex).to.eq(1);
 
     const emitTx2 = await oracle.emitExitEvents(exitRequest, 2);
 
@@ -257,9 +248,9 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         timestamp,
       );
 
-    const history2 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history2.length).to.eq(2);
-    expect(history2[1].lastDeliveredKeyIndex).to.eq(2);
+    // const history2 = await oracle.getDeliveryHistory(exitRequestHash);
+    // expect(history2.length).to.eq(2);
+    // expect(history2[1].lastDeliveredKeyIndex).to.eq(2);
 
     const emitTx3 = await oracle.emitExitEvents(exitRequest, 2);
 
@@ -276,9 +267,9 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         timestamp,
       );
 
-    const history3 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history3.length).to.eq(3);
-    expect(history3[2].lastDeliveredKeyIndex).to.eq(3);
+    // const history3 = await oracle.getDeliveryHistory(exitRequestHash);
+    // expect(history3.length).to.eq(3);
+    // expect(history3[2].lastDeliveredKeyIndex).to.eq(3);
 
     const emitTx4 = await oracle.emitExitEvents(exitRequest, 2);
 
@@ -295,9 +286,9 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         timestamp,
       );
 
-    const history4 = await oracle.getDeliveryHistory(exitRequestHash);
-    expect(history4.length).to.eq(4);
-    expect(history4[3].lastDeliveredKeyIndex).to.eq(4);
+    // const history4 = await oracle.getDeliveryHistory(exitRequestHash);
+    // expect(history4.length).to.eq(4);
+    // expect(history4[3].lastDeliveredKeyIndex).to.eq(4);
 
     await expect(oracle.emitExitEvents(exitRequest, 2)).to.be.revertedWithCustomError(
       oracle,

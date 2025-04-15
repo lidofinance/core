@@ -7,7 +7,7 @@ import {BeaconBlockHeader, Validator} from "./lib/BeaconTypes.sol";
 import {GIndex} from "./lib/GIndex.sol";
 import {SSZ} from "./lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBusOracle, DeliveryHistory} from "./interfaces/IValidatorsExitBusOracle.sol";
+import {IValidatorsExitBus, DeliveryHistory} from "./interfaces/IValidatorsExitBus.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ExitRequestData {
@@ -174,7 +174,7 @@ contract ValidatorExitVerifier {
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
 
-        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
@@ -225,7 +225,7 @@ contract ValidatorExitVerifier {
         _verifyBeaconBlockRoot(beaconBlock);
         _verifyHistoricalBeaconBlockRoot(beaconBlock, oldBlock);
 
-        IValidatorsExitBusOracle vebo = IValidatorsExitBusOracle(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
@@ -367,7 +367,7 @@ contract ValidatorExitVerifier {
     }
 
     function _getExitRequestDeliveryHistory(
-        IValidatorsExitBusOracle vebo,
+        IValidatorsExitBus vebo,
         ExitRequestData calldata exitRequests
     ) internal view returns (ExitRequestsDeliveryHistory memory) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
