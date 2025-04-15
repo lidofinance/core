@@ -7,7 +7,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
-import { addNodeOperator, certainAddress, NodeOperatorConfig, RewardDistributionState } from "lib";
+import { RewardDistributionState } from "lib";
 
 import { addAragonApp, deployLidoDao, deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -29,59 +29,6 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
   let impl: NodeOperatorsRegistry__Harness;
 
   let originalState: string;
-
-  const firstNodeOperatorId = 0;
-  const secondNodeOperatorId = 1;
-  const thirdNodeOperatorId = 2;
-  const fourthNodeOperatorId = 3;
-
-  const NODE_OPERATORS: NodeOperatorConfig[] = [
-    {
-      name: "foo",
-      rewardAddress: certainAddress("node-operator-1"),
-      totalSigningKeysCount: 10n,
-      depositedSigningKeysCount: 5n,
-      exitedSigningKeysCount: 1n,
-      vettedSigningKeysCount: 6n,
-      stuckValidatorsCount: 0n,
-      refundedValidatorsCount: 0n,
-      stuckPenaltyEndAt: 0n,
-    },
-    {
-      name: "bar",
-      rewardAddress: certainAddress("node-operator-2"),
-      totalSigningKeysCount: 15n,
-      depositedSigningKeysCount: 7n,
-      exitedSigningKeysCount: 0n,
-      vettedSigningKeysCount: 10n,
-      stuckValidatorsCount: 0n,
-      refundedValidatorsCount: 0n,
-      stuckPenaltyEndAt: 0n,
-    },
-    {
-      name: "deactivated",
-      isActive: false,
-      rewardAddress: certainAddress("node-operator-3"),
-      totalSigningKeysCount: 10n,
-      depositedSigningKeysCount: 0n,
-      exitedSigningKeysCount: 0n,
-      vettedSigningKeysCount: 5n,
-      stuckValidatorsCount: 0n,
-      refundedValidatorsCount: 0n,
-      stuckPenaltyEndAt: 0n,
-    },
-    {
-      name: "extra-no",
-      rewardAddress: certainAddress("node-operator-4"),
-      totalSigningKeysCount: 3n,
-      depositedSigningKeysCount: 2n,
-      exitedSigningKeysCount: 1n,
-      vettedSigningKeysCount: 2n,
-      stuckValidatorsCount: 1n,
-      refundedValidatorsCount: 0n,
-      stuckPenaltyEndAt: 0n,
-    },
-  ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const contractVersionV2 = 2n;
