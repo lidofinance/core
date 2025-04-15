@@ -157,7 +157,7 @@ abstract contract Permissions is AccessControlConfirmable {
         emit Initialized();
     }
 
-    function initialize(address _defaultAdmin, uint256 _confirmExpiry) public initializer {
+    function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal initializer {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);

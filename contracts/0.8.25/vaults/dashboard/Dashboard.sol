@@ -64,12 +64,13 @@ contract Dashboard is NodeOperatorFee {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
-    ) public override {
+    ) public {
+        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
 
-        super.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
     }
 
     // ==================== View Functions ====================

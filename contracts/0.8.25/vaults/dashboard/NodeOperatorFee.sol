@@ -84,15 +84,15 @@ contract NodeOperatorFee is Permissions {
      */
     uint256 public accruedRewardsAdjustment;
 
-    function initialize(
+    function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
-    ) public virtual {
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+    ) internal {
         if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
-        if (_nodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+
+        super._initialize(_defaultAdmin, _confirmExpiry);
 
         _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
         _setConfirmExpiry(_confirmExpiry);
