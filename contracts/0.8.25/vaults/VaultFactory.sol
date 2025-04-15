@@ -50,24 +50,22 @@ contract VaultFactory {
     address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
-    OperatorGrid public immutable OPERATOR_GRID;
 
     /// @param _lidoLocator The address of the Lido Locator contract
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _lidoLocator, address _beacon, address _delegationImpl, address _operatorGrid) {
+    constructor(address _lidoLocator, address _beacon, address _delegationImpl) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_delegationImpl == address(0)) revert ZeroArgument("_delegationImpl");
-        if (_operatorGrid == address(0)) revert ZeroArgument("_operatorGrid");
 
         LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
-        OPERATOR_GRID = OperatorGrid(_operatorGrid);
     }
 
-    /// @notice Creates a new StakingVault and Delegation contracts
+    /// @notice Creates a new StakingVault and Delegation contracts.
+    ///         It'a a payable function and requires the 1 ether to connect to the vault hub.
     /// @param _delegationConfig The params of delegation initialization
     /// @param _stakingVaultInitializerExtraParams The params of vault initialization
     function createVaultWithDelegation(
@@ -97,7 +95,7 @@ contract VaultFactory {
         vault.authorizeLidoVaultHub();
 
         // register vault and connect to hub
-        OPERATOR_GRID.registerVault(address(vault));
+        OperatorGrid(ILidoLocator(LIDO_LOCATOR).operatorGrid()).registerVault(address(vault));
         VaultHub(vault.vaultHub()).connectVault(address(vault));
 
         // transfer ownership of the vault back to the delegation

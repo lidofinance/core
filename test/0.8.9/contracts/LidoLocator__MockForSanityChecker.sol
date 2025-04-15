@@ -26,6 +26,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address operatorGrid;
     }
 
     address public immutable lido;
@@ -46,6 +47,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable operatorGrid;
+
     constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
         depositSecurityModule = addresses.depositSecurityModule;
@@ -65,6 +68,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         wstETH = addresses.wstETH;
         predepositGuarantee = addresses.predepositGuarantee;
         vaultHub = addresses.vaultHub;
+        operatorGrid = addresses.operatorGrid;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

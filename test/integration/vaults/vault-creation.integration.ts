@@ -61,7 +61,6 @@ describe("Scenario: Actions on vault creation", () => {
     const agentSigner = await ctx.getSigner("agent");
 
     const defaultGroupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.connect(agentSigner).registerGroup(defaultGroupAddress, ether("100"));
     await operatorGrid.connect(agentSigner).registerTiers(defaultGroupAddress, [
       {
         shareLimit,

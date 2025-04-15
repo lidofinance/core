@@ -89,6 +89,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         wstETH: deployer.address,
         vaultHub: deployer.address,
         predepositGuarantee: deployer.address,
+        operatorGrid: deployer.address,
       },
     ]);
 

@@ -32,6 +32,7 @@ contract LidoLocator is ILidoLocator {
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address operatorGrid;
     }
 
     error ZeroAddress();
@@ -55,6 +56,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable operatorGrid;
     //solhint-enable immutable-vars-naming
 
     /**
@@ -81,13 +83,14 @@ contract LidoLocator is ILidoLocator {
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);
         vaultHub = _assertNonZero(_config.vaultHub);
+        operatorGrid = _assertNonZero(_config.operatorGrid);
     }
 
     function coreComponents() external view returns (
         address,
         address,
         address,
-        address, 
+        address,
         address,
         address
     ) {

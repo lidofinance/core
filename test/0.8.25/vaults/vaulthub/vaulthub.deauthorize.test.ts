@@ -27,7 +27,7 @@ import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/
 import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultHub.sol:deauthorize", () => {
@@ -92,13 +92,10 @@ describe("VaultHub.sol:deauthorize", () => {
     operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
 
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
+
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      operatorGrid,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
@@ -116,9 +113,7 @@ describe("VaultHub.sol:deauthorize", () => {
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation, operatorGrid], {
-      from: deployer,
-    });
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);

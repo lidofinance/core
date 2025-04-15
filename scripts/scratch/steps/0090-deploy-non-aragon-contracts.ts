@@ -157,7 +157,6 @@ export async function main() {
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
-    operatorGrid.address,
     vaultHubParams.relativeShareLimitBP,
   ]);
 
@@ -239,6 +238,7 @@ export async function main() {
     predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
+    operatorGrid.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

@@ -133,7 +133,6 @@ describe("VaultHub.sol:reporting", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub__HarnessForReporting", [
       locator,
       await locator.lido(),
-      operatorGrid,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -148,7 +147,7 @@ describe("VaultHub.sol:reporting", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),

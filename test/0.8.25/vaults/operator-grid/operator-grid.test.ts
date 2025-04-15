@@ -1,24 +1,17 @@
 import { expect } from "chai";
-import { keccak256, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconProxy,
-  Delegation,
-  DepositContract__MockForStakingVault,
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
-  StakingVault,
   StakingVault__MockForOperatorGrid,
   StETH__MockForOperatorGrid,
-  UpgradeableBeacon,
-  VaultFactory,
-  VaultHub,
-  WETH9__MockForVault,
+  VaultHub__MockForOperatorGrid,
   WstETH__HarnessForVault,
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
@@ -27,8 +20,6 @@ import { certainAddress, ether, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-const VAULTS_RELATIVE_SHARE_LIMIT_BP = 10_00n;
 
 const SHARE_LIMIT = 1000;
 const RESERVE_RATIO = 2000;
@@ -44,19 +35,12 @@ describe("OperatorGrid.sol", () => {
   let nodeOperator2: HardhatEthersSigner;
 
   let stranger: HardhatEthersSigner;
-  let beaconOwner: HardhatEthersSigner;
 
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
   let steth: StETH__MockForOperatorGrid;
-  let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
-  let depositContract: DepositContract__MockForStakingVault;
-  let vaultImpl: StakingVault;
-  let factory: VaultFactory;
-  let delegation: Delegation;
-  let beacon: UpgradeableBeacon;
-  let vaultHub: VaultHub;
+  let vaultHub: VaultHub__MockForOperatorGrid;
   let operatorGrid: OperatorGrid;
   let operatorGridImpl: OperatorGrid;
   let proxy: OssifiableProxy;
@@ -65,16 +49,12 @@ describe("OperatorGrid.sol", () => {
   let vault_NO2_V1: StakingVault__MockForOperatorGrid;
   let vault_NO2_V2: StakingVault__MockForOperatorGrid;
 
-  let vaultBeaconProxy: BeaconProxy;
-  let vaultBeaconProxyCode: string;
-
   let originalState: string;
 
   before(async () => {
-    [deployer, vaultOwner, stranger, beaconOwner, nodeOperator1, nodeOperator2] = await ethers.getSigners();
+    [deployer, vaultOwner, stranger, nodeOperator1, nodeOperator2] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForOperatorGrid");
-    weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
@@ -111,42 +91,11 @@ describe("OperatorGrid.sol", () => {
     ]);
 
     // VaultHub
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      operatorGrid,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    vaultHub = await ethers.deployContract("VaultHub__MockForOperatorGrid", []);
 
-    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
-    vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
-    await expect(vaultHub.initialize(deployer)).to.emit(vaultHub, "Initialized").withArgs(1);
-    await vaultHub.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), deployer);
-
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
     vaultHubAsSigner = await impersonate(await vaultHub.getAddress(), ether("100.0"));
-
-    depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
-    vaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
-    expect(await vaultImpl.vaultHub()).to.equal(vaultHub);
-
-    beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
-
-    vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beacon, "0x"]);
-    vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
-
-    const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
-
-    //add proxy code hash to whitelist
-    await vaultHub.addVaultProxyCodehash(vaultProxyCodeHash);
-
-    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    factory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation, operatorGrid]);
-    expect(await beacon.implementation()).to.equal(vaultImpl);
-    expect(await factory.BEACON()).to.equal(beacon);
-    expect(await factory.DELEGATION_IMPL()).to.equal(delegation);
-    expect(await factory.LIDO_LOCATOR()).to.equal(locator);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -324,6 +273,17 @@ describe("OperatorGrid.sol", () => {
         .withArgs(nodeOperator1, tierId, tierShareLimit, reserveRatio, reserveRatioThreshold, treasuryFee);
 
       await operatorGrid.registerVault(vault_NO1_V1);
+      await vaultHub.mock__addVaultSocket(vault_NO1_V1, {
+        shareLimit: tierShareLimit,
+        reserveRatioBP: reserveRatio,
+        rebalanceThresholdBP: reserveRatioThreshold,
+        treasuryFeeBP: treasuryFee,
+        vault: vault_NO1_V1,
+        sharesMinted: 0,
+        pendingDisconnect: false,
+        feeSharesCharged: 0,
+      });
+
       await operatorGrid.connect(vaultOwner).requestTierChange(vault_NO1_V1, tierId);
       await operatorGrid.connect(nodeOperator1).confirmTierChange(vault_NO1_V1);
 

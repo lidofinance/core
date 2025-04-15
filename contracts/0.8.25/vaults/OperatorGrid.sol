@@ -186,44 +186,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         }
     }
 
-    /// @notice Appends a single tier to an existing group
-    /// @param _nodeOperator address of the node operator
-    /// @param _tier Parameters for the new tier
-    function appendTier(
-        address _nodeOperator,
-        TierParams calldata _tier
-    ) external onlyRole(REGISTRY_ROLE) {
-        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-
-        ERC7201Storage storage $ = _getStorage();
-        Group storage group_ = $.groups[_nodeOperator];
-        if (group_.operator == address(0)) revert GroupNotExists();
-
-        uint256 tierIndex = $.tiers.length;
-
-        Tier memory newTier = Tier({
-            operator: _nodeOperator,
-            shareLimit: uint96(_tier.shareLimit),
-            reserveRatioBP: uint16(_tier.reserveRatioBP),
-            rebalanceThresholdBP: uint16(_tier.rebalanceThresholdBP),
-            treasuryFeeBP: uint16(_tier.treasuryFeeBP),
-            mintedShares: 0
-        });
-
-        $.tiers.push(newTier);
-        group_.tiersId.push(tierIndex);
-
-        emit TierAdded(
-            _nodeOperator,
-            tierIndex,
-            uint96(_tier.shareLimit),
-            uint16(_tier.reserveRatioBP),
-            uint16(_tier.rebalanceThresholdBP),
-            uint16(_tier.treasuryFeeBP)
-        );
-    }
-
-
     /// @notice Registers a new vault
     /// @param vault address of the vault
     function registerVault(address vault) external {
@@ -282,7 +244,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
-        uint256 vaultShares = vaultHub.vaultSocket(_vault).sharesMinted;
+        VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
+        uint256 vaultShares = vaultSocket.sharesMinted;
 
         //check if tier limit is exceeded
         if (requestedTier.mintedShares + vaultShares > requestedTier.shareLimit) revert TierLimitExceeded();

@@ -580,10 +580,10 @@ contract Dashboard is Permissions {
 
     /**
      * @notice Requests a change of tier on the OperatorGrid.
-     * @param _tier The tier to change to.
+     * @param _tierId The tier to change to.
      */
-    function requestTierChange(uint256 _tier) external {
-        _requestTierChange(_tier);
+    function requestTierChange(uint256 _tierId) external {
+        _requestTierChange(_tierId);
     }
 
     // ==================== Internal Functions ====================

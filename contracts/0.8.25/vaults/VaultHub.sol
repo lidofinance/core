@@ -95,8 +95,6 @@ contract VaultHub is PausableUntilWithRoles {
     ILido public immutable LIDO;
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
-    /// @notice OperatorGrid contract
-    OperatorGrid public immutable OPERATOR_GRID;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
@@ -104,7 +102,6 @@ contract VaultHub is PausableUntilWithRoles {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        OperatorGrid _operatorGrid,
         uint256 _relativeShareLimitBP
     ) {
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
@@ -113,7 +110,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-        OPERATOR_GRID = _operatorGrid;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
         _disableInitializers();
@@ -133,6 +129,10 @@ contract VaultHub is PausableUntilWithRoles {
         _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    }
+
+    function operatorGrid() external view returns (address) {
+        return LIDO_LOCATOR.operatorGrid();
     }
 
     /// @notice added vault proxy codehash to allowed list
@@ -239,13 +239,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     function connectVault(address _vault) external {
         (
-        /* uint256 groupIndex */,
-        /* uint256 tierIndex */,
+        /* address nodeOperator */,
+        /* uint256 tierId */,
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 reserveRatioThresholdBP,
             uint256 treasuryFeeBP
-        ) = OPERATOR_GRID.getVaultInfo(_vault);
+        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).getVaultInfo(_vault);
         _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
     }
 
@@ -333,7 +333,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _checkShareLimitUpperBound(_vault, _shareLimit);
-        if (msg.sender != address(OPERATOR_GRID)) revert NotAuthorized("updateConnection", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized("updateConnection", msg.sender);
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -417,7 +417,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
-        OPERATOR_GRID.onMintedShares(_vault, _amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -440,7 +440,7 @@ contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
-        OPERATOR_GRID.onBurnedShares(_vault, _amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }

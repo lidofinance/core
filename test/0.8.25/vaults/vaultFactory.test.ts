@@ -27,7 +27,7 @@ import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/
 import { days, ether } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
@@ -99,13 +99,10 @@ describe("VaultFactory.sol", () => {
     await operatorGrid.initialize(admin);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
+
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      operatorGrid,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
@@ -124,9 +121,7 @@ describe("VaultFactory.sol", () => {
     vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation, operatorGrid], {
-      from: deployer,
-    });
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], { from: deployer });
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
@@ -199,33 +194,21 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_lidoLocator` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [ZeroAddress, beacon, delegation, operatorGrid], { from: deployer }),
-      )
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, delegation], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_lidoLocator");
     });
 
     it("reverts if `_beacon` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [locator, ZeroAddress, delegation, operatorGrid], { from: deployer }),
-      )
+      await expect(ethers.deployContract("VaultFactory", [locator, ZeroAddress, delegation], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
 
     it("reverts if `_delegationImpl` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress, operatorGrid], { from: deployer }),
-      )
+      await expect(ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_delegationImpl");
-    });
-
-    it("reverts if `_operatorGrid` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, steth, delegation, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_operatorGrid");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {

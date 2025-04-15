@@ -114,6 +114,7 @@ describe("OracleReportSanityChecker.sol", () => {
         vaultHub: deployer.address,
         wstETH: deployer.address,
         predepositGuarantee: deployer.address,
+        operatorGrid: deployer.address,
       }),
     );
 

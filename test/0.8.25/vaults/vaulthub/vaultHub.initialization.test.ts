@@ -4,15 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  LidoLocator,
-  OperatorGrid,
-  OperatorGrid__MockForVaultHub,
-  OssifiableProxy,
-  StETH__Harness,
-  VaultHub,
-  WstETH__HarnessForVault,
-} from "typechain-types";
+import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__HarnessForVault } from "typechain-types";
 
 import { ether } from "lib";
 
@@ -33,8 +25,6 @@ describe("VaultHub.sol:initialization", () => {
   let wsteth: WstETH__HarnessForVault;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
-  let operatorGrid: OperatorGrid;
-  let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let originalState: string;
 
@@ -48,15 +38,10 @@ describe("VaultHub.sol:initialization", () => {
       wstETH: wsteth,
     });
 
-    // OperatorGrid
-    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: admin });
-    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, admin);
-
     // VaultHub
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      operatorGrid,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -94,15 +79,13 @@ describe("VaultHub.sol:initialization", () => {
 
   context("constructor", () => {
     it("reverts on `_relativeShareLimitBP` is zero", async () => {
-      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), operatorGrid, 0n]))
+      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), 0n]))
         .to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument")
         .withArgs("_relativeShareLimitBP");
     });
 
     it("reverts if `_relativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
-      await expect(
-        ethers.deployContract("VaultHub", [locator, await locator.lido(), operatorGrid, TOTAL_BASIS_POINTS + 1n]),
-      )
+      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), TOTAL_BASIS_POINTS + 1n]))
         .to.be.revertedWithCustomError(vaultHubImpl, "RelativeShareLimitBPTooHigh")
         .withArgs(TOTAL_BASIS_POINTS + 1n, TOTAL_BASIS_POINTS);
     });

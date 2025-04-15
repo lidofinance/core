@@ -32,7 +32,7 @@ import {
   impersonate,
 } from "lib";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const BP_BASE = 10000n;
@@ -143,16 +143,17 @@ describe("Delegation.sol", () => {
     await operatorGrid.initialize(dao);
     await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
 
+    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { operatorGrid });
+
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault", [hub, depositContract]);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, beaconOwner]);
 
-    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, delegationImpl, operatorGrid]);
+    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, delegationImpl]);
     expect(await beacon.implementation()).to.equal(vaultImpl);
     expect(await factory.BEACON()).to.equal(beacon);
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
-    expect(await factory.OPERATOR_GRID()).to.equal(operatorGrid);
     expect(await factory.LIDO_LOCATOR()).to.equal(lidoLocator);
 
     const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();

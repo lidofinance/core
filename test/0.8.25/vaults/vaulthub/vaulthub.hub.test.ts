@@ -85,21 +85,6 @@ describe("VaultHub.sol:hub", () => {
     });
     const tx = await vaultHub.connect(user).connectVault(vault);
 
-    // const count = await vaultHub.vaultsCount();
-    // const valuations = [];
-    // const inOutDeltas = [];
-    // const locked = [];
-    // const treasuryFees = [];
-
-    // for (let i = 0; i < count; i++) {
-    //   const vaultAddr = await vaultHub.vault(i);
-    //   const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
-    //   valuations.push(await vaultContract.valuation());
-    //   inOutDeltas.push(await vaultContract.inOutDelta());
-    //   locked.push(await vaultContract.locked());
-    //   treasuryFees.push(0n);
-    // }
-
     return { vault, tx };
   }
 
@@ -137,7 +122,6 @@ describe("VaultHub.sol:hub", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      operatorGrid,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -152,7 +136,7 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
 

@@ -39,12 +39,7 @@ describe("VaultHub.sol:pausableUntil", () => {
     await operatorGrid.initialize(user);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [
-      locator,
-      steth,
-      operatorGrid,
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
-    ]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);

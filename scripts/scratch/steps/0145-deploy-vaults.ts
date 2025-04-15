@@ -13,7 +13,6 @@ export async function main() {
 
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
   const wethContract = state.delegation.deployParameters.wethContract;
@@ -48,7 +47,6 @@ export async function main() {
     locatorAddress,
     beaconAddress,
     delegationAddress,
-    operatorGridAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 
