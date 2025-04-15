@@ -18,12 +18,6 @@ import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
-interface IWETH9 is IERC20 {
-    function withdraw(uint256) external;
-
-    function deposit() external payable;
-}
-
 interface IWstETH is IERC20, IERC20Permit {
     function wrap(uint256) external returns (uint256);
 
@@ -51,11 +45,6 @@ contract Dashboard is NodeOperatorFee {
     IWstETH public immutable WSTETH;
 
     /**
-     * @notice The wETH token contract
-     */
-    IWETH9 public immutable WETH;
-
-    /**
      * @notice ETH address convention per EIP-7528
      */
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -72,15 +61,12 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Constructor sets the stETH, WETH, and WSTETH token addresses.
-     * @param _wETH Address of the weth token contract.
+     * @notice Constructor sets the stETH, and WSTETH token addresses.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _wETH, address _lidoLocator) {
-        if (_wETH == address(0)) revert ZeroArgument("_wETH");
+    constructor(address _lidoLocator) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
-        WETH = IWETH9(_wETH);
         STETH = IStETH(ILidoLocator(_lidoLocator).lido());
         WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
     }
@@ -190,9 +176,12 @@ contract Dashboard is NodeOperatorFee {
     // ==================== Vault Management Functions ====================
 
     /**
-     * @dev Receive function to accept ether
+     * @dev Automatically funds the staking vault with ether
      */
-    receive() external payable {}
+    receive() external payable {
+        _checkRole(FUND_ROLE, msg.sender);
+        _fund(msg.value);
+    }
 
     /**
      * @notice Transfers ownership of the staking vault to a new owner.
@@ -222,16 +211,6 @@ contract Dashboard is NodeOperatorFee {
         _fund(msg.value);
     }
 
-    /**
-     * @notice Funds the staking vault with wrapped ether. Expects WETH amount approved to this contract. Auth is performed in _fund
-     * @param _amountOfWETH Amount of wrapped ether to fund the staking vault with
-     */
-    function fundWeth(uint256 _amountOfWETH) external {
-        SafeERC20.safeTransferFrom(WETH, msg.sender, address(this), _amountOfWETH);
-        WETH.withdraw(_amountOfWETH);
-
-        _fund(_amountOfWETH);
-    }
 
     /**
      * @notice Withdraws ether from the staking vault to a recipient
@@ -240,17 +219,6 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdraw(address _recipient, uint256 _ether) external {
         _withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @notice Withdraws wETH tokens from the staking vault to wrapped ether.
-     * @param _recipient Address of the recipient
-     * @param _amountOfWETH Amount of WETH to withdraw
-     */
-    function withdrawWETH(address _recipient, uint256 _amountOfWETH) external {
-        _withdraw(address(this), _amountOfWETH);
-        WETH.deposit{value: _amountOfWETH}();
-        SafeERC20.safeTransfer(WETH, _recipient, _amountOfWETH);
     }
 
     /**
