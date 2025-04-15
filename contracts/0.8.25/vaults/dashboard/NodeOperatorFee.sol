@@ -101,6 +101,7 @@ contract NodeOperatorFee is Permissions {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
