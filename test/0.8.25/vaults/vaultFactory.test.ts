@@ -24,10 +24,11 @@ import {
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether } from "lib";
+import { days, ether } from "lib";
+import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -103,7 +104,6 @@ describe("VaultFactory.sol", () => {
       locator,
       steth,
       operatorGrid,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
@@ -111,26 +111,20 @@ describe("VaultFactory.sol", () => {
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [vaultHub, predepositGuarantee, depositContract], {
+    implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
+    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {
       from: deployer,
     });
-    implNew = await ethers.deployContract(
-      "StakingVault__HarnessForTestUpgrade",
-      [vaultHub, predepositGuarantee, depositContract],
-      {
-        from: deployer,
-      },
-    );
 
     //beacon
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
 
-    vaultBeaconProxy = await ethers.deployContract("BeaconProxy", [beacon, "0x"]);
+    vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
     vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
     delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [beacon, delegation, operatorGrid], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation, operatorGrid], {
       from: deployer,
     });
 
@@ -140,7 +134,7 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, "0x")).to.revertedWithCustomError(
+    await expect(implOld.initialize(stranger, operator, predepositGuarantee, "0x")).to.revertedWithCustomError(
       implOld,
       "InvalidInitialization",
     );
@@ -152,16 +146,25 @@ describe("VaultFactory.sol", () => {
       nodeOperatorFeeBP: 200n,
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
-      minters: [await vaultOwner1.getAddress()],
       lockers: [await vaultOwner1.getAddress()],
+      minters: [await vaultOwner1.getAddress()],
       burners: [await vaultOwner1.getAddress()],
-      nodeOperatorFeeClaimers: [await operator.getAddress()],
       rebalancers: [await vaultOwner1.getAddress()],
       depositPausers: [await vaultOwner1.getAddress()],
       depositResumers: [await vaultOwner1.getAddress()],
+      pdgCompensators: [await vaultOwner1.getAddress()],
+      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
+      unknownValidatorProvers: [await vaultOwner1.getAddress()],
       validatorExitRequesters: [await vaultOwner1.getAddress()],
       validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
       disconnecters: [await vaultOwner1.getAddress()],
+      lidoVaultHubAuthorizers: [await vaultOwner1.getAddress()],
+      lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
+      ossifiers: [await vaultOwner1.getAddress()],
+      depositorSetters: [await vaultOwner1.getAddress()],
+      lockedResetters: [await vaultOwner1.getAddress()],
+      nodeOperatorFeeClaimers: [await operator.getAddress()],
+      nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
       assetRecoverer: await vaultOwner1.getAddress(),
     };
 
@@ -170,14 +173,13 @@ describe("VaultFactory.sol", () => {
     const rebalanceThresholdBP = 100n;
     const treasuryFeeBP = 600n;
 
-    const tiers: TierParamsStruct[] = [
-      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
-      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
-      { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP },
-    ];
+    const tiers: TierParamsStruct[] = [{ shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP }];
 
-    await operatorGrid.connect(admin).registerGroup(operator, shareLimit);
-    await operatorGrid.connect(admin).registerTiers(operator, tiers);
+    const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
+
+    //register
+    await operatorGrid.connect(admin).registerGroup(DEFAULT_GROUP_ADDRESS, ether("1000"));
+    await operatorGrid.connect(admin).registerTiers(DEFAULT_GROUP_ADDRESS, tiers);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -196,20 +198,32 @@ describe("VaultFactory.sol", () => {
         .withArgs(ZeroAddress);
     });
 
-    it("reverts if `_implementation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, steth, operatorGrid], { from: deployer }))
+    it("reverts if `_lidoLocator` is zero address", async () => {
+      await expect(
+        ethers.deployContract("VaultFactory", [ZeroAddress, beacon, delegation, operatorGrid], { from: deployer }),
+      )
+        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+        .withArgs("_lidoLocator");
+    });
+
+    it("reverts if `_beacon` is zero address", async () => {
+      await expect(
+        ethers.deployContract("VaultFactory", [locator, ZeroAddress, delegation, operatorGrid], { from: deployer }),
+      )
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_beacon");
     });
 
-    it("reverts if `_delegation` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, ZeroAddress, operatorGrid], { from: deployer }))
+    it("reverts if `_delegationImpl` is zero address", async () => {
+      await expect(
+        ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress, operatorGrid], { from: deployer }),
+      )
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_delegation");
+        .withArgs("_delegationImpl");
     });
 
     it("reverts if `_operatorGrid` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [beacon, steth, ZeroAddress], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [beacon, steth, delegation, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_operatorGrid");
     });
@@ -309,7 +323,7 @@ describe("VaultFactory.sol", () => {
       await vault1WithNewImpl.finalizeUpgrade_v2();
 
       //try to initialize the second vault
-      await expect(vault2WithNewImpl.initialize(admin, operator, "0x")).to.revertedWithCustomError(
+      await expect(vault2WithNewImpl.initialize(admin, operator, predepositGuarantee, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -344,7 +358,7 @@ describe("VaultFactory.sol", () => {
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
 
-      await expect(vault1.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
+      await expect(vault1.initialize(ZeroAddress, ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault1WithNewImpl,
         "VaultAlreadyInitialized",
       );
@@ -359,7 +373,7 @@ describe("VaultFactory.sol", () => {
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 
-      await expect(vault2.initialize(ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
+      await expect(vault2.initialize(ZeroAddress, ZeroAddress, ZeroAddress, "0x")).to.revertedWithCustomError(
         vault2WithNewImpl,
         "InvalidInitialization",
       );

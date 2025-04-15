@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   LidoLocator,
   OperatorGrid,
+  OperatorGrid__MockForVaultHub,
   OssifiableProxy,
   StETH__Harness,
   VaultHub,
@@ -16,9 +17,11 @@ import {
 import { ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-describe("VaultHub.sol", () => {
+const TOTAL_BASIS_POINTS = 100_00n;
+
+describe("VaultHub.sol:initialization", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -31,7 +34,7 @@ describe("VaultHub.sol", () => {
   let locator: LidoLocator;
   let vaultHub: VaultHub;
   let operatorGrid: OperatorGrid;
-  let operatorGridImpl: OperatorGrid;
+  let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let originalState: string;
 
@@ -46,18 +49,14 @@ describe("VaultHub.sol", () => {
     });
 
     // OperatorGrid
-    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: admin });
-    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, admin, new Uint8Array()], admin);
-    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, admin);
-    await operatorGrid.initialize(admin);
-    await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
+    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: admin });
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, admin);
 
     // VaultHub
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
       operatorGrid,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -70,24 +69,42 @@ describe("VaultHub.sol", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  context("constructor", () => {
+  context("initialization", () => {
     it("reverts on impl initialization", async () => {
       await expect(vaultHubImpl.initialize(stranger)).to.be.revertedWithCustomError(
         vaultHubImpl,
         "InvalidInitialization",
       );
     });
+
     it("reverts on `_admin` address is zero", async () => {
       await expect(vaultHub.initialize(ZeroAddress))
         .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
         .withArgs("_admin");
     });
+
     it("initialization happy path", async () => {
       const tx = await vaultHub.initialize(admin);
 
       expect(await vaultHub.vaultsCount()).to.eq(0);
 
       await expect(tx).to.be.emit(vaultHub, "Initialized").withArgs(1);
+    });
+  });
+
+  context("constructor", () => {
+    it("reverts on `_relativeShareLimitBP` is zero", async () => {
+      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), operatorGrid, 0n]))
+        .to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument")
+        .withArgs("_relativeShareLimitBP");
+    });
+
+    it("reverts if `_relativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
+      await expect(
+        ethers.deployContract("VaultHub", [locator, await locator.lido(), operatorGrid, TOTAL_BASIS_POINTS + 1n]),
+      )
+        .to.be.revertedWithCustomError(vaultHubImpl, "RelativeShareLimitBPTooHigh")
+        .withArgs(TOTAL_BASIS_POINTS + 1n, TOTAL_BASIS_POINTS);
     });
   });
 });

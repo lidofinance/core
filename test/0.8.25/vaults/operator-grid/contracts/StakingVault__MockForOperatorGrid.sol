@@ -7,14 +7,20 @@ interface IStakingVault {
     function nodeOperator() external view returns (address);
 }
 
-contract StalingVault__MockForOperatorGrid is IStakingVault {
+contract StakingVault__MockForOperatorGrid is IStakingVault {
     address private nodeOp;
+    address private owner_;
 
-    constructor(address _operator) {
+    constructor(address _owner, address _operator) {
+        owner_ = _owner;
         nodeOp = _operator;
     }
 
     function nodeOperator() external view returns (address) {
         return nodeOp;
+    }
+
+    function owner() external view returns (address) {
+        return owner_;
     }
 }

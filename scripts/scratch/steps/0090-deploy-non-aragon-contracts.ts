@@ -158,7 +158,6 @@ export async function main() {
     locator.address,
     lidoAddress,
     operatorGrid.address,
-    vaultHubParams.connectedVaultsLimit,
     vaultHubParams.relativeShareLimitBP,
   ]);
 

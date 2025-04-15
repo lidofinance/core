@@ -9,7 +9,7 @@ import { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } fr
 import { ether, MAX_UINT256 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultHub.sol:pausableUntil", () => {
   let deployer: HardhatEthersSigner;
@@ -43,7 +43,6 @@ describe("VaultHub.sol:pausableUntil", () => {
       locator,
       steth,
       operatorGrid,
-      VAULTS_CONNECTED_VAULTS_LIMIT,
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);

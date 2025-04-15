@@ -4,21 +4,22 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Delegation} from "./Delegation.sol";
+import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 struct DelegationConfig {
     address defaultAdmin;
     address nodeOperatorManager;
-    address assetRecoverer;
     uint256 confirmExpiry;
     uint16 nodeOperatorFeeBP;
+    /// Permissions
     address[] funders;
     address[] withdrawers;
     address[] lockers;
@@ -27,24 +28,40 @@ struct DelegationConfig {
     address[] rebalancers;
     address[] depositPausers;
     address[] depositResumers;
+    address[] pdgCompensators;
+    address[] unknownValidatorProvers;
+    address[] unguaranteedBeaconChainDepositors;
     address[] validatorExitRequesters;
     address[] validatorWithdrawalTriggerers;
     address[] disconnecters;
+    address[] lidoVaultHubAuthorizers;
+    address[] lidoVaultHubDeauthorizers;
+    address[] ossifiers;
+    address[] depositorSetters;
+    address[] lockedResetters;
+    /// Dashboard
+    address assetRecoverer;
+    /// Delegation
     address[] nodeOperatorFeeClaimers;
+    address[] nodeOperatorRewardAdjusters;
 }
 
 contract VaultFactory {
+    address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DELEGATION_IMPL;
     OperatorGrid public immutable OPERATOR_GRID;
 
+    /// @param _lidoLocator The address of the Lido Locator contract
     /// @param _beacon The address of the beacon contract
     /// @param _delegationImpl The address of the Delegation implementation
-    constructor(address _beacon, address _delegationImpl, address _operatorGrid) {
+    constructor(address _lidoLocator, address _beacon, address _delegationImpl, address _operatorGrid) {
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
-        if (_delegationImpl == address(0)) revert ZeroArgument("_delegation");
+        if (_delegationImpl == address(0)) revert ZeroArgument("_delegationImpl");
         if (_operatorGrid == address(0)) revert ZeroArgument("_operatorGrid");
 
+        LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DELEGATION_IMPL = _delegationImpl;
         OPERATOR_GRID = OperatorGrid(_operatorGrid);
@@ -56,9 +73,12 @@ contract VaultFactory {
     function createVaultWithDelegation(
         DelegationConfig calldata _delegationConfig,
         bytes calldata _stakingVaultInitializerExtraParams
-    ) external returns (IStakingVault vault, Delegation delegation) {
+    ) external payable returns (IStakingVault vault, Delegation delegation) {
         // create StakingVault
-        vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+
+        uint256 connectDeposit = VaultHub(vault.vaultHub()).CONNECT_DEPOSIT();
+        if (msg.value < connectDeposit) revert InsufficientFunds();
 
         // create Delegation
         bytes memory immutableArgs = abi.encode(vault);
@@ -66,12 +86,22 @@ contract VaultFactory {
 
         // initialize StakingVault
         vault.initialize(
-            address(delegation),
+            address(this),
             _delegationConfig.nodeOperatorManager,
+            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
             _stakingVaultInitializerExtraParams
         );
+
+        vault.fund{value: msg.value}();
+        vault.lock(connectDeposit);
+        vault.authorizeLidoVaultHub();
+
+        // register vault and connect to hub
         OPERATOR_GRID.registerVault(address(vault));
         VaultHub(vault.vaultHub()).connectVault(address(vault));
+
+        // transfer ownership of the vault back to the delegation
+        OwnableUpgradeable(address(vault)).transferOwnership(address(delegation));
 
         // initialize Delegation
         delegation.initialize(address(this), _delegationConfig.confirmExpiry);
@@ -106,6 +136,18 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.depositResumers.length; i++) {
             delegation.grantRole(delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _delegationConfig.depositResumers[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.pdgCompensators.length; i++) {
+            delegation.grantRole(delegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _delegationConfig.pdgCompensators[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unknownValidatorProvers.length; i++) {
+            delegation.grantRole(delegation.PDG_PROVE_VALIDATOR_ROLE(), _delegationConfig.unknownValidatorProvers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.unguaranteedBeaconChainDepositors.length; i++) {
+            delegation.grantRole(
+                delegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+                _delegationConfig.unguaranteedBeaconChainDepositors[i]
+            );
+        }
         for (uint256 i = 0; i < _delegationConfig.validatorExitRequesters.length; i++) {
             delegation.grantRole(
                 delegation.REQUEST_VALIDATOR_EXIT_ROLE(),
@@ -121,10 +163,31 @@ contract VaultFactory {
         for (uint256 i = 0; i < _delegationConfig.disconnecters.length; i++) {
             delegation.grantRole(delegation.VOLUNTARY_DISCONNECT_ROLE(), _delegationConfig.disconnecters[i]);
         }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubAuthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubAuthorizers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lidoVaultHubDeauthorizers.length; i++) {
+            delegation.grantRole(delegation.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(), _delegationConfig.lidoVaultHubDeauthorizers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.ossifiers.length; i++) {
+            delegation.grantRole(delegation.OSSIFY_ROLE(), _delegationConfig.ossifiers[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.depositorSetters.length; i++) {
+            delegation.grantRole(delegation.SET_DEPOSITOR_ROLE(), _delegationConfig.depositorSetters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.lockedResetters.length; i++) {
+            delegation.grantRole(delegation.RESET_LOCKED_ROLE(), _delegationConfig.lockedResetters[i]);
+        }
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(
                 delegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
                 _delegationConfig.nodeOperatorFeeClaimers[i]
+            );
+        }
+        for (uint256 i = 0; i < _delegationConfig.nodeOperatorRewardAdjusters.length; i++) {
+            delegation.grantRole(
+                delegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+                _delegationConfig.nodeOperatorRewardAdjusters[i]
             );
         }
 
@@ -158,4 +221,9 @@ contract VaultFactory {
      * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
+
+    /**
+     * @notice Error thrown for when insufficient funds are provided
+     */
+    error InsufficientFunds();
 }

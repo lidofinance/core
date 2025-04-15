@@ -79,7 +79,6 @@
   },
   "vaultHub": {
     "deployParameters": {
-      "connectedVaultsLimit": 500,
       "relativeShareLimitBP": 1000
     }
   },
