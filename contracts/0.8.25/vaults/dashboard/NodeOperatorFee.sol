@@ -94,8 +94,7 @@ abstract contract NodeOperatorFee is Permissions {
         if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
         if (_nodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        nodeOperatorFeeBP = _nodeOperatorFeeBP;
-
+        _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
         _setConfirmExpiry(_confirmExpiry);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
@@ -175,19 +174,7 @@ abstract contract NodeOperatorFee is Permissions {
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
-        if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
-        if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
-
-        uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
-
-        // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
-        if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
-            nodeOperatorFeeClaimedReport = stakingVault().latestReport();
-        }
-
-        nodeOperatorFeeBP = _newNodeOperatorFeeBP;
-
-        emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
+        _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
     }
 
     /**
@@ -248,6 +235,22 @@ abstract contract NodeOperatorFee is Permissions {
         uint256 withdrawable = unreserved();
         if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
         _;
+    }
+
+    function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
+        if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+        if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
+
+        uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
+
+        // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
+        if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
+            nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+        }
+
+        nodeOperatorFeeBP = _newNodeOperatorFeeBP;
+
+        emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
     }
 
     /**
