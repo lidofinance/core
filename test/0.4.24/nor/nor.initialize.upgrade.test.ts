@@ -201,7 +201,7 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       expect(await nor.getInitializationBlock()).to.equal(latestBlock + 1n);
       expect(await lido.allowance(await nor.getAddress(), burnerAddress)).to.equal(MaxUint256);
       expect(await nor.getStuckPenaltyDelay()).to.equal(86400n);
-      expect(await nor.getContractVersion()).to.equal(3);
+      expect(await nor.getContractVersion()).to.equal(4);
       expect(await nor.getType()).to.equal(moduleType);
     });
   });

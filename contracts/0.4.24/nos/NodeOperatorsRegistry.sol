@@ -8,6 +8,8 @@ import {AragonApp} from "@aragon/os/contracts/apps/AragonApp.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
+import {NodeOperatorExitManager} from "./NodeOperatorExitManager.sol";
+
 import {Math256} from "../../common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
@@ -27,7 +29,7 @@ interface IStETH {
 /// @dev Must implement the full version of IStakingModule interface, not only the one declared locally.
 ///      It's also responsible for distributing rewards to node operators.
 /// NOTE: the code below assumes moderate amount of node operators, i.e. up to `MAX_NODE_OPERATORS_COUNT`.
-contract NodeOperatorsRegistry is AragonApp, Versioned {
+contract NodeOperatorsRegistry is AragonApp, Versioned, NodeOperatorExitManager {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
     using SigningKeys for bytes32;
@@ -222,6 +224,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         // Initializations for v2 --> v3
         _initialize_v3();
 
+        _initialize_v4();
+
         initialized();
     }
 
@@ -309,6 +313,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function _initialize_v3() internal {
         _setContractVersion(3);
         _updateRewardDistributionState(RewardDistributionState.Distributed);
+    }
+
+     function _initialize_v4() internal {
+        _setContractVersion(4);
+        // TODO: after devnet-1 set correct value
+        _initializeNodeOperatorExitManager(60 * 60 * 24 * 2);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1184,6 +1194,41 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
+    function handleActiveValidatorsExitingStatus(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        return _handleActiveValidatorsExitingStatus(
+            _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
+        );
+    }
+
+    function onTriggerableExit(
+        uint256 _nodeOperatorId,
+        bytes _publicKey,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        return _onTriggerableExit(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
+    }
+
+    function exitDeadlineThreshold(uint256 /* _nodeOperatorId */) external view returns (uint256) {
+       return _getExitDeadlineThreshold();
+    }
+
+    function shouldValidatorBePenalized(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external view returns (bool) {
+        return _shouldValidatorBePenalized(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
+    }
+
     function _removeUnusedSigningKeys(uint256 _nodeOperatorId, uint256 _fromIndex, uint256 _keysCount) internal {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _onlyNodeOperatorManager(msg.sender, _nodeOperatorId);
@@ -1435,6 +1480,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
                 toBurn = toBurn.add(shares[idx]);
                 emit NodeOperatorPenalized(recipients[idx], shares[idx]);
             }
+            // TODO: apply penalty to the operator
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
             emit RewardsDistributed(recipients[idx], shares[idx]);

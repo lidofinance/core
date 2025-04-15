@@ -226,24 +226,24 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         signatures = new bytes(96 * _depositsCount);
     }
 
-    event Mock__onExitedValidatorsCountsUpdated();
+    event Mock__onExitedAndStuckValidatorsCountsUpdated();
 
-    bool private onExitedValidatorsCountsUpdatedShouldRevert = false;
-    bool private onExitedValidatorsCountsUpdatedShouldRunOutGas = false;
+    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRevert = false;
+    bool private onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = false;
 
-    function onExitedValidatorsCountsUpdated() external {
-        require(!onExitedValidatorsCountsUpdatedShouldRevert, "revert reason");
+    function onExitedAndStuckValidatorsCountsUpdated() external {
+        require(!onExitedAndStuckValidatorsCountsUpdatedShouldRevert, "revert reason");
 
-        if (onExitedValidatorsCountsUpdatedShouldRunOutGas) {
+        if (onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas) {
             revert();
         }
 
-        emit Mock__onExitedValidatorsCountsUpdated();
+        emit Mock__onExitedAndStuckValidatorsCountsUpdated();
     }
 
-    function mock__onExitedValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
-        onExitedValidatorsCountsUpdatedShouldRevert = shouldRevert;
-        onExitedValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
+    function mock__onExitedAndStuckValidatorsCountsUpdated(bool shouldRevert, bool shouldRunOutGas) external {
+        onExitedAndStuckValidatorsCountsUpdatedShouldRevert = shouldRevert;
+        onExitedAndStuckValidatorsCountsUpdatedShouldRunOutGas = shouldRunOutGas;
     }
 
     event Mock__WithdrawalCredentialsChanged();

@@ -455,7 +455,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
     ///    and exited validator counts per node operator for the current reporting frame, the oracle calls
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
-    ///    `IStakingModule.onExitedValidatorsCountsUpdated` on all modules.
+    ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
     function updateExitedValidatorsCountByStakingModule(
@@ -554,7 +554,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///
     /// @param _stakingModuleId Id of the staking module.
     /// @param _nodeOperatorId Id of the node operator.
-    /// @param _triggerUpdateFinish Whether to call `onExitedValidatorsCountsUpdated` on the module
+    /// @param _triggerUpdateFinish Whether to call `onExitedAndStuckValidatorsCountsUpdated` on the module
     /// after applying the corrections.
     /// @param _correction See the docs for the `ValidatorsCountsCorrection` struct.
     ///
@@ -621,7 +621,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
                 );
             }
 
-            stakingModule.onExitedValidatorsCountsUpdated();
+            stakingModule.onExitedAndStuckValidatorsCountsUpdated();
         }
     }
 
@@ -649,13 +649,13 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             (uint256 exitedValidatorsCount, , ) = _getStakingModuleSummary(moduleContract);
             if (exitedValidatorsCount == stakingModule.exitedValidatorsCount) {
                 // oracle finished updating exited validators for all node ops
-                try moduleContract.onExitedValidatorsCountsUpdated() {}
+                try moduleContract.onExitedAndStuckValidatorsCountsUpdated() {}
                 catch (bytes memory lowLevelRevertData) {
                     /// @dev This check is required to prevent incorrect gas estimation of the method.
                     ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                    ///      return an invalid value when the onExitedValidatorsCountsUpdated()
+                    ///      return an invalid value when the onExitedAndStuckValidatorsCountsUpdated()
                     ///      reverts because of the "out of gas" error. Here we assume that the
-                    ///      onExitedValidatorsCountsUpdated() method doesn't have reverts with
+                    ///      onExitedAndStuckValidatorsCountsUpdated() method doesn't have reverts with
                     ///      empty error data except "out of gas".
                     if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                     emit ExitedAndStuckValidatorsCountsUpdateFailed(

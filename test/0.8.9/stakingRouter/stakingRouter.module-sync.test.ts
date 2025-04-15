@@ -126,7 +126,7 @@ describe("StakingRouter.sol:module-sync", () => {
     const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
       1, // targetLimitMode
       100n, // targetValidatorsCount
-      1n, // stuckValidatorsCount
+      0n, // stuckValidatorsCount
       5n, // refundedValidatorsCount
       0n, // stuckPenaltyEndTimestamp
       50, // totalExitedValidators
@@ -651,10 +651,8 @@ describe("StakingRouter.sol:module-sync", () => {
     const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
       currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
-      currentNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount,
       newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       newNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators + 1n,
-      newNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount + 1n,
     };
 
     beforeEach(async () => {
@@ -694,11 +692,7 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
+        .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
     it("Reverts if the number of exited validators of the operator does not match what is stored on the contract", async () => {
@@ -709,26 +703,7 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
-    });
-
-    it("Reverts if the number of stuck validators of the operator does not match what is stored on the contract", async () => {
-      await expect(
-        stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, {
-          ...correction,
-          currentNodeOperatorStuckValidatorsCount: 1n,
-        }),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
+        .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
     it("Reverts if the total exited validators exceed the module's deposited validators", async () => {
@@ -760,11 +735,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Update unsafely the number of exited validators on the staking module with finalization hook triggering", async () => {
       await expect(stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, correction))
         .to.be.emit(stakingModule, "Mock__ValidatorsCountUnsafelyUpdated")
-        .withArgs(
-          moduleId,
-          correction.newNodeOperatorExitedValidatorsCount,
-          correction.newNodeOperatorStuckValidatorsCount,
-        )
+        .withArgs(moduleId, correction.newNodeOperatorExitedValidatorsCount)
         .and.to.emit(stakingModule, "Mock__onExitedAndStuckValidatorsCountsUpdated");
     });
 

@@ -206,7 +206,7 @@ interface IStakingModule {
     ///
     /// @dev IMPORTANT: this method SHOULD revert with empty error data ONLY because of "out of gas".
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
-    function onExitedValidatorsCountsUpdated() external;
+    function onExitedAndStuckValidatorsCountsUpdated() external;
 
     /// @notice Called by StakingRouter when withdrawal credentials are changed.
     /// @dev This method MUST discard all StakingModule's unused deposit data cause they become
