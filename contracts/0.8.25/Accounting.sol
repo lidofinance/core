@@ -293,7 +293,7 @@ contract Accounting {
             _pre.clValidators,
             _report.clValidators,
             _report.clBalance,
-            _update.totalVaultsDeficit
+            _report.vaultsTotalDeficit
         );
 
         if (_update.totalSharesToBurn > 0) {
