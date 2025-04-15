@@ -958,10 +958,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Get the total amount of ether controlled by the protocol internally
     /// (buffered + CL balance of StakingRouter controlled validators + transient)
     function _getInternalEther() internal view returns (uint256) {
-        return _getBufferedEther()
+        uint256 internalEther = _getBufferedEther()
             .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientEther())
-            .sub(EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256());
+            .add(_getTransientEther());
+
+        uint256 externalDeficit = EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256();
+
+        if (externalDeficit >= internalEther) {
+            return 1;
+        }
+
+        return internalEther - externalDeficit;
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
