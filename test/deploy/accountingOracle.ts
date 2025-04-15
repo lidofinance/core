@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import { AccountingOracle, HashConsensus__Harness, LegacyOracle, ReportProcessor__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  AO_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
@@ -114,8 +114,7 @@ interface AccountingOracleConfig {
   consensus: HashConsensus__Harness;
   dataSubmitter?: string;
   consensusVersion?: bigint;
-  shouldMigrateLegacyOracle?: boolean;
-  lastProcessingRefSlot?: number;
+  lastProcessingRefSlot?: bigint;
 }
 
 export async function initAccountingOracle({
@@ -123,20 +122,10 @@ export async function initAccountingOracle({
   oracle,
   consensus,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
-  shouldMigrateLegacyOracle = true,
-  lastProcessingRefSlot = 0,
+  consensusVersion = AO_CONSENSUS_VERSION,
+  lastProcessingRefSlot = 0n,
 }: AccountingOracleConfig) {
-  let initTx;
-  if (shouldMigrateLegacyOracle)
-    initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion);
-  else
-    initTx = await oracle.initializeWithoutMigration(
-      admin,
-      await consensus.getAddress(),
-      consensusVersion,
-      lastProcessingRefSlot,
-    );
+  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
@@ -188,7 +177,7 @@ async function configureAccountingOracleSetup({
   oracle,
   legacyOracle,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
+  consensusVersion = AO_CONSENSUS_VERSION,
 }: AccountingOracleSetup) {
   // this is done as a part of the protocol upgrade voting execution
 

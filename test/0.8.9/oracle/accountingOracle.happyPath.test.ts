@@ -15,9 +15,9 @@ import {
 } from "typechain-types";
 
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
-  CONSENSUS_VERSION,
   encodeExtraDataItems,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
@@ -87,8 +87,8 @@ describe("AccountingOracle.sol:happyPath", () => {
 
   async function triggerConsensusOnHash(hash: string) {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, AO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, AO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   }
 
@@ -113,7 +113,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(procState.extraDataItemsSubmitted).to.equal(0);
   });
 
-  it("reference slot of the empty initial consensus report is set to the last processed slot of the legacy oracle", async () => {
+  it("reference slot of the empty initial consensus report is set to the last processed slot", async () => {
     const report = await oracle.getConsensusReport();
     expect(report.refSlot).to.equal(V1_ORACLE_LAST_REPORT_SLOT);
   });
@@ -138,7 +138,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     extraDataHash = calcExtraDataListHash(extraDataList);
 
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
       numValidators: 10,
       clBalanceGwei: 320n * ONE_GWEI,
@@ -197,9 +197,9 @@ describe("AccountingOracle.sol:happyPath", () => {
   });
 
   it("the data cannot be submitted passing a different contract version", async () => {
-    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion - 1))
+    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion + 1))
       .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-      .withArgs(oracleVersion, oracleVersion - 1);
+      .withArgs(oracleVersion, oracleVersion + 1);
   });
 
   it("a data not matching the consensus hash cannot be submitted", async () => {

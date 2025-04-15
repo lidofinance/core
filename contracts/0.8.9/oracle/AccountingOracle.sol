@@ -128,16 +128,7 @@ contract AccountingOracle is BaseOracle {
         LEGACY_ORACLE = ILegacyOracle(legacyOracle);
     }
 
-    function initialize(address admin, address consensusContract, uint256 consensusVersion) external {
-        if (admin == address(0)) revert AdminCannotBeZero();
-
-        uint256 lastProcessingRefSlot = _checkOracleMigration(LEGACY_ORACLE, consensusContract);
-        _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
-
-        _updateContractVersion(2);
-    }
-
-    function initializeWithoutMigration(
+    function initialize(
         address admin,
         address consensusContract,
         uint256 consensusVersion,
@@ -146,12 +137,11 @@ contract AccountingOracle is BaseOracle {
         if (admin == address(0)) revert AdminCannotBeZero();
 
         _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
-
-        _updateContractVersion(2);
+        _initializeContractVersionTo(3);
     }
 
-    function finalizeUpgrade_v2(uint256 consensusVersion) external {
-        _updateContractVersion(2);
+    function finalizeUpgrade_v3(uint256 consensusVersion) external {
+        _updateContractVersion(3);
         _setConsensusVersion(consensusVersion);
     }
 

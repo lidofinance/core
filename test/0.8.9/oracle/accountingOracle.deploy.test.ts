@@ -14,7 +14,7 @@ import {
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
-import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import { AO_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
 
 import {
   deployAccountingOracleSetup,
@@ -178,7 +178,7 @@ describe("AccountingOracle.sol:deploy", () => {
 
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+        expect(await oracle.getConsensusVersion()).to.equal(AO_CONSENSUS_VERSION);
         expect(await oracle.LOCATOR()).to.equal(locatorAddr);
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
       });
@@ -199,34 +199,24 @@ describe("AccountingOracle.sol:deploy", () => {
         const deployed = await deployAccountingOracleSetup(admin.address);
         await updateInitialEpoch(deployed.consensus);
         await expect(
-          deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), CONSENSUS_VERSION),
+          deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), AO_CONSENSUS_VERSION, 0n),
         ).to.be.revertedWithCustomError(defaultOracle, "AdminCannotBeZero");
       });
 
-      it("initializeWithoutMigration reverts if admin address is zero", async () => {
+      it("initialize reverts if admin address is zero", async () => {
         const deployed = await deployAccountingOracleSetup(admin.address);
         await updateInitialEpoch(deployed.consensus);
 
         await expect(
-          deployed.oracle.initializeWithoutMigration(
-            ZeroAddress,
-            await deployed.consensus.getAddress(),
-            CONSENSUS_VERSION,
-            0,
-          ),
+          deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), AO_CONSENSUS_VERSION, 0),
         ).to.be.revertedWithCustomError(defaultOracle, "AdminCannotBeZero");
       });
 
-      it("initializeWithoutMigration succeeds otherwise", async () => {
+      it("initialize succeeds otherwise", async () => {
         const deployed = await deployAccountingOracleSetup(admin.address);
         await updateInitialEpoch(deployed.consensus);
 
-        await deployed.oracle.initializeWithoutMigration(
-          admin,
-          await deployed.consensus.getAddress(),
-          CONSENSUS_VERSION,
-          0,
-        );
+        await deployed.oracle.initialize(admin, await deployed.consensus.getAddress(), AO_CONSENSUS_VERSION, 0);
       });
     });
   });

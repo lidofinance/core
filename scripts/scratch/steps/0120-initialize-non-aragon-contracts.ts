@@ -88,7 +88,7 @@ export async function main() {
   const accountingOracle = await loadContract("AccountingOracle", accountingOracleAddress);
   await makeTx(
     accountingOracle,
-    "initializeWithoutMigration",
+    "initialize",
     [
       accountingOracleAdmin,
       hashConsensusForAccountingAddress,
