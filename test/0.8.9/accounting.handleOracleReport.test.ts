@@ -22,10 +22,10 @@ import {
 } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/AccountingOracle.sol/IReportReceiver";
 
-import { certainAddress, ether, impersonate } from "lib";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -76,7 +76,7 @@ describe("Accounting.sol:report", () => {
 
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",
-      [locator, lido, VAULTS_CONNECTED_VAULTS_LIMIT, VAULTS_RELATIVE_SHARE_LIMIT_BP],
+      [locator, lido, VAULTS_RELATIVE_SHARE_LIMIT_BP],
       deployer,
     );
     const vaultHubProxy = await ethers.deployContract(
@@ -92,10 +92,55 @@ describe("Accounting.sol:report", () => {
     accounting = accounting.connect(accountingOracleSigner);
   });
 
+  function report(overrides?: Partial<ReportValuesStruct>): ReportValuesStruct {
+    return {
+      timestamp: 0n,
+      timeElapsed: 0n,
+      clValidators: 0n,
+      clBalance: 0n,
+      withdrawalVaultBalance: 0n,
+      elRewardsVaultBalance: 0n,
+      sharesRequestedToBurn: 0n,
+      withdrawalFinalizationBatches: [],
+      vaultsTotalTreasuryFeesShares: 0n,
+      vaultsTotalDeficit: 0n,
+      vaultsDataTreeRoot: ethers.ZeroHash,
+      vaultsDataTreeCid: "",
+      ...overrides,
+    };
+  }
+
+  context("simulateOracleReport", () => {
+    it("should revert if the report is not valid", async () => {
+      const preTotalPooledEther = await lido.getTotalPooledEther();
+      const preTotalShares = await lido.getTotalShares();
+
+      const simulated = await accounting.simulateOracleReport(report(), 0n);
+
+      expect(simulated.withdrawals).to.equal(0n);
+      expect(simulated.elRewards).to.equal(0n);
+      expect(simulated.etherToFinalizeWQ).to.equal(0n);
+      expect(simulated.sharesToFinalizeWQ).to.equal(0n);
+      expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
+      expect(simulated.totalSharesToBurn).to.equal(0n);
+      expect(simulated.sharesToMintAsFees).to.equal(0n);
+      expect(simulated.rewardDistribution.recipients).to.deep.equal([]);
+      expect(simulated.rewardDistribution.moduleIds).to.deep.equal([]);
+      expect(simulated.rewardDistribution.modulesFees).to.deep.equal([]);
+      expect(simulated.rewardDistribution.totalFee).to.equal(0n);
+      expect(simulated.rewardDistribution.precisionPoints).to.equal(0n);
+      expect(simulated.principalClBalance).to.equal(0n);
+      expect(simulated.postInternalShares).to.equal(preTotalShares);
+      expect(simulated.postInternalEther).to.equal(preTotalPooledEther);
+      expect(simulated.postTotalShares).to.equal(preTotalShares);
+      expect(simulated.postTotalPooledEther).to.equal(preTotalPooledEther);
+    });
+  });
+
   context("handleOracleReport", () => {
     it("Update CL validators count if reported more", async () => {
       let depositedValidators = 100n;
-      await lido.setMockedDepositedValidators(depositedValidators);
+      await lido.mock__setDepositedValidators(depositedValidators);
 
       // first report, 100 validators
       await accounting.handleOracleReport(
@@ -106,7 +151,7 @@ describe("Accounting.sol:report", () => {
       expect(await lido.reportClValidators()).to.equal(depositedValidators);
 
       depositedValidators = 101n;
-      await lido.setMockedDepositedValidators(depositedValidators);
+      await lido.mock__setDepositedValidators(depositedValidators);
 
       // second report, 101 validators
       await accounting.handleOracleReport(
@@ -135,6 +180,32 @@ describe("Accounting.sol:report", () => {
           }),
         ),
       ).to.be.revertedWithCustomError(oracleReportSanityChecker, "CheckWithdrawalQueueOracleReportReverts");
+    });
+
+    it("Reverts if the report timestamp is incorrect", async () => {
+      const currentTimestamp = await getCurrentBlockTimestamp();
+      const incorrectTimestamp = currentTimestamp + 1000n; // Future timestamp
+
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            timestamp: incorrectTimestamp,
+          }),
+        ),
+      ).to.be.revertedWithCustomError(accounting, "IncorrectReportTimestamp");
+    });
+
+    it("Reverts if the reported validators count is less than the current count", async () => {
+      const depositedValidators = 100n;
+      await expect(
+        accounting.handleOracleReport(
+          report({
+            clValidators: depositedValidators,
+          }),
+        ),
+      )
+        .to.be.revertedWithCustomError(accounting, "IncorrectReportValidators")
+        .withArgs(100n, 0n, 0n);
     });
 
     it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but no withdrawal batches were reported", async () => {
@@ -395,21 +466,5 @@ describe("Accounting.sol:report", () => {
         "Mock__PostTokenRebaseHandled",
       );
     });
-
-    function report(overrides?: Partial<ReportValuesStruct>): ReportValuesStruct {
-      return {
-        timestamp: 0n,
-        timeElapsed: 0n,
-        clValidators: 0n,
-        clBalance: 0n,
-        withdrawalVaultBalance: 0n,
-        elRewardsVaultBalance: 0n,
-        sharesRequestedToBurn: 0n,
-        withdrawalFinalizationBatches: [],
-        vaultValues: [],
-        inOutDeltas: [],
-        ...overrides,
-      };
-    }
   });
 });
