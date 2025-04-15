@@ -65,7 +65,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes validatorsPubkeys,
         uint256 timestamp
     );
-
     struct RequestStatus {
       // Total items count in report (by default type(uint32).max, update on first report delivery)
       uint256 totalItemsCount;
@@ -258,15 +257,18 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
           revert InvalidPubkeysArray();
         }
 
-        if (msg.value < withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH )) {
-           revert InsufficientPayment(withdrawalFee,(exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH ), msg.value);
+        // TODO: maybe add requestCount in DirectExitData
+        uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
+
+        if (msg.value < withdrawalFee *  requestsCount ) {
+           revert InsufficientPayment(withdrawalFee, requestsCount , msg.value);
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH )}(exitData.validatorsPubkeys);
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee *  requestsCount}(exitData.validatorsPubkeys);
 
         emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, exitData.validatorsPubkeys, _getTimestamp());
 
-        uint256 refund = msg.value - withdrawalFee * (exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH );
+        uint256 refund = msg.value - withdrawalFee *  requestsCount;
 
         if (refund > 0) {
           (bool success, ) = msg.sender.call{value: refund}("");
