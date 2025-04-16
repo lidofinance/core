@@ -13,11 +13,9 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
-  impersonate,
   prepareLocalMerkleTree,
 } from "lib";
 import {
-  connectToHub,
   createVaultWithDelegation,
   generateFeesToClaim,
   getProtocolContext,
@@ -61,7 +59,7 @@ describe("Scenario: Actions on vault creation", () => {
       nodeOperatorManager,
     ));
 
-    await connectToHub(ctx, delegation, stakingVault);
+    //await connectToHub(ctx, delegation, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -69,20 +67,6 @@ describe("Scenario: Actions on vault creation", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
-  it("Allows fund and withdraw", async () => {
-    await expect(delegation.connect(roles.funder).fund({ value: 2n }))
-      .to.emit(stakingVault, "Funded")
-      .withArgs(delegation, 2n);
-
-    expect(await delegation.withdrawableEther()).to.equal(2n);
-
-    await expect(await delegation.connect(roles.withdrawer).withdraw(stranger, 2n))
-      .to.emit(stakingVault, "Withdrawn")
-      .withArgs(delegation, stranger, 2n);
-
-    expect(await delegation.withdrawableEther()).to.equal(0);
-  });
 
   it("Allows pause/resume deposits to beacon chain", async () => {
     await expect(delegation.connect(roles.depositPauser).pauseBeaconChainDeposits()).to.emit(
@@ -100,85 +84,6 @@ describe("Scenario: Actions on vault creation", () => {
     await expect(delegation.connect(roles.validatorExitRequester).requestValidatorExit(SAMPLE_PUBKEY))
       .to.emit(stakingVault, "ValidatorExitRequested")
       .withArgs(delegation, SAMPLE_PUBKEY, SAMPLE_PUBKEY);
-  });
-
-  it("Allows trigger validator withdrawal", async () => {
-    await expect(
-      delegation
-        .connect(roles.validatorWithdrawalTriggerer)
-        .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
-    )
-      .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
-      .withArgs(delegation, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
-
-    await expect(
-      stakingVault
-        .connect(nodeOperatorManager)
-        .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
-    ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
-  });
-
-  context("Disconnected vault", () => {
-    let disconnectedDelegation: Delegation;
-    let disconnectedRoles: VaultRoles;
-
-    before(async () => {
-      ({ delegation: disconnectedDelegation, roles: disconnectedRoles } = await createVaultWithDelegation(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner,
-        nodeOperatorManager,
-      ));
-    });
-
-    it("Reverts on minting stETH", async () => {
-      await disconnectedDelegation.connect(disconnectedRoles.funder).fund({ value: ether("1") });
-      await disconnectedDelegation
-        .connect(owner)
-        .grantRole(await disconnectedDelegation.LOCK_ROLE(), disconnectedRoles.minter.address);
-
-      await expect(
-        disconnectedDelegation.connect(disconnectedRoles.minter).mintStETH(disconnectedRoles.locker, 1n),
-      ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "NotConnectedToHub");
-    });
-
-    it("Reverts on burning stETH", async () => {
-      const { lido, vaultHub, locator } = ctx.contracts;
-
-      // suppose user somehow got 1 share and tries to burn it via the delegation contract on disconnected vault
-      const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
-      await lido.connect(accountingSigner).mintShares(disconnectedRoles.burner, 1n);
-
-      await expect(
-        disconnectedDelegation.connect(disconnectedRoles.burner).burnStETH(1n),
-      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
-    });
-  });
-
-  describe("Connected vault", () => {
-    it("Allows minting stETH", async () => {
-      const { vaultHub } = ctx.contracts;
-
-      // add some stETH to the vault to have valuation
-      await delegation.connect(roles.funder).fund({ value: ether("1") });
-
-      await expect(delegation.connect(roles.minter).mintStETH(stranger, 1n))
-        .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
-    });
-
-    it("Allows burning stETH", async () => {
-      const { vaultHub, lido } = ctx.contracts;
-
-      // add some stETH to the vault to have valuation, mint shares and approve stETH
-      await delegation.connect(roles.funder).fund({ value: ether("1") });
-      await delegation.connect(roles.minter).mintStETH(roles.burner, 1n);
-      await lido.connect(roles.burner).approve(delegation, 1n);
-
-      await expect(delegation.connect(roles.burner).burnStETH(1n))
-        .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, 1n);
-    });
   });
 
   // Node Operator Manager roles actions

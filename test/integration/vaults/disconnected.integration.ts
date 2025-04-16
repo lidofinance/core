@@ -5,9 +5,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
 
+import { impersonate } from "lib";
 import { createVaultWithDelegation, getProtocolContext, ProtocolContext, setupLido, VaultRoles } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
+
+import { ether } from "../../../lib/units";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
@@ -64,6 +67,29 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     // weth contract must be deployed, @Yuri will add to provision, may skip for now
     it.skip("fundWeth");
+  });
+
+  it("Reverts on minting stETH", async () => {
+    await delegation.connect(roles.funder).fund({ value: ether("1") });
+    await delegation.connect(owner).grantRole(await delegation.LOCK_ROLE(), roles.minter.address);
+
+    await expect(delegation.connect(roles.minter).mintStETH(roles.locker, 1n)).to.be.revertedWithCustomError(
+      ctx.contracts.vaultHub,
+      "NotConnectedToHub",
+    );
+  });
+
+  it("Reverts on burning stETH", async () => {
+    const { lido, vaultHub, locator } = ctx.contracts;
+
+    // suppose user somehow got 1 share and tries to burn it via the delegation contract on disconnected vault
+    const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
+    await lido.connect(accountingSigner).mintShares(roles.burner, 1n);
+
+    await expect(delegation.connect(roles.burner).burnStETH(1n)).to.be.revertedWithCustomError(
+      vaultHub,
+      "NotConnectedToHub",
+    );
   });
 
   describe("Withdrawal", () => {
