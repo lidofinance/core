@@ -161,6 +161,18 @@ describe("VaultHub.sol:hub", () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, ethers.ZeroHash, "")).to.not.reverted;
     });
+
+    it("returns lastest report data correctly", async () => {
+      const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
+      const reportTimestamp = await getCurrentBlockTimestamp();
+      await expect(vaultHub.connect(accountingAddress).updateReportData(reportTimestamp, ethers.ZeroHash, "test_cid"))
+        .to.not.reverted;
+
+      const lastReportData = await vaultHub.latestReportData();
+      expect(lastReportData.timestamp).to.equal(reportTimestamp);
+      expect(lastReportData.treeRoot).to.equal(ethers.ZeroHash);
+      expect(lastReportData.reportCid).to.equal("test_cid");
+    });
   });
 
   context("updateVaultData", () => {
