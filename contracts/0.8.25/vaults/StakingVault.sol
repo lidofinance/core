@@ -630,6 +630,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (isValuationBelowLocked) {
             isAuthorized = isAuthorized || (msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized);
         }
+        if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
         // Block partial withdrawals when valuation is below locked amount or report is stale
         // This is to prevent forced validator exits from front-running with partial withdrawals
@@ -638,8 +639,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
             }
         }
-
-        if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
