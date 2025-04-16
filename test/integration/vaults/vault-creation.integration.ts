@@ -48,8 +48,6 @@ describe("Scenario: Actions on vault creation", () => {
   let snapshot: string;
   let originalSnapshot: string;
 
-  Error.stackTraceLimit = Infinity;
-
   before(async () => {
     ctx = await getProtocolContext();
 
