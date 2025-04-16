@@ -157,15 +157,13 @@ describe("Delegation.sol", () => {
     expect(await factory.DELEGATION_IMPL()).to.equal(delegationImpl);
     expect(await factory.LIDO_LOCATOR()).to.equal(lidoLocator);
 
-    const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.connect(dao).registerTiers(DEFAULT_GROUP_ADDRESS, [
-      {
-        shareLimit: ether("1000"),
-        reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 1000n,
-        treasuryFeeBP: 1000n,
-      },
-    ]);
+    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(dao).alterTier(defaultTierId, {
+      shareLimit: ether("1000"),
+      reserveRatioBP: 1000n,
+      rebalanceThresholdBP: 1000n,
+      treasuryFeeBP: 1000n,
+    });
     const vaultCreationTx = await factory.connect(vaultOwner).createVaultWithDelegation(
       {
         defaultAdmin: vaultOwner,

@@ -30,7 +30,7 @@ import { createVaultProxy } from "lib/protocol/helpers";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -98,7 +98,7 @@ describe("VaultFactory.sol", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(admin, DEFAULT_GROUP_SHARE_LIMIT);
+    await operatorGrid.initialize(admin, DEFAULT_TIER_SHARE_LIMIT);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
@@ -170,12 +170,10 @@ describe("VaultFactory.sol", () => {
     const rebalanceThresholdBP = 100n;
     const treasuryFeeBP = 600n;
 
-    const tiers: TierParamsStruct[] = [{ shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP }];
-
-    const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-
-    //register
-    await operatorGrid.connect(admin).registerTiers(DEFAULT_GROUP_ADDRESS, tiers);
+    //alter default tier
+    const tierParams: TierParamsStruct = { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP };
+    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(admin).alterTier(defaultTierId, tierParams);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

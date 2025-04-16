@@ -18,7 +18,67 @@ struct TierParams {
     uint256 treasuryFeeBP;
 }
 
+/**
+ * @title OperatorGrid
+ * @author Lido
+ * @notice
+ * OperatorGrid is a contract that manages connection parameters for vaults before they are connected to the VaultHub.
+ * These parameters include:
+ * - shareLimit: maximum amount of shares that can be minted
+ * - reserveRatioBP: reserve ratio in basis points
+ * - rebalanceThresholdBP: rebalance threshold in basis points
+ * - treasuryFeeBP: treasury fee in basis points
+ *
+ * These parameters are determined by the Tier in which the Vault is registered.
+ *
+ */
 contract OperatorGrid is AccessControlEnumerableUpgradeable {
+    /*
+      Key concepts:
+      1. Default Registration:
+         - All Vaults are initially registered in the default tier (DEFAULT_TIER_ID = 1)
+         - The default tier has no group
+
+         registerVault(vault)
+                │
+                ▼
+         DEFAULT_TIER_ID = 1
+        ┌──────────────────────┐
+        │        Tier 1        │
+        │  tierShareLimit = z  │
+        │  Vault_1 ... Vault_m │
+        └──────────────────────┘
+
+       2. Tier Change Process:
+         - To modify a vault's connection parameters to VaultHub, a tier change must be requested
+         - Change requests must be approved by the target tier's Node Operator
+         - All pending requests are tracked in the pendingRequests mapping
+
+         Operator1.pendingRequests = [Vault_1, Vault_2, ...]
+
+       3. Confirmation Process:
+         - Node Operator can confirm the tier change if:
+           a) The target tier has sufficient capacity (shareLimit)
+           b) The vault belongs to the same operator group
+         For detailed tier change scenarios and share accounting, see the ASCII diagrams in the `confirmTierChange` function.
+
+       4. Tier Capacity:
+         - Tiers are not limited by the number of vaults
+         - Tiers are limited by the sum of vaults' minted shares
+
+        ┌──────────────────────────────────────────────────────┐
+        │                 Group 1 = operator 1                 │
+        │  ┌────────────────────────────────────────────────┐  │
+        │  │  groupShareLimit = 1kk                         │  │
+        │  └────────────────────────────────────────────────┘  │
+        │  ┌──────────────────────┐  ┌──────────────────────┐  │
+        │  │       Tier 1         │  │       Tier 2         │  │
+        │  │  tierShareLimit = x  │  │  tierShareLimit = y  │  │
+        │  │  Vault2 ... Vaultk   │  │                      │  │
+        │  └──────────────────────┘  └──────────────────────┘  │
+        └──────────────────────────────────────────────────────┘
+     */
+
     using EnumerableSet for EnumerableSet.AddressSet;
 
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
@@ -27,7 +87,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     ILidoLocator public immutable LIDO_LOCATOR;
 
     /// @notice Default group address
-    address public constant DEFAULT_GROUP_ADDRESS = address(1);
+    uint128 public constant DEFAULT_TIER_ID = 1;
 
     // -----------------------------
     //            STRUCTS
@@ -90,7 +150,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     /// @notice Initializes the contract with an admin
     /// @param _admin Address of the admin
-    /// @param _defaultShareLimit Default share limit for the default group
+    /// @param _defaultShareLimit Default share limit for the default tier
     function initialize(address _admin, uint256 _defaultShareLimit) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
@@ -99,16 +159,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
 
+        // the stone in the elevator
         $.tiers.push(Tier(address(0), 0, 0, 0, 0, 0));
 
-        //create default group with default share limit
-        $.groups[DEFAULT_GROUP_ADDRESS] = Group({
-            operator: DEFAULT_GROUP_ADDRESS,
-            shareLimit: uint96(_defaultShareLimit),
-            mintedShares: 0,
-            tierIds: new uint128[](0)
-        });
-        $.nodeOperators.push(DEFAULT_GROUP_ADDRESS);
+        //create default tier with default share limit
+        $.tiers.push(Tier(address(0), uint96(_defaultShareLimit), 0, 0, 0, 0));
     }
 
     /// @notice Registers a new group
@@ -220,7 +275,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     function alterTier(uint256 _tierId, TierParams calldata _tierParams) external onlyRole(REGISTRY_ROLE) {
         ERC7201Storage storage $ = _getStorage();
         Tier storage tier_ = $.tiers[_tierId];
-        if ($.tiers[_tierId].operator == address(0)) revert TierNotExists();
+        if (_tierId != DEFAULT_TIER_ID && $.tiers[_tierId].operator == address(0)) revert TierNotExists();
 
         tier_.shareLimit = uint96(_tierParams.shareLimit);
         tier_.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
@@ -239,11 +294,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         VaultTier storage vaultTier = $.vaultTier[vault];
         if (vaultTier.currentTierId > 0) revert VaultExists();
 
-        Group storage defaultGroup = $.groups[DEFAULT_GROUP_ADDRESS];
-        if (defaultGroup.tierIds.length == 0) revert TiersNotAvailable();
-
-        uint256 tierId = defaultGroup.tierIds[0];
-        vaultTier.currentTierId = uint128(tierId);
+        vaultTier.currentTierId = DEFAULT_TIER_ID;
 
         emit VaultAdded(vault);
     }
@@ -275,6 +326,51 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @notice Confirm tier change request
     /// @param _vault address of the vault
     /// @param _tierIdToConfirm id of the tier to confirm
+    ///
+    /*
+
+    Legend:
+    V = Vault1.mintedShares
+
+    Scheme1 - transfer Vault from default tier to Tier2
+
+                                         ┌────────────────────────────────┐
+                                         │           Group 1              │
+                                         │                                │
+    ┌────────────────────┐               │  ┌───────────┐  ┌───────────┐  │
+    │  Tier 1 (default)  │   confirm     │  │ Tier 2    │  │ Tier 3    │  │
+    │  minted: -V        │    ─────▶     │  │ minted:+V │  │           │  │
+    └────────────────────┘               │  └───────────┘  └───────────┘  │
+                                         │                                │
+                                         │   Group1.mintedShares: +V      │
+                                         └────────────────────────────────┘
+
+    After confirmation:
+    - Tier 1.mintedShares   = -V
+    - Tier 2.mintedShares   = +V
+    - Group1.mintedShares   = +V
+
+    --------------------------------------------------------------------------
+    Scheme2 - transfer Vault from Tier2 to Tier3, no need to change group minted shares
+
+    ┌────────────────────────────────┐     ┌────────────────────────────────┐
+    │           Group 1              │     │           Group 2              │
+    │                                │     │                                │
+    │  ┌───────────┐  ┌───────────┐  │     │  ┌───────────┐                 │
+    │  │ Tier 2    │  │ Tier 3    │  │     │  │ Tier 4    │                 │
+    │  │ minted:-V │  │ minted:+V │  │     │  │           │                 │
+    │  └───────────┘  └───────────┘  │     │  └───────────┘                 │
+    │  operator1                     │     │  operator2                     │
+    └────────────────────────────────┘     └────────────────────────────────┘
+
+    After confirmation:
+    - Tier 2.mintedShares   = -V
+    - Tier 3.mintedShares   = +V
+
+    NB: Cannot changes from Tier2 to Tier1, because Tier1 has no group. Reverts on `requestTierChange`
+    NB: Cannot changes from Tier2 to Tier4, because Tier4 has different operator.
+
+    */
     function confirmTierChange(address _vault, uint256 _tierIdToConfirm) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
@@ -300,20 +396,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         //check if tier limit is exceeded
         if (requestedTier.mintedShares + vaultShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
-        //check if group limit is exceeded
-        Group storage requestedGroup = $.groups[nodeOperator];
-        if (requestedGroup.mintedShares + vaultShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
+        // if the vault was in the default tier:
+        // - that mean that the vault has no group, so we decrease only the minted shares of the default tier
+        // - but need to check requested group limit exceeded
+        if (vaultTier.currentTierId == DEFAULT_TIER_ID) {
+            Group storage requestedGroup = $.groups[nodeOperator];
+            if (requestedGroup.mintedShares + vaultShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
+            requestedGroup.mintedShares += uint96(vaultShares);
+        }
 
         Tier storage currentTier = $.tiers[vaultTier.currentTierId];
-        Group storage currentGroup = $.groups[currentTier.operator];
 
-        if (currentTier.operator != DEFAULT_GROUP_ADDRESS) {
-            currentTier.mintedShares -= uint96(vaultShares);
-        }
-        currentGroup.mintedShares -= uint96(vaultShares);
-
+        currentTier.mintedShares -= uint96(vaultShares);
         requestedTier.mintedShares += uint96(vaultShares);
-        requestedGroup.mintedShares += uint96(vaultShares);
 
         vaultTier.currentTierId = requestedTierId;
         vaultTier.requestedTierId = 0;
@@ -372,18 +467,20 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint128 tierId = vaultTier.currentTierId;
         if (tierId == 0) revert TierNotExists();
 
-        Tier storage tier_ = $.tiers[tierId];
-        Group storage group_ = $.groups[tier_.operator];
-
         uint96 amount_ = uint96(amount);
 
-        if (tier_.mintedShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
-        if (group_.mintedShares + amount_ > group_.shareLimit) revert GroupLimitExceeded();
+        Tier storage tier_ = $.tiers[tierId];
 
-        if (tier_.operator == DEFAULT_GROUP_ADDRESS) {
-            group_.mintedShares += amount_;
+        uint96 tierMintedShares = tier_.mintedShares; //cache
+        if (tierMintedShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
+
+        if (tierId == DEFAULT_TIER_ID) {
+            tier_.mintedShares = tierMintedShares + amount_;
         } else {
-            tier_.mintedShares += amount_;
+            Group storage group_ = $.groups[tier_.operator];
+            if (group_.mintedShares + amount_ > group_.shareLimit) revert GroupLimitExceeded();
+
+            tier_.mintedShares = tierMintedShares + amount_;
             group_.mintedShares += amount_;
         }
     }
@@ -403,16 +500,17 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint128 tierId = vaultTier.currentTierId;
         if (tierId == 0) revert TierNotExists();
 
-        Tier storage tier_ = $.tiers[tierId];
-        Group storage group_ = $.groups[tier_.operator];
-
         uint96 amount_ = uint96(amount);
+
+        Tier storage tier_ = $.tiers[tierId];
 
         // we skip the check for minted shared underflow, because it's done in the VaultHub.burnShares()
 
-        if (tier_.operator == DEFAULT_GROUP_ADDRESS) {
-            group_.mintedShares -= amount_;
+        if (tierId == DEFAULT_TIER_ID) {
+            tier_.mintedShares -= amount_;
         } else {
+            Group storage group_ = $.groups[tier_.operator];
+
             tier_.mintedShares -= amount_;
             group_.mintedShares -= amount_;
         }

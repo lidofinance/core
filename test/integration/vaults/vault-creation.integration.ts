@@ -60,15 +60,13 @@ describe("Scenario: Actions on vault creation", () => {
     const { operatorGrid } = ctx.contracts;
     const agentSigner = await ctx.getSigner("agent");
 
-    const defaultGroupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.connect(agentSigner).registerTiers(defaultGroupAddress, [
-      {
-        shareLimit,
-        reserveRatioBP,
-        rebalanceThresholdBP,
-        treasuryFeeBP,
-      },
-    ]);
+    const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
+      shareLimit,
+      reserveRatioBP,
+      rebalanceThresholdBP,
+      treasuryFeeBP,
+    });
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, delegation, roles } = await createVaultWithDelegation(

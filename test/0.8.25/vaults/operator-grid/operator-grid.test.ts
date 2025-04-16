@@ -21,7 +21,7 @@ import { certainAddress, ether, impersonate } from "lib";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const RESERVE_RATIO = 2000;
 const RESERVE_RATIO_THRESHOLD = 1800;
 const TREASURY_FEE = 500;
@@ -76,18 +76,16 @@ describe("OperatorGrid.sol", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(deployer, DEFAULT_GROUP_SHARE_LIMIT);
+    await operatorGrid.initialize(deployer, DEFAULT_TIER_SHARE_LIMIT);
     await operatorGrid.grantRole(await operatorGrid.REGISTRY_ROLE(), deployer);
 
-    const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.registerTiers(DEFAULT_GROUP_ADDRESS, [
-      {
-        shareLimit: DEFAULT_GROUP_SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO,
-        rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD,
-        treasuryFeeBP: TREASURY_FEE,
-      },
-    ]);
+    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.alterTier(defaultTierId, {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO,
+      rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD,
+      treasuryFeeBP: TREASURY_FEE,
+    });
 
     // VaultHub
     vaultHub = await ethers.deployContract("VaultHub__MockForOperatorGrid", []);
@@ -103,7 +101,7 @@ describe("OperatorGrid.sol", () => {
 
   context("constructor", () => {
     it("reverts on impl initialization", async () => {
-      await expect(operatorGrid.initialize(stranger, DEFAULT_GROUP_SHARE_LIMIT)).to.be.revertedWithCustomError(
+      await expect(operatorGrid.initialize(stranger, DEFAULT_TIER_SHARE_LIMIT)).to.be.revertedWithCustomError(
         operatorGridImpl,
         "InvalidInitialization",
       );
@@ -115,7 +113,7 @@ describe("OperatorGrid.sol", () => {
         deployer,
       );
       const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
-      await expect(operatorGridLocal.initialize(ZeroAddress, DEFAULT_GROUP_SHARE_LIMIT))
+      await expect(operatorGridLocal.initialize(ZeroAddress, DEFAULT_TIER_SHARE_LIMIT))
         .to.be.revertedWithCustomError(operatorGridImpl, "ZeroArgument")
         .withArgs("_admin");
     });
@@ -249,17 +247,17 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "TierNotExists");
     });
 
-    it("DEFAULT_GROUP mintShares should revert if group shares limit is exceeded", async function () {
-      const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-      const groupShareLimit = 2000;
-      await operatorGrid.updateGroupShareLimit(DEFAULT_GROUP_ADDRESS, groupShareLimit);
+    // it("DEFAULT_GROUP mintShares should revert if group shares limit is exceeded", async function () {
+    //   const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    //   const groupShareLimit = 2000;
+    //   await operatorGrid.updateGroupShareLimit(defaultTierId, groupShareLimit);
 
-      await operatorGrid.registerVault(vault_NO1_V1);
+    //   await operatorGrid.registerVault(vault_NO1_V1);
 
-      await expect(
-        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, groupShareLimit + 1),
-      ).to.be.revertedWithCustomError(operatorGrid, "GroupLimitExceeded");
-    });
+    //   await expect(
+    //     operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, groupShareLimit + 1),
+    //   ).to.be.revertedWithCustomError(operatorGrid, "GroupLimitExceeded");
+    // });
 
     it("mintShares should revert if group shares limit is exceeded", async function () {
       const shareLimit = 999;
@@ -322,56 +320,56 @@ describe("OperatorGrid.sol", () => {
       expect(tier.operator).to.equal(nodeOperator1);
     });
 
-    it("mintShares - DEFAULT_GROUP group=2000 tier=2000 NO1_vault1=1999, NO2_vault1=1", async function () {
-      const groupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-      const shareLimit = 1999;
+    // it("mintShares - DEFAULT_GROUP group=2000 tier=2000 NO1_vault1=1999, NO2_vault1=1", async function () {
+    //   const groupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
+    //   const shareLimit = 1999;
 
-      await operatorGrid.registerVault(vault_NO1_V1);
-      await operatorGrid.registerVault(vault_NO2_V1);
+    //   await operatorGrid.registerVault(vault_NO1_V1);
+    //   await operatorGrid.registerVault(vault_NO2_V1);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, shareLimit - 1);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V1, 1);
+    //   await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, shareLimit - 1);
+    //   await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V1, 1);
 
-      const group = await operatorGrid.group(groupAddress);
+    //   const group = await operatorGrid.group(groupAddress);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V1);
+    //   const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
+    //   const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V1);
 
-      const tier = await operatorGrid.tier(vaultTier.tierId);
-      const tier2 = await operatorGrid.tier(vaultTier2.tierId);
+    //   const tier = await operatorGrid.tier(vaultTier.tierId);
+    //   const tier2 = await operatorGrid.tier(vaultTier2.tierId);
 
-      expect(group.mintedShares).to.equal(shareLimit);
-      expect(tier.mintedShares).to.equal(0); //cause we increase only group limit for default group
-      expect(tier2.mintedShares).to.equal(0); //cause we increase only group limit for default group
-      expect(tier.operator).to.equal(groupAddress);
-      expect(tier2.operator).to.equal(groupAddress);
-    });
+    //   expect(group.mintedShares).to.equal(shareLimit);
+    //   expect(tier.mintedShares).to.equal(0); //cause we increase only group limit for default group
+    //   expect(tier2.mintedShares).to.equal(0); //cause we increase only group limit for default group
+    //   expect(tier.operator).to.equal(groupAddress);
+    //   expect(tier2.operator).to.equal(groupAddress);
+    // });
 
-    it("mintShares - DEFAULT_GROUP group=2000 tier=2000 NO1_vault1=1000, NO2_vault2=1, reverts TierLimitExceeded", async function () {
-      const groupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-      const shareLimit = 2000;
-      await operatorGrid.updateGroupShareLimit(groupAddress, shareLimit);
+    // it("mintShares - DEFAULT_GROUP group=2000 tier=2000 NO1_vault1=1000, NO2_vault2=1, reverts TierLimitExceeded", async function () {
+    //   const groupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
+    //   const shareLimit = 2000;
+    //   await operatorGrid.updateGroupShareLimit(groupAddress, shareLimit);
 
-      await operatorGrid.registerVault(vault_NO1_V1);
-      await operatorGrid.registerVault(vault_NO2_V1);
+    //   await operatorGrid.registerVault(vault_NO1_V1);
+    //   await operatorGrid.registerVault(vault_NO2_V1);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V1, 1);
+    //   await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
+    //   await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V1, 1);
 
-      const group = await operatorGrid.group(groupAddress);
+    //   const group = await operatorGrid.group(groupAddress);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V1);
+    //   const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
+    //   const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V1);
 
-      const tier = await operatorGrid.tier(vaultTier.tierId);
-      const tier2 = await operatorGrid.tier(vaultTier2.tierId);
+    //   const tier = await operatorGrid.tier(vaultTier.tierId);
+    //   const tier2 = await operatorGrid.tier(vaultTier2.tierId);
 
-      expect(group.mintedShares).to.equal(tierShareLimit + 1);
-      expect(tier.mintedShares).to.equal(0); //cause we increase only group limit for default group
-      expect(tier2.mintedShares).to.equal(0); //cause we increase only group limit for default group
-      expect(tier.operator).to.equal(groupAddress);
-      expect(tier2.operator).to.equal(groupAddress);
-    });
+    //   expect(group.mintedShares).to.equal(tierShareLimit + 1);
+    //   expect(tier.mintedShares).to.equal(0); //cause we increase only group limit for default group
+    //   expect(tier2.mintedShares).to.equal(0); //cause we increase only group limit for default group
+    //   expect(tier.operator).to.equal(groupAddress);
+    //   expect(tier2.operator).to.equal(groupAddress);
+    // });
 
     it("mintShares - Group1 group=2000 tier=1000 NO1_vault1=1000, NO1_vault2=1, reverts TierLimitExceeded", async function () {
       const shareLimit = 2000;

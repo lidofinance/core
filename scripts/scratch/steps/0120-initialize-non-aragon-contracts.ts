@@ -146,9 +146,9 @@ export async function main() {
   await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
 
   // Initialize OperatorGrid
-  const DEFAULT_SHARE_LIMIT = ether("1000");
+  const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
   const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
-  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, DEFAULT_SHARE_LIMIT], { from: deployer });
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, DEFAULT_TIER_SHARE_LIMIT], { from: deployer });
 
   // Initialize PDG
   const pdg = await loadContract("PredepositGuarantee", pdgAddress);

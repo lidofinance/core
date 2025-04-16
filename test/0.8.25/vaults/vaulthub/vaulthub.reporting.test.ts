@@ -23,7 +23,7 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
 const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
@@ -80,15 +80,13 @@ describe("VaultHub.sol:reporting", () => {
     await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
-    const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.connect(user).registerTiers(DEFAULT_GROUP_ADDRESS, [
-      {
-        shareLimit: options?.shareLimit ?? SHARE_LIMIT,
-        reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        rebalanceThresholdBP: options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
-        treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-      },
-    ]);
+    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(user).alterTier(defaultTierId, {
+      shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+      reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+      rebalanceThresholdBP: options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+      treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
+    });
     await operatorGrid.connect(user).registerVault(vault);
     await vaultHub.connect(user).connectVault(vault);
 
@@ -126,7 +124,7 @@ describe("VaultHub.sol:reporting", () => {
     operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
-    await operatorGrid.initialize(user, DEFAULT_GROUP_SHARE_LIMIT);
+    await operatorGrid.initialize(user, DEFAULT_TIER_SHARE_LIMIT);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub__HarnessForReporting", [
