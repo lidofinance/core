@@ -557,6 +557,76 @@ describe("VaultHub.sol:hub", () => {
         .withArgs("_vault");
     });
 
+    it("returns 0 when stETH was not minted", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      await vault.lock(ether("5"));
+      await vault.report(0n, ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(ether("0"));
+    });
+
+    it("returns 0 when minted small amount of stETH and vault is healthy", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 10_00n, // 10%
+        rebalanceThresholdBP: 9_00n, // 9%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("50") });
+      const mintingEth = ether("1");
+      const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
+      await vault.lock(ether("5"));
+      await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
+
+      await vault.report(0n, ether("50"), ether("50"), ether("5"));
+
+      const burner = await impersonate(await locator.burner(), ether("1"));
+      await lido.connect(whale).transfer(burner, ether("1"));
+      await lido.connect(burner).burnShares(ether("1"));
+
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
+    });
+
+    it("different cases when vault is healthy, unhealthy and minted > valuation", async () => {
+      const vault = await createAndConnectVault(vaultFactory, {
+        shareLimit: ether("100"), // just to bypass the share limit check
+        reserveRatioBP: 50_00n, // 50%
+        rebalanceThresholdBP: 50_00n, // 50%
+      });
+
+      const vaultAddress = await vault.getAddress();
+
+      await vault.fund({ value: ether("1") });
+      await vaultHub.connect(user).mintShares(vaultAddress, user, ether("0.25"));
+
+      await vault.report(0n, ether("0.5"), ether("1"), ether("1")); // at the threshold
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
+
+      await vault.report(0n, ether("0.5") - 1n, ether("1"), ether("1")); // below the threshold
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(false);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(1n);
+
+      await vault.report(0n, ether("0.5") - ether("0.5"), ether("1"), ether("1")); // minted > valuation
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(false);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MAX_UINT256);
+    });
+
     it("returns correct value for rebalance vault", async () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
@@ -590,7 +660,7 @@ describe("VaultHub.sol:hub", () => {
       });
 
       const vaultAddress = await vault.getAddress();
-      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(MAX_UINT256);
+      expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(0n);
 
       await vault.fund({ value: ether("50") });
       await vault.lock(ether("50"));
