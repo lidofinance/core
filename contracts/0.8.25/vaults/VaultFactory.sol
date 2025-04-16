@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
+import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 import {Permissions} from "./dashboard/Permissions.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -57,7 +57,7 @@ contract VaultFactory {
         Permissions.RoleAssignment[] calldata _roleAssignments,
         bytes calldata _extraParams
     ) external returns (IStakingVault vault, Dashboard dashboard) {
-        vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
 
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
