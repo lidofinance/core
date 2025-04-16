@@ -625,15 +625,18 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         bool isAuthorized = msg.sender == $.nodeOperator || msg.sender == owner();
 
-        // @dev When valuation drops below the locked amount:
-        //      1. Block partial withdrawals to prevent forced withdrawals from front-running
-        //      2. Authorize VaultHub to initiate forced full withdrawals
+        // Authorize VaultHub to initiate forced validator exits when valuation is below locked amount
         bool isValuationBelowLocked = valuation() < $.locked;
+        if (isValuationBelowLocked) {
+            isAuthorized = isAuthorized || (msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized);
+        }
+
+        // Block partial withdrawals when valuation is below locked amount or report is stale
+        // This is to prevent forced validator exits from front-running with partial withdrawals
         if (isValuationBelowLocked || !isReportFresh()) {
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
             }
-            isAuthorized = isAuthorized || (msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized);
         }
 
         if (!isAuthorized) revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);

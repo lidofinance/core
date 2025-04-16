@@ -1046,6 +1046,18 @@ describe("StakingVault.sol", () => {
         .withArgs("triggerValidatorWithdrawal", vaultHubAddress);
     });
 
+    it("reverts if called by the vault hub with non fresh report with valuation > locked", async () => {
+      await stakingVault.authorizeLidoVaultHub(); // needed for the report
+
+      await expect(
+        stakingVault
+          .connect(vaultHubSigner)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [0], vaultOwnerAddress, { value: 1n }),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
+        .withArgs("triggerValidatorWithdrawal", vaultHubAddress);
+    });
+
     it("reverts if the amounts array is not the same length as the pubkeys array", async () => {
       await expect(
         stakingVault
