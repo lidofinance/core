@@ -430,6 +430,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
         uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
 
+        if (amountToRebalance == 0) revert AlreadyHealthy(_vault);
+
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
     }
@@ -588,6 +590,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
