@@ -108,7 +108,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
-        _updateContractVersion(1);
+        _initializeContractVersionTo(1);
     }
 
     /// @notice Resume accepting validator exit requests
