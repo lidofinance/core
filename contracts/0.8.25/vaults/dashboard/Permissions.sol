@@ -184,7 +184,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Performs the role admin checks internally.
      * @dev If an account is already a member of a role, doesn't revert, emits no events.
      */
-    function grantRoles(RoleAssignment[] memory _assignments) external {
+    function grantRoles(RoleAssignment[] calldata _assignments) external {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
 
         for (uint256 i = 0; i < _assignments.length; i++) {
@@ -198,7 +198,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Performs the role admin checks internally.
      * @dev If an account is not a member of a role, doesn't revert, emits no events.
      */
-    function revokeRoles(RoleAssignment[] memory _assignments) external {
+    function revokeRoles(RoleAssignment[] calldata _assignments) external {
         if (_assignments.length == 0) revert ZeroArgument("_assignments");
 
         for (uint256 i = 0; i < _assignments.length; i++) {
