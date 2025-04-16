@@ -23,6 +23,7 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
+const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
 const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
@@ -80,8 +81,6 @@ describe("VaultHub.sol:reporting", () => {
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-
-    await operatorGrid.connect(user).registerGroup(DEFAULT_GROUP_ADDRESS, ether("1000"));
     await operatorGrid.connect(user).registerTiers(DEFAULT_GROUP_ADDRESS, [
       {
         shareLimit: options?.shareLimit ?? SHARE_LIMIT,
@@ -127,7 +126,7 @@ describe("VaultHub.sol:reporting", () => {
     operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
-    await operatorGrid.initialize(user);
+    await operatorGrid.initialize(user, DEFAULT_GROUP_SHARE_LIMIT);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub__HarnessForReporting", [

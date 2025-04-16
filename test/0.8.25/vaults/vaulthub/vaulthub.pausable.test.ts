@@ -11,6 +11,8 @@ import { ether, MAX_UINT256 } from "lib";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
+const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+
 describe("VaultHub.sol:pausableUntil", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
@@ -36,7 +38,7 @@ describe("VaultHub.sol:pausableUntil", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(user);
+    await operatorGrid.initialize(user, DEFAULT_GROUP_SHARE_LIMIT);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);

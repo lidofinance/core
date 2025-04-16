@@ -237,6 +237,8 @@ contract VaultHub is PausableUntilWithRoles {
         return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
     }
 
+    /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
+    /// @param _vault vault address
     function connectVault(address _vault) external {
         (
         /* address nodeOperator */,
@@ -245,7 +247,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 reserveRatioBP,
             uint256 reserveRatioThresholdBP,
             uint256 treasuryFeeBP
-        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).getVaultInfo(_vault);
+        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
         _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
     }
 
@@ -288,9 +290,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault.balance < CONNECT_DEPOSIT)
             revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
-        // here we intentionally prohibit all reports having referenceSlot earlier than the current block
-        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
-
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             0, // sharesMinted
@@ -303,6 +302,10 @@ contract VaultHub is PausableUntilWithRoles {
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
+
+        // here we intentionally prohibit all reports having referenceSlot earlier than the current block;
+        // if the vault is not connected to the hub, it will revert.
+        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
 
         emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }

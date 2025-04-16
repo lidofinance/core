@@ -37,6 +37,7 @@ import { Snapshot } from "test/suite";
 
 const BP_BASE = 10000n;
 const MAX_FEE = BP_BASE;
+const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
 
 describe("Delegation.sol", () => {
   let vaultOwner: HardhatEthersSigner;
@@ -140,7 +141,7 @@ describe("Delegation.sol", () => {
       vaultOwner,
     );
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, vaultOwner);
-    await operatorGrid.initialize(dao);
+    await operatorGrid.initialize(dao, DEFAULT_GROUP_SHARE_LIMIT);
     await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
 
     await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { operatorGrid });
@@ -157,8 +158,6 @@ describe("Delegation.sol", () => {
     expect(await factory.LIDO_LOCATOR()).to.equal(lidoLocator);
 
     const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-    await operatorGrid.connect(dao).registerGroup(DEFAULT_GROUP_ADDRESS, ether("1000"));
-
     await operatorGrid.connect(dao).registerTiers(DEFAULT_GROUP_ADDRESS, [
       {
         shareLimit: ether("1000"),

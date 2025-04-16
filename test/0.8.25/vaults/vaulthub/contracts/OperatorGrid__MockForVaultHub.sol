@@ -21,7 +21,7 @@ contract OperatorGrid__MockForVaultHub {
         });
     }
 
-    function getVaultInfo(
+    function vaultInfo(
         address vaultAddr
     )
         external

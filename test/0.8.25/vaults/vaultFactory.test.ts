@@ -30,6 +30,8 @@ import { createVaultProxy } from "lib/protocol/helpers";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
+const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -96,7 +98,7 @@ describe("VaultFactory.sol", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(admin);
+    await operatorGrid.initialize(admin, DEFAULT_GROUP_SHARE_LIMIT);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
@@ -173,7 +175,6 @@ describe("VaultFactory.sol", () => {
     const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
 
     //register
-    await operatorGrid.connect(admin).registerGroup(DEFAULT_GROUP_ADDRESS, ether("1000"));
     await operatorGrid.connect(admin).registerTiers(DEFAULT_GROUP_ADDRESS, tiers);
   });
 
