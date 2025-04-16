@@ -163,8 +163,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const agentSigner = await ctx.getSigner("agent");
 
     const defaultGroupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-
-    await operatorGrid.connect(agentSigner).registerGroup(defaultGroupAddress, shareLimit);
     await operatorGrid.connect(agentSigner).registerTiers(defaultGroupAddress, [
       {
         shareLimit,

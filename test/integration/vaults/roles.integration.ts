@@ -129,7 +129,6 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       ];
 
       const defaultGroupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
-      await operatorGrid.connect(agentSigner).registerGroup(defaultGroupAddress, shareLimit);
       await operatorGrid.connect(agentSigner).registerTiers(defaultGroupAddress, tiers);
 
       // Owner can create a vault with operator as a node operator

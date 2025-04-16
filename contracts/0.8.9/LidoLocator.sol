@@ -17,7 +17,6 @@ contract LidoLocator is ILidoLocator {
         address accountingOracle;
         address depositSecurityModule;
         address elRewardsVault;
-        address legacyOracle;
         address lido;
         address oracleReportSanityChecker;
         address postTokenRebaseReceiver;
@@ -41,7 +40,6 @@ contract LidoLocator is ILidoLocator {
     address public immutable accountingOracle;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
-    address public immutable legacyOracle;
     address public immutable lido;
     address public immutable oracleReportSanityChecker;
     address public immutable postTokenRebaseReceiver;
@@ -68,7 +66,6 @@ contract LidoLocator is ILidoLocator {
         accountingOracle = _assertNonZero(_config.accountingOracle);
         depositSecurityModule = _assertNonZero(_config.depositSecurityModule);
         elRewardsVault = _assertNonZero(_config.elRewardsVault);
-        legacyOracle = _assertNonZero(_config.legacyOracle);
         lido = _assertNonZero(_config.lido);
         oracleReportSanityChecker = _assertNonZero(_config.oracleReportSanityChecker);
         postTokenRebaseReceiver = _config.postTokenRebaseReceiver;

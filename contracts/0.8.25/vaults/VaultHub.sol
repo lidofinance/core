@@ -35,7 +35,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice root of the vaults data tree
         bytes32 vaultsDataTreeRoot;
         /// @notice CID of the vaults data tree
-        string vaultsDataTreeCid;
+        string vaultsDataReportCid;
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
     }
@@ -207,9 +207,15 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice estimate ether amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount to rebalance
+    /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     function rebalanceShortfall(address _vault) public view returns (uint256) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        bool isHealthy = isVaultHealthyAsOfLatestReport(_vault);
+
+        // Health vault do not need to rebalance
+        if (isHealthy) {
+            return 0;
+        }
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -218,8 +224,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
         uint256 valuation = IStakingVault(_vault).valuation();
 
-        // to avoid revert below
-        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
+        // Impossible to rebalance a vault with deficit
+        if (mintedStETH >= valuation) {
             // return MAX_UINT_256
             return type(uint256).max;
         }
@@ -249,6 +255,23 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 treasuryFeeBP
         ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
         _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
+    }
+
+    /// @notice returns the latest report data
+    /// @return timestamp of the report
+    /// @return treeRoot of the report
+    /// @return reportCid of the report
+    function latestReportData() external view returns (
+        uint64 timestamp,
+        bytes32 treeRoot,
+        string memory reportCid
+    ) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        return (
+            $.vaultsDataTimestamp,
+            $.vaultsDataTreeRoot,
+            $.vaultsDataReportCid
+        );
     }
 
     /// @notice connects a vault to the hub
@@ -351,15 +374,15 @@ contract VaultHub is PausableUntilWithRoles {
     function updateReportData(
         uint64 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
-        string memory _vaultsDataTreeCid
+        string memory _vaultsDataReportCid
     ) external {
         if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateReportData", msg.sender);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
         $.vaultsDataTimestamp = _vaultsDataTimestamp;
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
-        $.vaultsDataTreeCid = _vaultsDataTreeCid;
-        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataTreeCid);
+        $.vaultsDataReportCid = _vaultsDataReportCid;
+        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
     }
 
     /// @notice force disconnects a vault from the hub
@@ -456,14 +479,15 @@ contract VaultHub is PausableUntilWithRoles {
         burnShares(_vault, _amountOfShares);
     }
 
-    /// @notice force rebalance of the vault to have sufficient reserve ratio
+    /// @notice permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
-    /// @dev permissionless if the vault's min reserve ratio is broken
+    /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        _requireUnhealthy(_vault);
 
-        uint256 amountToRebalance = rebalanceShortfall(_vault);
+        uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
+        if (maxAmountToRebalance == 0) revert AlreadyHealthy(_vault);
+        uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
@@ -500,7 +524,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        _requireUnhealthy(_vault);
+        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
@@ -604,10 +628,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
-    }
-
-    function _requireUnhealthy(address _vault) internal view {
-        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
     }
 
     event VaultConnected(
