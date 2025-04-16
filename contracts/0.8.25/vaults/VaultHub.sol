@@ -34,7 +34,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice root of the vaults data tree
         bytes32 vaultsDataTreeRoot;
         /// @notice CID of the vaults data tree
-        string vaultsDataTreeCid;
+        string vaultsDataReportCid;
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
     }
@@ -238,6 +238,23 @@ contract VaultHub is PausableUntilWithRoles {
         return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
     }
 
+    /// @notice returns the latest report data
+    /// @return timestamp of the report
+    /// @return treeRoot of the report
+    /// @return reportCid of the report
+    function latestReportData() external view returns (
+        uint64 timestamp,
+        bytes32 treeRoot,
+        string memory reportCid
+    ) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        return (
+            $.vaultsDataTimestamp,
+            $.vaultsDataTreeRoot,
+            $.vaultsDataReportCid
+        );
+    }
+
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
@@ -318,15 +335,15 @@ contract VaultHub is PausableUntilWithRoles {
     function updateReportData(
         uint64 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
-        string memory _vaultsDataTreeCid
+        string memory _vaultsDataReportCid
     ) external {
         if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateReportData", msg.sender);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
         $.vaultsDataTimestamp = _vaultsDataTimestamp;
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
-        $.vaultsDataTreeCid = _vaultsDataTreeCid;
-        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataTreeCid);
+        $.vaultsDataReportCid = _vaultsDataReportCid;
+        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
     }
 
     /// @notice force disconnects a vault from the hub
