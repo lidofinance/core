@@ -38,6 +38,7 @@ export type VaultRoles = {
   ossifier: HardhatEthersSigner;
   depositorSetter: HardhatEthersSigner;
   lockedResetter: HardhatEthersSigner;
+  tierChanger: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
   nodeOperatorRewardAdjuster: HardhatEthersSigner;
 };
@@ -95,6 +96,7 @@ export async function createVaultWithDelegation(
     ossifier,
     depositorSetter,
     lockedResetter,
+    tierChanger,
     nodeOperatorFeeClaimer,
     nodeOperatorRewardAdjuster,
   ] = defaultRoles;
@@ -121,6 +123,7 @@ export async function createVaultWithDelegation(
     ossifier: rolesOverrides.ossifier ?? ossifier,
     depositorSetter: rolesOverrides.depositorSetter ?? depositorSetter,
     lockedResetter: rolesOverrides.lockedResetter ?? lockedResetter,
+    tierChanger: rolesOverrides.tierChanger ?? tierChanger,
     nodeOperatorFeeClaimer: rolesOverrides.nodeOperatorFeeClaimer ?? nodeOperatorFeeClaimer,
     nodeOperatorRewardAdjuster: rolesOverrides.nodeOperatorRewardAdjuster ?? nodeOperatorRewardAdjuster,
   };
@@ -153,6 +156,7 @@ export async function createVaultWithDelegation(
       ossifiers: [roles.ossifier],
       depositorSetters: [roles.depositorSetter],
       lockedResetters: [roles.lockedResetter],
+      tierChangers: [roles.tierChanger],
     },
     "0x",
     { value: VAULT_CONNECTION_DEPOSIT },

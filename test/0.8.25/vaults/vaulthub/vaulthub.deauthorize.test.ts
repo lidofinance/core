@@ -155,6 +155,7 @@ describe("VaultHub.sol:deauthorize", () => {
       ossifiers: [await vaultOwner1.getAddress()],
       depositorSetters: [await vaultOwner1.getAddress()],
       lockedResetters: [await vaultOwner1.getAddress()],
+      tierChangers: [await vaultOwner1.getAddress()],
       nodeOperatorFeeClaimers: [await operator.getAddress()],
       nodeOperatorRewardAdjusters: [await operator.getAddress()],
     };

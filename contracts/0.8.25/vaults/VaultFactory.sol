@@ -39,6 +39,7 @@ struct DelegationConfig {
     address[] ossifiers;
     address[] depositorSetters;
     address[] lockedResetters;
+    address[] tierChangers;
     /// Dashboard
     address assetRecoverer;
     /// Delegation
@@ -175,6 +176,9 @@ contract VaultFactory {
         }
         for (uint256 i = 0; i < _delegationConfig.lockedResetters.length; i++) {
             delegation.grantRole(delegation.RESET_LOCKED_ROLE(), _delegationConfig.lockedResetters[i]);
+        }
+        for (uint256 i = 0; i < _delegationConfig.tierChangers.length; i++) {
+            delegation.grantRole(delegation.REQUEST_CHANGE_TIER_ROLE(), _delegationConfig.tierChangers[i]);
         }
         for (uint256 i = 0; i < _delegationConfig.nodeOperatorFeeClaimers.length; i++) {
             delegation.grantRole(

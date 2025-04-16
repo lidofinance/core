@@ -192,6 +192,7 @@ describe("Delegation.sol", () => {
         nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
         nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
         assetRecoverer: vaultOwner,
+        tierChangers: [vaultOwner],
       },
       "0x",
       { value: ether("1") },

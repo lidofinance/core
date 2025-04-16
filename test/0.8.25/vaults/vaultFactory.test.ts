@@ -163,6 +163,7 @@ describe("VaultFactory.sol", () => {
       nodeOperatorFeeClaimers: [await operator.getAddress()],
       nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
       assetRecoverer: await vaultOwner1.getAddress(),
+      tierChangers: [await vaultOwner1.getAddress()],
     };
 
     const shareLimit = ether("1");

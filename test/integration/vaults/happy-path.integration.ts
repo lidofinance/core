@@ -197,6 +197,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
         ossifiers: [curator],
         depositorSetters: [curator],
         lockedResetters: [curator],
+        tierChangers: [curator],
         nodeOperatorFeeClaimers: [nodeOperator],
         nodeOperatorRewardAdjusters: [nodeOperator],
       },

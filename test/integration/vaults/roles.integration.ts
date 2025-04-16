@@ -56,6 +56,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     ossifier: HardhatEthersSigner,
     depositorSetter: HardhatEthersSigner,
     lockedResetter: HardhatEthersSigner,
+    tierChanger: HardhatEthersSigner,
     nodeOperatorFeeClaimer: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
@@ -89,6 +90,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       ossifier,
       depositorSetter,
       lockedResetter,
+      tierChanger,
       nodeOperatorFeeClaimer,
       nodeOperatorRewardAdjuster,
       stranger,
@@ -147,6 +149,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           ossifiers: [ossifier],
           depositorSetters: [depositorSetter],
           lockedResetters: [lockedResetter],
+          tierChangers: [tierChanger],
           nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
           nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
         },
@@ -541,6 +544,16 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             await testDelegation.RESET_LOCKED_ROLE(),
           );
         });
+
+        it("requestTierChange", async () => {
+          await testMethod(
+            testDelegation,
+            "requestTierChange",
+            { successUsers: [tierChanger], failingUsers: allRoles.filter((r) => r !== tierChanger) },
+            [1n],
+            await testDelegation.REQUEST_CHANGE_TIER_ROLE(),
+          );
+        });
       });
     });
 
@@ -635,6 +648,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
           ossifiers: [],
           depositorSetters: [],
           lockedResetters: [],
+          tierChangers: [],
           nodeOperatorFeeClaimers: [],
           nodeOperatorRewardAdjusters: [],
         },
