@@ -12,7 +12,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address depositSecurityModule;
         address elRewardsVault;
         address accountingOracle;
-        address legacyOracle;
         address oracleReportSanityChecker;
         address burner;
         address validatorsExitBusOracle;
@@ -32,7 +31,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
     address public immutable accountingOracle;
-    address public immutable legacyOracle;
     address public immutable oracleReportSanityChecker;
     address public immutable burner;
     address public immutable validatorsExitBusOracle;
@@ -51,7 +49,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         depositSecurityModule = addresses.depositSecurityModule;
         elRewardsVault = addresses.elRewardsVault;
         accountingOracle = addresses.accountingOracle;
-        legacyOracle = addresses.legacyOracle;
         oracleReportSanityChecker = addresses.oracleReportSanityChecker;
         burner = addresses.burner;
         validatorsExitBusOracle = addresses.validatorsExitBusOracle;

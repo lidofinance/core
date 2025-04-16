@@ -11,7 +11,6 @@ export async function main() {
 
   // Extract addresses from state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const nodeOperatorsRegistryParams = state[Sk.nodeOperatorsRegistry].deployParameters;
   const simpleDvtRegistryAddress = state[Sk.appSimpleDvt].proxy.address;
@@ -78,17 +77,13 @@ export async function main() {
     from: deployer,
   });
 
-  // Initialize LegacyOracle
-  const legacyOracle = await loadContract("LegacyOracle", legacyOracleAddress);
-  await makeTx(legacyOracle, "initialize", [lidoLocatorAddress, hashConsensusForAccountingAddress], { from: deployer });
-
   const zeroLastProcessingRefSlot = 0;
 
   // Initialize AccountingOracle
   const accountingOracle = await loadContract("AccountingOracle", accountingOracleAddress);
   await makeTx(
     accountingOracle,
-    "initializeWithoutMigration",
+    "initialize",
     [
       accountingOracleAdmin,
       hashConsensusForAccountingAddress,

@@ -62,7 +62,7 @@ A detailed overview of the deployment script's process:
 - Deploy standard Aragon apps contracts (e.g., `Agent`, `Voting`)
 - Deploy `LidoTemplate` contract
   - Auxiliary contract for DAO configuration
-- Deploy Lido custom Aragon apps implementations (bases) for `Lido`, `LegacyOracle`, `NodeOperatorsRegistry`
+- Deploy Lido custom Aragon apps implementations (bases) for `Lido`, `NodeOperatorsRegistry`
 - Register Lido APM name in ENS
 - Deploy Aragon package manager contract `APMRegistry` (via `LidoTemplate`)
 - Deploy Lido custom Aragon apps repo contracts (via `LidoTemplate`)
