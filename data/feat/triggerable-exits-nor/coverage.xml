@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3207"  lines-covered="3155"  line-rate="0.9838"  branches-valid="1414"  branches-covered="1354"  branch-rate="0.9576"  timestamp="1744742387835" complexity="0" version="0.1">
+<coverage lines-valid="3207"  lines-covered="3155"  line-rate="0.9838"  branches-valid="1414"  branches-covered="1354"  branch-rate="0.9576"  timestamp="1744795025889" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -895,19 +895,19 @@
 			<method name="_getExitDeadlineThreshold"  hits="4"  signature="()V" >
 				<lines><line number="1145"  hits="4" /></lines>
 			</method>
-			<method name="_shouldValidatorBePenalized"  hits="3"  signature="()V" >
+			<method name="_isValidatorExitDelayPenaltyApplicable"  hits="3"  signature="()V" >
 				<lines><line number="1149"  hits="3" /></lines>
 			</method>
-			<method name="handleActiveValidatorsExitingStatus"  hits="3"  signature="()V" >
+			<method name="reportValidatorExitDelay"  hits="3"  signature="()V" >
 				<lines><line number="1158"  hits="3" /></lines>
 			</method>
-			<method name="onTriggerableExit"  hits="3"  signature="()V" >
+			<method name="onValidatorExitTriggered"  hits="3"  signature="()V" >
 				<lines><line number="1172"  hits="3" /></lines>
 			</method>
 			<method name="exitDeadlineThreshold"  hits="1"  signature="()V" >
 				<lines><line number="1184"  hits="1" /></lines>
 			</method>
-			<method name="shouldValidatorBePenalized"  hits="3"  signature="()V" >
+			<method name="isValidatorExitDelayPenaltyApplicable"  hits="3"  signature="()V" >
 				<lines><line number="1188"  hits="3" /></lines>
 			</method>
 			<method name="_removeUnusedSigningKeys"  hits="56"  signature="()V" >
@@ -2937,10 +2937,10 @@
 			<method name="_getStakingModuleSummary"  hits="60"  signature="()V" >
 				<lines><line number="1467"  hits="60" /></lines>
 			</method>
-			<method name="handleActiveValidatorsExitingStatus"  hits="0"  signature="()V" >
+			<method name="reportValidatorExitDelay"  hits="0"  signature="()V" >
 				<lines><line number="1488"  hits="0" /></lines>
 			</method>
-			<method name="onTriggerableExit"  hits="0"  signature="()V" >
+			<method name="onValidatorExitTriggered"  hits="0"  signature="()V" >
 				<lines><line number="1514"  hits="0" /></lines>
 			</method>
 		</methods>
