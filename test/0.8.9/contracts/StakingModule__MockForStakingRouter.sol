@@ -11,14 +11,14 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__OnRewardsMinted(uint256 _totalShares);
     event Mock__ExitedValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
 
-    event Mock__HandleActiveValidatorsExitingStatus(
+    event Mock__reportValidatorExitDelay(
         uint256 nodeOperatorId,
         uint256 proofSlotTimestamp,
         bytes publicKeys,
         bytes eligibleToExitInSec
     );
 
-    event Mock__OnTriggerableExit(
+    event Mock__onValidatorExitTriggered(
         uint256 _nodeOperatorId,
         bytes publicKeys,
         uint256 withdrawalRequestPaidFee,
@@ -268,13 +268,13 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     bool private shouldBePenalized__mocked;
 
-    function handleActiveValidatorsExitingStatus(
+    function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKeys,
         bytes calldata _eligibleToExitInSec
     ) external {
-        emit Mock__HandleActiveValidatorsExitingStatus(
+        emit Mock__reportValidatorExitDelay(
             _nodeOperatorId,
             _proofSlotTimestamp,
             _publicKeys,
@@ -282,13 +282,13 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         );
     }
 
-    function onTriggerableExit(
+    function onValidatorExitTriggered(
         uint256 _nodeOperatorId,
         bytes calldata _publicKeys,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external {
-        emit Mock__OnTriggerableExit(
+        emit Mock__onValidatorExitTriggered(
             _nodeOperatorId,
             _publicKeys,
             _withdrawalRequestPaidFee,
@@ -296,7 +296,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         );
     }
 
-    function shouldValidatorBePenalized(
+    function isValidatorExitDelayPenaltyApplicable(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
@@ -305,7 +305,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         return shouldBePenalized__mocked;
     }
 
-    function mock__shouldValidatorBePenalized(bool _shouldBePenalized) external {
+    function mock__isValidatorExitDelayPenaltyApplicable(bool _shouldBePenalized) external {
         shouldBePenalized__mocked = _shouldBePenalized;
     }
 

@@ -119,13 +119,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   afterEach(async () => (originalState = await Snapshot.refresh(originalState)));
 
-  context("handleActiveValidatorsExitingStatus", () => {
+  context("reportValidatorExitDelay", () => {
     it("reverts when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
         .false;
 
       await expect(
-        nor.connect(stranger).handleActiveValidatorsExitingStatus(
+        nor.connect(stranger).reportValidatorExitDelay(
           firstNodeOperatorId,
           proofSlotTimestamp,
           testPublicKey,
@@ -139,7 +139,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.be.true;
 
       await expect(
-        nor.connect(stakingRouter).handleActiveValidatorsExitingStatus(
+        nor.connect(stakingRouter).reportValidatorExitDelay(
           firstNodeOperatorId,
           proofSlotTimestamp,
           testPublicKey,
@@ -154,7 +154,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
     it("reverts when public key is empty", async () => {
       await expect(
-        nor.connect(stakingRouter).handleActiveValidatorsExitingStatus(
+        nor.connect(stakingRouter).reportValidatorExitDelay(
           firstNodeOperatorId,
           proofSlotTimestamp,
           "0x",
@@ -164,13 +164,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     });
   });
 
-  context("onTriggerableExit", () => {
+  context("onValidatorExitTriggered", () => {
     it("reverts when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
         .false;
 
       await expect(
-        nor.connect(stranger).onTriggerableExit(
+        nor.connect(stranger).onValidatorExitTriggered(
           firstNodeOperatorId,
           testPublicKey,
           withdrawalRequestPaidFee,
@@ -184,7 +184,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.be.true;
 
       await expect(
-        nor.connect(stakingRouter).onTriggerableExit(
+        nor.connect(stakingRouter).onValidatorExitTriggered(
           firstNodeOperatorId,
           testPublicKey,
           withdrawalRequestPaidFee,
@@ -197,7 +197,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
     it("reverts when public key is empty", async () => {
       await expect(
-        nor.connect(stakingRouter).onTriggerableExit(
+        nor.connect(stakingRouter).onValidatorExitTriggered(
           firstNodeOperatorId,
           "0x",
           withdrawalRequestPaidFee,
@@ -214,9 +214,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     });
   });
 
-  context("shouldValidatorBePenalized", () => {
+  context("isValidatorExitDelayPenaltyApplicable", () => {
     it("returns true when eligible to exit time exceeds the threshold", async () => {
-      const shouldPenalize = await nor.shouldValidatorBePenalized(
+      const shouldPenalize = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
@@ -224,7 +224,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       );
       expect(shouldPenalize).to.be.true;
 
-      const shouldPenalizeMore = await nor.shouldValidatorBePenalized(
+      const shouldPenalizeMore = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
@@ -234,7 +234,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     });
 
     it("returns false when eligible to exit time is less than the threshold", async () => {
-      const shouldPenalize = await nor.shouldValidatorBePenalized(
+      const shouldPenalize = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,

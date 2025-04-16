@@ -1477,7 +1477,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _publicKey The public key of the validator being reported.
     /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
-    function handleActiveValidatorsExitingStatus(
+    function reportValidatorExitDelay(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -1487,7 +1487,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         external
         onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
     {
-        _getIStakingModuleById(_stakingModuleId).handleActiveValidatorsExitingStatus(
+        _getIStakingModuleById(_stakingModuleId).reportValidatorExitDelay(
             _nodeOperatorId,
             _proofSlotTimestamp,
             _publicKey,
@@ -1503,7 +1503,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
     /// @param _exitType The type of exit being performed.
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
-    function onTriggerableExit(
+    function onValidatorExitTriggered(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         bytes calldata _publicKey,
@@ -1513,7 +1513,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         external
         onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
     {
-        _getIStakingModuleById(_stakingModuleId).onTriggerableExit(
+        _getIStakingModuleById(_stakingModuleId).onValidatorExitTriggered(
             _nodeOperatorId,
             _publicKey,
             _withdrawalRequestPaidFee,

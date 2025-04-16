@@ -1146,7 +1146,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return 60 * 60 * 24 * 2; // 2 days
     }
 
-    function _shouldValidatorBePenalized(
+    function _isValidatorExitDelayPenaltyApplicable(
         uint256, // _nodeOperatorId
         uint256, // _proofSlotTimestamp
         bytes, // _publicKey
@@ -1155,7 +1155,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return _eligibleToExitInSec >= _getExitDeadlineThreshold();
     }
 
-    function handleActiveValidatorsExitingStatus(
+    function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes _publicKey,
@@ -1169,7 +1169,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
 
-    function onTriggerableExit(
+    function onValidatorExitTriggered(
         uint256 _nodeOperatorId,
         bytes _publicKey,
         uint256 _withdrawalRequestPaidFee,
@@ -1185,13 +1185,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
        return _getExitDeadlineThreshold();
     }
 
-    function shouldValidatorBePenalized(
+    function isValidatorExitDelayPenaltyApplicable(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
-        return _shouldValidatorBePenalized(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
+        return _isValidatorExitDelayPenaltyApplicable(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
     }
 
     function _removeUnusedSigningKeys(uint256 _nodeOperatorId, uint256 _fromIndex, uint256 _keysCount) internal {
