@@ -257,6 +257,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot
     ) internal virtual {
+        _initializeContractVersionTo(1);
         _setConsensusContract(consensusContract, lastProcessingRefSlot);
         _setConsensusVersion(consensusVersion);
         LAST_PROCESSING_REF_SLOT_POSITION.setStorageUint256(lastProcessingRefSlot);

@@ -118,8 +118,15 @@ contract AccountingOracle is BaseOracle {
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
 
-        _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
+        _setupRole(DEFAULT_ADMIN_ROLE, admin);
         _initializeContractVersionTo(3);
+
+        /// @dev BaseOracle.initialize() mistakenly sets the contract version to 1, so it's impossible to
+        ///      initialize inheriting contracts to version > 2.
+        _setConsensusContract(consensusContract, lastProcessingRefSlot);
+        _setConsensusVersion(consensusVersion);
+        LAST_PROCESSING_REF_SLOT_POSITION.setStorageUint256(lastProcessingRefSlot);
+        _storageConsensusReport().value.refSlot = lastProcessingRefSlot.toUint64();
     }
 
     function finalizeUpgrade_v3(uint256 consensusVersion) external {
@@ -415,17 +422,6 @@ contract AccountingOracle is BaseOracle {
     ///
     /// Implementation & helpers
     ///
-
-    function _initialize(
-        address admin,
-        address consensusContract,
-        uint256 consensusVersion,
-        uint256 lastProcessingRefSlot
-    ) internal {
-        _setupRole(DEFAULT_ADMIN_ROLE, admin);
-
-        BaseOracle._initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
-    }
 
     function _handleConsensusReport(
         ConsensusReport memory /* report */,
