@@ -56,25 +56,25 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     await deploy();
   });
 
-  it("Should revert without DIRECT_EXIT_HASH_ROLE role", async () => {
+  it("Should revert without DIRECT_EXIT_ROLE role", async () => {
     const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
 
     exitData = {
       stakingModuleId: 1,
       nodeOperatorId: 0,
-      validatorsPubkeys: "0x" + concatenatedPubKeys
+      validatorsPubkeys: "0x" + concatenatedPubKeys,
     };
 
     await expect(
       oracle.connect(stranger).triggerExitsDirectly(exitData, {
         value: 4,
       }),
-    ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.DIRECT_EXIT_HASH_ROLE());
+    ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.DIRECT_EXIT_ROLE());
   });
 
   it("Not enough fee", async () => {
-    const role = await oracle.DIRECT_EXIT_HASH_ROLE();
+    const role = await oracle.DIRECT_EXIT_ROLE();
 
     await oracle.grantRole(role, authorizedEntity);
 
@@ -97,11 +97,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
 
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(
-        exitData.stakingModuleId,
-        exitData.nodeOperatorId,
-        exitData.validatorsPubkeys,
-        timestamp,
-      );
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, exitData.validatorsPubkeys, timestamp);
   });
 });

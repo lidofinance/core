@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable.sol";
-import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
-import { Versioned } from "../utils/Versioned.sol";
-import { ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData } from "../lib/ReportExitLimitUtils.sol";
-import { PausableUntil } from "../utils/PausableUntil.sol";
-import { IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
+import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
+import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {Versioned} from "../utils/Versioned.sol";
+import {ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData} from "../lib/ReportExitLimitUtils.sol";
+import {PausableUntil} from "../utils/PausableUntil.sol";
+import {IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
 
 interface IWithdrawalVault {
     function addFullWithdrawalRequests(bytes calldata pubkeys) external payable;
 
     function getWithdrawalRequestFee() external view returns (uint256);
 }
-
 contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ReportExitLimitUtilsStorage for bytes32;
@@ -37,15 +36,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error NoExitRequestProvided();
 
     /// @dev Events
-    event MadeRefund(
-        address sender,
-        uint256 refundValue
-    );
-
-    event StoredExitRequestHash(
-        bytes32 exitRequestHash
-    );
-
+    event MadeRefund(address sender, uint256 refundValue);
+    event StoredExitRequestHash(bytes32 exitRequestHash);
     event ValidatorExitRequest(
         uint256 indexed stakingModuleId,
         uint256 indexed nodeOperatorId,
@@ -53,11 +45,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes validatorPubkey,
         uint256 timestamp
     );
-
-    event ExitRequestsLimitSet(
-        uint256 _maxExitRequestsLimit,
-        uint256 _exitRequestsLimitIncreasePerBlock
-    );
+    event ExitRequestsLimitSet(uint256 _maxExitRequestsLimit, uint256 _exitRequestsLimitIncreasePerBlock);
 
     event DirectExitRequest(
         uint256 indexed stakingModuleId,
@@ -66,18 +54,17 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 timestamp
     );
     struct RequestStatus {
-      // Total items count in report (by default type(uint32).max, update on first report delivery)
-      uint256 totalItemsCount;
-      // Total processed items in report (by default 0)
-      uint256 deliveredItemsCount;
-      // Vebo contract version at the time of hash submittion
-      uint256 contractVersion;
-
-      DeliveryHistory[] deliverHistory;
+        // Total items count in report (by default type(uint32).max, update on first report delivery)
+        uint256 totalItemsCount;
+        // Total processed items in report (by default 0)
+        uint256 deliveredItemsCount;
+        // Vebo contract version at the time of hash submission
+        uint256 contractVersion;
+        DeliveryHistory[] deliverHistory;
     }
 
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
-    bytes32 public constant DIRECT_EXIT_HASH_ROLE = keccak256("DIRECT_EXIT_HASH_ROLE");
+    bytes32 public constant DIRECT_EXIT_ROLE = keccak256("DIRECT_EXIT_ROLE");
     bytes32 public constant EXIT_REPORT_LIMIT_ROLE = keccak256("EXIT_REPORT_LIMIT_ROLE");
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
@@ -92,7 +79,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     ILidoLocator internal immutable LOCATOR;
-
 
     /// @notice The list format of the validator exit requests data. Used when all
     /// requests fit into a single transaction.
@@ -113,26 +99,34 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     uint256 public constant DATA_FORMAT_LIST = 1;
 
     /// Hash constant for mapping exit requests storage
-    bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION =
-        keccak256("lido.ValidatorsExitBus.reportHashes");
+    bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
+
+    /// @dev Ensures the contract’s ETH balance is unchanged.
+    modifier preservesEthBalance() {
+        uint256 balanceBeforeCall = address(this).balance - msg.value;
+        _;
+        assert(address(this).balance == balanceBeforeCall);
+    }
 
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
     }
 
     function submitReportHash(bytes32 exitReportHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
-      uint256 contractVersion = getContractVersion();
-      _storeExitRequestHash(exitReportHash,  type(uint256).max, 0, contractVersion, DeliveryHistory(0,0));
+        uint256 contractVersion = getContractVersion();
+        _storeExitRequestHash(exitReportHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
     }
 
     function emitExitEvents(ExitRequestData calldata request, uint256 contractVersion) external whenResumed {
         bytes calldata data = request.data;
         _checkContractVersion(contractVersion);
 
-        RequestStatus storage requestStatus = _storageExitRequestsHashes()[keccak256(abi.encode(data, request.dataFormat))];
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[
+            keccak256(abi.encode(data, request.dataFormat))
+        ];
 
         if (requestStatus.contractVersion == 0) {
-          revert ExitHashWasNotSubmitted();
+            revert ExitHashWasNotSubmitted();
         }
 
         if (request.dataFormat != DATA_FORMAT_LIST) {
@@ -143,15 +137,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert InvalidRequestsDataLength();
         }
 
-        // TODO: hash requestsCount too
-        if (requestStatus.totalItemsCount == type(uint256).max ) {
-          requestStatus.totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
+        // By default, totalItemsCount is set to type(uint256).max.
+        // If an exit is emitted for the request for the first time, the default value is used for totalItemsCount.
+        if (requestStatus.totalItemsCount == type(uint256).max) {
+            requestStatus.totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         }
 
         uint256 deliveredItemsCount = requestStatus.deliveredItemsCount;
         uint256 undeliveredItemsCount = requestStatus.totalItemsCount - deliveredItemsCount;
 
-        if (undeliveredItemsCount == 0 ) {
+        if (undeliveredItemsCount == 0) {
             revert RequestsAlreadyDelivered();
         }
 
@@ -159,18 +154,18 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 toDeliver;
 
         if (exitRequestLimitData.isExitReportLimitSet()) {
-          uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
-          if (limit == 0) {
-            revert ExitRequestsLimit();
-          }
+            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+            if (limit == 0) {
+                revert ExitRequestsLimit();
+            }
 
-          toDeliver = undeliveredItemsCount > limit
-            ? limit
-            : undeliveredItemsCount;
+            toDeliver = undeliveredItemsCount > limit ? limit : undeliveredItemsCount;
 
-          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(exitRequestLimitData.updatePrevExitRequestsLimit(limit - toDeliver));
+            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                exitRequestLimitData.updatePrevExitRequestsLimit(limit - toDeliver)
+            );
         } else {
-           toDeliver = undeliveredItemsCount;
+            toDeliver = undeliveredItemsCount;
         }
         _processExitRequestsList(request.data, deliveredItemsCount, toDeliver);
 
@@ -181,19 +176,23 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
     /// @dev This function verifies that the hash of the provided exit request data exists in storage
     // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
-    function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable whenResumed {
-        uint256 prevBalance = address(this).balance - msg.value;
+    function triggerExits(
+        ExitRequestData calldata request,
+        uint256[] calldata keyIndexes
+    ) external payable whenResumed preservesEthBalance {
         bytes calldata data = request.data;
-        RequestStatus storage requestStatus = _storageExitRequestsHashes()[keccak256(abi.encode(data, request.dataFormat))];
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[
+            keccak256(abi.encode(data, request.dataFormat))
+        ];
 
         if (requestStatus.contractVersion == 0) {
-          revert ExitHashWasNotSubmitted();
+            revert ExitHashWasNotSubmitted();
         }
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
-        if (msg.value < keyIndexes.length * withdrawalFee ) {
-           revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
+        if (msg.value < keyIndexes.length * withdrawalFee) {
+            revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
         }
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
@@ -203,7 +202,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         // TODO: create library for reading DATA
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
-               revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
+                revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
             }
 
             if (keyIndexes[i] > lastDeliveredKeyIndex) {
@@ -219,75 +218,61 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
             assembly {
                 let dest := add(pubkeys, add(32, destOffset))
-                calldatacopy(
-                    dest,
-                    add(data.offset,  requestPublicKeyOffset),
-                    PUBLIC_KEY_LENGTH
-                )
+                calldatacopy(dest, add(data.offset, requestPublicKeyOffset), PUBLIC_KEY_LENGTH)
             }
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value:  keyIndexes.length *  withdrawalFee}(pubkeys);
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
+            pubkeys
+        );
 
-        uint256 refund = msg.value - keyIndexes.length *  withdrawalFee;
-
-        if (refund > 0) {
-          (bool success, ) = msg.sender.call{value: refund}("");
-
-           if (!success) {
-                revert TriggerableWithdrawalRefundFailed();
-           }
-
-           emit MadeRefund(msg.sender, refund);
-        }
-
-        assert(address(this).balance == prevBalance);
+        _refundFee(keyIndexes.length * withdrawalFee);
     }
 
-    function triggerExitsDirectly(DirectExitData calldata exitData) external payable whenResumed onlyRole(DIRECT_EXIT_HASH_ROLE) returns (uint256)  {
-        uint256 prevBalance = address(this).balance - msg.value;
+    function triggerExitsDirectly(
+        DirectExitData calldata exitData
+    ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance returns (uint256) {
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
         if (exitData.validatorsPubkeys.length == 0) {
-          revert NoExitRequestProvided();
+            revert NoExitRequestProvided();
         }
 
-        if ( exitData.validatorsPubkeys.length % PUBLIC_KEY_LENGTH != 0) {
-          revert InvalidPubkeysArray();
+        if (exitData.validatorsPubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+            revert InvalidPubkeysArray();
         }
 
         // TODO: maybe add requestCount in DirectExitData
         uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
 
-        if (msg.value < withdrawalFee *  requestsCount ) {
-           revert InsufficientPayment(withdrawalFee, requestsCount , msg.value);
+        if (msg.value < withdrawalFee * requestsCount) {
+            revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee *  requestsCount}(exitData.validatorsPubkeys);
+        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
+            exitData.validatorsPubkeys
+        );
 
-        emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, exitData.validatorsPubkeys, _getTimestamp());
+        emit DirectExitRequest(
+            exitData.stakingModuleId,
+            exitData.nodeOperatorId,
+            exitData.validatorsPubkeys,
+            _getTimestamp()
+        );
 
-        uint256 refund = msg.value - withdrawalFee *  requestsCount;
-
-        if (refund > 0) {
-          (bool success, ) = msg.sender.call{value: refund}("");
-
-           if (!success) {
-                revert TriggerableWithdrawalRefundFailed();
-           }
-
-           emit MadeRefund(msg.sender, refund);
-        }
-
-        assert(address(this).balance == prevBalance);
-
-        return refund;
+        return _refundFee(withdrawalFee * requestsCount);
     }
 
-    function setExitReportLimit(uint256 _maxExitRequestsLimit, uint256 _exitRequestsLimitIncreasePerBlock) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
+    function setExitReportLimit(
+        uint256 _maxExitRequestsLimit,
+        uint256 _exitRequestsLimitIncreasePerBlock
+    ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitReportLimit(_maxExitRequestsLimit, _exitRequestsLimitIncreasePerBlock)
+            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitReportLimit(
+                _maxExitRequestsLimit,
+                _exitRequestsLimitIncreasePerBlock
+            )
         );
 
         emit ExitRequestsLimitSet(_maxExitRequestsLimit, _exitRequestsLimitIncreasePerBlock);
@@ -432,7 +417,23 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _getTimestamp() internal virtual view returns (uint256) {
+    function _refundFee(uint256 fee) internal returns (uint256) {
+        uint256 refund = msg.value - fee;
+
+        if (refund > 0) {
+            (bool success, ) = msg.sender.call{value: refund}("");
+
+            if (!success) {
+                revert TriggerableWithdrawalRefundFailed();
+            }
+
+            emit MadeRefund(msg.sender, refund);
+        }
+
+        return refund;
+    }
+
+    function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
@@ -456,14 +457,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             request.deliverHistory.push(history);
         }
 
-
         emit StoredExitRequestHash(exitRequestHash);
     }
 
     /// Storage helpers
-    function _storageExitRequestsHashes() internal pure returns (
-        mapping(bytes32 => RequestStatus) storage r
-    ) {
+    function _storageExitRequestsHashes() internal pure returns (mapping(bytes32 => RequestStatus) storage r) {
         bytes32 position = EXIT_REQUESTS_HASHES_POSITION;
         assembly {
             r.slot := position

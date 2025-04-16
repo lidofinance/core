@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { Math256 } from "../../common/lib/Math256.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
@@ -60,11 +59,11 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     /// Initialization & admin functions
     ///
 
-    constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
-        BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator)
-    {
-    }
+    constructor(
+        uint256 secondsPerSlot,
+        uint256 genesisTime,
+        address lidoLocator
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator) {}
 
     function initialize(
         address admin,
@@ -246,15 +245,15 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
         if (exitRequestLimitData.isExitReportLimitSet()) {
-          uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
 
-          if (data.requestsCount > limit) {
-            revert ExitRequestsLimit();
-          }
+            if (data.requestsCount > limit) {
+                revert ExitRequestsLimit();
+            }
 
-          EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount)
-          );
+            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount)
+            );
         }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
@@ -283,7 +282,13 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         if (requestsCount == 0) {
             return;
         }
-        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, DeliveryHistory(requestsCount - 1, _getTimestamp()));
+        _storeExitRequestHash(
+            exitRequestHash,
+            requestsCount,
+            requestsCount,
+            contractVersion,
+            DeliveryHistory(requestsCount - 1, _getTimestamp())
+        );
     }
 
     ///

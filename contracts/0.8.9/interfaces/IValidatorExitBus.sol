@@ -15,6 +15,7 @@ interface IValidatorsExitBus {
     }
 
     struct DeliveryHistory {
+        // index in array of requests
         uint256 lastDeliveredKeyIndex;
         uint256 timestamp;
     }
