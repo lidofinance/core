@@ -15,9 +15,11 @@ contract IStETH {
 contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
+    address public immutable LIDO_LOCATOR;
 
-    constructor(IStETH _steth) {
+    constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
+        LIDO_LOCATOR = _lidoLocator;
     }
 
     event Mock__VaultDisconnected(address vault);

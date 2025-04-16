@@ -65,6 +65,11 @@ contract Dashboard is Permissions {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
+     * @notice Permission for assets recovery.
+     */
+    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Dashboard.AssetRecovery");
+
+    /**
      * @notice Struct containing the permit details.
      */
     struct PermitInput {
@@ -534,10 +539,43 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice Authorizes the Lido Vault Hub to manage the staking vault.
+     */
+    function authorizeLidoVaultHub() external {
+        _authorizeLidoVaultHub();
+    }
+
+    /**
      * @notice Deauthorizes the Lido Vault Hub from managing the staking vault.
      */
     function deauthorizeLidoVaultHub() external {
         _deauthorizeLidoVaultHub();
+    }
+
+    /**
+     * @notice Ossifies the staking vault. WARNING: This operation is irreversible,
+     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
+     *         This is a one-way operation.
+     * @dev    Pins the current vault implementation to prevent further upgrades.
+     */
+    function ossifyStakingVault() external {
+        _ossifyStakingVault();
+    }
+
+    /**
+     * @notice Updates the address of the depositor for the staking vault.
+     * @param _depositor Address of the new depositor.
+     */
+    function setDepositor(address _depositor) external {
+        _setDepositor(_depositor);
+    }
+
+    /**
+     * @notice Zeroes the locked amount of the staking vault.
+     *         Can only be called on disconnected from the vault hub vaults.
+     */
+    function resetLocked() external {
+        _resetLocked();
     }
 
     // ==================== Internal Functions ====================

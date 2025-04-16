@@ -22,7 +22,8 @@ import {
 } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { createVaultProxy, days, ether } from "lib";
+import { days, ether } from "lib";
+import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -125,24 +126,28 @@ describe("VaultFactory.sol", () => {
       nodeOperatorManager: await operator.getAddress(),
       confirmExpiry: days(7n),
       nodeOperatorFeeBP: 200n,
-      assetRecoverer: await vaultOwner1.getAddress(),
       funders: [await vaultOwner1.getAddress()],
       withdrawers: [await vaultOwner1.getAddress()],
-      minters: [await vaultOwner1.getAddress()],
       lockers: [await vaultOwner1.getAddress()],
+      minters: [await vaultOwner1.getAddress()],
       burners: [await vaultOwner1.getAddress()],
-      nodeOperatorFeeClaimers: [await operator.getAddress()],
       rebalancers: [await vaultOwner1.getAddress()],
       depositPausers: [await vaultOwner1.getAddress()],
       depositResumers: [await vaultOwner1.getAddress()],
-      validatorExitRequesters: [await vaultOwner1.getAddress()],
-      validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
-      disconnecters: [await vaultOwner1.getAddress()],
-      nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
       pdgCompensators: [await vaultOwner1.getAddress()],
       unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
       unknownValidatorProvers: [await vaultOwner1.getAddress()],
+      validatorExitRequesters: [await vaultOwner1.getAddress()],
+      validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
+      disconnecters: [await vaultOwner1.getAddress()],
+      lidoVaultHubAuthorizers: [await vaultOwner1.getAddress()],
       lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
+      ossifiers: [await vaultOwner1.getAddress()],
+      depositorSetters: [await vaultOwner1.getAddress()],
+      lockedResetters: [await vaultOwner1.getAddress()],
+      nodeOperatorFeeClaimers: [await operator.getAddress()],
+      nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
+      assetRecoverer: await vaultOwner1.getAddress(),
     };
   });
 
