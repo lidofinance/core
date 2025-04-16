@@ -428,9 +428,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
+        if (maxAmountToRebalance == 0) revert AlreadyHealthy(_vault);
         uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
-
-        if (amountToRebalance == 0) revert AlreadyHealthy(_vault);
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
