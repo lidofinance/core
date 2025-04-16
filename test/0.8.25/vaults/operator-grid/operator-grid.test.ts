@@ -216,10 +216,9 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("add an vault", async function () {
-      const DEFAULT_GROUP_ADDRESS = await operatorGrid.DEFAULT_GROUP_ADDRESS();
       await expect(operatorGrid.registerVault(vault_NO1_V1))
         .to.be.emit(operatorGrid, "VaultAdded")
-        .withArgs(DEFAULT_GROUP_ADDRESS, 1, await vault_NO1_V1.getAddress());
+        .withArgs(vault_NO1_V1);
     });
   });
 
