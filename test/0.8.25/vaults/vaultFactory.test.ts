@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   BeaconProxy,
-  Delegation,
+  Dashboard,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
   OssifiableProxy,
@@ -20,7 +20,6 @@ import {
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
-import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { days, ether } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
@@ -44,7 +43,7 @@ describe("VaultFactory.sol", () => {
   let vaultHub: VaultHub;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
-  let delegation: Delegation;
+  let dashboard: Dashboard;
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -60,7 +59,8 @@ describe("VaultFactory.sol", () => {
 
   let originalState: string;
 
-  let delegationParams: DelegationConfigStruct;
+  let confirmExpiry = days(7n);
+  let nodeOperatorFeeBP = 200n;
 
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
@@ -105,8 +105,8 @@ describe("VaultFactory.sol", () => {
     vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
-    delegation = await ethers.deployContract("Delegation", [weth, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, delegation], {
+    dashboard = await ethers.deployContract("Dashboard", [locator], { from: deployer });
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
       from: deployer,
     });
 
@@ -120,35 +120,6 @@ describe("VaultFactory.sol", () => {
       implOld,
       "InvalidInitialization",
     );
-
-    delegationParams = {
-      defaultAdmin: await admin.getAddress(),
-      nodeOperatorManager: await operator.getAddress(),
-      confirmExpiry: days(7n),
-      nodeOperatorFeeBP: 200n,
-      funders: [await vaultOwner1.getAddress()],
-      withdrawers: [await vaultOwner1.getAddress()],
-      lockers: [await vaultOwner1.getAddress()],
-      minters: [await vaultOwner1.getAddress()],
-      burners: [await vaultOwner1.getAddress()],
-      rebalancers: [await vaultOwner1.getAddress()],
-      depositPausers: [await vaultOwner1.getAddress()],
-      depositResumers: [await vaultOwner1.getAddress()],
-      pdgCompensators: [await vaultOwner1.getAddress()],
-      unguaranteedBeaconChainDepositors: [await vaultOwner1.getAddress()],
-      unknownValidatorProvers: [await vaultOwner1.getAddress()],
-      validatorExitRequesters: [await vaultOwner1.getAddress()],
-      validatorWithdrawalTriggerers: [await vaultOwner1.getAddress()],
-      disconnecters: [await vaultOwner1.getAddress()],
-      lidoVaultHubAuthorizers: [await vaultOwner1.getAddress()],
-      lidoVaultHubDeauthorizers: [await vaultOwner1.getAddress()],
-      ossifiers: [await vaultOwner1.getAddress()],
-      depositorSetters: [await vaultOwner1.getAddress()],
-      lockedResetters: [await vaultOwner1.getAddress()],
-      nodeOperatorFeeClaimers: [await operator.getAddress()],
-      nodeOperatorRewardAdjusters: [await vaultOwner1.getAddress()],
-      assetRecoverer: await vaultOwner1.getAddress(),
-    };
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -168,14 +139,14 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_lidoLocator` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, delegation], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, dashboard], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_lidoLocator");
     });
 
     it("reverts if `_implementation` is zero address", async () => {
       await expect(
-        ethers.deployContract("VaultFactory", [locator, ZeroAddress, delegation], {
+        ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboard], {
           from: deployer,
         }),
       )
@@ -183,10 +154,10 @@ describe("VaultFactory.sol", () => {
         .withArgs("_beacon");
     });
 
-    it("reverts if `_delegation` is zero address", async () => {
+    it("reverts if `_dashboard` is zero address", async () => {
       await expect(ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_delegationImpl");
+        .withArgs("_dashboardImpl");
     });
 
     it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
@@ -206,22 +177,22 @@ describe("VaultFactory.sol", () => {
       const {
         tx,
         vault,
-        delegation: delegation_,
-      } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+        dashboard: dashboard_,
+      } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
-        .withArgs(await delegation_.getAddress(), await vault.getAddress());
+        .withArgs(await vault.getAddress(), await dashboard_.getAddress());
 
       await expect(tx)
-        .to.emit(vaultFactory, "DelegationCreated")
-        .withArgs(await admin.getAddress(), await delegation_.getAddress());
+        .to.emit(vaultFactory, "DashboardCreated")
+        .withArgs(await dashboard_.getAddress(), vaultOwner1);
 
-      expect(await delegation_.getAddress()).to.eq(await vault.owner());
+      expect(await dashboard_.getAddress()).to.eq(await vault.owner());
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
       expect(await vault.version()).to.eq(1);
     });
   });
@@ -245,20 +216,32 @@ describe("VaultFactory.sol", () => {
       };
 
       //create vaults
-      const { vault: vault1, delegation: delegator1 } = await createVaultProxy(
+      const { vault: vault1, dashboard: dashboard1 } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
-        delegationParams,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
       );
-      const { vault: vault2, delegation: delegator2 } = await createVaultProxy(
+      const { vault: vault2, dashboard: dashboard2 } = await createVaultProxy(
         vaultOwner2,
         vaultFactory,
-        delegationParams,
+        vaultOwner2,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
       );
 
       //owner of vault is delegator
-      expect(await delegator1.getAddress()).to.eq(await vault1.owner());
-      expect(await delegator2.getAddress()).to.eq(await vault2.owner());
+      expect(await dashboard1.getAddress()).to.eq(await vault1.owner());
+      expect(await dashboard2.getAddress()).to.eq(await vault2.owner());
 
       //attempting to add a vault without adding a proxy bytecode to the allowed list
       await expect(
@@ -305,7 +288,7 @@ describe("VaultFactory.sol", () => {
       expect(implAfter).to.eq(await implNew.getAddress());
 
       //create new vault with new implementation
-      const { vault: vault3 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const { vault: vault3 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
 
       //we upgrade implementation - we do not check implementation, just proxy bytecode
       await expect(
@@ -356,7 +339,7 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
-      const { vault: vault1 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const { vault: vault1 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
 
       await beacon.connect(admin).upgradeTo(implNew);
 
@@ -372,7 +355,7 @@ describe("VaultFactory.sol", () => {
     it("new vaults - init works, finalize not works ", async () => {
       await beacon.connect(admin).upgradeTo(implNew);
 
-      const { vault: vault2 } = await createVaultProxy(vaultOwner1, vaultFactory, delegationParams);
+      const { vault: vault2 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 
