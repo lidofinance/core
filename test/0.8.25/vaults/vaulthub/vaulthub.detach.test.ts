@@ -17,7 +17,6 @@ import {
   UpgradeableBeacon,
   VaultFactory,
   VaultHub,
-  WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
 
@@ -53,7 +52,6 @@ describe("VaultHub.sol:deauthorize", () => {
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
-  let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
 
   let locator: LidoLocator;
@@ -63,14 +61,10 @@ describe("VaultHub.sol:deauthorize", () => {
 
   let originalState: string;
 
-  let confirmExpiry = days(7n);
-  let nodeOperatorFeeBP = 200n;
-
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], { value: ether("10000.0") });
-    weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
@@ -142,10 +136,10 @@ describe("VaultHub.sol:deauthorize", () => {
         [],
         "0x",
       );
-      const delegationSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+      const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
-      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
+      await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
       expect(await vault.vaultHubAuthorized()).to.equal(false);
     });
 
@@ -161,14 +155,14 @@ describe("VaultHub.sol:deauthorize", () => {
         [],
         "0x",
       );
-      const delegationSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+      const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
 
       await vaultHub
         .connect(admin)
         .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-      await expect(vault.connect(delegationSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+      await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
         "VaultConnected",
       );
@@ -186,15 +180,15 @@ describe("VaultHub.sol:deauthorize", () => {
         [],
         "0x",
       );
-      const delegationSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+      const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
 
       await vaultHub
         .connect(admin)
         .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
-      await expect(vault.connect(delegationSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
+      await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
+      await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
         "VaultConnected",
       );
@@ -212,7 +206,7 @@ describe("VaultHub.sol:deauthorize", () => {
         [],
         "0x",
       );
-      const delegationSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+      const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
       const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
@@ -220,11 +214,11 @@ describe("VaultHub.sol:deauthorize", () => {
       await vaultHub
         .connect(admin)
         .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-      await vaultHub.connect(delegationSigner).voluntaryDisconnect(vault);
+      await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
       const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
       await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
       await vaultHub.updateVaultData(await vault.getAddress(), 1n, 1n, 1n, 0n, tree.getProof(0));
-      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
+      await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
       expect(await vault.vaultHubAuthorized()).to.equal(false);
     });
   });
@@ -248,10 +242,10 @@ describe("VaultHub.sol:deauthorize", () => {
         "0x",
       );
 
-      const delegationSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+      const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
 
-      await vault.connect(delegationSigner).deauthorizeLidoVaultHub();
-      await expect(vault.connect(delegationSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
+      await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
+      await expect(vault.connect(dashboardSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");
 
       const vault1ImplementationAfterOssify = await proxy1.implementation();
       const vault2ImplementationAfterOssify = await proxy2.implementation();

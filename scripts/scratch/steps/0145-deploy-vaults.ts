@@ -15,7 +15,6 @@ export async function main() {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
-  const wethContract = state.delegation.deployParameters.wethContract;
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
@@ -24,14 +23,11 @@ export async function main() {
   ]);
   const impAddress = await imp.getAddress();
 
-  // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
-    wethContract,
-    locatorAddress,
-  ]);
-  const delegationAddress = await delegation.getAddress();
+  // Deploy Dashboard implementation contract
+  const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [locatorAddress]);
+  const dashboardAddress = await dashboard.getAddress();
 
-  // Deploy Delegation implementation contract
+  // Deploy Dashboard implementation contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
   const beaconAddress = await beacon.getAddress();
 
@@ -46,7 +42,7 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beaconAddress,
-    delegationAddress,
+    dashboardAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 

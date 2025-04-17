@@ -4,7 +4,6 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DepositContract__MockForStakingVault,
   LidoLocator,
   NodeOperatorFee__Harness,
   StakingVault__MockForNodeOperatorFee,
@@ -12,18 +11,10 @@ import {
   UpgradeableBeacon,
   VaultFactory__MockForNodeOperatorFee,
   VaultHub__MockForNodeOperatorFee,
-  WETH9__MockForVault,
-  WstETH__HarnessForVault
+  WstETH__HarnessForVault,
 } from "typechain-types";
 
-import {
-  certainAddress,
-  days,
-  ether,
-  findEvents,
-  getCurrentBlockTimestamp,
-  getNextBlockTimestamp
-} from "lib";
+import { certainAddress, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -43,10 +34,8 @@ describe("NodeOperatorFee.sol", () => {
 
   let lidoLocator: LidoLocator;
   let steth: StETH__MockForNodeOperatorFee;
-  let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
   let hub: VaultHub__MockForNodeOperatorFee;
-  let depositContract: DepositContract__MockForStakingVault;
   let vaultImpl: StakingVault__MockForNodeOperatorFee;
   let nodeOperatorFeeImpl: NodeOperatorFee__Harness;
   let factory: VaultFactory__MockForNodeOperatorFee;
@@ -71,7 +60,6 @@ describe("NodeOperatorFee.sol", () => {
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForNodeOperatorFee");
-    weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
@@ -79,7 +67,6 @@ describe("NodeOperatorFee.sol", () => {
 
     nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness");
 
-    depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
     vaultImpl = await ethers.deployContract("StakingVault__MockForNodeOperatorFee", [hub]);
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, deployer]);

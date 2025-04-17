@@ -17,7 +17,6 @@ import {
   UpgradeableBeacon,
   VaultFactory,
   VaultHub,
-  WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
 
@@ -47,7 +46,6 @@ describe("VaultFactory.sol", () => {
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
-  let weth: WETH9__MockForVault;
   let wsteth: WstETH__HarnessForVault;
 
   let locator: LidoLocator;
@@ -59,9 +57,6 @@ describe("VaultFactory.sol", () => {
 
   let originalState: string;
 
-  let confirmExpiry = days(7n);
-  let nodeOperatorFeeBP = 200n;
-
   before(async () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
@@ -69,7 +64,6 @@ describe("VaultFactory.sol", () => {
       value: ether("10.0"),
       from: deployer,
     });
-    weth = await ethers.deployContract("WETH9__MockForVault");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     //predeposit guarantee
@@ -172,7 +166,7 @@ describe("VaultFactory.sol", () => {
     });
   });
 
-  context("createVaultWithDelegation", () => {
+  context("createVaultWithDashboard", () => {
     it("works with empty `params`", async () => {
       const {
         tx,
@@ -192,7 +186,17 @@ describe("VaultFactory.sol", () => {
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
+      const { vault } = await createVaultProxy(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
+      );
       expect(await vault.version()).to.eq(1);
     });
   });
@@ -288,7 +292,17 @@ describe("VaultFactory.sol", () => {
       expect(implAfter).to.eq(await implNew.getAddress());
 
       //create new vault with new implementation
-      const { vault: vault3 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
+      const { vault: vault3 } = await createVaultProxy(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
+      );
 
       //we upgrade implementation - we do not check implementation, just proxy bytecode
       await expect(
@@ -339,7 +353,17 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
-      const { vault: vault1 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
+      const { vault: vault1 } = await createVaultProxy(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
+      );
 
       await beacon.connect(admin).upgradeTo(implNew);
 
@@ -355,7 +379,17 @@ describe("VaultFactory.sol", () => {
     it("new vaults - init works, finalize not works ", async () => {
       await beacon.connect(admin).upgradeTo(implNew);
 
-      const { vault: vault2 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x");
+      const { vault: vault2 } = await createVaultProxy(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+        "0x",
+      );
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 

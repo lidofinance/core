@@ -43,6 +43,7 @@ export type VaultRoles = {
 export interface VaultWithDashboard {
   stakingVault: StakingVault;
   dashboard: Dashboard;
+  roles: VaultRoles;
 }
 
 /**
@@ -70,16 +71,9 @@ export async function createVaultWithDashboard(
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDashboard> {
-
-  const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDashboard(
-    owner,
-    nodeOperator,
-    nodeOperatorManager,
-    fee,
-    confirmExpiry,
-    roleAssignments,
-    "0x",
-  );
+  const deployTx = await stakingVaultFactory
+    .connect(owner)
+    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, "0x");
 
   const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
   const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -93,9 +87,70 @@ export async function createVaultWithDashboard(
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
   const dashboard = await ethers.getContractAt("Dashboard", ownerAddress);
 
+  const roleIds = await Promise.all([
+    dashboard.RECOVER_ASSETS_ROLE(),
+    dashboard.FUND_ROLE(),
+    dashboard.WITHDRAW_ROLE(),
+    dashboard.LOCK_ROLE(),
+    dashboard.MINT_ROLE(),
+    dashboard.BURN_ROLE(),
+    dashboard.REBALANCE_ROLE(),
+    dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+    dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+    dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+    dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+    dashboard.PDG_PROVE_VALIDATOR_ROLE(),
+    dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+    dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+    dashboard.VOLUNTARY_DISCONNECT_ROLE(),
+    dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+    dashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
+    dashboard.OSSIFY_ROLE(),
+    dashboard.SET_DEPOSITOR_ROLE(),
+    dashboard.RESET_LOCKED_ROLE(),
+    dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+    dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+  ]);
+
+  const signers = await ethers.getSigners();
+  const roles: VaultRoles = {
+    assetRecoverer: signers[0],
+    funder: signers[1],
+    withdrawer: signers[2],
+    locker: signers[3],
+    minter: signers[4],
+    burner: signers[5],
+    rebalancer: signers[6],
+    depositPauser: signers[7],
+    depositResumer: signers[8],
+    pdgCompensator: signers[9],
+    unguaranteedBeaconChainDepositor: signers[10],
+    unknownValidatorProver: signers[11],
+    validatorExitRequester: signers[12],
+    validatorWithdrawalTriggerer: signers[13],
+    disconnecter: signers[14],
+    lidoVaultHubAuthorizer: signers[15],
+    lidoVaultHubDeauthorizer: signers[16],
+    ossifier: signers[17],
+    depositorSetter: signers[18],
+    lockedResetter: signers[19],
+    nodeOperatorFeeClaimer: signers[20],
+    nodeOperatorRewardAdjuster: signers[21],
+  };
+
+  for (let i = 0; i < roleIds.length; i++) {
+    const roleAdmin = await dashboard.getRoleAdmin(roleIds[i]);
+    if (roleAdmin === (await dashboard.NODE_OPERATOR_MANAGER_ROLE())) {
+      await dashboard.connect(nodeOperatorManager).grantRole(roleIds[i], signers[i]);
+    } else {
+      await dashboard.grantRole(roleIds[i], signers[i]);
+    }
+  }
+
   return {
     stakingVault,
     dashboard,
+    roles,
   };
 }
 

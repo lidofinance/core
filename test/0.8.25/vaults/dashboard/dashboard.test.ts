@@ -1,7 +1,9 @@
 import { expect } from "chai";
+import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard,
@@ -16,7 +18,7 @@ import {
   VaultFactory,
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
-  WstETH__HarnessForVault
+  WstETH__HarnessForVault,
 } from "typechain-types";
 
 import {
@@ -31,14 +33,11 @@ import {
   randomValidatorPubkey,
 } from "lib";
 
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { MaxUint256, ZeroAddress } from "ethers";
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("Dashboard.sol", () => {
   let deployer: HardhatEthersSigner;
-  let factoryOwner: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -70,7 +69,7 @@ describe("Dashboard.sol", () => {
   const BP_BASE = 10_000n;
 
   before(async () => {
-    [deployer, factoryOwner, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+    [deployer, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
 
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 

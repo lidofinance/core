@@ -66,8 +66,8 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     event VaultCreated(address indexed owner, address indexed vault);
 
     /**
-     * @notice Event emitted on a Delegation creation
-     * @param admin The address of the Delegation admin
+     * @notice Event emitted on a Dashboard creation
+     * @param admin The address of the Dashboard admin
      * @param dashboard The address of the created Dashboard
      */
     event DashboardCreated(address indexed admin, address indexed dashboard);
