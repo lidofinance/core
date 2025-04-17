@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 import {
   HashConsensus__Harness,
   ReportProcessor__Mock,
+  StakingRouter__MockForVebo,
   ValidatorsExitBusOracle,
   WithdrawalVault__MockForVebo,
 } from "typechain-types";
@@ -43,6 +44,10 @@ async function deployWithdrawalVault() {
   return await ethers.deployContract("WithdrawalVault__MockForVebo");
 }
 
+async function deploySR() {
+  return await ethers.deployContract("StakingRouter__MockForVebo");
+}
+
 export async function deployVEBO(
   admin: string,
   {
@@ -68,11 +73,13 @@ export async function deployVEBO(
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
   const withdrawalVault = await deployWithdrawalVault();
+  const stakingRouter = await deploySR();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: await ao.getAddress(),
     withdrawalVault,
+    stakingRouter,
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
@@ -90,6 +97,7 @@ export async function deployVEBO(
     consensus,
     oracleReportSanityChecker,
     withdrawalVault,
+    stakingRouter,
   };
 }
 

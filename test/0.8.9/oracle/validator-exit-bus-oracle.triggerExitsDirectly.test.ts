@@ -4,7 +4,12 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingRouter__MockForVebo,
+  ValidatorsExitBus__Harness,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import { deployVEBO, initVEBO } from "test/deploy";
 
@@ -21,12 +26,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let withdrawalVault: WithdrawalVault__MockForVebo;
+  let stakingRouter: StakingRouter__MockForVebo;
 
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let exitData: DirectExitData;
 
   const LAST_PROCESSING_REF_SLOT = 1;
+  const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
 
   interface DirectExitData {
     stakingModuleId: number;
@@ -39,6 +46,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     withdrawalVault = deployed.withdrawalVault;
+    stakingRouter = deployed.stakingRouter;
 
     await initVEBO({
       admin: admin.address,
@@ -57,7 +65,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
   });
 
   it("Should revert without DIRECT_EXIT_ROLE role", async () => {
-    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
 
     exitData = {
@@ -97,6 +104,24 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
 
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, exitData.validatorsPubkeys, timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp);
+    await expect(tx)
+      .to.emit(oracle, "DirectExitRequest")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp);
+    await expect(tx)
+      .to.emit(oracle, "DirectExitRequest")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], 1, 0);
   });
 });

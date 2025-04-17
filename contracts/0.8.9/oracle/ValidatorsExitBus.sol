@@ -15,6 +15,17 @@ interface IWithdrawalVault {
 
     function getWithdrawalRequestFee() external view returns (uint256);
 }
+
+interface IStakingRouter {
+    function onValidatorExitTriggered(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        bytes calldata _publicKey,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    ) external;
+}
+
 contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ReportExitLimitUtilsStorage for bytes32;
@@ -51,7 +62,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     event DirectExitRequest(
         uint256 indexed stakingModuleId,
         uint256 indexed nodeOperatorId,
-        bytes validatorsPubkeys,
+        bytes validatoPubkey,
         uint256 timestamp
     );
     struct RequestStatus {
@@ -203,6 +214,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
+        address stakingRouterAddr = LOCATOR.stakingRouter();
 
         if (msg.value < keyIndexes.length * withdrawalFee) {
             revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
@@ -211,6 +223,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
 
         bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
+        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
 
         // TODO: create library for reading DATA
         for (uint256 i = 0; i < keyIndexes.length; i++) {
@@ -222,17 +235,40 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 revert KeyWasNotDelivered(keyIndexes[i], lastDeliveredKeyIndex);
             }
 
-            ///
-            /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
-            /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
-            /// 16 bytes - part without pubkey
-            uint256 requestPublicKeyOffset = keyIndexes[i] * PACKED_REQUEST_LENGTH + 16;
-            uint256 destOffset = i * PUBLIC_KEY_LENGTH;
+            uint256 itemOffset;
+            uint256 dataWithoutPubkey;
+            uint256 index = keyIndexes[i];
 
             assembly {
-                let dest := add(pubkeys, add(32, destOffset))
-                calldatacopy(dest, add(data.offset, requestPublicKeyOffset), PUBLIC_KEY_LENGTH)
+                // Compute the start of this packed request (item)
+                itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH, index))
+
+                // Load the first 16 bytes which contain moduleId (24 bits),
+                // nodeOpId (40 bits), and valIndex (64 bits).
+                dataWithoutPubkey := shr(128, calldataload(itemOffset))
             }
+
+            // dataWithoutPubkey format (128 bits total):
+            // MSB <-------------------- 128 bits --------------------> LSB
+            // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+
+            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
+            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidRequestsData();
+            }
+
+            assembly {
+                let pubkeyCalldataOffset := add(itemOffset, 16)
+                let pubkeyMemPtr := add(pubkey, 32)
+                let dest := add(pubkeys, add(32, mul(PUBLIC_KEY_LENGTH, i)))
+
+                calldatacopy(dest, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+                calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+            }
+
+            IStakingRouter(stakingRouterAddr).onValidatorExitTriggered(moduleId, nodeOpId, pubkey, withdrawalFee, 0);
         }
 
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
@@ -247,6 +283,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance returns (uint256) {
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
+        address stakingRouterAddr = LOCATOR.stakingRouter();
 
         if (exitData.validatorsPubkeys.length == 0) {
             revert NoExitRequestProvided();
@@ -256,25 +293,41 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert InvalidPubkeysArray();
         }
 
-        // TODO: maybe add requestCount in DirectExitData
         uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
 
         if (msg.value < withdrawalFee * requestsCount) {
             revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
         }
 
+        uint256 timestamp = _getTimestamp();
+
+        bytes calldata data = exitData.validatorsPubkeys;
+
+        for (uint256 i = 0; i < requestsCount; i++) {
+            bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+
+            assembly {
+                let offset := add(data.offset, mul(i, PUBLIC_KEY_LENGTH))
+                let dest := add(pubkey, 0x20)
+                calldatacopy(dest, offset, PUBLIC_KEY_LENGTH)
+            }
+
+            IStakingRouter(stakingRouterAddr).onValidatorExitTriggered(
+                exitData.stakingModuleId,
+                exitData.nodeOperatorId,
+                pubkey,
+                withdrawalFee,
+                0
+            );
+
+            emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, pubkey, timestamp);
+        }
+
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
             exitData.validatorsPubkeys
         );
 
-        emit DirectExitRequest(
-            exitData.stakingModuleId,
-            exitData.nodeOperatorId,
-            exitData.validatorsPubkeys,
-            _getTimestamp()
-        );
-
-        return _refundFee(withdrawalFee * requestsCount);
+        return _refundFee(requestsCount * withdrawalFee);
     }
 
     function setExitReportLimit(
