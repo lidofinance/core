@@ -95,8 +95,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the number of stETHshares minted
      * @return The shares minted as a uint96
      */
-    function sharesMinted() public view returns (uint96) {
-        return vaultSocket().sharesMinted;
+    function liabilityShares() public view returns (uint96) {
+        return vaultSocket().liabilityShares;
     }
 
     /**
@@ -145,11 +145,11 @@ contract Dashboard is NodeOperatorFee {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(_mintableTotalValue() + _etherToFund);
-        uint256 _sharesMinted = vaultSocket().sharesMinted;
+        uint256 totalShares = _totalMintableShares(_mintableTotalValue() + _etherToFund);
+        uint256 liabilityShares_ = vaultSocket().liabilityShares;
 
-        if (_totalShares < _sharesMinted) return 0;
-        return _totalShares - _sharesMinted;
+        if (totalShares < liabilityShares_) return 0;
+        return totalShares - liabilityShares_;
     }
 
     /**
@@ -184,7 +184,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub().vaultSocket(_stakingVaultAddress()).sharesMinted;
+        uint256 shares = vaultHub().vaultSocket(_stakingVaultAddress()).liabilityShares;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -503,7 +503,7 @@ contract Dashboard is NodeOperatorFee {
         VaultHub.VaultSocket memory socket = vaultSocket();
 
         // Calculate the locked amount required to accommodate the new shares
-        uint256 requiredLocked = (STETH.getPooledEthBySharesRoundUp(socket.sharesMinted + _newShares) *
+        uint256 requiredLocked = (STETH.getPooledEthBySharesRoundUp(socket.liabilityShares + _newShares) *
             TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // If the required locked amount is greater than the current, increase the locked amount

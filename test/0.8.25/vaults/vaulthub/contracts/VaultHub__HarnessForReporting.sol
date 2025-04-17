@@ -42,7 +42,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
-            0, // sharesMinted
+            0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
             uint16(_rebalanceThresholdBP),

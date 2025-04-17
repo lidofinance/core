@@ -228,14 +228,14 @@ describe("VaultHub.sol:hub", () => {
       totalValue: bigint,
       inOutDelta: bigint,
       treasuryFees: bigint,
-      sharesMinted: bigint,
+      liabilityShares: bigint,
     ) {
       const vaultReport: VaultReportItem = [
         await vault.getAddress(),
         totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
       ];
       const tree = createVaultsReportTree([vaultReport]);
       const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
@@ -246,7 +246,7 @@ describe("VaultHub.sol:hub", () => {
         totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
         tree.getProof(0),
       );
     }

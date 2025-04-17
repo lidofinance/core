@@ -402,7 +402,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   expect(socket.sharesMinted).to.be.gt(stakingVaultMaxMintingShares);
+  //   expect(socket.liabilityShares).to.be.gt(stakingVaultMaxMintingShares);
 
   //   const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
   //   expect(vaultReportedEvent.length).to.equal(1n);
@@ -458,7 +458,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   await report(ctx, params);
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   const mintedShares = socket.sharesMinted;
+  //   const mintedShares = socket.liabilityShares;
   //   expect(mintedShares).to.be.gt(0n); // we still have the protocol fees minted
 
   //   const lockedOnVault = await stakingVault.locked();
@@ -469,7 +469,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   const { vaultHub, lido } = ctx.contracts;
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   const stETHToRebalance = await lido.getPooledEthByShares(socket.sharesMinted);
+  //   const stETHToRebalance = await lido.getPooledEthByShares(socket.liabilityShares);
 
   //   await delegation.connect(curator).rebalanceVault(stETHToRebalance, { value: stETHToRebalance });
 

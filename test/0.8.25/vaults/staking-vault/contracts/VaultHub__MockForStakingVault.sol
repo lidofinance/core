@@ -24,7 +24,7 @@ contract VaultHub__MockForStakingVault {
     function addVaultSocket(address vault) external {
         sockets[vault] = VaultHub.VaultSocket({
             vault: vault,
-            sharesMinted: 0,
+            liabilityShares: 0,
             shareLimit: 0,
             reserveRatioBP: 0,
             rebalanceThresholdBP: 0,

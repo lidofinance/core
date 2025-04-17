@@ -222,7 +222,7 @@ describe("Dashboard.sol", () => {
     it("returns the correct vault socket data", async () => {
       const sockets = {
         vault: await vault.getAddress(),
-        sharesMinted: 555n,
+        liabilityShares: 555n,
         shareLimit: 1000n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
@@ -235,7 +235,7 @@ describe("Dashboard.sol", () => {
 
       expect(await dashboard.vaultSocket()).to.deep.equal(Object.values(sockets));
       expect(await dashboard.shareLimit()).to.equal(sockets.shareLimit);
-      expect(await dashboard.sharesMinted()).to.equal(sockets.sharesMinted);
+      expect(await dashboard.liabilityShares()).to.equal(sockets.liabilityShares);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.rebalanceThresholdBP()).to.equal(sockets.rebalanceThresholdBP);
       expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
@@ -258,7 +258,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 1000000000n,
-        sharesMinted: 555n,
+        liabilityShares: 555n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -281,7 +281,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 100n,
-        sharesMinted: 0n,
+        liabilityShares: 0n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -302,7 +302,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 1000000000n,
-        sharesMinted: 555n,
+        liabilityShares: 555n,
         reserveRatioBP: 10_000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -323,7 +323,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 10000000n,
-        sharesMinted: 555n,
+        liabilityShares: 555n,
         reserveRatioBP: 0n,
         rebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
@@ -352,7 +352,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 10000000n,
-        sharesMinted: 0n,
+        liabilityShares: 0n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -379,7 +379,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 10000000n,
-        sharesMinted: 900n,
+        liabilityShares: 900n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -403,7 +403,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 10000000n,
-        sharesMinted: 10000n,
+        liabilityShares: 10000n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -427,7 +427,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 10000000n,
-        sharesMinted: 500n,
+        liabilityShares: 500n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
@@ -444,7 +444,7 @@ describe("Dashboard.sol", () => {
       const sharesFunded = await steth.getSharesByPooledEth((funding * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE);
 
       const canMint = await dashboard.projectedNewMintableShares(0n);
-      expect(canMint).to.equal(sharesFunded - sockets.sharesMinted);
+      expect(canMint).to.equal(sharesFunded - sockets.liabilityShares);
       expect(canMint).to.equal(preFundCanMint);
     });
 
@@ -452,7 +452,7 @@ describe("Dashboard.sol", () => {
       const sockets = {
         vault: vaultAddress,
         shareLimit: 500n,
-        sharesMinted: 500n,
+        liabilityShares: 500n,
         reserveRatioBP: 1000n,
         rebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,

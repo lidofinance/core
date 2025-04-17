@@ -216,7 +216,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
-      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted).to.equal(cap);
+      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).liabilityShares).to.equal(cap);
 
       // decrease totalValue to trigger rebase
       const penalty = ether("1");

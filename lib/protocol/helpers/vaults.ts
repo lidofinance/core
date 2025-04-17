@@ -234,7 +234,7 @@ export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: St
   await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
 }
 
-// Address, totalValue, inOutDelta, treasuryFees, sharesMinted
+// address, totalValue, inOutDelta, treasuryFees, liabilityShares
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {

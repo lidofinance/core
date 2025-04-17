@@ -239,7 +239,7 @@ describe("VaultHub.sol:hub", () => {
       const lastVaultSocket = await vaultHub["vaultSocket(uint256)"](lastVaultId);
 
       expect(lastVaultSocket.vault).to.equal(await vault.getAddress());
-      expect(lastVaultSocket.sharesMinted).to.equal(0n);
+      expect(lastVaultSocket.liabilityShares).to.equal(0n);
       expect(lastVaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(lastVaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(lastVaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
@@ -254,7 +254,7 @@ describe("VaultHub.sol:hub", () => {
       const vaultSocket = await vaultHub["vaultSocket(address)"](address);
 
       expect(vaultSocket.vault).to.equal(ZeroAddress);
-      expect(vaultSocket.sharesMinted).to.equal(0n);
+      expect(vaultSocket.liabilityShares).to.equal(0n);
       expect(vaultSocket.shareLimit).to.equal(0n);
       expect(vaultSocket.reserveRatioBP).to.equal(0n);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(0n);
@@ -268,7 +268,7 @@ describe("VaultHub.sol:hub", () => {
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
 
       expect(vaultSocket.vault).to.equal(vaultAddress);
-      expect(vaultSocket.sharesMinted).to.equal(0n);
+      expect(vaultSocket.liabilityShares).to.equal(0n);
       expect(vaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(vaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultSocket.rebalanceThresholdBP).to.equal(RESERVE_RATIO_THRESHOLD_BP);
@@ -606,7 +606,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(burner).burnShares(ether("1"));
 
       const vaultSocket_2 = await vaultHub["vaultSocket(address)"](vaultAddress);
-      const mintedStETH_2 = await lido.getPooledEthByShares(vaultSocket_2.sharesMinted);
+      const mintedStETH_2 = await lido.getPooledEthByShares(vaultSocket_2.liabilityShares);
       const maxMintableRatio_2 = TOTAL_BASIS_POINTS - vaultSocket_2.reserveRatioBP;
       const vaultTotalValue_2 = await vault.totalValue();
       const localGap_2 =
@@ -858,7 +858,7 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
-        "NoMintedSharesShouldBeLeft",
+        "NoLiabilitySharesShouldBeLeft",
       );
     });
 
@@ -917,7 +917,7 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
-        "NoMintedSharesShouldBeLeft",
+        "NoLiabilitySharesShouldBeLeft",
       );
     });
 
