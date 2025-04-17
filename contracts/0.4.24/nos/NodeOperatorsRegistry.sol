@@ -241,15 +241,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         initialized();
     }
 
-    function _initialize_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) internal {
+    function _initialize_v2(address _locator, bytes32 _type, uint256 /* _stuckPenaltyDelay */) internal {
         _onlyNonZeroAddress(_locator);
         LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
         TYPE_POSITION.setStorageBytes32(_type);
 
         _setContractVersion(2);
-
-        _setStuckPenaltyDelay(_stuckPenaltyDelay);
-
         // set unlimited allowance for burner from staking router
         // to burn stuck keys penalized shares
         IStETH(getLocator().lido()).approve(getLocator().burner(), ~uint256(0));
@@ -499,17 +496,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _increaseValidatorsKeysNonce();
     }
 
-    /// @notice Updates the number of the refunded validators for node operator with the given id
-    /// @param _nodeOperatorId Id of the node operator
-    /// @param _refundedValidatorsCount New number of refunded validators of the node operator
-    function updateRefundedValidatorsCount(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount) external {
-        _onlyExistedNodeOperator(_nodeOperatorId);
-        _auth(STAKING_ROUTER_ROLE);
-
-        _updateRefundValidatorsKeysCount(_nodeOperatorId, _refundedValidatorsCount);
-        _increaseValidatorsKeysNonce();
-    }
-
     /// @notice Permissionless method for distributing all accumulated module rewards among node operators
     /// based on the latest accounting report.
     ///
@@ -548,11 +534,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     ///      'unsafely' means that this method can both increase and decrease exited and stuck counters
     /// @param _nodeOperatorId Id of the node operator
     /// @param _exitedValidatorsCount New number of EXITED validators for the node operator
-    /// @param _stuckValidatorsCount New number of STUCK validator for the node operator
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
+        uint256 _exitedValidatorsCount
     ) external {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
@@ -1211,7 +1195,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         targetLimitMode = operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET);
         targetValidatorsCount = operatorTargetStats.get(TARGET_VALIDATORS_COUNT_OFFSET);
         stuckValidatorsCount = 0;
-        refundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);
+        refundedValidatorsCount = 0;
         stuckPenaltyEndTimestamp = 0;
 
         (totalExitedValidators, totalDepositedValidators, depositableValidatorsCount) =
@@ -1300,20 +1284,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             return;
         }
 
-        (address[] memory recipients, uint256[] memory shares, bool[] memory penalized) =
+        (address[] memory recipients, uint256[] memory shares,) =
             getRewardsDistribution(sharesToDistribute);
 
         uint256 toBurn;
         for (uint256 idx; idx < recipients.length; ++idx) {
             /// @dev skip ultra-low amounts processing to avoid transfer zero amount in case of a penalty
             if (shares[idx] < 2) continue;
-            if (penalized[idx]) {
-                /// @dev half reward punishment
-                /// @dev ignore remainder since it accumulated on contract balance
-                shares[idx] >>= 1;
-                toBurn = toBurn.add(shares[idx]);
-                emit NodeOperatorPenalized(recipients[idx], shares[idx]);
-            }
             // TODO: apply penalty to the operator
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
@@ -1326,16 +1303,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     function getLocator() public view returns (ILidoLocator) {
         return ILidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
-    }
-
-    function getStuckPenaltyDelay() public view returns (uint256) {
-        return STUCK_PENALTY_DELAY_POSITION.getStorageUint256();
-    }
-
-    function setStuckPenaltyDelay(uint256 _delay) external {
-        _auth(MANAGE_NODE_OPERATOR_ROLE);
-
-        _setStuckPenaltyDelay(_delay);
     }
 
     /// @dev Get the current reward distribution state, anyone can monitor this state
