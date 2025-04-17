@@ -30,20 +30,6 @@ const config: HardhatUserConfig = {
     enabled: !process.env.SKIP_GAS_REPORT,
   },
   networks: {
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "local-devnet": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
-    },
-    "holesky": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
     "hardhat": {
       // setting base fee to 0 to avoid extra calculations doesn't work :(
       // minimal base fee is 1 for EIP-1559
