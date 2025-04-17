@@ -28,6 +28,7 @@ import {
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
+  getCurrentBlockTimestamp,
   getNextBlockTimestamp,
   impersonate,
   randomValidatorPubkey,
@@ -484,6 +485,21 @@ describe("Dashboard.sol", () => {
     });
   });
 
+  context("unreserved", () => {
+    it("initially returns 0", async () => {
+      expect(await dashboard.unreserved()).to.equal(0n);
+    });
+
+    it("returns 0 if locked is greater than valuation", async () => {
+      const valuation = ether("2");
+      const inOutDelta = ether("2");
+
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, valuation + 1n);
+
+      expect(await dashboard.unreserved()).to.equal(0n);
+    });
+  });
+
   context("withdrawableEther", () => {
     it("returns the trivial amount can withdraw ether", async () => {
       const withdrawableEther = await dashboard.withdrawableEther();
@@ -616,6 +632,8 @@ describe("Dashboard.sol", () => {
 
   context("withdraw", () => {
     it("reverts if called by a non-admin", async () => {
+      await dashboard.connect(vaultOwner).fund({ value: ether("1") });
+
       await expect(dashboard.connect(stranger).withdraw(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",

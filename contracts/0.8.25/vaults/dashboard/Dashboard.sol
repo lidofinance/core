@@ -164,6 +164,21 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the unreserved amount of ether,
+     * i.e. the amount of ether that is not locked in the StakingVault
+     * and not reserved for node operator fee.
+     * This amount does not account for the current balance of the StakingVault and
+     * can return a value greater than the actual balance of the StakingVault.
+     * @return uint256: the amount of unreserved ether.
+     */
+    function unreserved() public view returns (uint256) {
+        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
+        uint256 valuation_ = stakingVault().valuation();
+
+        return reserved > valuation_ ? 0 : valuation_ - reserved;
+    }
+
+    /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
@@ -216,6 +231,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
+        uint256 unreserved_ = unreserved();
+
+        if (_ether > unreserved_) {
+            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        }
+
         _withdraw(_recipient, _ether);
     }
 
@@ -322,6 +343,10 @@ contract Dashboard is NodeOperatorFee {
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
+        }
+
+        if (totalAmount > unreserved()) {
+            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
         }
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
@@ -609,6 +634,13 @@ contract Dashboard is NodeOperatorFee {
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
+
+        /**
+     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @param amount The amount of ether that was attempted to be withdrawn
+     * @param unreserved The amount of unreserved ether available
+     */
+    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient

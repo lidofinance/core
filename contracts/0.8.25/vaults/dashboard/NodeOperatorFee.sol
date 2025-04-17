@@ -155,21 +155,6 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Returns the unreserved amount of ether,
-     * i.e. the amount of ether that is not locked in the StakingVault
-     * and not reserved for node operator fee.
-     * This amount does not account for the current balance of the StakingVault and
-     * can return a value greater than the actual balance of the StakingVault.
-     * @return uint256: the amount of unreserved ether.
-     */
-    function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
-        uint256 valuation = stakingVault().valuation();
-
-        return reserved > valuation ? 0 : valuation - reserved;
-    }
-
-    /**
      * @notice Sets the confirm expiry.
      * Confirm expiry is a period during which the confirm is counted. Once the period is over,
      * the confirm is considered expired, no longer counts and must be recasted.
@@ -241,16 +226,6 @@ contract NodeOperatorFee is Permissions {
         _setAccruedRewardsAdjustment(_newAdjustment);
     }
 
-    /**
-     * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
-     * @param _ether The amount of ether to check.
-     */
-    modifier onlyIfUnreserved(uint256 _ether) {
-        uint256 withdrawable = unreserved();
-        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
-        _;
-    }
-
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
         if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
@@ -313,11 +288,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
-
-    /**
-     * @dev Error emitted when the requested amount exceeds the unreserved amount.
-     */
-    error RequestedAmountExceedsUnreserved();
 
     /**
      * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.

@@ -438,27 +438,6 @@ describe("NodeOperatorFee.sol", () => {
     });
   });
 
-  context("unreserved", () => {
-    it("initially returns 0", async () => {
-      expect(await nodeOperatorFee.unreserved()).to.equal(0n);
-    });
-
-    it("returns 0 if locked is greater than valuation", async () => {
-      const valuation = ether("2");
-      const inOutDelta = ether("2");
-
-      await vault.setLatestReport({
-        valuation,
-        inOutDelta,
-        timestamp: await getCurrentBlockTimestamp(),
-      });
-
-      await vault.setLocked(valuation + 1n);
-
-      expect(await nodeOperatorFee.unreserved()).to.equal(0n);
-    });
-  });
-
   async function assertSoleMember(account: HardhatEthersSigner, role: string) {
     expect(await nodeOperatorFee.hasRole(role, account)).to.be.true;
     expect(await nodeOperatorFee.getRoleMemberCount(role)).to.equal(1);
