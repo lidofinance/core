@@ -297,6 +297,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.ossified()) revert VaultOssified(_vault);
+        if (!vault_.vaultHubAuthorized()) revert VaultDeauthorized(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -327,10 +328,9 @@ contract VaultHub is PausableUntilWithRoles {
         $.sockets.push(vsocket);
 
         // here we intentionally prohibit all reports having referenceSlot earlier than the current block;
-        // if the vault is not connected to the hub, it will revert.
         vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
 
     /// @notice updates share limit for the vault
@@ -368,7 +368,7 @@ contract VaultHub is PausableUntilWithRoles {
         socket.rebalanceThresholdBP = uint16(_rebalanceThresholdBP);
         socket.treasuryFeeBP = uint16(_treasuryFeeBP);
 
-        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
 
     function updateReportData(
@@ -630,7 +630,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    event VaultConnected(
+    event VaultConnectionSet(
         address indexed vault,
         uint256 capShares,
         uint256 minReserveRatio,
@@ -647,7 +647,6 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-    event VaultConnectionUpdated(address indexed vault, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFeeBP);
 
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
@@ -673,4 +672,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
+    error VaultDeauthorized(address vault);
 }

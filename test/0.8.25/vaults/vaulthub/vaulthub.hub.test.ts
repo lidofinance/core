@@ -807,7 +807,7 @@ describe("VaultHub.sol:hub", () => {
       });
 
       await expect(tx)
-        .to.emit(vaultHub, "VaultConnected")
+        .to.emit(vaultHub, "VaultConnectionSet")
         .withArgs(_vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
 
       expect(await vaultHub.vaultsCount()).to.equal(vaultCountBefore + 1n);
@@ -839,7 +839,7 @@ describe("VaultHub.sol:hub", () => {
       });
 
       await expect(tx)
-        .to.emit(vaultHub, "VaultConnected")
+        .to.emit(vaultHub, "VaultConnectionSet")
         .withArgs(_vault, 0n, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
     });
 
@@ -863,7 +863,7 @@ describe("VaultHub.sol:hub", () => {
       });
 
       await expect(tx)
-        .to.emit(vaultHub, "VaultConnected")
+        .to.emit(vaultHub, "VaultConnectionSet")
         .withArgs(_vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, 0n);
     });
   });
