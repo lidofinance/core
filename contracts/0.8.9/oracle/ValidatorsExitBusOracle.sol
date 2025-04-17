@@ -51,10 +51,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint256 requestsCount
     );
 
-    event StoredOracleTWExitRequestHash(
-        bytes32 exitRequestHash
-    );
-
     event StoreOracleExitRequestHashStart(
         bytes32 exitRequestHash
     );
@@ -101,7 +97,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
         BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator)
     {
         LOCATOR = ILidoLocator(lidoLocator);
     }
@@ -121,6 +116,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
+        _setLocatorAddress(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
@@ -227,13 +223,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
-        bytes32 dataHash = keccak256(data.data);
+        bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
-        _storeOracleExitRequestHash(dataHash, data, contractVersion);
+        _storeOracleExitRequestHash(dataHash, data.requestsCount, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -313,6 +309,72 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         result.dataFormat = procState.dataFormat;
         result.requestsCount = procState.requestsCount;
         result.requestsSubmitted = procState.requestsProcessed;
+    }
+
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
+        if (dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+
+        if (exitRequests.length % PACKED_REQUEST_LENGTH != 0) {
+            revert InvalidRequestsDataLength();
+        }
+
+        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
+            revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+        }
+
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, index))
+
+            // Load the first 16 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), and valIndex (64 bits).
+            dataWithoutPubkey := shr(128, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (128 bits total):
+        // MSB <-------------------- 128 bits --------------------> LSB
+        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+
+        valIndex = uint64(dataWithoutPubkey);
+        nodeOpId = uint40(dataWithoutPubkey >> 64);
+        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+        // Allocate a new bytes array in memory for the pubkey
+        pubkey = new bytes(PUBLIC_KEY_LENGTH);
+
+        assembly {
+            // Starting offset in calldata for the pubkey part
+            let pubkeyCalldataOffset := add(itemOffset, 16)
+
+            // Memory location of the 'pubkey' bytes array data
+            let pubkeyMemPtr := add(pubkey, 32)
+
+            // Copy the 48 bytes of the pubkey from calldata into memory
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        return (pubkey, nodeOpId, moduleId, valIndex);
+    }
+
+    function getExitRequestsDeliveryHistory(
+        bytes32 exitRequestsHash
+    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
+
+        if (requestStatus.contractVersion == 0) {
+            revert ExitHashWasNotSubmitted();
+        }
+
+        return (requestStatus.totalItemsCount, requestStatus.deliveredItemsCount, requestStatus.deliverHistory);
     }
 
     ///
@@ -454,22 +516,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         return (moduleId << 40) | nodeOpId;
     }
 
-    function _storeOracleExitRequestHash(bytes32 exitRequestHash, ReportData calldata report, uint256 contractVersion) internal {
-        emit StoreOracleExitRequestHashStart(exitRequestHash);
-
-        if (report.requestsCount == 0) {
+    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+        if (requestsCount == 0) {
             return;
         }
-
-        mapping(bytes32 => RequestStatus) storage hashes = _storageExitRequestsHashes();
-
-        RequestStatus storage request = hashes[exitRequestHash];
-        request.totalItemsCount = report.requestsCount;
-        request.deliveredItemsCount = report.requestsCount;
-        request.contractVersion = contractVersion;
-        request.deliverHistory.push(DeliveryHistory({blockNumber: block.number, lastDeliveredKeyIndex: report.requestsCount - 1}));
-
-        emit StoredOracleTWExitRequestHash(exitRequestHash);
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
     }
 
     ///
