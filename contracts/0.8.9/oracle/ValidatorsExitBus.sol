@@ -34,6 +34,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error ExitRequestsLimit();
     error InvalidPubkeysArray();
     error NoExitRequestProvided();
+    error InvalidRequestsDataSortOrder();
 
     /// @dev Events
     event MadeRefund(address sender, uint256 refundValue);
@@ -117,9 +118,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         _storeExitRequestHash(exitReportHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
     }
 
-    function emitExitEvents(ExitRequestData calldata request, uint256 contractVersion) external whenResumed {
+    function emitExitEvents(ExitRequestData calldata request) external whenResumed {
         bytes calldata data = request.data;
-        _checkContractVersion(contractVersion);
 
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[
             keccak256(abi.encode(data, request.dataFormat))
@@ -136,6 +136,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (request.data.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
+
+        _checkContractVersion(requestStatus.contractVersion);
 
         // By default, totalItemsCount is set to type(uint256).max.
         // If an exit is emitted for the request for the first time, the default value is used for totalItemsCount.
@@ -188,6 +190,17 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (requestStatus.contractVersion == 0) {
             revert ExitHashWasNotSubmitted();
         }
+
+        if (request.dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(request.dataFormat);
+        }
+
+        if (request.data.length % PACKED_REQUEST_LENGTH != 0) {
+            revert InvalidRequestsDataLength();
+        }
+
+        _checkContractVersion(requestStatus.contractVersion);
+
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
@@ -378,6 +391,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     function _processExitRequestsList(bytes calldata data, uint256 startIndex, uint256 count) internal {
         uint256 offset;
         uint256 offsetPastEnd;
+        uint256 lastDataWithoutPubkey = 0;
+        uint256 timestamp = _getTimestamp();
 
         assembly {
             offset := add(data.offset, mul(startIndex, PACKED_REQUEST_LENGTH))
@@ -389,8 +404,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         assembly {
             pubkey.length := 48
         }
-
-        uint256 timestamp = _getTimestamp();
 
         while (offset < offsetPastEnd) {
             uint256 dataWithoutPubkey;
@@ -405,6 +418,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             //                              dataWithoutPubkey
             // MSB <---------------------------------------------------------------------- LSB
             // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+                revert InvalidRequestsDataSortOrder();
+            }
+
             uint64 valIndex = uint64(dataWithoutPubkey);
             uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
             uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
@@ -413,6 +430,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 revert InvalidRequestsData();
             }
 
+            lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }
     }

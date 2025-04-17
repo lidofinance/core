@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { UnstructuredStorage } from "./UnstructuredStorage.sol";
+import {UnstructuredStorage} from "./UnstructuredStorage.sol";
 
 // MSB ------------------------------------------------------------------------------> LSB
 // 256______________160____________________________128_______________32____________________________ 0
@@ -12,12 +12,11 @@ import { UnstructuredStorage } from "./UnstructuredStorage.sol";
 //
 
 struct ExitRequestLimitData {
-    uint32 prevExitRequestsBlockNumber;       // block number of the previous exit requests
-    uint96 prevExitRequestsLimit;             // limit value (<= `maxExitRequestLimit`) obtained on the previous exit request
-    uint32 maxExitRequestsLimitGrowthBlocks;  // limit regeneration speed expressed in blocks
-    uint96 maxExitRequestsLimit;              // maximum limit value
+    uint32 prevExitRequestsBlockNumber; // block number of the previous exit requests
+    uint96 prevExitRequestsLimit; // limit value (<= `maxExitRequestLimit`) obtained on the previous exit request
+    uint32 maxExitRequestsLimitGrowthBlocks; // limit regeneration speed expressed in blocks
+    uint96 maxExitRequestsLimit; // maximum limit value
 }
-
 
 library ReportExitLimitUtilsStorage {
     using UnstructuredStorage for bytes32;
@@ -27,11 +26,7 @@ library ReportExitLimitUtilsStorage {
     uint256 internal constant PREV_EXIT_REQUESTS_LIMIT_OFFSET = 32;
     uint256 internal constant PREV_EXIT_REQUESTS_BLOCK_NUMBER_OFFSET = 0;
 
-    function getStorageExitRequestLimit(bytes32 _position)
-        internal
-        view
-        returns (ExitRequestLimitData memory data)
-    {
+    function getStorageExitRequestLimit(bytes32 _position) internal view returns (ExitRequestLimitData memory data) {
         uint256 slotValue = _position.getStorageUint256();
 
         data.prevExitRequestsBlockNumber = uint32(slotValue >> PREV_EXIT_REQUESTS_BLOCK_NUMBER_OFFSET);
@@ -43,19 +38,19 @@ library ReportExitLimitUtilsStorage {
     function setStorageExitRequestLimit(bytes32 _position, ExitRequestLimitData memory _data) internal {
         _position.setStorageUint256(
             (uint256(_data.prevExitRequestsBlockNumber) << PREV_EXIT_REQUESTS_BLOCK_NUMBER_OFFSET) |
-            (uint256(_data.prevExitRequestsLimit) << PREV_EXIT_REQUESTS_LIMIT_OFFSET) |
-            (uint256(_data.maxExitRequestsLimitGrowthBlocks) << MAX_EXIT_REQUESTS_LIMIT_GROWTH_BLOCKS_OFFSET) |
-            (uint256(_data.maxExitRequestsLimit) << MAX_EXIT_REQUESTS_LIMIT_OFFSET)
+                (uint256(_data.prevExitRequestsLimit) << PREV_EXIT_REQUESTS_LIMIT_OFFSET) |
+                (uint256(_data.maxExitRequestsLimitGrowthBlocks) << MAX_EXIT_REQUESTS_LIMIT_GROWTH_BLOCKS_OFFSET) |
+                (uint256(_data.maxExitRequestsLimit) << MAX_EXIT_REQUESTS_LIMIT_OFFSET)
         );
     }
 }
 
 library ReportExitLimitUtils {
     /**
-    * @notice Calculate exit requests limit
-    * @dev using `_constGasMin` to make gas consumption independent of the current block number
-    */
-    function calculateCurrentExitRequestLimit(ExitRequestLimitData memory _data) internal view returns(uint256 limit) {
+     * @notice Calculate exit requests limit
+     * @dev using `_constGasMin` to make gas consumption independent of the current block number
+     */
+    function calculateCurrentExitRequestLimit(ExitRequestLimitData memory _data) internal view returns (uint256 limit) {
         uint256 exitRequestLimitIncPerBlock;
         if (_data.maxExitRequestsLimitGrowthBlocks != 0) {
             exitRequestLimitIncPerBlock = _data.maxExitRequestsLimit / _data.maxExitRequestsLimitGrowthBlocks;
@@ -64,21 +59,15 @@ library ReportExitLimitUtils {
         uint256 blocksPassed = block.number - _data.prevExitRequestsBlockNumber;
         uint256 projectedLimit = _data.prevExitRequestsLimit + blocksPassed * exitRequestLimitIncPerBlock;
 
-        limit = _constGasMin(
-            projectedLimit,
-            _data.maxExitRequestsLimit
-        );
-
-
+        limit = _constGasMin(projectedLimit, _data.maxExitRequestsLimit);
     }
 
-
     /**
-    * @notice update exit requests limit repr after exit request
-    * @dev input `_data` param is mutated and the func returns effectively the same pointer
-    * @param _data exit request limit struct
-    * @param _newPrevExitRequestsLimit new value for the `prevExitRequests` field
-    */
+     * @notice update exit requests limit repr after exit request
+     * @dev input `_data` param is mutated and the func returns effectively the same pointer
+     * @param _data exit request limit struct
+     * @param _newPrevExitRequestsLimit new value for the `prevExitRequests` field
+     */
     function updatePrevExitRequestsLimit(
         ExitRequestLimitData memory _data,
         uint256 _newPrevExitRequestsLimit
@@ -91,14 +80,13 @@ library ReportExitLimitUtils {
         return _data;
     }
 
-
     /**
-    * @notice update exit request limit repr with the desired limits
-    * @dev input `_data` param is mutated and the func returns effectively the same pointer
-    * @param _data exit request limit struct
-    * @param _maxExitRequestsLimit exit request limit max value
-    * @param _exitRequestsLimitIncreasePerBlock exit request limit increase (restoration) per block
-    */
+     * @notice update exit request limit repr with the desired limits
+     * @dev input `_data` param is mutated and the func returns effectively the same pointer
+     * @param _data exit request limit struct
+     * @param _maxExitRequestsLimit exit request limit max value
+     * @param _exitRequestsLimitIncreasePerBlock exit request limit increase (restoration) per block
+     */
     function setExitReportLimit(
         ExitRequestLimitData memory _data,
         uint256 _maxExitRequestsLimit,
@@ -108,8 +96,8 @@ library ReportExitLimitUtils {
         require(_maxExitRequestsLimit <= type(uint96).max, "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT");
         require(_maxExitRequestsLimit >= _exitRequestsLimitIncreasePerBlock, "TOO_LARGE_LIMIT_INCREASE");
         require(
-            (_exitRequestsLimitIncreasePerBlock == 0)
-            || (_maxExitRequestsLimit / _exitRequestsLimitIncreasePerBlock <= type(uint32).max),
+            (_exitRequestsLimitIncreasePerBlock == 0) ||
+                (_maxExitRequestsLimit / _exitRequestsLimitIncreasePerBlock <= type(uint32).max),
             "TOO_SMALL_LIMIT_INCREASE"
         );
 
@@ -120,8 +108,9 @@ library ReportExitLimitUtils {
         ) {
             _data.prevExitRequestsLimit = uint96(_maxExitRequestsLimit);
         }
-        _data.maxExitRequestsLimitGrowthBlocks=
-            _exitRequestsLimitIncreasePerBlock != 0 ? uint32(_maxExitRequestsLimit/ _exitRequestsLimitIncreasePerBlock) : 0;
+        _data.maxExitRequestsLimitGrowthBlocks = _exitRequestsLimitIncreasePerBlock != 0
+            ? uint32(_maxExitRequestsLimit / _exitRequestsLimitIncreasePerBlock)
+            : 0;
 
         _data.maxExitRequestsLimit = uint96(_maxExitRequestsLimit);
 
@@ -134,10 +123,9 @@ library ReportExitLimitUtils {
      * TODO: discuss this part
      * @notice check if max exit request limit is set. Otherwise there are no limits on exits
      */
-    function isExitReportLimitSet(ExitRequestLimitData memory _data) internal pure returns(bool){
-      return _data.maxExitRequestsLimit != 0;
+    function isExitReportLimitSet(ExitRequestLimitData memory _data) internal pure returns (bool) {
+        return _data.maxExitRequestsLimit != 0;
     }
-
 
     /**
      * @notice find a minimum of two numbers with a constant gas consumption

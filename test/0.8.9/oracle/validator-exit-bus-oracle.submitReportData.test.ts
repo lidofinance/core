@@ -621,8 +621,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const requests = [
         { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
         { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
-        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2] },
-        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3] },
       ];
       const { reportData } = await prepareReportAndSubmitHash(requests);
       const exitRequestHash = ethers.keccak256(
@@ -640,17 +640,22 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         data: reportData.data,
       };
 
-      const emitTx = await oracle.emitExitEvents(exitRequest, 2);
+      const emitTx = await oracle.emitExitEvents(exitRequest);
 
       const timestamp = await oracle.getTime();
 
       await expect(emitTx)
         .to.emit(oracle, "ValidatorExitRequest")
         .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
-
       await expect(emitTx)
         .to.emit(oracle, "ValidatorExitRequest")
         .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[2].moduleId, requests[2].nodeOpId, requests[2].valIndex, requests[2].valPubkey, timestamp);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
     });
 
     it("emits ValidatorExitRequest events", async () => {

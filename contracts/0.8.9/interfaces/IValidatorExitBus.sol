@@ -22,7 +22,7 @@ interface IValidatorsExitBus {
 
     function submitReportHash(bytes32 exitReportHash) external;
 
-    function emitExitEvents(ExitRequestData calldata request, uint256 contractVersion) external;
+    function emitExitEvents(ExitRequestData calldata request) external;
 
     function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable;
 
