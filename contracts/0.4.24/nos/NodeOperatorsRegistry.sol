@@ -63,6 +63,21 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
     event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
 
+    event ValidatorExitStatusUpdated(
+        uint256 indexed nodeOperatorId,
+        bytes publicKey,
+        uint256 eligibleToExitInSec,
+        uint256 proofSlotTimestamp
+    );
+    event TriggerableExitFeeSet(
+        uint256 indexed nodeOperatorId,
+        bytes publicKey,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    );
+    event PenaltyApplied(uint256 indexed nodeOperatorId, bytes publicKey, uint256 penaltyAmount, string penaltyType);
+    event ExitDeadlineThresholdChanged(uint256 threshold);
+
     // Enum to represent the state of the reward distribution process
     enum RewardDistributionState {
         TransferredToModule,      // New reward portion minted and transferred to the module
@@ -222,60 +237,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         // Initializations for v2 --> v3
         _initialize_v3();
 
+        _initialize_v4();
+
         initialized();
-    }
-
-    /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once
-    /// For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    function finalizeUpgrade_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) external {
-        require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
-        _checkContractVersion(0);
-        _initialize_v2(_locator, _type, _stuckPenaltyDelay);
-
-        uint256 totalOperators = getNodeOperatorsCount();
-        Packed64x4.Packed memory signingKeysStats;
-        Packed64x4.Packed memory operatorTargetStats;
-        Packed64x4.Packed memory summarySigningKeysStats = Packed64x4.Packed(0);
-        uint256 vettedSigningKeysCountBefore;
-        uint256 totalSigningKeysCount;
-        uint256 depositedSigningKeysCount;
-        for (uint256 nodeOperatorId; nodeOperatorId < totalOperators; ++nodeOperatorId) {
-            signingKeysStats = _loadOperatorSigningKeysStats(nodeOperatorId);
-            vettedSigningKeysCountBefore = signingKeysStats.get(TOTAL_VETTED_KEYS_COUNT_OFFSET);
-            totalSigningKeysCount = signingKeysStats.get(TOTAL_KEYS_COUNT_OFFSET);
-            depositedSigningKeysCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
-
-            uint256 vettedSigningKeysCountAfter;
-            if (!_nodeOperators[nodeOperatorId].active) {
-                // trim vetted signing keys count when node operator is not active
-                vettedSigningKeysCountAfter = depositedSigningKeysCount;
-            } else {
-                vettedSigningKeysCountAfter = Math256.min(
-                    totalSigningKeysCount,
-                    Math256.max(depositedSigningKeysCount, vettedSigningKeysCountBefore)
-                );
-            }
-
-            if (vettedSigningKeysCountBefore != vettedSigningKeysCountAfter) {
-                signingKeysStats.set(TOTAL_VETTED_KEYS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-                _saveOperatorSigningKeysStats(nodeOperatorId, signingKeysStats);
-                emit VettedSigningKeysCountChanged(nodeOperatorId, vettedSigningKeysCountAfter);
-            }
-
-            operatorTargetStats = _loadOperatorTargetValidatorsStats(nodeOperatorId);
-            operatorTargetStats.set(MAX_VALIDATORS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-            _saveOperatorTargetValidatorsStats(nodeOperatorId, operatorTargetStats);
-
-            summarySigningKeysStats.add(SUMMARY_MAX_VALIDATORS_COUNT_OFFSET, vettedSigningKeysCountAfter);
-            summarySigningKeysStats.add(SUMMARY_DEPOSITED_KEYS_COUNT_OFFSET, depositedSigningKeysCount);
-            summarySigningKeysStats.add(
-                SUMMARY_EXITED_KEYS_COUNT_OFFSET,
-                signingKeysStats.get(TOTAL_EXITED_KEYS_COUNT_OFFSET)
-            );
-        }
-
-        _saveSummarySigningKeysStats(summarySigningKeysStats);
-        _increaseValidatorsKeysNonce();
     }
 
     function _initialize_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) internal {
@@ -295,20 +259,14 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit StakingModuleTypeSet(_type);
     }
 
-    function finalizeUpgrade_v3() external {
-        require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
-        _checkContractVersion(2);
-        _initialize_v3();
-
-        // clear deprecated total keys count storage
-        Packed64x4.Packed memory summarySigningKeysStats = _loadSummarySigningKeysStats();
-        summarySigningKeysStats.set(SUMMARY_TOTAL_KEYS_COUNT_OFFSET, 0);
-        _saveSummarySigningKeysStats(summarySigningKeysStats);
-    }
-
     function _initialize_v3() internal {
         _setContractVersion(3);
         _updateRewardDistributionState(RewardDistributionState.Distributed);
+    }
+
+     function _initialize_v4() internal {
+        _setContractVersion(4);
+        // TODO: after devnet-1 set correct logic
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1184,6 +1142,49 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
+    function _getExitDeadlineThreshold() public view returns (uint256) {
+        return 60 * 60 * 24 * 2; // 2 days
+    }
+
+    function reportValidatorExitDelay(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        require(_eligibleToExitInSec >= 0, "INVALID_EXIT_TIME"); // placeholder check
+        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
+
+        emit PenaltyApplied(_nodeOperatorId, _publicKey, 1 ether, "EXCESS_EXIT_TIME");
+        emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
+    }
+
+    function onValidatorExitTriggered(
+        uint256 _nodeOperatorId,
+        bytes _publicKey,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
+
+        emit TriggerableExitFeeSet(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
+    }
+
+    function exitDeadlineThreshold(uint256 /* _nodeOperatorId */) external view returns (uint256) {
+       return _getExitDeadlineThreshold();
+    }
+
+    function isValidatorExitDelayPenaltyApplicable(
+        uint256, // _nodeOperatorId
+        uint256, // _proofSlotTimestamp
+        bytes, // _publicKey
+        uint256 _eligibleToExitInSec
+    ) external view returns (bool) {
+         return _eligibleToExitInSec >= _getExitDeadlineThreshold();
+    }
+
     function _removeUnusedSigningKeys(uint256 _nodeOperatorId, uint256 _fromIndex, uint256 _keysCount) internal {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _onlyNodeOperatorManager(msg.sender, _nodeOperatorId);
@@ -1435,6 +1436,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
                 toBurn = toBurn.add(shares[idx]);
                 emit NodeOperatorPenalized(recipients[idx], shares[idx]);
             }
+            // TODO: apply penalty to the operator
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
             emit RewardsDistributed(recipients[idx], shares[idx]);

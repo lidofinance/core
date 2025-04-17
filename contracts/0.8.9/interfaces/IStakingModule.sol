@@ -23,7 +23,7 @@ interface IStakingModule {
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _publicKey The public key of the validator being reported.
     /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
-    function handleActiveValidatorsExitingStatus(
+    function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
@@ -38,7 +38,7 @@ interface IStakingModule {
     /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
     /// @param _exitType The type of exit being performed.
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
-    function onTriggerableExit(
+    function onValidatorExitTriggered(
         uint256 _nodeOperatorId,
         bytes calldata _publicKey,
         uint256 _withdrawalRequestPaidFee,
@@ -51,7 +51,7 @@ interface IStakingModule {
     /// @param _publicKey The public key of the validator.
     /// @param _eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
     /// @return bool Returns true if the contract should receive the updated status of the validator.
-    function shouldValidatorBePenalized(
+    function isValidatorExitDelayPenaltyApplicable(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
@@ -206,7 +206,7 @@ interface IStakingModule {
     ///
     /// @dev IMPORTANT: this method SHOULD revert with empty error data ONLY because of "out of gas".
     ///      Details about error data: https://docs.soliditylang.org/en/v0.8.9/control-structures.html#error-handling-assert-require-revert-and-exceptions
-    function onExitedValidatorsCountsUpdated() external;
+    function onExitedAndStuckValidatorsCountsUpdated() external;
 
     /// @notice Called by StakingRouter when withdrawal credentials are changed.
     /// @dev This method MUST discard all StakingModule's unused deposit data cause they become
