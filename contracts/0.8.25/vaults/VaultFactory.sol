@@ -8,7 +8,6 @@ import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {VaultHub} from "./VaultHub.sol";
-import {OperatorGrid} from "./OperatorGrid.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Delegation} from "./Delegation.sol";

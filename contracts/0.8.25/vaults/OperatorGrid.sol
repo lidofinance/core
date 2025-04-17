@@ -308,6 +308,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (_tierId >= $.tiers.length) revert TierNotExists();
         if (_tierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
+        Tier memory requestedTier = $.tiers[_tierId];
+        address requestedTierOperator = requestedTier.operator;
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
+
         uint128 tierId = uint128(_tierId);
 
         VaultTier storage vaultTier = $.vaultTier[_vault];
@@ -316,7 +321,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         vaultTier.requestedTierId = tierId;
 
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
         $.pendingRequests[nodeOperator].add(_vault); //returns true if the vault was not in the set
 
         emit TierChangeRequested(_vault, vaultTier.currentTierId, _tierId);
@@ -383,10 +387,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
 
         Tier memory requestedTier = $.tiers[requestedTierId];
-        address requestedTierOperator = requestedTier.operator;
-
-        // check if tier belongs to the same group as the operator
-        if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
