@@ -10,6 +10,7 @@ import { PausableUntil } from "../utils/PausableUntil.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
+import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
 
 
 interface IOracleReportSanityChecker {
@@ -17,7 +18,7 @@ interface IOracleReportSanityChecker {
 }
 
 
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
+contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
 
@@ -48,6 +49,10 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         uint256 indexed refSlot,
         uint256 requestsProcessed,
         uint256 requestsCount
+    );
+
+    event StoreOracleExitRequestHashStart(
+        bytes32 exitRequestHash
     );
 
     struct DataProcessingState {
@@ -107,6 +112,11 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
+    }
+
+    function finalizeUpgrade_v2() external {
+        _updateContractVersion(2);
+        _setLocatorAddress(address(LOCATOR));
     }
 
     /// @notice Resume accepting validator exit requests
@@ -192,9 +202,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
 
-    /// Length in bytes of packed request
-    uint256 internal constant PACKED_REQUEST_LENGTH = 64;
-
     /// @notice Submits report data for processing.
     ///
     /// @param data The data. See the `ReportData` structure's docs for details.
@@ -216,10 +223,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
     {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
+        bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
         // it's a waste of gas to copy the whole calldata into mem but seems there's no way around
-        _checkConsensusData(data.refSlot, data.consensusVersion, keccak256(abi.encode(data)));
+        bytes32 reportDataHash = keccak256(abi.encode(data));
+        _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
+        _storeOracleExitRequestHash(dataHash, data.requestsCount, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -301,6 +311,72 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
         result.requestsSubmitted = procState.requestsProcessed;
     }
 
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
+        if (dataFormat != DATA_FORMAT_LIST) {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+
+        if (exitRequests.length % PACKED_REQUEST_LENGTH != 0) {
+            revert InvalidRequestsDataLength();
+        }
+
+        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
+            revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+        }
+
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, index))
+
+            // Load the first 16 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), and valIndex (64 bits).
+            dataWithoutPubkey := shr(128, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (128 bits total):
+        // MSB <-------------------- 128 bits --------------------> LSB
+        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+
+        valIndex = uint64(dataWithoutPubkey);
+        nodeOpId = uint40(dataWithoutPubkey >> 64);
+        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+        // Allocate a new bytes array in memory for the pubkey
+        pubkey = new bytes(PUBLIC_KEY_LENGTH);
+
+        assembly {
+            // Starting offset in calldata for the pubkey part
+            let pubkeyCalldataOffset := add(itemOffset, 16)
+
+            // Memory location of the 'pubkey' bytes array data
+            let pubkeyMemPtr := add(pubkey, 32)
+
+            // Copy the 48 bytes of the pubkey from calldata into memory
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        return (pubkey, nodeOpId, moduleId, valIndex);
+    }
+
+    function getExitRequestsDeliveryHistory(
+        bytes32 exitRequestsHash
+    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
+
+        if (requestStatus.contractVersion == 0) {
+            revert ExitHashWasNotSubmitted();
+        }
+
+        return (requestStatus.totalItemsCount, requestStatus.deliveredItemsCount, requestStatus.deliverHistory);
+    }
+
     ///
     /// Implementation & helpers
     ///
@@ -336,6 +412,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
             revert InvalidRequestsDataLength();
         }
 
+        // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
 
@@ -437,6 +514,13 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil {
 
     function _computeNodeOpKey(uint256 moduleId, uint256 nodeOpId) internal pure returns (uint256) {
         return (moduleId << 40) | nodeOpId;
+    }
+
+    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+        if (requestsCount == 0) {
+            return;
+        }
+        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
     }
 
     ///

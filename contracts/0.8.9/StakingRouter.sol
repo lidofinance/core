@@ -60,8 +60,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     error StakingModuleWrongName();
     error UnexpectedCurrentValidatorsCount(
         uint256 currentModuleExitedValidatorsCount,
-        uint256 currentNodeOpExitedValidatorsCount,
-        uint256 currentNodeOpStuckValidatorsCount
+        uint256 currentNodeOpExitedValidatorsCount
     );
     error UnexpectedFinalExitedValidatorsCount (
         uint256 newModuleTotalExitedValidatorsCount,
@@ -133,6 +132,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
+    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_STATUS_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -437,18 +437,13 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    distribute new stake and staking fees between the modules. There can only be single call of this function
     ///    per oracle reporting frame.
     ///
-    /// 2. In the first part of the second data submission phase, the oracle calls
-    ///    `StakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator` on the staking router which passes the
-    ///    counts by node operator to the staking module by calling `IStakingModule.updateStuckValidatorsCount`.
-    ///    This can be done multiple times for the same module, passing data for different subsets of node operators.
-    ///
-    /// 3. In the second part of the second data submission phase, the oracle calls
+    /// 2. In the second part of the second data submission phase, the oracle calls
     ///    `StakingRouter.reportStakingModuleExitedValidatorsCountByNodeOperator` on the staking router which passes
     ///    the counts by node operator to the staking module by calling `IStakingModule.updateExitedValidatorsCount`.
     ///    This can be done multiple times for the same module, passing data for different subsets of node
     ///    operators.
     ///
-    /// 4. At the end of the second data submission phase, it's expected for the aggregate exited validators count
+    /// 3. At the end of the second data submission phase, it's expected for the aggregate exited validators count
     ///    across all module's node operators (stored in the module) to match the total count for this module
     ///    (stored in the staking router). However, it might happen that the second phase of data submission doesn't
     ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
@@ -457,7 +452,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    the exited and maybe stuck validator counts during the whole reporting frame. Handling this condition is
     ///    the responsibility of each staking module.
     ///
-    /// 5. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
+    /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
     ///    and exited validator counts per node operator for the current reporting frame, the oracle calls
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
     ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
@@ -545,15 +540,10 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         /// @notice The expected current number of exited validators of the node operator
         /// that is being corrected.
         uint256 currentNodeOperatorExitedValidatorsCount;
-        /// @notice The expected current number of stuck validators of the node operator
-        /// that is being corrected.
-        uint256 currentNodeOperatorStuckValidatorsCount;
         /// @notice The corrected number of exited validators of the module.
         uint256 newModuleExitedValidatorsCount;
         /// @notice The corrected number of exited validators of the node operator.
         uint256 newNodeOperatorExitedValidatorsCount;
-        /// @notice The corrected number of stuck validators of the node operator.
-        uint256 newNodeOperatorStuckValidatorsCount;
     }
 
     /// @notice Sets exited validators count for the given module and given node operator in that module
@@ -587,7 +577,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         (
             /* uint256 targetLimitMode */,
             /* uint256 targetValidatorsCount */,
-            uint256 stuckValidatorsCount,
+            /* uint256 stuckValidatorsCount, */,
             /* uint256 refundedValidatorsCount */,
             /* uint256 stuckPenaltyEndTimestamp */,
             uint256 totalExitedValidators,
@@ -596,13 +586,11 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
 
         if (_correction.currentModuleExitedValidatorsCount != stakingModuleState.exitedValidatorsCount ||
-            _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators ||
-            _correction.currentNodeOperatorStuckValidatorsCount != stuckValidatorsCount
+            _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators
         ) {
             revert UnexpectedCurrentValidatorsCount(
                 stakingModuleState.exitedValidatorsCount,
-                totalExitedValidators,
-                stuckValidatorsCount
+                totalExitedValidators
             );
         }
 
@@ -610,8 +598,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
         stakingModule.unsafeUpdateValidatorsCount(
             _nodeOperatorId,
-            _correction.newNodeOperatorExitedValidatorsCount,
-            _correction.newNodeOperatorStuckValidatorsCount
+            _correction.newNodeOperatorExitedValidatorsCount
         );
 
         (
@@ -636,27 +623,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
             stakingModule.onExitedAndStuckValidatorsCountsUpdated();
         }
-    }
-
-    /// @notice Updates stuck validators counts per node operator for the staking module with
-    /// the specified id. See the docs for `updateExitedValidatorsCountByStakingModule` for the
-    /// description of the overall update process.
-    ///
-    /// @param _stakingModuleId The id of the staking modules to be updated.
-    /// @param _nodeOperatorIds Ids of the node operators to be updated.
-    /// @param _stuckValidatorsCounts New counts of stuck validators for the specified node operators.
-    ///
-    /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
-    function reportStakingModuleStuckValidatorsCountByNodeOperator(
-        uint256 _stakingModuleId,
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _stuckValidatorsCounts
-    )
-        external
-        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
-    {
-        _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _stuckValidatorsCounts);
-        _getIStakingModuleById(_stakingModuleId).updateStuckValidatorsCount(_nodeOperatorIds, _stuckValidatorsCounts);
     }
 
     /// @notice Finalizes the reporting of the exited and stuck validators counts for the current
@@ -863,18 +829,16 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         (
             uint256 targetLimitMode,
             uint256 targetValidatorsCount,
-            uint256 stuckValidatorsCount,
+            /* uint256 stuckValidatorsCount */,
             uint256 refundedValidatorsCount,
-            uint256 stuckPenaltyEndTimestamp,
+            /* uint256 stuckPenaltyEndTimestamp */,
             uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
             uint256 depositableValidatorsCount
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
         summary.targetLimitMode = targetLimitMode;
         summary.targetValidatorsCount = targetValidatorsCount;
-        summary.stuckValidatorsCount = stuckValidatorsCount;
         summary.refundedValidatorsCount = refundedValidatorsCount;
-        summary.stuckPenaltyEndTimestamp = stuckPenaltyEndTimestamp;
         summary.totalExitedValidators = totalExitedValidators;
         summary.totalDepositedValidators = totalDepositedValidators;
         summary.depositableValidatorsCount = depositableValidatorsCount;
@@ -1502,5 +1466,58 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
     function _getStakingModuleSummary(IStakingModule stakingModule) internal view returns (uint256, uint256, uint256) {
         return stakingModule.getStakingModuleSummary();
+    }
+
+    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
+    ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
+    ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
+    /// @param _stakingModuleId The ID of the staking module.
+    /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
+    function reportValidatorExitDelay(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        bytes calldata _eligibleToExitInSec
+    )
+        external
+        onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
+    {
+        _getIStakingModuleById(_stakingModuleId).reportValidatorExitDelay(
+            _nodeOperatorId,
+            _proofSlotTimestamp,
+            _publicKey,
+            _eligibleToExitInSec
+        );
+    }
+
+    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
+    /// @dev This function is called when a validator is exited using the triggerable exit request on the Execution Layer (EL).
+    /// @param _stakingModuleId The ID of the staking module.
+    /// @param _nodeOperatorId The ID of the node operator.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
+    /// @param _exitType The type of exit being performed.
+    ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
+    function onValidatorExitTriggered(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        bytes calldata _publicKey,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    )
+        external
+        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+    {
+        _getIStakingModuleById(_stakingModuleId).onValidatorExitTriggered(
+            _nodeOperatorId,
+            _publicKey,
+            _withdrawalRequestPaidFee,
+            _exitType
+        );
     }
 }

@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -30,6 +30,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
+  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let oracleVersion: bigint;
 
@@ -57,13 +58,12 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
-
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -80,10 +80,12 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
+      withdrawalVault,
       consensus,
       resumeAfterDeploy: true,
     });
@@ -141,7 +143,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     context(`Total requests: ${totalRequests}`, () => {
       let exitRequests: { requests: ExitRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
       let reportFields: ReportFields;
-      let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
       let reportHash: string;
       let originalState: string;
 
@@ -173,8 +174,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
           data: encodeExitRequestsDataList(exitRequests.requests),
         };
 
-        reportItems = getValidatorsExitBusReportDataItems(reportFields);
-        reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+        reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
         await triggerConsensusOnHash(reportHash);
       });
