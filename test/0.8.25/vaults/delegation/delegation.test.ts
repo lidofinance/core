@@ -141,7 +141,13 @@ describe("Delegation.sol", () => {
       vaultOwner,
     );
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, vaultOwner);
-    await operatorGrid.initialize(dao, DEFAULT_GROUP_SHARE_LIMIT);
+    const defaultTierParams = {
+      shareLimit: DEFAULT_GROUP_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      rebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(dao, defaultTierParams);
     await operatorGrid.connect(dao).grantRole(await operatorGrid.REGISTRY_ROLE(), dao);
 
     await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { operatorGrid });

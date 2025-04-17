@@ -198,11 +198,23 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return true if vault is healthy, false otherwise
     function isVaultHealthyAsOfLatestReport(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (socket.sharesMinted == 0) return true;
+        return _isVaulthealthyAsOfLatestReport(
+            IStakingVault(_vault).valuation(),
+            socket.sharesMinted,
+            socket.rebalanceThresholdBP
+        );
+    }
+
+    function _isVaulthealthyAsOfLatestReport(
+        uint256 _valuation,
+        uint256 _sharesMinted,
+        uint256 _rebalanceThresholdBP
+    ) internal view returns (bool) {
+        if (_sharesMinted == 0) return true;
 
         return
-            ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
-                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+            ((_valuation * (TOTAL_BASIS_POINTS - _rebalanceThresholdBP)) /
+                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(_sharesMinted);
     }
 
     /// @notice estimate ether amount to make the vault healthy using rebalance
@@ -350,6 +362,13 @@ contract VaultHub is PausableUntilWithRoles {
         emit ShareLimitUpdated(_vault, _shareLimit);
     }
 
+    /// @notice updates the vault's connection parameters
+    /// @dev Reverts if the vault is not healthy as of latest report
+    /// @param _vault vault address
+    /// @param _shareLimit new share limit
+    /// @param _reserveRatioBP new reserve ratio
+    /// @param _rebalanceThresholdBP new rebalance threshold
+    /// @param _treasuryFeeBP new treasury fee
     function updateConnection(
         address _vault,
         uint256 _shareLimit,
@@ -362,6 +381,13 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized("updateConnection", msg.sender);
 
         VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 valuation = IStakingVault(_vault).valuation();
+        uint256 sharesMinted = socket.sharesMinted;
+
+        // check healthy with new rebalance threshold
+        if (!_isVaulthealthyAsOfLatestReport(valuation, sharesMinted, _rebalanceThresholdBP))
+            revert VaultNotHealthyWithNewRebalanceThreshold(_vault, valuation, sharesMinted, _rebalanceThresholdBP);
 
         socket.shareLimit = uint96(_shareLimit);
         socket.reserveRatioBP = uint16(_reserveRatioBP);
@@ -649,6 +675,7 @@ contract VaultHub is PausableUntilWithRoles {
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error AlreadyHealthy(address vault);
+    error VaultNotHealthyWithNewRebalanceThreshold(address vault, uint256 valuation, uint256 sharesMinted, uint256 newRebalanceThresholdBP);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);

@@ -6,19 +6,28 @@ pragma solidity ^0.8.0;
 import {TierParams} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 contract OperatorGrid__MockForVaultHub {
-    mapping(address => TierParams) public vaults;
-
-    function registerVault(address _vault, TierParams calldata _tierParams) external {
-        vaults[_vault] = _tierParams;
+    struct Tier {
+        address operator;
+        uint96 shareLimit;
+        uint96 mintedShares;
+        uint16 reserveRatioBP;
+        uint16 rebalanceThresholdBP;
+        uint16 treasuryFeeBP;
     }
 
-    function registerVault(address _vault) external {
-        vaults[_vault] = TierParams({
-            shareLimit: 1 ether,
-            reserveRatioBP: 1000,
-            rebalanceThresholdBP: 800,
-            treasuryFeeBP: 500
-        });
+    Tier[] public tiers;
+    mapping(address vault => uint256 tierId) public vaultTier;
+
+    function initialize(uint256 _defaultShareLimit) external {
+        tiers.push(Tier(address(1), uint96(_defaultShareLimit), 0, 2000, 1800, 500));
+    }
+
+    function changeVaultTierParams(address _vault, TierParams calldata _tierParams) external {
+        Tier storage tierParams = tiers[vaultTier[_vault]];
+        tierParams.shareLimit = uint96(_tierParams.shareLimit);
+        tierParams.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
+        tierParams.rebalanceThresholdBP = uint16(_tierParams.rebalanceThresholdBP);
+        tierParams.treasuryFeeBP = uint16(_tierParams.treasuryFeeBP);
     }
 
     function vaultInfo(
@@ -35,7 +44,7 @@ contract OperatorGrid__MockForVaultHub {
             uint256 treasuryFeeBP
         )
     {
-        TierParams memory tierParams = vaults[vaultAddr];
+        Tier memory tierParams = tiers[vaultTier[vaultAddr]];
 
         groupId = 0;
         tierId = 0;

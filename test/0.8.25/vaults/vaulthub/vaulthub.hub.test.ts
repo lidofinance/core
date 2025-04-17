@@ -77,7 +77,7 @@ describe("VaultHub.sol:hub", () => {
     const vault = await createVault(factory);
     await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
     await vault.connect(user).lock(CONNECT_DEPOSIT);
-    await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+    await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
       shareLimit: options?.shareLimit ?? SHARE_LIMIT,
       reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
       rebalanceThresholdBP: options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
@@ -118,6 +118,7 @@ describe("VaultHub.sol:hub", () => {
     // OperatorGrid
     operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
@@ -685,7 +686,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if reserve ratio BP is zero", async () => {
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: 0n,
         reserveRatioBP: 0n,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -701,7 +702,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if reserve ratio is too high", async () => {
       const tooHighReserveRatioBP = TOTAL_BASIS_POINTS + 1n;
 
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: tooHighReserveRatioBP,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -714,7 +715,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if rebalance threshold BP is zero", async () => {
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: 0n,
@@ -728,7 +729,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if rebalance threshold BP is higher than reserve ratio BP", async () => {
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: RESERVE_RATIO_BP + 1n,
@@ -743,7 +744,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if treasury fee is too high", async () => {
       const tooHighTreasuryFeeBP = TOTAL_BASIS_POINTS + 1n;
 
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -776,7 +777,7 @@ describe("VaultHub.sol:hub", () => {
       ]);
 
       const vault2 = await createVault(vault2Factory);
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault2.getAddress(), {
+      await operatorGridMock.changeVaultTierParams(await vault2.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -823,7 +824,7 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).fund({ value: ether("1") });
       await vault.connect(user).lock(ether("1"));
 
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](vaultAddress, {
+      await operatorGridMock.changeVaultTierParams(vaultAddress, {
         shareLimit: 0n,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -847,7 +848,7 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).fund({ value: ether("1") });
       await vault.connect(user).lock(ether("1"));
 
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](vaultAddress, {
+      await operatorGridMock.changeVaultTierParams(vaultAddress, {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,

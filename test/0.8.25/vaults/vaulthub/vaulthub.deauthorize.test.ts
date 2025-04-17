@@ -91,6 +91,7 @@ describe("VaultHub.sol:deauthorize", () => {
     // OperatorGrid
     operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
 

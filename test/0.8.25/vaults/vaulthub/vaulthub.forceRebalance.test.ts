@@ -85,6 +85,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     // OperatorGrid
     operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
 
@@ -116,7 +117,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
-    await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+    await operatorGridMock.changeVaultTierParams(vaultAddress, {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
       rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,

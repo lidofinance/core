@@ -29,11 +29,6 @@ import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
-const shareLimit = ether("1");
-const reserveRatioBP = 120n;
-const rebalanceThresholdBP = 100n;
-const treasuryFeeBP = 600n;
-
 describe("Scenario: Actions on vault creation", () => {
   let ctx: ProtocolContext;
 
@@ -56,17 +51,6 @@ describe("Scenario: Actions on vault creation", () => {
     await setupLido(ctx);
 
     [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
-
-    const { operatorGrid } = ctx.contracts;
-    const agentSigner = await ctx.getSigner("agent");
-
-    const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
-      shareLimit,
-      reserveRatioBP,
-      rebalanceThresholdBP,
-      treasuryFeeBP,
-    });
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, delegation, roles } = await createVaultWithDelegation(

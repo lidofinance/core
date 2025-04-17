@@ -21,7 +21,6 @@ import {
   WETH9__MockForVault,
   WstETH__HarnessForVault,
 } from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
 import { days, ether } from "lib";
@@ -29,8 +28,6 @@ import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
-
-const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("VaultFactory.sol", () => {
   let deployer: HardhatEthersSigner;
@@ -98,7 +95,13 @@ describe("VaultFactory.sol", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(admin, DEFAULT_TIER_SHARE_LIMIT);
+    const defaultTierParams = {
+      shareLimit: ether("1"),
+      reserveRatioBP: 2000n,
+      rebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(admin, defaultTierParams);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
@@ -165,16 +168,6 @@ describe("VaultFactory.sol", () => {
       assetRecoverer: await vaultOwner1.getAddress(),
       tierChangers: [await vaultOwner1.getAddress()],
     };
-
-    const shareLimit = ether("1");
-    const reserveRatioBP = 120n;
-    const rebalanceThresholdBP = 100n;
-    const treasuryFeeBP = 600n;
-
-    //alter default tier
-    const tierParams: TierParamsStruct = { shareLimit, reserveRatioBP, rebalanceThresholdBP, treasuryFeeBP };
-    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(admin).alterTier(defaultTierId, tierParams);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

@@ -29,7 +29,7 @@ import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "li
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
-const DEFAULT_GROUP_SHARE_LIMIT = ether("1000");
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -86,7 +86,13 @@ describe("Accounting.sol:report", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(deployer, DEFAULT_GROUP_SHARE_LIMIT);
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      rebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(deployer, defaultTierParams);
 
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",

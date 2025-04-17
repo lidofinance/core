@@ -95,8 +95,7 @@ contract VaultFactory {
         vault.lock(connectDeposit);
         vault.authorizeLidoVaultHub();
 
-        // register vault and connect to hub
-        OperatorGrid(ILidoLocator(LIDO_LOCATOR).operatorGrid()).registerVault(address(vault));
+        // connect to hub
         VaultHub(vault.vaultHub()).connectVault(address(vault));
 
         // transfer ownership of the vault back to the delegation

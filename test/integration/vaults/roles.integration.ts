@@ -16,10 +16,6 @@ const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
-const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
-const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
-const treasuryFeeBP = 5_00n; // 5% of the treasury fee
-
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 type Methods<T> = {
@@ -108,19 +104,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     let testDelegation: Delegation;
 
     before(async () => {
-      const { stakingVaultFactory, operatorGrid, lido } = ctx.contracts;
-
-      const agentSigner = await ctx.getSigner("agent");
-
-      const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
-
-      const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
-      await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
-        shareLimit,
-        reserveRatioBP: reserveRatio,
-        rebalanceThresholdBP: rebalanceThreshold,
-        treasuryFeeBP: treasuryFeeBP,
-      });
+      const { stakingVaultFactory } = ctx.contracts;
 
       // Owner can create a vault with operator as a node operator
       const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(

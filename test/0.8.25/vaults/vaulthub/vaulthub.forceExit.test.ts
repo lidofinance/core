@@ -72,6 +72,7 @@ describe("VaultHub.sol:forceExit", () => {
     // OperatorGrid
     operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
 
@@ -112,7 +113,7 @@ describe("VaultHub.sol:forceExit", () => {
     await vault.connect(user).fund({ value: connectDeposit });
     await vault.connect(user).lock(connectDeposit);
 
-    await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](await vault.getAddress(), {
+    await operatorGridMock.changeVaultTierParams(vault, {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
       rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
@@ -234,7 +235,7 @@ describe("VaultHub.sol:forceExit", () => {
       await demoVault.connect(user).lock(valuation);
       const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
-      await operatorGridMock["registerVault(address,(uint256,uint256,uint256,uint256))"](demoVaultAddress, {
+      await operatorGridMock.changeVaultTierParams(demoVaultAddress, {
         shareLimit: cap,
         reserveRatioBP: 20_00n,
         rebalanceThresholdBP: 20_00n,

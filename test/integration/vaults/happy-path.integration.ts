@@ -45,6 +45,8 @@ const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 
+Error.stackTraceLimit = Infinity;
+
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 

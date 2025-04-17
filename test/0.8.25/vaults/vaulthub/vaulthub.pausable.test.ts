@@ -38,7 +38,13 @@ describe("VaultHub.sol:pausableUntil", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
     operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
 
-    await operatorGrid.initialize(user, DEFAULT_TIER_SHARE_LIMIT);
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      rebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(user, defaultTierParams);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
