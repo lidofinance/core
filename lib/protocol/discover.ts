@@ -85,7 +85,6 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "LidoExecutionLayerRewardsVault",
       config.get("elRewardsVault") || (await locator.elRewardsVault()),
     ),
-    legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
     accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
@@ -219,7 +218,6 @@ export async function discover() {
     "Kernel": contracts.kernel.address,
     "ACL": contracts.acl.address,
     "Burner": foundationContracts.burner.address,
-    "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory.address,

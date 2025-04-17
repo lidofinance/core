@@ -9,15 +9,14 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
-  LegacyOracle__MockForAccountingOracle,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types";
 
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
-  CONSENSUS_VERSION,
   encodeExtraDataItems,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
@@ -35,11 +34,11 @@ import {
 
 import {
   deployAndConfigureAccountingOracle,
+  ORACLE_LAST_REPORT_SLOT,
   SECONDS_PER_EPOCH,
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
   timestampAtSlot,
-  V1_ORACLE_LAST_REPORT_SLOT,
 } from "test/deploy";
 
 describe("AccountingOracle.sol:happyPath", () => {
@@ -49,7 +48,6 @@ describe("AccountingOracle.sol:happyPath", () => {
   let mockAccounting: Accounting__MockForAccountingOracle;
   let mockWithdrawalQueue: WithdrawalQueue__MockForAccountingOracle;
   let mockStakingRouter: StakingRouter__MockForAccountingOracle;
-  let mockLegacyOracle: LegacyOracle__MockForAccountingOracle;
 
   let extraData: ExtraDataType;
   let extraDataItems: string[];
@@ -74,7 +72,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     mockAccounting = deployed.accounting;
     mockWithdrawalQueue = deployed.withdrawalQueue;
     mockStakingRouter = deployed.stakingRouter;
-    mockLegacyOracle = deployed.legacyOracle;
 
     oracleVersion = Number(await oracle.getContractVersion());
 
@@ -87,8 +84,8 @@ describe("AccountingOracle.sol:happyPath", () => {
 
   async function triggerConsensusOnHash(hash: string) {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, AO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, AO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   }
 
@@ -113,9 +110,9 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(procState.extraDataItemsSubmitted).to.equal(0);
   });
 
-  it("reference slot of the empty initial consensus report is set to the last processed slot of the legacy oracle", async () => {
+  it("reference slot of the empty initial consensus report is set to the last processed slot", async () => {
     const report = await oracle.getConsensusReport();
-    expect(report.refSlot).to.equal(V1_ORACLE_LAST_REPORT_SLOT);
+    expect(report.refSlot).to.equal(ORACLE_LAST_REPORT_SLOT);
   });
 
   it("committee reaches consensus on a report hash", async () => {
@@ -138,7 +135,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     extraDataHash = calcExtraDataListHash(extraDataList);
 
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
       numValidators: 10,
       clBalanceGwei: 320n * ONE_GWEI,
@@ -197,9 +194,9 @@ describe("AccountingOracle.sol:happyPath", () => {
   });
 
   it("the data cannot be submitted passing a different contract version", async () => {
-    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion - 1))
+    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion + 1))
       .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-      .withArgs(oracleVersion, oracleVersion - 1);
+      .withArgs(oracleVersion, oracleVersion + 1);
   });
 
   it("a data not matching the consensus hash cannot be submitted", async () => {
@@ -241,7 +238,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     const lastOracleReportCall = await mockAccounting.lastCall__handleOracleReport();
     expect(lastOracleReportCall.callCount).to.equal(1);
     expect(lastOracleReportCall.arg.timeElapsed).to.equal(
-      (reportFields.refSlot - V1_ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
+      (reportFields.refSlot - ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
     );
     expect(lastOracleReportCall.arg.clValidators).to.equal(reportFields.numValidators);
     expect(lastOracleReportCall.arg.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
@@ -270,14 +267,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(lastExitedKeysByModuleCall.exitedKeysCounts.map(Number)).to.have.ordered.members(
       reportFields.numExitedValidatorsByStakingModule,
     );
-  });
-
-  it("legacy oracle got CL data report", async () => {
-    const lastLegacyOracleCall = await mockLegacyOracle.lastCall__handleConsensusLayerReport();
-    expect(lastLegacyOracleCall.totalCalls).to.equal(1);
-    expect(lastLegacyOracleCall.refSlot).to.equal(reportFields.refSlot);
-    expect(lastLegacyOracleCall.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-    expect(lastLegacyOracleCall.clValidators).to.equal(reportFields.numValidators);
   });
 
   it("no data can be submitted for the same reference slot again", async () => {

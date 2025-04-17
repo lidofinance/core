@@ -1,11 +1,8 @@
 import { bigintToHex } from "bigint-conversion";
-import { assert } from "chai";
 import { keccak256, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
-
-import { CONSENSUS_VERSION } from "lib/constants";
 
 import { numberToHex } from "./string";
 
@@ -105,44 +102,6 @@ export async function prepareOracleReport({
   const hash = calcReportDataHash(items);
 
   return { fields, items, hash };
-}
-
-export async function triggerConsensusOnHash(hash: string, consensus: HashConsensus) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const membersInfo = await consensus.getMembers();
-  const signers = [
-    await ethers.provider.getSigner(membersInfo.addresses[0]),
-    await ethers.provider.getSigner(membersInfo.addresses[1]),
-  ];
-  for (const s of signers) {
-    await consensus.connect(s).submitReport(refSlot, hash, CONSENSUS_VERSION);
-  }
-  assert.equal((await consensus.getConsensusState()).consensusReport, hash);
-}
-
-export async function reportOracle(
-  consensus: HashConsensus,
-  oracle: AccountingOracle,
-  reportFields: Partial<OracleReport> & { clBalance: bigint },
-) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const report = await prepareOracleReport({ ...reportFields, refSlot });
-
-  // non-empty extra data is not supported here yet
-  assert.equal(report.fields.extraDataFormat, 0n);
-  assert.equal(report.fields.extraDataHash, ethers.ZeroHash);
-  assert.equal(report.fields.extraDataItemsCount, 0n);
-
-  const membersInfo = await consensus.getMembers();
-  await triggerConsensusOnHash(report.hash, consensus);
-
-  const oracleVersion = await oracle.getContractVersion();
-
-  const memberSigner = await ethers.provider.getSigner(membersInfo.addresses[0]);
-  const submitDataTx = await oracle.connect(memberSigner).submitReportData(report.fields, oracleVersion);
-  const submitExtraDataTx = await oracle.connect(memberSigner).submitReportExtraDataEmpty();
-
-  return { report, submitDataTx, submitExtraDataTx };
 }
 
 export function encodeExtraDataItem(

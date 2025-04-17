@@ -68,11 +68,6 @@
       "totalNonCoverSharesBurnt": "0"
     }
   },
-  "legacyOracle": {
-    "deployParameters": {
-      "lastCompletedEpochId": 0
-    }
-  },
   "hashConsensusForAccountingOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
