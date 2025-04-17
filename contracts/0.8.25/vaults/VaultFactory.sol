@@ -72,7 +72,7 @@ contract VaultFactory {
 
         vault.authorizeLidoVaultHub();
 
-        // transfer ownership of the vault back to the delegation
+        // transfer ownership of the vault back to the dashboard
         OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
 
         // If there are extra role assignments to be made,
