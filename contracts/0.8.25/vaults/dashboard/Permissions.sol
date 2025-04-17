@@ -162,6 +162,11 @@ abstract contract Permissions is AccessControlConfirmable {
         emit Initialized();
     }
 
+    /**
+     * @dev Sets the ACL default admin and confirmation expiry time.
+     * @param _defaultAdmin The address of the default admin
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal initializer {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 

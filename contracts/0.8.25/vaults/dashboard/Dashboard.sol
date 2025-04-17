@@ -64,6 +64,13 @@ contract Dashboard is NodeOperatorFee {
         WSTETH = IWstETH(wstETH);
     }
 
+    /**
+     * @notice Calls the parent's iniatializer and approves the max allowance for WSTETH for gas savings
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
@@ -75,7 +82,6 @@ contract Dashboard is NodeOperatorFee {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
-
     }
 
     // ==================== View Functions ====================
@@ -159,7 +165,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
@@ -204,7 +210,6 @@ contract Dashboard is NodeOperatorFee {
     function fund() external payable {
         _fund(msg.value);
     }
-
 
     /**
      * @notice Withdraws ether from the staking vault to a recipient

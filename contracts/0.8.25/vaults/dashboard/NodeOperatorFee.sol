@@ -76,7 +76,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
      *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
-     *          - can be set via `setAccruedRewardsAdjustment` to by `_confirmingRoles()`
+     *          - can be set via `setAccruedRewardsAdjustment` by `confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
      *          - reset to zero after `claimNodeOperatorFee`
      *        This amount will be deducted from rewards during NO fee calculation and can be used effectively write off NO's accrued fees.
@@ -90,6 +90,14 @@ contract NodeOperatorFee is Permissions {
      */
     constructor(address _vaultHub) Permissions(_vaultHub) {}
 
+    /**
+     * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,
+     * and makes the node operator manager the admin for the node operator roles.
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
@@ -101,9 +109,7 @@ contract NodeOperatorFee is Permissions {
         super._initialize(_defaultAdmin, _confirmExpiry);
 
         _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
-        _setConfirmExpiry(_confirmExpiry);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
@@ -125,11 +131,12 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Returns the accumulated unclaimed node operator fee in ether,
-     * calculated as: U = (R * F) / T
+     * calculated as: U = ((R - A) * F) / T
      * where:
      * - U is the node operator unclaimed fee;
      * - R is the StakingVault rewards accrued since the last node operator fee claim;
      * - F is `nodeOperatorFeeBP`;
+     * - A is `accruedRewardsAdjustment`;
      * - T is the total basis points, 10,000.
      * @return uint256: the amount of unclaimed fee in ether.
      */
@@ -219,7 +226,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()` agree
+     * @notice set `accruedRewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
      * @param _newAdjustment ew adjustment amount
      * @param _currentAdjustment current adjustment value for invalidating old confirmations
      * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
