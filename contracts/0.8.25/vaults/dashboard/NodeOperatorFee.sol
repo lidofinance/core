@@ -84,6 +84,12 @@ contract NodeOperatorFee is Permissions {
      */
     uint256 public accruedRewardsAdjustment;
 
+    /**
+     * @notice Passes the address of the vault hub up the inheritance chain.
+     * @param _vaultHub The address of the vault hub.
+     */
+    constructor(address _vaultHub) Permissions(_vaultHub) {}
+
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,

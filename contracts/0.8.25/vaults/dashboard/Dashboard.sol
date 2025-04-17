@@ -12,6 +12,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
+import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -49,14 +50,18 @@ contract Dashboard is NodeOperatorFee {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
-     * @notice Constructor sets the stETH, and WSTETH token addresses.
-     * @param _lidoLocator Address of the Lido locator contract.
+     * @notice Constructor sets the stETH, and WSTETH token addresses,
+     * and passes the address of the vault hub up the inheritance chain.
+     * @param stETH Address of the stETH token contract.
+     * @param wstETH Address of the wstETH token contract.
+     * @param _vaultHub Address of the vault hub contract.
      */
-    constructor(address _lidoLocator) {
-        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
+    constructor(address stETH, address wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+        if (stETH == address(0)) revert ZeroArgument("stETH");
+        if (wstETH == address(0)) revert ZeroArgument("wstETH");
 
-        STETH = IStETH(ILidoLocator(_lidoLocator).lido());
-        WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
+        STETH = IStETH(stETH);
+        WSTETH = IWstETH(wstETH);
     }
 
     function initialize(
@@ -80,7 +85,7 @@ contract Dashboard is NodeOperatorFee {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub().vaultSocket(_stakingVaultAddress());
+        return vaultHub.vaultSocket(_stakingVaultAddress());
     }
 
     /**
@@ -184,7 +189,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub().vaultSocket(_stakingVaultAddress()).sharesMinted;
+        uint256 shares = vaultHub.vaultSocket(_stakingVaultAddress()).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -265,7 +270,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -546,7 +551,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -559,7 +564,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(_vaultHubAddress(), unwrappedShares);
+        STETH.transferShares(address(vaultHub), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 
