@@ -292,10 +292,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the unlocked amount of ether, which is the valuation minus the locked ether amount
      * @dev Unlocked amount is the total amount that can be withdrawn from `StakingVault`,
-     *      including ether currently being staked on validators
+     *      including ether currently being staked on validators only if the report is fresh
      */
     function unlocked() public view returns (uint256) {
-        uint256 _valuation = valuation();
+        uint256 _valuation = isReportFresh() ? valuation() : address(this).balance;
         uint256 _locked = _getStorage().locked;
 
         if (_locked > _valuation) return 0;
@@ -415,12 +415,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
-
-        if (isReportFresh()) {
-            if (valuation() < $.locked) revert ValuationBelowLockedAmount();
-        } else {
-            if (address(this).balance < $.locked) revert ValuationBelowLockedAmount();
-        }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -661,11 +655,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
     }
 
-    function _checkFreshnessAndGetValuation() internal view returns (uint256) {
-        if (!isReportFresh()) revert ReportStaled();
-        return valuation();
-    }
-
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
@@ -876,11 +865,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when trying to attach vault to VaultHub while it is ossified
      */
     error VaultOssified();
-
-    /**
-     * @notice Thrown when a report is staled
-     */
-    error ReportStaled();
 
     /**
      * @notice Thrown when a report is too old
