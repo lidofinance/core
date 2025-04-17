@@ -5,13 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
+import { Burner__factory, IStakingModule,NodeOperatorsRegistry } from "typechain-types";
+
 import {
   advanceChainTime,
   ether,
   EXTRA_DATA_TYPE_EXITED_VALIDATORS,
   EXTRA_DATA_TYPE_STUCK_VALIDATORS,
   findEventsWithInterfaces,
-  impersonate,
   ItemType,
   LoadedContract,
   log,
@@ -21,16 +22,18 @@ import {
 } from "lib";
 import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/nor";
-import { SDVT_MODULE_ID } from "lib/protocol/helpers/sdvt";
+import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
+import {
+  calcNodeOperatorRewards,
+  CSM_MODULE_ID,
+  NOR_MODULE_ID,
+  SDVT_MODULE_ID,
+} from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
-import { Burner__factory, NodeOperatorsRegistry } from "typechain-types";
-
-const MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM = 24;
-const MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION = 8;
-const CSM_MODULE_ID = 3n;
+const MIN_KEYS_PER_OPERATOR = 5n;
+const MIN_OPERATORS_COUNT = 50n;
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -64,6 +67,8 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
   let snapshot: string;
   let originalState: string;
+  let maxNodeOperatorsPerExtraDataItem: number;
+  let maxItemsPerExtraDataTransaction: number;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -78,12 +83,16 @@ describe("Integration: AccountingOracle extra data full items", () => {
       // with not that much TVL
       await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
-      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-      // with not that much TVL
-      await advanceChainTime(15n * 24n * 60n * 60n);
+      // Need this to pass the annual balance / appeared validators per day
+      // increase limit check in sanity checker for scratch deploy with not that much TVL
+      await advanceChainTime(1n * 24n * 60n * 60n);
     }
 
     await prepareModules();
+
+    const limits = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
+    maxNodeOperatorsPerExtraDataItem = Number(limits.maxNodeOperatorsPerExtraDataItem);
+    maxItemsPerExtraDataTransaction = Number(limits.maxItemsPerExtraDataTransaction);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -92,265 +101,27 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  async function calcNodeOperatorRewards(
-    module: LoadedContract,
-    nodeOperatorId: bigint,
-    mintedShares: bigint,
-  ): Promise<bigint> {
-    const operatorSummary = await module.getFunction("getNodeOperatorSummary")(nodeOperatorId);
-    const moduleSummary = await module.getFunction("getStakingModuleSummary")();
-
-    const operatorTotalActiveKeys = operatorSummary.totalDepositedValidators - operatorSummary.totalExitedValidators;
-    const moduleTotalActiveKeys = moduleSummary.totalDepositedValidators - moduleSummary.totalExitedValidators;
-
-    return (mintedShares * BigInt(operatorTotalActiveKeys)) / BigInt(moduleTotalActiveKeys);
-  }
-
-  async function fillModuleWithOldAndNewOperators(
-    module: NodeOperatorsRegistry,
-    evmScriptExecutor: HardhatEthersSigner,
-    newKeysPerOperator: number,
-    maxNodeOperatorsPerItem: number,
-  ): Promise<[number, number]> {
-    const { acl, stakingRouter } = ctx.contracts;
-    const voting = await ctx.getSigner("voting");
-    const stakingRouterSigner = await impersonate(stakingRouter.address, ether("1"));
-
-    // Grant permission
-    await acl
-      .connect(voting)
-      .grantPermission(
-        voting.address,
-        await module.getAddress(),
-        ethers.keccak256(ethers.toUtf8Bytes("MANAGE_NODE_OPERATOR_ROLE")),
-      );
-
-    // Calculate new operators count
-    // TODO: commend and proper number
-    const operatorsCountBefore = Number(await module.getNodeOperatorsCount());
-    const operatorsCountAfter = Math.max(maxNodeOperatorsPerItem, operatorsCountBefore);
-    const operatorsCountAdded = Math.max(operatorsCountAfter - operatorsCountBefore, 0);
-
-    // Add new node operators and keys
-    if (operatorsCountAdded > 0) {
-      await addModuleOperatorsWithKeys(module, voting, evmScriptExecutor, operatorsCountAdded, newKeysPerOperator);
-    }
-    log.debug("Added new node operators and keys", {
-      operatorsCountAdded,
-    });
-
-    // Activate old deactivated node operators
-    for (let i = 0; i < operatorsCountAfter; i++) {
-      if (!(await module.getNodeOperatorIsActive(i))) {
-        await module.connect(voting).activateNodeOperator(i);
-      }
-    }
-    log.debug("Activated old node operators", {
-      operatorsCountAfter,
-    });
-
-    // Add keys to old node operators
-    for (let i = 0; i < operatorsCountBefore; i++) {
-      const pubkeysBatch = randomPubkeysBatch(newKeysPerOperator);
-      const signaturesBatch = randomSignaturesBatch(newKeysPerOperator);
-      const operator = await module.getNodeOperator(i, false);
-      const operatorSummary = await module.getNodeOperatorSummary(i);
-      const newDepositLimit = Number(operator.totalDepositedValidators) + newKeysPerOperator;
-      const operatorSigner = await impersonate(operator.rewardAddress, ether("1"));
-
-      await module.connect(operatorSigner).addSigningKeys(i, newKeysPerOperator, pubkeysBatch, signaturesBatch);
-
-      // Change staking limits for old node operators (change to new total added keys count)
-      await module.connect(evmScriptExecutor).setNodeOperatorStakingLimit(i, newDepositLimit);
-
-      // Remove target validators limits if active
-      if (Number(operatorSummary.targetLimitMode) > 0) {
-        // await nor.connect(stakingRouterSigner).updateTargetValidatorsLimits(i, 0n, 0n);
-        await module.connect(stakingRouterSigner)["updateTargetValidatorsLimits(uint256,uint256,uint256)"](i, 0n, 0n);
-      }
-    }
-    log.debug("Updated staking limits for old node operators", {
-      operatorsCountBefore,
-    });
-
-    return [operatorsCountBefore, operatorsCountAdded];
-  }
-
-  function randomPubkeysBatch(count: number): string {
-    // Generate random pubkeys as a concatenated hex string
-    return (
-      "0x" +
-      Array(count)
-        .fill(0)
-        .map(() =>
-          Array(48)
-            .fill(0)
-            .map(() =>
-              Math.floor(Math.random() * 256)
-                .toString(16)
-                .padStart(2, "0"),
-            )
-            .join(""),
-        )
-        .join("")
-    );
-  }
-
-  function randomSignaturesBatch(count: number): string {
-    // Generate random signatures as a concatenated hex string
-    return (
-      "0x" +
-      Array(count)
-        .fill(0)
-        .map(() =>
-          Array(96)
-            .fill(0)
-            .map(() =>
-              Math.floor(Math.random() * 256)
-                .toString(16)
-                .padStart(2, "0"),
-            )
-            .join(""),
-        )
-        .join("")
-    );
-  }
-
-  async function addModuleOperatorsWithKeys(
-    module: NodeOperatorsRegistry,
-    votingSigner: HardhatEthersSigner,
-    evmScriptExecutorSigner: HardhatEthersSigner,
-    operatorsCount: number,
-    keysPerOperator: number,
-  ): Promise<void> {
-    for (let i = 0; i < operatorsCount; i++) {
-      const operatorName = `Operator ${Date.now()}-${i}`;
-      const rewardAddress = ethers.Wallet.createRandom().address;
-      const operatorSigner = await impersonate(rewardAddress, ether("1"));
-      // Add node operator
-      await module.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
-
-      const operatorId = Number(await module.getNodeOperatorsCount()) - 1;
-
-      // Add signing keys
-      const pubkeysBatch = randomPubkeysBatch(keysPerOperator);
-      const signaturesBatch = randomSignaturesBatch(keysPerOperator);
-
-      await module.connect(operatorSigner).addSigningKeys(operatorId, keysPerOperator, pubkeysBatch, signaturesBatch);
-
-      // Set staking limit
-      await module.connect(evmScriptExecutorSigner).setNodeOperatorStakingLimit(operatorId, keysPerOperator);
-    }
-  }
-
-  async function depositBufferForKeys(norKeysToDeposit: number, sdvtKeysToDeposit: number): Promise<void> {
-    const { stakingRouter, lido, depositSecurityModule } = ctx.contracts;
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("1"));
-    const voting = await ctx.getSigner("voting");
-
-    // Calculate total depositable keys
-    let totalDepositableKeys = 0n;
-    const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
-
-    for (const digest of moduleDigests) {
-      const summary = digest[3]; // Get the summary from the digest tuple
-      const depositableKeys = summary[2]; // Get depositable keys from summary tuple
-      totalDepositableKeys += depositableKeys;
-    }
-
-    // Remove staking limit
-    await lido.connect(voting).removeStakingLimit();
-
-    // Fill deposit buffer
-    await fillDepositBuffer(totalDepositableKeys);
-
-    const keysPerDeposit = 50;
-
-    // Deposits for NOR
-    const norTimes = Math.ceil(norKeysToDeposit / keysPerDeposit);
-    for (let i = 0; i < norTimes; i++) {
-      await lido.connect(dsmSigner).deposit(keysPerDeposit, NOR_MODULE_ID, "0x");
-    }
-
-    // Deposits for SDVT
-    const sdvtTimes = Math.ceil(sdvtKeysToDeposit / keysPerDeposit);
-    for (let i = 0; i < sdvtTimes; i++) {
-      await lido.connect(dsmSigner).deposit(keysPerDeposit, SDVT_MODULE_ID, "0x");
-    }
-  }
-
-  async function fillDepositBuffer(totalKeys: bigint): Promise<void> {
-    const { lido } = ctx.contracts;
-
-    // Calculate required ETH for deposits (32 ETH per validator)
-    const requiredEth = ether(String(totalKeys * 32n));
-
-    // Get current balance
-    const currentBalance = await ethers.provider.getBalance(lido.target);
-
-    // If we need more ETH, send it to the contract
-    if (currentBalance < requiredEth) {
-      const [depositor] = await ethers.getSigners();
-      await setBalance(depositor.address, requiredEth * 2n);
-
-      // Send ETH to Lido contract
-      await depositor.sendTransaction({
-        to: lido.target,
-        value: requiredEth - currentBalance,
-      });
-    }
-  }
-
   async function prepareModules() {
     const { nor, sdvt } = ctx.contracts;
-    const evmScriptExecutor = await ctx.getSigner("easyTrack");
 
-    // Constants
-    const numKeysPerOperator = 5;
-    const maxNodeOperatorsPerExtraDataItem = 50;
+    await ctx.contracts.lido.connect(await ctx.getSigner("voting")).removeStakingLimit();
 
-    // Fill NOR with new operators and keys
-    const [norCountBefore, addedNorOperatorsCount] = await fillModuleWithOldAndNewOperators(
-      nor,
-      evmScriptExecutor,
-      numKeysPerOperator,
-      maxNodeOperatorsPerExtraDataItem,
-    );
-
-    // Fill SDVT with new operators and keys
-    const [sdvtCountBefore, addedSdvtOperatorsCount] = await fillModuleWithOldAndNewOperators(
-      sdvt,
-      evmScriptExecutor,
-      numKeysPerOperator,
-      maxNodeOperatorsPerExtraDataItem,
-    );
-
-    // Deposit for new added keys from buffer
-    const keysForNor = addedNorOperatorsCount * numKeysPerOperator + norCountBefore * numKeysPerOperator;
-    const keysForSdvt = addedSdvtOperatorsCount * numKeysPerOperator + sdvtCountBefore * numKeysPerOperator;
-
-    await depositBufferForKeys(keysForNor, keysForSdvt);
-
-    return {
-      norCountBefore,
-      addedNorOperatorsCount,
-      sdvtCountBefore,
-      addedSdvtOperatorsCount,
-      keysForNor,
-      keysForSdvt,
-    };
+    await norSdvtEnsureOperators(ctx, nor, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR);
+    await advanceChainTime(1n * 24n * 60n * 60n);
+    await norSdvtEnsureOperators(ctx, sdvt, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR);
+    await advanceChainTime(1n * 24n * 60n * 60n);
   }
 
-  async function distributeReward(module: LoadedContract, fromSigner: HardhatEthersSigner) {
+  async function distributeReward(module: LoadedContract<NodeOperatorsRegistry>, fromSigner: HardhatEthersSigner) {
     // Get initial reward distribution state
-    const rewardDistributionState = await module.getFunction("getRewardDistributionState")();
+    const rewardDistributionState = await module.getRewardDistributionState();
     expect(rewardDistributionState).to.equal(RewardDistributionState.ReadyForDistribution);
 
     // Distribute rewards
-    const tx = await module.connect(fromSigner).getFunction("distributeReward")();
+    const tx = await module.connect(fromSigner).distributeReward();
 
     // Verify reward distribution state after
-    const finalState = await module.getFunction("getRewardDistributionState")();
+    const finalState = await module.getRewardDistributionState();
     expect(finalState).to.equal(RewardDistributionState.Distributed);
 
     return (await tx.wait()) as ContractTransactionReceipt;
@@ -381,7 +152,6 @@ describe("Integration: AccountingOracle extra data full items", () => {
     csmStuckItems: number;
     csmExitedItems: number;
   }) {
-    // TODO: add CSM part when finishing this test for upgrade
     return async () => {
       const { accountingOracle, nor, sdvt, csm } = ctx.contracts;
 
@@ -409,12 +179,12 @@ describe("Integration: AccountingOracle extra data full items", () => {
         }
       }
 
-      expect(norIds.length).to.gte(2 * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM);
-      expect(sdvtIds.length).to.gte(2 * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM);
+      expect(norIds.length).to.gte(2 * maxNodeOperatorsPerExtraDataItem);
+      expect(sdvtIds.length).to.gte(2 * maxNodeOperatorsPerExtraDataItem);
 
       // Prepare arrays for stuck and exited keys
       const csmIds: bigint[] = [];
-      for (let i = 0; i < MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM; i++) {
+      for (let i = 0; i < maxNodeOperatorsPerExtraDataItem; i++) {
         csmIds.push(BigInt(i));
       }
 
@@ -422,27 +192,27 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const idsExited = new Map<bigint, bigint[]>();
       const idsStuck = new Map<bigint, bigint[]>();
 
-      idsExited.set(NOR_MODULE_ID, norIds.slice(0, norExitedItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM));
+      idsExited.set(NOR_MODULE_ID, norIds.slice(0, norExitedItems * maxNodeOperatorsPerExtraDataItem));
       idsStuck.set(
         NOR_MODULE_ID,
         norIds.slice(
-          norStuckItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM,
-          2 * norStuckItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM,
+          norStuckItems * maxNodeOperatorsPerExtraDataItem,
+          2 * norStuckItems * maxNodeOperatorsPerExtraDataItem,
         ),
       );
 
-      idsExited.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtExitedItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM));
+      idsExited.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtExitedItems * maxNodeOperatorsPerExtraDataItem));
       idsStuck.set(
         SDVT_MODULE_ID,
         sdvtIds.slice(
-          sdvtStuckItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM,
-          2 * sdvtStuckItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM,
+          sdvtStuckItems * maxNodeOperatorsPerExtraDataItem,
+          2 * sdvtStuckItems * maxNodeOperatorsPerExtraDataItem,
         ),
       );
 
       if (ctx.flags.withCSM) {
-        idsExited.set(CSM_MODULE_ID, csmIds.slice(0, csmExitedItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM));
-        idsStuck.set(CSM_MODULE_ID, csmIds.slice(0, csmStuckItems * MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM));
+        idsExited.set(CSM_MODULE_ID, csmIds.slice(0, csmExitedItems * maxNodeOperatorsPerExtraDataItem));
+        idsStuck.set(CSM_MODULE_ID, csmIds.slice(0, csmStuckItems * maxNodeOperatorsPerExtraDataItem));
       }
 
       const numKeysReportedByNo = new ListKeyMapHelper<bigint>(); // [moduleId, nodeOpId, type] -> numKeys
@@ -479,7 +249,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         }
       }
 
-      const extraData = prepareExtraData(reportExtraItems, { maxItemsPerChunk: MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION });
+      const extraData = prepareExtraData(reportExtraItems, { maxItemsPerChunk: maxItemsPerExtraDataTransaction });
 
       // Prepare modules with exited validators and their counts
       const modulesWithExited = [];
@@ -489,7 +259,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         modulesWithExited.push(NOR_MODULE_ID);
         const norExitedBefore = (await nor.getStakingModuleSummary()).totalExitedValidators;
         numExitedValidatorsByStakingModule.push(
-          norExitedBefore + BigInt(norExitedItems) * BigInt(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM),
+          norExitedBefore + BigInt(norExitedItems) * BigInt(maxNodeOperatorsPerExtraDataItem),
         );
       }
 
@@ -497,7 +267,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         modulesWithExited.push(SDVT_MODULE_ID);
         const sdvtExitedBefore = (await sdvt.getStakingModuleSummary()).totalExitedValidators;
         numExitedValidatorsByStakingModule.push(
-          sdvtExitedBefore + BigInt(sdvtExitedItems) * BigInt(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM),
+          sdvtExitedBefore + BigInt(sdvtExitedItems) * BigInt(maxNodeOperatorsPerExtraDataItem),
         );
       }
 
@@ -505,7 +275,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         modulesWithExited.push(CSM_MODULE_ID);
         const csmExitedBefore = (await csm!.getStakingModuleSummary()).totalExitedValidators;
         numExitedValidatorsByStakingModule.push(
-          csmExitedBefore + BigInt(csmExitedItems) * BigInt(MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM),
+          csmExitedBefore + BigInt(csmExitedItems) * BigInt(maxNodeOperatorsPerExtraDataItem),
         );
       }
 
@@ -542,7 +312,10 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const distributeTxReceipts: Record<string, ContractTransactionReceipt> = {};
       for (const { moduleId, module } of modules) {
         if (moduleId === CSM_MODULE_ID) continue;
-        distributeTxReceipts[String(moduleId)] = await distributeReward(module as unknown as LoadedContract, stranger);
+        distributeTxReceipts[String(moduleId)] = await distributeReward(
+          module as unknown as LoadedContract<NodeOperatorsRegistry>,
+          stranger,
+        );
       }
 
       for (const { moduleId, module } of modules) {
@@ -588,7 +361,11 @@ describe("Integration: AccountingOracle extra data full items", () => {
             const sharesAfter = await ctx.contracts.lido.sharesOf(operator.rewardAddress);
 
             // Calculate expected rewards
-            const rewardsAfter = await calcNodeOperatorRewards(moduleNor, opId, moduleRewards);
+            const rewardsAfter = await calcNodeOperatorRewards(
+              moduleNor as unknown as LoadedContract<IStakingModule>,
+              opId,
+              moduleRewards,
+            );
 
             // Verify operator received only half the rewards (due to penalty)
             const sharesDiff = sharesAfter - sharesBefore.get([moduleId, opId])!;
@@ -621,8 +398,8 @@ describe("Integration: AccountingOracle extra data full items", () => {
     for (const norExitedItems of [0, 1]) {
       for (const sdvtStuckItems of [0, 1]) {
         for (const sdvtExitedItems of [0, 1]) {
-          for (const csmStuckItems of (withCSM() ? [0, 1] : [0])) {
-            for (const csmExitedItems of (withCSM() ? [0, 1] : [0])) {
+          for (const csmStuckItems of withCSM() ? [0, 1] : [0]) {
+            for (const csmExitedItems of withCSM() ? [0, 1] : [0]) {
               if (
                 norStuckItems + norExitedItems + sdvtStuckItems + sdvtExitedItems + csmStuckItems + csmExitedItems ===
                 0

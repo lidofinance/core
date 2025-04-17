@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { advanceChainTime, ether, hexToBytes, RewardDistributionState } from "lib";
+import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
 import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 import {
@@ -12,7 +12,7 @@ import {
   reportWithoutExtraData,
   waitNextAvailableReportTime,
 } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/nor";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
@@ -142,8 +142,32 @@ describe("Integration: AccountingOracle extra data", () => {
       stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
     };
 
-    const { reportTx } = await report(ctx, reportData);
-    await reportTx?.wait();
+    const numExitedBefore = (await nor.getStakingModuleSummary()).totalExitedValidators;
+
+    const { reportTx, extraDataTx } = await report(ctx, reportData);
+    const reportReceipt = await reportTx?.wait();
+    const extraDataReceipt = await extraDataTx?.wait();
+
+    const processingStartedEvents = await findEventsWithInterfaces(reportReceipt!, "ProcessingStarted", [
+      ctx.contracts.accountingOracle.interface,
+    ]);
+    expect(processingStartedEvents.length).to.equal(1, "Should emit ProcessingStarted event");
+
+    const tokenRebasedEvents = await findEventsWithInterfaces(reportReceipt!, "TokenRebased", [
+      ctx.contracts.lido.interface,
+    ]);
+    expect(tokenRebasedEvents.length).to.equal(1, "Should emit TokenRebased event");
+
+    const extraDataSubmittedEvents = await findEventsWithInterfaces(extraDataReceipt!, "ExtraDataSubmitted", [
+      ctx.contracts.accountingOracle.interface,
+    ]);
+    expect(extraDataSubmittedEvents.length).to.equal(1, "Should emit ExtraDataSubmitted event");
+    expect(extraDataSubmittedEvents[0].args.itemsProcessed).to.equal(extraDataItemsCount);
+    expect(extraDataSubmittedEvents[0].args.itemsCount).to.equal(extraDataItemsCount);
+
+    expect((await nor.getStakingModuleSummary()).totalExitedValidators).to.equal(
+      numExitedBefore + NUM_NEWLY_EXITED_VALIDATORS,
+    );
   });
 
   it("should accept extra data splitted into multiple chunks", async () => {

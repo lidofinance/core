@@ -7,10 +7,21 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { DepositSecurityModule } from "typechain-types";
 
-import { certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
+import {
+  BigIntMath,
+  certainAddress,
+  DSMUnvetMessage,
+  ether,
+  findEventsWithInterfaces,
+  impersonate,
+} from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm";
-import { norAddNodeOperator, norAddOperatorKeys, norSetOperatorStakingLimit } from "lib/protocol/helpers/nor";
+import {
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
+} from "lib/protocol/helpers/nor-sdvt";
 
 import { Snapshot } from "test/suite";
 
@@ -221,16 +232,22 @@ describe("Integration: DSM keys unvetting", () => {
     // Add node operator and signing keys
     const stakingModuleId = 1;
     const rewardAddress = certainAddress("rewardAddress");
-    const operatorId = await norAddNodeOperator(ctx, {
+    const operatorId = await norSdvtAddNodeOperator(ctx, ctx.contracts.nor, {
       name: "test",
       rewardAddress,
     });
 
     // Add signing keys
-    await norAddOperatorKeys(ctx, { operatorId, keysToAdd: 10n });
+    await norSdvtAddOperatorKeys(ctx, ctx.contracts.nor, {
+      operatorId,
+      keysToAdd: 10n,
+    });
 
     // Set staking limit to 8
-    await norSetOperatorStakingLimit(ctx, { operatorId, limit: 8n });
+    await norSdvtSetOperatorStakingLimit(ctx, ctx.contracts.nor, {
+      operatorId,
+      limit: 8n,
+    });
 
     // Prepare unvet parameters
     const blockNumber = await time.latestBlock();
