@@ -10,7 +10,6 @@ const services = [
   "accountingOracle",
   "depositSecurityModule",
   "elRewardsVault",
-  "legacyOracle",
   "lido",
   "oracleReportSanityChecker",
   "burner",

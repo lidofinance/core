@@ -15,7 +15,6 @@ export async function main() {
 
   // Deploy Lido-specific app implementations
   await deployImplementation(Sk.appLido, "Lido", deployer);
-  await deployImplementation(Sk.appOracle, "LegacyOracle", deployer);
 
   const minFirstAllocationStrategy = await deployWithoutProxy(
     Sk.minFirstAllocationStrategy,

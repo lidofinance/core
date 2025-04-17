@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -93,7 +93,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     ];
 
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: VEBO_CONSENSUS_VERSION,
       dataFormat: DATA_FORMAT_LIST,
       refSlot: refSlot,
       requestsCount: exitRequests.length,
@@ -103,8 +103,8 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     reportItems = getValidatorsExitBusReportDataItems(reportFields);
     reportHash = calcValidatorsExitBusReportDataHash(reportItems);
 
-    await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -132,7 +132,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

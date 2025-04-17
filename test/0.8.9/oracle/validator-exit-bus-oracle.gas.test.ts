@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
   computeTimestampAtSlot,
@@ -78,8 +78,8 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -163,7 +163,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         exitRequests = generateExitRequests(totalRequests);
 
         reportFields = {
-          consensusVersion: CONSENSUS_VERSION,
+          consensusVersion: VEBO_CONSENSUS_VERSION,
           refSlot: refSlot,
           requestsCount: exitRequests.requests.length,
           dataFormat: DATA_FORMAT_LIST,
