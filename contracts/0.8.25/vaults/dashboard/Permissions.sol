@@ -131,6 +131,8 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     address private immutable _SELF;
 
+    VaultHub public immutable vaultHub;
+
     /**
      * @notice Indicates whether the contract has been initialized
      */
@@ -139,8 +141,11 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Constructor sets the address of the implementation contract.
      */
-    constructor() {
+    constructor(address _vaultHub) {
+        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+
         _SELF = address(this);
+        vaultHub = VaultHub(_vaultHub);
     }
 
     /**
@@ -157,6 +162,11 @@ abstract contract Permissions is AccessControlConfirmable {
         emit Initialized();
     }
 
+    /**
+     * @dev Sets the ACL default admin and confirmation expiry time.
+     * @param _defaultAdmin The address of the default admin
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal initializer {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
@@ -170,10 +180,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function stakingVault() public view returns (IStakingVault) {
         return IStakingVault(_stakingVaultAddress());
-    }
-
-    function vaultHub() public view returns (VaultHub) {
-        return VaultHub(_vaultHubAddress());
     }
 
     // ==================== Role Management Functions ====================
@@ -249,7 +255,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        vaultHub().mintShares(_stakingVaultAddress(), _recipient, _shares);
+        vaultHub.mintShares(_stakingVaultAddress(), _recipient, _shares);
     }
 
     /**
@@ -258,7 +264,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        vaultHub().burnShares(_stakingVaultAddress(), _shares);
+        vaultHub.burnShares(_stakingVaultAddress(), _shares);
     }
 
     /**
@@ -308,7 +314,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        vaultHub().voluntaryDisconnect(_stakingVaultAddress());
+        vaultHub.voluntaryDisconnect(_stakingVaultAddress());
     }
 
     /**
@@ -399,14 +405,6 @@ abstract contract Permissions is AccessControlConfirmable {
         assembly {
             addr := mload(add(args, 32))
         }
-    }
-
-    /**
-     * @dev Loads the address of the VaultHub from the StakingVault.
-     * @return addr The address of the VaultHub.
-     */
-    function _vaultHubAddress() internal view returns (address addr) {
-        return stakingVault().vaultHub();
     }
 
     /**

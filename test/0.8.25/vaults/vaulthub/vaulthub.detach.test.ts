@@ -98,7 +98,7 @@ describe("VaultHub.sol:deauthorize", () => {
     vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
 
-    dashboard = await ethers.deployContract("Dashboard", [locator], { from: deployer });
+    dashboard = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
       from: deployer,
     });

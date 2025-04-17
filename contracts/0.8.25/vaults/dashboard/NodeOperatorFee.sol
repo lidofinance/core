@@ -76,7 +76,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
      *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
-     *          - can be set via `setAccruedRewardsAdjustment` to by `_confirmingRoles()`
+     *          - can be set via `setAccruedRewardsAdjustment` by `confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
      *          - reset to zero after `claimNodeOperatorFee`
      *        This amount will be deducted from rewards during NO fee calculation and can be used effectively write off NO's accrued fees.
@@ -84,6 +84,20 @@ contract NodeOperatorFee is Permissions {
      */
     uint256 public accruedRewardsAdjustment;
 
+    /**
+     * @notice Passes the address of the vault hub up the inheritance chain.
+     * @param _vaultHub The address of the vault hub.
+     */
+    constructor(address _vaultHub) Permissions(_vaultHub) {}
+
+    /**
+     * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,
+     * and makes the node operator manager the admin for the node operator roles.
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
@@ -95,9 +109,7 @@ contract NodeOperatorFee is Permissions {
         super._initialize(_defaultAdmin, _confirmExpiry);
 
         _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
-        _setConfirmExpiry(_confirmExpiry);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
@@ -119,11 +131,12 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Returns the accumulated unclaimed node operator fee in ether,
-     * calculated as: U = (R * F) / T
+     * calculated as: U = ((R - A) * F) / T
      * where:
      * - U is the node operator unclaimed fee;
      * - R is the StakingVault rewards accrued since the last node operator fee claim;
      * - F is `nodeOperatorFeeBP`;
+     * - A is `accruedRewardsAdjustment`;
      * - T is the total basis points, 10,000.
      * @return uint256: the amount of unclaimed fee in ether.
      */
@@ -134,26 +147,11 @@ contract NodeOperatorFee is Permissions {
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport.totalValue - _lastClaimedReport.totalValue) -
+        int128 rewardsAccrued = int128(latestReport.totalValue) - int128(_lastClaimedReport.totalValue) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
             adjustment;
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
-    }
-
-    /**
-     * @notice Returns the unreserved amount of ether,
-     * i.e. the amount of ether that is not locked in the StakingVault
-     * and not reserved for node operator fee.
-     * This amount does not account for the current balance of the StakingVault and
-     * can return a value greater than the actual balance of the StakingVault.
-     * @return uint256: the amount of unreserved ether.
-     */
-    function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
-        uint256 totalValue = stakingVault().totalValue();
-
-        return reserved > totalValue ? 0 : totalValue - reserved;
     }
 
     /**
@@ -213,7 +211,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice set `accruedRewardsAdjustment` to a new proposed value if `_confirmingRoles()` agree
+     * @notice set `accruedRewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
      * @param _newAdjustment ew adjustment amount
      * @param _currentAdjustment current adjustment value for invalidating old confirmations
      * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
@@ -226,16 +224,6 @@ contract NodeOperatorFee is Permissions {
             revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
         if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
         _setAccruedRewardsAdjustment(_newAdjustment);
-    }
-
-    /**
-     * @dev Modifier that checks if the requested amount is less than or equal to the unreserved amount.
-     * @param _ether The amount of ether to check.
-     */
-    modifier onlyIfUnreserved(uint256 _ether) {
-        uint256 withdrawable = unreserved();
-        if (_ether > withdrawable) revert RequestedAmountExceedsUnreserved();
-        _;
     }
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
@@ -300,11 +288,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
-
-    /**
-     * @dev Error emitted when the requested amount exceeds the unreserved amount.
-     */
-    error RequestedAmountExceedsUnreserved();
 
     /**
      * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.

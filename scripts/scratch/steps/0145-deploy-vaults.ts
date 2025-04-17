@@ -11,6 +11,8 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
+  const stethAddress = state[Sk.appLido].proxy.address;
+  const wstethAddress = state[Sk.wstETH].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
@@ -24,7 +26,11 @@ export async function main() {
   const impAddress = await imp.getAddress();
 
   // Deploy Dashboard implementation contract
-  const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [locatorAddress]);
+  const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    stethAddress,
+    wstethAddress,
+    vaultHubAddress,
+  ]);
   const dashboardAddress = await dashboard.getAddress();
 
   // Deploy Dashboard implementation contract

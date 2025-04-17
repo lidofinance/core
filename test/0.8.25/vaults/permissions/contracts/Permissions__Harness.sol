@@ -6,6 +6,8 @@ pragma solidity ^0.8.0;
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
 
 contract Permissions__Harness is Permissions {
+    constructor(address _vaultHub) Permissions(_vaultHub) {}
+
     function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
         super._initialize(_defaultAdmin, _confirmExpiry);
     }

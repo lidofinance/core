@@ -28,6 +28,7 @@ import {
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
+  getCurrentBlockTimestamp,
   getNextBlockTimestamp,
   impersonate,
   randomValidatorPubkey,
@@ -93,7 +94,7 @@ describe("Dashboard.sol", () => {
 
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, deployer]);
 
-    dashboardImpl = await ethers.deployContract("Dashboard", [lidoLocator]);
+    dashboardImpl = await ethers.deployContract("Dashboard", [steth, wsteth, hub]);
     expect(await dashboardImpl.STETH()).to.equal(steth);
     expect(await dashboardImpl.WSTETH()).to.equal(wsteth);
 
@@ -160,16 +161,29 @@ describe("Dashboard.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("reverts if LidoLocator is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress]))
+    it("reverts if steth is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, hub]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_lidoLocator");
+        .withArgs("stETH");
+    });
+
+    it("reverts if wsteth is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, hub]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("wstETH");
+    });
+
+    it("reverts if vaultHub is zero address", async () => {
+      await expect(ethers.deployContract("Dashboard", [steth, wsteth, ethers.ZeroAddress]))
+        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
+        .withArgs("_vaultHub");
     });
 
     it("sets the stETH, wETH, and wstETH addresses", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [lidoLocator]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, wsteth, hub]);
       expect(await dashboard_.STETH()).to.equal(steth);
       expect(await dashboard_.WSTETH()).to.equal(wsteth);
+      expect(await dashboard_.vaultHub()).to.equal(hub);
     });
   });
 
@@ -181,7 +195,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const dashboard_ = await ethers.deployContract("Dashboard", [lidoLocator]);
+      const dashboard_ = await ethers.deployContract("Dashboard", [steth, wsteth, hub]);
 
       await expect(
         dashboard_.initialize(vaultOwner, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
@@ -471,6 +485,21 @@ describe("Dashboard.sol", () => {
     });
   });
 
+  context("unreserved", () => {
+    it("initially returns 0", async () => {
+      expect(await dashboard.unreserved()).to.equal(0n);
+    });
+
+    it("returns 0 if locked is greater than valuation", async () => {
+      const valuation = ether("2");
+      const inOutDelta = ether("2");
+
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, valuation + 1n);
+
+      expect(await dashboard.unreserved()).to.equal(0n);
+    });
+  });
+
   context("withdrawableEther", () => {
     it("returns the trivial amount can withdraw ether", async () => {
       const withdrawableEther = await dashboard.withdrawableEther();
@@ -603,6 +632,8 @@ describe("Dashboard.sol", () => {
 
   context("withdraw", () => {
     it("reverts if called by a non-admin", async () => {
+      await dashboard.connect(vaultOwner).fund({ value: ether("1") });
+
       await expect(dashboard.connect(stranger).withdraw(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",

@@ -12,6 +12,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
+import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -49,16 +50,27 @@ contract Dashboard is NodeOperatorFee {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
-     * @notice Constructor sets the stETH, and WSTETH token addresses.
-     * @param _lidoLocator Address of the Lido locator contract.
+     * @notice Constructor sets the stETH, and WSTETH token addresses,
+     * and passes the address of the vault hub up the inheritance chain.
+     * @param stETH Address of the stETH token contract.
+     * @param wstETH Address of the wstETH token contract.
+     * @param _vaultHub Address of the vault hub contract.
      */
-    constructor(address _lidoLocator) {
-        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
+    constructor(address stETH, address wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+        if (stETH == address(0)) revert ZeroArgument("stETH");
+        if (wstETH == address(0)) revert ZeroArgument("wstETH");
 
-        STETH = IStETH(ILidoLocator(_lidoLocator).lido());
-        WSTETH = IWstETH(ILidoLocator(_lidoLocator).wstETH());
+        STETH = IStETH(stETH);
+        WSTETH = IWstETH(wstETH);
     }
 
+    /**
+     * @notice Calls the parent's iniatializer and approves the max allowance for WSTETH for gas savings
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry time in seconds
+     */
     function initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
@@ -70,7 +82,6 @@ contract Dashboard is NodeOperatorFee {
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
-
     }
 
     // ==================== View Functions ====================
@@ -80,7 +91,7 @@ contract Dashboard is NodeOperatorFee {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub().vaultSocket(_stakingVaultAddress());
+        return vaultHub.vaultSocket(_stakingVaultAddress());
     }
 
     /**
@@ -153,8 +164,23 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the unreserved amount of ether,
+     * i.e. the amount of total value that is not locked in the StakingVault
+     * and not reserved for node operator fee.
+     * This amount does not account for the current balance of the StakingVault and
+     * can return a value greater than the actual balance of the StakingVault.
+     * @return uint256: the amount of unreserved ether.
+     */
+    function unreserved() public view returns (uint256) {
+        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
+        uint256 totalValue_ = stakingVault().totalValue();
+
+        return reserved > totalValue_ ? 0 : totalValue_ - reserved;
+    }
+
+    /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for curator and node operator fees.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
@@ -168,7 +194,6 @@ contract Dashboard is NodeOperatorFee {
      * @dev Automatically funds the staking vault with ether
      */
     receive() external payable {
-        _checkRole(FUND_ROLE, msg.sender);
         _fund(msg.value);
     }
 
@@ -184,7 +209,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub().vaultSocket(_stakingVaultAddress()).liabilityShares;
+        uint256 shares = vaultHub.vaultSocket(_stakingVaultAddress()).liabilityShares;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -200,13 +225,18 @@ contract Dashboard is NodeOperatorFee {
         _fund(msg.value);
     }
 
-
     /**
      * @notice Withdraws ether from the staking vault to a recipient
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
+        uint256 unreserved_ = unreserved();
+
+        if (_ether > unreserved_) {
+            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        }
+
         _withdraw(_recipient, _ether);
     }
 
@@ -265,7 +295,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -313,6 +343,10 @@ contract Dashboard is NodeOperatorFee {
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
+        }
+
+        if (totalAmount > unreserved()) {
+            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
         }
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
@@ -546,7 +580,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, _vaultHubAddress(), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -559,7 +593,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(_vaultHubAddress(), unwrappedShares);
+        STETH.transferShares(address(vaultHub), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 
@@ -600,6 +634,13 @@ contract Dashboard is NodeOperatorFee {
     event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
+
+        /**
+     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @param amount The amount of ether that was attempted to be withdrawn
+     * @param unreserved The amount of unreserved ether available
+     */
+    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient

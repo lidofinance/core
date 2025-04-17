@@ -65,7 +65,7 @@ describe("NodeOperatorFee.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
     hub = await ethers.deployContract("VaultHub__MockForNodeOperatorFee", [lidoLocator, steth]);
 
-    nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness");
+    nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness", [hub]);
 
     vaultImpl = await ethers.deployContract("StakingVault__MockForNodeOperatorFee", [hub]);
 
@@ -115,7 +115,7 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const nodeOperatorFeeImpl_ = await ethers.deployContract("NodeOperatorFee__Harness");
+      const nodeOperatorFeeImpl_ = await ethers.deployContract("NodeOperatorFee__Harness", [hub]);
 
       await expect(
         nodeOperatorFeeImpl_.initialize(vaultOwner, nodeOperatorManager, 0n, days(7n)),
@@ -435,27 +435,6 @@ describe("NodeOperatorFee.sol", () => {
         .withArgs(newAdjustment, currentAdjustment);
 
       expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(newAdjustment);
-    });
-  });
-
-  context("unreserved", () => {
-    it("initially returns 0", async () => {
-      expect(await nodeOperatorFee.unreserved()).to.equal(0n);
-    });
-
-    it("returns 0 if locked is greater than totalValue", async () => {
-      const totalValue = ether("2");
-      const inOutDelta = ether("2");
-
-      await vault.setLatestReport({
-        totalValue,
-        inOutDelta,
-        timestamp: await getCurrentBlockTimestamp(),
-      });
-
-      await vault.setLocked(totalValue + 1n);
-
-      expect(await nodeOperatorFee.unreserved()).to.equal(0n);
     });
   });
 
