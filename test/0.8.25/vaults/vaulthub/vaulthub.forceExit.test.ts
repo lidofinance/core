@@ -25,7 +25,7 @@ const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 const SHARE_LIMIT = ether("1");
 const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 const FEE = 2n;
@@ -99,7 +99,7 @@ describe("VaultHub.sol:forceExit", () => {
 
     await vaultHub
       .connect(user)
-      .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+      .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
 
     vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
   });
@@ -180,7 +180,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       it("initiates force validator withdrawal", async () => {
         await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-          .to.emit(vaultHub, "ForceValidatorExitTriggered")
+          .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);
       });
 
@@ -191,7 +191,7 @@ describe("VaultHub.sol:forceExit", () => {
         await expect(
           vaultHub.forceValidatorExit(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
         )
-          .to.emit(vaultHub, "ForceValidatorExitTriggered")
+          .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
     });
@@ -225,7 +225,7 @@ describe("VaultHub.sol:forceExit", () => {
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-        .to.emit(vaultHub, "ForceValidatorExitTriggered")
+        .to.emit(vaultHub, "ForcedValidatorExitTriggered")
         .withArgs(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient);
     });
   });

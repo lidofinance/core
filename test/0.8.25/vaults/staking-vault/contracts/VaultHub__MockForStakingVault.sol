@@ -27,7 +27,7 @@ contract VaultHub__MockForStakingVault {
             liabilityShares: 0,
             shareLimit: 0,
             reserveRatioBP: 0,
-            rebalanceThresholdBP: 0,
+            forcedRebalanceThresholdBP: 0,
             treasuryFeeBP: 0,
             pendingDisconnect: false,
             feeSharesCharged: 0

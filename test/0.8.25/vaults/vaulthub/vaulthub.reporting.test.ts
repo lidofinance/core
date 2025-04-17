@@ -23,7 +23,7 @@ import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
@@ -66,7 +66,7 @@ describe("VaultHub.sol:hub", () => {
     options?: {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
-      rebalanceThresholdBP?: bigint;
+      forcedRebalanceThresholdBP?: bigint;
       treasuryFeeBP?: bigint;
     },
   ) {
@@ -80,7 +80,7 @@ describe("VaultHub.sol:hub", () => {
         await vault.getAddress(),
         options?.shareLimit ?? SHARE_LIMIT,
         options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+        options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
         options?.treasuryFeeBP ?? TREASURY_FEE_BP,
       );
 
@@ -255,7 +255,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);
@@ -273,7 +273,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);

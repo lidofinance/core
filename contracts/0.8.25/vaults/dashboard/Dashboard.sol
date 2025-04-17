@@ -111,8 +111,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the rebalance threshold of the vault in basis points.
      * @return The rebalance threshold in basis points as a uint16.
      */
-    function rebalanceThresholdBP() external view returns (uint16) {
-        return vaultSocket().rebalanceThresholdBP;
+    function forcedRebalanceThresholdBP() external view returns (uint16) {
+        return vaultSocket().forcedRebalanceThresholdBP;
     }
 
     /**

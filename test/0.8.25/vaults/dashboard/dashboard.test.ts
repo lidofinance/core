@@ -225,7 +225,7 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         shareLimit: 1000n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -237,7 +237,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.shareLimit()).to.equal(sockets.shareLimit);
       expect(await dashboard.liabilityShares()).to.equal(sockets.liabilityShares);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
-      expect(await dashboard.rebalanceThresholdBP()).to.equal(sockets.rebalanceThresholdBP);
+      expect(await dashboard.forcedRebalanceThresholdBP()).to.equal(sockets.forcedRebalanceThresholdBP);
       expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
     });
 
@@ -260,7 +260,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000000000n,
         liabilityShares: 555n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -283,7 +283,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 100n,
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -304,7 +304,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000000000n,
         liabilityShares: 555n,
         reserveRatioBP: 10_000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -325,7 +325,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         liabilityShares: 555n,
         reserveRatioBP: 0n,
-        rebalanceThresholdBP: 0n,
+        forcedRebalanceThresholdBP: 0n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -354,7 +354,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -381,7 +381,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         liabilityShares: 900n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -405,7 +405,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         liabilityShares: 10000n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -429,7 +429,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 10000000n,
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
@@ -454,7 +454,7 @@ describe("Dashboard.sol", () => {
         shareLimit: 500n,
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
-        rebalanceThresholdBP: 800n,
+        forcedRebalanceThresholdBP: 800n,
         treasuryFeeBP: 500n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,

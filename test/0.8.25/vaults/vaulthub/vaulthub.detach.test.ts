@@ -28,7 +28,7 @@ import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 describe("VaultHub.sol:deauthorize", () => {
@@ -161,7 +161,7 @@ describe("VaultHub.sol:deauthorize", () => {
 
       await vaultHub
         .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
       await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
         "VaultConnected",
@@ -186,7 +186,7 @@ describe("VaultHub.sol:deauthorize", () => {
 
       await vaultHub
         .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
       await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
       await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
@@ -213,7 +213,7 @@ describe("VaultHub.sol:deauthorize", () => {
 
       await vaultHub
         .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
+        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
       await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
       const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
       await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");

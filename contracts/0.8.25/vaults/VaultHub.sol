@@ -51,7 +51,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
-        uint16 rebalanceThresholdBP;
+        uint16 forcedRebalanceThresholdBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
@@ -196,7 +196,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (socket.liabilityShares == 0) return true;
 
         return
-            ((IStakingVault(_vault).totalValue() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
+            ((IStakingVault(_vault).totalValue() * (TOTAL_BASIS_POINTS - socket.forcedRebalanceThresholdBP)) /
                 TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.liabilityShares);
     }
 
@@ -236,23 +236,23 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
-    /// @param _rebalanceThresholdBP threshold to force rebalance on the vault in basis points
+    /// @param _forcedRebalanceThresholdBP threshold to force rebalance on the vault in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
-        uint256 _rebalanceThresholdBP,
+        uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
-        if (_rebalanceThresholdBP == 0) revert ZeroArgument("_rebalanceThresholdBP");
-        if (_rebalanceThresholdBP > _reserveRatioBP)
-            revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
+        if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
+        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+            revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
         IStakingVault vault_ = IStakingVault(_vault);
@@ -281,7 +281,7 @@ contract VaultHub is PausableUntilWithRoles {
             0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
-            uint16(_rebalanceThresholdBP),
+            uint16(_forcedRebalanceThresholdBP),
             uint16(_treasuryFeeBP),
             false, // pendingDisconnect
             0
@@ -289,7 +289,7 @@ contract VaultHub is PausableUntilWithRoles {
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
     /// @notice updates share limit for the vault
@@ -466,7 +466,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
-        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
+        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     function _disconnect(address _vault) internal {
@@ -573,7 +573,7 @@ contract VaultHub is PausableUntilWithRoles {
         address indexed vault,
         uint256 capShares,
         uint256 minReserveRatio,
-        uint256 rebalanceThreshold,
+        uint256 forcedRebalanceThreshold,
         uint256 treasuryFeeBP
     );
 
@@ -584,7 +584,7 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+    event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error AlreadyHealthy(address vault);
     error InsufficientSharesToBurn(address vault, uint256 amount);
@@ -595,7 +595,7 @@ contract VaultHub is PausableUntilWithRoles {
     error ZeroArgument(string argument);
     error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
-    error RebalanceThresholdTooHigh(address vault, uint256 rebalanceThresholdBP, uint256 maxRebalanceThresholdBP);
+    error ForcedRebalanceThresholdTooHigh(address vault, uint256 forcedRebalanceThresholdBP, uint256 maxForcedRebalanceThresholdBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error AlreadyExists(bytes32 codehash);
