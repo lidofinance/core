@@ -179,7 +179,6 @@ contract Dashboard is NodeOperatorFee {
      * @dev Automatically funds the staking vault with ether
      */
     receive() external payable {
-        _checkRole(FUND_ROLE, msg.sender);
         _fund(msg.value);
     }
 
