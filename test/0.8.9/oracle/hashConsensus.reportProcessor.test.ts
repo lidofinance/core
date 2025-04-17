@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, streccak } from "lib";
+import { BASE_CONSENSUS_VERSION, streccak } from "lib";
 
 import { deployHashConsensus, HASH_1, HASH_2 } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -29,7 +29,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
     consensus = deployed.consensus;
     reportProcessor1 = deployed.reportProcessor;
 
-    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
+    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION], admin);
 
     snapshot = await Snapshot.take();
   };
@@ -89,7 +89,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
       const frame = await consensus.getCurrentFrame();
 
       await consensus.connect(admin).addMember(member1, 1);
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
 
       // There is no `processor.startReportProcessing()`
       // to simulate situation when processing still in progress
@@ -102,7 +102,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
       const frame = await consensus.getCurrentFrame();
 
       await consensus.connect(admin).addMember(member1, 1);
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
 
       await reportProcessor1.startReportProcessing();
 
@@ -115,7 +115,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
 
       // 1 — Make up state of unfinished processing for reportProcessor1
       await consensus.connect(admin).addMember(member1, 1);
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
 
       // 2 — Make up state of finished processing for reportProcessor2
       await reportProcessor2.setLastProcessingStartedRefSlot(frame.refSlot);
@@ -131,7 +131,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
       await consensus.connect(admin).addMember(member1, 1);
       await consensus.connect(admin).addMember(member2, 2);
 
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await reportProcessor1.startReportProcessing();
 
       await consensus.setReportProcessor(await reportProcessor2.getAddress());
@@ -147,9 +147,9 @@ describe("HashConsensus.sol:reportProcessor", function () {
       await consensus.connect(admin).addMember(member1, 1);
       await consensus.connect(admin).addMember(member2, 2);
 
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-      await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-      await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
+      await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
+      await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, BASE_CONSENSUS_VERSION);
       expect((await reportProcessor1.getLastCall_discardReport()).callCount).to.equal(1, "report withdrawn");
 
       await consensus.setReportProcessor(await reportProcessor2.getAddress());
@@ -161,7 +161,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
     afterEach(rollback);
 
     it("equals to version of initial processor", async () => {
-      expect(await consensus.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+      expect(await consensus.getConsensusVersion()).to.equal(BASE_CONSENSUS_VERSION);
     });
 
     it("equals to new processor version after it was changed", async () => {
@@ -181,7 +181,7 @@ describe("HashConsensus.sol:reportProcessor", function () {
       const { refSlot } = await consensus.getCurrentFrame();
       await consensus.connect(admin).addMember(member1, 1);
 
-      await consensus.connect(member1).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       const reportVariants1 = await consensus.getReportVariants();
       expect([...reportVariants1.variants]).to.have.ordered.members([HASH_1]);
       expect([...reportVariants1.support]).to.have.ordered.members([1n]);

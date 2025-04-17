@@ -51,7 +51,6 @@ const defaultEnv = {
   accountingOracle: "ACCOUNTING_ORACLE_ADDRESS",
   depositSecurityModule: "DEPOSIT_SECURITY_MODULE_ADDRESS",
   elRewardsVault: "EL_REWARDS_VAULT_ADDRESS",
-  legacyOracle: "LEGACY_ORACLE_ADDRESS",
   lido: "LIDO_ADDRESS",
   accounting: "ACCOUNTING_ADDRESS",
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",

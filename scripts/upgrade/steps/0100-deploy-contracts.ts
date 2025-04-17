@@ -1,11 +1,12 @@
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { LidoLocator } from "typechain-types";
+
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
-import { LidoLocator } from "../../../typechain-types";
 import { readUpgradeParameters } from "../upgrade-utils";
 
 export async function main() {
@@ -15,7 +16,6 @@ export async function main() {
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const agentAddress = state[Sk.appAgent].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
@@ -62,7 +62,6 @@ export async function main() {
   // Deploy AccountingOracle new implementation
   const accountingOracleImpl = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
     locatorAddress,
-    legacyOracleAddress,
     Number(chainSpec.secondsPerSlot),
     Number(chainSpec.genesisTime),
   ]);
@@ -109,7 +108,6 @@ export async function main() {
     await locator.accountingOracle(),
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
-    legacyOracleAddress,
     lidoAddress,
     oracleReportSanityChecker.address,
     ZeroAddress,

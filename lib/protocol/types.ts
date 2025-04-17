@@ -10,7 +10,6 @@ import {
   DepositSecurityModule,
   HashConsensus,
   Kernel,
-  LegacyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
@@ -38,7 +37,6 @@ export type ProtocolNetworkItems = {
   accountingOracle: string;
   depositSecurityModule: string;
   elRewardsVault: string;
-  legacyOracle: string;
   lido: string;
   accounting: string;
   oracleReportSanityChecker: string;
@@ -69,7 +67,6 @@ export interface ContractTypes {
   AccountingOracle: AccountingOracle;
   DepositSecurityModule: DepositSecurityModule;
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
-  LegacyOracle: LegacyOracle;
   Lido: Lido;
   Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
@@ -103,7 +100,6 @@ export type CoreContracts = {
   accountingOracle: LoadedContract<AccountingOracle>;
   depositSecurityModule: LoadedContract<DepositSecurityModule>;
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
-  legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
   accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;

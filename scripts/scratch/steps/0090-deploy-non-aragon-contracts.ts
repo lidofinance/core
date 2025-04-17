@@ -18,7 +18,6 @@ export async function main() {
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const votingAddress = state[Sk.appVoting].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
@@ -157,7 +156,7 @@ export async function main() {
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+    [locator.address, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
   // Deploy HashConsensus for AccountingOracle
@@ -242,7 +241,6 @@ export async function main() {
     accountingOracle.address,
     depositSecurityModuleAddress,
     elRewardsVault.address,
-    legacyOracleAddress,
     lidoAddress,
     oracleReportSanityChecker.address,
     ZeroAddress,

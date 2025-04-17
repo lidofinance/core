@@ -251,7 +251,6 @@ export async function main() {
   const appRepos = await template.apmRepos();
   addRepoAddress(state, Sk.appLido, appRepos.lido);
   addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
-  addRepoAddress(state, Sk.appOracle, appRepos.oracle);
   addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
   addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
   addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);

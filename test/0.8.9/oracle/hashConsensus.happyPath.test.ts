@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
 
 import {
   computeEpochFirstSlotAt,
@@ -81,7 +81,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member1.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_3, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_3, BASE_CONSENSUS_VERSION);
 
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
@@ -113,7 +113,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member2.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
 
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
@@ -145,7 +145,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member3.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member3).submitReport(frame.refSlot, HASH_3, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member3).submitReport(frame.refSlot, HASH_3, BASE_CONSENSUS_VERSION);
 
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
@@ -182,7 +182,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member1.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
       .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
@@ -218,7 +218,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member2.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, BASE_CONSENSUS_VERSION);
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
       .withArgs(frame.refSlot, await member2.getAddress(), HASH_2);
@@ -254,7 +254,7 @@ describe("HashConsensus.sol:happyPath", function () {
     const { canReport } = await consensus.getConsensusStateForMember(await member2.getAddress());
     expect(canReport).to.be.true;
 
-    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
     await expect(tx)
       .to.emit(consensus, "ReportReceived")
       .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
@@ -301,7 +301,7 @@ describe("HashConsensus.sol:happyPath", function () {
     expect(canReport).to.be.false;
 
     await expect(
-      consensus.connect(member2).submitReport(frame.refSlot, HASH_3, CONSENSUS_VERSION),
+      consensus.connect(member2).submitReport(frame.refSlot, HASH_3, BASE_CONSENSUS_VERSION),
     ).to.be.revertedWithCustomError(consensus, "ConsensusReportAlreadyProcessing()");
   });
 
@@ -339,21 +339,21 @@ describe("HashConsensus.sol:happyPath", function () {
 
   it("a member cannot submit report for the previous ref slot", async () => {
     await expect(
-      consensus.connect(member1).submitReport(prevFrame.refSlot, HASH_2, CONSENSUS_VERSION),
+      consensus.connect(member1).submitReport(prevFrame.refSlot, HASH_2, BASE_CONSENSUS_VERSION),
     ).to.be.revertedWithCustomError(consensus, "InvalidSlot()");
   });
 
   it("a member cannot submit report for a non-reference slot", async () => {
     await expect(
-      consensus.connect(member1).submitReport(newFrame.refSlot - 1n, HASH_2, CONSENSUS_VERSION),
+      consensus.connect(member1).submitReport(newFrame.refSlot - 1n, HASH_2, BASE_CONSENSUS_VERSION),
     ).to.be.revertedWithCustomError(consensus, "InvalidSlot()");
     await expect(
-      consensus.connect(member1).submitReport(newFrame.refSlot + 1n, HASH_2, CONSENSUS_VERSION),
+      consensus.connect(member1).submitReport(newFrame.refSlot + 1n, HASH_2, BASE_CONSENSUS_VERSION),
     ).to.be.revertedWithCustomError(consensus, "InvalidSlot()");
   });
 
   it("first member votes for hash 2", async () => {
-    const tx = await consensus.connect(member1).submitReport(newFrame.refSlot, HASH_2, CONSENSUS_VERSION);
+    const tx = await consensus.connect(member1).submitReport(newFrame.refSlot, HASH_2, BASE_CONSENSUS_VERSION);
 
     await expect(tx)
       .to.emit(consensus, "ReportReceived")

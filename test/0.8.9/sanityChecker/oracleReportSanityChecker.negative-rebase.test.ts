@@ -77,7 +77,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         depositSecurityModule: deployer.address,
         elRewardsVault: deployer.address,
         accountingOracle: await accountingOracle.getAddress(),
-        legacyOracle: deployer.address,
         oracleReportSanityChecker: sanityCheckerAddress,
         burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,

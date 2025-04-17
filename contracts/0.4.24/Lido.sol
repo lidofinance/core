@@ -882,14 +882,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice DEPRECATED: Returns legacy oracle
-     * @dev DEPRECATED: the `AccountingOracle` superseded the old one
-     */
-    function getOracle() external view returns (address) {
-        return getLidoLocator().legacyOracle();
-    }
-
-    /**
      * @notice DEPRECATED: Returns the treasury address
      * @dev DEPRECATED: use LidoLocator.treasury()
      */

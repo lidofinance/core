@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION } from "lib";
+import { BASE_CONSENSUS_VERSION } from "lib";
 
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -38,58 +38,57 @@ describe("HashConsensus.sol:submitReport", function () {
   context("method submitReport", () => {
     it("reverts with NumericOverflow if slot is greater than max allowed", async () => {
       await expect(
-        consensus.connect(member1).submitReport("20446744073709551615", HASH_1, CONSENSUS_VERSION),
+        consensus.connect(member1).submitReport("20446744073709551615", HASH_1, BASE_CONSENSUS_VERSION),
       ).to.be.revertedWithCustomError(consensus, "NumericOverflow()");
     });
 
     it("reverts with InvalidSlot if slot is zero", async () => {
-      await expect(consensus.connect(member1).submitReport(0, HASH_1, CONSENSUS_VERSION)).to.be.revertedWithCustomError(
-        consensus,
-        "InvalidSlot()",
-      );
+      await expect(
+        consensus.connect(member1).submitReport(0, HASH_1, BASE_CONSENSUS_VERSION),
+      ).to.be.revertedWithCustomError(consensus, "InvalidSlot()");
     });
 
     it("reverts with UnexpectedConsensusVersion", async () => {
       await expect(consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION_NEW))
         .to.be.revertedWithCustomError(consensus, "UnexpectedConsensusVersion")
-        .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION_NEW);
+        .withArgs(BASE_CONSENSUS_VERSION, CONSENSUS_VERSION_NEW);
     });
 
     it("reverts with EmptyReport", async () => {
       await expect(
-        consensus.connect(member1).submitReport(frame.refSlot, ZERO_HASH, CONSENSUS_VERSION),
+        consensus.connect(member1).submitReport(frame.refSlot, ZERO_HASH, BASE_CONSENSUS_VERSION),
       ).to.be.revertedWithCustomError(consensus, "EmptyReport()");
     });
 
     it("reverts with ConsensusReportAlreadyProcessing", async () => {
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await reportProcessor.startReportProcessing();
       await expect(
-        consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+        consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
       ).to.be.revertedWithCustomError(consensus, "ConsensusReportAlreadyProcessing()");
     });
 
     it("reverts with DuplicateReport", async () => {
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await expect(
-        consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+        consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
       ).to.be.revertedWithCustomError(consensus, "DuplicateReport()");
     });
 
     it("does not revert with ConsensusReportAlreadyProcessing if member has not sent a report for this slot", async () => {
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await reportProcessor.startReportProcessing();
       await consensus.addMember(await member2.getAddress(), 2);
-      await expect(consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION)).not.to.be
+      await expect(consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION)).not.to.be
         .reverted;
     });
 
     it("consensus loss on conflicting report submit", async () => {
       await consensus.addMember(await member2.getAddress(), 2);
-      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
-      const tx1 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
+      const tx1 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await expect(tx1).to.emit(consensus, "ConsensusReached");
-      const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, CONSENSUS_VERSION);
+      const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_2, BASE_CONSENSUS_VERSION);
       await expect(tx2).to.emit(consensus, "ConsensusLost");
     });
   });

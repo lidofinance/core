@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus__Harness, LegacyOracle, ReportProcessor__Mock } from "typechain-types";
+import { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  AO_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
@@ -18,20 +18,8 @@ import {
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 
-export const V1_ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
-export const V1_ORACLE_LAST_REPORT_SLOT = V1_ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
-
-export async function deployMockLegacyOracle({
-  epochsPerFrame = EPOCHS_PER_FRAME,
-  slotsPerEpoch = SLOTS_PER_EPOCH,
-  secondsPerSlot = SECONDS_PER_SLOT,
-  genesisTime = GENESIS_TIME,
-  lastCompletedEpochId = V1_ORACLE_LAST_COMPLETED_EPOCH,
-} = {}) {
-  const legacyOracle = await ethers.deployContract("LegacyOracle__MockForAccountingOracle");
-  await legacyOracle.setParams(epochsPerFrame, slotsPerEpoch, secondsPerSlot, genesisTime, lastCompletedEpochId);
-  return legacyOracle;
-}
+export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
+export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
 
 async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
@@ -43,30 +31,21 @@ async function deployMockAccountingAndStakingRouter() {
 export async function deployAccountingOracleSetup(
   admin: string,
   {
-    initialEpoch = null as bigint | null,
+    initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME,
     epochsPerFrame = EPOCHS_PER_FRAME,
     slotsPerEpoch = SLOTS_PER_EPOCH,
     secondsPerSlot = SECONDS_PER_SLOT,
     genesisTime = GENESIS_TIME,
     getLidoAndStakingRouter = deployMockAccountingAndStakingRouter,
-    getLegacyOracle = deployMockLegacyOracle,
     lidoLocatorAddr = null as string | null,
-    legacyOracleAddr = null as string | null,
   } = {},
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
   const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
 
-  const legacyOracle = await getLegacyOracle();
-
-  if (initialEpoch == null) {
-    initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + epochsPerFrame;
-  }
-
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
-    legacyOracleAddr || (await legacyOracle.getAddress()),
     secondsPerSlot,
     genesisTime,
   ]);
@@ -109,7 +88,6 @@ export async function deployAccountingOracleSetup(
     stakingRouter,
     withdrawalQueue,
     locatorAddr,
-    legacyOracle,
     oracle,
     consensus,
     oracleReportSanityChecker,
@@ -122,8 +100,7 @@ interface AccountingOracleConfig {
   consensus: HashConsensus__Harness;
   dataSubmitter?: string;
   consensusVersion?: bigint;
-  shouldMigrateLegacyOracle?: boolean;
-  lastProcessingRefSlot?: number;
+  lastProcessingRefSlot?: bigint;
 }
 
 export async function initAccountingOracle({
@@ -131,20 +108,10 @@ export async function initAccountingOracle({
   oracle,
   consensus,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
-  shouldMigrateLegacyOracle = true,
-  lastProcessingRefSlot = 0,
+  consensusVersion = AO_CONSENSUS_VERSION,
+  lastProcessingRefSlot = 0n,
 }: AccountingOracleConfig) {
-  let initTx;
-  if (shouldMigrateLegacyOracle)
-    initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion);
-  else
-    initTx = await oracle.initializeWithoutMigration(
-      admin,
-      await consensus.getAddress(),
-      consensusVersion,
-      lastProcessingRefSlot,
-    );
+  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
@@ -190,7 +157,6 @@ interface AccountingOracleSetup {
   admin: string;
   consensus: HashConsensus__Harness;
   oracle: AccountingOracle;
-  legacyOracle: LegacyOracle;
   dataSubmitter?: string;
   consensusVersion?: bigint;
 }
@@ -199,20 +165,23 @@ async function configureAccountingOracleSetup({
   admin,
   consensus,
   oracle,
-  legacyOracle,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
+  consensusVersion = AO_CONSENSUS_VERSION,
 }: AccountingOracleSetup) {
   // this is done as a part of the protocol upgrade voting execution
 
   const frameConfig = await consensus.getFrameConfig();
-  // TODO: Double check it
-  await consensus.setTimeInEpochs(await legacyOracle.getLastCompletedEpochId());
-
-  const initialEpoch = (await legacyOracle.getLastCompletedEpochId()) + frameConfig.epochsPerFrame;
-
+  const initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + frameConfig.epochsPerFrame;
   const updateInitialEpochIx = await consensus.updateInitialEpoch(initialEpoch);
-  const initTx = await initAccountingOracle({ admin, oracle, consensus, dataSubmitter, consensusVersion });
+
+  const initTx = await initAccountingOracle({
+    admin,
+    oracle,
+    consensus,
+    dataSubmitter,
+    consensusVersion,
+    lastProcessingRefSlot: ORACLE_LAST_REPORT_SLOT,
+  });
 
   return { updateInitialEpochIx, initTx };
 }
@@ -225,7 +194,7 @@ export async function deployAndConfigureAccountingOracle(admin: string) {
 
   // pretend we're after the legacy oracle's last proc epoch but before the new oracle's initial epoch
   expect(EPOCHS_PER_FRAME).to.be.greaterThan(1);
-  const voteExecTime = GENESIS_TIME + (V1_ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
+  const voteExecTime = GENESIS_TIME + (ORACLE_LAST_COMPLETED_EPOCH + 1n) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
   await deployed.consensus.setTime(voteExecTime);
 
   /// this is done as a part of the protocol upgrade voting execution:
@@ -236,7 +205,7 @@ export async function deployAndConfigureAccountingOracle(admin: string) {
   const finalizeResult = await configureAccountingOracleSetup({ admin, ...deployed });
 
   // pretend we're at the first slot of the new oracle's initial epoch
-  const initialEpoch = V1_ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME;
+  const initialEpoch = ORACLE_LAST_COMPLETED_EPOCH + EPOCHS_PER_FRAME;
   await deployed.consensus.setTime(GENESIS_TIME + initialEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT);
 
   return { ...deployed, ...finalizeResult };
