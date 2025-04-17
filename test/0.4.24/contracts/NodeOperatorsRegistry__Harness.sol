@@ -140,10 +140,6 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
         LIDO_LOCATOR_POSITION.setStorageAddress(_mockedLocator);
     }
 
-    function harness__setStuckPenaltyDelay(uint256 _stuckPenaltyDelay) external {
-        STUCK_PENALTY_DELAY_POSITION.setStorageUint256(_stuckPenaltyDelay);
-    }
-
     function harness__setNonce(uint256 _nonce) external {
         KEYS_OP_INDEX_POSITION.setStorageUint256(_nonce);
     }
