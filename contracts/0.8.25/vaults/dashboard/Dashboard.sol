@@ -124,19 +124,19 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the valuation of the vault in ether.
-     * @return The valuation as a uint256.
+     * @notice Returns the total value of the vault in ether.
+     * @return The total value as a uint256.
      */
-    function valuation() external view returns (uint256) {
-        return stakingVault().valuation();
+    function totalValue() external view returns (uint256) {
+        return stakingVault().totalValue();
     }
 
     /**
-     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by valuation and vault share limit.
+     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by total value and vault share limit.
      * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(_mintableValuation());
+        return _totalMintableShares(_mintableTotalValue());
     }
 
     /**
@@ -145,7 +145,7 @@ contract Dashboard is NodeOperatorFee {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(_mintableValuation() + _etherToFund);
+        uint256 _totalShares = _totalMintableShares(_mintableTotalValue() + _etherToFund);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -515,17 +515,17 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the valuation with the node operator fee subtracted,
+     * @notice Returns the total value with the node operator fee subtracted,
      *         because the fee cannot be used to mint shares.
      * @return The amount of ether in wei that can be used to mint shares.
      */
-    function _mintableValuation() internal view returns (uint256) {
-        return stakingVault().valuation() - nodeOperatorUnclaimedFee();
+    function _mintableTotalValue() internal view returns (uint256) {
+        return stakingVault().totalValue() - nodeOperatorUnclaimedFee();
     }
 
     /**
-     * @notice Mints shares within the mintable valuation,
-     *         and reverts if the resulting backing is greater than the mintable valuation.
+     * @notice Mints shares within the mintable total value,
+     *         and reverts if the resulting backing is greater than the mintable total value.
      * @param _recipient The address of the recipient.
      * @param _amountOfShares The amount of shares to mint.
      */
@@ -533,10 +533,10 @@ contract Dashboard is NodeOperatorFee {
         _mintShares(_recipient, _amountOfShares);
 
         uint256 locked = stakingVault().locked();
-        uint256 mintableValuation = _mintableValuation();
+        uint256 mintableTotalValue = _mintableTotalValue();
 
-        if (locked > mintableValuation) {
-            revert MintableValuationExceeded(locked, mintableValuation);
+        if (locked > mintableTotalValue) {
+            revert MintableTotalValueExceeded(locked, mintableTotalValue);
         }
     }
 
@@ -565,10 +565,10 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @dev Calculates total shares vault can mint
-     * @param _valuation custom vault valuation
+     * @param _totalValue custom vault total value
      */
-    function _totalMintableShares(uint256 _valuation) internal view returns (uint256) {
-        uint256 maxMintableStETH = (_valuation * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
+    function _totalMintableShares(uint256 _totalValue) internal view returns (uint256) {
+        uint256 maxMintableStETH = (_totalValue * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
             TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
@@ -607,7 +607,7 @@ contract Dashboard is NodeOperatorFee {
     error EthTransferFailed(address recipient, uint256 amount);
 
     /**
-     * @notice Error thrown when mintable valuation is breached
+     * @notice Error thrown when mintable total value is breached
      */
-    error MintableValuationExceeded(uint256 locked, uint256 mintableValuation);
+    error MintableTotalValueExceeded(uint256 locked, uint256 mintableTotalValue);
 }

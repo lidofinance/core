@@ -18,24 +18,15 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * @author Lido
  * @notice
  *
- * StakingVault is a private staking pool that enables staking with a designated node operator.
- * Each StakingVault includes an accounting system that tracks its valuation via reports.
+ * StakingVault is a contract which is designed to be used as withdrawal credentials
+ * to stake ETH with a designated node operator, while being able to mint stETH.
  *
  * The StakingVault can be used as a backing for minting new stETH through integration with the VaultHub.
  * When minting stETH backed by the StakingVault, the VaultHub designates a portion of the StakingVault's
- * valuation as locked, which cannot be withdrawn by the owner. This locked portion represents the
- * backing for the minted stETH.
+ * total value as locked, which cannot be withdrawn by the owner. This locked portion represents the
+ * collateral for the minted stETH.
  *
- * If the locked amount exceeds the StakingVault's current valuation, the VaultHub has the ability to
- * rebalance the StakingVault. This rebalancing process involves withdrawing a portion of the staked amount
- * and adjusting the locked amount to align with the current valuation.
- *
- * The owner may proactively maintain the vault's backing ratio by either:
- * - Voluntarily rebalancing the StakingVault at any time
- * - Adding more ether to increase the valuation
- * - Triggering validator withdrawals to increase the valuation
- *
- * Access
+ * Access Control:
  * - Owner:
  *   - `fund()`
  *   - `withdraw()`
@@ -65,13 +56,12 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * The contract is designed as an extended beacon proxy implementation, allowing individual StakingVault instances
  * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
  * and contains immutable references to the beacon chain deposit contract.
- *
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice ERC-7201 storage namespace for the vault
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
-     * @custom:report Latest report containing valuation and inOutDelta
+     * @custom:report Latest report containing total value and inOutDelta
      * @custom:locked Amount of ether locked on StakingVault by VaultHub and cannot be withdrawn by owner
      * @custom:inOutDelta Net difference between ether funded and withdrawn from StakingVault
      * @custom:nodeOperator Address of the node operator
@@ -272,12 +262,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the total valuation of `StakingVault` in ether
-     * @dev Valuation = latestReport.valuation + (current inOutDelta - latestReport.inOutDelta)
+     * @notice Returns the current total value of `StakingVault` in ether
+     * @dev totalValue = latestReport.totalValue + (current inOutDelta - latestReport.inOutDelta)
      */
-    function valuation() public view returns (uint256) {
+    function totalValue() public view returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
-        return uint256(int256(int128($.report.valuation) + $.inOutDelta - $.report.inOutDelta));
+        return uint256(int256(int128($.report.totalValue) + $.inOutDelta - $.report.inOutDelta));
     }
 
     /**
@@ -290,17 +280,17 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the unlocked amount of ether, which is the valuation minus the locked ether amount
+     * @notice Returns the unlocked amount of ether, which is the total value minus the locked ether amount
      * @dev Unlocked amount is the total amount that can be withdrawn from `StakingVault`,
      *      including ether currently being staked on validators
      */
     function unlocked() public view returns (uint256) {
-        uint256 _valuation = valuation();
-        uint256 _locked = _getStorage().locked;
+        uint256 totalValue_ = totalValue();
+        uint256 locked_ = _getStorage().locked;
 
-        if (_locked > _valuation) return 0;
+        if (locked_ > totalValue_) return 0;
 
-        return _valuation - _locked;
+        return totalValue_ - locked_;
     }
 
     /**
@@ -332,7 +322,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Returns the latest report data for the vault (valuation and inOutDelta)
+     * @notice Returns the latest report data for the vault (total value and inOutDelta)
      */
     function latestReport() external view returns (IStakingVault.Report memory) {
         return _getStorage().report;
@@ -401,14 +391,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _ether Amount of ether to withdraw.
      * @dev Cannot withdraw more than the unlocked amount or the balance of the contract, whichever is less.
      * @dev Updates inOutDelta to track the net difference between funded and withdrawn ether.
-     * @dev Checks that valuation remains greater or equal than locked amount and prevents reentrancy attacks.
+     * @dev Checks that totalValue remains greater or equal than locked amount and prevents reentrancy attacks.
      */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
-        uint256 _unlocked = unlocked();
-        if (_ether > _unlocked) revert InsufficientUnlocked(_unlocked);
+        uint256 unlocked_ = unlocked();
+        if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_);
 
         ERC7201Storage storage $ = _getStorage();
         $.inOutDelta -= int128(int256(_ether));
@@ -417,9 +407,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (!success) revert TransferFailed(_recipient, _ether);
 
         if (isReportFresh()) {
-            if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+            if (totalValue() < $.locked) revert TotalValueBelowLockedAmount();
         } else {
-            if (address(this).balance < $.locked) revert ValuationBelowLockedAmount();
+            if (address(this).balance < $.locked) revert TotalValueBelowLockedAmount();
         }
 
         emit Withdrawn(msg.sender, _recipient, _ether);
@@ -434,9 +424,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if (_locked <= $.locked) revert NewLockedNotGreaterThanCurrent();
         if (isReportFresh()) {
-            if (_locked > valuation()) revert NewLockedExceedsValuation();
+            if (_locked > totalValue()) revert NewLockedExceedsTotalValue();
         } else {
-            if (_locked > address(this).balance) revert NewLockedExceedsValuation();
+            if (_locked > address(this).balance) revert NewLockedExceedsTotalValue();
         }
 
         $.locked = uint128(_locked);
@@ -446,20 +436,20 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Rebalances StakingVault by withdrawing ether to VaultHub
-     * @dev Can only be called by VaultHub if StakingVault valuation is less than locked amount
+     * @dev Can only be called by VaultHub if StakingVault totalValue is less than locked amount
      * @param _ether Amount of ether to rebalance
      */
     function rebalance(uint256 _ether) external {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance);
 
-        uint256 valuation_ = valuation();
-        if (_ether > valuation_) revert RebalanceAmountExceedsValuation(valuation_, _ether);
+        uint256 totalValue_ = totalValue();
+        if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
 
         ERC7201Storage storage $ = _getStorage();
 
         bool isAuthorized = (owner() == msg.sender
-            || (valuation_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+            || (totalValue_ < $.locked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
         );
         if (!isAuthorized) revert NotAuthorized("rebalance", msg.sender);
 
@@ -471,12 +461,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice Submits a report containing valuation, inOutDelta, and locked amount
-     * @param _valuation New total valuation: validator balances + StakingVault balance
+     * @notice Submits a report containing totalValue, inOutDelta, and locked amount
+     * @param _totalValue New total value: validator balances + StakingVault balance
      * @param _inOutDelta New net difference between funded and withdrawn ether
      * @param _locked New amount of locked ether
      */
-    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _totalValue, int256 _inOutDelta, uint256 _locked) external {
         ERC7201Storage storage $ = _getStorage();
         if (msg.sender != address(VAULT_HUB) || !$.vaultHubAuthorized) revert NotAuthorized("report", msg.sender);
 
@@ -484,11 +474,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (currentTimestamp >= _timestamp) revert ReportTooOld(currentTimestamp, _timestamp);
 
         $.report.timestamp = _timestamp;
-        $.report.valuation = uint128(_valuation);
+        $.report.totalValue = uint128(_totalValue);
         $.report.inOutDelta = int128(_inOutDelta);
         $.locked = uint128(_locked);
 
-        emit Reported(_timestamp, _valuation, _inOutDelta, _locked);
+        emit Reported(_timestamp, _totalValue, _inOutDelta, _locked);
     }
 
     /**
@@ -540,7 +530,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Performs a deposit to the beacon chain deposit contract
      * @param _deposits Array of deposit structs
      * @dev Can only be called by the depositor address
-     * @dev Includes a check to ensure `StakingVault` valuation is not less than locked before making deposits
+     * @dev Includes a check to ensure `StakingVault` total value is not less than locked before making deposits
      */
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
@@ -548,7 +538,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
         if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        if (valuation() < $.locked) revert ValuationBelowLockedAmount();
+        if (totalValue() < $.locked) revert TotalValueBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
         uint256 totalAmount = 0;
@@ -625,8 +615,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         ERC7201Storage storage $ = _getStorage();
-        bool isValuationBelowLocked = valuation() < $.locked;
-        if (isValuationBelowLocked || !isReportFresh()) {
+        bool isTotalValueBelowLocked = totalValue() < $.locked;
+        if (isTotalValueBelowLocked || !isReportFresh()) {
             // Block partial withdrawals to prevent front-running force withdrawals
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialWithdrawalNotAllowed();
@@ -635,7 +625,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         bool isAuthorized = (msg.sender == $.nodeOperator ||
             msg.sender == owner() ||
-            (isValuationBelowLocked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
+            (isTotalValueBelowLocked && msg.sender == address(VAULT_HUB) && $.vaultHubAuthorized)
         );
 
 
@@ -662,9 +652,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
     }
 
-    function _checkFreshnessAndGetValuation() internal view returns (uint256) {
+    function _checkFreshnessAndGetTotalValue() internal view returns (uint256) {
         if (!isReportFresh()) revert ReportStaled();
-        return valuation();
+        return totalValue();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
@@ -715,11 +705,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Emitted when a new report is submitted to `StakingVault`
-     * @param valuation Sum of the vault's validator balances and the balance of `StakingVault`
+     * @param totalValue Sum of the vault's validator balances and the balance of `StakingVault`
      * @param inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      * @param locked Amount of ether locked in `StakingVault`
      */
-    event Reported(uint64 indexed timestamp, uint256 valuation, int256 inOutDelta, uint256 locked);
+    event Reported(uint64 indexed timestamp, uint256 totalValue, int256 inOutDelta, uint256 locked);
 
     /**
      * @notice Emitted when deposits to beacon chain are paused
@@ -789,11 +779,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error InsufficientUnlocked(uint256 unlocked);
 
     /**
-     * @notice Thrown when attempting to rebalance more ether than the valuation of `StakingVault`
-     * @param valuation Current valuation of the vault
+     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
+     * @param totalValue Current total value of the vault
      * @param rebalanceAmount Amount attempting to rebalance
      */
-    error RebalanceAmountExceedsValuation(uint256 valuation, uint256 rebalanceAmount);
+    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails
@@ -803,9 +793,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error TransferFailed(address recipient, uint256 amount);
 
     /**
-     * @notice Thrown when the valuation of the vault falls below the locked amount
+     * @notice Thrown when the total value of the vault falls below the locked amount
      */
-    error ValuationBelowLockedAmount();
+    error TotalValueBelowLockedAmount();
 
     /**
      * @notice Thrown when an unauthorized address attempts a restricted operation
@@ -820,9 +810,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error NewLockedNotGreaterThanCurrent();
 
     /**
-     * @notice Thrown when the locked amount exceeds the valuation
+     * @notice Thrown when the locked amount exceeds the total value
      */
-    error NewLockedExceedsValuation();
+    error NewLockedExceedsTotalValue();
 
     /**
      * @notice Thrown when trying to pause deposits to beacon chain while deposits are already paused
@@ -864,7 +854,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error WithdrawalFeeRefundFailed(address _sender, uint256 _amount);
 
     /**
-     * @notice Thrown when partial withdrawals are not allowed when valuation is below locked
+     * @notice Thrown when partial withdrawals are not allowed when total value is below locked
      */
     error PartialWithdrawalNotAllowed();
 

@@ -241,9 +241,9 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
     });
 
-    it("valuation", async () => {
-      const valuation = await dashboard.valuation();
-      expect(valuation).to.equal(await vault.valuation());
+    it("totalValue", async () => {
+      const totalValue = await dashboard.totalValue();
+      expect(totalValue).to.equal(await vault.totalValue());
     });
   });
 
@@ -271,7 +271,7 @@ describe("Dashboard.sol", () => {
       await dashboard.connect(vaultOwner).fund({ value: 1000n });
 
       const maxMintableShares = await dashboard.totalMintableShares();
-      const maxStETHMinted = ((await vault.valuation()) * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE;
+      const maxStETHMinted = ((await vault.totalValue()) * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE;
       const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
 
       expect(maxMintableShares).to.equal(maxSharesMinted);

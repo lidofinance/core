@@ -83,7 +83,7 @@ describe("VaultHub.sol:hub", () => {
       );
 
     const count = await vaultHub.vaultsCount();
-    const valuations = [];
+    const totalValues = [];
     const inOutDeltas = [];
     const locked = [];
     const treasuryFees = [];
@@ -91,14 +91,14 @@ describe("VaultHub.sol:hub", () => {
     for (let i = 0; i < count; i++) {
       const vaultAddr = await vaultHub.vault(i);
       const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
-      valuations.push(await vaultContract.valuation());
+      totalValues.push(await vaultContract.totalValue());
       inOutDeltas.push(await vaultContract.inOutDelta());
       locked.push(await vaultContract.locked());
       treasuryFees.push(0n);
     }
 
-    // const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    // await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
+    //const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+    //await vaultHub.connect(accountingSigner).updateVaults(totalValues, inOutDeltas, locked, treasuryFees);
 
     return vault;
   }
@@ -361,14 +361,14 @@ describe("VaultHub.sol:hub", () => {
         const rebalanceThresholdBP = tbi(10000);
         const reserveRatioBP = BigIntMath.min(rebalanceThresholdBP + tbi(1000), TOTAL_BASIS_POINTS);
 
-        const valuationEth = tbi(100);
-        const valuation = ether(valuationEth.toString());
+        const totalValueEth = tbi(100);
+        const totalValue = ether(totalValueEth.toString());
 
-        const mintable = (valuation * (TOTAL_BASIS_POINTS - reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        const mintable = (totalValue * (TOTAL_BASIS_POINTS - reserveRatioBP)) / TOTAL_BASIS_POINTS;
 
         const isSlashing = Math.random() < 0.5;
-        const slashed = isSlashing ? ether(tbi(valuationEth).toString()) : 0n;
-        const threshold = ((valuation - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
+        const slashed = isSlashing ? ether(tbi(totalValueEth).toString()) : 0n;
+        const threshold = ((totalValue - slashed) * (TOTAL_BASIS_POINTS - rebalanceThresholdBP)) / TOTAL_BASIS_POINTS;
         const expectedHealthy = threshold >= mintable;
 
         const vault = await createAndConnectVault(vaultFactory, {
@@ -379,15 +379,15 @@ describe("VaultHub.sol:hub", () => {
 
         const vaultAddress = await vault.getAddress();
 
-        await vault.fund({ value: valuation });
+        await vault.fund({ value: totalValue });
 
         if (mintable > 0n) {
           const sharesToMint = await lido.getSharesByPooledEth(mintable);
-          await vault.lock(valuation);
+          await vault.lock(totalValue);
           await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
         }
 
-        await vault.report(0n, valuation - slashed, valuation, BigIntMath.max(mintable, ether("1")));
+        await vault.report(0n, totalValue - slashed, totalValue, BigIntMath.max(mintable, ether("1")));
 
         const actualHealthy = await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress);
         try {
@@ -396,7 +396,7 @@ describe("VaultHub.sol:hub", () => {
           console.log(`Test failed with parameters:
             Rebalance Threshold: ${rebalanceThresholdBP}
             Reserve Ratio: ${reserveRatioBP}
-            Valuation: ${valuation} ETH
+            Total Value: ${totalValue} ETH
             Minted: ${mintable} stETH
             Slashed: ${slashed} ETH
             Threshold: ${threshold} stETH
@@ -449,7 +449,7 @@ describe("VaultHub.sol:hub", () => {
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
 
       await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true); // valuation is enough
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true); // totalValue is enough
 
       // Burn some shares to make share rate fractional
       const burner = await impersonate(await locator.burner(), ether("1"));
@@ -457,10 +457,10 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(burner).burnShares(ether("100"));
 
       await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(false); // old valuation is not enough
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(false); // old totalValue is not enough
 
       const lockedEth = await lido.getPooledEthBySharesRoundUp(sharesToMint);
-      // For 50% reserve ratio, we need valuation to be 2x of locked ETH to be healthy
+      // For 50% reserve ratio, we need totalValue to be 2x of locked ETH to be healthy
       const report = lockedEth * 2n;
 
       await vault.report(0n, report - 1n, ether("1"), ether("1")); // below the threshold
@@ -484,12 +484,12 @@ describe("VaultHub.sol:hub", () => {
 
       await vault.fund({ value: ether("1") });
 
-      const mintingEth = ether("0.9999"); // 99.99% of the valuation
+      const mintingEth = ether("0.9999"); // 99.99% of the totalValue
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await vaultHub.connect(user).mintShares(vaultAddress, user, sharesToMint);
 
       await vault.report(0n, ether("1"), ether("1"), ether("1")); // normal report
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true); // valuation is enough
+      expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true); // totalValue is enough
 
       // Burn some shares to make share rate fractional
       const burner = await impersonate(await locator.burner(), ether("1"));
@@ -497,7 +497,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(burner).burnShares(ether("100"));
 
       const lockedEth = await lido.getPooledEthBySharesRoundUp(sharesToMint);
-      // if lockedEth is 99.99% of the valuation we need to report 100.00% of the valuation to be healthy
+      // if lockedEth is 99.99% of the totalValue we need to report 100.00% of the totalValue to be healthy
       const report = (lockedEth * 10000n) / 9999n;
 
       await vault.report(0n, report - 1n, ether("1"), ether("1")); // below the threshold
@@ -525,10 +525,10 @@ describe("VaultHub.sol:hub", () => {
       await vault.report(0n, ether("1"), ether("1"), ether("1"));
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true);
 
-      await vault.report(0n, 2n, ether("1"), ether("1")); // Minimal valuation to be healthy with 1 share (50% reserve ratio)
+      await vault.report(0n, 2n, ether("1"), ether("1")); // Minimal totalValue to be healthy with 1 share (50% reserve ratio)
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(true);
 
-      await vault.report(0n, 1n, ether("1"), ether("1")); // Below minimal required valuation
+      await vault.report(0n, 1n, ether("1"), ether("1")); // Below minimal required totalValue
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(vaultAddress)).to.equal(false);
 
       await lido.connect(user).transferShares(await locator.vaultHub(), 1n);
@@ -608,9 +608,9 @@ describe("VaultHub.sol:hub", () => {
       const vaultSocket_2 = await vaultHub["vaultSocket(address)"](vaultAddress);
       const mintedStETH_2 = await lido.getPooledEthByShares(vaultSocket_2.sharesMinted);
       const maxMintableRatio_2 = TOTAL_BASIS_POINTS - vaultSocket_2.reserveRatioBP;
-      const vaultValuation_2 = await vault.valuation();
+      const vaultTotalValue_2 = await vault.totalValue();
       const localGap_2 =
-        (mintedStETH_2 * TOTAL_BASIS_POINTS - vaultValuation_2 * maxMintableRatio_2) / vaultSocket_2.reserveRatioBP;
+        (mintedStETH_2 * TOTAL_BASIS_POINTS - vaultTotalValue_2 * maxMintableRatio_2) / vaultSocket_2.reserveRatioBP;
 
       expect(await vaultHub.rebalanceShortfall(vaultAddress)).to.equal(localGap_2);
     });

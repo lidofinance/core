@@ -134,7 +134,7 @@ contract NodeOperatorFee is Permissions {
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport.valuation - _lastClaimedReport.valuation) -
+        int128 rewardsAccrued = int128(latestReport.totalValue - _lastClaimedReport.totalValue) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
             adjustment;
 
@@ -151,9 +151,9 @@ contract NodeOperatorFee is Permissions {
      */
     function unreserved() public view returns (uint256) {
         uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
-        uint256 valuation = stakingVault().valuation();
+        uint256 totalValue = stakingVault().totalValue();
 
-        return reserved > valuation ? 0 : valuation - reserved;
+        return reserved > totalValue ? 0 : totalValue - reserved;
     }
 
     /**

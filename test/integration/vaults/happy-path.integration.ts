@@ -267,7 +267,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
     expect(vaultBalance).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.totalValue()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
@@ -341,7 +341,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
     expect(vaultBalance).to.equal(VAULT_CONNECTION_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.totalValue()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow Curator to mint max stETH", async () => {
@@ -354,7 +354,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     log.debug("Staking Vault", {
       "Staking Vault Address": stakingVaultAddress,
-      "Total ETH": await stakingVault.valuation(),
+      "Total ETH": await stakingVault.totalValue(),
       "Max shares": stakingVaultMaxMintingShares,
     });
 
@@ -407,7 +407,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
   //   expect(vaultReportedEvent.length).to.equal(1n);
 
-  //   expect(vaultReportedEvent[0].args?.valuation).to.equal(vaultValue);
+  //   expect(vaultReportedEvent[0].args?.totalValue).to.equal(vaultValue);
   //   expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
   //   // TODO: add assertions or locked values and rewards
 

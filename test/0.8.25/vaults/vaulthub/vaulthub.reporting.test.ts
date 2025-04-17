@@ -164,7 +164,7 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("updateVaultData", () => {
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
@@ -187,7 +187,7 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
     });
 
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
 
@@ -225,14 +225,14 @@ describe("VaultHub.sol:hub", () => {
 
     async function updateVaultReportHelper(
       vault: StakingVault__MockForVaultHub,
-      valuation: bigint,
+      totalValue: bigint,
       inOutDelta: bigint,
       treasuryFees: bigint,
       sharesMinted: bigint,
     ) {
       const vaultReport: VaultReportItem = [
         await vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
         sharesMinted,
@@ -243,7 +243,7 @@ describe("VaultHub.sol:hub", () => {
 
       await vaultHub.updateVaultData(
         vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
         sharesMinted,

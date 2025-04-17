@@ -49,26 +49,6 @@ describe("VaultHub.sol:forceExit", () => {
 
   let originalState: string;
 
-  async function report() {
-    const count = await vaultHub.vaultsCount();
-    const valuations = [];
-    const inOutDeltas = [];
-    const locked = [];
-    const treasuryFees = [];
-
-    for (let i = 0; i < count; i++) {
-      const vaultAddr = await vaultHub.vault(i);
-      const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
-      valuations.push(await vaultContract.valuation());
-      inOutDeltas.push(await vaultContract.inOutDelta());
-      locked.push(await vaultContract.locked());
-      treasuryFees.push(0n);
-    }
-
-    // const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-    // await vaultHub.connect(accountingSigner).updateVaults(valuations, inOutDeltas, locked, treasuryFees);
-  }
-
   before(async () => {
     [deployer, user, feeRecipient] = await ethers.getSigners();
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
@@ -120,8 +100,6 @@ describe("VaultHub.sol:forceExit", () => {
     await vaultHub
       .connect(user)
       .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-
-    await report();
 
     vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
   });
@@ -229,20 +207,20 @@ describe("VaultHub.sol:forceExit", () => {
 
       const demoVault = await ethers.getContractAt("StakingVault__MockForVaultHub", demoVaultAddress, user);
 
-      const valuation = ether("100");
-      await demoVault.fund({ value: valuation });
-      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
+      const totalValue = ether("100");
+      await demoVault.fund({ value: totalValue });
+      const cap = await steth.getSharesByPooledEth((totalValue * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
-      await demoVault.connect(user).lock(valuation);
+      await demoVault.connect(user).lock(totalValue);
       await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
 
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
       expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted).to.equal(cap);
 
-      // decrease valuation to trigger rebase
+      // decrease totalValue to trigger rebase
       const penalty = ether("1");
-      await demoVault.mock__decreaseValuation(penalty);
+      await demoVault.mock__decreaseTotalValue(penalty);
 
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
 
