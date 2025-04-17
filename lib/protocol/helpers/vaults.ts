@@ -8,7 +8,7 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { Delegation, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
 import { DelegationConfigStruct } from "typechain-types/contracts/0.8.25/vaults/VaultFactory";
 
-import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate, MAX_UINT256 } from "lib";
+import { days, de0x, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate, MAX_UINT256 } from "lib";
 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
@@ -335,3 +335,15 @@ export async function createVaultProxy(
     delegation,
   };
 }
+
+export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
+  const pubkeys = Array.from({ length: num }, (_, i) => {
+    const paddedIndex = (i + 1).toString().padStart(8, "0");
+    return `0x${paddedIndex.repeat(12)}`;
+  });
+
+  return {
+    pubkeys,
+    stringified: `0x${pubkeys.map(de0x).join("")}`,
+  };
+};

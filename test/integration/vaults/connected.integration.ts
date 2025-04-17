@@ -4,20 +4,21 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Delegation, StakingVault } from "typechain-types";
-const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 import {
   connectToHub,
   createVaultWithDelegation,
+  disconnectFromHub,
   getProtocolContext,
   ProtocolContext,
   setupLido,
   VaultRoles,
 } from "lib/protocol";
+import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
-import { ether } from "../../../lib/units";
+const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
@@ -97,5 +98,25 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         .connect(nodeOperatorManager)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
     ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
+  });
+
+  describe("Authorize / Deauthorize Lido VaultHub", () => {
+    it("After creation via createVaultWithDelegation and connection vault is authorized", async () => {
+      expect(await stakingVault.vaultHubAuthorized()).to.equal(true);
+    });
+
+    it("Can't deauthorize Lido VaultHub if connected to Hub", async () => {
+      await expect(
+        delegation.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub(),
+      ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
+    });
+
+    it.skip("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
+      await disconnectFromHub(ctx, stakingVault);
+      // todo: need to call something to actually disconnect the socket, but did not find, what to call
+      await expect(delegation.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
+        .to.emit(stakingVault, "VaultHubAuthorizedSet")
+        .withArgs(false);
+    });
   });
 });
