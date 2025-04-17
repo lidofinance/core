@@ -1146,15 +1146,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return 60 * 60 * 24 * 2; // 2 days
     }
 
-    function _isValidatorExitDelayPenaltyApplicable(
-        uint256, // _nodeOperatorId
-        uint256, // _proofSlotTimestamp
-        bytes, // _publicKey
-        uint256 _eligibleToExitInSec
-    ) internal view returns (bool) {
-        return _eligibleToExitInSec >= _getExitDeadlineThreshold();
-    }
-
     function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -1186,12 +1177,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     }
 
     function isValidatorExitDelayPenaltyApplicable(
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes _publicKey,
+        uint256, // _nodeOperatorId
+        uint256, // _proofSlotTimestamp
+        bytes, // _publicKey
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
-        return _isValidatorExitDelayPenaltyApplicable(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
+         return _eligibleToExitInSec >= _getExitDeadlineThreshold();
     }
 
     function _removeUnusedSigningKeys(uint256 _nodeOperatorId, uint256 _fromIndex, uint256 _keysCount) internal {
