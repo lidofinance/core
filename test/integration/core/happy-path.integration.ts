@@ -8,11 +8,10 @@ import { batch, ether, impersonate, log, updateBalance } from "lib";
 import {
   finalizeWithdrawalQueue,
   getProtocolContext,
-  norEnsureOperators,
+  norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
   report,
-  sdvtEnsureOperators,
 } from "lib/protocol";
 
 import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
@@ -77,10 +76,10 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should have at least 3 node operators in every module", async () => {
-    await norEnsureOperators(ctx, 3n, 5n);
+    await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 3n, 5n);
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(3n);
 
-    await sdvtEnsureOperators(ctx, 3n, 5n);
+    await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 3n, 5n);
     expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(3n);
   });
 

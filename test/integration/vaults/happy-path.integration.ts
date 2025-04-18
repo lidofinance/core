@@ -18,14 +18,7 @@ import {
   log,
   prepareLocalMerkleTree,
 } from "lib";
-import {
-  getProtocolContext,
-  norEnsureOperators,
-  OracleReportParams,
-  ProtocolContext,
-  report,
-  sdvtEnsureOperators,
-} from "lib/protocol";
+import { getProtocolContext, norSdvtEnsureOperators, OracleReportParams, ProtocolContext, report } from "lib/protocol";
 import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -120,8 +113,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should have at least 10 deposited node operators in NOR", async () => {
     const { depositSecurityModule, lido } = ctx.contracts;
 
-    await norEnsureOperators(ctx, 10n, 1n);
-    await sdvtEnsureOperators(ctx, 10n, 1n);
+    await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, 1n);
+    await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 10n, 1n);
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(10n);
     expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(10n);
 

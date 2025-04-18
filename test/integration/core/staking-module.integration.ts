@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { certainAddress, ether, impersonate } from "lib";
 import { LoadedContract } from "lib/contract";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/nor";
+import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
