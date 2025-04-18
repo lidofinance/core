@@ -25,7 +25,7 @@ export async function main() {
       // New fancy proxy contracts
       state[Sk.stakingVaultBeacon].address,
       state[Sk.stakingVaultImplementation].address,
-      state[Sk.delegationImplementation].address,
+      state[Sk.dashboardImpl].address,
 
       // Aragon Apps new implementations
       state[Sk.appLido].implementation.address,

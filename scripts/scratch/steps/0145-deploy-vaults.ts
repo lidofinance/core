@@ -11,33 +11,32 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
+  const stethAddress = state[Sk.appLido].proxy.address;
+  const wstethAddress = state[Sk.wstETH].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const agentAddress = state[Sk.appAgent].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
-  const wethContract = state.delegation.deployParameters.wethContract;
-  const wstethAddress = state[Sk.wstETH].address;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
+  const vaultImplementation = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
     vaultHubAddress,
     depositContract,
   ]);
-  const impAddress = await imp.getAddress();
+  const vaultImplementationAddress = await vaultImplementation.getAddress();
 
-  // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImplementation, "Delegation", deployer, [
-    wethContract,
+  // Deploy Dashboard implementation contract
+  const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    stethAddress,
     wstethAddress,
-    locatorAddress,
+    vaultHubAddress,
   ]);
-  const delegationAddress = await delegation.getAddress();
+  const dashboardAddress = await dashboard.getAddress();
 
-  // Deploy Delegation implementation contract
+  // Deploy Dashboard implementation contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
-    impAddress,
-    agentAddress,
+    vaultImplementationAddress,
+    deployer,
   ]);
   const beaconAddress = await beacon.getAddress();
 
@@ -52,7 +51,7 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beaconAddress,
-    delegationAddress,
+    dashboardAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 

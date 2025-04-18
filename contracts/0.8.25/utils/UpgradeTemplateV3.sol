@@ -74,7 +74,7 @@ interface IWithdrawalsManagerProxy {
 
 interface IVaultFactory {
     function BEACON() external view returns (address);
-    function DELEGATION_IMPL() external view returns (address);
+    function DASHBOARD_IMPL() external view returns (address);
 }
 
 interface IVaultHub is IPausableUntilWithRoles, IOssifiableProxy {
@@ -106,7 +106,7 @@ contract UpgradeTemplateV3 {
         // New fancy proxy contracts
         address upgradeableBeacon;
         address stakingVaultImplementation;
-        address delegationImplementation;
+        address dashboardImplementation;
 
         // New Aragon apps implementations
         address lidoImplementation;
@@ -143,7 +143,7 @@ contract UpgradeTemplateV3 {
     // New fancy proxy contracts
     IUpgradeableBeacon public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPLEMENTATION;
-    address public immutable DELEGATION_IMPLEMENTATION;
+    address public immutable DASHBOARD_IMPLEMENTATION;
 
     // Aragon Apps new implementations
     address public immutable LIDO_IMPLEMENTATION;
@@ -275,7 +275,7 @@ contract UpgradeTemplateV3 {
         VAULT_FACTORY = IVaultFactory(params.vaultFactory);
         UPGRADEABLE_BEACON = IUpgradeableBeacon(params.upgradeableBeacon);
         STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
-        DELEGATION_IMPLEMENTATION = params.delegationImplementation;
+        DASHBOARD_IMPLEMENTATION = params.dashboardImplementation;
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = IAragonAppRepo(params.aragonAppLidoRepo);
         VOTING = params.voting;
@@ -436,8 +436,8 @@ contract UpgradeTemplateV3 {
         if (VAULT_FACTORY.BEACON() != address(UPGRADEABLE_BEACON)) {
             revert IncorrectVaultFactoryBeacon(address(VAULT_FACTORY), address(UPGRADEABLE_BEACON));
         }
-        if (VAULT_FACTORY.DELEGATION_IMPL() != DELEGATION_IMPLEMENTATION) {
-            revert IncorrectVaultFactoryDelegationImplementation(address(VAULT_FACTORY), DELEGATION_IMPLEMENTATION);
+        if (VAULT_FACTORY.DASHBOARD_IMPL() != DASHBOARD_IMPLEMENTATION) {
+            revert IncorrectVaultFactoryDashboardImplementation(address(VAULT_FACTORY), DASHBOARD_IMPLEMENTATION);
         }
 
         if (UPGRADEABLE_BEACON.owner() != address(AGENT)) {
@@ -605,7 +605,7 @@ contract UpgradeTemplateV3 {
     error IncorrectBurnerAllowance(address contractAddress, address burner);
     error IncorrectOldBurnerAllowance(address contractAddress);
     error IncorrectVaultFactoryBeacon(address factory, address beacon);
-    error IncorrectVaultFactoryDelegationImplementation(address factory, address delegation);
+    error IncorrectVaultFactoryDashboardImplementation(address factory, address delegation);
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error NewAndOldLocatorImplementationsMustBeDifferent();

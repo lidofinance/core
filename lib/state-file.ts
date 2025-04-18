@@ -91,7 +91,7 @@ export enum Sk {
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
   stakingVaultFactory = "stakingVaultFactory",
-  delegationImplementation = "delegationImplementation",
+  dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
   upgradeTemplateV3 = "upgradeTemplateV3",
 }

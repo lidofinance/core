@@ -21,7 +21,6 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
   const depositContract = state.chainSpec.depositContractAddress;
-  const wethContract = parameters["delegation"].deployParameters.wethContract;
   const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
 
   // TODO: maybe take the parameters from current sanity checker
@@ -133,12 +132,12 @@ export async function main() {
   const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
 
   // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImplementation, "Delegation", deployer, [
-    wethContract,
+  const dashboardImpl = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    lidoAddress,
     wstethAddress,
-    locatorAddress,
+    vaultHub.address,
   ]);
-  const delegationAddress = await delegation.getAddress();
+  const dashboardImplAddress = await dashboardImpl.getAddress();
 
   // Deploy UpgradeableBeacon contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
@@ -151,7 +150,7 @@ export async function main() {
   const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beaconAddress,
-    delegationAddress,
+    dashboardImplAddress,
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 }

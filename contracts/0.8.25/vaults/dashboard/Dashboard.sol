@@ -4,28 +4,19 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Permissions} from "./Permissions.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
-
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {VaultHub} from "./VaultHub.sol";
-
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {NodeOperatorFee} from "./NodeOperatorFee.sol";
+import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
-import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
-interface IWETH9 is IERC20 {
-    function withdraw(uint256) external;
-
-    function deposit() external payable;
-}
-
-interface IWstETH is IERC20, IERC20Permit {
+interface IWstETH is IERC20 {
     function wrap(uint256) external returns (uint256);
 
     function unwrap(uint256) external returns (uint256);
@@ -38,11 +29,8 @@ interface IWstETH is IERC20, IERC20Permit {
  * in this single contract. It provides administrative functions for managing the StakingVault,
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
-contract Dashboard is Permissions {
-    /**
-     * @notice Total basis points for fee calculations; equals to 100%.
-     */
-    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
+contract Dashboard is NodeOperatorFee {
+    bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
 
     /**
      * @notice The stETH token contract
@@ -55,76 +43,53 @@ contract Dashboard is Permissions {
     IWstETH public immutable WSTETH;
 
     /**
-     * @notice The wETH token contract
-     */
-    IWETH9 public immutable WETH;
-
-    /**
      * @notice ETH address convention per EIP-7528
      */
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
-     * @notice Permission for assets recovery.
+     * @notice Constructor sets the stETH, and WSTETH token addresses,
+     * and passes the address of the vault hub up the inheritance chain.
+     * @param _stETH Address of the stETH token contract.
+     * @param _wstETH Address of the wstETH token contract.
+     * @param _vaultHub Address of the vault hub contract.
      */
-    bytes32 public constant ASSET_RECOVERY_ROLE = keccak256("vaults.Dashboard.AssetRecovery");
-
-    /**
-     * @notice Struct containing the permit details.
-     */
-    struct PermitInput {
-        uint256 value;
-        uint256 deadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
-    /**
-     * @notice Constructor sets the stETH, WETH, and WSTETH token addresses.
-     * @param _wETH Address of the weth token contract.
-     * @param _wstETH Address of the wsteth token contract.
-     * @param _lidoLocator Address of the Lido locator contract.
-     */
-    constructor(address _wETH, address _wstETH, address _lidoLocator) {
-        if (_wETH == address(0)) revert ZeroArgument("_wETH");
+    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+        if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
-        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
-        WETH = IWETH9(_wETH);
-        STETH = IStETH(ILidoLocator(_lidoLocator).lido());
+        STETH = IStETH(_stETH);
         WSTETH = IWstETH(_wstETH);
     }
 
     /**
-     * @notice Initializes the contract
-     * @param _defaultAdmin Address of the default admin
-     * @param _confirmExpiry Confirm expiry in seconds
+     * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
+     * @param _defaultAdmin The address of the default admin
+     * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _confirmExpiry The confirmation expiry time in seconds
      */
-    function initialize(address _defaultAdmin, uint256 _confirmExpiry) external virtual {
+    function initialize(
+        address _defaultAdmin,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry
+    ) public {
+        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
         STETH.approve(address(WSTETH), type(uint256).max);
-
-        _initialize(_defaultAdmin, _confirmExpiry);
     }
 
     // ==================== View Functions ====================
-
-    /**
-     * @notice Returns the roles that need to confirm multi-role operations.
-     * @return The roles that need to confirm the call.
-     */
-    function confirmingRoles() external pure returns (bytes32[] memory) {
-        return _confirmingRoles();
-    }
 
     /**
      * @notice Returns the vault socket data for the staking vault.
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(address(stakingVault()));
+        return VAULT_HUB.vaultSocket(address(_stakingVault()));
     }
 
     /**
@@ -172,7 +137,7 @@ contract Dashboard is Permissions {
      * @return The valuation as a uint256.
      */
     function valuation() external view returns (uint256) {
-        return stakingVault().valuation();
+        return _stakingVault().valuation();
     }
 
     /**
@@ -180,7 +145,7 @@ contract Dashboard is Permissions {
      * @return The maximum number of mintable stETH shares not counting already minted ones.
      */
     function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(stakingVault().valuation());
+        return _totalMintableShares(_mintableValuation());
     }
 
     /**
@@ -189,7 +154,7 @@ contract Dashboard is Permissions {
      * @return the maximum number of shares that can be minted by ether
      */
     function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 _totalShares = _totalMintableShares(stakingVault().valuation() + _etherToFund);
+        uint256 _totalShares = _totalMintableShares(_mintableValuation() + _etherToFund);
         uint256 _sharesMinted = vaultSocket().sharesMinted;
 
         if (_totalShares < _sharesMinted) return 0;
@@ -197,19 +162,39 @@ contract Dashboard is Permissions {
     }
 
     /**
+     * @notice Returns the unreserved amount of ether,
+     * i.e. the amount of ether that is not locked in the StakingVault
+     * and not reserved for node operator fee.
+     * This amount does not account for the current balance of the StakingVault and
+     * can return a value greater than the actual balance of the StakingVault.
+     * @return uint256: the amount of unreserved ether.
+     */
+    function unreserved() public view returns (uint256) {
+        IStakingVault stakingVault_ = _stakingVault();
+        uint256 reserved = stakingVault_.locked() + nodeOperatorUnclaimedFee();
+        uint256 valuation_ = stakingVault_.valuation();
+
+        return reserved > valuation_ ? 0 : valuation_ - reserved;
+    }
+
+    /**
      * @notice Returns the amount of ether that can be withdrawn from the staking vault.
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
+     * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
-    function withdrawableEther() external view virtual returns (uint256) {
-        return Math256.min(address(stakingVault()).balance, stakingVault().unlocked());
+    function withdrawableEther() external view returns (uint256) {
+        return Math256.min(address(_stakingVault()).balance, unreserved());
     }
 
     // ==================== Vault Management Functions ====================
 
     /**
-     * @dev Receive function to accept ether
+     * @dev Automatically funds the staking vault with ether
      */
-    receive() external payable {}
+    receive() external payable {
+        _fund(msg.value);
+    }
 
     /**
      * @notice Transfers ownership of the staking vault to a new owner.
@@ -222,13 +207,7 @@ contract Dashboard is Permissions {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub.vaultSocket(address(stakingVault())).sharesMinted;
-
-        if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
-        }
-
+    function voluntaryDisconnect() external {
         _voluntaryDisconnect();
     }
 
@@ -240,34 +219,18 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Funds the staking vault with wrapped ether. Expects WETH amount approved to this contract. Auth is performed in _fund
-     * @param _amountOfWETH Amount of wrapped ether to fund the staking vault with
-     */
-    function fundWeth(uint256 _amountOfWETH) external {
-        SafeERC20.safeTransferFrom(WETH, msg.sender, address(this), _amountOfWETH);
-        WETH.withdraw(_amountOfWETH);
-
-        _fund(_amountOfWETH);
-    }
-
-    /**
      * @notice Withdraws ether from the staking vault to a recipient
      * @param _recipient Address of the recipient
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        _withdraw(_recipient, _ether);
-    }
+        uint256 unreserved_ = unreserved();
 
-    /**
-     * @notice Withdraws wETH tokens from the staking vault to wrapped ether.
-     * @param _recipient Address of the recipient
-     * @param _amountOfWETH Amount of WETH to withdraw
-     */
-    function withdrawWETH(address _recipient, uint256 _amountOfWETH) external {
-        _withdraw(address(this), _amountOfWETH);
-        WETH.deposit{value: _amountOfWETH}();
-        SafeERC20.safeTransfer(WETH, _recipient, _amountOfWETH);
+        if (_ether > unreserved_) {
+            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        }
+
+        _withdraw(_recipient, _ether);
     }
 
     /**
@@ -325,7 +288,7 @@ contract Dashboard is Permissions {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -349,45 +312,6 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @notice Burns stETH shares backed by the vault from the sender using permit (with value in stETH).
-     * @param _amountOfShares Amount of stETH shares to burn
-     * @param _permit data required for the stETH.permit() with amount in stETH
-     */
-    function burnSharesWithPermit(
-        uint256 _amountOfShares,
-        PermitInput calldata _permit
-    ) external virtual safePermit(address(STETH), msg.sender, address(this), _permit) {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
-        _burnShares(_amountOfShares);
-    }
-
-    /**
-     * @notice Burns stETH tokens backed by the vault from the sender using permit.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
-     * @param _amountOfStETH Amount of stETH to burn
-     * @param _permit data required for the stETH.permit() method to set the allowance
-     */
-    function burnStETHWithPermit(
-        uint256 _amountOfStETH,
-        PermitInput calldata _permit
-    ) external safePermit(address(STETH), msg.sender, address(this), _permit) {
-        _burnStETH(_amountOfStETH);
-    }
-
-    /**
-     * @notice Burns wstETH tokens backed by the vault from the sender using EIP-2612 Permit.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
-     * @param _amountOfWstETH Amount of wstETH tokens to burn
-     * @param _permit data required for the wstETH.permit() method to set the allowance
-     */
-    function burnWstETHWithPermit(
-        uint256 _amountOfWstETH,
-        PermitInput calldata _permit
-    ) external safePermit(address(WSTETH), msg.sender, address(this), _permit) {
-        _burnWstETH(_amountOfWstETH);
-    }
-
-    /**
      * @notice Rebalances the vault by transferring ether
      * @param _ether Amount of ether to rebalance
      */
@@ -406,17 +330,21 @@ contract Dashboard is Permissions {
      */
     function unguaranteedDepositToBeaconChain(
         StakingVaultDeposit[] calldata _deposits
-    ) public virtual returns (uint256 totalAmount) {
-        IStakingVault stakingVault = stakingVault();
-        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+    ) public returns (uint256 totalAmount) {
+        IStakingVault stakingVault_ = _stakingVault();
+        IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
         }
 
+        if (totalAmount > unreserved()) {
+            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
+        }
+
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
 
-        bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
+        bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
         StakingVaultDeposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
@@ -428,8 +356,10 @@ contract Dashboard is Permissions {
                 deposit.depositDataRoot
             );
 
-            emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
+            emit UnguaranteedDeposit(address(stakingVault_), deposit.pubkey, deposit.amount);
         }
+
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
     }
 
     /**
@@ -460,7 +390,7 @@ contract Dashboard is Permissions {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(ASSET_RECOVERY_ROLE) {
+    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -487,7 +417,7 @@ contract Dashboard is Permissions {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(ASSET_RECOVERY_ROLE) {
+    ) external onlyRole(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -604,7 +534,7 @@ contract Dashboard is Permissions {
             TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // If the required locked amount is greater than the current, increase the locked amount
-        if (requiredLocked > stakingVault().locked()) {
+        if (requiredLocked > _stakingVault().locked()) {
             _lock(requiredLocked);
         }
 
@@ -612,36 +542,29 @@ contract Dashboard is Permissions {
     }
 
     /**
-     * @dev Modifier to check if the permit is successful, and if not, check if the allowance is sufficient
+     * @notice Returns the valuation with the node operator fee subtracted,
+     *         because the fee cannot be used to mint shares.
+     * @return The amount of ether in wei that can be used to mint shares.
      */
-    modifier safePermit(
-        address token,
-        address owner,
-        address spender,
-        PermitInput calldata permitInput
-    ) {
-        // Try permit() before allowance check to advance nonce if possible
-        try
-            IERC20Permit(token).permit(
-                owner,
-                spender,
-                permitInput.value,
-                permitInput.deadline,
-                permitInput.v,
-                permitInput.r,
-                permitInput.s
-            )
-        {
-            _;
-            return;
-        } catch {
-            // Permit potentially got frontran. Continue anyways if allowance is sufficient.
-            if (IERC20(token).allowance(owner, spender) >= permitInput.value) {
-                _;
-                return;
-            }
+    function _mintableValuation() internal view returns (uint256) {
+        return _stakingVault().valuation() - nodeOperatorUnclaimedFee();
+    }
+
+    /**
+     * @notice Mints shares within the mintable valuation,
+     *         and reverts if the resulting backing is greater than the mintable valuation.
+     * @param _recipient The address of the recipient.
+     * @param _amountOfShares The amount of shares to mint.
+     */
+    function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
+        _mintShares(_recipient, _amountOfShares);
+
+        uint256 locked = _stakingVault().locked();
+        uint256 mintableValuation = _mintableValuation();
+
+        if (locked > mintableValuation) {
+            revert MintableValuationExceeded(locked, mintableValuation);
         }
-        revert InvalidPermit(token);
     }
 
     /**
@@ -650,7 +573,7 @@ contract Dashboard is Permissions {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -663,7 +586,7 @@ contract Dashboard is Permissions {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(vaultHub), unwrappedShares);
+        STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 
@@ -705,9 +628,20 @@ contract Dashboard is Permissions {
 
     // ==================== Errors ====================
 
-    /// @notice Error when provided permit is invalid
-    error InvalidPermit(address token);
+        /**
+     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @param amount The amount of ether that was attempted to be withdrawn
+     * @param unreserved The amount of unreserved ether available
+     */
+    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
 
-    /// @notice Error when recovery of ETH fails on transfer to recipient
+    /**
+     * @notice Error thrown when recovery of ETH fails on transfer to recipient
+     */
     error EthTransferFailed(address recipient, uint256 amount);
+
+    /**
+     * @notice Error thrown when mintable valuation is breached
+     */
+    error MintableValuationExceeded(uint256 locked, uint256 mintableValuation);
 }
