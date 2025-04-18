@@ -71,7 +71,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         │  ┌──────────────────────┐  ┌──────────────────────┐  │
         │  │       Tier 1         │  │       Tier 2         │  │
         │  │  tierShareLimit = x  │  │  tierShareLimit = y  │  │
-        │  │  Vault2 ... Vaultk   │  │                      │  │
+        │  │  Vault_2 ... Vault_k │  │                      │  │
         │  └──────────────────────┘  └──────────────────────┘  │
         └──────────────────────────────────────────────────────┘
      */
@@ -85,7 +85,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     /// @notice Default group address
     uint256 public constant DEFAULT_TIER_ID = 0;
-    address public constant DEFAULT_TIER_ADDRESS = address(uint160(type(uint160).max));
+    address public constant DEFAULT_TIER_OPERATOR = address(uint160(type(uint160).max));
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
@@ -163,7 +163,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         //create default tier with default share limit
         $.tiers.push(
             Tier({
-                operator: DEFAULT_TIER_ADDRESS,
+                operator: DEFAULT_TIER_OPERATOR,
                 shareLimit: uint96(_defaultTierParams.shareLimit),
                 reserveRatioBP: uint16(_defaultTierParams.reserveRatioBP),
                 rebalanceThresholdBP: uint16(_defaultTierParams.rebalanceThresholdBP),
@@ -208,7 +208,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         emit GroupShareLimitUpdated(_nodeOperator, uint96(_shareLimit));
     }
 
-    /// @notice Returns a node operator address
+    /// @notice Returns a group by node operator address
     /// @param _nodeOperator address of the node operator
     /// @return Group
     function group(address _nodeOperator) external view returns (Group memory) {
@@ -219,7 +219,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _index index of the node operator
     /// @return Node operator address
     function nodeOperatorAddress(uint256 _index) external view returns (address) {
-        return _getStorage().nodeOperators[_index];
+        ERC7201Storage storage $ = _getStorage();
+        if (_index >= $.nodeOperators.length) revert NodeOperatorNotExists();
+        return $.nodeOperators[_index];
     }
 
     /// @notice Returns a node operator count
@@ -274,7 +276,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _tierId id of the tier
     /// @return Tier
     function tier(uint256 _tierId) external view returns (Tier memory) {
-        return _getStorage().tiers[_tierId];
+        ERC7201Storage storage $ = _getStorage();
+        if (_tierId >= $.tiers.length) revert TierNotExists();
+        return $.tiers[_tierId];
     }
 
     /// @notice Alters a tier
@@ -386,7 +390,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint128 requestedTierId = vaultTier.requestedTierId;
         if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
 
-        Tier memory requestedTier = $.tiers[requestedTierId];
+        Tier storage requestedTier = $.tiers[requestedTierId];
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
@@ -593,7 +597,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error GroupNotExists();
     error GroupLimitExceeded();
     error GroupMintedSharesUnderflow();
-
+    error NodeOperatorNotExists();
     error TierExists();
     error TiersNotAvailable();
     error TierLimitExceeded();
