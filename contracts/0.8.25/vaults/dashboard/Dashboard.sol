@@ -91,7 +91,7 @@ contract Dashboard is NodeOperatorFee {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(_stakingVaultAddress());
+        return VAULT_HUB.vaultSocket(_stakingVaultAddress());
     }
 
     /**
@@ -209,7 +209,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub.vaultSocket(_stakingVaultAddress()).sharesMinted;
+        uint256 shares = VAULT_HUB.vaultSocket(_stakingVaultAddress()).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -295,7 +295,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+            STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -580,7 +580,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -593,7 +593,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(vaultHub), unwrappedShares);
+        STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 

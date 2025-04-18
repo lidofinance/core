@@ -131,7 +131,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     address private immutable _SELF;
 
-    VaultHub public immutable vaultHub;
+    VaultHub public immutable VAULT_HUB;
 
     /**
      * @notice Indicates whether the contract has been initialized
@@ -145,7 +145,7 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
 
         _SELF = address(this);
-        vaultHub = VaultHub(_vaultHub);
+        VAULT_HUB = VaultHub(_vaultHub);
     }
 
     /**
@@ -255,7 +255,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        vaultHub.mintShares(_stakingVaultAddress(), _recipient, _shares);
+        VAULT_HUB.mintShares(_stakingVaultAddress(), _recipient, _shares);
     }
 
     /**
@@ -264,7 +264,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        vaultHub.burnShares(_stakingVaultAddress(), _shares);
+        VAULT_HUB.burnShares(_stakingVaultAddress(), _shares);
     }
 
     /**
@@ -314,7 +314,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        vaultHub.voluntaryDisconnect(_stakingVaultAddress());
+        VAULT_HUB.voluntaryDisconnect(_stakingVaultAddress());
     }
 
     /**

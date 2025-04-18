@@ -183,7 +183,7 @@ describe("Dashboard.sol", () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth, wsteth, hub]);
       expect(await dashboard_.STETH()).to.equal(steth);
       expect(await dashboard_.WSTETH()).to.equal(wsteth);
-      expect(await dashboard_.vaultHub()).to.equal(hub);
+      expect(await dashboard_.VAULT_HUB()).to.equal(hub);
     });
   });
 
@@ -220,7 +220,7 @@ describe("Dashboard.sol", () => {
       expect(await vault.nodeOperator()).to.equal(nodeOperator);
       expect(await dashboard.initialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
-      expect(await dashboard.vaultHub()).to.equal(hub);
+      expect(await dashboard.VAULT_HUB()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
       // dashboard roles
