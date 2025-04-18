@@ -658,9 +658,9 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultConnectionSet(
         address indexed vault,
-        uint256 capShares,
-        uint256 minReserveRatio,
-        uint256 forcedRebalanceThreshold,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 forcedRebalanceThresholdBP,
         uint256 treasuryFeeBP
     );
 
@@ -673,16 +673,15 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
-
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(address vault, uint256 totalValue, uint256 liabilityShares, uint256 newRebalanceThresholdBP);
     error InsufficientSharesToBurn(address vault, uint256 amount);
-    error ShareLimitExceeded(address vault, uint256 capShares);
+    error ShareLimitExceeded(address vault, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error NotAuthorized(string operation, address addr);
     error ZeroArgument(string argument);
-    error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
+    error ShareLimitTooHigh(address vault, uint256 shareLimit, uint256 maxShareLimit);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error ForcedRebalanceThresholdTooHigh(address vault, uint256 forcedRebalanceThresholdBP, uint256 maxForcedRebalanceThresholdBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
