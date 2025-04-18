@@ -14,7 +14,7 @@ export GAS_PRIORITY_FEE=1
 export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-${NETWORK}.json"
-export NETWORK_STATE_DEFAULTS_FILE="scripts/scratch/deployed-testnet-defaults.json"
+export NETWORK_STATE_DEFAULTS_FILE="scripts/defaults/testnet-defaults.json"
 
 bash scripts/dao-deploy.sh
 
@@ -22,4 +22,5 @@ bash scripts/dao-deploy.sh
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run acceptance tests
+export INTEGRATION_WITH_CSM="off"
 yarn test:integration:fork:local

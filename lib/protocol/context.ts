@@ -1,4 +1,4 @@
-import { ContractTransactionReceipt } from "ethers";
+import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
@@ -39,9 +39,10 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     signers,
     interfaces,
     flags,
+    isScratch: true, // NB: gonna be updated upon merge of upgrade PR
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
-    getEvents: (receipt: ContractTransactionReceipt, eventName: string) =>
-      findEventsWithInterfaces(receipt, eventName, interfaces),
+    getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
+      findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
   await provision(context);

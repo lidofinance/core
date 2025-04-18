@@ -10,7 +10,6 @@ const VIEW_NAMES_AND_CTOR_ARGS = [
   "accountingOracle",
   "depositSecurityModule",
   "elRewardsVault",
-  "legacyOracle",
   "lido",
   "oracleReportSanityChecker",
   "postTokenRebaseReceiver",

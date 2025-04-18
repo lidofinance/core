@@ -1,23 +1,28 @@
-import { BaseContract as EthersBaseContract, ContractTransactionReceipt, LogDescription } from "ethers";
+import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interface, LogDescription } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   AccountingOracle,
   ACL,
   Burner,
   DepositSecurityModule,
   HashConsensus,
   Kernel,
-  LegacyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
   NodeOperatorsRegistry,
+  OperatorGrid,
   OracleDaemonConfig,
   OracleReportSanityChecker,
+  PredepositGuarantee,
   StakingRouter,
+  UpgradeableBeacon,
   ValidatorsExitBusOracle,
+  VaultFactory,
+  VaultHub,
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
@@ -33,8 +38,8 @@ export type ProtocolNetworkItems = {
   accountingOracle: string;
   depositSecurityModule: string;
   elRewardsVault: string;
-  legacyOracle: string;
   lido: string;
+  accounting: string;
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
@@ -51,6 +56,12 @@ export type ProtocolNetworkItems = {
   sdvt: string;
   // hash consensus
   hashConsensus: string;
+  // vaults
+  stakingVaultFactory: string;
+  stakingVaultBeacon: string;
+  vaultHub: string;
+  predepositGuarantee: string;
+  operatorGrid: string;
 };
 
 export interface ContractTypes {
@@ -58,8 +69,8 @@ export interface ContractTypes {
   AccountingOracle: AccountingOracle;
   DepositSecurityModule: DepositSecurityModule;
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
-  LegacyOracle: LegacyOracle;
   Lido: Lido;
+  Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
@@ -70,8 +81,13 @@ export interface ContractTypes {
   Kernel: Kernel;
   ACL: ACL;
   HashConsensus: HashConsensus;
+  PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  VaultFactory: VaultFactory;
+  UpgradeableBeacon: UpgradeableBeacon;
+  VaultHub: VaultHub;
+  OperatorGrid: OperatorGrid;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -87,8 +103,8 @@ export type CoreContracts = {
   accountingOracle: LoadedContract<AccountingOracle>;
   depositSecurityModule: LoadedContract<DepositSecurityModule>;
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
-  legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
+  accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
@@ -119,11 +135,20 @@ export type WstETHContracts = {
   wstETH: LoadedContract<WstETH>;
 };
 
+export type VaultsContracts = {
+  stakingVaultFactory: LoadedContract<VaultFactory>;
+  stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
+  vaultHub: LoadedContract<VaultHub>;
+  predepositGuarantee: LoadedContract<PredepositGuarantee>;
+  operatorGrid: LoadedContract<OperatorGrid>;
+};
+
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
   AragonContracts &
   StakingModuleContracts &
   HashConsensusContracts &
-  WstETHContracts;
+  WstETHContracts &
+  VaultsContracts;
 
 export type ProtocolSigners = {
   agent: string;
@@ -142,6 +167,11 @@ export type ProtocolContext = {
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
+  isScratch: boolean;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
-  getEvents: (receipt: ContractTransactionReceipt, eventName: string) => LogDescription[];
+  getEvents: (
+    receipt: ContractTransactionReceipt,
+    eventName: string,
+    extraInterfaces?: Interface[], // additional interfaces to parse
+  ) => LogDescription[];
 };
