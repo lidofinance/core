@@ -7,7 +7,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
-import {Dashboard} from "contracts/0.8.25/vaults/Dashboard.sol";
+import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
 
 contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     address public immutable DASHBOARD_IMPL;
@@ -34,7 +34,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
 
         vault.initialize(address(dashboard), _operator, PREDEPOSIT_GUARANTEE, "");
 
-        dashboard.initialize(address(this), 7 days);
+        dashboard.initialize(address(this), _operator, 0, 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.FUND_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.WITHDRAW_ROLE(), msg.sender);
@@ -66,8 +66,8 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
     event VaultCreated(address indexed owner, address indexed vault);
 
     /**
-     * @notice Event emitted on a Delegation creation
-     * @param admin The address of the Delegation admin
+     * @notice Event emitted on a Dashboard creation
+     * @param admin The address of the Dashboard admin
      * @param dashboard The address of the created Dashboard
      */
     event DashboardCreated(address indexed admin, address indexed dashboard);

@@ -5,7 +5,7 @@ import { beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Delegation } from "typechain-types";
+import { Dashboard } from "typechain-types";
 
 import { days, ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -16,14 +16,16 @@ const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
+const VAULT_CONNECTION_DEPOSIT = ether("1");
+
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
 }[keyof T];
 
-type DelegationMethods = Methods<Delegation>; // "foo" | "bar"
+type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"
 
-describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
+describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -50,6 +52,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     ossifier: HardhatEthersSigner,
     depositorSetter: HardhatEthersSigner,
     lockedResetter: HardhatEthersSigner,
+    tierChanger: HardhatEthersSigner,
     nodeOperatorFeeClaimer: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
@@ -83,6 +86,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       ossifier,
       depositorSetter,
       lockedResetter,
+      tierChanger,
       nodeOperatorFeeClaimer,
       nodeOperatorRewardAdjuster,
       stranger,
@@ -97,88 +101,163 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
   // initializing contracts with signers
   describe("Vault created with all the roles", () => {
-    let testDelegation: Delegation;
+    let testDashboard: Dashboard;
 
     before(async () => {
       const { stakingVaultFactory } = ctx.contracts;
 
       // Owner can create a vault with operator as a node operator
-      const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
-        {
-          defaultAdmin: owner,
-          nodeOperatorManager: nodeOperatorManager,
-          assetRecoverer: assetRecoverer,
-          nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-          confirmExpiry: days(7n),
-          funders: [funder],
-          withdrawers: [withdrawer],
-          lockers: [locker],
-          minters: [minter],
-          burners: [burner],
-          rebalancers: [rebalancer],
-          depositPausers: [depositPauser],
-          depositResumers: [depositResumer],
-          pdgCompensators: [pdgCompensator],
-          unknownValidatorProvers: [unknownValidatorProver],
-          unguaranteedBeaconChainDepositors: [unguaranteedBeaconChainDepositor],
-          validatorExitRequesters: [validatorExitRequester],
-          validatorWithdrawalTriggerers: [validatorWithdrawalTriggerer],
-          disconnecters: [disconnecter],
-          lidoVaultHubAuthorizers: [lidoVaultHubAuthorizer],
-          lidoVaultHubDeauthorizers: [lidoVaultHubDeauthorizer],
-          ossifiers: [ossifier],
-          depositorSetters: [depositorSetter],
-          lockedResetters: [lockedResetter],
-          nodeOperatorFeeClaimers: [nodeOperatorFeeClaimer],
-          nodeOperatorRewardAdjusters: [nodeOperatorRewardAdjuster],
-        },
-        "0x",
-      );
+      const deployTx = await stakingVaultFactory
+        .connect(owner)
+        .createVaultWithDashboard(
+          owner,
+          nodeOperatorManager,
+          nodeOperatorManager,
+          VAULT_NODE_OPERATOR_FEE,
+          days(7n),
+          [],
+          "0x",
+          { value: VAULT_CONNECTION_DEPOSIT },
+        );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
-      testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+      testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
+
+      await testDashboard.connect(owner).grantRoles([
+        {
+          account: assetRecoverer,
+          role: await testDashboard.RECOVER_ASSETS_ROLE(),
+        },
+        {
+          account: funder,
+          role: await testDashboard.FUND_ROLE(),
+        },
+        {
+          account: withdrawer,
+          role: await testDashboard.WITHDRAW_ROLE(),
+        },
+        {
+          account: locker,
+          role: await testDashboard.LOCK_ROLE(),
+        },
+        {
+          account: minter,
+          role: await testDashboard.MINT_ROLE(),
+        },
+        {
+          account: burner,
+          role: await testDashboard.BURN_ROLE(),
+        },
+        {
+          account: rebalancer,
+          role: await testDashboard.REBALANCE_ROLE(),
+        },
+        {
+          account: depositPauser,
+          role: await testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+        },
+        {
+          account: depositResumer,
+          role: await testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+        },
+        {
+          account: unknownValidatorProver,
+          role: await testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
+        },
+        {
+          account: unguaranteedBeaconChainDepositor,
+          role: await testDashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+        },
+        {
+          account: validatorExitRequester,
+          role: await testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+        },
+        {
+          account: validatorWithdrawalTriggerer,
+          role: await testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+        },
+        {
+          account: disconnecter,
+          role: await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
+        },
+        {
+          account: lidoVaultHubAuthorizer,
+          role: await testDashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+        },
+        {
+          account: lidoVaultHubDeauthorizer,
+          role: await testDashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
+        },
+        {
+          account: ossifier,
+          role: await testDashboard.OSSIFY_ROLE(),
+        },
+        {
+          account: depositorSetter,
+          role: await testDashboard.SET_DEPOSITOR_ROLE(),
+        },
+        {
+          account: lockedResetter,
+          role: await testDashboard.RESET_LOCKED_ROLE(),
+        },
+        {
+          account: tierChanger,
+          role: await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+        },
+      ]);
+
+      await testDashboard.connect(nodeOperatorManager).grantRoles([
+        {
+          account: nodeOperatorFeeClaimer,
+          role: await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+        },
+        {
+          account: nodeOperatorRewardAdjuster,
+          role: await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+        },
+      ]);
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
-      expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
-      expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
+      expect(await testDashboard.connect(funder).unreserved()).to.equal(0);
+      expect(await testDashboard.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
+      expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
     });
 
     it("Allows to retrieve roles addresses", async () => {
-      expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+      expect(await testDashboard.getRoleMembers(await testDashboard.MINT_ROLE())).to.deep.equal([minter.address]);
     });
 
     it("Allows NO Manager to add and remove new managers", async () => {
-      await testDelegation
+      await testDashboard
         .connect(nodeOperatorManager)
-        .grantRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
-      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        .grantRole(await testDashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDashboard.getRoleMembers(await testDashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
         nodeOperatorManager.address,
         stranger.address,
       ]);
-      await testDelegation
+      await testDashboard
         .connect(nodeOperatorManager)
-        .revokeRole(await testDelegation.NODE_OPERATOR_MANAGER_ROLE(), stranger);
-      expect(await testDelegation.getRoleMembers(await testDelegation.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        .revokeRole(await testDashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await testDashboard.getRoleMembers(await testDashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
         nodeOperatorManager.address,
       ]);
     });
 
     describe("Verify ACL for methods that require only role", () => {
-      describe("Delegation methods", () => {
+      describe("Dashboard methods", () => {
         it("claimNodeOperatorFee", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "claimNodeOperatorFee",
             {
               successUsers: [nodeOperatorFeeClaimer],
               failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimer),
             },
             [stranger],
-            await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+            await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
           );
         });
       });
@@ -186,288 +265,215 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("recoverERC20", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "recoverERC20",
             {
               successUsers: [assetRecoverer],
               failingUsers: allRoles.filter((r) => r !== assetRecoverer),
             },
             [ZeroAddress, owner, 1n],
-            await testDelegation.ASSET_RECOVERY_ROLE(),
+            await testDashboard.RECOVER_ASSETS_ROLE(),
           );
         });
 
         it("recoverERC721", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "recoverERC721",
             {
               successUsers: [assetRecoverer],
               failingUsers: allRoles.filter((r) => r !== assetRecoverer),
             },
             [ZeroAddress, 0, stranger],
-            await testDelegation.ASSET_RECOVERY_ROLE(),
+            await testDashboard.RECOVER_ASSETS_ROLE(),
           );
         });
 
         it("triggerValidatorWithdrawal", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "triggerValidatorWithdrawal",
             {
               successUsers: [validatorWithdrawalTriggerer],
               failingUsers: allRoles.filter((r) => r !== validatorWithdrawalTriggerer),
             },
             ["0x", [0n], stranger],
-            await testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+            await testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
           );
         });
 
         it("requestValidatorExit", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "requestValidatorExit",
             {
               successUsers: [validatorExitRequester],
               failingUsers: allRoles.filter((r) => r !== validatorExitRequester),
             },
             ["0x" + "ab".repeat(48)],
-            await testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
+            await testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
           );
         });
 
         it("resumeBeaconChainDeposits", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "resumeBeaconChainDeposits",
             {
               successUsers: [depositResumer],
               failingUsers: allRoles.filter((r) => r !== depositResumer),
             },
             [],
-            await testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+            await testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
           );
         });
 
         it("pauseBeaconChainDeposits", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "pauseBeaconChainDeposits",
             {
               successUsers: [depositPauser],
               failingUsers: allRoles.filter((r) => r !== depositPauser),
             },
             [],
-            await testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+            await testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
           );
         });
 
         // requires prepared state for this test to pass, skipping for now
         it.skip("compensateDisprovenPredepositFromPDG", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "compensateDisprovenPredepositFromPDG",
             {
               successUsers: [pdgCompensator],
               failingUsers: allRoles.filter((r) => r !== pdgCompensator),
             },
             [SAMPLE_PUBKEY, stranger],
-            await testDelegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+            await testDashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
           );
         });
 
         // requires prepared state for this test to pass, skipping for now
         it.skip("proveUnknownValidatorsToPDG", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "proveUnknownValidatorsToPDG",
             {
               successUsers: [unknownValidatorProver],
               failingUsers: allRoles.filter((r) => r !== unknownValidatorProver),
             },
             [SAMPLE_PUBKEY, stranger],
-            await testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
+            await testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
           );
         });
 
         // requires prepared state for this test to pass, skipping for now
         it.skip("increaseAccruedRewardsAdjustment", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "increaseAccruedRewardsAdjustment",
             {
               successUsers: [nodeOperatorRewardAdjuster],
               failingUsers: allRoles.filter((r) => r !== nodeOperatorRewardAdjuster),
             },
             [SAMPLE_PUBKEY, stranger],
-            await testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
           );
         });
 
         it("rebalanceVault", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "rebalanceVault",
             {
               successUsers: [rebalancer],
               failingUsers: allRoles.filter((r) => r !== rebalancer),
             },
             [1n],
-            await testDelegation.REBALANCE_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("burnWstETHWithPermit", async () => {
-          await testMethod(
-            testDelegation,
-            "burnWstETHWithPermit",
-            {
-              successUsers: [burner],
-              failingUsers: allRoles.filter((r) => r !== burner),
-            },
-            [ZeroAddress, 0, stranger],
-            await testDelegation.BURN_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("burnStETHWithPermit", async () => {
-          await testMethod(
-            testDelegation,
-            "burnStETHWithPermit",
-            {
-              successUsers: [burner],
-              failingUsers: allRoles.filter((r) => r !== burner),
-            },
-            [ZeroAddress, 0, stranger],
-            await testDelegation.BURN_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("burnSharesWithPermit", async () => {
-          await testMethod(
-            testDelegation,
-            "burnSharesWithPermit",
-            {
-              successUsers: [burner],
-              failingUsers: allRoles.filter((r) => r !== burner),
-            },
-            [stranger],
-            await testDelegation.BURN_ROLE(),
+            await testDashboard.REBALANCE_ROLE(),
           );
         });
 
         it("mintWstETH", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "mintWstETH",
             {
               successUsers: [minter],
               failingUsers: allRoles.filter((r) => r !== minter),
             },
             [ZeroAddress, 0, stranger],
-            await testDelegation.MINT_ROLE(),
+            await testDashboard.MINT_ROLE(),
           );
         });
 
         it("mintStETH", async () => {
-          await testDelegation.connect(funder).fund({ value: ether("1") });
-          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
-            testDelegation,
+            testDashboard,
             "mintStETH",
             {
               successUsers: [minter],
               failingUsers: allRoles.filter((r) => r !== minter),
             },
             [stranger, 1n],
-            await testDelegation.MINT_ROLE(),
+            await testDashboard.MINT_ROLE(),
           );
         });
 
         it("mintShares", async () => {
-          await testDelegation.connect(funder).fund({ value: ether("1") });
-          await testDelegation.connect(locker).lock(ether("1"));
           await testMethod(
-            testDelegation,
+            testDashboard,
             "mintShares",
             {
               successUsers: [minter],
               failingUsers: allRoles.filter((r) => r !== minter),
             },
             [stranger, 100n],
-            await testDelegation.MINT_ROLE(),
+            await testDashboard.MINT_ROLE(),
           );
         });
 
         // requires prepared state for this test to pass, skipping for now
+        // fund 2 ether, cause vault has 1 ether locked already
         it("withdraw", async () => {
-          await testDelegation.connect(funder).fund({ value: 1n });
+          await testDashboard.connect(funder).fund({ value: ether("2") });
           await testMethod(
-            testDelegation,
+            testDashboard,
             "withdraw",
             {
               successUsers: [withdrawer],
               failingUsers: allRoles.filter((r) => r !== withdrawer),
             },
-            [stranger, 1n],
-            await testDelegation.WITHDRAW_ROLE(),
+            [stranger, ether("1")],
+            await testDashboard.WITHDRAW_ROLE(),
           );
         });
 
         it("lock", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "lock",
             {
               successUsers: [locker],
               failingUsers: allRoles.filter((r) => r !== locker),
             },
             [ether("1")],
-            await testDelegation.LOCK_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("withdrawWETH", async () => {
-          await testMethod(
-            testDelegation,
-            "withdrawWETH",
-            {
-              successUsers: [withdrawer],
-              failingUsers: allRoles.filter((r) => r !== withdrawer),
-            },
-            [stranger, ether("1")],
-            await testDelegation.WITHDRAW_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("fundWeth", async () => {
-          await testMethod(
-            testDelegation,
-            "fundWeth",
-            {
-              successUsers: [funder],
-              failingUsers: allRoles.filter((r) => r !== funder),
-            },
-            [ether("1"), { from: funder.address }],
-            await testDelegation.FUND_ROLE(),
+            await testDashboard.LOCK_ROLE(),
           );
         });
 
         it("fund", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "fund",
             {
               successUsers: [funder],
               failingUsers: allRoles.filter((r) => r !== funder),
             },
             [{ value: 1n }],
-            await testDelegation.FUND_ROLE(),
+            await testDashboard.FUND_ROLE(),
           );
         });
 
@@ -475,54 +481,64 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
         it("voluntaryDisconnect", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "voluntaryDisconnect",
             { successUsers: [disconnecter], failingUsers: allRoles.filter((r) => r !== disconnecter) },
             [],
-            await testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
+            await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
           );
         });
 
         it("authorizeLidoVaultHub", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "authorizeLidoVaultHub",
             {
               successUsers: [lidoVaultHubAuthorizer],
               failingUsers: allRoles.filter((r) => r !== lidoVaultHubAuthorizer),
             },
             [],
-            await testDelegation.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
+            await testDashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
           );
         });
 
         it("ossifyStakingVault", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "ossifyStakingVault",
             { successUsers: [ossifier], failingUsers: allRoles.filter((r) => r !== ossifier) },
             [],
-            await testDelegation.OSSIFY_ROLE(),
+            await testDashboard.OSSIFY_ROLE(),
           );
         });
 
         it("setDepositor", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "setDepositor",
             { successUsers: [depositorSetter], failingUsers: allRoles.filter((r) => r !== depositorSetter) },
             [stranger],
-            await testDelegation.SET_DEPOSITOR_ROLE(),
+            await testDashboard.SET_DEPOSITOR_ROLE(),
           );
         });
 
         it("resetLocked", async () => {
           await testMethod(
-            testDelegation,
+            testDashboard,
             "resetLocked",
             { successUsers: [lockedResetter], failingUsers: allRoles.filter((r) => r !== lockedResetter) },
             [],
-            await testDelegation.RESET_LOCKED_ROLE(),
+            await testDashboard.RESET_LOCKED_ROLE(),
+          );
+        });
+
+        it("requestTierChange", async () => {
+          await testMethod(
+            testDashboard,
+            "requestTierChange",
+            { successUsers: [tierChanger], failingUsers: allRoles.filter((r) => r !== tierChanger) },
+            [1n],
+            await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
           );
         });
       });
@@ -530,17 +546,17 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
-        await expect(testDelegation.connect(owner).setNodeOperatorFeeBP(1n)).not.to.emit(
-          testDelegation,
+        await expect(testDashboard.connect(owner).setNodeOperatorFeeBP(1n)).not.to.emit(
+          testDashboard,
           "NodeOperatorFeeBPSet",
         );
-        await expect(testDelegation.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n)).to.emit(
-          testDelegation,
+        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n)).to.emit(
+          testDashboard,
           "NodeOperatorFeeBPSet",
         );
 
         await testMethodConfirmedRoles(
-          testDelegation,
+          testDashboard,
           "setNodeOperatorFeeBP",
           {
             successUsers: [],
@@ -551,17 +567,17 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
       });
 
       it("setConfirmExpiry", async () => {
-        await expect(testDelegation.connect(owner).setConfirmExpiry(days(7n))).not.to.emit(
-          testDelegation,
+        await expect(testDashboard.connect(owner).setConfirmExpiry(days(7n))).not.to.emit(
+          testDashboard,
           "ConfirmExpirySet",
         );
-        await expect(testDelegation.connect(nodeOperatorManager).setConfirmExpiry(days(7n))).to.emit(
-          testDelegation,
+        await expect(testDashboard.connect(nodeOperatorManager).setConfirmExpiry(days(7n))).to.emit(
+          testDashboard,
           "ConfirmExpirySet",
         );
 
         await testMethodConfirmedRoles(
-          testDelegation,
+          testDashboard,
           "setConfirmExpiry",
           {
             successUsers: [],
@@ -573,19 +589,19 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDelegation.connect(funder).unreserved()).to.equal(0);
-      expect(await testDelegation.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
-      expect(await testDelegation.connect(funder).withdrawableEther()).to.equal(0);
+      expect(await testDashboard.connect(funder).unreserved()).to.equal(0);
+      expect(await testDashboard.connect(funder).nodeOperatorUnclaimedFee()).to.equal(0);
+      expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
     });
 
     it("Allows to retrieve roles addresses", async () => {
-      expect(await testDelegation.getRoleMembers(await testDelegation.MINT_ROLE())).to.deep.equal([minter.address]);
+      expect(await testDashboard.getRoleMembers(await testDashboard.MINT_ROLE())).to.deep.equal([minter.address]);
     });
   });
 
   // initializing contracts without signers
   describe('"Vault created with no roles', () => {
-    let testDelegation: Delegation;
+    let testDashboard: Dashboard;
 
     before(async () => {
       const { stakingVaultFactory } = ctx.contracts;
@@ -593,75 +609,56 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
 
       [owner, stranger] = allRoles;
       // Owner can create a vault with operator as a node operator
-      const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
-        {
-          defaultAdmin: owner,
-          nodeOperatorManager: nodeOperatorManager,
-          nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-          assetRecoverer: assetRecoverer,
-          confirmExpiry: days(7n),
-          funders: [],
-          withdrawers: [],
-          lockers: [],
-          minters: [],
-          burners: [],
-          rebalancers: [],
-          depositPausers: [],
-          depositResumers: [],
-          pdgCompensators: [],
-          unknownValidatorProvers: [],
-          unguaranteedBeaconChainDepositors: [],
-          validatorExitRequesters: [],
-          validatorWithdrawalTriggerers: [],
-          disconnecters: [],
-          lidoVaultHubAuthorizers: [],
-          lidoVaultHubDeauthorizers: [],
-          ossifiers: [],
-          depositorSetters: [],
-          lockedResetters: [],
-          nodeOperatorFeeClaimers: [],
-          nodeOperatorRewardAdjusters: [],
-        },
-        "0x",
-      );
+      const deployTx = await stakingVaultFactory
+        .connect(owner)
+        .createVaultWithDashboard(
+          owner,
+          nodeOperatorManager,
+          nodeOperatorManager,
+          VAULT_NODE_OPERATOR_FEE,
+          days(7n),
+          [],
+          "0x",
+          { value: VAULT_CONNECTION_DEPOSIT },
+        );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
       const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
-      testDelegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+      testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
     });
 
     it("Verify that roles are not assigned", async () => {
       const roles = await Promise.all([
-        testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-        testDelegation.FUND_ROLE(),
-        testDelegation.WITHDRAW_ROLE(),
-        testDelegation.MINT_ROLE(),
-        testDelegation.BURN_ROLE(),
-        testDelegation.REBALANCE_ROLE(),
-        testDelegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        testDelegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        testDelegation.REQUEST_VALIDATOR_EXIT_ROLE(),
-        testDelegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        testDelegation.VOLUNTARY_DISCONNECT_ROLE(),
-        testDelegation.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-        testDelegation.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-        testDelegation.PDG_PROVE_VALIDATOR_ROLE(),
-        testDelegation.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+        testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+        testDashboard.FUND_ROLE(),
+        testDashboard.WITHDRAW_ROLE(),
+        testDashboard.MINT_ROLE(),
+        testDashboard.BURN_ROLE(),
+        testDashboard.REBALANCE_ROLE(),
+        testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+        testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+        testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+        testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+        testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
+        testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+        testDashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+        testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
+        testDashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
       ]);
 
       for (const role of roles) {
-        expect(await testDelegation.getRoleMembers(role)).to.deep.equal([]);
+        expect(await testDashboard.getRoleMembers(role)).to.deep.equal([]);
       }
     });
 
     describe("Verify ACL for methods that require only role", () => {
-      describe("Delegation methods", () => {
+      describe("Dashboard methods", () => {
         it("claimNodeOperatorFee", async () => {
           await testGrantingRole(
-            testDelegation,
+            testDashboard,
             "claimNodeOperatorFee",
-            await testDelegation.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+            await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
             [stranger],
             nodeOperatorManager,
           );
@@ -671,61 +668,61 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
   });
 
   async function testMethod<T extends unknown[]>(
-    delegation: Delegation,
-    methodName: DelegationMethods,
+    dashboard: Dashboard,
+    methodName: DashboardMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
     requiredRole: string,
   ) {
     for (const user of failingUsers) {
-      await expect(delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)))
-        .to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount")
+      await expect(dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
         .withArgs(user, requiredRole);
     }
 
     for (const user of successUsers) {
       await expect(
-        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.not.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
+        dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.not.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     }
   }
 
   async function testMethodConfirmedRoles<T extends unknown[]>(
-    delegation: Delegation,
-    methodName: DelegationMethods,
+    dashboard: Dashboard,
+    methodName: DashboardMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
   ) {
     for (const user of failingUsers) {
       await expect(
-        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.revertedWithCustomError(delegation, "SenderNotMember");
+        dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.revertedWithCustomError(dashboard, "SenderNotMember");
     }
 
     for (const user of successUsers) {
       await expect(
-        delegation.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.not.revertedWithCustomError(delegation, "SenderNotMember");
+        dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
+      ).to.be.not.revertedWithCustomError(dashboard, "SenderNotMember");
     }
   }
 
   async function testGrantingRole<T extends unknown[]>(
-    delegation: Delegation,
-    methodName: DelegationMethods,
+    dashboard: Dashboard,
+    methodName: DashboardMethods,
     roleToGrant: string,
     argument: T,
     roleGratingActor: HardhatEthersSigner,
   ) {
     await expect(
-      delegation.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
-    ).to.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
+      dashboard.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
 
-    await delegation.connect(roleGratingActor).grantRole(roleToGrant, stranger);
+    await dashboard.connect(roleGratingActor).grantRole(roleToGrant, stranger);
 
     await expect(
-      delegation.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
-    ).to.not.be.revertedWithCustomError(delegation, "AccessControlUnauthorizedAccount");
+      dashboard.connect(stranger)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
 
-    await delegation.connect(roleGratingActor).revokeRole(roleToGrant, stranger);
+    await dashboard.connect(roleGratingActor).revokeRole(roleToGrant, stranger);
   }
 });

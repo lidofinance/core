@@ -31,6 +31,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     wstETH: certainAddress("dummy-locator:wstETH"),
     predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
     vaultHub: certainAddress("dummy-locator:vaultHub"),
+    operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     ...config,
   });
 
@@ -108,6 +109,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "wstETH",
     "predepositGuarantee",
     "vaultHub",
+    "operatorGrid",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

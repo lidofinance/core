@@ -4,12 +4,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
+import { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 
 import { ether, MAX_UINT256 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("VaultHub.sol:pausableUntil", () => {
   let deployer: HardhatEthersSigner;
@@ -19,6 +21,9 @@ describe("VaultHub.sol:pausableUntil", () => {
   let vaultHubAdmin: VaultHub;
   let vaultHub: VaultHub;
   let steth: StETH__HarnessForVaultHub;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let originalState: string;
 
@@ -28,8 +33,22 @@ describe("VaultHub.sol:pausableUntil", () => {
     const locator = await deployLidoLocator();
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1.0") });
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      rebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(user, defaultTierParams);
+    await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
+
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
-    const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);

@@ -3,11 +3,10 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Delegation, StakingVault } from "typechain-types";
+import { Dashboard, StakingVault } from "typechain-types";
 
 import {
-  connectToHub,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   getProtocolContext,
   ProtocolContext,
@@ -20,15 +19,15 @@ import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
-describe("Integration: Actions with vault disconnected from hub", () => {
+describe("Integration: Actions with vault is connected to VaultHub", () => {
   let ctx: ProtocolContext;
 
-  let delegation: Delegation;
+  let dashboard: Dashboard;
   let stakingVault: StakingVault;
   let roles: VaultRoles;
 
   let owner: HardhatEthersSigner;
-  let nodeOperatorManager: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let snapshot: string;
@@ -41,17 +40,17 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     await setupLido(ctx);
 
-    [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
+    [owner, nodeOperator, stranger] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
-    ({ stakingVault, delegation, roles } = await createVaultWithDelegation(
+    ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
-      nodeOperatorManager,
+      nodeOperator,
+      nodeOperator,
+      [],
     ));
-
-    await connectToHub(ctx, delegation, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -64,9 +63,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     const { vaultHub } = ctx.contracts;
 
     // add some stETH to the vault to have valuation
-    await delegation.connect(roles.funder).fund({ value: ether("1") });
+    await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
-    await expect(delegation.connect(roles.minter).mintStETH(stranger, 1n))
+    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
       .to.emit(vaultHub, "MintedSharesOnVault")
       .withArgs(stakingVault, 1n);
   });
@@ -75,27 +74,27 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     const { vaultHub, lido } = ctx.contracts;
 
     // add some stETH to the vault to have valuation, mint shares and approve stETH
-    await delegation.connect(roles.funder).fund({ value: ether("1") });
-    await delegation.connect(roles.minter).mintStETH(roles.burner, 1n);
-    await lido.connect(roles.burner).approve(delegation, 1n);
+    await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
+    await lido.connect(roles.burner).approve(dashboard, 1n);
 
-    await expect(delegation.connect(roles.burner).burnStETH(1n))
+    await expect(dashboard.connect(roles.burner).burnStETH(1n))
       .to.emit(vaultHub, "BurnedSharesOnVault")
       .withArgs(stakingVault, 1n);
   });
 
   it("Allows trigger validator withdrawal", async () => {
     await expect(
-      delegation
+      dashboard
         .connect(roles.validatorWithdrawalTriggerer)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
     )
       .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
-      .withArgs(delegation, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
+      .withArgs(dashboard, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
 
     await expect(
       stakingVault
-        .connect(nodeOperatorManager)
+        .connect(nodeOperator)
         .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
     ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
   });
@@ -107,14 +106,14 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     it("Can't deauthorize Lido VaultHub if connected to Hub", async () => {
       await expect(
-        delegation.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub(),
+        dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub(),
       ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
     });
 
     it.skip("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
       await disconnectFromHub(ctx, stakingVault);
       // todo: need to call something to actually disconnect the socket, but did not find, what to call
-      await expect(delegation.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
+      await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
     });

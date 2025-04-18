@@ -23,6 +23,7 @@ const services = [
   "wstETH",
   "vaultHub",
   "predepositGuarantee",
+  "operatorGrid",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];
