@@ -344,6 +344,7 @@ contract Dashboard is NodeOperatorFee {
         }
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
+        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
@@ -359,8 +360,6 @@ contract Dashboard is NodeOperatorFee {
 
             emit UnguaranteedDeposit(address(stakingVault_), deposit.pubkey, deposit.amount);
         }
-
-        _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
     }
 
     /**
