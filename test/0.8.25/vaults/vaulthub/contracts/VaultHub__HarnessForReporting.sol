@@ -53,6 +53,6 @@ contract VaultHub__HarnessForReporting is VaultHub {
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
 }

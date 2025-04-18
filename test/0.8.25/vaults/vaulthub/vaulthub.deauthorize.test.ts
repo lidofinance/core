@@ -9,6 +9,8 @@ import {
   Dashboard,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OperatorGrid,
+  OperatorGrid__MockForVaultHub,
   OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault,
@@ -23,13 +25,8 @@ import {
 import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
-
-const SHARE_LIMIT = ether("1");
-const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
 
 describe("VaultHub.sol:deauthorize", () => {
   let deployer: HardhatEthersSigner;
@@ -39,6 +36,7 @@ describe("VaultHub.sol:deauthorize", () => {
   let stranger: HardhatEthersSigner;
   let vaultOwner1: HardhatEthersSigner;
   let vaultOwner2: HardhatEthersSigner;
+  let accountingSigner: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let proxy: OssifiableProxy;
@@ -50,6 +48,8 @@ describe("VaultHub.sol:deauthorize", () => {
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let dashboard: Dashboard;
   let vaultFactory: VaultFactory;
+  let operatorGrid: OperatorGrid;
+  let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let steth: StETH__HarnessForVaultHub;
   let wsteth: WstETH__HarnessForVault;
@@ -78,7 +78,16 @@ describe("VaultHub.sol:deauthorize", () => {
       predepositGuarantee: predepositGuarantee,
     });
 
+    accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
+
+    // OperatorGrid
+    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
 
     // Accounting
     vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
@@ -138,6 +147,14 @@ describe("VaultHub.sol:deauthorize", () => {
       );
       const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
 
+      await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
+      const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
+      await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+      await vaultHub.updateVaultData(vault, 1n, 1n, 1n, 0n, tree.getProof(0));
+
+      await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
+      await vault.connect(dashboardSigner).authorizeLidoVaultHub();
+
       expect(await vault.vaultHubAuthorized()).to.equal(true);
       await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
       expect(await vault.vaultHubAuthorized()).to.equal(false);
@@ -159,9 +176,6 @@ describe("VaultHub.sol:deauthorize", () => {
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
 
-      await vaultHub
-        .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
       await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
         "VaultConnected",
@@ -184,9 +198,6 @@ describe("VaultHub.sol:deauthorize", () => {
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
 
-      await vaultHub
-        .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
       await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
       await expect(vault.connect(dashboardSigner).deauthorizeLidoVaultHub()).to.revertedWithCustomError(
         vault,
@@ -207,13 +218,9 @@ describe("VaultHub.sol:deauthorize", () => {
         "0x",
       );
       const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
-      const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
 
       expect(await vault.vaultHubAuthorized()).to.equal(true);
 
-      await vaultHub
-        .connect(admin)
-        .connectVault(vault, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
       await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
       const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
       await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
@@ -243,6 +250,11 @@ describe("VaultHub.sol:deauthorize", () => {
       );
 
       const dashboardSigner = await impersonate(await _dashboard.getAddress(), ether("100"));
+
+      await vaultHub.connect(dashboardSigner).voluntaryDisconnect(vault);
+      const tree = await createVaultsReportTree([[await vault.getAddress(), 1n, 1n, 1n, 0n]]);
+      await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+      await vaultHub.updateVaultData(vault, 1n, 1n, 1n, 0n, tree.getProof(0));
 
       await vault.connect(dashboardSigner).deauthorizeLidoVaultHub();
       await expect(vault.connect(dashboardSigner).ossifyStakingVault()).to.emit(vault, "PinnedImplementationUpdated");

@@ -7,13 +7,14 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 import { Dashboard, Permissions, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
 
-import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate, MAX_UINT256 } from "lib";
+import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
+const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 export type VaultRoles = {
   assetRecoverer: HardhatEthersSigner;
@@ -36,6 +37,7 @@ export type VaultRoles = {
   ossifier: HardhatEthersSigner;
   depositorSetter: HardhatEthersSigner;
   lockedResetter: HardhatEthersSigner;
+  tierChanger: HardhatEthersSigner;
   nodeOperatorFeeClaimer: HardhatEthersSigner;
   nodeOperatorRewardAdjuster: HardhatEthersSigner;
 };
@@ -73,7 +75,9 @@ export async function createVaultWithDashboard(
 ): Promise<VaultWithDashboard> {
   const deployTx = await stakingVaultFactory
     .connect(owner)
-    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, "0x");
+    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, "0x", {
+      value: VAULT_CONNECTION_DEPOSIT,
+    });
 
   const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
   const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -108,6 +112,7 @@ export async function createVaultWithDashboard(
     dashboard.OSSIFY_ROLE(),
     dashboard.SET_DEPOSITOR_ROLE(),
     dashboard.RESET_LOCKED_ROLE(),
+    dashboard.REQUEST_TIER_CHANGE_ROLE(),
     dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
     dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
   ]);
@@ -134,8 +139,9 @@ export async function createVaultWithDashboard(
     ossifier: signers[17],
     depositorSetter: signers[18],
     lockedResetter: signers[19],
-    nodeOperatorFeeClaimer: signers[20],
-    nodeOperatorRewardAdjuster: signers[21],
+    tierChanger: signers[20],
+    nodeOperatorFeeClaimer: signers[21],
+    nodeOperatorRewardAdjuster: signers[22],
   };
 
   for (let i = 0; i < roleIds.length; i++) {
@@ -182,49 +188,6 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Das
   const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("100"));
   await stakingVault.connect(dashboardSigner).fund({ value: ether("1") });
   await stakingVault.connect(dashboardSigner).lock(ether("1"));
-}
-
-type ConnectToHubParams = {
-  reserveRatio: bigint;
-  rebalanceThreshold: bigint;
-  treasuryFeeBP: bigint;
-  shareLimit: bigint;
-};
-
-/**
- * Connects a staking vault to the hub
- *
- * This function locks the connection deposit, connects the vault to the hub
- * using the provided parameters and then does the first report
- *
- * @param ctx Protocol context for contract interaction
- * @param dashboard Dashboard contract instance
- * @param stakingVault Staking vault instance
- * @param params Connect to hub parameters
- */
-export async function connectToHub(
-  ctx: ProtocolContext,
-  dashboard: Dashboard,
-  stakingVault: StakingVault,
-  { reserveRatio, rebalanceThreshold, treasuryFeeBP, shareLimit }: ConnectToHubParams = {
-    reserveRatio: 10_00n, // 10% of ETH allocation as reserve,
-    rebalanceThreshold: 8_00n, // 8% is a threshold to force rebalance on the vault
-    treasuryFeeBP: 5_00n, // 5% of the treasury fee
-    shareLimit: MAX_UINT256, // stub for getting real share limit from protocol
-  },
-) {
-  await lockConnectionDeposit(ctx, dashboard, stakingVault);
-
-  const { vaultHub } = ctx.contracts;
-  const agentSigner = await ctx.getSigner("agent");
-
-  if (shareLimit === MAX_UINT256) {
-    shareLimit = (await ctx.contracts.lido.getTotalShares()) / 10n; // 10% of total shares
-  }
-
-  await vaultHub
-    .connect(agentSigner)
-    .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 }
 
 export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault) {
@@ -294,6 +257,7 @@ export async function createVaultProxy(
       confirmExpiry,
       roleAssignments,
       stakingVaultInitializerExtraParams,
+      { value: VAULT_CONNECTION_DEPOSIT },
     );
 
   // Get the receipt manually
@@ -314,11 +278,6 @@ export async function createVaultProxy(
   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
   const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
-
-  //fund and lock
-  const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("100"));
-  await stakingVault.connect(dashboardSigner).fund({ value: ether("1") });
-  await stakingVault.connect(dashboardSigner).lock(ether("1"));
 
   return {
     tx,

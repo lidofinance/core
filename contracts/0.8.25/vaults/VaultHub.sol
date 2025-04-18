@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -80,10 +81,10 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
-    /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
-    uint256 internal constant CONNECT_DEPOSIT = 1 ether;
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
+    uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
     uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
@@ -128,6 +129,10 @@ contract VaultHub is PausableUntilWithRoles {
         _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    }
+
+    function operatorGrid() external view returns (address) {
+        return LIDO_LOCATOR.operatorGrid();
     }
 
     /// @notice added vault proxy codehash to allowed list
@@ -193,11 +198,23 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return true if vault is healthy, false otherwise
     function isVaultHealthyAsOfLatestReport(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (socket.sharesMinted == 0) return true;
+        return _isVaultHealthyByThreshold(
+            IStakingVault(_vault).valuation(),
+            socket.sharesMinted,
+            socket.rebalanceThresholdBP
+        );
+    }
+
+    function _isVaultHealthyByThreshold(
+        uint256 _valuation,
+        uint256 _sharesMinted,
+        uint256 _checkThreshold
+    ) internal view returns (bool) {
+        if (_sharesMinted == 0) return true;
 
         return
-            ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
-                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+            ((_valuation * (TOTAL_BASIS_POINTS - _checkThreshold)) /
+                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(_sharesMinted);
     }
 
     /// @notice estimate ether amount to make the vault healthy using rebalance
@@ -238,6 +255,20 @@ contract VaultHub is PausableUntilWithRoles {
         return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
     }
 
+    /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
+    /// @param _vault vault address
+    function connectVault(address _vault) external {
+        (
+        /* address nodeOperator */,
+        /* uint256 tierId */,
+            uint256 shareLimit,
+            uint256 reserveRatioBP,
+            uint256 reserveRatioThresholdBP,
+            uint256 treasuryFeeBP
+        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
+        _connectVault(_vault, shareLimit, reserveRatioBP, reserveRatioThresholdBP, treasuryFeeBP);
+    }
+
     /// @notice returns the latest report data
     /// @return timestamp of the report
     /// @return treeRoot of the report
@@ -261,15 +292,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _reserveRatioBP minimum reserve ratio in basis points
     /// @param _rebalanceThresholdBP threshold to force rebalance on the vault in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function connectVault(
+    function _connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _rebalanceThresholdBP,
         uint256 _treasuryFeeBP
-    ) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+    ) internal {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
@@ -280,6 +309,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.ossified()) revert VaultOssified(_vault);
+        if (!vault_.vaultHubAuthorized()) revert VaultDeauthorized(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -296,9 +326,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault.balance < CONNECT_DEPOSIT)
             revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
-        // here we intentionally prohibit all reports having referenceSlot earlier than the current block
-        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
-
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             0, // sharesMinted
@@ -312,7 +339,10 @@ contract VaultHub is PausableUntilWithRoles {
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        // here we intentionally prohibit all reports having referenceSlot earlier than the current block;
+        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
+
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
 
     /// @notice updates share limit for the vault
@@ -330,6 +360,41 @@ contract VaultHub is PausableUntilWithRoles {
         socket.shareLimit = uint96(_shareLimit);
 
         emit ShareLimitUpdated(_vault, _shareLimit);
+    }
+
+    /// @notice updates the vault's connection parameters
+    /// @dev Reverts if the vault is not healthy as of latest report
+    /// @param _vault vault address
+    /// @param _shareLimit new share limit
+    /// @param _reserveRatioBP new reserve ratio
+    /// @param _rebalanceThresholdBP new rebalance threshold
+    /// @param _treasuryFeeBP new treasury fee
+    function updateConnection(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _rebalanceThresholdBP,
+        uint256 _treasuryFeeBP
+    ) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        _checkShareLimitUpperBound(_vault, _shareLimit);
+        if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized("updateConnection", msg.sender);
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 valuation = IStakingVault(_vault).valuation();
+        uint256 sharesMinted = socket.sharesMinted;
+
+        // check healthy with new rebalance threshold
+        if (!_isVaultHealthyByThreshold(valuation, sharesMinted, _reserveRatioBP))
+            revert VaultMintingCapacityExceeded(_vault, valuation, sharesMinted, _reserveRatioBP);
+
+        socket.shareLimit = uint96(_shareLimit);
+        socket.reserveRatioBP = uint16(_reserveRatioBP);
+        socket.rebalanceThresholdBP = uint16(_rebalanceThresholdBP);
+        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
     }
 
     function updateReportData(
@@ -404,6 +469,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.sharesMinted = uint96(vaultSharesAfterMint);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -426,6 +492,7 @@ contract VaultHub is PausableUntilWithRoles {
         socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -589,7 +656,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    event VaultConnected(
+    event VaultConnectionSet(
         address indexed vault,
         uint256 capShares,
         uint256 minReserveRatio,
@@ -608,6 +675,7 @@ contract VaultHub is PausableUntilWithRoles {
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error AlreadyHealthy(address vault);
+    error VaultMintingCapacityExceeded(address vault, uint256 valuation, uint256 sharesMinted, uint256 newRebalanceThresholdBP);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
@@ -631,4 +699,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
+    error VaultDeauthorized(address vault);
 }

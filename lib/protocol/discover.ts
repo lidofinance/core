@@ -166,6 +166,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       "PredepositGuarantee",
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
+    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
   })) as VaultsContracts;
 };
 
@@ -209,6 +210,7 @@ export async function discover() {
     "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
     "Vault Hub": contracts.vaultHub.address,
     "Predeposit Guarantee": contracts.predepositGuarantee.address,
+    "Operator Grid": contracts.operatorGrid.address,
   });
 
   const signers = {

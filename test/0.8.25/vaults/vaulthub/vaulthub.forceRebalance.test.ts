@@ -6,6 +6,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   LidoLocator,
+  OperatorGrid,
+  OperatorGrid__MockForVaultHub,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
@@ -17,7 +19,7 @@ import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SHARE_LIMIT = ether("10");
@@ -36,6 +38,8 @@ describe("VaultHub.sol:forceRebalance", () => {
   let steth: StETH__HarnessForVaultHub;
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
+  let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let vaultAddress: string;
 
@@ -78,6 +82,13 @@ describe("VaultHub.sol:forceRebalance", () => {
       predepositGuarantee: predepositGuarantee,
     });
 
+    // OperatorGrid
+    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
+
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
@@ -106,14 +117,18 @@ describe("VaultHub.sol:forceRebalance", () => {
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
+    await operatorGridMock.changeVaultTierParams(vaultAddress, {
+      shareLimit: SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO_BP,
+      rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
+      treasuryFeeBP: TREASURY_FEE_BP,
+    });
+
     const connectDeposit = ether("1.0");
     await vault.connect(user).fund({ value: connectDeposit });
     await vault.connect(user).lock(connectDeposit);
 
-    await vaultHub
-      .connect(user)
-      .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-
+    await vaultHub.connect(user).connectVault(vaultAddress);
     await report();
   });
 
