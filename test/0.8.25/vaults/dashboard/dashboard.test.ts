@@ -164,13 +164,13 @@ describe("Dashboard.sol", () => {
     it("reverts if steth is zero address", async () => {
       await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, hub]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("stETH");
+        .withArgs("_stETH");
     });
 
     it("reverts if wsteth is zero address", async () => {
       await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, hub]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("wstETH");
+        .withArgs("_wstETH");
     });
 
     it("reverts if vaultHub is zero address", async () => {
