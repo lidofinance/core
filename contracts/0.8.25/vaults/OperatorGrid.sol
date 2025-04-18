@@ -565,7 +565,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
-            revert ForcedRebalanceThresholdBPTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
+            revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
 
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS)
             revert TreasuryFeeTooHigh(_tierId, _treasuryFeeBP, TOTAL_BASIS_POINTS);
@@ -611,6 +611,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error CannotChangeToDefaultTier();
 
     error ReserveRatioTooHigh(uint256 tierId, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
-    error ForcedRebalanceThresholdBPTooHigh(uint256 tierId, uint256 forcedRebalanceThresholdBP, uint256 reserveRatioBP);
+    error ForcedRebalanceThresholdTooHigh(uint256 tierId, uint256 forcedRebalanceThresholdBP, uint256 reserveRatioBP);
     error TreasuryFeeTooHigh(uint256 tierId, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
 }
