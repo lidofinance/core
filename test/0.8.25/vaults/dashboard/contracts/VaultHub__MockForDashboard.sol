@@ -16,6 +16,7 @@ contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
     address public immutable LIDO_LOCATOR;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
     constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
@@ -41,6 +42,10 @@ contract VaultHub__MockForDashboard {
 
     function disconnect(address vault) external {
         emit Mock__VaultDisconnected(vault);
+    }
+
+    function deleteVaultSocket(address vault) external {
+        delete vaultSockets[vault];
     }
 
     function mintShares(address vault, address recipient, uint256 amount) external {

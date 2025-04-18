@@ -6,7 +6,7 @@ import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Delegation, SSZHelpers, StakingVault } from "typechain-types";
+import { Dashboard, SSZHelpers, StakingVault } from "typechain-types";
 
 import {
   days,
@@ -44,6 +44,7 @@ const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
+const CONFIRM_EXPIRY = days(7n);
 
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
@@ -58,7 +59,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
   const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
-  let delegation: Delegation;
+  let dashboard: Dashboard;
   let stakingVault: StakingVault;
   let stakingVaultAddress: string;
   let stakingVaultBeaconBalance = 0n;
@@ -143,13 +144,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
     const implAddress = await stakingVaultBeacon.implementation();
-    const delegationAddress = await stakingVaultFactory.DELEGATION_IMPL();
-
+    const dashboardAddress = await stakingVaultFactory.DASHBOARD_IMPL();
     const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
-    const _delegation = await ethers.getContractAt("Delegation", delegationAddress);
+    const _dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
 
     expect(await _stakingVault.DEPOSIT_CONTRACT()).to.equal(depositContract);
-    expect(await _delegation.STETH()).to.equal(ctx.contracts.lido.address);
+    expect(await _dashboard.STETH()).to.equal(ctx.contracts.lido.address);
 
     // TODO: check what else should be validated here
   });
@@ -158,37 +158,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory } = ctx.contracts;
 
     // Owner can create a vault with operator as a node operator
-    const deployTx = await stakingVaultFactory.connect(owner).createVaultWithDelegation(
-      {
-        defaultAdmin: owner,
-        nodeOperatorManager: nodeOperator,
-        assetRecoverer: curator,
-        nodeOperatorFeeBP: VAULT_NODE_OPERATOR_FEE,
-        confirmExpiry: days(7n),
-        funders: [curator],
-        withdrawers: [curator],
-        lockers: [curator],
-        minters: [curator],
-        burners: [curator],
-        rebalancers: [curator],
-        depositPausers: [curator],
-        depositResumers: [curator],
-        pdgCompensators: [curator],
-        unknownValidatorProvers: [curator],
-        unguaranteedBeaconChainDepositors: [curator],
-        validatorExitRequesters: [curator],
-        validatorWithdrawalTriggerers: [curator],
-        disconnecters: [curator],
-        lidoVaultHubAuthorizers: [curator],
-        lidoVaultHubDeauthorizers: [curator],
-        ossifiers: [curator],
-        depositorSetters: [curator],
-        lockedResetters: [curator],
-        nodeOperatorFeeClaimers: [nodeOperator],
-        nodeOperatorRewardAdjusters: [nodeOperator],
-      },
-      "0x",
-    );
+    const deployTx = await stakingVaultFactory
+      .connect(owner)
+      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], "0x");
 
     const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -196,24 +168,73 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(createVaultEvents.length).to.equal(1n);
 
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
-    delegation = await ethers.getContractAt("Delegation", createVaultEvents[0].args?.owner);
+    dashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
 
-    expect(await isSoleRoleMember(owner, await delegation.DEFAULT_ADMIN_ROLE())).to.be.true;
+    await dashboard.connect(owner).grantRoles([
+      {
+        role: await dashboard.FUND_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.WITHDRAW_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.LOCK_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.MINT_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.BURN_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.REBALANCE_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+        account: curator,
+      },
+      {
+        role: await dashboard.VOLUNTARY_DISCONNECT_ROLE(),
+        account: curator,
+      },
+    ]);
 
-    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(nodeOperator, await delegation.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
+    await dashboard.connect(nodeOperator).grantRole(await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperator);
 
-    expect(await isSoleRoleMember(curator, await delegation.FUND_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.WITHDRAW_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.LOCK_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.MINT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.BURN_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.REBALANCE_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await delegation.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(owner, await dashboard.DEFAULT_ADMIN_ROLE())).to.be.true;
+
+    expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
+
+    expect(await isSoleRoleMember(curator, await dashboard.FUND_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.WITHDRAW_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.LOCK_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.MINT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.BURN_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.REBALANCE_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
+    expect(await isSoleRoleMember(curator, await dashboard.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -229,8 +250,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const agentSigner = await ctx.getSigner("agent");
 
-    await delegation.connect(curator).fund({ value: ether("1") });
-    await delegation.connect(curator).lock(ether("1"));
+    await dashboard.connect(curator).fund({ value: ether("1") });
+    await dashboard.connect(curator).lock(ether("1"));
 
     await vaultHub
       .connect(agentSigner)
@@ -240,8 +261,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
-  it("Should allow Curator to fund vault via delegation contract", async () => {
-    await delegation.connect(curator).fund({ value: VAULT_DEPOSIT });
+  it("Should allow Curator to fund vault via dashboard contract", async () => {
+    await dashboard.connect(curator).fund({ value: VAULT_DEPOSIT });
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
@@ -341,7 +362,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await reportVaultDataWithProof(stakingVault);
 
     // mint
-    const mintTx = await delegation.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
+    const mintTx = await dashboard.connect(curator).mintShares(curator, stakingVaultMaxMintingShares);
     const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 
     const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
@@ -466,6 +487,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   // });
 
   async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {
-    return (await delegation.getRoleMemberCount(role)).toString() === "1" && (await delegation.hasRole(role, account));
+    return (await dashboard.getRoleMemberCount(role)).toString() === "1" && (await dashboard.hasRole(role, account));
   }
 });

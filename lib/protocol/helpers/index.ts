@@ -22,7 +22,7 @@ export {
   connectToHub,
   createVaultProxy,
   createVaultsReportTree,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
   reportVaultDataWithProof,
