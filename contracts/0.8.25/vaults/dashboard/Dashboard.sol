@@ -12,10 +12,8 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
-import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 interface IWstETH is IERC20 {
@@ -52,16 +50,16 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
-     * @param stETH Address of the stETH token contract.
-     * @param wstETH Address of the wstETH token contract.
+     * @param _stETH Address of the stETH token contract.
+     * @param _wstETH Address of the wstETH token contract.
      * @param _vaultHub Address of the vault hub contract.
      */
-    constructor(address stETH, address wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
-        if (stETH == address(0)) revert ZeroArgument("stETH");
-        if (wstETH == address(0)) revert ZeroArgument("wstETH");
+    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+        if (_stETH == address(0)) revert ZeroArgument("_stETH");
+        if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
-        STETH = IStETH(stETH);
-        WSTETH = IWstETH(wstETH);
+        STETH = IStETH(_stETH);
+        WSTETH = IWstETH(_wstETH);
     }
 
     /**
@@ -91,7 +89,7 @@ contract Dashboard is NodeOperatorFee {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return vaultHub.vaultSocket(_stakingVaultAddress());
+        return VAULT_HUB.vaultSocket(address(_stakingVault()));
     }
 
     /**
@@ -139,7 +137,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The total value as a uint256.
      */
     function totalValue() external view returns (uint256) {
-        return stakingVault().totalValue();
+        return _stakingVault().totalValue();
     }
 
     /**
@@ -172,8 +170,9 @@ contract Dashboard is NodeOperatorFee {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
-        uint256 totalValue_ = stakingVault().totalValue();
+        IStakingVault stakingVault_ = _stakingVault();
+        uint256 reserved = stakingVault_.locked() + nodeOperatorUnclaimedFee();
+        uint256 totalValue_ = stakingVault_.totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;
     }
@@ -185,7 +184,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether that can be withdrawn.
      */
     function withdrawableEther() external view returns (uint256) {
-        return Math256.min(_stakingVaultAddress().balance, unreserved());
+        return Math256.min(address(_stakingVault()).balance, unreserved());
     }
 
     // ==================== Vault Management Functions ====================
@@ -208,13 +207,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable fundable {
-        uint256 shares = vaultHub.vaultSocket(_stakingVaultAddress()).liabilityShares;
-
-        if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
-        }
-
+    function voluntaryDisconnect() external {
         _voluntaryDisconnect();
     }
 
@@ -295,7 +288,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+            STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -338,8 +331,8 @@ contract Dashboard is NodeOperatorFee {
     function unguaranteedDepositToBeaconChain(
         StakingVaultDeposit[] calldata _deposits
     ) public returns (uint256 totalAmount) {
-        IStakingVault stakingVault = stakingVault();
-        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+        IStakingVault stakingVault_ = _stakingVault();
+        IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -351,7 +344,7 @@ contract Dashboard is NodeOperatorFee {
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
 
-        bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
+        bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
         StakingVaultDeposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
@@ -363,7 +356,7 @@ contract Dashboard is NodeOperatorFee {
                 deposit.depositDataRoot
             );
 
-            emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
+            emit UnguaranteedDeposit(address(stakingVault_), deposit.pubkey, deposit.amount);
         }
 
         _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
@@ -541,7 +534,7 @@ contract Dashboard is NodeOperatorFee {
             TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // If the required locked amount is greater than the current, increase the locked amount
-        if (requiredLocked > stakingVault().locked()) {
+        if (requiredLocked > _stakingVault().locked()) {
             _lock(requiredLocked);
         }
 
@@ -554,7 +547,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableTotalValue() internal view returns (uint256) {
-        return stakingVault().totalValue() - nodeOperatorUnclaimedFee();
+        return _stakingVault().totalValue() - nodeOperatorUnclaimedFee();
     }
 
     /**
@@ -566,7 +559,7 @@ contract Dashboard is NodeOperatorFee {
     function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
         _mintShares(_recipient, _amountOfShares);
 
-        uint256 locked = stakingVault().locked();
+        uint256 locked = _stakingVault().locked();
         uint256 mintableTotalValue = _mintableTotalValue();
 
         if (locked > mintableTotalValue) {
@@ -580,7 +573,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(vaultHub), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -593,7 +586,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(vaultHub), unwrappedShares);
+        STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 

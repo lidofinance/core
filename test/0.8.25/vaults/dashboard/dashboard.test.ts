@@ -164,13 +164,13 @@ describe("Dashboard.sol", () => {
     it("reverts if steth is zero address", async () => {
       await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, hub]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("stETH");
+        .withArgs("_stETH");
     });
 
     it("reverts if wsteth is zero address", async () => {
       await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, hub]))
         .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("wstETH");
+        .withArgs("_wstETH");
     });
 
     it("reverts if vaultHub is zero address", async () => {
@@ -183,7 +183,7 @@ describe("Dashboard.sol", () => {
       const dashboard_ = await ethers.deployContract("Dashboard", [steth, wsteth, hub]);
       expect(await dashboard_.STETH()).to.equal(steth);
       expect(await dashboard_.WSTETH()).to.equal(wsteth);
-      expect(await dashboard_.vaultHub()).to.equal(hub);
+      expect(await dashboard_.VAULT_HUB()).to.equal(hub);
     });
   });
 
@@ -220,7 +220,7 @@ describe("Dashboard.sol", () => {
       expect(await vault.nodeOperator()).to.equal(nodeOperator);
       expect(await dashboard.initialized()).to.equal(true);
       expect(await dashboard.stakingVault()).to.equal(vault);
-      expect(await dashboard.vaultHub()).to.equal(hub);
+      expect(await dashboard.VAULT_HUB()).to.equal(hub);
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
       // dashboard roles
@@ -596,19 +596,6 @@ describe("Dashboard.sol", () => {
     it("disconnects the staking vault from the vault hub", async () => {
       await dashboard.connect(vaultOwner).grantRole(await dashboard.VOLUNTARY_DISCONNECT_ROLE(), vaultOwner);
       await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
-    });
-
-    it("succeeds with rebalance when providing sufficient ETH", async () => {
-      const amountShares = ether("1");
-      const amountSteth = await steth.getPooledEthByShares(amountShares);
-      await dashboard.connect(vaultOwner).fund({ value: amountSteth });
-      await dashboard.connect(vaultOwner).mintShares(vaultOwner, amountShares);
-
-      await expect(dashboard.voluntaryDisconnect({ value: amountSteth }))
-        .to.emit(hub, "Mock__Rebalanced")
-        .withArgs(amountSteth)
-        .to.emit(hub, "Mock__VaultDisconnected")
-        .withArgs(vault);
     });
   });
 
