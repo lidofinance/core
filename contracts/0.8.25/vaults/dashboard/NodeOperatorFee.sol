@@ -4,14 +4,12 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Math256} from "contracts/common/lib/Math256.sol";
-
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {Permissions} from "./Permissions.sol";
-import {VaultHub} from "../VaultHub.sol";
 
 /**
  * @title NodeOperatorFee
+ * @author Lido
  * @notice This contract manages the node operator fee and claiming mechanism.
  * It reserves a portion of the staking rewards for the node operator, and allows
  * the node operator to claim their fee.

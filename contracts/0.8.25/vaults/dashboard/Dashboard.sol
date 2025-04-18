@@ -12,10 +12,8 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
-import {Permissions} from "./Permissions.sol";
 import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 interface IWstETH is IERC20 {
