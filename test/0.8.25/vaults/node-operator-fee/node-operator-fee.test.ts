@@ -90,8 +90,8 @@ describe("NodeOperatorFee.sol", () => {
     vault = await ethers.getContractAt("StakingVault__MockForNodeOperatorFee", stakingVaultAddress, vaultOwner);
     expect(await vault.vaultHub()).to.equal(hub);
 
-    const nodeOperatoFeeAddress = vaultCreatedEvents[0].args.nodeOperatorFee;
-    nodeOperatorFee = await ethers.getContractAt("NodeOperatorFee__Harness", nodeOperatoFeeAddress, vaultOwner);
+    const nodeOperatorFeeAddress = vaultCreatedEvents[0].args.nodeOperatorFee;
+    nodeOperatorFee = await ethers.getContractAt("NodeOperatorFee__Harness", nodeOperatorFeeAddress, vaultOwner);
     expect(await nodeOperatorFee.stakingVault()).to.equal(vault);
   });
 
@@ -217,14 +217,14 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.nodeOperatorFeeBP()).to.equal(operatorFee);
 
       const report = {
-        valuation: ether("1.1"),
+        totalValue: ether("1.1"),
         inOutDelta: ether("1"),
         timestamp: await getCurrentBlockTimestamp(),
       };
 
       await vault.setLatestReport(report);
 
-      const expectedNodeOperatorFee = ((report.valuation - report.inOutDelta) * operatorFee) / BP_BASE;
+      const expectedNodeOperatorFee = ((report.totalValue - report.inOutDelta) * operatorFee) / BP_BASE;
 
       await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
         .to.emit(vault, "Mock__Withdrawn")
@@ -299,7 +299,7 @@ describe("NodeOperatorFee.sol", () => {
 
       const rewards = ether("10");
       await vault.setLatestReport({
-        valuation: rewards,
+        totalValue: rewards,
         inOutDelta: 0n,
         timestamp: await getCurrentBlockTimestamp(),
       });
@@ -320,7 +320,7 @@ describe("NodeOperatorFee.sol", () => {
       const rewards = ether("10");
 
       await vault.setLatestReport({
-        valuation: rewards,
+        totalValue: rewards,
         inOutDelta: 0n,
         timestamp: await getCurrentBlockTimestamp(),
       });
@@ -424,11 +424,11 @@ describe("NodeOperatorFee.sol", () => {
 
       confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
 
-      const secondConfrimTx = await nodeOperatorFee
+      const secondConfirmTx = await nodeOperatorFee
         .connect(vaultOwner)
         .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
 
-      await expect(secondConfrimTx)
+      await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
         .to.emit(nodeOperatorFee, "AccruedRewardsAdjustmentSet")

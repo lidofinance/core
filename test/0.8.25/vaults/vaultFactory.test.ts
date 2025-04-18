@@ -92,7 +92,7 @@ describe("VaultFactory.sol", () => {
     const defaultTierParams = {
       shareLimit: ether("1"),
       reserveRatioBP: 2000n,
-      rebalanceThresholdBP: 1800n,
+      forcedRebalanceThresholdBP: 1800n,
       treasuryFeeBP: 500n,
     };
     await operatorGrid.initialize(admin, defaultTierParams);

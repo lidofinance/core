@@ -25,8 +25,8 @@ contract StakingVault__MockForNodeOperatorFee {
         locked = _locked;
     }
 
-    function valuation() external view returns (uint256) {
-        return latestReport.valuation;
+    function totalValue() external view returns (uint256) {
+        return latestReport.totalValue;
     }
 
     function withdraw(address _recipient, uint256 _amount) external {

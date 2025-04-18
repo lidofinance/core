@@ -26,7 +26,7 @@ import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
@@ -72,7 +72,7 @@ describe("VaultHub.sol:reporting", () => {
     options?: {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
-      rebalanceThresholdBP?: bigint;
+      forcedRebalanceThresholdBP?: bigint;
       treasuryFeeBP?: bigint;
     },
   ) {
@@ -84,7 +84,7 @@ describe("VaultHub.sol:reporting", () => {
     await operatorGrid.connect(user).alterTier(defaultTierId, {
       shareLimit: options?.shareLimit ?? SHARE_LIMIT,
       reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-      rebalanceThresholdBP: options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
+      forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
       treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
     });
     await vaultHub.connect(user).connectVault(vault);
@@ -126,7 +126,7 @@ describe("VaultHub.sol:reporting", () => {
     const defaultTierParams = {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
       reserveRatioBP: 2000n,
-      rebalanceThresholdBP: 1800n,
+      forcedRebalanceThresholdBP: 1800n,
       treasuryFeeBP: 500n,
     };
     await operatorGrid.initialize(user, defaultTierParams);
@@ -194,7 +194,7 @@ describe("VaultHub.sol:reporting", () => {
   });
 
   context("updateVaultData", () => {
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
@@ -217,7 +217,7 @@ describe("VaultHub.sol:reporting", () => {
       ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
     });
 
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
 
@@ -255,17 +255,17 @@ describe("VaultHub.sol:reporting", () => {
 
     async function updateVaultReportHelper(
       vault: StakingVault__MockForVaultHub,
-      valuation: bigint,
+      totalValue: bigint,
       inOutDelta: bigint,
       treasuryFees: bigint,
-      sharesMinted: bigint,
+      liabilityShares: bigint,
     ) {
       const vaultReport: VaultReportItem = [
         await vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
       ];
       const tree = createVaultsReportTree([vaultReport]);
       const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
@@ -273,10 +273,10 @@ describe("VaultHub.sol:reporting", () => {
 
       await vaultHub.updateVaultData(
         vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
         tree.getProof(0),
       );
     }
@@ -285,7 +285,7 @@ describe("VaultHub.sol:reporting", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);
@@ -303,7 +303,7 @@ describe("VaultHub.sol:reporting", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);

@@ -197,7 +197,7 @@ export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: St
   await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
 }
 
-// Address, valuation, inOutDelta, treasuryFees, sharesMinted
+// address, totalValue, inOutDelta, treasuryFees, liabilityShares
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
@@ -210,7 +210,7 @@ export async function reportVaultDataWithProof(stakingVault: StakingVault) {
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
   const vaultReport: VaultReportItem = [
     await stakingVault.getAddress(),
-    await stakingVault.valuation(),
+    await stakingVault.totalValue(),
     await stakingVault.inOutDelta(),
     0n,
     0n,
@@ -221,7 +221,7 @@ export async function reportVaultDataWithProof(stakingVault: StakingVault) {
   await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
   await vaultHub.updateVaultData(
     await stakingVault.getAddress(),
-    await stakingVault.valuation(),
+    await stakingVault.totalValue(),
     await stakingVault.inOutDelta(),
     0n,
     0n,

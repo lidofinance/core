@@ -9,9 +9,9 @@ contract OperatorGrid__MockForVaultHub {
     struct Tier {
         address operator;
         uint96 shareLimit;
-        uint96 mintedShares;
+        uint96 liabilityShares;
         uint16 reserveRatioBP;
-        uint16 rebalanceThresholdBP;
+        uint16 forcedRebalanceThresholdBP;
         uint16 treasuryFeeBP;
     }
 
@@ -26,7 +26,7 @@ contract OperatorGrid__MockForVaultHub {
         Tier storage tierParams = tiers[vaultTier[_vault]];
         tierParams.shareLimit = uint96(_tierParams.shareLimit);
         tierParams.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
-        tierParams.rebalanceThresholdBP = uint16(_tierParams.rebalanceThresholdBP);
+        tierParams.forcedRebalanceThresholdBP = uint16(_tierParams.forcedRebalanceThresholdBP);
         tierParams.treasuryFeeBP = uint16(_tierParams.treasuryFeeBP);
     }
 
@@ -40,7 +40,7 @@ contract OperatorGrid__MockForVaultHub {
             uint256 tierId,
             uint256 shareLimit,
             uint256 reserveRatioBP,
-            uint256 rebalanceThresholdBP,
+            uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
         )
     {
@@ -50,7 +50,7 @@ contract OperatorGrid__MockForVaultHub {
         tierId = 0;
         shareLimit = tierParams.shareLimit;
         reserveRatioBP = tierParams.reserveRatioBP;
-        rebalanceThresholdBP = tierParams.rebalanceThresholdBP;
+        forcedRebalanceThresholdBP = tierParams.forcedRebalanceThresholdBP;
         treasuryFeeBP = tierParams.treasuryFeeBP;
     }
 
