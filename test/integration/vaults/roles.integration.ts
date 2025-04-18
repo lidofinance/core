@@ -535,7 +535,7 @@ describe("Integration: Staking Vaults Delegation Roles Initial Setup", () => {
             "requestTierChange",
             { successUsers: [tierChanger], failingUsers: allRoles.filter((r) => r !== tierChanger) },
             [1n],
-            await testDelegation.REQUEST_CHANGE_TIER_ROLE(),
+            await testDelegation.REQUEST_TIER_CHANGE_ROLE(),
           );
         });
       });

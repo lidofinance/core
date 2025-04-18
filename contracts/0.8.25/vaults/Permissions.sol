@@ -129,7 +129,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Permission for requesting change of tier on the OperatorGrid.
      */
-    bytes32 public constant REQUEST_CHANGE_TIER_ROLE = keccak256("vaults.Permissions.RequestChangeTier");
+    bytes32 public constant REQUEST_TIER_CHANGE_ROLE = keccak256("vaults.Permissions.RequestTierChange");
 
     /**
      * @notice Address of the implementation contract
@@ -392,10 +392,10 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the REQUEST_CHANGE_TIER_ROLE and requests a change of the tier on the OperatorGrid.
+     * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      */
-    function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_CHANGE_TIER_ROLE) {
+    function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
         OperatorGrid(vaultHub.operatorGrid()).requestTierChange(_loadStakingVaultAddress(), _tierId);
     }
 

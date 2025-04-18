@@ -184,7 +184,7 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
         permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
         permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
-        permissions.grantRole(permissions.REQUEST_CHANGE_TIER_ROLE(), _permissionsConfig.tierChanger);
+        permissions.grantRole(permissions.REQUEST_TIER_CHANGE_ROLE(), _permissionsConfig.tierChanger);
     }
 
     /**
