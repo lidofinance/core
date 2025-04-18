@@ -4,7 +4,6 @@ import { ethers } from "hardhat";
 import {
   HashConsensus__Harness,
   ReportProcessor__Mock,
-  StakingRouter__MockForVebo,
   ValidatorsExitBusOracle,
   WithdrawalVault__MockForVebo,
 } from "typechain-types";
