@@ -10,7 +10,7 @@ struct DeliveryHistory {
     uint256 lastDeliveredKeyIndex;
 }
 
-interface IValidatorsExitBusOracle {
+interface IValidatorsExitBus {
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
     ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history);

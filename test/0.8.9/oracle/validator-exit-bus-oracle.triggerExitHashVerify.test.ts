@@ -5,7 +5,12 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingRouter__MockForVebo,
+  ValidatorsExitBus__Harness,
+  WithdrawalVault__MockForVebo,
+} from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -31,6 +36,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let withdrawalVault: WithdrawalVault__MockForVebo;
+  let stakingRouter: StakingRouter__MockForVebo;
 
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
@@ -81,6 +87,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     withdrawalVault = deployed.withdrawalVault;
+    stakingRouter = deployed.stakingRouter;
 
     await initVEBO({
       admin: admin.address,
@@ -210,14 +217,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
   });
 
-  it("last requested validator indices are updated", async () => {
-    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n, 3n]);
-    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n, 3n]);
-
-    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n, -1n]);
-    expect([...indices2]).to.have.ordered.members([3n, -1n, -1n, -1n]);
-  });
-
   it("someone submitted exit report data and triggered exit", async () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
@@ -230,6 +229,22 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
       .withArgs("0x" + concatenatedPubKeys);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[2].moduleId, exitRequests[2].nodeOpId, pubkeys[2], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[3], 1, 0);
   });
 
   it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
@@ -242,6 +257,18 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await expect(tx)
       .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
       .withArgs("0x" + concatenatedPubKeys);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
 
     await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
   });

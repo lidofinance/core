@@ -38,6 +38,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let authorizedEntity: HardhatEthersSigner;
 
   const LAST_PROCESSING_REF_SLOT = 1;
 
@@ -102,10 +103,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     return { reportData, reportHash };
   };
 
-  async function getLastRequestedValidatorIndex(moduleId: number, nodeOpId: number) {
-    return (await oracle.getLastRequestedValidatorIndices(moduleId, [nodeOpId]))[0];
-  }
-
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
@@ -130,7 +127,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   };
 
   before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+    [admin, member1, member2, member3, stranger, authorizedEntity] = await ethers.getSigners();
 
     await deploy();
   });
@@ -394,106 +391,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
   });
 
-  context(`requires validator indices for the same node operator to increase`, () => {
-    let originalState: string;
-
-    before(async () => {
-      originalState = await Snapshot.take();
-      await consensus.advanceTimeToNextFrameStart();
-    });
-
-    after(async () => await Snapshot.restore(originalState));
-
-    it(`requesting NO 5-3 to exit validator 0`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] },
-      ]);
-      await oracle.connect(member1).submitReportData(reportData, oracleVersion);
-      expect(await getLastRequestedValidatorIndex(5, 3)).to.equal(0);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 0 again`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "NodeOpValidatorIndexMustIncrease")
-        .withArgs(5, 3, 0, 0);
-    });
-
-    it(`requesting NO 5-3 to exit validator 1`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[1] },
-      ]);
-      await oracle.connect(member1).submitReportData(reportData, oracleVersion, { from: member1 });
-      expect(await getLastRequestedValidatorIndex(5, 3)).to.equal(1);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 1 again`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[1] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "NodeOpValidatorIndexMustIncrease")
-        .withArgs(5, 3, 1, 1);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 0 again`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "NodeOpValidatorIndexMustIncrease")
-        .withArgs(5, 3, 1, 0);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 1 again (multiple requests)`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[0] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "NodeOpValidatorIndexMustIncrease")
-        .withArgs(5, 3, 1, 1);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 1 again (multiple requests, case 2)`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[2] },
-        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[3] },
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[4] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "NodeOpValidatorIndexMustIncrease")
-        .withArgs(5, 3, 1, 1);
-    });
-
-    it(`cannot request NO 5-3 to exit validator 2 two times per request`, async () => {
-      await consensus.advanceTimeToNextFrameStart();
-      const { reportData } = await prepareReportAndSubmitHash([
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
-        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
-      ]);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
-        oracle,
-        "InvalidRequestsDataSortOrder",
-      );
-    });
-  });
-
   context(`only consensus member or SUBMIT_DATA_ROLE can submit report on unpaused contract`, () => {
     let originalState: string;
 
@@ -702,6 +599,97 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         0,
         0,
       ]);
+    });
+  });
+
+  context("VEB limits", () => {
+    let originalState: string;
+    before(async () => {
+      originalState = await Snapshot.take();
+      await consensus.advanceTimeToNextFrameStart();
+    });
+    after(async () => await Snapshot.restore(originalState));
+
+    it("Set exit limit", async () => {
+      const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      await oracle.grantRole(role, admin);
+      const exitLimitTx = await oracle.connect(admin).setExitReportLimit(4, 1);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1);
+    });
+
+    it("deliver report by actor different from oracle", async () => {
+      const requests = [
+        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3] },
+      ];
+      const { reportData } = await prepareReportAndSubmitHash(requests);
+      const exitRequestHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [reportData.data, reportData.dataFormat]),
+      );
+
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
+      await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
+
+      const exitRequest = {
+        dataFormat: reportData.dataFormat,
+        data: reportData.data,
+      };
+
+      const emitTx = await oracle.emitExitEvents(exitRequest);
+
+      const timestamp = await oracle.getTime();
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[2].moduleId, requests[2].nodeOpId, requests[2].valIndex, requests[2].valPubkey, timestamp);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
+    });
+
+    it("emits ValidatorExitRequest events", async () => {
+      const requests = [
+        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 4, valPubkey: PUBKEYS[4] },
+      ];
+      const { reportData } = await prepareReportAndSubmitHash(requests);
+
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
+        oracle,
+        "ExitRequestsLimit",
+      );
+
+      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      const timestamp = await consensus.getTime();
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[0].moduleId, requests[0].nodeOpId, requests[0].valIndex, requests[0].valPubkey, timestamp);
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[1].moduleId, requests[1].nodeOpId, requests[1].valIndex, requests[1].valPubkey, timestamp);
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[2].moduleId, requests[2].nodeOpId, requests[2].valIndex, requests[2].valPubkey, timestamp);
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
     });
   });
 });
