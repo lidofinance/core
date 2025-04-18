@@ -207,13 +207,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Disconnects the staking vault from the vault hub.
      */
-    function voluntaryDisconnect() external payable fundable {
-        uint256 shares = VAULT_HUB.vaultSocket(address(_stakingVault())).sharesMinted;
-
-        if (shares > 0) {
-            _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
-        }
-
+    function voluntaryDisconnect() external {
         _voluntaryDisconnect();
     }
 

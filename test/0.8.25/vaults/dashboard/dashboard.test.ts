@@ -597,19 +597,6 @@ describe("Dashboard.sol", () => {
       await dashboard.connect(vaultOwner).grantRole(await dashboard.VOLUNTARY_DISCONNECT_ROLE(), vaultOwner);
       await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
     });
-
-    it("succeeds with rebalance when providing sufficient ETH", async () => {
-      const amountShares = ether("1");
-      const amountSteth = await steth.getPooledEthByShares(amountShares);
-      await dashboard.connect(vaultOwner).fund({ value: amountSteth });
-      await dashboard.connect(vaultOwner).mintShares(vaultOwner, amountShares);
-
-      await expect(dashboard.voluntaryDisconnect({ value: amountSteth }))
-        .to.emit(hub, "Mock__Rebalanced")
-        .withArgs(amountSteth)
-        .to.emit(hub, "Mock__VaultDisconnected")
-        .withArgs(vault);
-    });
   });
 
   context("fund", () => {
