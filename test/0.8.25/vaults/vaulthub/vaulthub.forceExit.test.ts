@@ -6,6 +6,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   LidoLocator,
+  OperatorGrid,
+  OperatorGrid__MockForVaultHub,
+  OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
@@ -17,7 +20,7 @@ import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
@@ -41,6 +44,9 @@ describe("VaultHub.sol:forceExit", () => {
   let steth: StETH__HarnessForVaultHub;
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
+  let operatorGridMock: OperatorGrid__MockForVaultHub;
+  let proxy: OssifiableProxy;
 
   let vaultAddress: string;
   let vaultHubAddress: string;
@@ -63,9 +69,14 @@ describe("VaultHub.sol:forceExit", () => {
       predepositGuarantee: predepositGuarantee,
     });
 
+    // OperatorGrid
+    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
+
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
 
-    const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);
@@ -76,7 +87,12 @@ describe("VaultHub.sol:forceExit", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
+
+    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
+      await vaultHub.getAddress(),
+      depositContract,
+    ]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
 
@@ -97,9 +113,16 @@ describe("VaultHub.sol:forceExit", () => {
     await vault.connect(user).fund({ value: connectDeposit });
     await vault.connect(user).lock(connectDeposit);
 
-    await vaultHub
-      .connect(user)
-      .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
+    await operatorGridMock.changeVaultTierParams(vault, {
+      shareLimit: SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO_BP,
+      forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
+      treasuryFeeBP: TREASURY_FEE_BP,
+    });
+
+    await vault.fund({ value: ether("1") });
+    await vault.lock(ether("1"));
+    await vaultHub.connect(user).connectVault(vaultAddress);
 
     vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
   });
@@ -209,11 +232,17 @@ describe("VaultHub.sol:forceExit", () => {
 
       const totalValue = ether("100");
       await demoVault.fund({ value: totalValue });
+      await demoVault.connect(user).lock(totalValue);
       const cap = await steth.getSharesByPooledEth((totalValue * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
-      await demoVault.connect(user).lock(totalValue);
-      await vaultHub.connectVault(demoVaultAddress, cap, 20_00n, 20_00n, 5_00n);
+      await operatorGridMock.changeVaultTierParams(demoVault, {
+        shareLimit: cap,
+        reserveRatioBP: 20_00n,
+        forcedRebalanceThresholdBP: 20_00n,
+        treasuryFeeBP: 5_00n,
+      });
 
+      await vaultHub.connectVault(demoVaultAddress);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
       expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).liabilityShares).to.equal(cap);

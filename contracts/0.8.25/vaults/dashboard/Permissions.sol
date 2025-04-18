@@ -11,6 +11,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {VaultHub} from "../VaultHub.sol";
+import {OperatorGrid} from "../OperatorGrid.sol";
 
 /**
  * @title Permissions
@@ -124,6 +125,11 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Permission for resetting locked amount on the disconnected StakingVault.
      */
     bytes32 public constant RESET_LOCKED_ROLE = keccak256("vaults.Permissions.ResetLocked");
+
+    /**
+     * @dev Permission for requesting change of tier on the OperatorGrid.
+     */
+    bytes32 public constant REQUEST_TIER_CHANGE_ROLE = keccak256("vaults.Permissions.RequestTierChange");
 
     /**
      * @notice Address of the implementation contract
@@ -394,6 +400,14 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _resetLocked() internal onlyRole(RESET_LOCKED_ROLE) {
         _stakingVault().resetLocked();
+    }
+
+    /**
+     * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
+     * @param _tierId The tier to change to.
+     */
+    function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
+        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
     }
 
     /**

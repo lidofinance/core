@@ -16,6 +16,8 @@ const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
+const VAULT_CONNECTION_DEPOSIT = ether("1");
+
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
@@ -50,6 +52,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     ossifier: HardhatEthersSigner,
     depositorSetter: HardhatEthersSigner,
     lockedResetter: HardhatEthersSigner,
+    tierChanger: HardhatEthersSigner,
     nodeOperatorFeeClaimer: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
@@ -83,6 +86,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       ossifier,
       depositorSetter,
       lockedResetter,
+      tierChanger,
       nodeOperatorFeeClaimer,
       nodeOperatorRewardAdjuster,
       stranger,
@@ -113,6 +117,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           days(7n),
           [],
           "0x",
+          { value: VAULT_CONNECTION_DEPOSIT },
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
@@ -196,6 +201,10 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         {
           account: lockedResetter,
           role: await testDashboard.RESET_LOCKED_ROLE(),
+        },
+        {
+          account: tierChanger,
+          role: await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
         },
       ]);
 
@@ -401,8 +410,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         it("mintStETH", async () => {
-          await testDashboard.connect(funder).fund({ value: ether("1") });
-          await testDashboard.connect(locker).lock(ether("1"));
           await testMethod(
             testDashboard,
             "mintStETH",
@@ -416,8 +423,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         it("mintShares", async () => {
-          await testDashboard.connect(funder).fund({ value: ether("1") });
-          await testDashboard.connect(locker).lock(ether("1"));
           await testMethod(
             testDashboard,
             "mintShares",
@@ -431,8 +436,9 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         // requires prepared state for this test to pass, skipping for now
+        // fund 2 ether, cause vault has 1 ether locked already
         it("withdraw", async () => {
-          await testDashboard.connect(funder).fund({ value: 1n });
+          await testDashboard.connect(funder).fund({ value: ether("2") });
           await testMethod(
             testDashboard,
             "withdraw",
@@ -440,7 +446,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
               successUsers: [withdrawer],
               failingUsers: allRoles.filter((r) => r !== withdrawer),
             },
-            [stranger, 1n],
+            [stranger, ether("1")],
             await testDashboard.WITHDRAW_ROLE(),
           );
         });
@@ -525,6 +531,16 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             await testDashboard.RESET_LOCKED_ROLE(),
           );
         });
+
+        it("requestTierChange", async () => {
+          await testMethod(
+            testDashboard,
+            "requestTierChange",
+            { successUsers: [tierChanger], failingUsers: allRoles.filter((r) => r !== tierChanger) },
+            [1n],
+            await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+          );
+        });
       });
     });
 
@@ -603,6 +619,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           days(7n),
           [],
           "0x",
+          { value: VAULT_CONNECTION_DEPOSIT },
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;

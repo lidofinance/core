@@ -52,6 +52,7 @@ type PermissionsConfigStruct = {
   ossifier: HardhatEthersSigner;
   depositorSetter: HardhatEthersSigner;
   lockedResetter: HardhatEthersSigner;
+  tierChanger: HardhatEthersSigner;
 };
 
 describe("Permissions", () => {
@@ -77,7 +78,7 @@ describe("Permissions", () => {
   let ossifier: HardhatEthersSigner;
   let depositorSetter: HardhatEthersSigner;
   let lockedResetter: HardhatEthersSigner;
-
+  let tierChanger: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForStakingVault;
@@ -116,6 +117,7 @@ describe("Permissions", () => {
       ossifier,
       depositorSetter,
       lockedResetter,
+      tierChanger,
       stranger,
     ] = await getRandomSigners(30);
 
@@ -169,6 +171,7 @@ describe("Permissions", () => {
         ossifier,
         depositorSetter,
         lockedResetter,
+        tierChanger,
       } as PermissionsConfigStruct,
       "0x",
     );
@@ -231,6 +234,7 @@ describe("Permissions", () => {
       await checkSoleMember(ossifier, await permissions.OSSIFY_ROLE());
       await checkSoleMember(depositorSetter, await permissions.SET_DEPOSITOR_ROLE());
       await checkSoleMember(lockedResetter, await permissions.RESET_LOCKED_ROLE());
+      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
     });
   });
 
@@ -261,6 +265,7 @@ describe("Permissions", () => {
             ossifier,
             depositorSetter,
             lockedResetter,
+            tierChanger,
           } as PermissionsConfigStruct,
           "0x",
         ),
@@ -301,6 +306,7 @@ describe("Permissions", () => {
             ossifier,
             depositorSetter,
             lockedResetter,
+            tierChanger,
           } as PermissionsConfigStruct,
           "0x",
         ),

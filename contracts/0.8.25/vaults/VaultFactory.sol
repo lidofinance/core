@@ -8,6 +8,7 @@ import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
+import {VaultHub} from "./VaultHub.sol";
 import {Permissions} from "./dashboard/Permissions.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
@@ -56,8 +57,11 @@ contract VaultFactory {
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments,
         bytes calldata _extraParams
-    ) external returns (IStakingVault vault, Dashboard dashboard) {
+    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+
+        uint256 connectDeposit = VaultHub(vault.vaultHub()).CONNECT_DEPOSIT();
+        if (msg.value < connectDeposit) revert InsufficientFunds();
 
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
@@ -70,7 +74,12 @@ contract VaultFactory {
             _extraParams
         );
 
+        vault.fund{value: msg.value}();
+        vault.lock(connectDeposit);
         vault.authorizeLidoVaultHub();
+
+        // connect to hub
+        VaultHub(vault.vaultHub()).connectVault(address(vault));
 
         // transfer ownership of the vault back to the dashboard
         OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
@@ -113,4 +122,9 @@ contract VaultFactory {
      * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
+
+    /**
+     * @notice Error thrown for when insufficient funds are provided
+     */
+    error InsufficientFunds();
 }

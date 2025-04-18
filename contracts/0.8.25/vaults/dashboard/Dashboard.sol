@@ -510,6 +510,14 @@ contract Dashboard is NodeOperatorFee {
         _resetLocked();
     }
 
+    /**
+     * @notice Requests a change of tier on the OperatorGrid.
+     * @param _tierId The tier to change to.
+     */
+    function requestTierChange(uint256 _tierId) external {
+        _requestTierChange(_tierId);
+    }
+
     // ==================== Internal Functions ====================
 
     /**

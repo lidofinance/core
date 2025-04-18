@@ -37,6 +37,8 @@ import {
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
+const VAULT_CONNECTION_DEPOSIT = ether("1");
+
 describe("Dashboard.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
@@ -106,7 +108,9 @@ describe("Dashboard.sol", () => {
 
     const createVaultTx = await factory
       .connect(vaultOwner)
-      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], "0x");
+      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], "0x", {
+        value: VAULT_CONNECTION_DEPOSIT,
+      });
     const createVaultReceipt = await createVaultTx.wait();
     if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
 
@@ -148,6 +152,16 @@ describe("Dashboard.sol", () => {
     ]);
 
     await Promise.all(defaultAdminRoles.map((role) => dashboard.connect(vaultOwner).grantRole(role, vaultOwner)));
+
+    //reset locked and inOutDelta
+    await dashboard.deauthorizeLidoVaultHub();
+    await expect(dashboard.resetLocked()).to.emit(vault, "LockedReset");
+    await expect(dashboard.withdraw(vaultOwner, ether("1"))).to.emit(vault, "Withdrawn");
+
+    expect(await vault.locked()).to.equal(0n);
+    expect(await vault.inOutDelta()).to.equal(0n);
+
+    await dashboard.authorizeLidoVaultHub();
 
     originalState = await Snapshot.take();
   });
@@ -282,7 +296,7 @@ describe("Dashboard.sol", () => {
 
       await hub.mock__setVaultSocket(vault, sockets);
 
-      await dashboard.connect(vaultOwner).fund({ value: 1000n });
+      // await dashboard.connect(vaultOwner).fund({ value: 1000n });
 
       const maxMintableShares = await dashboard.totalMintableShares();
       const maxStETHMinted = ((await vault.totalValue()) * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE;
