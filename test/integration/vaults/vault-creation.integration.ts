@@ -16,6 +16,7 @@ import {
   generateValidator,
   impersonate,
   prepareLocalMerkleTree,
+  updateBalance,
 } from "lib";
 import {
   connectToHub,
@@ -68,6 +69,8 @@ describe("Scenario: Actions on vault creation", () => {
       VAULT_NODE_OPERATOR_FEE,
       DEFAULT_CONFIRM_EXPIRY,
     ));
+
+    await updateBalance(roles.funder.address, ether("1000000000"));
 
     await connectToHub(ctx, dashboard, stakingVault);
   });
@@ -150,7 +153,7 @@ describe("Scenario: Actions on vault creation", () => {
         .grantRole(await disconnectedDashboard.LOCK_ROLE(), disconnectedRoles.minter.address);
 
       await expect(
-        disconnectedDashboard.connect(disconnectedRoles.minter).mintStETH(disconnectedRoles.locker, 1n),
+        disconnectedDashboard.connect(disconnectedRoles.minter).mintStETH(disconnectedRoles.locker, 10n),
       ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "NotConnectedToHub");
     });
 
@@ -159,12 +162,12 @@ describe("Scenario: Actions on vault creation", () => {
 
       // suppose user somehow got 1 share and tries to burn it via the dashboard contract on disconnected vault
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
-      await lido.connect(accountingSigner).mintShares(disconnectedRoles.burner, 1n);
+      await lido.connect(disconnectedRoles.burner).approve(disconnectedDashboard, 100000n);
+      await lido.connect(accountingSigner).mintShares(disconnectedRoles.burner, 10n);
 
-      await expect(disconnectedDashboard.connect(disconnectedRoles.burner).burnStETH(1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotConnectedToHub",
-      );
+      await expect(
+        disconnectedDashboard.connect(disconnectedRoles.burner).burnStETH(10n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
   });
 
@@ -175,22 +178,26 @@ describe("Scenario: Actions on vault creation", () => {
       // add some stETH to the vault to have valuation
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      const stethAmount = 10n;
+      const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(stethAmount);
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, stethAmount))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, sharesAmount);
     });
 
     it("Allows burning stETH", async () => {
       const { vaultHub, lido } = ctx.contracts;
+      const stethAmount = 10n;
+      const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(stethAmount);
 
       // add some stETH to the vault to have valuation, mint shares and approve stETH
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
-      await lido.connect(roles.burner).approve(dashboard, 1n);
+      await dashboard.connect(roles.minter).mintStETH(roles.burner, stethAmount);
+      await lido.connect(roles.burner).approve(dashboard, stethAmount);
 
-      await expect(dashboard.connect(roles.burner).burnStETH(1n))
+      await expect(dashboard.connect(roles.burner).burnStETH(stethAmount))
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, sharesAmount);
     });
   });
 

@@ -5,6 +5,8 @@
 // solhint-disable-next-line
 pragma solidity >=0.4.24 <0.9.0;
 
+// import { IAccessControlEnumerable } from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+
 interface IBurner {
     /**
      * Commit cover/non-cover burning requests and logs cover/non-cover shares amount just burnt.
@@ -32,4 +34,18 @@ interface IBurner {
       * Returns the total non-cover shares ever burnt.
       */
     function getNonCoverSharesBurnt() external view returns (uint256);
+
+    /**
+     * @param _oldBurner The address of the old Burner contract
+     * @dev The migration besides setting the shares related state requires transferring the stETH balance
+     *      from the old Burner contract to the new one which is to be performed by the Lido contract
+     *      along with the call of this function.
+     */
+    function migrate(address _oldBurner) external;
+
+    /**
+     * @notice Returns whether migration is allowed.
+     * @return bool indicating if migration is allowed
+     */
+    function isMigrationAllowed() external view returns (bool);
 }

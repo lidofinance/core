@@ -8,12 +8,18 @@ import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonAp
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {IBurner} from "../common/interfaces/IBurner.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
 import {StETHPermit} from "./StETHPermit.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
+
+
+interface ICSModule {
+    function accounting() external view returns (address);
+}
 
 interface IStakingRouter {
     function deposit(uint256 _depositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external payable;
@@ -33,6 +39,17 @@ interface IStakingRouter {
         external
         view
         returns (uint16 modulesFee, uint16 treasuryFee);
+
+    // This function interfaces does not follow the actual interface of getStakingModule
+    // of the StakingRouter contract.
+    // This is a low-level hack to read return values from getStakingModule because Solidity 0.4.24
+    // does not support structs as return values.
+    // See function _getStakingModuleAddress for more details.
+    function getStakingModule(uint256 _stakingModuleId) external view returns (
+        uint256 __offset__,
+        uint256 id,
+        address stakingModuleAddress
+    );
 }
 
 interface IWithdrawalQueue {
@@ -210,31 +227,69 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
-        // set infinite allowance for burner from withdrawal queue
-        // to burn finalized requests' shares
-        _approve(ILidoLocator(_lidoLocator).withdrawalQueue(), ILidoLocator(_lidoLocator).burner(), INFINITE_ALLOWANCE);
+        _setContractVersion(3);
 
-        _initialize_v3();
+        _approve(getLidoLocator().withdrawalQueue(), getLidoLocator().burner(), INFINITE_ALLOWANCE);
         initialized();
+    }
+
+    /**
+     * @notice Retrieves the address of a staking module by its ID
+     * @param _moduleId The ID of the staking module to retrieve
+     * @return The address of the staking module
+     * @dev The function parses the returned structure in a low-level manner because Solidity 0.4.24
+     *      does not support structs as return values.
+     *      See https://docs.soliditylang.org/en/latest/abi-spec.html#formal-specification-of-the-encoding
+     */
+    function _getStakingModuleAddress(uint256 _moduleId) internal view returns (address) {
+        IStakingRouter router = IStakingRouter(getLidoLocator().stakingRouter());
+        (
+            uint256 __offset__, // bytes offset containing starting offset of the actual struct data
+            uint256 id, // it is uint24 originally but it is padded to uint256 in the encoded struct
+            address stakingModuleAddress
+        ) = router.getStakingModule(_moduleId);
+        require(__offset__ == 0x20, "INVALID_STRUCTURE_FIRST_BYTES");
+        require(id == _moduleId, "INVALID_MODULE_ID");
+        return stakingModuleAddress;
     }
 
     /**
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     * @param _oldBurner The address of the old Burner contract to migrate from
      */
-    function finalizeUpgrade_v3() external {
+    function finalizeUpgrade_v3(address _oldBurner) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
+        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
+        address burner = getLidoLocator().burner();
+        require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
 
-        _initialize_v3();
-    }
-
-    /**
-     * initializer for the Lido version "3"
-     */
-    function _initialize_v3() internal {
         _setContractVersion(3);
+
+        // migrate burner stETH balance
+        uint256 oldBurnerShares = _sharesOf(_oldBurner);
+        if (oldBurnerShares > 0) {
+            _transferShares(_oldBurner, burner, oldBurnerShares);
+            _emitTransferEvents(_oldBurner, burner, oldBurnerShares, oldBurnerShares);
+        }
+
+        // initialize new burner with state from the old burner
+        IBurner(burner).migrate(_oldBurner);
+
+        // migrating allowances for staking modules, CSM accounting ans WQ
+        address[4] memory contractsWithBurnerAllowances = [
+            _getStakingModuleAddress(1), // NodeOperatorsRegistry
+            _getStakingModuleAddress(2), // SimpleDVT
+            ICSModule(_getStakingModuleAddress(3)).accounting(),
+            getLidoLocator().withdrawalQueue()
+        ];
+        for (uint256 i = 0; i < contractsWithBurnerAllowances.length; i++) {
+            uint256 oldAllowance = allowance(contractsWithBurnerAllowances[i], _oldBurner);
+            _approve(contractsWithBurnerAllowances[i], _oldBurner, 0);
+            _approve(contractsWithBurnerAllowances[i], burner, oldAllowance);
+        }
     }
 
     /**

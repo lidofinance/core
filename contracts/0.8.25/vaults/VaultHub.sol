@@ -88,7 +88,7 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
-    uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
+    uint256 public immutable RELATIVE_SHARE_LIMIT_BP;
 
     /// @notice Lido stETH contract
     ILido public immutable LIDO;

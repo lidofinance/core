@@ -33,6 +33,8 @@ describe("OracleReportSanityChecker.sol", () => {
 
   let locatorAddress: string;
   let withdrawalVaultAddress: string;
+  let accountingOracleAddress: string;
+  let accountingAddress: string;
 
   const defaultLimits = {
     exitedValidatorsPerDayLimit: 55n,
@@ -88,11 +90,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
-    const accountingOracleAddress = await accountingOracle.getAddress();
+    accountingOracleAddress = await accountingOracle.getAddress();
     const burnerAddress = await burner.getAddress();
     const stakingRouterAddress = await stakingRouter.getAddress();
     const withdrawalQueueAddress = await withdrawalQueueMock.getAddress();
-    const accountingAddress = await accounting.getAddress();
+    accountingAddress = await accounting.getAddress();
 
     locator = await ethers.getContractFactory("LidoLocator__MockForSanityChecker").then((factory) =>
       factory.deploy({
@@ -119,7 +121,7 @@ describe("OracleReportSanityChecker.sol", () => {
     locatorAddress = await locator.getAddress();
     checker = await ethers
       .getContractFactory("OracleReportSanityChecker")
-      .then((f) => f.deploy(locatorAddress, admin, defaultLimits));
+      .then((f) => f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, admin.address, defaultLimits));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -129,7 +131,13 @@ describe("OracleReportSanityChecker.sol", () => {
   context("constructor", () => {
     it("reverts if admin address is zero", async () => {
       await expect(
-        ethers.deployContract("OracleReportSanityChecker", [locatorAddress, ZeroAddress, defaultLimits]),
+        ethers.deployContract("OracleReportSanityChecker", [
+          locatorAddress,
+          accountingOracleAddress,
+          accountingAddress,
+          ZeroAddress,
+          defaultLimits,
+        ]),
       ).to.be.revertedWithCustomError(checker, "AdminCannotBeZero");
     });
   });

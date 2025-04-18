@@ -63,7 +63,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Calls the parent's iniatializer and approves the max allowance for WSTETH for gas savings
+     * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
      * @param _nodeOperatorFeeBP The node operator fee in basis points

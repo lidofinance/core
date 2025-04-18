@@ -7,7 +7,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForStakingVault,
   EthRejector,
-  IPredepositGuarantee,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
@@ -18,6 +17,7 @@ import {
   VaultFactory__MockForStakingVault,
   VaultHub__MockForStakingVault,
 } from "typechain-types";
+import { IPredepositGuarantee } from "typechain-types/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee";
 
 import {
   addressToWC,
