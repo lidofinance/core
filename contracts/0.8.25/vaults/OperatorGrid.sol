@@ -208,7 +208,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         emit GroupShareLimitUpdated(_nodeOperator, uint96(_shareLimit));
     }
 
-    /// @notice Returns a node operator address
+    /// @notice Returns a group by node operator address
     /// @param _nodeOperator address of the node operator
     /// @return Group
     function group(address _nodeOperator) external view returns (Group memory) {
