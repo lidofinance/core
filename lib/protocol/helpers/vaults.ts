@@ -112,6 +112,7 @@ export async function createVaultWithDashboard(
     dashboard.OSSIFY_ROLE(),
     dashboard.SET_DEPOSITOR_ROLE(),
     dashboard.RESET_LOCKED_ROLE(),
+    dashboard.REQUEST_TIER_CHANGE_ROLE(),
     dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
     dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
   ]);
