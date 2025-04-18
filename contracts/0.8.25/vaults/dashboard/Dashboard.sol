@@ -63,7 +63,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Calls the parent's iniatializer and approves the max allowance for WSTETH for gas savings
+     * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
      * @param _nodeOperatorFeeBP The node operator fee in basis points
@@ -141,20 +141,21 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the overall capacity of stETH shares that can be minted by the vault bound by total value and vault share limit.
-     * @return The maximum number of mintable stETH shares not counting already minted ones.
+     * @notice Returns the overall capacity for stETH shares that can be minted by the vault
+     * @return The maximum number of mintable stETH shares.
      */
-    function totalMintableShares() public view returns (uint256) {
-        return _totalMintableShares(_mintableTotalValue());
+    function totalMintingCapacity() public view returns (uint256) {
+        return _totalMintingCapacity(0);
     }
 
     /**
-     * @notice Returns the maximum number of shares that can be minted with funded ether.
+     * @notice Returns the remaining capacity for stETH shares that can be minted
+     *         by the vault if additional ether is funded
      * @param _etherToFund the amount of ether to be funded, can be zero
-     * @return the maximum number of shares that can be minted by ether
+     * @return the number of shares that can be minted using additional ether
      */
-    function projectedNewMintableShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 totalShares = _totalMintableShares(_mintableTotalValue() + _etherToFund);
+    function remainingMintingCapacity(uint256 _etherToFund) external view returns (uint256) {
+        uint256 totalShares = _totalMintingCapacity(_etherToFund);
         uint256 liabilityShares_ = vaultSocket().liabilityShares;
 
         if (totalShares < liabilityShares_) return 0;
@@ -178,7 +179,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of ether that can be withdrawn from the staking vault.
+     * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
@@ -538,23 +539,23 @@ contract Dashboard is NodeOperatorFee {
         VaultHub.VaultSocket memory socket = vaultSocket();
 
         // Calculate the locked amount required to accommodate the new shares
-        uint256 requiredLocked = (STETH.getPooledEthBySharesRoundUp(socket.liabilityShares + _newShares) *
+        uint256 requiredLock = (STETH.getPooledEthBySharesRoundUp(socket.liabilityShares + _newShares) *
             TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // If the required locked amount is greater than the current, increase the locked amount
-        if (requiredLocked > _stakingVault().locked()) {
-            _lock(requiredLocked);
+        if (requiredLock > _stakingVault().locked()) {
+            _lock(requiredLock);
         }
 
         _;
     }
 
     /**
-     * @notice Returns the total value with the node operator fee subtracted,
+     * @notice Returns the value of the staking vault with the node operator fee subtracted,
      *         because the fee cannot be used to mint shares.
      * @return The amount of ether in wei that can be used to mint shares.
      */
-    function _mintableTotalValue() internal view returns (uint256) {
+    function _mintableValue() internal view returns (uint256) {
         return _stakingVault().totalValue() - nodeOperatorUnclaimedFee();
     }
 
@@ -564,14 +565,14 @@ contract Dashboard is NodeOperatorFee {
      * @param _recipient The address of the recipient.
      * @param _amountOfShares The amount of shares to mint.
      */
-    function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
+    function _mintSharesWithinMintingCapacity(address _recipient, uint256 _amountOfShares) internal {
         _mintShares(_recipient, _amountOfShares);
 
         uint256 locked = _stakingVault().locked();
-        uint256 mintableTotalValue = _mintableTotalValue();
+        uint256 mintableValue = _mintableValue();
 
-        if (locked > mintableTotalValue) {
-            revert MintableTotalValueExceeded(locked, mintableTotalValue);
+        if (locked > mintableValue) {
+            revert MintingCapacityExceeded(locked, mintableValue);
         }
     }
 
@@ -599,12 +600,13 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @dev Calculates total shares vault can mint
-     * @param _totalValue custom vault total value
+     * @dev calculates the maximum number of stETH shares that can be minted by the vault
+     * @param _additionalFunding additional ether that may be funded to the vault
      */
-    function _totalMintableShares(uint256 _totalValue) internal view returns (uint256) {
-        uint256 maxMintableStETH = (_totalValue * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) /
-            TOTAL_BASIS_POINTS;
+    function _totalMintingCapacity(uint256 _additionalFunding) internal view returns (uint256) {
+        uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding)
+            * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP))
+            / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
@@ -651,5 +653,5 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Error thrown when mintable total value is breached
      */
-    error MintableTotalValueExceeded(uint256 locked, uint256 mintableTotalValue);
+    error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
 }
