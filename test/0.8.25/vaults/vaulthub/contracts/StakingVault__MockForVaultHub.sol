@@ -16,7 +16,7 @@ contract StakingVault__MockForVaultHub {
     bool public vaultHubAuthorized;
 
     uint256 public $locked;
-    uint256 public $valuation;
+    uint256 public $totalValue;
     int256 public $inOutDelta;
     uint64 public $timestamp;
 
@@ -46,8 +46,8 @@ contract StakingVault__MockForVaultHub {
         return $locked;
     }
 
-    function valuation() external view returns (uint256) {
-        return $valuation;
+    function totalValue() external view returns (uint256) {
+        return $totalValue;
     }
 
     function mock__setWithdrawalCredentials(bytes32 _wc) external {
@@ -63,12 +63,12 @@ contract StakingVault__MockForVaultHub {
     }
 
     function fund() external payable {
-        $valuation += msg.value;
+        $totalValue += msg.value;
         $inOutDelta += int256(msg.value);
     }
 
     function withdraw(address, uint256 amount) external {
-        $valuation -= amount;
+        $totalValue -= amount;
         $inOutDelta -= int256(amount);
     }
 
@@ -76,9 +76,9 @@ contract StakingVault__MockForVaultHub {
         VaultHub(VAULT_HUB).rebalance{value: amount}();
     }
 
-    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
+    function report(uint64 _timestamp, uint256 _totalValue, int256 _inOutDelta, uint256 _locked) external {
         $timestamp = _timestamp;
-        $valuation = _valuation;
+        $totalValue = _totalValue;
         $inOutDelta = _inOutDelta;
         $locked = _locked;
     }
@@ -92,19 +92,19 @@ contract StakingVault__MockForVaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        if ($valuation > $locked) {
+        if ($totalValue > $locked) {
             revert Mock__HealthyVault();
         }
 
         emit ValidatorWithdrawalTriggered(_pubkeys, _amounts, _refundRecipient);
     }
 
-    function mock__decreaseValuation(uint256 amount) external {
-        $valuation -= amount;
+    function mock__decreaseTotalValue(uint256 amount) external {
+        $totalValue -= amount;
     }
 
-    function mock__increaseValuation(uint256 amount) external {
-        $valuation += amount;
+    function mock__increaseTotalValue(uint256 amount) external {
+        $totalValue += amount;
     }
 
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}

@@ -111,7 +111,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         return
             IStakingVault.Report({
                 timestamp: $.report.timestamp,
-                valuation: $.report.valuation,
+                totalValue: $.report.totalValue,
                 inOutDelta: $.report.inOutDelta
             });
     }
@@ -136,7 +136,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function rebalance(uint256 _ether) external {}
 
-    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {}
+    function report(uint64 _timestamp, uint256 _totalValue, int256 _inOutDelta, uint256 _locked) external {}
 
     function lock(uint256 _locked) external {
         _getVaultStorage().locked = uint128(_locked);
@@ -152,7 +152,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function resetLocked() external {}
 
-    function valuation() external pure returns (uint256) {
+    function totalValue() external pure returns (uint256) {
         return 0;
     }
 

@@ -28,7 +28,7 @@ const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 const SHARE_LIMIT = ether("1");
 const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 const FEE = 2n;
@@ -116,7 +116,7 @@ describe("VaultHub.sol:forceExit", () => {
     await operatorGridMock.changeVaultTierParams(vault, {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
-      rebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
+      forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
       treasuryFeeBP: TREASURY_FEE_BP,
     });
 
@@ -203,7 +203,7 @@ describe("VaultHub.sol:forceExit", () => {
 
       it("initiates force validator withdrawal", async () => {
         await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-          .to.emit(vaultHub, "ForceValidatorExitTriggered")
+          .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);
       });
 
@@ -214,7 +214,7 @@ describe("VaultHub.sol:forceExit", () => {
         await expect(
           vaultHub.forceValidatorExit(vaultAddress, pubkeys, feeRecipient, { value: FEE * BigInt(numPubkeys) }),
         )
-          .to.emit(vaultHub, "ForceValidatorExitTriggered")
+          .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, pubkeys, feeRecipient);
       });
     });
@@ -230,31 +230,31 @@ describe("VaultHub.sol:forceExit", () => {
 
       const demoVault = await ethers.getContractAt("StakingVault__MockForVaultHub", demoVaultAddress, user);
 
-      const valuation = ether("100");
-      await demoVault.fund({ value: valuation });
-      await demoVault.connect(user).lock(valuation);
-      const cap = await steth.getSharesByPooledEth((valuation * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
+      const totalValue = ether("100");
+      await demoVault.fund({ value: totalValue });
+      await demoVault.connect(user).lock(totalValue);
+      const cap = await steth.getSharesByPooledEth((totalValue * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
-      await operatorGridMock.changeVaultTierParams(demoVaultAddress, {
+      await operatorGridMock.changeVaultTierParams(demoVault, {
         shareLimit: cap,
         reserveRatioBP: 20_00n,
-        rebalanceThresholdBP: 20_00n,
+        forcedRebalanceThresholdBP: 20_00n,
         treasuryFeeBP: 5_00n,
       });
 
       await vaultHub.connectVault(demoVaultAddress);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
-      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).sharesMinted).to.equal(cap);
+      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).liabilityShares).to.equal(cap);
 
-      // decrease valuation to trigger rebase
+      // decrease totalValue to trigger rebase
       const penalty = ether("1");
-      await demoVault.mock__decreaseValuation(penalty);
+      await demoVault.mock__decreaseTotalValue(penalty);
 
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
-        .to.emit(vaultHub, "ForceValidatorExitTriggered")
+        .to.emit(vaultHub, "ForcedValidatorExitTriggered")
         .withArgs(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient);
     });
   });

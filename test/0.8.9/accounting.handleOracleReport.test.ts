@@ -89,7 +89,7 @@ describe("Accounting.sol:report", () => {
     const defaultTierParams = {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
       reserveRatioBP: 2000n,
-      rebalanceThresholdBP: 1800n,
+      forcedRebalanceThresholdBP: 1800n,
       treasuryFeeBP: 500n,
     };
     await operatorGrid.initialize(deployer, defaultTierParams);

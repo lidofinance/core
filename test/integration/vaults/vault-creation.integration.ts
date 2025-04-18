@@ -182,7 +182,7 @@ describe("Scenario: Actions on vault creation", () => {
     it("Allows minting stETH", async () => {
       const { vaultHub } = ctx.contracts;
 
-      // add some stETH to the vault to have valuation
+      // add some stETH to the vault to have totalValue
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
@@ -193,7 +193,7 @@ describe("Scenario: Actions on vault creation", () => {
     it("Allows burning stETH", async () => {
       const { vaultHub, lido } = ctx.contracts;
 
-      // add some stETH to the vault to have valuation, mint shares and approve stETH
+      // add some stETH to the vault to have totalValue, mint shares and approve stETH
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
       await lido.connect(roles.burner).approve(dashboard, 1n);
