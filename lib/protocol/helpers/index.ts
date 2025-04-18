@@ -24,6 +24,7 @@ export {
   createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
+  getPubkeys,
   reportVaultDataWithProof,
   setupLido,
   VaultRoles,

@@ -7,7 +7,7 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 import { Dashboard, Permissions, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
 
-import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate } from "lib";
+import { days, de0x, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { ether } from "../../units";
 import { ProtocolContext } from "../types";
@@ -57,8 +57,9 @@ export interface VaultWithDashboard {
  * @param ctx Protocol context for event handling and contract interaction
  * @param stakingVaultFactory Factory contract used to create the vault
  * @param owner Address that will be set as the owner/admin of the vault
+ * @param nodeOperator Address of the node operator
  * @param nodeOperatorManager Address of the node operator manager contract
- * @param rolesOverrides Optional object to override default randomly generated role addresses
+ * @param roleAssignments Optional object to override default randomly generated role addresses
  * @param fee Node operator fee in basis points (default: 3% = 300 basis points)
  * @param confirmExpiry Time period for confirmation expiry (default: 7 days)
  * @returns Object containing the created StakingVault, Dashboard contract, and role addresses
@@ -286,3 +287,15 @@ export async function createVaultProxy(
     dashboard,
   };
 }
+
+export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
+  const pubkeys = Array.from({ length: num }, (_, i) => {
+    const paddedIndex = (i + 1).toString().padStart(8, "0");
+    return `0x${paddedIndex.repeat(12)}`;
+  });
+
+  return {
+    pubkeys,
+    stringified: `0x${pubkeys.map(de0x).join("")}`,
+  };
+};
