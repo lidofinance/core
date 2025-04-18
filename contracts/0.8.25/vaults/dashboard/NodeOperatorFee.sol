@@ -141,7 +141,7 @@ contract NodeOperatorFee is Permissions {
      * @return uint256: the amount of unclaimed fee in ether.
      */
     function nodeOperatorUnclaimedFee() public view returns (uint256) {
-        IStakingVault.Report memory latestReport = stakingVault().latestReport();
+        IStakingVault.Report memory latestReport = _stakingVault().latestReport();
         IStakingVault.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
 
         // cast down safely clamping to int128.max
@@ -189,9 +189,9 @@ contract NodeOperatorFee is Permissions {
         if (fee == 0) revert NoUnclaimedFee();
 
         if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-        nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+        nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
 
-        stakingVault().withdraw(_recipient, fee);
+        _stakingVault().withdraw(_recipient, fee);
     }
 
     /**
@@ -234,7 +234,7 @@ contract NodeOperatorFee is Permissions {
 
         // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
         if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
-            nodeOperatorFeeClaimedReport = stakingVault().latestReport();
+            nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
         }
 
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;

@@ -178,8 +178,8 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Returns the address of the underlying StakingVault.
      * @return The address of the StakingVault.
      */
-    function stakingVault() public view returns (IStakingVault) {
-        return IStakingVault(_stakingVaultAddress());
+    function stakingVault() external view returns (IStakingVault) {
+        return _stakingVault();
     }
 
     // ==================== Role Management Functions ====================
@@ -227,7 +227,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to fund the StakingVault with.
      */
     function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
-        stakingVault().fund{value: _ether}();
+        _stakingVault().fund{value: _ether}();
     }
 
     /**
@@ -237,7 +237,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
-        stakingVault().withdraw(_recipient, _ether);
+        _stakingVault().withdraw(_recipient, _ether);
     }
 
     /**
@@ -245,7 +245,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _locked The amount of locked ether, must be greater or equal to the current locked amount.
      */
     function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
-        stakingVault().lock(_locked);
+        _stakingVault().lock(_locked);
     }
 
     /**
@@ -255,7 +255,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        VAULT_HUB.mintShares(_stakingVaultAddress(), _recipient, _shares);
+        VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares);
     }
 
     /**
@@ -264,7 +264,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        VAULT_HUB.burnShares(_stakingVaultAddress(), _shares);
+        VAULT_HUB.burnShares(address(_stakingVault()), _shares);
     }
 
     /**
@@ -273,21 +273,21 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the StakingVault contract.
      */
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
-        stakingVault().rebalance(_ether);
+        _stakingVault().rebalance(_ether);
     }
 
     /**
      * @dev Checks the PAUSE_BEACON_CHAIN_DEPOSITS_ROLE and pauses beacon chain deposits on the StakingVault.
      */
     function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
-        stakingVault().pauseBeaconChainDeposits();
+        _stakingVault().pauseBeaconChainDeposits();
     }
 
     /**
      * @dev Checks the RESUME_BEACON_CHAIN_DEPOSITS_ROLE and resumes beacon chain deposits on the StakingVault.
      */
     function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
-        stakingVault().resumeBeaconChainDeposits();
+        _stakingVault().resumeBeaconChainDeposits();
     }
 
     /**
@@ -295,7 +295,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
     function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        stakingVault().requestValidatorExit(_pubkeys);
+        _stakingVault().requestValidatorExit(_pubkeys);
     }
 
     /**
@@ -307,14 +307,14 @@ abstract contract Permissions is AccessControlConfirmable {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
-        stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+        _stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        VAULT_HUB.voluntaryDisconnect(_stakingVaultAddress());
+        VAULT_HUB.voluntaryDisconnect(address(_stakingVault()));
     }
 
     /**
@@ -327,7 +327,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -336,7 +336,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IStakingVault vault = stakingVault();
+        IStakingVault vault = _stakingVault();
         IPredepositGuarantee pdg = IPredepositGuarantee(vault.depositor());
         for (uint256 i = 0; i < _witnesses.length; i++) {
             pdg.proveUnknownValidator(_witnesses[i], vault);
@@ -349,7 +349,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _withdrawForUnguaranteedDepositToBeaconChain(
         uint256 _ether
     ) internal onlyRole(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
-        stakingVault().withdraw(address(this), _ether);
+        _stakingVault().withdraw(address(this), _ether);
     }
 
     /**
@@ -357,28 +357,28 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
-        OwnableUpgradeable(address(stakingVault())).transferOwnership(_newOwner);
+        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
     }
 
     /**
      * @dev Checks the LIDO_VAULTHUB_AUTHORIZATION_ROLE and authorizes Lido VaultHub on the StakingVault.
      */
     function _authorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_AUTHORIZATION_ROLE) {
-        stakingVault().authorizeLidoVaultHub();
+        _stakingVault().authorizeLidoVaultHub();
     }
 
     /**
      * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
      */
     function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
-        stakingVault().deauthorizeLidoVaultHub();
+        _stakingVault().deauthorizeLidoVaultHub();
     }
 
     /**
      * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
      */
     function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
-        stakingVault().ossifyStakingVault();
+        _stakingVault().ossifyStakingVault();
     }
 
     /**
@@ -386,25 +386,27 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _depositor The address to set the depositor to.
      */
     function _setDepositor(address _depositor) internal onlyRole(SET_DEPOSITOR_ROLE) {
-        stakingVault().setDepositor(_depositor);
+        _stakingVault().setDepositor(_depositor);
     }
 
     /**
      * @dev Checks the RESET_LOCKED_ROLE and resets the locked amount on the disconnected StakingVault.
      */
     function _resetLocked() internal onlyRole(RESET_LOCKED_ROLE) {
-        stakingVault().resetLocked();
+        _stakingVault().resetLocked();
     }
 
     /**
      * @dev Loads the address of the underlying StakingVault.
      * @return addr The address of the StakingVault.
      */
-    function _stakingVaultAddress() internal view returns (address addr) {
+    function _stakingVault() internal view returns (IStakingVault) {
         bytes memory args = Clones.fetchCloneArgs(address(this));
+        address stakingVaultAddress;
         assembly {
-            addr := mload(add(args, 32))
+            stakingVaultAddress := mload(add(args, 32))
         }
+        return IStakingVault(stakingVaultAddress);
     }
 
     /**

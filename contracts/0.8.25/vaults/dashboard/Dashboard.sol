@@ -91,7 +91,7 @@ contract Dashboard is NodeOperatorFee {
      * @return VaultSocket struct containing vault data
      */
     function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return VAULT_HUB.vaultSocket(_stakingVaultAddress());
+        return VAULT_HUB.vaultSocket(address(_stakingVault()));
     }
 
     /**
@@ -139,7 +139,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The valuation as a uint256.
      */
     function valuation() external view returns (uint256) {
-        return stakingVault().valuation();
+        return _stakingVault().valuation();
     }
 
     /**
@@ -172,8 +172,9 @@ contract Dashboard is NodeOperatorFee {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = stakingVault().locked() + nodeOperatorUnclaimedFee();
-        uint256 valuation_ = stakingVault().valuation();
+        IStakingVault stakingVault_ = _stakingVault();
+        uint256 reserved = stakingVault_.locked() + nodeOperatorUnclaimedFee();
+        uint256 valuation_ = stakingVault_.valuation();
 
         return reserved > valuation_ ? 0 : valuation_ - reserved;
     }
@@ -185,7 +186,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether that can be withdrawn.
      */
     function withdrawableEther() external view returns (uint256) {
-        return Math256.min(_stakingVaultAddress().balance, unreserved());
+        return Math256.min(address(_stakingVault()).balance, unreserved());
     }
 
     // ==================== Vault Management Functions ====================
@@ -209,7 +210,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external payable fundable {
-        uint256 shares = VAULT_HUB.vaultSocket(_stakingVaultAddress()).sharesMinted;
+        uint256 shares = VAULT_HUB.vaultSocket(address(_stakingVault())).sharesMinted;
 
         if (shares > 0) {
             _rebalanceVault(STETH.getPooledEthBySharesRoundUp(shares));
@@ -338,8 +339,8 @@ contract Dashboard is NodeOperatorFee {
     function unguaranteedDepositToBeaconChain(
         StakingVaultDeposit[] calldata _deposits
     ) public returns (uint256 totalAmount) {
-        IStakingVault stakingVault = stakingVault();
-        IDepositContract depositContract = stakingVault.DEPOSIT_CONTRACT();
+        IStakingVault stakingVault_ = _stakingVault();
+        IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -351,7 +352,7 @@ contract Dashboard is NodeOperatorFee {
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
 
-        bytes memory withdrawalCredentials = bytes.concat(stakingVault.withdrawalCredentials());
+        bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
         StakingVaultDeposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
@@ -363,7 +364,7 @@ contract Dashboard is NodeOperatorFee {
                 deposit.depositDataRoot
             );
 
-            emit UnguaranteedDeposit(address(stakingVault), deposit.pubkey, deposit.amount);
+            emit UnguaranteedDeposit(address(stakingVault_), deposit.pubkey, deposit.amount);
         }
 
         _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
@@ -541,7 +542,7 @@ contract Dashboard is NodeOperatorFee {
             TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
 
         // If the required locked amount is greater than the current, increase the locked amount
-        if (requiredLocked > stakingVault().locked()) {
+        if (requiredLocked > _stakingVault().locked()) {
             _lock(requiredLocked);
         }
 
@@ -554,7 +555,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValuation() internal view returns (uint256) {
-        return stakingVault().valuation() - nodeOperatorUnclaimedFee();
+        return _stakingVault().valuation() - nodeOperatorUnclaimedFee();
     }
 
     /**
@@ -566,7 +567,7 @@ contract Dashboard is NodeOperatorFee {
     function _mintSharesWithinMintableValuation(address _recipient, uint256 _amountOfShares) internal {
         _mintShares(_recipient, _amountOfShares);
 
-        uint256 locked = stakingVault().locked();
+        uint256 locked = _stakingVault().locked();
         uint256 mintableValuation = _mintableValuation();
 
         if (locked > mintableValuation) {
