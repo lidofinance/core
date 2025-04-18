@@ -9,7 +9,6 @@ interface ILidoLocator {
     function accountingOracle() external view returns(address);
     function depositSecurityModule() external view returns(address);
     function elRewardsVault() external view returns(address);
-    function legacyOracle() external view returns(address);
     function lido() external view returns(address);
     function oracleReportSanityChecker() external view returns(address);
     function burner() external view returns(address);
@@ -24,6 +23,7 @@ interface ILidoLocator {
     function predepositGuarantee() external view returns (address);
     function wstETH() external view returns (address);
     function vaultHub() external view returns (address);
+    function operatorGrid() external view returns (address);
     /// @notice Returns core Lido protocol component addresses in a single call
     /// @dev This function provides a gas-efficient way to fetch multiple component addresses in a single call
     function coreComponents() external view returns(

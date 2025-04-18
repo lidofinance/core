@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 
+import { ether } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -11,7 +12,6 @@ export async function main() {
 
   // Extract addresses from state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const nodeOperatorsRegistryParams = state[Sk.nodeOperatorsRegistry].deployParameters;
   const simpleDvtRegistryAddress = state[Sk.appSimpleDvt].proxy.address;
@@ -30,6 +30,7 @@ export async function main() {
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -39,7 +40,7 @@ export async function main() {
   const withdrawalQueueAdmin = testnetAdmin;
   const vaultHubAdmin = testnetAdmin;
   const pdgAdmin = testnetAdmin;
-
+  const operatorGridAdmin = testnetAdmin;
   // Initialize NodeOperatorsRegistry
 
   // https://github.com/ethereum/solidity-examples/blob/master/docs/bytes/Bytes.md#description
@@ -78,17 +79,13 @@ export async function main() {
     from: deployer,
   });
 
-  // Initialize LegacyOracle
-  const legacyOracle = await loadContract("LegacyOracle", legacyOracleAddress);
-  await makeTx(legacyOracle, "initialize", [lidoLocatorAddress, hashConsensusForAccountingAddress], { from: deployer });
-
   const zeroLastProcessingRefSlot = 0;
 
   // Initialize AccountingOracle
   const accountingOracle = await loadContract("AccountingOracle", accountingOracleAddress);
   await makeTx(
     accountingOracle,
-    "initializeWithoutMigration",
+    "initialize",
     [
       accountingOracleAdmin,
       hashConsensusForAccountingAddress,
@@ -147,6 +144,16 @@ export async function main() {
   // Initialize VaultHub
   const vaultHub = await loadContract("VaultHub", vaultHubAddress);
   await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
+
+  // Initialize OperatorGrid
+  const defaultTierParams = {
+    shareLimit: ether("1000"),
+    reserveRatioBP: 2000n,
+    rebalanceThresholdBP: 1800n,
+    treasuryFeeBP: 500n,
+  };
+  const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });
 
   // Initialize PDG
   const pdg = await loadContract("PredepositGuarantee", pdgAddress);

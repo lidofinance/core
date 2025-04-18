@@ -1,5 +1,7 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
+
+/* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
@@ -9,25 +11,10 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
 
-import {BaseOracle, IConsensusContract} from "./BaseOracle.sol";
+import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
-}
-
-interface ILegacyOracle {
-    // only called before the migration
-
-    function getBeaconSpec()
-        external
-        view
-        returns (uint64 epochsPerFrame, uint64 slotsPerEpoch, uint64 secondsPerSlot, uint64 genesisTime);
-
-    function getLastCompletedEpochId() external view returns (uint256);
-
-    // only called after the migration
-
-    function handleConsensusLayerReport(uint256 refSlot, uint256 clBalance, uint256 clValidators) external;
 }
 
 interface IOracleReportSanityChecker {
@@ -68,7 +55,6 @@ contract AccountingOracle is BaseOracle {
 
     error LidoLocatorCannotBeZero();
     error AdminCannotBeZero();
-    error LegacyOracleCannotBeZero();
     error LidoCannotBeZero();
     error IncorrectOracleMigration(uint256 code);
     error SenderNotAllowed();
@@ -110,7 +96,6 @@ contract AccountingOracle is BaseOracle {
     bytes32 internal constant ZERO_HASH = bytes32(0);
 
     ILidoLocator public immutable LOCATOR;
-    ILegacyOracle public immutable LEGACY_ORACLE;
 
     ///
     /// Initialization & admin functions
@@ -118,26 +103,14 @@ contract AccountingOracle is BaseOracle {
 
     constructor(
         address lidoLocator,
-        address legacyOracle,
         uint256 secondsPerSlot,
         uint256 genesisTime
     ) BaseOracle(secondsPerSlot, genesisTime) {
         if (lidoLocator == address(0)) revert LidoLocatorCannotBeZero();
-        if (legacyOracle == address(0)) revert LegacyOracleCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
-        LEGACY_ORACLE = ILegacyOracle(legacyOracle);
     }
 
-    function initialize(address admin, address consensusContract, uint256 consensusVersion) external {
-        if (admin == address(0)) revert AdminCannotBeZero();
-
-        uint256 lastProcessingRefSlot = _checkOracleMigration(LEGACY_ORACLE, consensusContract);
-        _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
-
-        _updateContractVersion(2);
-    }
-
-    function initializeWithoutMigration(
+    function initialize(
         address admin,
         address consensusContract,
         uint256 consensusVersion,
@@ -146,12 +119,12 @@ contract AccountingOracle is BaseOracle {
         if (admin == address(0)) revert AdminCannotBeZero();
 
         _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
-
         _updateContractVersion(2);
+        _updateContractVersion(3); // ¯\_(ツ)_/¯
     }
 
-    function finalizeUpgrade_v2(uint256 consensusVersion) external {
-        _updateContractVersion(2);
+    function finalizeUpgrade_v3(uint256 consensusVersion) external {
+        _updateContractVersion(3);
         _setConsensusVersion(consensusVersion);
     }
 
@@ -444,67 +417,6 @@ contract AccountingOracle is BaseOracle {
     /// Implementation & helpers
     ///
 
-    /// @dev Returns last processed reference slot of the legacy oracle.
-    ///
-    /// Old oracle didn't specify what slot use as a reference one, but actually
-    /// used the first slot of the first frame's epoch. The new oracle uses the
-    /// last slot of the previous frame's last epoch as a reference one.
-    ///
-    /// Oracle migration scheme:
-    ///
-    /// last old frame    <--------->
-    /// old frames       |r  .   .   |
-    /// new frames                  r|   .   .  r|   .   .  r|
-    /// first new frame               <--------->
-    /// events            0  1  2   3  4
-    /// time ------------------------------------------------>
-    ///
-    /// 0. last reference slot of legacy oracle
-    /// 1. last legacy oracle's consensus report arrives
-    /// 2. new oracle is deployed and enabled, legacy oracle is disabled and upgraded to
-    ///    the compatibility implementation
-    /// 3. first reference slot of the new oracle
-    /// 4. first new oracle's consensus report arrives
-    ///
-    function _checkOracleMigration(
-        ILegacyOracle legacyOracle,
-        address consensusContract
-    ) internal view returns (uint256) {
-        (uint256 initialEpoch, uint256 epochsPerFrame) = IConsensusContract(consensusContract).getFrameConfig();
-
-        (uint256 slotsPerEpoch, uint256 secondsPerSlot, uint256 genesisTime) = IConsensusContract(consensusContract)
-            .getChainConfig();
-
-        {
-            // check chain spec to match the prev. one (a block is used to reduce stack allocation)
-            (
-                uint256 legacyEpochsPerFrame,
-                uint256 legacySlotsPerEpoch,
-                uint256 legacySecondsPerSlot,
-                uint256 legacyGenesisTime
-            ) = legacyOracle.getBeaconSpec();
-            if (
-                slotsPerEpoch != legacySlotsPerEpoch ||
-                secondsPerSlot != legacySecondsPerSlot ||
-                genesisTime != legacyGenesisTime
-            ) {
-                revert IncorrectOracleMigration(0);
-            }
-            if (epochsPerFrame != legacyEpochsPerFrame) {
-                revert IncorrectOracleMigration(1);
-            }
-        }
-
-        uint256 legacyProcessedEpoch = legacyOracle.getLastCompletedEpochId();
-        if (initialEpoch != legacyProcessedEpoch + epochsPerFrame) {
-            revert IncorrectOracleMigration(2);
-        }
-
-        // last processing ref. slot of the new oracle should be set to the last processed
-        // ref. slot of the legacy oracle, i.e. the first slot of the last processed epoch
-        return legacyProcessedEpoch * slotsPerEpoch;
-    }
-
     function _initialize(
         address admin,
         address consensusContract,
@@ -553,8 +465,6 @@ contract AccountingOracle is BaseOracle {
                 revert ExtraDataHashCannotBeZeroForNonEmptyData();
             }
         }
-
-        LEGACY_ORACLE.handleConsensusLayerReport(data.refSlot, data.clBalanceGwei * 1e9, data.numValidators);
 
         uint256 slotsElapsed = data.refSlot - prevRefSlot;
 

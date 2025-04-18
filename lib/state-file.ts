@@ -15,7 +15,6 @@ export type DeploymentState = {
 export const TemplateAppNames = {
   // Lido apps
   LIDO: "lido",
-  ORACLE: "oracle",
   NODE_OPERATORS_REGISTRY: "node-operators-registry",
   SIMPLE_DVT: "simple-dvt",
   // Aragon apps
@@ -31,7 +30,6 @@ export enum Sk {
   aragonEnsLabelName = "aragonEnsLabelName",
   apmRegistryFactory = "apmRegistryFactory",
   appLido = "app:lido",
-  appOracle = `app:oracle`,
   appNodeOperatorsRegistry = "app:node-operators-registry",
   appSimpleDvt = "app:simple-dvt",
   aragonAcl = "aragon-acl",
@@ -93,8 +91,9 @@ export enum Sk {
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImpl = "stakingVaultImpl",
   stakingVaultFactory = "stakingVaultFactory",
-  delegationImpl = "delegationImpl",
+  dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  operatorGrid = "operatorGrid",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -106,7 +105,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.appVoting:
     case Sk.appLido:
     case Sk.appNodeOperatorsRegistry:
-    case Sk.appOracle:
     case Sk.aragonAcl:
     case Sk.aragonApmRegistry:
     case Sk.aragonEvmScriptRegistry:
@@ -141,6 +139,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.depositContract:
     case Sk.accounting:
     case Sk.tokenRebaseNotifier:
+    case Sk.operatorGrid:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

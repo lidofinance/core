@@ -10,11 +10,11 @@ import {
   DepositSecurityModule,
   HashConsensus,
   Kernel,
-  LegacyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
   NodeOperatorsRegistry,
+  OperatorGrid,
   OracleDaemonConfig,
   OracleReportSanityChecker,
   PredepositGuarantee,
@@ -38,7 +38,6 @@ export type ProtocolNetworkItems = {
   accountingOracle: string;
   depositSecurityModule: string;
   elRewardsVault: string;
-  legacyOracle: string;
   lido: string;
   accounting: string;
   oracleReportSanityChecker: string;
@@ -62,6 +61,7 @@ export type ProtocolNetworkItems = {
   stakingVaultBeacon: string;
   vaultHub: string;
   predepositGuarantee: string;
+  operatorGrid: string;
 };
 
 export interface ContractTypes {
@@ -69,7 +69,6 @@ export interface ContractTypes {
   AccountingOracle: AccountingOracle;
   DepositSecurityModule: DepositSecurityModule;
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
-  LegacyOracle: LegacyOracle;
   Lido: Lido;
   Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
@@ -88,6 +87,7 @@ export interface ContractTypes {
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
+  OperatorGrid: OperatorGrid;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -103,7 +103,6 @@ export type CoreContracts = {
   accountingOracle: LoadedContract<AccountingOracle>;
   depositSecurityModule: LoadedContract<DepositSecurityModule>;
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
-  legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
   accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
@@ -141,6 +140,7 @@ export type VaultsContracts = {
   stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
+  operatorGrid: LoadedContract<OperatorGrid>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &

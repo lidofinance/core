@@ -19,10 +19,9 @@ export { ensureDsmGuardians } from "./dsm";
 export { norEnsureOperators } from "./nor";
 export { sdvtEnsureOperators } from "./sdvt";
 export {
-  connectToHub,
   createVaultProxy,
   createVaultsReportTree,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
   reportVaultDataWithProof,

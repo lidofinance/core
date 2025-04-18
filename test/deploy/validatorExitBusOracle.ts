@@ -4,12 +4,12 @@ import { ethers } from "hardhat";
 import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
+  VEBO_CONSENSUS_VERSION,
 } from "lib";
 
 import { deployHashConsensus } from "./hashConsensus";
@@ -106,7 +106,7 @@ export async function initVEBO({
   oracle,
   consensus,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
+  consensusVersion = VEBO_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
 }: VEBOConfig) {

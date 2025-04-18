@@ -190,6 +190,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
+    fullTrace: true,
     rootHooks: mochaRootHooks,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
