@@ -140,7 +140,7 @@ describe("Permissions", () => {
     beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
     // 5. Deploy Permissions implementation
-    permissionsImpl = await ethers.deployContract("Permissions__Harness");
+    permissionsImpl = await ethers.deployContract("Permissions__Harness", [vaultHub]);
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
 
@@ -273,7 +273,7 @@ describe("Permissions", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const newImplementation = await ethers.deployContract("Permissions__Harness");
+      const newImplementation = await ethers.deployContract("Permissions__Harness", [vaultHub]);
       await expect(newImplementation.initialize(defaultAdmin, days(7n))).to.be.revertedWithCustomError(
         permissions,
         "NonProxyCallsForbidden",

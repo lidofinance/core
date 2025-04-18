@@ -21,7 +21,7 @@ export { sdvtEnsureOperators } from "./sdvt";
 export {
   createVaultProxy,
   createVaultsReportTree,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
   reportVaultDataWithProof,
