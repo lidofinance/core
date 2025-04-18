@@ -198,22 +198,22 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return true if vault is healthy, false otherwise
     function isVaultHealthyAsOfLatestReport(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        return _isVaulthealthyAsOfLatestReport(
+        return _isVaultHealthyByThreshold(
             IStakingVault(_vault).valuation(),
             socket.sharesMinted,
             socket.rebalanceThresholdBP
         );
     }
 
-    function _isVaulthealthyAsOfLatestReport(
+    function _isVaultHealthyByThreshold(
         uint256 _valuation,
         uint256 _sharesMinted,
-        uint256 _rebalanceThresholdBP
+        uint256 _checkThreshold
     ) internal view returns (bool) {
         if (_sharesMinted == 0) return true;
 
         return
-            ((_valuation * (TOTAL_BASIS_POINTS - _rebalanceThresholdBP)) /
+            ((_valuation * (TOTAL_BASIS_POINTS - _checkThreshold)) /
                 TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(_sharesMinted);
     }
 
@@ -386,8 +386,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 sharesMinted = socket.sharesMinted;
 
         // check healthy with new rebalance threshold
-        if (!_isVaulthealthyAsOfLatestReport(valuation, sharesMinted, _rebalanceThresholdBP))
-            revert VaultNotHealthyWithNewRebalanceThreshold(_vault, valuation, sharesMinted, _rebalanceThresholdBP);
+        if (!_isVaultHealthyByThreshold(valuation, sharesMinted, _reserveRatioBP))
+            revert VaultMintingCapacityExceeded(_vault, valuation, sharesMinted, _reserveRatioBP);
 
         socket.shareLimit = uint96(_shareLimit);
         socket.reserveRatioBP = uint16(_reserveRatioBP);
@@ -675,7 +675,7 @@ contract VaultHub is PausableUntilWithRoles {
     event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error AlreadyHealthy(address vault);
-    error VaultNotHealthyWithNewRebalanceThreshold(address vault, uint256 valuation, uint256 sharesMinted, uint256 newRebalanceThresholdBP);
+    error VaultMintingCapacityExceeded(address vault, uint256 valuation, uint256 sharesMinted, uint256 newRebalanceThresholdBP);
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 capShares);
     error AlreadyConnected(address vault, uint256 index);
