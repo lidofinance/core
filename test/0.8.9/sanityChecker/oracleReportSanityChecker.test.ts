@@ -100,7 +100,6 @@ describe("OracleReportSanityChecker.sol", () => {
         depositSecurityModule: deployer.address,
         elRewardsVault: elRewardsVault.address,
         accountingOracle: accountingOracleAddress,
-        legacyOracle: deployer.address,
         oracleReportSanityChecker: deployer.address,
         burner: burnerAddress,
         validatorsExitBusOracle: deployer.address,

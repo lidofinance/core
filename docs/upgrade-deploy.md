@@ -14,11 +14,10 @@ At first, you need to specify `DEPLOYER` private key in accounts.json under `/et
 }
 ```
 
-E. g. to deploy `LidoLocator` implementation with new addresses for `legacyOracle` and `postTokenRebaseReceiver`
+E. g. to deploy `LidoLocator` implementation with new addresses `postTokenRebaseReceiver`
 on Sepolia run
 
 ```shell
-legacyOracle=<PUT-YOU-VALUE> \
 postTokenRebaseReceiver=<PUT-YOU-VALUE> \
 GAS_MAX_FEE=100 GAS_PRIORITY_FEE=2 \
 DEPLOYER=<PUT-YOU-VALUE> \

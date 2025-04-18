@@ -490,11 +490,11 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.unreserved()).to.equal(0n);
     });
 
-    it("returns 0 if locked is greater than valuation", async () => {
-      const valuation = ether("2");
+    it("returns 0 if locked is greater than total value", async () => {
+      const totalValue = ether("2");
       const inOutDelta = ether("2");
 
-      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), valuation, inOutDelta, valuation + 1n);
+      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), totalValue, inOutDelta, totalValue + 1n);
 
       expect(await dashboard.unreserved()).to.equal(0n);
     });

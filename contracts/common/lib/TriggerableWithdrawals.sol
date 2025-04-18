@@ -20,9 +20,6 @@ library TriggerableWithdrawals {
     error WithdrawalFeeInvalidData();
     error WithdrawalRequestAdditionFailed(bytes callData);
 
-    error InsufficientWithdrawalFee(uint256 feePerRequest, uint256 minFeePerRequest);
-    error TotalWithdrawalFeeExceededBalance(uint256 balance, uint256 totalWithdrawalFee);
-
     error NoWithdrawalRequests();
     error MalformedPubkeysArray();
     error PartialWithdrawalRequired(uint256 index);
@@ -37,7 +34,6 @@ library TriggerableWithdrawals {
      *
      * @param feePerRequest The withdrawal fee for each withdrawal request.
      *        - Must be greater than or equal to the current minimal withdrawal fee.
-     *        - If set to zero, the current minimal withdrawal fee will be used automatically.
      *
      * @notice Reverts if:
      *         - Validation of the public keys fails.
@@ -46,7 +42,6 @@ library TriggerableWithdrawals {
      */
     function addFullWithdrawalRequests(bytes calldata pubkeys, uint256 feePerRequest) internal {
         uint256 keysCount = _validateAndCountPubkeys(pubkeys);
-        feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
 
         bytes memory callData = new bytes(56);
 
@@ -75,7 +70,6 @@ library TriggerableWithdrawals {
      *
      * @param feePerRequest The withdrawal fee for each withdrawal request.
      *        - Must be greater than or equal to the current minimal withdrawal fee.
-     *        - If set to zero, the current minimal withdrawal fee will be used automatically.
      *
      * @notice Reverts if:
      *         - Validation of the public keys fails.
@@ -116,7 +110,6 @@ library TriggerableWithdrawals {
      *
      * @param feePerRequest The withdrawal fee for each withdrawal request.
      *        - Must be greater than or equal to the current minimal withdrawal fee.
-     *        - If set to zero, the current minimal withdrawal fee will be used automatically.
      *
      * @notice Reverts if:
      *         - Validation of the public keys fails.
@@ -130,8 +123,6 @@ library TriggerableWithdrawals {
         if (keysCount != amounts.length) {
             revert MismatchedArrayLengths(keysCount, amounts.length);
         }
-
-        feePerRequest = _validateAndAdjustFee(feePerRequest, keysCount);
 
         bytes memory callData = new bytes(56);
         for (uint256 i = 0; i < keysCount; i++) {
@@ -187,23 +178,5 @@ library TriggerableWithdrawals {
         }
 
         return keysCount;
-    }
-
-    function _validateAndAdjustFee(uint256 feePerRequest, uint256 keysCount) private view returns (uint256) {
-        uint256 minFeePerRequest = getWithdrawalRequestFee();
-
-        if (feePerRequest == 0) {
-            feePerRequest = minFeePerRequest;
-        }
-
-        if (feePerRequest < minFeePerRequest) {
-            revert InsufficientWithdrawalFee(feePerRequest, minFeePerRequest);
-        }
-
-        if (address(this).balance < feePerRequest * keysCount) {
-            revert TotalWithdrawalFeeExceededBalance(address(this).balance, feePerRequest * keysCount);
-        }
-
-        return feePerRequest;
     }
 }
