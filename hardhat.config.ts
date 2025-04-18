@@ -60,6 +60,11 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
     // forks
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
@@ -68,6 +73,10 @@ const config: HardhatUserConfig = {
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
+    },
+    "hoodi-fork": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
     },
   },
   etherscan: {
